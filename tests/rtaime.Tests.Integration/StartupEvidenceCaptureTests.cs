@@ -19,7 +19,7 @@ public sealed class StartupEvidenceCaptureTests
 		fixture.Command("RuntimeHost", state);
 		fixture.Command("AIHost", "ready");
 		var host = fixture.Host(TimeSpan.FromSeconds(8));
-		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		await Assert.ThrowsAsync<TimeoutException>(() => fixture.RunAsync(host));
 		using var before = fixture.ReadCapture("before-shutdown.json");
 		Assert.Equal("startup.deadline.expired", before.RootElement.GetProperty("lifecycle")
 			.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
@@ -41,7 +41,7 @@ public sealed class StartupEvidenceCaptureTests
 		await using var fixture = new Fixture();
 		fixture.Command("RuntimeHost", "crash");
 		var host = fixture.Host();
-		var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+		var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.RunAsync(host));
 		Assert.Contains("RuntimeHost", failure.Message);
 		using var before = fixture.ReadCapture("before-shutdown.json");
 		Assert.Equal("startup.process.exited", before.RootElement.GetProperty("lifecycle")
@@ -62,7 +62,7 @@ public sealed class StartupEvidenceCaptureTests
 	{
 		await using var fixture = new Fixture();
 		var host = fixture.Host();
-		var run = host.RunAsync();
+		var run = fixture.RunAsync(host);
 		await fixture.WaitObserved("ControlHost", "pending");
 		fixture.Command("ControlHost", "crash");
 		await Assert.ThrowsAsync<InvalidOperationException>(() => run);
@@ -79,7 +79,7 @@ public sealed class StartupEvidenceCaptureTests
 		await using var fixture = new Fixture();
 		var host = fixture.Host();
 		using var stop = new CancellationTokenSource();
-		var run = host.RunAsync(stop.Token);
+		var run = fixture.RunAsync(host, stop.Token);
 		await fixture.WaitObserved("ControlHost", "pending");
 		await fixture.WaitObserved("RuntimeHost", "pending");
 		await fixture.WaitObserved("AIHost", "pending");
@@ -104,7 +104,7 @@ public sealed class StartupEvidenceCaptureTests
 		await using var fixture = new Fixture();
 		var host = fixture.Host();
 		using var stop = new CancellationTokenSource();
-		var run = host.RunAsync(stop.Token);
+		var run = fixture.RunAsync(host, stop.Token);
 		await fixture.WaitObserved("ControlHost", "pending");
 		using (var cancelledDrain = new CancellationTokenSource())
 		{
@@ -128,7 +128,7 @@ public sealed class StartupEvidenceCaptureTests
 		}
 		host = fixture.Host();
 		using var restartStop = new CancellationTokenSource();
-		run = host.RunAsync(restartStop.Token);
+		run = fixture.RunAsync(host, restartStop.Token);
 		await fixture.Wait(() => host.State == ApplicationLifecycleState.Healthy);
 		Assert.NotEqual(oldDirectory, fixture.CaptureDirectory);
 		restartStop.Cancel();
@@ -136,6 +136,23 @@ public sealed class StartupEvidenceCaptureTests
 		Assert.Equal(oldEvidence, ReadShared(Path.Combine(oldDirectory, "before-shutdown.json")));
 		Assert.Equal(2, Directory.GetDirectories(Path.Combine(fixture.Options.WorkRoot, "startup-evidence")).Length);
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
+	}
+
+	[Fact]
+	public async Task Teardown_before_readiness_awaits_capture_release_and_process_drain()
+	{
+		var fixture = new Fixture();
+		await using (fixture)
+		{
+			var host = fixture.Host();
+			var run = fixture.RunAsync(host);
+			await fixture.WaitObserved("ControlHost", "pending");
+			Assert.False(run.IsCompleted);
+			await fixture.DisposeAsync();
+			Assert.True(run.IsCompleted);
+			Assert.False(Directory.Exists(fixture.Root));
+			Assert.False(fixture.IsProcessAlive(fixture.ControlProcessId));
+		}
 	}
 
 	private static string ReadShared(string path)
@@ -155,6 +172,18 @@ public sealed class StartupEvidenceCaptureTests
 		public ApplicationHostOptions Options { get; }
 		private readonly SystemApplicationHostPlatform _system;
 		private readonly List<int> _processes = [];
+		private readonly CancellationTokenSource _shutdown = new();
+		private readonly List<Task<ApplicationHostRunResult>> _runs = [];
+		private readonly List<CancellationTokenSource> _runTokens = [];
+		private bool _disposed;
+		public Task<ApplicationHostRunResult> RunAsync(UnifiedApplicationHost host, CancellationToken token = default)
+		{
+			var linked = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, token);
+			_runTokens.Add(linked);
+			var run = host.RunAsync(linked.Token);
+			_runs.Add(run);
+			return run;
+		}
 		public int ControlProcessId => _processes.Last();
 		public string CaptureDirectory {
 			get { using var doc = JsonDocument.Parse(ReadShared(Options.LifecycleEvidencePath));
@@ -258,8 +287,16 @@ public sealed class StartupEvidenceCaptureTests
 
 		public async ValueTask DisposeAsync()
 		{
+			if (_disposed) return;
+			_disposed = true;
 			try
 			{
+				_shutdown.Cancel();
+				foreach (var run in _runs)
+				{
+					try { await run.WaitAsync(TimeSpan.FromSeconds(40)); }
+					catch (Exception) when (run.IsCompleted) { /* The test observes the run failure. */ }
+				}
 				File.WriteAllText(Path.Combine(Root, "children-stop.signal"), "stop");
 				if (Directory.Exists(Options.WorkRoot)) File.WriteAllText(Options.StopPath, "stop");
 				foreach (var pid in _processes)
@@ -275,13 +312,16 @@ public sealed class StartupEvidenceCaptureTests
 			{
 				var targetRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
 				if (!string.IsNullOrWhiteSpace(targetRoot))
-					foreach (var file in Directory.GetFiles(Root, "*", SearchOption.AllDirectories))
+					foreach (var file in Directory.GetFiles(Root, "*", SearchOption.AllDirectories)
+						.Where(file => !string.Equals(Path.GetFileName(file), "active.lock", StringComparison.Ordinal)))
 					{
 						var target = Path.Combine(targetRoot, "synthetic-" + SessionId, Path.GetRelativePath(Root, file));
 						Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 						File.Copy(file, target, true);
 					}
 				Directory.Delete(Root, true);
+				foreach (var token in _runTokens) token.Dispose();
+				_shutdown.Dispose();
 			}
 		}
 	}

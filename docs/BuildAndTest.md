@@ -317,3 +317,11 @@ dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --con
 Cadence tests simulate approximately 24 hours at 50/1 and 60000/1001, with every deadline checked against independent rational arithmetic. Early/repeated wakes, long overruns, recovery, explicit resync/format epochs, clock regression and overflow have deterministic coverage. The targeted allocation guard requires zero allocation over 100,000 warmed schedule/probe/drop observations and retains a broad 15-second software regression limit.
 
 These targeted commands supplement the complete Release build, existing CUT/DISSOLVE, output health, audio alignment, recording, quality policies and five Required Gates. Passing software tests does not qualify physical GPU, external clocks, device latency or physical presentation.
+
+## Viewport and startup capture regressions
+
+The real Operator XAML qualification includes scroll measurement, hidden monitor views and normal/maximized windows with 150% physical target sizing. GPU controls keep layout in logical WPF units; only texture allocation converts to physical pixels. A render target does not supply its own viewport's desired size.
+
+Startup capture qualification checks that Healthy is published after qualified evidence and the Production Readiness stage are available. Fixture teardown owns and joins every host run before copying retained evidence or removing temporary data; active capture leases are not diagnostic artifacts. Repeated recovery qualification also runs rapid preview/take actions and requires a successful ControlHost durability drain.
+
+The unit suite exercises bounded large MXF KLV/local-set inputs and SRT cancellation/failed encoder initialization with resource-release checks. These checks supplement all five Required Gates and the packaged managed lifecycle qualification, including preserved legacy 1.0 checkpoint content. They do not qualify physical presentation or external hardware.

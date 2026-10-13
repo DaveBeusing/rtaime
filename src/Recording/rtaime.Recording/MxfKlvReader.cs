@@ -24,12 +24,12 @@ internal static class MxfKlvReader
             throw new ArgumentOutOfRangeException(nameof(maximumElements));
         var result = new List<Element>();
         stream.Position = 0;
+        Span<byte> key = stackalloc byte[16];
         while (stream.Position < stream.Length)
         {
             if (result.Count == maximumElements)
                 throw new InvalidDataException("MXF contains too many KLV records.");
             var offset = stream.Position;
-            Span<byte> key = stackalloc byte[16];
             stream.ReadExactly(key);
             if (!key[..4].SequenceEqual(new byte[] { 0x06, 0x0e, 0x2b, 0x34 }))
                 throw new InvalidDataException("Invalid MXF SMPTE universal-label prefix.");

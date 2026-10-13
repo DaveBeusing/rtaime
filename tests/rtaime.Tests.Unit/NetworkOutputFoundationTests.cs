@@ -96,6 +96,41 @@ public sealed class NetworkOutputFoundationTests
 	}
 
 	[Fact]
+	public async Task Cancelling_pending_SRT_connect_releases_attempt_resources_and_frame_once()
+	{
+		var transport = new BlockingTransport(new TaskCompletionSource().Task);
+		var encoder = new PassThroughEncoder();
+		var session = new SrtNetworkOutputSession(
+			Configuration(new Uri("srt://127.0.0.1:9000/live")), () => transport, () => encoder);
+		await using (session)
+		{
+			var sample = Sample(1);
+			Assert.True(session.TrySubmit(sample).Accepted);
+			await transport.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+			await session.DisposeAsync();
+			Assert.Equal(1, transport.DisposeCount);
+			Assert.Equal(1, encoder.DisposeCount);
+			Assert.Equal(1, sample.VideoLease.DisposeCount);
+		}
+	}
+
+	[Fact]
+	public async Task Failed_SRT_encoder_initialization_releases_connected_transport_and_encoder()
+	{
+		var transport = new BlockingTransport(Task.CompletedTask);
+		var encoder = new PassThroughEncoder(failInitialization: true);
+		await using var session = new SrtNetworkOutputSession(
+			Configuration(new Uri("srt://127.0.0.1:9000/live"), reconnectMaximumAttempts: 1),
+			() => transport, () => encoder);
+		Assert.True(session.TrySubmit(Sample(1)).Accepted);
+		await WaitUntilAsync(() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Faulted,
+			TimeSpan.FromSeconds(2));
+		Assert.Equal(1, transport.DisposeCount);
+		Assert.Equal(1, encoder.DisposeCount);
+		Assert.False(transport.IsConnected);
+	}
+
+	[Fact]
 	public void Ndi_configuration_uses_typed_source_identity_without_SRT_fields()
 	{
 		var configuration = NdiConfiguration("rtaime Program");
@@ -369,9 +404,11 @@ public sealed class NetworkOutputFoundationTests
 		private ReadOnlyMemory<byte> _memory;
 		public TestLease(ReadOnlyMemory<byte> memory) => _memory = memory;
 		public bool IsDisposed { get; private set; }
+		public int DisposeCount { get; private set; }
 		public ReadOnlyMemory<byte> Memory => IsDisposed ? ReadOnlyMemory<byte>.Empty : _memory;
 		public void Dispose()
 		{
+			DisposeCount++;
 			IsDisposed = true;
 			_memory = ReadOnlyMemory<byte>.Empty;
 		}
@@ -383,6 +420,7 @@ public sealed class NetworkOutputFoundationTests
 		public BlockingTransport(Task gate) => _gate = gate;
 		public TaskCompletionSource ConnectStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public bool IsConnected { get; private set; }
+		public int DisposeCount { get; private set; }
 		public async ValueTask ConnectAsync(NetworkOutputConfiguration configuration, string? passphrase, CancellationToken cancellationToken)
 		{
 			_ = configuration;
@@ -398,6 +436,7 @@ public sealed class NetworkOutputFoundationTests
 		}
 		public ValueTask DisposeAsync()
 		{
+			DisposeCount++;
 			IsConnected = false;
 			return ValueTask.CompletedTask;
 		}
@@ -480,12 +519,14 @@ public sealed class NetworkOutputFoundationTests
 		public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 	}
 
-	private sealed class PassThroughEncoder : ISrtPayloadEncoder
+	private sealed class PassThroughEncoder(bool failInitialization = false) : ISrtPayloadEncoder
 	{
+		public int DisposeCount { get; private set; }
 		public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken cancellationToken)
 		{
 			_ = configuration;
 			cancellationToken.ThrowIfCancellationRequested();
+			if (failInitialization) throw new IOException("Synthetic encoder initialization failure.");
 			return ValueTask.CompletedTask;
 		}
 		public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken cancellationToken)
@@ -495,6 +536,10 @@ public sealed class NetworkOutputFoundationTests
 		}
 		public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken cancellationToken) =>
 			ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
-		public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+		public ValueTask DisposeAsync()
+		{
+			DisposeCount++;
+			return ValueTask.CompletedTask;
+		}
 	}
 }

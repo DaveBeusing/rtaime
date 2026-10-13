@@ -433,7 +433,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
                 if (!monitoringDisconnected && boundaryIndex >= Math.Max(8, recordingBackpressureBoundaries / 2))
                 {
-                    await monitoring.DisposeAsync();
+                    await (monitoring ?? throw new InvalidOperationException("Monitoring subscription was lost before the disconnect boundary.")).DisposeAsync();
                     monitoring = null;
                     monitoringDisconnected = true;
                     reconnectCountdown = 3;

@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using rtaime.Operator.Controls;
+using rtaime.Operator;
 using Vortice.Mathematics;
 using System.Windows.Threading;
 using SharpGen.Runtime;
@@ -112,6 +113,7 @@ public sealed class GpuDrawingSurfaceTests
 		})
 			await VerifyProductiveSurfaceAsync(surface, dispatcher);
 		await VerifyDpiAndRecoveryAsync(dispatcher);
+		await VerifyViewportLayoutAsync(dispatcher);
 	}
 
 	private static async Task VerifyProductiveSurfaceAsync(OperatorDrawingSurface surface, Dispatcher dispatcher)
@@ -309,6 +311,74 @@ public sealed class GpuDrawingSurfaceTests
 			window.Close();
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
+		}
+	}
+
+	private static async Task VerifyViewportLayoutAsync(Dispatcher dispatcher)
+	{
+		var monitor = new MonitorView();
+		var presentation = new RtaimeMonitorPresentation
+		{
+			Monitor = monitor,
+			Style = (Style)Application.Current.FindResource("RtaimeMonitorPresentation")
+		};
+		var scroll = new ScrollViewer
+		{
+			VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+			HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+			Content = presentation
+		};
+		var window = new Window { Width = 1200, Height = 900, Content = scroll, ShowInTaskbar = false };
+		GpuMonitorPresentationSurface? surface = null;
+		try
+		{
+			window.Show();
+			window.UpdateLayout();
+			var viewport = Assert.IsAssignableFrom<FrameworkElement>(presentation.Template.FindName("PART_MediaViewport", presentation));
+			surface = Assert.Single(Descendants(presentation).OfType<GpuMonitorPresentationSurface>());
+			foreach (var state in new[] { WindowState.Normal, WindowState.Maximized })
+			foreach (var visibility in new[] { Visibility.Visible, Visibility.Hidden, Visibility.Visible })
+			{
+				window.WindowState = state;
+				presentation.Visibility = visibility;
+				for (var pass = 0; pass < 30; pass++)
+				{
+					window.UpdateLayout();
+					monitor.UpdatePresentationViewport(viewport.ActualWidth, viewport.ActualHeight, 1.5, 1.5);
+					surface.Invalidate();
+					await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
+					Assert.InRange(viewport.ActualHeight, 1, 900);
+					Assert.InRange(surface.ActualHeight, 1, 900);
+					Assert.Equal(viewport.ActualHeight, surface.ActualHeight, 6);
+				}
+			}
+			await ReadyAsync(surface, dispatcher);
+			Assert.Equal(checked((int)Math.Ceiling(surface.ActualWidth * 1.5)), surface.TextureWidth);
+			Assert.Equal(checked((int)Math.Ceiling(surface.ActualHeight * 1.5)), surface.TextureHeight);
+			var creates = surface.TargetCreateCount;
+			for (var pass = 0; pass < 30; pass++)
+			{
+				surface.Invalidate();
+				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
+			}
+			Assert.Equal(creates, surface.TargetCreateCount);
+			Console.WriteLine("GPU VIEWPORT PASS: scroll measure, hidden workspaces, normal/maximized layout, 150% physical targets, stable allocations.");
+		}
+		finally
+		{
+			window.Close();
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+			if (surface is not null) Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
+		}
+	}
+
+	private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+	{
+		for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+		{
+			var child = VisualTreeHelper.GetChild(root, index);
+			yield return child;
+			foreach (var descendant in Descendants(child)) yield return descendant;
 		}
 	}
 

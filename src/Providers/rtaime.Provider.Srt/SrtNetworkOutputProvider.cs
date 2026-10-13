@@ -215,13 +215,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						if (_queue.Count > 0 && _reconnects > 0)
 						{
 							_dropped++;
-							sample.Video.Dispose();
-							sample = null;
+							continue;
 						}
 					}
-					if (sample is null)
-						continue;
-
 					var encoded = await _encoder!.EncodeAsync(sample, cancellationToken).ConfigureAwait(false);
 					if (encoded.IsEmpty)
 						throw new InvalidDataException("Network encoder returned an empty transport payload.");
@@ -242,7 +238,6 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
-					sample.Video.Dispose();
 					break;
 				}
 				catch (Exception exception)
@@ -257,7 +252,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				finally
 				{
-					sample?.Video.Dispose();
+					sample.Video.Dispose();
 				}
 			}
 		}
@@ -303,7 +298,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			{
 				await ReleaseConnectionAsync().ConfigureAwait(false);
 				var transport = _transportFactory();
+				_transport = transport;
 				var encoder = _encoderFactory();
+				_encoder = encoder;
 				var passphrase = ResolvePassphrase();
 				lock (_gate)
 				{
@@ -314,8 +311,6 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				await transport.ConnectAsync(_configuration, passphrase, cancellationToken).ConfigureAwait(false);
 				await encoder.InitializeAsync(_configuration, cancellationToken).ConfigureAwait(false);
-				_transport = transport;
-				_encoder = encoder;
 				lock (_gate)
 				{
 					if (attempt > 1 || _reconnects > 0)

@@ -17,12 +17,12 @@ internal static class MxfLocalSet
         ArgumentNullException.ThrowIfNull(properties);
         using var output = new MemoryStream();
         var seen = new HashSet<ushort>();
+        Span<byte> tag = stackalloc byte[2];
         foreach (var property in properties)
         {
             if (property.Tag == 0 || !seen.Add(property.Tag))
                 throw new ArgumentException("MXF local tags must be nonzero and unique.", nameof(properties));
             ArgumentNullException.ThrowIfNull(property.Value);
-            Span<byte> tag = stackalloc byte[2];
             BinaryPrimitives.WriteUInt16BigEndian(tag, property.Tag);
             output.Write(tag);
             MxfKlvWriter.WriteLength(output, (ulong)property.Value.Length);

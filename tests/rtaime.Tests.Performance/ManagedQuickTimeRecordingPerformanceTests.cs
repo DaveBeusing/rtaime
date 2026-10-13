@@ -49,7 +49,7 @@ public sealed class ManagedQuickTimeRecordingPerformanceTests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public void Mov_1080p_writer_has_bounded_software_write_and_finalize_cost(bool fractionalRate)
+	public async Task Mov_1080p_writer_has_bounded_software_write_and_finalize_cost(bool fractionalRate)
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-mov-performance", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(root);
@@ -60,26 +60,29 @@ public sealed class ManagedQuickTimeRecordingPerformanceTests
 			var outputId = RecordingOutputId.New();
 			var writer = new ManagedQuickTimeMovRecordingWriter(root);
 			writer.ConfigureTarget(root, "performance");
-			writer.OpenAsync(Request(outputId), CancellationToken.None).GetAwaiter().GetResult();
+			await writer.OpenAsync(Request(outputId), CancellationToken.None);
 
 			var videoPayload = new byte[checked((int)((long)format.Width * format.Height * 4))];
 
 			var warmup = Sample(outputId, firstSequence, format, out var warmupAudio);
 			writer.StagePayload(firstSequence, new TestPayloadLease(videoPayload), warmupAudio);
-			writer.WriteAsync(warmup, CancellationToken.None).GetAwaiter().GetResult();
+			await writer.WriteAsync(warmup, CancellationToken.None);
 
 			var measuredSequence = checked(firstSequence + 1);
 			var measured = Sample(outputId, measuredSequence, format, out var measuredAudio);
 			writer.StagePayload(measuredSequence, new TestPayloadLease(videoPayload), measuredAudio);
 
+			var measurementThread = Environment.CurrentManagedThreadId;
 			var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 			var writeStopwatch = Stopwatch.StartNew();
-			writer.WriteAsync(measured, CancellationToken.None).GetAwaiter().GetResult();
+			await writer.WriteAsync(measured, CancellationToken.None);
 			writeStopwatch.Stop();
+			// Thread-local allocation accounting is valid only while the write stays on this thread.
+			Assert.Equal(measurementThread, Environment.CurrentManagedThreadId);
 			var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
 			var finalizeStopwatch = Stopwatch.StartNew();
-			writer.FinalizeAsync(CancellationToken.None).GetAwaiter().GetResult();
+			await writer.FinalizeAsync(CancellationToken.None);
 			finalizeStopwatch.Stop();
 
 			var producedVideoBytes = checked((long)format.Width * format.Height * 2);

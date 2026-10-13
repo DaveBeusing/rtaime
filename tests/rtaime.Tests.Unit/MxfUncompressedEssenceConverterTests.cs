@@ -13,7 +13,7 @@ public sealed class MxfUncompressedEssenceConverterTests
         var rgba = new byte[1920 * 1080 * 4];
         var uyvy = new byte[1920 * 1080 * 2];
         MxfUncompressedEssenceConverter.ConvertVideo(rgba, uyvy, 1920, 1080);
-        Assert.Equal(uyvy.Length, 4_147_200);
+        Assert.Equal(4_147_200, uyvy.Length);
         Assert.Equal((byte)128, uyvy[0]);
         Assert.Equal((byte)16, uyvy[1]);
         Assert.Equal((byte)128, uyvy[2]);

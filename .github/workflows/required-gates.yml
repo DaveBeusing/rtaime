@@ -127,7 +127,8 @@ jobs:
         run: |
           $tests = @(
             "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_RuntimeHost_is_restarted_and_Control_reapplies_same_authority_revision",
-            "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_ControlHost_restores_durable_authority_while_Runtime_continues_and_stale_client_fails_closed"
+            "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_ControlHost_restores_durable_authority_while_Runtime_continues_and_stale_client_fails_closed",
+            "FullyQualifiedName~ProductionIpcIntegrationTests.Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions"
           )
           foreach ($iteration in 1..3) {
             foreach ($test in $tests) {

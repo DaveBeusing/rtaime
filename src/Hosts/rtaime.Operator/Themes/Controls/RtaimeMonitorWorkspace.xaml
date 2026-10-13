@@ -121,17 +121,9 @@
 									GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}"
 									InspectionChannel="{Binding Monitor.InspectionChannel, RelativeSource={RelativeSource TemplatedParent}}"
 									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
-									Width="{Binding Monitor.ViewportPixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									Height="{Binding Monitor.ViewportPixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									HorizontalAlignment="Center"
-									VerticalAlignment="Center"
-									RenderTransformOrigin="0.5,0.5"
+									HorizontalAlignment="Stretch"
+									VerticalAlignment="Stretch"
 									Panel.ZIndex="10">
-									<controls:GpuMonitorPresentationSurface.RenderTransform>
-										<ScaleTransform
-											ScaleX="{Binding Monitor.InverseDpiScaleX, RelativeSource={RelativeSource TemplatedParent}}"
-											ScaleY="{Binding Monitor.InverseDpiScaleY, RelativeSource={RelativeSource TemplatedParent}}" />
-									</controls:GpuMonitorPresentationSurface.RenderTransform>
 								</controls:GpuMonitorPresentationSurface>
 								<controls:RtaimeRoiOverlay
 									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
