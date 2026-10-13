@@ -385,6 +385,29 @@ public sealed class NetworkOutputFoundationTests
         }
     }
 
+
+    [Fact]
+    public void Warmed_Runtime_clock_validation_does_not_allocate_per_sample()
+    {
+        var format = VideoFormat.Hd1080p59_94Rgba8;
+        var window = rtaime.Media.AudioVideoTimingRelationship.GetSampleWindow(format.FrameRate, 48_000, 11);
+        var sample = new NetworkOutputProgramSample(11,
+            new FrameTiming(11, 11, new Timebase(1001, 60000)),
+            new AudioBufferTiming(window.SamplePosition, window.SampleCount, window.PresentationTimestamp, window.Timebase),
+            new TestLease(new byte[] { 1, 2, 3, 4 }), new byte[checked((int)window.SampleCount * 8)]);
+        var valid = 0;
+        for (var index = 0; index < 20_000; index++)
+            if (sample.HasCompatibleRuntimeTiming(format, AudioFormat.Stereo48kFloat32)) valid++;
+        Assert.Equal(20_000, valid);
+        valid = 0;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 100_000; index++)
+            if (sample.HasCompatibleRuntimeTiming(format, AudioFormat.Stereo48kFloat32)) valid++;
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(100_000, valid);
+        Assert.Equal(0, allocated);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
