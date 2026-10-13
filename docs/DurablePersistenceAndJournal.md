@@ -52,6 +52,10 @@ Checkpoint records use:
 
 The current authoritative checkpoint payload includes confirmed Preview/Program routing, the optional `ActiveSceneId`, and the configured governed output-role states (stable role ID/kind, source, provider selector, target, format/timing policy and enabled state). Scene definitions remain part of the production specification rather than duplicated into every checkpoint. Older payloads without `ActiveSceneId` are interpreted as having no confirmed active Scene; older V1 payloads without `OutputRoles` recover the production specification defaults with Program synchronized to the recovered Program route.
 
+Supported Control contract 1.0 checkpoints can recover into the active Control 1.1 specification through an explicit compatible interpretation at load time. Only the recovered in-memory authority's contract marker changes. Production identity, authoritative revision, Preview/Program routes, Scene identity, output-role configuration and compositing remain intact; legacy output roles without an audio-bus mapping retain the existing `program` default. Unknown versions and unsupported adaptation/downgrade paths fail closed.
+
+Startup does not rewrite or replace the original checkpoint. Its payload/checksum remains unchanged at the existing revision, including after repeated recovery. A later confirmed operator mutation advances the authority normally and writes a new checkpoint using the current contract; the older immutable checkpoint remains available. SQLite schema versions and the `rtaime.control.authority.v1` checkpoint format are unchanged. This is contract compatibility handling, not an in-place database migration.
+
 Only one checkpoint payload is accepted for a given production/revision pair. Replaying the same payload is idempotent; a different payload for the same revision fails closed.
 
 ## Production Journal
