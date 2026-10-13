@@ -44,6 +44,7 @@
     <Project Path="src/Hosts/rtaime.Operator/rtaime.Operator.csproj" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="tests/rtaime.LifecycleTestHost/rtaime.LifecycleTestHost.csproj" />
     <Project Path="tests/rtaime.TestInfrastructure/rtaime.TestInfrastructure.csproj" />
     <Project Path="tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj" />
     <Project Path="tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj" />

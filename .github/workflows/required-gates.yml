@@ -63,6 +63,17 @@ jobs:
           RTAIME_BINDING_EVIDENCE_ROOT: ${{ github.workspace }}/artifacts/qualification/control-runtime-binding
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlRuntimeBindingReadinessTests|FullyQualifiedName~ControlHostRecoveryIntegrationTests|FullyQualifiedName~ProductionIpcRecoveryTests|FullyQualifiedName~ExecutableHostLifecycleTests|FullyQualifiedName~ProcessSupervisionRecoveryTests" --logger "console;verbosity=detailed"
 
+      - name: Repeat startup evidence capture qualification
+        shell: pwsh
+        env:
+          RTAIME_BINDING_EVIDENCE_ROOT: ${{ github.workspace }}/artifacts/qualification/control-runtime-binding
+        run: |
+          foreach ($iteration in 1..2) {
+            Write-Host "Startup evidence qualification iteration $iteration"
+            dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupEvidenceCaptureTests|FullyQualifiedName~ProcessSupervisionRecoveryTests.AppHost_" --logger "console;verbosity=detailed"
+            if ($LASTEXITCODE -ne 0) { throw "Startup evidence qualification failed in iteration $iteration." }
+          }
+
       - name: Preserve Control runtime binding evidence
         if: always()
         uses: actions/upload-artifact@v6

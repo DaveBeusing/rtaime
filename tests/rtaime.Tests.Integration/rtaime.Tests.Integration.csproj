@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\rtaime.LifecycleTestHost\rtaime.LifecycleTestHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />
     <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />

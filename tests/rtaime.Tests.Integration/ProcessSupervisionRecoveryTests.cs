@@ -490,7 +490,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		{
 			foreach (var profile in new[] { "clean", "retained" })
 			{
-				var work = Path.Combine(root, profile);
+				var work = Path.Combine(root, "shared-work");
 				Directory.CreateDirectory(work);
 				var readyPath = Path.Combine(work, "control-readiness.json");
 				var stopPath = Path.Combine(work, "control-stop.signal");
@@ -601,6 +601,8 @@ public sealed class ProcessSupervisionRecoveryTests
 						using (var shutdownEvidence = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-shutdown.json"))))
 						{
 							Assert.False(shutdownEvidence.RootElement.GetProperty("forcedTermination").GetBoolean());
+							Assert.True(shutdownEvidence.RootElement.GetProperty("diagnosticsDrained").GetBoolean());
+							Assert.Equal(session, shutdownEvidence.RootElement.GetProperty("sessionId").GetString());
 						}
 						foreach (var host in new[] { "ControlHost", "RuntimeHost", "AIHost" })
 						{
@@ -613,6 +615,7 @@ public sealed class ProcessSupervisionRecoveryTests
 									record.RootElement.GetProperty("dimensions").GetProperty("exitCode").GetString() == "0";
 							});
 						}
+						AssertRetainedStartupCapture(work, session, qualified: true);
 						if (controlPid is { } controlId) Assert.False(ProcessIsAlive(controlId));
 						if (runtimePid is { } runtimeId) Assert.False(ProcessIsAlive(runtimeId));
 						if (aiPid is { } aiId) Assert.False(ProcessIsAlive(aiId));
@@ -703,6 +706,7 @@ public sealed class ProcessSupervisionRecoveryTests
 			Assert.False(shutdown.RootElement.GetProperty("forcedTermination").GetBoolean());
 			Assert.True(failure.GetProperty("capturedAtUtc").GetDateTimeOffset() <=
 				shutdown.RootElement.GetProperty("requestedAtUtc").GetDateTimeOffset());
+			AssertRetainedStartupCapture(work, session, qualified: false);
 			Console.WriteLine($"AppHost deadline evidence session={session} controlPid={control.GetProperty("processId")} phase={control.GetProperty("lastProgressPhase")} shutdown=PASS");
 		}
 		finally
@@ -733,6 +737,33 @@ public sealed class ProcessSupervisionRecoveryTests
 				DeleteDirectory(root);
 			}
 		}
+	}
+
+	private static void AssertRetainedStartupCapture(string work, string session, bool qualified)
+	{
+		using var live = JsonDocument.Parse(File.ReadAllText(Path.Combine(work, "apphost-lifecycle.json")));
+		var capture = Path.GetDirectoryName(live.RootElement.GetProperty("retainedEvidencePath").GetString())!;
+		using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(capture, "manifest.json")));
+		using var before = JsonDocument.Parse(File.ReadAllText(Path.Combine(capture, "before-shutdown.json")));
+		using var shutdown = JsonDocument.Parse(File.ReadAllText(Path.Combine(capture, "apphost-shutdown.json")));
+		Assert.Equal(session, live.RootElement.GetProperty("sessionId").GetString());
+		foreach (var document in new[] { manifest, before, shutdown })
+		{
+			Assert.Equal(session, document.RootElement.GetProperty("sessionId").GetString());
+			Assert.Equal(live.RootElement.GetProperty("captureId").GetString(),
+				document.RootElement.GetProperty("captureId").GetString());
+		}
+		Assert.True(before.RootElement.GetProperty("capturedAtUtc").GetDateTimeOffset() <=
+			shutdown.RootElement.GetProperty("requestedAtUtc").GetDateTimeOffset());
+		Assert.True(shutdown.RootElement.GetProperty("diagnosticsDrained").GetBoolean());
+		Assert.Equal(qualified, File.Exists(Path.Combine(capture, "qualified.json")));
+		Assert.Contains(before.RootElement.GetProperty("events").EnumerateArray(),
+			item => item.GetProperty("host").GetString() == "ControlHost");
+		var stream = File.ReadAllText(Path.Combine(capture, "controlhost-process.log"));
+		Assert.Contains("sessionId=" + session, stream);
+		Assert.Contains("stream=process exitCode=0", stream);
+		Assert.Empty(manifest.RootElement.GetProperty("errors").EnumerateArray());
+		Console.WriteLine($"Retained startup capture session={session} path={capture} qualified={qualified} streams=drained");
 	}
 
 	private static string[] ReadSharedLogLines(string path)

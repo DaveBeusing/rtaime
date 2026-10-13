@@ -2,6 +2,7 @@
 
 using System.Text;
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.AppHost;
 
@@ -111,7 +112,7 @@ internal static class ApplicationHostDiagnosticReader
 			if (root.TryGetProperty("dimensions", out var values) && values.ValueKind == JsonValueKind.Object)
 				foreach (var value in values.EnumerateObject())
 					if (AllowedDimensions.Contains(value.Name) && value.Value.ValueKind == JsonValueKind.String)
-						dimensions[value.Name] = value.Value.GetString() ?? string.Empty;
+						dimensions[value.Name] = DiagnosticRedactor.SanitizeValue(value.Name, value.Value.GetString());
 			return new ApplicationHostDiagnosticEvent(host, root.GetProperty("processId").GetInt32(),
 				root.GetProperty("timestampUtc").GetDateTimeOffset(), code, dimensions);
 		}

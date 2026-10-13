@@ -237,16 +237,21 @@ public sealed record ApplicationProcessSpec(
 	bool CreateNoWindow)
 {
 	public string? DiagnosticLogPath { get; init; }
+	public string? RetainedDiagnosticLogPath { get; init; }
+	public string? DiagnosticSessionId { get; init; }
 }
 
 public interface IApplicationHostPlatform
 {
 	DateTimeOffset UtcNow { get; }
+	string? DiagnosticSessionId => Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+	string? DiagnosticLogRoot => Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	string FindProductArtifact(string installRoot, string baseName);
 	int StartProcess(ApplicationProcessSpec spec);
 	bool IsProcessAlive(int processId);
 	bool IsEndpointLeaseHeld(string endpoint) => false;
 	Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken) => Task.CompletedTask;
+	IDisposable? OpenDiagnosticSession(string directory) => null;
 	IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() => Array.Empty<ApplicationHostDiagnosticEvent>();
 	void WriteAllTextAtomic(string path, string content) => WriteAllText(path, content);
 	void KillProcessTree(int processId);
@@ -261,10 +266,20 @@ public interface IApplicationHostPlatform
 
 public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 {
+	private readonly string? _logRoot;
+	private readonly string? _sessionId;
+	public SystemApplicationHostPlatform(string? logRoot = null, string? sessionId = null)
+	{
+		_logRoot = logRoot;
+		_sessionId = sessionId;
+	}
+	public string? DiagnosticSessionId => _sessionId ?? Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+	public string? DiagnosticLogRoot => _logRoot ?? Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
 	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
 
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
+	public IDisposable OpenDiagnosticSession(string directory) => StartupEvidenceSession.OpenDirectory(directory);
 
 	public string FindProductArtifact(string installRoot, string baseName)
 	{
@@ -356,12 +371,12 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		var diagnosticPath = Path.GetFullPath(spec.DiagnosticLogPath);
 		var diagnosticDirectory = Path.GetDirectoryName(diagnosticPath);
 		if (!string.IsNullOrWhiteSpace(diagnosticDirectory)) Directory.CreateDirectory(diagnosticDirectory);
-		try { if (File.Exists(diagnosticPath)) File.Delete(diagnosticPath); }
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
 
 		startInfo.RedirectStandardOutput = true;
 		startInfo.RedirectStandardError = true;
-		var writeGate = new object();
+		var diagnostic = new BoundedProcessDiagnosticLog(diagnosticPath);
+		var retained = string.IsNullOrWhiteSpace(spec.RetainedDiagnosticLogPath) ? null :
+			new BoundedProcessDiagnosticLog(spec.RetainedDiagnosticLogPath);
 		var processWithDiagnostics = new Process { StartInfo = startInfo };
 		var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 		var processId = 0;
@@ -370,14 +385,9 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		void AppendDiagnostic(string stream, string? line)
 		{
 			if (line is null) return;
-			try
-			{
-				lock (writeGate)
-					File.AppendAllText(diagnosticPath, $"{DateTimeOffset.UtcNow:O} stream={stream} {line}{Environment.NewLine}");
-			}
-			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-			{
-			}
+			var record = $"{DateTimeOffset.UtcNow:O} sessionId={spec.DiagnosticSessionId ?? "unavailable"} processId={processId} stream={stream} {line}";
+			diagnostic.Append(record);
+			retained?.Append(record);
 		}
 
 		void FinalizeDiagnostic()
@@ -495,8 +505,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() =>
 		ApplicationHostDiagnosticReader.ReadSession(
-			Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT"),
-			Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"));
+			DiagnosticLogRoot, DiagnosticSessionId);
 
 	public void WriteAllTextAtomic(string path, string content)
 	{
@@ -621,6 +630,7 @@ public sealed class UnifiedApplicationHost
 	private bool _adopted;
 	private bool _initialQualificationCompleted;
 	private readonly ApplicationReadinessTracker _readinessTracker;
+	private readonly StartupEvidenceSession _diagnostics;
 	private DateTimeOffset? _qualificationDeadline;
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
@@ -628,11 +638,13 @@ public sealed class UnifiedApplicationHost
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
 		_readinessTracker = new ApplicationReadinessTracker(_options, _platform);
+		_diagnostics = new StartupEvidenceSession(_options, _platform);
 		_lifecycle = new ApplicationLifecycleStateProvider(
 			_options.LifecycleEvidencePath,
 			_options.RequireAI,
 			_platform,
-			_options.ControlHostDiagnosticPath);
+			_options.ControlHostDiagnosticPath,
+			_diagnostics.SessionId, _diagnostics.CaptureId, _diagnostics.LifecyclePath);
 	}
 
 	public ApplicationLifecycleState State { get; private set; } = ApplicationLifecycleState.Stopped;
@@ -647,6 +659,7 @@ public sealed class UnifiedApplicationHost
 		{
 			_platform.CreateDirectory(_options.WorkRoot);
 			_platform.CreateDirectory(_options.StateRoot);
+			_diagnostics.Begin();
 			_platform.DeleteFile(_options.ShutdownEvidencePath);
 			_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 
@@ -724,6 +737,7 @@ public sealed class UnifiedApplicationHost
 			TrackReadiness(qualifiedReadiness);
 			Transition(ApplicationLifecycleState.Healthy);
 			_initialQualificationCompleted = true;
+			_diagnostics.CaptureQualified(qualifiedReadiness.Evidence);
 			_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
@@ -744,6 +758,7 @@ public sealed class UnifiedApplicationHost
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
+			_diagnostics.CaptureBeforeShutdown("startup.cancelled", _readinessTracker.GetHosts());
 			if (ShouldStopOwnedControlOnHostExit())
 				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Stopped);
@@ -766,6 +781,7 @@ public sealed class UnifiedApplicationHost
 			}
 			else
 				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
+			_diagnostics.CaptureBeforeShutdown("startup.failure", _readinessTracker.GetHosts());
 			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
 			{
 				try { await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false); }
@@ -779,6 +795,11 @@ public sealed class UnifiedApplicationHost
 				throw;
 			throw classified;
 		}
+		finally
+		{
+			_diagnostics.Complete(State.ToString());
+			_diagnostics.Dispose();
+		}
 	}
 
 	private void StartControlHost()
@@ -790,10 +811,10 @@ public sealed class UnifiedApplicationHost
 
 		_platform.DeleteFile(_options.ReadinessPath);
 		_platform.DeleteFile(_options.StopPath);
-		_platform.DeleteFile(_options.ControlHostDiagnosticPath);
 
 		var environment = new Dictionary<string, string>(StringComparer.Ordinal)
 		{
+			["RTAIME_LOG_SESSION_ID"] = _diagnostics.SessionId,
 			["RTAIME_CONTROL_ENDPOINT"] = endpoints.Control,
 			["RTAIME_RUNTIME_ENDPOINT"] = endpoints.Runtime,
 			["RTAIME_AI_ENDPOINT"] = endpoints.AI,
@@ -817,7 +838,9 @@ public sealed class UnifiedApplicationHost
 			environment,
 			true)
 		{
-			DiagnosticLogPath = _options.ControlHostDiagnosticPath
+			DiagnosticLogPath = _options.ControlHostDiagnosticPath,
+			RetainedDiagnosticLogPath = _diagnostics.ProcessLogPath,
+			DiagnosticSessionId = _diagnostics.SessionId
 		});
 
 		_ownedControlProcessId = processId;
@@ -1250,26 +1273,40 @@ public sealed class UnifiedApplicationHost
 	private async Task StopOwnedControlAsync(CancellationToken cancellationToken)
 	{
 		if (_ownedControlProcessId is not { } processId) return;
+		_diagnostics.CaptureBeforeShutdown("shutdown.requested", _readinessTracker.GetHosts());
 		_lifecycle.MarkShutdownInitiated();
 		Transition(ApplicationLifecycleState.Stopping);
 		var requestedAtUtc = _platform.UtcNow;
 		var processAliveAtRequest = _platform.IsProcessAlive(processId);
+		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
 		if (processAliveAtRequest)
 		{
 			_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
-			var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
 			while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
 				await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
 		}
 
 		var forcedTermination = processAliveAtRequest && _platform.IsProcessAlive(processId);
 		if (forcedTermination) _platform.KillProcessTree(processId);
-		var graceful = processAliveAtRequest && !forcedTermination;
+		var remainingDrainBudget = deadline - _platform.UtcNow;
+		using var drainTimeout = new CancellationTokenSource(remainingDrainBudget > TimeSpan.Zero ?
+			remainingDrainBudget : TimeSpan.FromMilliseconds(1));
+		var diagnosticsDrained = false;
+		try
+		{
+			await _platform.FlushProcessDiagnosticsAsync(processId, drainTimeout.Token).ConfigureAwait(false);
+			diagnosticsDrained = true;
+		}
+		catch (OperationCanceledException) when (drainTimeout.IsCancellationRequested) { }
+		var graceful = processAliveAtRequest && !forcedTermination && !_platform.IsProcessAlive(processId);
 
 		var evidence = JsonSerializer.Serialize(new
 		{
 			copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 			schemaVersion = "1.0",
+			sessionId = _diagnostics.SessionId,
+			captureId = _diagnostics.CaptureId,
+			diagnosticsDrained,
 			status = graceful ? "PASS" : "FAIL",
 			graceful,
 			forcedTermination,

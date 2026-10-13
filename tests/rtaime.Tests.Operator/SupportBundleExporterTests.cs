@@ -170,6 +170,56 @@ public sealed class SupportBundleExporterTests : IDisposable
 		Assert.Empty(Directory.EnumerateFiles(_root, "*.tmp"));
 	}
 
+	[Fact]
+	public async Task Export_includes_retained_capture_with_matching_identity_and_redacted_streams()
+	{
+		var capture = Guid.NewGuid().ToString("N");
+		var directory = Path.Combine(_root, "startup-evidence", capture);
+		Directory.CreateDirectory(directory);
+		var lifecycle = Path.Combine(_root, "apphost-lifecycle.json");
+		await File.WriteAllTextAsync(lifecycle, JsonSerializer.Serialize(new { captureId = capture, sessionId = "retained-session" }));
+		foreach (var name in new[] { "manifest.json", "before-shutdown.json", "apphost-shutdown.json", "apphost-lifecycle.json" })
+			await File.WriteAllTextAsync(Path.Combine(directory, name),
+				JsonSerializer.Serialize(new { sessionId = "retained-session", captureId = capture, password = "capture-secret" }));
+		await File.WriteAllTextAsync(Path.Combine(directory, "controlhost-process.log"),
+			"sessionId=retained-session stream=stderr token=stream-secret" + Environment.NewLine);
+		await File.WriteAllTextAsync(Path.Combine(directory, "production-state.json"), "must not export");
+		var destination = Path.Combine(_root, "retained.zip");
+		var exporter = new SupportBundleExporter(new FixedHealthProvider([]),
+			sessionIdProvider: () => null, logRootProvider: () => _root);
+		var result = await exporter.ExportAsync(destination, lifecycle);
+		Assert.True(result.SourceBytes > 0);
+		using var archive = ZipFile.OpenRead(destination);
+		foreach (var name in new[] { "manifest.json", "before-shutdown.json", "apphost-shutdown.json", "apphost-lifecycle.json", "controlhost-process.log" })
+		{
+			var content = await ReadEntryAsync(archive, "startup/" + capture + "/" + name);
+			Assert.Contains("retained-session", content);
+			Assert.DoesNotContain("capture-secret", content);
+			Assert.DoesNotContain("stream-secret", content);
+			Assert.Contains("[REDACTED]", content);
+		}
+		Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("production-state", StringComparison.Ordinal));
+		archive.Dispose();
+		var historicalDestination = Path.Combine(_root, "historical.zip");
+		await exporter.ExportAsync(historicalDestination, Path.Combine(directory, "apphost-lifecycle.json"));
+		using var historical = ZipFile.OpenRead(historicalDestination);
+		Assert.Contains(historical.Entries, entry => entry.FullName == "startup/" + capture + "/before-shutdown.json");
+	}
+
+	[Fact]
+	public async Task Export_never_follows_a_capture_identifier_outside_the_owned_directory()
+	{
+		Directory.CreateDirectory(_root);
+		var lifecycle = Path.Combine(_root, "apphost-lifecycle.json");
+		await File.WriteAllTextAsync(lifecycle, """{"captureId":"../../sensitive","retainedEvidencePath":"C:\\sensitive\\secret.json"}""");
+		var exporter = new SupportBundleExporter(new FixedHealthProvider([]),
+			sessionIdProvider: () => null, logRootProvider: () => _root);
+		var destination = Path.Combine(_root, "safe.zip");
+		await exporter.ExportAsync(destination, lifecycle);
+		using var archive = ZipFile.OpenRead(destination);
+		Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("before-shutdown", StringComparison.Ordinal));
+	}
+
 	public void Dispose()
 	{
 		try
