@@ -66,7 +66,12 @@ public sealed record CudaQualificationCaseResult(
 	IReadOnlyList<CudaQualificationTimingMetric> BackendTimings,
 	bool PixelCorrect,
 	bool SurfaceLifetimeCorrect,
-	bool TimingBudgetMet);
+	bool TimingBudgetMet,
+	int WarmupIterations = 0,
+	int BackendTimingCapacity = 0,
+	ulong BackendTimingOverwrittenSamples = 0,
+	ulong BackendTimingContentionDroppedSamples = 0,
+	int BackendTimingRetainedSamples = 0);
 
 public sealed record CudaQualificationReport(
 	string SchemaVersion,
@@ -120,7 +125,7 @@ public static class CudaReferenceHardwareQualification
 		try
 		{
 			var timingCapacity = checked((int)Math.Clamp(
-				((long)profile.SampleIterations * 4L) + 16L,
+				((long)profile.SampleIterations * 8L) + 16L,
 				256L,
 				65_536L));
 			var timingCollector = new CudaGpuTimingCollector(timingCapacity);
@@ -195,6 +200,15 @@ public static class CudaReferenceHardwareQualification
 				writer.WriteString("format", item.Format);
 				writer.WriteString("operation", item.Operation);
 				writer.WriteNumber("samples", item.Samples);
+                writer.WriteNumber("warmupIterations", item.WarmupIterations);
+                writer.WriteString("executionPath", item.Operation is "CUT_A" or "CUT_B" ? "IDENTITY_ALIAS" : "COMPOSITE_KERNEL");
+                writer.WriteBoolean("uploadSamplesArePreSteadyState", true);
+                writer.WriteStartObject("backendTimingWindow");
+                writer.WriteNumber("capacity", item.BackendTimingCapacity);
+                writer.WriteNumber("retainedSamples", item.BackendTimingRetainedSamples);
+                writer.WriteNumber("overwrittenSamples", item.BackendTimingOverwrittenSamples);
+                writer.WriteNumber("contentionDroppedSamples", item.BackendTimingContentionDroppedSamples);
+                writer.WriteEndObject();
 				writer.WriteNumber("frameBudgetMilliseconds", item.FrameBudgetMilliseconds);
 				writer.WriteNumber("p50Milliseconds", item.P50Milliseconds);
 				writer.WriteNumber("p95Milliseconds", item.P95Milliseconds);
@@ -205,6 +219,7 @@ public static class CudaReferenceHardwareQualification
 				{
 					writer.WriteStartObject();
 					writer.WriteString("operation", timing.Operation);
+                    writer.WriteString("measurementKind", timing.Operation == nameof(CudaGpuTimingOperation.KernelGpuElapsed) ? "GPU_EVENT" : "CPU_WALL");
 					writer.WriteNumber("samples", timing.Samples);
 					writer.WriteNumber("p50Milliseconds", timing.P50Milliseconds);
 					writer.WriteNumber("p95Milliseconds", timing.P95Milliseconds);
@@ -302,7 +317,12 @@ public static class CudaReferenceHardwareQualification
 			backendTimings,
 			pixelCorrect,
 			surfaceLifetimeCorrect,
-			timingBudgetMet);
+			timingBudgetMet,
+			profile.WarmupIterations,
+			timingCollector.Capacity,
+			timingCollector.OverwrittenSampleCount,
+			timingCollector.ContentionDroppedSamples,
+			measuredTimings.Count);
 	}
 
 	private static GpuFrame Compose(

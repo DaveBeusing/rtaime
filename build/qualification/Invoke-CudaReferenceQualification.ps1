@@ -12,6 +12,43 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Assert-CudaCaseTimingEvidence {
+    param([Parameter(Mandatory)]$Case)
+    $kernelCase = switch ([string]$Case.operation) {
+        "CUT_A" { $false }
+        "CUT_B" { $false }
+        "DISSOLVE_50" { $true }
+        "DISSOLVE_LAYER" { $true }
+        default { throw "Unknown CUDA qualification operation '$($Case.operation)'." }
+    }
+    $expectedPath = if ($kernelCase) { "COMPOSITE_KERNEL" } else { "IDENTITY_ALIAS" }
+    if ([string]$Case.executionPath -ne $expectedPath) { throw "CUDA execution-path evidence does not match '$($Case.operation)'." }
+    $requiredOperations = @("UploadHostToDevice", "ReadbackDeviceToHost", "BackendLockWait", "BackendLockHold")
+    if ($kernelCase) { $requiredOperations += @("KernelLaunch", "ContextSynchronize", "KernelGpuElapsed") }
+    $timingOperations = @($Case.backendTimings | ForEach-Object { [string]$_.operation })
+    foreach ($requiredOperation in $requiredOperations) {
+        if ($timingOperations -notcontains $requiredOperation) {
+            throw "CUDA qualification evidence is missing '$requiredOperation' timing for '$($Case.format)/$($Case.operation)'."
+        }
+    }
+    if (-not $kernelCase -and @($timingOperations | Where-Object { $_ -in @("KernelLaunch", "ContextSynchronize", "KernelGpuElapsed") }).Count -ne 0) {
+        throw "Identity CUT evidence must not invent or execute a compositor kernel."
+    }
+    foreach ($timing in @($Case.backendTimings)) {
+        $expectedKind = if ([string]$timing.operation -eq "KernelGpuElapsed") { "GPU_EVENT" } else { "CPU_WALL" }
+        if ([string]$timing.measurementKind -ne $expectedKind -or [int]$timing.samples -le 0) { throw "Invalid CUDA timing measurement kind/count." }
+        $values = @([double]$timing.p50Milliseconds, [double]$timing.p95Milliseconds,
+            [double]$timing.p99Milliseconds, [double]$timing.maximumMilliseconds)
+        foreach ($value in $values) { if (-not [double]::IsFinite($value) -or $value -lt 0) { throw "Invalid CUDA timing duration." } }
+        if ($values[0] -gt $values[1] -or $values[1] -gt $values[2] -or $values[2] -gt $values[3]) { throw "Invalid CUDA timing percentile order." }
+    }
+    if ([int]$Case.backendTimingWindow.capacity -le 0 -or [int]$Case.backendTimingWindow.capacity -gt 65536 -or
+        [int]$Case.backendTimingWindow.retainedSamples -lt 0 -or [int]$Case.backendTimingWindow.retainedSamples -gt [int]$Case.backendTimingWindow.capacity -or
+        [int]$Case.warmupIterations -lt 0) {
+        throw "Invalid CUDA timing window/warmup evidence."
+    }
+}
+
 if (-not $IsWindows) { throw "CUDA reference qualification requires the Windows V1 reference platform." }
 if (-not [Environment]::Is64BitProcess) { throw "CUDA reference qualification requires an x64 process." }
 if ([string]::IsNullOrWhiteSpace($ExpectedDeviceName)) { throw "ExpectedDeviceName is required." }
@@ -72,17 +109,7 @@ try {
 			throw "CUDA qualification evidence contains non-monotonic latency percentiles for '$($case.format)/$($case.operation)'."
 		}
 
-		$timingOperations = @($case.backendTimings | ForEach-Object { $_.operation })
-		foreach ($requiredOperation in @(
-			"UploadHostToDevice",
-			"KernelLaunch",
-			"ContextSynchronize",
-			"KernelGpuElapsed",
-			"ReadbackDeviceToHost")) {
-			if ($timingOperations -notcontains $requiredOperation) {
-				throw "CUDA qualification evidence is missing '$requiredOperation' timing for '$($case.format)/$($case.operation)'."
-			}
-		}
+		Assert-CudaCaseTimingEvidence $case
 	}
 
 	Write-Host "CUDA reference hardware qualification PASS"
