@@ -42,7 +42,10 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
 		var probe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
 			period, TimeSpan.FromTicks(period.Ticks / 4), period, 2048));
 		var counter = new RuntimeFrameDropCounter();
-		for (ulong sequence = 0; sequence < 128; sequence++)
+		const ulong warmup = 16_384;
+		const ulong samples = 100_000;
+		// Prime both ring overwrite and tiered execution before checking steady-state allocations.
+		for (ulong sequence = 0; sequence < warmup; sequence++)
 		{
 			var at = schedule.NextDeadline;
 			schedule.TryTake(at, out _);
@@ -51,7 +54,7 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
 		}
 		var clock = System.Diagnostics.Stopwatch.StartNew();
 		var start = GC.GetAllocatedBytesForCurrentThread();
-		for (ulong sequence = 128; sequence < 100_128; sequence++)
+		for (ulong sequence = warmup; sequence < warmup + samples; sequence++)
 		{
 			var at = schedule.NextDeadline;
 			schedule.TryTake(at, out _);
@@ -61,7 +64,8 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
 		var allocated = GC.GetAllocatedBytesForCurrentThread() - start;
 		Assert.Equal(0, allocated);
 		Assert.True(clock.Elapsed < TimeSpan.FromSeconds(15), "Constant-space cadence regression exceeded its software guard.");
-		Assert.Equal(TimingQualificationState.Healthy, probe.Snapshot(schedule.Deadline(100_128)).State);
+		Assert.Equal(TimingQualificationState.Healthy, probe.Snapshot(schedule.Deadline(warmup + samples)).State);
+		Console.WriteLine($"RATIONAL CADENCE rate={rate} samples={samples} allocated={allocated} warmup={warmup}");
 	}
 
 
