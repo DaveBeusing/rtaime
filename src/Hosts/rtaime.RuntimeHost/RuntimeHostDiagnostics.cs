@@ -16,6 +16,7 @@ public static class RuntimeHostDiagnostics
 		var lifecycle = process.Lifecycle;
 		var timing = process.TimingQualification;
 		var schedule = process.ScheduleStatistics;
+		var pipeline = process.PipelineTiming;
 		var build = ProductBuildInfo.FromAssembly(typeof(RuntimeHostProcess).Assembly);
 		var builder = new SupportSnapshotBuilder(
 			build,
@@ -45,6 +46,22 @@ public static class RuntimeHostDiagnostics
 			.Counter("timing.processingViolations", ToCounter(timing.ProcessingViolations))
 			.Counter("timing.consecutiveViolations", timing.ConsecutiveViolations)
 			.Configuration("monitoringEndpoint", process.MonitoringEndpoint);
+
+        builder.Status("timing.pipeline.window", "BOUNDED_RETAINED_SAMPLES")
+            .Counter("timing.pipeline.capacity", pipeline.Capacity)
+            .Counter("timing.pipeline.recorded", ToCounter(pipeline.RecordedSamples))
+            .Counter("timing.pipeline.overwritten", ToCounter(pipeline.OverwrittenSamples))
+            .Counter("timing.pipeline.contentionDropped", ToCounter(pipeline.ContentionDroppedSamples));
+        foreach (var stage in pipeline.Stages)
+        {
+            var key = $"timing.pipeline.{stage.Stage}";
+            builder.Status($"{key}.measurementKind", stage.MeasurementKind)
+                .Counter($"{key}.retainedSamples", stage.RetainedSamples)
+                .Status($"{key}.p50Ms", stage.P50Milliseconds.ToString("F6", CultureInfo.InvariantCulture))
+                .Status($"{key}.p95Ms", stage.P95Milliseconds.ToString("F6", CultureInfo.InvariantCulture))
+                .Status($"{key}.p99Ms", stage.P99Milliseconds.ToString("F6", CultureInfo.InvariantCulture))
+                .Status($"{key}.maximumMs", stage.MaximumMilliseconds.ToString("F6", CultureInfo.InvariantCulture));
+        }
 
 		if (process.IpcServer is { } ipc)
 		{
@@ -96,6 +113,7 @@ public static class RuntimeHostDiagnostics
 			var snapshot = runtime.Snapshot;
 			var monitorTap = runtime.MonitoringStatistics;
 			var monitorHub = runtime.MonitoringHub.Statistics;
+			var monitorQueues = runtime.MonitoringHub.QueueStatistics;
 			var recording = snapshot.Recording;
 			var performance = snapshot.Performance;
 			var gpuTransfers = runtime.GpuMemoryTransfers;
@@ -160,6 +178,9 @@ public static class RuntimeHostDiagnostics
 				.Counter("monitoring.hubPublished", ToCounter(monitorHub.Published))
 				.Counter("monitoring.hubDropped", ToCounter(monitorHub.DroppedBySubscribers))
 				.Counter("monitoring.subscribers", monitorHub.Subscribers)
+                .Counter("monitoring.subscriberQueues.depth", monitorQueues.QueueDepth)
+                .Counter("monitoring.subscriberQueues.sumMaximumDepth", monitorQueues.SumSubscriberMaximumQueueDepth)
+                .Counter("monitoring.subscriberQueues.capacity", monitorQueues.QueueCapacity)
 				.Counter("recording.accepted", ToCounter(recording.Statistics.Accepted))
 				.Counter("recording.written", ToCounter(recording.Statistics.Written))
 				.Counter("recording.dropped", ToCounter(recording.Statistics.Dropped))

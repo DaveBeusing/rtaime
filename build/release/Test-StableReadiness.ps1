@@ -40,20 +40,18 @@ function Get-Sha256 {
 }
 
 function Get-RepositorySourceCommit {
-	$workflowCommit = ([string]$env:GITHUB_SHA).Trim().ToLowerInvariant()
-	if ($workflowCommit -match '^[0-9a-f]{40,64}$') {
-		return $workflowCommit
-	}
-
-	try {
-		$resolved = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-		if (-not [string]::IsNullOrWhiteSpace([string]$resolved)) {
-			$normalized = ([string]$resolved).Trim().ToLowerInvariant()
-			if ($normalized -match '^[0-9a-f]{40,64}$') { return $normalized }
-		}
-	} catch {
-	}
-	return $null
+    try {
+        $resolved = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
+        if (-not [string]::IsNullOrWhiteSpace([string]$resolved)) {
+            $normalized = ([string]$resolved).Trim().ToLowerInvariant()
+            if ($normalized -match '^[0-9a-f]{40,64}$') { return $normalized }
+        }
+    } catch {
+    }
+    # A pull-request workflow SHA may name a synthetic merge while checkout selects the source head.
+    $workflowCommit = ([string]$env:GITHUB_SHA).Trim().ToLowerInvariant()
+    if ($workflowCommit -match '^[0-9a-f]{40,64}$') { return $workflowCommit }
+    return $null
 }
 
 function Normalize-SourceCommit {

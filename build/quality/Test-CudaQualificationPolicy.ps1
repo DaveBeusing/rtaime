@@ -100,3 +100,42 @@ Assert-Condition ($requiredGates -notmatch 'Invoke-CudaReferenceQualification\.p
 Write-Host "CUDA qualification policy verification PASS"
 Write-Host "Hardware evidence state: UNVERIFIED unless the dedicated self-hosted workflow produces PASSED evidence"
 Write-Host "Profile: 1080p50 + 1080p59.94, CUT/DISSOLVE/layer, pixel/lifetime/timing evidence"
+
+# Validate the same per-case evidence rules without pretending to execute physical CUDA.
+$tokens = $null; $errors = $null
+$runnerAst = [System.Management.Automation.Language.Parser]::ParseFile($runnerPath, [ref]$tokens, [ref]$errors)
+Assert-Condition (@($errors).Count -eq 0) "CUDA qualification wrapper must parse."
+$caseFunction = $runnerAst.Find({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq "Assert-CudaCaseTimingEvidence"
+}, $true)
+Assert-Condition ($null -ne $caseFunction) "CUDA per-case timing validator is missing."
+. ([scriptblock]::Create($caseFunction.Extent.Text))
+function New-CudaTimingFixture {
+    param([string]$Operation, [bool]$Kernel)
+    $operations = @("UploadHostToDevice", "ReadbackDeviceToHost", "BackendLockWait", "BackendLockHold")
+    if ($Kernel) { $operations += @("KernelLaunch", "ContextSynchronize", "KernelGpuElapsed") }
+    return [pscustomobject]@{
+        format = "1080p50"; operation = $Operation
+        executionPath = if ($Kernel) { "COMPOSITE_KERNEL" } else { "IDENTITY_ALIAS" }
+        warmupIterations = 4
+        backendTimingWindow = [pscustomobject]@{ capacity = 256; retainedSamples = 240; overwrittenSamples = 0; contentionDroppedSamples = 0 }
+        backendTimings = @($operations | ForEach-Object {
+            [pscustomobject]@{ operation = $_; measurementKind = if ($_ -eq "KernelGpuElapsed") { "GPU_EVENT" } else { "CPU_WALL" }
+                samples = 30; p50Milliseconds = 1.0; p95Milliseconds = 2.0; p99Milliseconds = 3.0; maximumMilliseconds = 4.0 }
+        })
+    }
+}
+foreach ($operation in @("CUT_A", "CUT_B")) { Assert-CudaCaseTimingEvidence (New-CudaTimingFixture $operation $false) }
+foreach ($operation in @("DISSOLVE_50", "DISSOLVE_LAYER")) { Assert-CudaCaseTimingEvidence (New-CudaTimingFixture $operation $true) }
+$missingKernel = New-CudaTimingFixture "DISSOLVE_50" $true
+$missingKernel.backendTimings = @($missingKernel.backendTimings | Where-Object operation -ne "KernelGpuElapsed")
+$wrongKind = New-CudaTimingFixture "DISSOLVE_LAYER" $true
+@($wrongKind.backendTimings | Where-Object operation -eq "KernelGpuElapsed")[0].measurementKind = "CPU_WALL"
+$inventedCut = New-CudaTimingFixture "CUT_A" $true
+$inventedCut.executionPath = "IDENTITY_ALIAS"
+foreach ($fixture in @($missingKernel, $wrongKind, $inventedCut, (New-CudaTimingFixture "UNKNOWN" $false))) {
+    $rejected = $false
+    try { Assert-CudaCaseTimingEvidence $fixture } catch { $rejected = $true }
+    Assert-Condition $rejected "CUDA per-case timing validator accepted incomplete or fabricated execution evidence."
+}
+Write-Host "CUDA identity/kernel timing evidence fixtures PASS"

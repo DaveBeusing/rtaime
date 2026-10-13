@@ -451,6 +451,17 @@ try {
 	if (Test-Path -LiteralPath $tempReadiness) { Remove-Item -LiteralPath $tempReadiness -Force }
 }
 
+# Workflow identity can differ from an explicitly selected checkout; the observed Git source is authoritative.
+$originalWorkflowCommit = $env:GITHUB_SHA
+try {
+    $env:GITHUB_SHA = if ($currentHead -eq ("a" * 40)) { "b" * 40 } else { "a" * 40 }
+    $checkoutReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1")
+    Assert-Condition ([string]$checkoutReadiness.sourceCommit -eq $currentHead) "Stable readiness must prefer the observed checkout over workflow merge metadata."
+} finally {
+    if ($null -eq $originalWorkflowCommit) { Remove-Item Env:GITHUB_SHA -ErrorAction SilentlyContinue }
+    else { $env:GITHUB_SHA = $originalWorkflowCommit }
+}
+
 $wrongSource = "1111111111111111111111111111111111111111"
 if ($wrongSource -eq $currentHead) { $wrongSource = "2222222222222222222222222222222222222222" }
 $sourceMismatchReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1") -ExpectedSourceCommit $wrongSource

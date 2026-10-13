@@ -189,6 +189,79 @@ public sealed class GpuCompositorPerformanceProfileTests
             "resident inputs + composite + one readback; excludes upload, output devices and physical GPU timing.");
     }
 
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Managed_1080p_matrix_reports_warmup_steady_state_and_full_readback(bool use5994, bool dissolve)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var backend = new CountingCompositeBackend();
+        using var provider = new GpuProcessingProvider(backend, readbackBufferCapacity: 1);
+        provider.Start();
+        var timing = new FrameTiming(0, 0, new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator));
+        using var a = new StaticRgbaSource(MediaSourceId.New(), RgbaFrameBuffer.Solid(format, 16, 32, 64)).Materialize(provider, timing);
+        using var b = new StaticRgbaSource(MediaSourceId.New(), RgbaFrameBuffer.Solid(format, 192, 128, 64)).Materialize(provider, timing);
+        var frames = new List<GpuFrame>();
+        var reports = new List<object>();
+        try
+        {
+            for (var index = 0; index < 8; index++)
+                frames.Add(new StaticRgbaSource(MediaSourceId.New(),
+                    RgbaFrameBuffer.Solid(format, (byte)(32 + index * 19), (byte)(220 - index * 17), (byte)(64 + index * 11), (byte)(64 + index * 20))).Materialize(provider, timing));
+            foreach (var layerCount in new[] { 0, 1, 2, 4, 8 })
+            {
+                var request = GpuCompositeRequest.WithLayers(MediaSourceId.New(), a, b,
+                    dissolve ? GpuTransition.Dissolve(128) : GpuTransition.CutToA,
+                    frames.Take(layerCount).Select((frame, index) => new GpuKeyLayer(frame, (byte)(255 - index * 9), true)));
+                void Boundary()
+                {
+                    var result = provider.Composite(request);
+                    Assert.True(result.Succeeded, result.Failure?.ToString());
+                    using var output = result.Frame!;
+                    var identityAlias = !dissolve && layerCount == 0;
+                    Assert.Equal(identityAlias ? 10 : 11, provider.ActiveSurfaceCount);
+                    Assert.Equal(identityAlias, output.SurfaceId == a.SurfaceId);
+                    using var readback = provider.RentReadback(output);
+                    Assert.Equal(RgbaFrameBuffer.RequiredByteLength(format), readback.Memory.Length);
+                }
+                const int warmup = 3;
+                const int count = 12;
+                for (var index = 0; index < warmup; index++) Boundary();
+                var passes = backend.CompositeCalls;
+                var samples = new double[count];
+                for (var index = 0; index < count; index++)
+                {
+                    var started = Stopwatch.GetTimestamp();
+                    Boundary();
+                    samples[index] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                }
+                var expectedPasses = layerCount == 0 ? (dissolve ? 1 : 0) : layerCount;
+                Assert.Equal(expectedPasses * count, backend.CompositeCalls - passes);
+                Assert.Equal(10, provider.ActiveSurfaceCount);
+                Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+                Array.Sort(samples);
+                var report = new
+                {
+                    format = use5994 ? "1080p59.94" : "1080p50",
+                    transition = dissolve ? "DISSOLVE" : "CUT", layerCount,
+                    warmupBoundaries = warmup, samples = count, measurementKind = "CPU_WALL",
+                    scope = "RESIDENT_INPUTS_COMPOSITE_AND_ONE_READBACK",
+                    p50Milliseconds = Percentile(samples, .50), p95Milliseconds = Percentile(samples, .95),
+                    p99Milliseconds = Percentile(samples, .99), maximumMilliseconds = samples[^1],
+                    passes = backend.CompositeCalls - passes,
+                    provider.MemoryTransferStatistics
+                };
+                reports.Add(report);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
+            }
+            ProgramPipelineEvidence.Write($"compositor-{use5994}-{dissolve}", reports);
+        }
+        finally { foreach (var frame in frames) frame.Dispose(); }
+    }
+
     private static void ScalarBlendBaseline(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, Span<byte> output, byte weight)
     {
         for (var offset = 0; offset < output.Length; offset += 4)

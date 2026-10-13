@@ -49,7 +49,7 @@ public sealed class CudaReferenceHardwareQualificationTests
 	{
 		var caseResult = new CudaQualificationCaseResult(
 			"1080p50",
-			"CUT_A",
+			"DISSOLVE_50",
 			30,
 			20.0,
 			1.0,
@@ -75,7 +75,12 @@ public sealed class CudaReferenceHardwareQualificationTests
 			},
 			true,
 			true,
-			true);
+			true,
+            WarmupIterations: 4,
+            BackendTimingCapacity: 256,
+            BackendTimingOverwrittenSamples: 7,
+            BackendTimingContentionDroppedSamples: 2,
+            BackendTimingRetainedSamples: 60);
 		var report = new CudaQualificationReport(
 			CudaQualificationReport.CurrentSchemaVersion,
 			DateTimeOffset.Parse("2026-10-08T09:00:00Z"),
@@ -92,6 +97,13 @@ public sealed class CudaReferenceHardwareQualificationTests
 		Assert.Equal("1.1", CudaQualificationReport.CurrentSchemaVersion);
 		Assert.Contains("\"p99Milliseconds\": 2.5", json, StringComparison.Ordinal);
 		Assert.Contains("\"backendTimings\":", json, StringComparison.Ordinal);
+        Assert.Contains("\"executionPath\": \"COMPOSITE_KERNEL\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"measurementKind\": \"GPU_EVENT\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"measurementKind\": \"CPU_WALL\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"warmupIterations\": 4", json, StringComparison.Ordinal);
+        Assert.Contains("\"overwrittenSamples\": 7", json, StringComparison.Ordinal);
+        Assert.Contains("\"contentionDroppedSamples\": 2", json, StringComparison.Ordinal);
+        Assert.Contains("\"retainedSamples\": 60", json, StringComparison.Ordinal);
 		Assert.Contains(CudaGpuTimingOperation.KernelGpuElapsed.ToString(), json, StringComparison.Ordinal);
 		Assert.Contains(CudaGpuTimingOperation.ContextSynchronize.ToString(), json, StringComparison.Ordinal);
 	}

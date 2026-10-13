@@ -226,8 +226,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
     public void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels)
     {
+        var lockStarted = StartTiming();
         lock (_gate)
         {
+            _timingCollector?.RecordLockWait(CudaGpuTimingOperation.UploadHostToDevice, lockStarted);
+            using var lockHold = _timingCollector?.MeasureLockHold(CudaGpuTimingOperation.UploadHostToDevice) ?? default;
             EnsureRunning();
             EnsureRgba8(format);
             if (_surfaces.ContainsKey(surfaceId))
@@ -260,8 +263,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
     public void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation)
     {
+        var lockStarted = StartTiming();
         lock (_gate)
         {
+            _timingCollector?.RecordLockWait(CudaGpuTimingOperation.KernelLaunch, lockStarted);
+            using var lockHold = _timingCollector?.MeasureLockHold(CudaGpuTimingOperation.KernelLaunch) ?? default;
             EnsureRunning();
             EnsureRgba8(format);
             if (_surfaces.ContainsKey(outputSurfaceId))
@@ -344,8 +350,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
         VideoFormat format,
         out GpuBackendMonitoringResource? resource)
     {
+        var lockStarted = StartTiming();
         lock (_gate)
         {
+            _timingCollector?.RecordLockWait(CudaGpuTimingOperation.MonitoringExport, lockStarted);
+            using var lockHold = _timingCollector?.MeasureLockHold(CudaGpuTimingOperation.MonitoringExport) ?? default;
             EnsureRunning();
             resource = null;
             if (_monitoringInterop is null)
@@ -388,8 +397,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
     public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
     {
+        var lockStarted = StartTiming();
         lock (_gate)
         {
+            _timingCollector?.RecordLockWait(CudaGpuTimingOperation.ReadbackDeviceToHost, lockStarted);
+            using var lockHold = _timingCollector?.MeasureLockHold(CudaGpuTimingOperation.ReadbackDeviceToHost) ?? default;
             EnsureRunning();
             var allocation = Get(surfaceId, format);
             if (destination.Length != checked((int)allocation.ByteLength))

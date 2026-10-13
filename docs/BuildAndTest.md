@@ -325,3 +325,10 @@ The real Operator XAML qualification includes scroll measurement, hidden monitor
 Startup capture qualification checks that Healthy is published after qualified evidence and the Production Readiness stage are available. Fixture teardown owns and joins every host run before copying retained evidence or removing temporary data; active capture leases are not diagnostic artifacts. Repeated recovery qualification also runs rapid preview/take actions and requires a successful ControlHost durability drain.
 
 The unit suite exercises bounded large MXF KLV/local-set inputs and SRT cancellation/failed encoder initialization with resource-release checks. These checks supplement all five Required Gates and the packaged managed lifecycle qualification, including preserved legacy 1.0 checkpoint content. They do not qualify physical presentation or external hardware.
+
+
+## Program pipeline measurements
+
+Run `TimingQualificationTests`, `RuntimePerformanceStatusBarPerformanceTests`, `GpuCompositorPerformanceProfileTests`, `ProgramPipelineMeasurementBaselineTests` and `DeterministicRuntimeBoundaryTests` for bounded telemetry, diagnostic-contention behavior, warmed allocation overhead, both-format layer/load matrices and unchanged Program pixels/ownership. Required Gates runs the profile subset with detailed console output and preserves source-bound JSON measurements.
+
+For retained local software reports, set `RTAIME_PIPELINE_BASELINE_EVIDENCE` to an output directory, `RTAIME_SOURCE_COMMIT` and `RTAIME_BUILD_COMMIT` to the same exact built SHA, and `RTAIME_BASELINE_SDK` to the verified `10.0.401` SDK. Without an output destination the tests only print measurements. See [Renderer qualification](RendererQualificationAndSoakTesting.md#program-pipeline-measurement-baseline) for scope, warmup, bounded-window semantics and the physical evidence boundary.

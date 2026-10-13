@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 namespace rtaime.Provider.Gpu;
@@ -9,13 +11,16 @@ public enum CudaGpuTimingOperation
     ContextSynchronize = 3,
     KernelGpuElapsed = 4,
     ReadbackDeviceToHost = 5,
-    MonitoringExport = 6
+    MonitoringExport = 6,
+    BackendLockWait = 7,
+    BackendLockHold = 8
 }
 
 public readonly record struct CudaGpuTimingSample(
     CudaGpuTimingOperation Operation,
     ulong ByteLength,
-    double Milliseconds);
+    double Milliseconds,
+    CudaGpuTimingOperation? Scope = null);
 
 /// <summary>
 /// Optional bounded CUDA timing evidence sink. Production execution does not create a collector by default.
@@ -30,6 +35,8 @@ public sealed class CudaGpuTimingCollector
     private int _sampleCount;
     private int _nextSampleIndex;
     private ulong _overwrittenSampleCount;
+    private long _contentionDroppedSamples;
+    public ulong ContentionDroppedSamples => checked((ulong)Interlocked.Read(ref _contentionDroppedSamples));
 
     public CudaGpuTimingCollector(int capacity = DefaultCapacity)
     {
@@ -38,6 +45,12 @@ public sealed class CudaGpuTimingCollector
 
         _samples = new CudaGpuTimingSample[capacity];
     }
+
+    internal CudaGpuTimingScope MeasureLockHold(CudaGpuTimingOperation scope) =>
+        new(this, scope, Stopwatch.GetTimestamp());
+
+    internal void RecordLockWait(CudaGpuTimingOperation scope, long startedAt) =>
+        Record(CudaGpuTimingOperation.BackendLockWait, 0, Stopwatch.GetElapsedTime(startedAt), scope);
 
     public int Capacity => _samples.Length;
 
@@ -50,14 +63,24 @@ public sealed class CudaGpuTimingCollector
         }
     }
 
-    internal void Record(CudaGpuTimingOperation operation, nuint byteLength, TimeSpan duration)
+    internal void Record(CudaGpuTimingOperation operation, nuint byteLength, TimeSpan duration, CudaGpuTimingOperation? scope = null)
     {
-        if (!Enum.IsDefined(typeof(CudaGpuTimingOperation), operation))
+        if ((int)operation < (int)CudaGpuTimingOperation.UploadHostToDevice ||
+            (int)operation > (int)CudaGpuTimingOperation.BackendLockHold)
             throw new ArgumentOutOfRangeException(nameof(operation));
+        if (scope is { } scopedOperation &&
+            ((int)scopedOperation < (int)CudaGpuTimingOperation.UploadHostToDevice ||
+             (int)scopedOperation > (int)CudaGpuTimingOperation.BackendLockHold))
+            throw new ArgumentOutOfRangeException(nameof(scope));
         if (duration < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(duration));
 
-        lock (_gate)
+        if (!Monitor.TryEnter(_gate))
+        {
+            Interlocked.Increment(ref _contentionDroppedSamples);
+            return;
+        }
+        try
         {
             if (_sampleCount == _samples.Length && _overwrittenSampleCount < ulong.MaxValue)
                 _overwrittenSampleCount++;
@@ -65,10 +88,12 @@ public sealed class CudaGpuTimingCollector
             _samples[_nextSampleIndex] = new CudaGpuTimingSample(
                 operation,
                 checked((ulong)byteLength),
-                duration.TotalMilliseconds);
+                duration.TotalMilliseconds,
+                scope);
             _nextSampleIndex = (_nextSampleIndex + 1) % _samples.Length;
             _sampleCount = Math.Min(_sampleCount + 1, _samples.Length);
         }
+        finally { Monitor.Exit(_gate); }
     }
 
     internal void RecordGpuMilliseconds(CudaGpuTimingOperation operation, nuint byteLength, float milliseconds)
@@ -99,6 +124,20 @@ public sealed class CudaGpuTimingCollector
             _sampleCount = 0;
             _nextSampleIndex = 0;
             _overwrittenSampleCount = 0;
+            Interlocked.Exchange(ref _contentionDroppedSamples, 0);
         }
     }
+}
+
+internal readonly struct CudaGpuTimingScope : IDisposable
+{
+    private readonly CudaGpuTimingCollector? _collector;
+    private readonly CudaGpuTimingOperation _scope;
+    private readonly long _startedAt;
+    internal CudaGpuTimingScope(CudaGpuTimingCollector collector, CudaGpuTimingOperation scope, long startedAt)
+    {
+        _collector = collector; _scope = scope; _startedAt = startedAt;
+    }
+    public void Dispose() => _collector?.Record(CudaGpuTimingOperation.BackendLockHold, 0,
+        Stopwatch.GetElapsedTime(_startedAt), _scope);
 }

@@ -10,6 +10,7 @@ using rtaime.Provider.Gpu;
 using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
+using rtaime.Runtime;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
@@ -174,6 +175,64 @@ public sealed class DeterministicRuntimeBoundaryTests
 		Assert.True(published.AuthoritativeActive);
 		Assert.Contains("frame sequence 1", published.Evidence, StringComparison.Ordinal);
 	}
+
+
+    [Fact]
+    public async Task Pipeline_measurement_preserves_pixels_sequence_and_readback_ownership()
+    {
+        using var backend = new ManagedReferenceGpuBackend();
+        await using var fixture = CreateFixture(backend);
+        var program = Assert.Single(fixture.Prepared.Bindings, binding => binding.OutputRoleId == "program");
+        AssertCommitted(fixture.Runtime.ApplyExecution(fixture.Prepared, program.MediaSinkId!.Value));
+        using var baselineBackend = new ManagedReferenceGpuBackend();
+        await using var baseline = CreateFixture(baselineBackend);
+        var baselineProgram = Assert.Single(baseline.Prepared.Bindings, binding => binding.OutputRoleId == "program");
+        AssertCommitted(baseline.Runtime.ApplyExecution(baseline.Prepared, baselineProgram.MediaSinkId!.Value));
+        byte[] before;
+        using (var boundary = baseline.Runtime.ProcessNextBoundary())
+        {
+            Assert.Equal(0UL, boundary.SequenceNumber);
+            before = boundary.ProgramPixels.ToArray();
+        }
+        var probe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(15)));
+        fixture.Runtime.EnablePipelineTiming(probe);
+        using (var boundary = fixture.Runtime.ProcessNextBoundary())
+        {
+            Assert.Equal(0UL, boundary.SequenceNumber);
+            Assert.Equal(before, boundary.ProgramPixels.ToArray());
+            Assert.Equal(1, fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
+        }
+        Assert.Equal(0, fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
+        Assert.Equal(0, fixture.Runtime.Snapshot.ActiveGpuSurfaces);
+        var stages = probe.PipelineSnapshot().Stages.Select(stage => stage.Stage).ToArray();
+        Assert.Contains(RuntimePipelineTimingStage.ServiceBoundaryAttempt, stages);
+        Assert.Contains(RuntimePipelineTimingStage.ExecutionLockWait, stages);
+        Assert.Contains(RuntimePipelineTimingStage.CaptureLockHold, stages);
+        Assert.Contains(RuntimePipelineTimingStage.MetadataLockHold, stages);
+        Assert.Contains(RuntimePipelineTimingStage.Composite, stages);
+        Assert.Contains(RuntimePipelineTimingStage.Readback, stages);
+        Assert.Contains(RuntimePipelineTimingStage.ConsumerSubmission, stages);
+        // Only the process loop can measure external admission and output completion.
+        Assert.DoesNotContain(RuntimePipelineTimingStage.CompleteProgramBoundary, stages);
+    }
+
+    [Fact]
+    public async Task Failed_boundary_records_attempt_without_success_or_readback_evidence()
+    {
+        using var backend = new ManagedReferenceGpuBackend();
+        await using var fixture = CreateFixture(backend);
+        var probe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(15)));
+        fixture.Runtime.EnablePipelineTiming(probe);
+        Assert.Throws<InvalidOperationException>(() => fixture.Runtime.ProcessNextBoundary());
+        var stages = probe.PipelineSnapshot().Stages.Select(stage => stage.Stage).ToArray();
+        Assert.Contains(RuntimePipelineTimingStage.ServiceBoundaryAttempt, stages);
+        Assert.DoesNotContain(RuntimePipelineTimingStage.CompleteProgramBoundary, stages);
+        Assert.DoesNotContain(RuntimePipelineTimingStage.Readback, stages);
+        Assert.Equal(0UL, fixture.Runtime.Snapshot.NextSequenceNumber);
+        Assert.Equal(0, fixture.Runtime.Snapshot.ActiveGpuSurfaces);
+    }
 
 	private static Fixture CreateFixture(IGpuProcessingBackend backend, bool includeAux = false)
 	{

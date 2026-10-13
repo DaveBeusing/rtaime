@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Runtime;
+using rtaime.Provider.Gpu;
 
 namespace rtaime.Tests.Unit;
 
@@ -121,4 +122,99 @@ public sealed class TimingQualificationTests
 		Assert.Equal(expected.Samples, observed.Samples);
 	}
 
+
+    [Fact]
+    public void Pipeline_window_reports_exact_nearest_rank_percentiles_and_overwrites()
+    {
+        var probe = new RuntimeTimingQualificationProbe(Thresholds);
+        for (ulong index = 0; index < 12; index++)
+            Assert.True(probe.TryObserveStage(RuntimePipelineTimingStage.Readback, index, TimeSpan.FromMilliseconds(index)));
+        var snapshot = probe.PipelineSnapshot();
+        Assert.Equal(12UL, snapshot.RecordedSamples);
+        Assert.Equal(4UL, snapshot.OverwrittenSamples);
+        Assert.Equal(0UL, snapshot.ContentionDroppedSamples);
+        Assert.Equal(Enumerable.Range(4, 8).Select(i => (ulong)i), snapshot.Samples.Select(sample => sample.SequenceNumber));
+        var stage = Assert.Single(snapshot.Stages);
+        Assert.Equal("CPU_WALL", stage.MeasurementKind);
+        Assert.Equal(8, stage.RetainedSamples);
+        Assert.Equal(7, stage.P50Milliseconds);
+        Assert.Equal(11, stage.P95Milliseconds);
+        Assert.Equal(11, stage.P99Milliseconds);
+        Assert.Equal(11, stage.MaximumMilliseconds);
+        // Pipeline measurements are observational and must not change readiness health.
+        Assert.Equal(TimingQualificationState.Recovering, probe.Snapshot(TimeSpan.Zero).State);
+        probe.ResetPipelineSamples();
+        Assert.Empty(probe.PipelineSnapshot().Samples);
+        Assert.Equal(0UL, probe.PipelineSnapshot().RecordedSamples);
+    }
+
+    [Fact]
+    public async Task Pipeline_writer_drops_and_counts_samples_instead_of_waiting_for_snapshot()
+    {
+        var probe = new RuntimeTimingQualificationProbe(Thresholds);
+        var gate = typeof(RuntimeTimingQualificationProbe).GetField("_pipelineGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(probe)!;
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var reader = Task.Run(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } });
+        try
+        {
+            Assert.True(held.Wait(TimeSpan.FromSeconds(3)));
+            var writer = Task.Run(() => probe.TryObserveStage(RuntimePipelineTimingStage.Readback, 1, TimeSpan.Zero));
+            Assert.False(await writer.WaitAsync(TimeSpan.FromSeconds(1)));
+        }
+        finally { release.Set(); await reader; }
+        Assert.Equal(1UL, probe.PipelineSnapshot().ContentionDroppedSamples);
+        Assert.Empty(probe.PipelineSnapshot().Samples);
+    }
+
+    [Fact]
+    public void Pipeline_rejects_invalid_measurements_and_labels_lateness_separately()
+    {
+        var probe = new RuntimeTimingQualificationProbe(Thresholds);
+        Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage((RuntimePipelineTimingStage)999, 0, TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage(RuntimePipelineTimingStage.Readback, 0, TimeSpan.FromTicks(-1)));
+        foreach (var stage in Enum.GetValues<RuntimePipelineTimingStage>())
+            Assert.True(probe.TryObserveStage(stage, 0, TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage((RuntimePipelineTimingStage)(-1), 0, TimeSpan.Zero));
+        probe.ResetPipelineSamples();
+        probe.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, 0, TimeSpan.Zero);
+        probe.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, 0, TimeSpan.Zero);
+        Assert.Equal(new[] { "SCHEDULER_LATENESS", "PRESENTATION_LATENESS" }, probe.PipelineSnapshot().Stages.Select(stage => stage.MeasurementKind));
+    }
+
+    [Fact]
+    public async Task Cuda_timing_writer_is_nonblocking_and_preserves_operation_scope()
+    {
+        var collector = new CudaGpuTimingCollector(64);
+        var method = typeof(CudaGpuTimingCollector).GetMethod("Record",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var record = method.CreateDelegate<Action<CudaGpuTimingOperation, nuint, TimeSpan, CudaGpuTimingOperation?>>(collector);
+        foreach (var operation in Enum.GetValues<CudaGpuTimingOperation>())
+            record(operation, 0, TimeSpan.Zero, operation);
+        Assert.Throws<ArgumentOutOfRangeException>(() => record((CudaGpuTimingOperation)999, 0, TimeSpan.Zero, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => record(CudaGpuTimingOperation.KernelLaunch, 0, TimeSpan.Zero, (CudaGpuTimingOperation)(-1)));
+        collector.Reset();
+        for (var index = 0; index < 70; index++)
+            record(CudaGpuTimingOperation.BackendLockWait, 0, TimeSpan.FromMilliseconds(index), CudaGpuTimingOperation.KernelLaunch);
+        Assert.Equal(6UL, collector.OverwrittenSampleCount);
+        Assert.Equal(64, collector.Snapshot().Count);
+        Assert.All(collector.Snapshot(), sample => Assert.Equal(CudaGpuTimingOperation.KernelLaunch, sample.Scope));
+        var gate = typeof(CudaGpuTimingCollector).GetField("_gate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(collector)!;
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var reader = Task.Run(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } });
+        try
+        {
+            Assert.True(held.Wait(TimeSpan.FromSeconds(3)));
+            await Task.Run(() => record(CudaGpuTimingOperation.ReadbackDeviceToHost, 0, TimeSpan.Zero, null))
+                .WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        finally { release.Set(); await reader; }
+        Assert.Equal(1UL, collector.ContentionDroppedSamples);
+        collector.Reset();
+        Assert.Empty(collector.Snapshot());
+        Assert.Equal(0UL, collector.ContentionDroppedSamples);
+    }
 }
