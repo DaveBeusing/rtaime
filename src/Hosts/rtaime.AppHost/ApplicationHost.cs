@@ -735,10 +735,10 @@ public sealed class UnifiedApplicationHost
 				_options.RequireAI ? "AIHost supervision is healthy and qualified." : "AIHost is not required by the selected startup profile.");
 			_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Qualifying the complete production runtime.");
 			TrackReadiness(qualifiedReadiness);
-			Transition(ApplicationLifecycleState.Healthy);
-			_initialQualificationCompleted = true;
 			_diagnostics.CaptureQualified(qualifiedReadiness.Evidence);
 			_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
+			_initialQualificationCompleted = true;
+			Transition(ApplicationLifecycleState.Healthy);
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
 			{
