@@ -220,6 +220,122 @@ public sealed class GpuCompositorOptimizationTests
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(255, false)]
+    [InlineData(127, true)]
+    public void Noop_transition_retains_selected_surface_without_backend_work(int weight, bool sameBackground)
+    {
+        var backend = new CountingCompositeBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var timing = Timing(9);
+        var contentA = Pattern(19);
+        var contentB = Pattern(131);
+        var a = new StaticRgbaSource(MediaSourceId.New(), contentA).Materialize(provider, timing);
+        var b = new StaticRgbaSource(MediaSourceId.New(), contentB).Materialize(provider, timing);
+        var selected = weight == 255 ? b : a;
+        var surface = selected.SurfaceId;
+        var result = provider.Composite(new GpuCompositeRequest(OutputSource, a, sameBackground ? a : b,
+            GpuTransition.Dissolve((byte)weight)));
+        Assert.True(result.Succeeded, result.Failure?.ToString());
+        var output = result.Frame!;
+        Assert.NotSame(selected, output);
+        Assert.Equal(OutputSource, output.Descriptor.SourceId);
+        Assert.Equal(timing, output.Descriptor.Timing);
+        Assert.Equal(surface, output.SurfaceId);
+        Assert.Equal(0, backend.CompositeCalls);
+        Assert.Equal(2, provider.ActiveSurfaceCount);
+        a.Dispose();
+        b.Dispose();
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal((weight == 255 ? contentB : contentA).Pixels.ToArray(), provider.Readback(output));
+        provider.Stop();
+        Assert.True(output.IsDisposed);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        output.Dispose();
+    }
+
+    [Fact]
+    public void Noop_transition_validates_hidden_layers_and_unselected_background_before_retaining()
+    {
+        var backend = new CountingCompositeBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var a = new StaticRgbaSource(MediaSourceId.New(), Pattern(11)).Materialize(provider, Timing(1));
+        using var b = new StaticRgbaSource(MediaSourceId.New(), Pattern(31)).Materialize(provider, Timing(2));
+        Assert.Equal("gpu.composite.timing_mismatch", provider.Composite(
+            new GpuCompositeRequest(OutputSource, a, b, GpuTransition.CutToA)).Failure?.Code);
+        using var hidden = new StaticRgbaSource(MediaSourceId.New(), Pattern(51)).Materialize(provider, Timing(1));
+        hidden.Dispose();
+        Assert.Equal("gpu.composite.surface_disposed", provider.Composite(
+            new GpuCompositeRequest(OutputSource, a, a, GpuTransition.CutToA,
+                new GpuKeyLayer(hidden, 0, visible: false))).Failure?.Code);
+        Assert.Equal(0, backend.CompositeCalls);
+        Assert.Equal(2, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
+    public void Noop_transition_rejects_foreign_frame_with_colliding_surface_identity()
+    {
+        using var first = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        using var second = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        first.Start(); second.Start();
+        var source = MediaSourceId.New();
+        using var owned = new StaticRgbaSource(source, Pattern(11)).Materialize(first, Timing(1));
+        using var foreign = new StaticRgbaSource(source, Pattern(31)).Materialize(second, Timing(1));
+        Assert.Equal(owned.SurfaceId, foreign.SurfaceId);
+        var result = first.Composite(new GpuCompositeRequest(OutputSource, owned, foreign, GpuTransition.CutToA));
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.composite.surface_foreign", result.Failure?.Code);
+    }
+
+    [Fact]
+    public void Dissolve_matches_independent_integer_equation_for_every_byte_pair_and_weight()
+    {
+        var format = new VideoFormat(128, 128, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+        var pixelsA = new byte[65_536];
+        var pixelsB = new byte[65_536];
+        for (var index = 0; index < pixelsA.Length; index++)
+        {
+            pixelsA[index] = (byte)(index >> 8);
+            pixelsB[index] = (byte)(index & 255);
+        }
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+        using var a = new StaticRgbaSource(MediaSourceId.New(), new RgbaFrameBuffer(format, pixelsA)).Materialize(provider, Timing(1));
+        using var b = new StaticRgbaSource(MediaSourceId.New(), new RgbaFrameBuffer(format, pixelsB)).Materialize(provider, Timing(1));
+        for (var weight = 0; weight <= 255; weight++)
+        {
+            var result = provider.Composite(new GpuCompositeRequest(OutputSource, a, b, GpuTransition.Dissolve((byte)weight)));
+            Assert.True(result.Succeeded, result.Failure?.ToString());
+            using var output = result.Frame!;
+            using var readback = provider.RentReadback(output);
+            var actual = readback.Memory.Span;
+            for (var index = 0; index < actual.Length; index++)
+                Assert.Equal((byte)((pixelsA[index] * (255 - weight) + pixelsB[index] * weight + 127) / 255), actual[index]);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(3, 3)]
+    [InlineData(67, 3)]
+    public void Vector_dissolve_preserves_scalar_tail_and_alpha(int width, int height)
+    {
+        var format = new VideoFormat((uint)width, (uint)height, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+        var length = RgbaFrameBuffer.RequiredByteLength(format);
+        var pixelsA = Enumerable.Range(0, length).Select(index => (byte)(index % 256)).ToArray();
+        var pixelsB = Enumerable.Range(0, length).Select(index => (byte)(255 - index % 256)).ToArray();
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+        using var a = new StaticRgbaSource(MediaSourceId.New(), new RgbaFrameBuffer(format, pixelsA)).Materialize(provider, Timing(1));
+        using var b = new StaticRgbaSource(MediaSourceId.New(), new RgbaFrameBuffer(format, pixelsB)).Materialize(provider, Timing(1));
+        var result = provider.Composite(new GpuCompositeRequest(OutputSource, a, b, GpuTransition.Dissolve(137)));
+        using var output = result.Frame!;
+        Assert.Equal(CompositeReference(pixelsA, pixelsB, 137, []), provider.Readback(output));
+    }
+
     private static FrameTiming Timing(ulong sequence) =>
         new(sequence, checked((long)sequence), new Timebase(1, 50));
 

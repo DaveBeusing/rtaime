@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -1238,6 +1239,29 @@ public sealed class GpuProcessingProvider : IDisposable
 
             var format = request.BackgroundA.Descriptor.Surface.Format;
             var timing = request.BackgroundA.Descriptor.Timing;
+            var contributingLayerCount = 0;
+            for (var index = 0; index < request.Layers.Count; index++)
+            {
+                if (LayerContributesToComposite(request.Layers[index]))
+                    contributingLayerCount++;
+            }
+
+            // Validation still covers every input, including inputs the exact no-op path does not read.
+            if (contributingLayerCount == 0 &&
+                (request.Transition.BlendWeight is 0 or byte.MaxValue ||
+                 request.BackgroundA.SurfaceId == request.BackgroundB.SurfaceId))
+            {
+                var selected = request.Transition.BlendWeight == byte.MaxValue
+                    ? request.BackgroundB : request.BackgroundA;
+                var frame = CreateFrameReferenceUnsafe(_activeFrames[selected.SurfaceId], request.OutputSourceId, timing);
+                stopwatch.Stop();
+                Observe(request.Transition.Kind == GpuTransitionKind.Cut
+                    ? "gpu.composite.cut" : "gpu.composite.dissolve", timing.SequenceNumber, null);
+                Observe($"gpu.composite.layers:{request.Layers.Count}", timing.SequenceNumber, null);
+                Observe($"gpu.composite.passes:0:skipped:{request.Layers.Count}", timing.SequenceNumber, null);
+                return GpuProcessingResult.Success(frame, stopwatch.Elapsed, request.Layers.Count);
+            }
+
             var ordinal = NextSurfaceOrdinal();
             var outputSurfaceId = new SurfaceId(GpuIdentity.Create(
                 "gpu-composite-output",
@@ -1247,13 +1271,6 @@ public sealed class GpuProcessingProvider : IDisposable
                 request.Transition.BlendWeight.ToString(),
                 request.Layers.Count.ToString(),
                 ordinal.ToString()));
-
-            var contributingLayerCount = 0;
-            for (var index = 0; index < request.Layers.Count; index++)
-            {
-                if (LayerContributesToComposite(request.Layers[index]))
-                    contributingLayerCount++;
-            }
 
             SurfaceId? intermediateSurfaceId = null;
             SurfaceId? pendingSurfaceId = null;
@@ -1585,43 +1602,42 @@ public sealed class GpuProcessingProvider : IDisposable
                 $"GPU composite requests support at most '{GpuCompositeLimits.MaxActiveLayers}' ordered layers.");
         }
 
-        if (request.Layers
-            .Select(layer => layer.Frame.SurfaceId)
-            .Distinct()
-            .Count() != request.Layers.Count)
-        {
-            return new Failure("gpu.composite.layer_duplicate", "GPU composite layer surfaces must be unique within one request.");
-        }
+        for (var index = 0; index < request.Layers.Count; index++)
+            for (var previous = 0; previous < index; previous++)
+                if (request.Layers[index].Frame.SurfaceId == request.Layers[previous].Frame.SurfaceId)
+                    return new Failure("gpu.composite.layer_duplicate", "GPU composite layer surfaces must be unique within one request.");
 
-        if (request.BackgroundA.IsDisposed ||
-            request.BackgroundB.IsDisposed ||
-            request.Layers.Any(layer => layer.Frame.IsDisposed))
-        {
+        if (request.BackgroundA.IsDisposed || request.BackgroundB.IsDisposed)
             return new Failure("gpu.composite.surface_disposed", "GPU composite inputs must still own live surfaces.");
-        }
+        for (var index = 0; index < request.Layers.Count; index++)
+            if (request.Layers[index].Frame.IsDisposed)
+                return new Failure("gpu.composite.surface_disposed", "GPU composite inputs must still own live surfaces.");
 
-        if (!_activeFrames.ContainsKey(request.BackgroundA.SurfaceId) || !_activeFrames.ContainsKey(request.BackgroundB.SurfaceId))
+        if (!OwnsFrameUnsafe(request.BackgroundA) || !OwnsFrameUnsafe(request.BackgroundB))
             return new Failure("gpu.composite.surface_foreign", "GPU composite backgrounds must belong to this provider instance.");
-
-        if (request.Layers.Any(layer => !_activeFrames.ContainsKey(layer.Frame.SurfaceId)))
-            return new Failure("gpu.composite.layer_foreign", "GPU composite layers must belong to this provider instance.");
+        for (var index = 0; index < request.Layers.Count; index++)
+            if (!OwnsFrameUnsafe(request.Layers[index].Frame))
+                return new Failure("gpu.composite.layer_foreign", "GPU composite layers must belong to this provider instance.");
 
         var format = request.BackgroundA.Descriptor.Surface.Format;
-        if (request.BackgroundB.Descriptor.Surface.Format != format ||
-            request.Layers.Any(layer => layer.Frame.Descriptor.Surface.Format != format))
-        {
+        if (request.BackgroundB.Descriptor.Surface.Format != format)
             return new Failure("gpu.composite.format_mismatch", "GPU composite inputs must use the same video format.");
-        }
+        for (var index = 0; index < request.Layers.Count; index++)
+            if (request.Layers[index].Frame.Descriptor.Surface.Format != format)
+                return new Failure("gpu.composite.format_mismatch", "GPU composite inputs must use the same video format.");
 
         var timing = request.BackgroundA.Descriptor.Timing;
-        if (request.BackgroundB.Descriptor.Timing != timing ||
-            request.Layers.Any(layer => layer.Frame.Descriptor.Timing != timing))
-        {
+        if (request.BackgroundB.Descriptor.Timing != timing)
             return new Failure("gpu.composite.timing_mismatch", "GPU composite inputs must share the same frame timing.");
-        }
+        for (var index = 0; index < request.Layers.Count; index++)
+            if (request.Layers[index].Frame.Descriptor.Timing != timing)
+                return new Failure("gpu.composite.timing_mismatch", "GPU composite inputs must share the same frame timing.");
 
         return null;
     }
+
+    private bool OwnsFrameUnsafe(GpuFrame frame) =>
+        _activeFrames.TryGetValue(frame.SurfaceId, out var entry) && entry.Frames.Contains(frame);
 
     private static bool LayerContributesToComposite(GpuKeyLayer layer) =>
         layer.Visible && layer.Opacity != 0;
@@ -2194,7 +2210,9 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
 
             try
             {
-                for (var offset = 0; offset < output.Length; offset += 4)
+                if (!operation.LayerVisible || layer is null || operation.LayerOpacity == 0)
+                    BlendBackgrounds(a.Pixels, b.Pixels, output, weight);
+                else for (var offset = 0; offset < output.Length; offset += 4)
                 {
                     var baseR = Blend(a.Pixels[offset], b.Pixels[offset], weight);
                     var baseG = Blend(a.Pixels[offset + 1], b.Pixels[offset + 1], weight);
@@ -2310,6 +2328,37 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
 
         pool.Push(buffer);
         _pooledAllocationCount++;
+    }
+
+    private static void BlendBackgrounds(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, Span<byte> output, byte weight)
+    {
+        if (weight is 0 or byte.MaxValue)
+        {
+            (weight == 0 ? a : b).CopyTo(output);
+            return;
+        }
+
+        var offset = 0;
+        if (Vector.IsHardwareAccelerated)
+        {
+            var weightA = new Vector<ushort>((ushort)(255 - weight));
+            var weightB = new Vector<ushort>(weight);
+            var rounding = new Vector<ushort>(127);
+            var one = new Vector<ushort>(1);
+            for (; offset <= output.Length - Vector<byte>.Count; offset += Vector<byte>.Count)
+            {
+                Vector.Widen(new Vector<byte>(a.Slice(offset)), out Vector<ushort> aLow, out Vector<ushort> aHigh);
+                Vector.Widen(new Vector<byte>(b.Slice(offset)), out Vector<ushort> bLow, out Vector<ushort> bHigh);
+                var low = aLow * weightA + bLow * weightB + rounding;
+                var high = aHigh * weightA + bHigh * weightB + rounding;
+                // Exact division by 255 for the blend numerator range 0..65152, without ushort overflow.
+                low = Vector.ShiftRightLogical(low + one + Vector.ShiftRightLogical(low, 8), 8);
+                high = Vector.ShiftRightLogical(high + one + Vector.ShiftRightLogical(high, 8), 8);
+                Vector.Narrow(low, high).CopyTo(output.Slice(offset));
+            }
+        }
+        for (; offset < output.Length; offset++)
+            output[offset] = Blend(a[offset], b[offset], weight);
     }
 
     private static byte Blend(byte a, byte b, byte weight) =>
