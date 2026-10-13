@@ -294,6 +294,32 @@ public sealed record NetworkOutputProgramSample
 	public AudioBufferTiming AudioTiming { get; }
 	public INetworkOutputPayloadLease Video { get; }
 	public ReadOnlyMemory<byte> Audio { get; }
+
+    /// <summary>Accepts the legacy shared clock or Runtime's exact rational frame/sample-clock pairing.</summary>
+    public bool HasCompatibleRuntimeTiming(VideoFormat format, AudioFormat audioFormat)
+    {
+        if (VideoTiming.Timebase == AudioTiming.Timebase)
+            return true;
+        if (VideoTiming.Timebase != new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator) ||
+            AudioTiming.Timebase != new Timebase(1, audioFormat.SampleRate) ||
+            VideoTiming.PresentationTimestamp < 0 ||
+            (ulong)VideoTiming.PresentationTimestamp != SequenceNumber ||
+            AudioTiming.PresentationTimestamp < 0)
+            return false;
+        try
+        {
+            var units = checked((Int128)audioFormat.SampleRate * format.FrameRate.Denominator);
+            var start = checked((Int128)SequenceNumber * units) / format.FrameRate.Numerator;
+            var end = checked(((Int128)SequenceNumber + 1) * units) / format.FrameRate.Numerator;
+            return start == AudioTiming.SamplePosition &&
+                start == AudioTiming.PresentationTimestamp &&
+                end - start == AudioTiming.SampleCount;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
 }
 
 public enum NetworkOutputEnqueueStatus

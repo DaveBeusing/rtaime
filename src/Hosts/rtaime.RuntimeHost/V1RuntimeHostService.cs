@@ -534,6 +534,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private string? _recordingFileName;
 	private MediaSourceId? _avSyncDiagnosticsSourceId;
 	private bool _disposed;
+	private Task? _disposeTask;
 
 	public V1RuntimeHostService(
 		MediaSourceId sourceAId,
@@ -544,6 +545,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs = null,
 		RuntimeReplayService? replayService = null,
 		RuntimeTimingQualificationProbe? pipelineTimingProbe = null)
+		: this(sourceAId, sourceBId, format, recordingWriter, gpuBackend, networkOutputs,
+			replayService, pipelineTimingProbe, null)
+	{
+	}
+
+	internal V1RuntimeHostService(
+		MediaSourceId sourceAId,
+		MediaSourceId sourceBId,
+		VideoFormat format,
+		IProgramRecordingWriter recordingWriter,
+		IGpuProcessingBackend? gpuBackend,
+		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs,
+		RuntimeReplayService? replayService,
+		RuntimeTimingQualificationProbe? pipelineTimingProbe,
+		IRuntimeNetworkOutputProviderRegistry? networkOutputProviderRegistry)
 	{
 		_pipelineTiming = pipelineTimingProbe;
 		_format = format;
@@ -635,7 +651,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_ndiProvider = new NdiNetworkOutputProvider();
 		_networkOutputBridge = new RuntimeNetworkOutputBridge(
 			configuredNetworkOutputs,
-			new RuntimeNetworkOutputProviderRegistry(ndi: _ndiProvider));
+			networkOutputProviderRegistry ?? new RuntimeNetworkOutputProviderRegistry(ndi: _ndiProvider));
 		_ndiInputBridge = new RuntimeNdiInputBridge(_ndiProvider, this);
 		_replay = replayService;
 		_monitoringHub = new RuntimeMonitoringHub();
@@ -2612,16 +2628,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			.CreateClipAsync(name, cancellationToken)
 			.ConfigureAwait(false);
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
-		bool dispose;
-		lock (_gate)
+		// Finish the admitted boundary before closing admission and draining retained consumers.
+		lock (_boundaryExecutionGate)
 		{
-			dispose = !_disposed;
-			_disposed = true;
+			lock (_gate)
+			{
+				_disposed = true;
+				return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+			}
 		}
-		if (!dispose) return;
+	}
 
+	private async Task DisposeCoreAsync()
+	{
 		await _monitoringTap.DisposeAsync().ConfigureAwait(false);
 		_monitoringHub.Dispose();
 		await _ndiInputBridge.DisposeAsync().ConfigureAwait(false);

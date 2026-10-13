@@ -54,6 +54,17 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Consumer timing and shutdown regression qualification
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReplayCaptureIsolationTests|FullyQualifiedName~NetworkOutputFoundationTests|FullyQualifiedName~RecordingFoundationTests" --logger "console;verbosity=detailed"
+
+      - name: Mixed Runtime consumer isolation qualification
+        env:
+          RTAIME_PIPELINE_BASELINE_EVIDENCE: ${{ github.workspace }}/artifacts/qualification/program-pipeline
+          RTAIME_BASELINE_SDK: "10.0.401"
+          RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RTAIME_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~RuntimeConsumerIsolationTests" --logger "console;verbosity=detailed"
+
       - name: Renderer low latency pixel and ownership qualification
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorOptimizationTests|FullyQualifiedName~GpuProcessingTests|FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuSchedulingSynchronizationTests|FullyQualifiedName~GpuReadbackOwnershipConcurrencyTests" --logger "console;verbosity=detailed"
 

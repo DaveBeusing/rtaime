@@ -20,6 +20,7 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 	private ReplayClipResult? _lastClip;
 	private ReplayBufferSnapshot? _finalSnapshot;
 	private bool _disposed;
+	private Task? _disposeTask;
 
 	public RuntimeReplayService(
 		string rootDirectory,
@@ -42,6 +43,7 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 	}
 
 	public int QueueCapacity => _capture.QueueCapacity;
+	public ReplayCaptureQueueStatistics QueueStatistics => _capture.QueueStatistics;
 	public ReplayClipResult? LastClip
 	{
 		get { lock (_gate) return _lastClip; }
@@ -159,15 +161,17 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 		return result;
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
 		lock (_gate)
 		{
-			if (_disposed)
-				return;
 			_disposed = true;
+			return new ValueTask(_disposeTask ??= DisposeCoreAsync());
 		}
+	}
 
+	private async Task DisposeCoreAsync()
+	{
 		await _capture.StopAsync(CancellationToken.None).ConfigureAwait(false);
 		var finalCapture = _capture.Snapshot;
 		lock (_gate)

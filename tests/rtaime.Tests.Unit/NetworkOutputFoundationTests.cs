@@ -313,6 +313,41 @@ public sealed class NetworkOutputFoundationTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Independent_clocks_reject_wrong_audio_window_and_return_each_lease_once(bool ndi, bool use5994)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        var configuration = ndi
+            ? new NetworkOutputConfiguration("invalid-ndi", NetworkOutputProtocolFamily.Ndi, format,
+                AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("Invalid clock"))
+            : new NetworkOutputConfiguration("invalid-srt", new Uri("srt://127.0.0.1:9000/live"),
+                NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller, format,
+                AudioFormat.Stereo48kFloat32, NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc,
+                12_000_000, 192_000, 120, 8, NetworkOutputLatencyMode.Normal);
+        await using INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(configuration, _ => new CapturingNdiSender())
+            : new SrtNetworkOutputSession(configuration, () => new BlockingTransport(Task.CompletedTask), () => new PassThroughEncoder());
+        var window = rtaime.Media.AudioVideoTimingRelationship.GetSampleWindow(format.FrameRate, 48_000, 11);
+        for (var fault = 0; fault < 4; fault++)
+        {
+            var lease = new TestLease(new byte[] { 1, 2, 3, 4 });
+            var sample = new NetworkOutputProgramSample(11,
+                new FrameTiming(11, fault == 3 ? 12 : 11, new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator)),
+                new AudioBufferTiming(window.SamplePosition + (fault == 0 ? 1UL : 0UL),
+                    window.SampleCount + (fault == 1 ? 1U : 0U),
+                    window.PresentationTimestamp + (fault == 2 ? 1 : 0), window.Timebase),
+                lease, new byte[checked((int)window.SampleCount * 8)]);
+            Assert.False(session.TrySubmit(sample).Accepted);
+            Assert.Equal(1, lease.DisposeCount);
+        }
+        Assert.Equal(4UL, session.Snapshot.Statistics.RejectedSamples);
+        Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Every_dispose_waits_for_native_cleanup(bool ndi)
