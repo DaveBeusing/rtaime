@@ -57,9 +57,13 @@ Ordinary frame-affecting control mutations synchronize only with `_boundaryCaptu
 
 ## Output evidence publication
 
-Virtual Program/Aux outputs can receive their provider frame before the RuntimeHost boundary state is finally published. Output-role snapshot construction therefore ignores output evidence whose frame sequence is not older than `NextSequenceNumber`.
+Virtual Program/Aux outputs can receive their provider frame before the RuntimeHost boundary state is finally published. Output-role snapshot construction ignores evidence whose frame sequence is not older than `NextSequenceNumber`.
 
-This prevents a concurrent snapshot from presenting a provider frame as committed Runtime evidence before the boundary publication point. After publication advances `NextSequenceNumber`, the matching sink/source evidence becomes eligible for normal health evaluation.
+Aux submission occurs early in boundary capture. RuntimeHost therefore retains one immutable Aux provider frame from the last completed boundary and replaces it only in the final short publication section. A newer in-flight provider write cannot erase that completed evidence or repeatedly turn a healthy Aux route into `UNVERIFIED` while composition/readback is running.
+
+A successful execution replacement clears the retained Aux confirmation. The new binding remains `UNVERIFIED` until a boundary completes with matching source/sink evidence; prior route evidence cannot qualify it. Provider binding mismatches and Aux submission failures remain role-scoped faults. The retained record is bounded to one frame descriptor and does not retain pixel buffers or add a frame queue.
+
+This preserves snapshot availability without holding the Runtime metadata lock across heavy execution, and prevents a provider frame from being presented as completed Runtime evidence before the publication point.
 
 ## Monitoring ownership
 
