@@ -94,7 +94,8 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
         var record = typeof(CudaGpuTimingCollector).GetMethod("Record",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .CreateDelegate<Action<CudaGpuTimingOperation, nuint, TimeSpan, CudaGpuTimingOperation?>>(collector);
-        for (var index = 0; index < 512; index++)
+        // Warm both recording and overwrite branches, plus the reflection-created delegate/JIT entry point.
+        for (var index = 0; index < 16_384; index++)
             record(CudaGpuTimingOperation.ReadbackDeviceToHost, 4096, TimeSpan.Zero, null);
         collector.Reset();
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
