@@ -279,6 +279,77 @@ public sealed class NetworkOutputFoundationTests
 		Assert.True(sample.VideoLease.IsDisposed);
 	}
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Every_dispose_waits_for_native_cleanup(bool ndi)
+    {
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sender = new CleanupNdiSender(cleanupStarted, releaseCleanup);
+        var transport = new CleanupSrtTransport(cleanupStarted, releaseCleanup);
+        INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(NdiConfiguration("Cleanup"), _ => sender)
+            : new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live")),
+                () => transport, () => new PassThroughEncoder());
+        Task? first = null;
+        Task? second = null;
+        try
+        {
+            Assert.True(session.TrySubmit(Sample(1)).Accepted);
+            await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 1, TimeSpan.FromSeconds(5));
+            first = session.DisposeAsync().AsTask();
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = session.DisposeAsync().AsTask();
+            Assert.False(first.IsCompleted);
+            Assert.False(second.IsCompleted);
+            releaseCleanup.TrySetResult();
+            await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, ndi ? sender.Disposals : transport.Disposals);
+            Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+        }
+        finally
+        {
+            releaseCleanup.TrySetResult();
+            if (first is not null) await first.WaitAsync(TimeSpan.FromSeconds(5));
+            if (second is not null) await second.WaitAsync(TimeSpan.FromSeconds(5));
+            await session.DisposeAsync();
+        }
+    }
+
+    private sealed class CleanupNdiSender(TaskCompletionSource started, TaskCompletionSource release) : INdiSender
+    {
+        public bool IsReady => true;
+        public int Disposals { get; private set; }
+        public ValueTask<NdiSendResult> SendAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
+            ValueTask.FromResult(new NdiSendResult(1, 4));
+        public async ValueTask DisposeAsync()
+        {
+            Disposals++;
+            started.TrySetResult();
+            await release.Task;
+        }
+    }
+
+    private sealed class CleanupSrtTransport(TaskCompletionSource started, TaskCompletionSource release) : ISrtTransport
+    {
+        public bool IsConnected { get; private set; }
+        public int Disposals { get; private set; }
+        public ValueTask ConnectAsync(NetworkOutputConfiguration configuration, string? passphrase, CancellationToken token)
+        {
+            IsConnected = true;
+            return ValueTask.CompletedTask;
+        }
+        public ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken token) => ValueTask.FromResult(payload.Length);
+        public async ValueTask DisposeAsync()
+        {
+            Disposals++;
+            started.TrySetResult();
+            await release.Task;
+            IsConnected = false;
+        }
+    }
+
 	private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
 	{
 		var deadline = DateTimeOffset.UtcNow + timeout;
