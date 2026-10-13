@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 
 namespace rtaime.Runtime;
 
@@ -65,6 +66,13 @@ public sealed class RuntimeTimingQualificationProbe
 	private const int LostFramePeriods = 3;
 
 	private readonly object _gate = new();
+	private readonly object _pipelineGate = new();
+	private readonly RuntimePipelineTimingSample[] _pipelineSamples;
+	private int _pipelineCount;
+	private int _pipelineNext;
+	private ulong _pipelineRecorded;
+	private ulong _pipelineOverwritten;
+	private long _pipelineDropped;
 	private readonly TimingQualificationThresholds _thresholds;
 	private readonly TimingBoundaryObservation[] _samples;
 	private int _sampleCount;
@@ -84,6 +92,7 @@ public sealed class RuntimeTimingQualificationProbe
 		_thresholds = thresholds ?? throw new ArgumentNullException(nameof(thresholds));
 		_thresholds.Validate();
 		_samples = new TimingBoundaryObservation[_thresholds.RetainedSampleCapacity];
+		_pipelineSamples = new RuntimePipelineTimingSample[_thresholds.RetainedSampleCapacity];
 	}
 
 	public TimingQualificationThresholds Thresholds => _thresholds;
@@ -221,5 +230,111 @@ public sealed class RuntimeTimingQualificationProbe
 		return TimingQualificationState.Healthy;
 	}
 
+	public RuntimePipelineTimingScope MeasureStage(RuntimePipelineTimingStage stage, ulong sequenceNumber, long? startedAt = null) =>
+		new(this, stage, sequenceNumber, startedAt ?? Stopwatch.GetTimestamp());
+
+	public bool TryObserveStage(RuntimePipelineTimingStage stage, ulong sequenceNumber, TimeSpan duration)
+	{
+		if (!Enum.IsDefined(stage)) throw new ArgumentOutOfRangeException(nameof(stage));
+		if (duration < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(duration));
+		// A diagnostic snapshot must never stall the Program writer.
+		if (!Monitor.TryEnter(_pipelineGate))
+		{
+			Interlocked.Increment(ref _pipelineDropped);
+			return false;
+		}
+		try
+		{
+			_pipelineSamples[_pipelineNext] = new RuntimePipelineTimingSample(stage, sequenceNumber, duration.TotalMilliseconds);
+			_pipelineNext = (_pipelineNext + 1) % _pipelineSamples.Length;
+			if (_pipelineCount == _pipelineSamples.Length)
+			{
+				if (_pipelineOverwritten < ulong.MaxValue) _pipelineOverwritten++;
+			}
+			else _pipelineCount++;
+			if (_pipelineRecorded < ulong.MaxValue) _pipelineRecorded++;
+			return true;
+		}
+		finally { Monitor.Exit(_pipelineGate); }
+	}
+
+	public RuntimePipelineTimingSnapshot PipelineSnapshot()
+	{
+		RuntimePipelineTimingSample[] samples;
+		ulong recorded, overwritten;
+		lock (_pipelineGate)
+		{
+			samples = new RuntimePipelineTimingSample[_pipelineCount];
+			var start = _pipelineCount == _pipelineSamples.Length ? _pipelineNext : 0;
+			for (var index = 0; index < samples.Length; index++)
+				samples[index] = _pipelineSamples[(start + index) % _pipelineSamples.Length];
+			recorded = _pipelineRecorded;
+			overwritten = _pipelineOverwritten;
+		}
+		// Sorting and report allocation belong exclusively to the snapshot caller.
+		var stages = new List<RuntimePipelineTimingSummary>();
+		foreach (var stage in Enum.GetValues<RuntimePipelineTimingStage>())
+		{
+			var values = samples.Where(sample => sample.Stage == stage).Select(sample => sample.Milliseconds).Order().ToArray();
+			if (values.Length == 0) continue;
+			double Percentile(double percentile) => values[Math.Clamp((int)Math.Ceiling(values.Length * percentile) - 1, 0, values.Length - 1)];
+			stages.Add(new RuntimePipelineTimingSummary(stage, stage == RuntimePipelineTimingStage.SchedulerStartLateness ? "SCHEDULER_LATENESS" :
+				stage == RuntimePipelineTimingStage.PresentationLateness ? "PRESENTATION_LATENESS" : "CPU_WALL", values.Length,
+				Percentile(0.50), Percentile(0.95), Percentile(0.99), values[^1]));
+		}
+		return new RuntimePipelineTimingSnapshot(_pipelineSamples.Length, recorded, overwritten,
+			checked((ulong)Interlocked.Read(ref _pipelineDropped)), samples, stages);
+	}
+
+	public void ResetPipelineSamples()
+	{
+		lock (_pipelineGate)
+		{
+			_pipelineCount = _pipelineNext = 0;
+			_pipelineRecorded = _pipelineOverwritten = 0;
+			Interlocked.Exchange(ref _pipelineDropped, 0);
+		}
+	}
+
 	private static TimeSpan Absolute(TimeSpan value) => value < TimeSpan.Zero ? -value : value;
+}
+
+public enum RuntimePipelineTimingStage
+{
+	CompleteProgramBoundary = 1,
+	SchedulerStartLateness = 2,
+	PresentationLateness = 3,
+	ServiceBoundaryAttempt = 4,
+	ExecutionLockWait = 5,
+	ExecutionLockHold = 6,
+	CaptureLockWait = 7,
+	CaptureLockHold = 8,
+	MetadataLockWait = 9,
+	MetadataLockHold = 10,
+	InputAdmission = 11,
+	Composite = 12,
+	Readback = 13,
+	MonitoringExport = 14,
+	ConsumerSubmission = 15,
+	OutputSubmission = 16
+}
+
+public readonly record struct RuntimePipelineTimingSample(RuntimePipelineTimingStage Stage, ulong SequenceNumber, double Milliseconds);
+public sealed record RuntimePipelineTimingSummary(RuntimePipelineTimingStage Stage, string MeasurementKind,
+	int RetainedSamples, double P50Milliseconds, double P95Milliseconds, double P99Milliseconds, double MaximumMilliseconds);
+public sealed record RuntimePipelineTimingSnapshot(int Capacity, ulong RecordedSamples, ulong OverwrittenSamples,
+	ulong ContentionDroppedSamples, IReadOnlyList<RuntimePipelineTimingSample> Samples, IReadOnlyList<RuntimePipelineTimingSummary> Stages);
+
+/// <summary>Value-type measurement lifetime; no diagnostic allocation or waiting occurs when the scope completes.</summary>
+public readonly struct RuntimePipelineTimingScope : IDisposable
+{
+	private readonly RuntimeTimingQualificationProbe? _probe;
+	private readonly RuntimePipelineTimingStage _stage;
+	private readonly ulong _sequence;
+	private readonly long _startedAt;
+	internal RuntimePipelineTimingScope(RuntimeTimingQualificationProbe probe, RuntimePipelineTimingStage stage, ulong sequence, long startedAt)
+	{
+		_probe = probe; _stage = stage; _sequence = sequence; _startedAt = startedAt;
+	}
+	public void Dispose() => _probe?.TryObserveStage(_stage, _sequence, Stopwatch.GetElapsedTime(_startedAt));
 }

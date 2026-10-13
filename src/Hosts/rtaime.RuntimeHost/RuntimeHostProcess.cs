@@ -297,6 +297,8 @@ public sealed class RuntimeHostProcess
 	public MediaIoPortStatus? MediaIoInputAStatus => _mediaIo?.InputAStatus;
 	public MediaIoPortStatus? MediaIoInputBStatus => _mediaIo?.InputBStatus;
 	public MediaIoPortStatus? MediaIoProgramOutputStatus => _mediaIo?.ProgramOutputStatus;
+	public RuntimePipelineTimingSnapshot PipelineTiming => _timingProbe.PipelineSnapshot();
+
 	public TimingQualificationSnapshot TimingQualification => _timingProbe.Snapshot(_timingClock.Elapsed);
 
 	internal event Action<RuntimePipeListenerSnapshot, Exception>? PrimaryIpcListenerFaulted;
@@ -319,6 +321,7 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
+			_runtime.EnablePipelineTiming(_timingProbe);
 			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format);
 			_aiShowcase = _aiShowcaseFactory(_runtime, _options)
 				?? throw new InvalidOperationException("AI showcase factory returned null.");
@@ -465,6 +468,7 @@ public sealed class RuntimeHostProcess
 			var boundaryObservedAt = _timingClock.Elapsed;
 			if (!schedule.TryTake(boundaryObservedAt, out var opportunity))
 				continue;
+			var admissionStartedAt = _timingClock.Elapsed;
 			mediaIo?.PumpInputs();
 			AdmitMediaDeckBoundary(runtime, mediaDeck);
 			if (!runtime.HasCommittedExecution)
@@ -476,10 +480,15 @@ public sealed class RuntimeHostProcess
 			var processingStartedAt = _timingClock.Elapsed;
 			using var boundary = runtime.ProcessNextBoundary();
 			var renderDuration = _timingClock.Elapsed - processingStartedAt;
+			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.InputAdmission, boundary.SequenceNumber, processingStartedAt - admissionStartedAt);
+			var outputStartedAt = _timingClock.Elapsed;
 			mediaIo?.SubmitProgram(boundary);
 			aiShowcase.ObserveProgramBoundary(boundary.ProgramFrame);
 			var completedAt = _timingClock.Elapsed;
 			var pipelineDuration = completedAt - boundaryObservedAt;
+			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.OutputSubmission, boundary.SequenceNumber, completedAt - outputStartedAt);
+			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.CompleteProgramBoundary, boundary.SequenceNumber, pipelineDuration);
+			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, boundary.SequenceNumber, opportunity.StartLateness);
 			var timing = _timingProbe.ObserveBoundary(boundary.SequenceNumber, boundaryObservedAt, pipelineDuration);
 			var mediaIoStatistics = mediaIo?.Statistics;
 			if (hasCommittedObservation)
@@ -487,6 +496,7 @@ public sealed class RuntimeHostProcess
 			hasCommittedObservation = true;
 			var presentationLateness = completedAt > opportunity.PresentationDeadline
 				? completedAt - opportunity.PresentationDeadline : TimeSpan.Zero;
+			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, boundary.SequenceNumber, presentationLateness);
 			lock (_gate)
 			{
 				_scheduleStatistics = new RuntimeScheduleStatistics(

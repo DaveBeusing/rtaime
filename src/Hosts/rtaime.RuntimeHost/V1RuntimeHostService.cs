@@ -411,6 +411,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private readonly object _gate = new();
 	private readonly object _boundaryExecutionGate = new();
+	private RuntimeTimingQualificationProbe? _pipelineTiming;
 	private readonly object _boundaryCaptureGate = new();
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
@@ -541,8 +542,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		IProgramRecordingWriter recordingWriter,
 		IGpuProcessingBackend? gpuBackend = null,
 		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs = null,
-		RuntimeReplayService? replayService = null)
+		RuntimeReplayService? replayService = null,
+		RuntimeTimingQualificationProbe? pipelineTimingProbe = null)
 	{
+		_pipelineTiming = pipelineTimingProbe;
 		_format = format;
 		var configuredNetworkOutputs = networkOutputs ?? Array.Empty<RuntimeNetworkOutputTarget>();
 		_virtualMedia = new VirtualMediaReferenceProvider(sourceAId, sourceBId, format);
@@ -998,10 +1001,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public void EnablePipelineTiming(RuntimeTimingQualificationProbe probe) =>
+		Interlocked.Exchange(ref _pipelineTiming, probe ?? throw new ArgumentNullException(nameof(probe)));
+
 	public V1ProgramBoundaryResult ProcessNextBoundary()
 	{
+		var boundaryStarted = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 		lock (_boundaryExecutionGate)
 		{
+			_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.ExecutionLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(boundaryStarted));
+			using var boundaryTiming = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ServiceBoundaryAttempt, _nextSequenceNumber, boundaryStarted) ?? default;
+			using var executionHold = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ExecutionLockHold, _nextSequenceNumber) ?? default;
 			GpuFrame? gpuA = null;
 			GpuFrame? gpuB = null;
 			GpuFrame? previewMonitoringFrame = null;
@@ -1046,10 +1056,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				FrameDescriptor? auxNetworkFrame = null;
 				Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
 
+				var captureStarted = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 				lock (_boundaryCaptureGate)
 				{
+					_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.CaptureLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(captureStarted));
+					using var captureHold = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.CaptureLockHold, _nextSequenceNumber) ?? default;
+					var metadataStarted1 = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 					lock (_gate)
 					{
+						_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.MetadataLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(metadataStarted1));
+						using var metadataHold = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.MetadataLockHold, _nextSequenceNumber) ?? default;
 						ThrowIfDisposed();
 						execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
 						var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
@@ -1151,8 +1167,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						ResolveTransition(committedSource, sequence, gpuFrames);
 					materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
 
+					var metadataStarted2 = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 					lock (_gate)
 					{
+						_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.MetadataLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(metadataStarted2));
+						using var metadataHold = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.MetadataLockHold, _nextSequenceNumber) ?? default;
 						RefreshVirtualAudioMetersUnsafe(sequence);
 						PrepareAudioProductionBlockUnsafe(
 							sequence,
@@ -1184,6 +1203,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				GpuProcessingResult composite;
 				try
 				{
+					using var compositeTiming = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.Composite, sequence) ?? default;
 					composite = _gpu.Composite(GpuCompositeRequest.WithLayers(
 						committedSource,
 						fromFrame,
@@ -1206,7 +1226,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				}
 
 				using var output = composite.Frame!;
-				var pixels = _gpu.RentReadback(output);
+				GpuReadbackLease pixels;
+				using (_pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.Readback, sequence) ?? default)
+					pixels = _gpu.RentReadback(output);
 				try
 				{
 					var probe = ProbeCenter(pixels.Memory.Span, _format);
@@ -1249,6 +1271,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					GpuSharedMonitoringResourceLease? programSharedMonitoringResource = null;
 					if (monitoringSources is not null)
 					{
+						using var exportTiming = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.MonitoringExport, sequence) ?? default;
 						try
 						{
 							if (previewMonitoringFrame is not null)
@@ -1273,6 +1296,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						}
 					}
 
+					var consumersStarted = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 					try
 					{
 						_monitoringTap.TryCapture(
@@ -1394,6 +1418,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						}
 					}
 
+					_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.ConsumerSubmission, sequence, Stopwatch.GetElapsedTime(consumersStarted));
 					output.Dispose();
 					if (gpuFrames is not null)
 					{
@@ -1405,8 +1430,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					gpuA = null;
 					var activeGpuSurfacesAfterBoundary = _gpu.ActiveSurfaceCount;
 
+					var metadataStarted3 = _pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 					lock (_gate)
 					{
+						_pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.MetadataLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(metadataStarted3));
+						using var metadataHold = _pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.MetadataLockHold, _nextSequenceNumber) ?? default;
 						_auxFailure = auxFailure;
 						// Publish only completed provider evidence; an in-flight write must not erase the prior boundary.
 						_confirmedAuxFrame = auxFailure is null ? _auxOutput?.LastFrame : null;
