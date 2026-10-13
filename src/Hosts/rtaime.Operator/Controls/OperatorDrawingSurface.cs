@@ -104,6 +104,13 @@ public class OperatorDrawingSurface : Image
 
 	protected virtual DpiScale TargetScale => VisualTreeHelper.GetDpi(this);
 
+	protected override Size MeasureOverride(Size constraint)
+	{
+		// A render target follows the viewport; its ImageSource must never size the viewport.
+		return new Size(double.IsFinite(constraint.Width) ? constraint.Width : 0,
+			double.IsFinite(constraint.Height) ? constraint.Height : 0);
+	}
+
 	protected override Size ArrangeOverride(Size finalSize)
 	{
 		// Image returns zero size while Source is absent. Preserve the parent's

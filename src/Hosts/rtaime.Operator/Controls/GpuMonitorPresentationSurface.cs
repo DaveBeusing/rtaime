@@ -34,7 +34,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private ID3D11ShaderResourceView? _sharedView;
 	private MonitoringResourceId? _openedResourceId;
 	private long _deviceAdapterLuid;
-	private FrameworkElement? _standaloneViewport;
 	private DateTimeOffset _lastAnalysisAt;
 	private ulong _lastAnalysisSequence;
 	private MediaInspectionRoi? _lastAnalyzedRoi;
@@ -89,7 +88,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		LoadContent += OnLoadContent;
 		Draw += OnDraw;
 		UnloadContent += OnUnloadContent;
-		Loaded += OnSurfaceLoaded;
 		_analysisRetryTimer.Tick += OnAnalysisRetryTick;
 		Unloaded += OnSurfaceUnloaded;
 	}
@@ -147,51 +145,16 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		Invalidate();
 	}
 
-	private void OnSurfaceLoaded(object sender, RoutedEventArgs e)
-	{
-		if (!StandaloneFit || Parent is not FrameworkElement viewport)
-			return;
-
-		_standaloneViewport = viewport;
-		_standaloneViewport.SizeChanged += OnStandaloneViewportChanged;
-		UpdateStandalonePhysicalSize();
-	}
-
 	private void OnSurfaceUnloaded(object sender, RoutedEventArgs e)
 	{
-		if (_standaloneViewport is not null)
-			_standaloneViewport.SizeChanged -= OnStandaloneViewportChanged;
-		_standaloneViewport = null;
 		_analysisRetryTimer.Stop();
 		Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
 	}
 
-	private void OnStandaloneViewportChanged(object sender, SizeChangedEventArgs e) => UpdateStandalonePhysicalSize();
-
-	protected override DpiScale TargetScale => Monitor is not null || StandaloneFit
-		? new DpiScale(1, 1) : base.TargetScale;
-
-	protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
-	{
-		base.OnDpiChanged(oldDpi, newDpi);
-		UpdateStandalonePhysicalSize();
-	}
-
-	private void UpdateStandalonePhysicalSize()
-	{
-		if (_standaloneViewport is null) return;
-		if (_standaloneViewport.ActualWidth <= 0 || _standaloneViewport.ActualHeight <= 0)
-		{
-			Width = Height = 0;
-			return;
-		}
-
-		var dpi = VisualTreeHelper.GetDpi(_standaloneViewport);
-		Width = Math.Max(1, Math.Round(_standaloneViewport.ActualWidth * dpi.DpiScaleX));
-		Height = Math.Max(1, Math.Round(_standaloneViewport.ActualHeight * dpi.DpiScaleY));
-		RenderTransformOrigin = new Point(0.5, 0.5);
-		RenderTransform = new ScaleTransform(1.0 / dpi.DpiScaleX, 1.0 / dpi.DpiScaleY);
-	}
+	// Layout uses DIPs; only the texture allocation converts to physical pixels.
+	protected override DpiScale TargetScale => Monitor is { } monitor
+		? new DpiScale(monitor.DpiScaleX, monitor.DpiScaleY)
+		: VisualTreeHelper.GetDpi(this);
 
 	private void OnLoadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
