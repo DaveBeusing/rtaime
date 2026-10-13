@@ -456,10 +456,11 @@ public sealed class GpuProcessingTests
         Assert.Equal(output.SurfaceId, lease!.Descriptor.SurfaceId);
         AssertPixel(provider.Readback(output), 11, 22, 33, 255);
         output.Dispose();
-        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(1, provider.ActiveSurfaceCount);
         Assert.Equal(1, backend.ActiveAllocationCount);
         Assert.True(provider.IsMonitoringResourceActive(lease.Descriptor));
         lease.Dispose();
+        Assert.Equal(0, provider.ActiveSurfaceCount);
         Assert.Equal(0, backend.ActiveAllocationCount);
         Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
     }
