@@ -298,7 +298,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			{
 				await ReleaseConnectionAsync().ConfigureAwait(false);
 				var transport = _transportFactory();
+				_transport = transport;
 				var encoder = _encoderFactory();
+				_encoder = encoder;
 				var passphrase = ResolvePassphrase();
 				lock (_gate)
 				{
@@ -309,8 +311,6 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				await transport.ConnectAsync(_configuration, passphrase, cancellationToken).ConfigureAwait(false);
 				await encoder.InitializeAsync(_configuration, cancellationToken).ConfigureAwait(false);
-				_transport = transport;
-				_encoder = encoder;
 				lock (_gate)
 				{
 					if (attempt > 1 || _reconnects > 0)
