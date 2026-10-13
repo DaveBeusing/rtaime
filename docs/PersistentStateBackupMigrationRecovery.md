@@ -57,6 +57,14 @@ production-journal   schema version 1
 
 No production schema version is incremented merely to exercise migration logic.
 
+## Legacy Control authority compatibility
+
+Control contract 1.0 authority checkpoints are interpreted compatibly when loaded by the current 1.1 production specification. Recovery preserves production IDs, revision, routes, Scene/output configuration and compositing. The original stored checkpoint is not upgraded in place, and unsupported contracts do not trigger a fresh empty production.
+
+Retain a verified backup before operational repair. A startup timeout with `planning.authority.version_mismatch` at `reconcile-prepare` identifies the contract boundary; increasing the startup timeout or deleting management/journal databases is not the supported repair. Use the compatible recovery build and the normal lifecycle. The next confirmed production mutation persists the current contract at its next authority revision. See [Durable Persistence & Journal](DurablePersistenceAndJournal.md).
+
+The Windows regression fixture `tests/rtaime.Tests.Integration/TestData/LegacyAuthorityV1.json` retains revision 8, Program/Aux routes and legacy CG state. `LegacyAuthorityCheckpointRecoveryTests` verifies real Runtime reconciliation, repeated recovery, byte-for-byte original checkpoint preservation, a later current-contract commit and fail-closed unsupported versions.
+
 ## `SqliteStateMaintenance`
 
 The persistence project exposes:

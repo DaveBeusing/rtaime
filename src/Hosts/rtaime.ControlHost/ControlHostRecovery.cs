@@ -99,6 +99,21 @@ internal static class ControlHostRecovery
 
 		var version = CompatibilityVersion.Parse(snapshot.Version);
 		ControlContractVersion.EnsureSupported(version);
+		ControlContractVersion.EnsureSupported(specification.Version);
+		var recoveredVersion = version;
+		if (version != specification.Version)
+		{
+			if (version == ControlContractVersion.LegacyV1_0 && specification.Version == new CompatibilityVersion(1, 1))
+			{
+				// Interpret the compatible legacy authority in memory; its durable revision and payload stay immutable.
+				recoveredVersion = specification.Version;
+			}
+			else
+			{
+				throw new InvalidDataException(
+					$"Recovered Control contract '{version}' cannot be adapted to production contract '{specification.Version}'.");
+			}
+		}
 		var productionId = new ProductionId(Identity.Parse(snapshot.ProductionId));
 		if (productionId != specification.ProductionId)
 			throw new InvalidDataException("Recovered authoritative payload belongs to a different production identity.");
@@ -196,7 +211,7 @@ internal static class ControlHostRecovery
 			throw new InvalidDataException(string.Join("; ", outputValidation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
 
 		return new AuthoritativeProductionState(
-			version,
+			recoveredVersion,
 			productionId,
 			revision,
 			recoveredRouting,
