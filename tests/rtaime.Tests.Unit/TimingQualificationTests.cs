@@ -156,12 +156,15 @@ public sealed class TimingQualificationTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(probe)!;
         using var held = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var reader = Task.Run(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } });
+        var reader = Task.Factory.StartNew(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } },
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             Assert.True(held.Wait(TimeSpan.FromSeconds(3)));
-            var writer = Task.Run(() => probe.TryObserveStage(RuntimePipelineTimingStage.Readback, 1, TimeSpan.Zero));
-            Assert.False(await writer.WaitAsync(TimeSpan.FromSeconds(1)));
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            Assert.False(probe.TryObserveStage(RuntimePipelineTimingStage.Readback, 1, TimeSpan.Zero));
+            Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1),
+                "Pipeline writer blocked on the held diagnostic reader gate.");
         }
         finally { release.Set(); await reader; }
         Assert.Equal(1UL, probe.PipelineSnapshot().ContentionDroppedSamples);
@@ -204,12 +207,15 @@ public sealed class TimingQualificationTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(collector)!;
         using var held = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var reader = Task.Run(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } });
+        var reader = Task.Factory.StartNew(() => { lock (gate) { held.Set(); release.Wait(TimeSpan.FromSeconds(5)); } },
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             Assert.True(held.Wait(TimeSpan.FromSeconds(3)));
-            await Task.Run(() => record(CudaGpuTimingOperation.ReadbackDeviceToHost, 0, TimeSpan.Zero, null))
-                .WaitAsync(TimeSpan.FromSeconds(1));
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            record(CudaGpuTimingOperation.ReadbackDeviceToHost, 0, TimeSpan.Zero, null);
+            Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1),
+                "CUDA timing writer blocked on the held diagnostic reader gate.");
         }
         finally { release.Set(); await reader; }
         Assert.Equal(1UL, collector.ContentionDroppedSamples);
