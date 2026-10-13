@@ -52,6 +52,15 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Output evidence and AUX routing qualification
+        shell: pwsh
+        run: |
+          for ($iteration = 1; $iteration -le 2; $iteration++) {
+            Write-Host "Output evidence and AUX routing qualification iteration $iteration"
+            dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~DeterministicRuntimeBoundaryTests|FullyQualifiedName~RuntimeOutputBindingHealthTests|FullyQualifiedName~OutputRoleRuntimeFailureTests|FullyQualifiedName~ProductionIpcIntegrationTests.ShowTemplate_|FullyQualifiedName~ProductionIpcIntegrationTests.Operator_commands_" --logger "console;verbosity=detailed"
+            if ($LASTEXITCODE -ne 0) { throw "Output evidence and AUX routing qualification failed in iteration $iteration." }
+          }
+
       - name: AppHost readiness evidence and stage qualification
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~UnifiedApplicationHostTests" --logger "console;verbosity=detailed"
 

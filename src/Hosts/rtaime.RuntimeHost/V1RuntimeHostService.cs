@@ -476,6 +476,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private VirtualVideoOutput? _auxOutput;
 	private MediaSinkId? _auxSinkId;
 	private Failure? _auxFailure;
+	private VirtualOutputFrame? _confirmedAuxFrame;
 	private AnchoredTransition? _transition;
 	private V1VisualLayerMode _visualLayerMode = V1VisualLayerMode.Disabled;
 	private byte[]? _operatorGraphicsAsset;
@@ -968,6 +969,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (_programSinkId != programSinkId || _programOutput is null)
 				_programOutput = _virtualMedia.CreateOutput(programSinkId);
 			_programSinkId = programSinkId;
+			_confirmedAuxFrame = null;
 			var auxBinding = auxBindings.SingleOrDefault();
 			if (auxBinding is null)
 			{
@@ -1406,6 +1408,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					lock (_gate)
 					{
 						_auxFailure = auxFailure;
+						// Publish only completed provider evidence; an in-flight write must not erase the prior boundary.
+						_confirmedAuxFrame = auxFailure is null ? _auxOutput?.LastFrame : null;
 						_lastAudioResult = audio;
 						_publishedAudioStatistics = _audio.Statistics;
 						_lastCompositionDuration = composite.Duration;
@@ -2770,7 +2774,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (auxBinding?.MediaSourceId is { } auxSource && auxBinding.MediaSinkId is { } auxSink)
 		{
 			var auxOutput = _auxOutput;
-			var auxEvidence = auxOutput?.LastFrame;
+			var auxEvidence = _confirmedAuxFrame;
 			if (auxEvidence is not null && auxEvidence.Frame.Timing.SequenceNumber >= _nextSequenceNumber)
 				auxEvidence = null;
 			Failure? bindingFault = null;

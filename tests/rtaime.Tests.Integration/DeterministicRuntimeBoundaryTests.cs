@@ -112,7 +112,70 @@ public sealed class DeterministicRuntimeBoundaryTests
 		Assert.Equal(RuntimeOutputRoleHealthState.Healthy, ProgramRole(fixture.Runtime).HealthState);
 	}
 
-	private static Fixture CreateFixture(IGpuProcessingBackend backend)
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Aux_health_retains_completed_evidence_while_the_next_boundary_is_blocked(bool reroute)
+	{
+		using var backend = new BlockingCompositeBackend();
+		await using var fixture = CreateFixture(backend, includeAux: true);
+		var programBinding = Assert.Single(fixture.Prepared.Bindings, binding => binding.OutputRoleId == "program");
+		AssertCommitted(fixture.Runtime.ApplyExecution(fixture.Prepared, programBinding.MediaSinkId!.Value));
+		backend.ReleaseComposite();
+		using (fixture.Runtime.ProcessNextBoundary()) { }
+		var initial = Assert.Single(fixture.Runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux");
+		Assert.Equal(RuntimeOutputRoleHealthState.Healthy, initial.HealthState);
+		Assert.Contains("frame sequence 0", initial.Evidence, StringComparison.Ordinal);
+
+		var expectedSource = initial.SourceId;
+		if (reroute)
+		{
+			expectedSource = programBinding.MediaSourceId!.Value;
+			var bindings = fixture.Prepared.Bindings.Select(binding => binding.OutputRoleId == "aux"
+				? new PreparedExecutionBinding(binding.LogicalNodeId, binding.CapabilityId, binding.Resource,
+					expectedSource, binding.MediaSinkId, binding.OutputRoleId, binding.AudioBusId,
+					binding.ExternalSourceId, binding.SafeSourceIdentity)
+				: binding).ToArray();
+			var prepared = new PreparedExecutionContract(RuntimeContractVersion.Current, PreparedExecutionId.New(),
+				new AuthoritySnapshotReference(fixture.Prepared.AuthoritySnapshot.StateId,
+					fixture.Prepared.AuthoritySnapshot.Revision.Next()),
+				fixture.Prepared.PlanGeneration.Next(), bindings, fixture.Prepared.CompositingState);
+			AssertCommitted(fixture.Runtime.ApplyExecution(prepared, programBinding.MediaSinkId.Value));
+			Assert.Equal(RuntimeOutputRoleHealthState.Unverified,
+				Assert.Single(fixture.Runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux").HealthState);
+		}
+
+		backend.BlockNextComposite();
+		var boundaryTask = Task.Run(() => fixture.Runtime.ProcessNextBoundary());
+		try
+		{
+			await backend.CompositeEntered.WaitAsync(TimeSpan.FromSeconds(3));
+			var snapshot = await Task.Run(() => fixture.Runtime.Snapshot).WaitAsync(TimeSpan.FromSeconds(2));
+			Assert.Equal(1UL, snapshot.NextSequenceNumber);
+			// The provider already accepted sequence 1, but Runtime has not published that boundary.
+			Assert.Equal(1UL, fixture.Runtime.AuxFrames[^1].Frame.Timing.SequenceNumber);
+			var aux = Assert.Single(snapshot.OutputRoles!, role => role.RoleId == "aux");
+			Assert.Equal(expectedSource, aux.SourceId);
+			Assert.Equal(reroute ? RuntimeOutputRoleHealthState.Unverified : RuntimeOutputRoleHealthState.Healthy,
+				aux.HealthState);
+			if (!reroute)
+				Assert.Contains("frame sequence 0", aux.Evidence, StringComparison.Ordinal);
+		}
+		finally
+		{
+			backend.ReleaseComposite();
+			using var boundary = await boundaryTask.WaitAsync(TimeSpan.FromSeconds(5));
+		}
+
+		var published = Assert.Single(fixture.Runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux");
+		Assert.Equal(expectedSource, published.SourceId);
+		Assert.Equal(RuntimeOutputRoleHealthState.Healthy, published.HealthState);
+		Assert.True(published.AuthoritativeActive);
+		Assert.Contains("frame sequence 1", published.Evidence, StringComparison.Ordinal);
+	}
+
+	private static Fixture CreateFixture(IGpuProcessingBackend backend, bool includeAux = false)
 	{
 		var sourceA = new ProductionSourceId(Identity.New());
 		var sourceB = new ProductionSourceId(Identity.New());
@@ -125,7 +188,10 @@ public sealed class DeterministicRuntimeBoundaryTests
 				new ProductionSourceSpecification(sourceA, "Input A"),
 				new ProductionSourceSpecification(sourceB, "Input B")
 			},
-			new ProductionRoutingState(sourceA, sourceA));
+			new ProductionRoutingState(sourceA, sourceA),
+			initialOutputRoles: includeAux
+				? new[] { ProductionOutputRoleState.Program(sourceA), ProductionOutputRoleState.Aux(sourceB) }
+				: new[] { ProductionOutputRoleState.Program(sourceA) });
 
 		var runtime = new V1RuntimeHostService(
 			new MediaSourceId(sourceA.Value),
@@ -221,14 +287,20 @@ public sealed class DeterministicRuntimeBoundaryTests
 	private sealed class BlockingCompositeBackend : IGpuProcessingBackend
 	{
 		private readonly ManagedReferenceGpuBackend _inner = new();
-		private readonly TaskCompletionSource<bool> _compositeEntered =
+		private TaskCompletionSource<bool> _compositeEntered =
 			new(TaskCreationOptions.RunContinuationsAsynchronously);
-		private readonly TaskCompletionSource<bool> _releaseComposite =
+		private TaskCompletionSource<bool> _releaseComposite =
 			new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 		public Task CompositeEntered => _compositeEntered.Task;
 		public GpuBackendInfo Info => _inner.Info;
 		public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
+
+		public void BlockNextComposite()
+		{
+			_compositeEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+			_releaseComposite = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		}
 
 		public void ReleaseComposite() => _releaseComposite.TrySetResult(true);
 		public void Start() => _inner.Start();

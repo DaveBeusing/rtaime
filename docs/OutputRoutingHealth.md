@@ -42,6 +42,8 @@ Governed Program/Aux output health is projected from Runtime/provider evidence a
 
 The clean Program monitor reuses the existing `ProgramOutputController.Health` state. `LIVE` is presented as healthy, `ERROR` as faulted, and states without confirmed healthy/faulted evidence remain warning-level. The existing monitoring panel remains available in OUTPUTS so display selection, start, stop and fullscreen controls are preserved. The workspace defines no independent warning thresholds.
 
+Runtime retains the last completed Aux provider confirmation while the next boundary is being processed. A committed route change clears that confirmation and remains `UNVERIFIED` until matching provider evidence is published by a completed boundary. An in-flight frame alone cannot qualify the new route; read-only health polling does not erase the previous completed confirmation for an unchanged route.
+
 Technical detail from the existing projections remains visible with the affected output so an operator does not need a log file to identify first-level output failures.
 
 ## Performance evidence
