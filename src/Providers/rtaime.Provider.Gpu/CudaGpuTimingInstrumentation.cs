@@ -65,9 +65,12 @@ public sealed class CudaGpuTimingCollector
 
     internal void Record(CudaGpuTimingOperation operation, nuint byteLength, TimeSpan duration, CudaGpuTimingOperation? scope = null)
     {
-        if (!Enum.IsDefined(operation))
+        if ((int)operation < (int)CudaGpuTimingOperation.UploadHostToDevice ||
+            (int)operation > (int)CudaGpuTimingOperation.BackendLockHold)
             throw new ArgumentOutOfRangeException(nameof(operation));
-        if (scope is { } scopedOperation && !Enum.IsDefined(scopedOperation))
+        if (scope is { } scopedOperation &&
+            ((int)scopedOperation < (int)CudaGpuTimingOperation.UploadHostToDevice ||
+             (int)scopedOperation > (int)CudaGpuTimingOperation.BackendLockHold))
             throw new ArgumentOutOfRangeException(nameof(scope));
         if (duration < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(duration));

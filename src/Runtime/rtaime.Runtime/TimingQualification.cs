@@ -235,7 +235,10 @@ public sealed class RuntimeTimingQualificationProbe
 
 	public bool TryObserveStage(RuntimePipelineTimingStage stage, ulong sequenceNumber, TimeSpan duration)
 	{
-		if (!Enum.IsDefined(stage)) throw new ArgumentOutOfRangeException(nameof(stage));
+		// Stage identities are contiguous; avoid runtime enum metadata initialization on the writer.
+		if ((int)stage < (int)RuntimePipelineTimingStage.CompleteProgramBoundary ||
+			(int)stage > (int)RuntimePipelineTimingStage.OutputSubmission)
+			throw new ArgumentOutOfRangeException(nameof(stage));
 		if (duration < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(duration));
 		// A diagnostic snapshot must never stall the Program writer.
 		if (!Monitor.TryEnter(_pipelineGate))

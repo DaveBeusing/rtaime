@@ -174,6 +174,10 @@ public sealed class TimingQualificationTests
         var probe = new RuntimeTimingQualificationProbe(Thresholds);
         Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage((RuntimePipelineTimingStage)999, 0, TimeSpan.Zero));
         Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage(RuntimePipelineTimingStage.Readback, 0, TimeSpan.FromTicks(-1)));
+        foreach (var stage in Enum.GetValues<RuntimePipelineTimingStage>())
+            Assert.True(probe.TryObserveStage(stage, 0, TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => probe.TryObserveStage((RuntimePipelineTimingStage)(-1), 0, TimeSpan.Zero));
+        probe.ResetPipelineSamples();
         probe.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, 0, TimeSpan.Zero);
         probe.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, 0, TimeSpan.Zero);
         Assert.Equal(new[] { "SCHEDULER_LATENESS", "PRESENTATION_LATENESS" }, probe.PipelineSnapshot().Stages.Select(stage => stage.MeasurementKind));
@@ -186,6 +190,11 @@ public sealed class TimingQualificationTests
         var method = typeof(CudaGpuTimingCollector).GetMethod("Record",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var record = method.CreateDelegate<Action<CudaGpuTimingOperation, nuint, TimeSpan, CudaGpuTimingOperation?>>(collector);
+        foreach (var operation in Enum.GetValues<CudaGpuTimingOperation>())
+            record(operation, 0, TimeSpan.Zero, operation);
+        Assert.Throws<ArgumentOutOfRangeException>(() => record((CudaGpuTimingOperation)999, 0, TimeSpan.Zero, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => record(CudaGpuTimingOperation.KernelLaunch, 0, TimeSpan.Zero, (CudaGpuTimingOperation)(-1)));
+        collector.Reset();
         for (var index = 0; index < 70; index++)
             record(CudaGpuTimingOperation.BackendLockWait, 0, TimeSpan.FromMilliseconds(index), CudaGpuTimingOperation.KernelLaunch);
         Assert.Equal(6UL, collector.OverwrittenSampleCount);

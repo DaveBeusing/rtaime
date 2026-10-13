@@ -71,7 +71,8 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
             using var scope = probe.MeasureStage(RuntimePipelineTimingStage.ServiceBoundaryAttempt, sequence);
             probe.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, sequence, TimeSpan.Zero);
         }
-        for (ulong index = 0; index < 512; index++) Observe(index);
+        // Warm scope disposal, both record/overwrite branches and tiered entry points.
+        for (ulong index = 0; index < 16_384; index++) Observe(index);
         probe.ResetPipelineSamples();
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var bytes = GC.GetAllocatedBytesForCurrentThread();
