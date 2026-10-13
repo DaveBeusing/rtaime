@@ -327,3 +327,9 @@ RecordingStatistics exposes current queue depth, capacity, maximum queue depth a
 A stalled writer regression holds one in-flight sample, fills a capacity-two queue, offers another 10,000 samples, and verifies all excess samples are dropped without queue growth or writer I/O on the submit path. After release, the three admitted samples drain before finalization. The next recording session starts with a fresh high-water mark.
 
 These fields are exposed by the recorder snapshot and Runtime support diagnostics; they do not introduce a new recording control authority or a new Operator polling flow.
+
+## Concurrent shutdown and admission
+
+Repeated recorder disposal joins one drain. Closing disposal admission prevents a lifecycle operation that was already waiting from starting a new session. Queue publication and its worker signal occur together under the existing admission gate, so a delayed signal cannot touch a disposed semaphore after shutdown. Already admitted lifecycle waiters may finish against the existing managed admission semaphore; no native wait handle is requested.
+
+The mixed Runtime qualification fills the unchanged default 64-sample recording queue while replay, NDI and SRT are also stalled. Program continues, rejected recording samples do not retain payloads, and the first writer's retained Program hash remains unchanged across later source replacement and transitions. Shutdown waits for recording finalization, including repeated shutdown callers.

@@ -55,6 +55,7 @@ public sealed class ProgramRecorder : IAsyncDisposable
     private int _maximumQueueDepth;
     private Failure? _failure;
     private bool _disposed;
+    private Task? _disposeTask;
 
     public ProgramRecorder(
         IProgramRecordingWriter writer,
@@ -95,6 +96,7 @@ public sealed class ProgramRecorder : IAsyncDisposable
         {
             lock (_gate)
             {
+                ThrowIfDisposed();
                 if (_state is RecordingLifecycleState.Recording or RecordingLifecycleState.Finalizing)
                 {
                     _rejected++;
@@ -164,12 +166,11 @@ public sealed class ProgramRecorder : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(video);
         ThrowIfDisposed();
 
-        bool releaseSignal = false;
         RecordingEnqueueResult result;
 
         lock (_gate)
         {
-            if (_state != RecordingLifecycleState.Recording || _activeRequest is null || _stopRequested)
+            if (_disposed || _state != RecordingLifecycleState.Recording || _activeRequest is null || _stopRequested)
             {
                 _rejected++;
                 return RecordingEnqueueResult.Rejected(new Failure(
@@ -230,12 +231,9 @@ public sealed class ProgramRecorder : IAsyncDisposable
             _queue.Enqueue(sample);
             _maximumQueueDepth = Math.Max(_maximumQueueDepth, _queue.Count);
             _accepted++;
-            releaseSignal = true;
+            _queueSignal.Release();
             result = RecordingEnqueueResult.AcceptedSample();
         }
-
-        if (releaseSignal)
-            _queueSignal.Release();
 
         return result;
     }
@@ -453,14 +451,20 @@ public sealed class ProgramRecorder : IAsyncDisposable
             throw new ObjectDisposedException(nameof(ProgramRecorder));
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed)
-            return;
+        lock (_gate)
+        {
+            _disposed = true;
+            return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        }
+    }
 
+    private async Task DisposeCoreAsync()
+    {
         await StopCoreAsync(CancellationToken.None).ConfigureAwait(false);
-        _disposed = true;
-        _lifecycleGate.Dispose();
         _queueSignal.Dispose();
+        // Already admitted lifecycle waiters may still release this managed semaphore.
+        // No native wait handle is requested; the closed recorder and semaphore are reclaimed together.
     }
 }

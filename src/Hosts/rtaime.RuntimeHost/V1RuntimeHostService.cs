@@ -2643,25 +2643,41 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private async Task DisposeCoreAsync()
 	{
-		await _monitoringTap.DisposeAsync().ConfigureAwait(false);
-		_monitoringHub.Dispose();
-		await _ndiInputBridge.DisposeAsync().ConfigureAwait(false);
-		await _networkOutputBridge.DisposeAsync().ConfigureAwait(false);
+		Exception? failure = null;
+		async ValueTask DrainAsync(Func<ValueTask> cleanup)
+		{
+			try { await cleanup().ConfigureAwait(false); }
+			catch (Exception exception) { failure ??= exception; }
+		}
+		void Release(Action cleanup)
+		{
+			try { cleanup(); }
+			catch (Exception exception) { failure ??= exception; }
+		}
+
+		await DrainAsync(_monitoringTap.DisposeAsync).ConfigureAwait(false);
+		Release(_monitoringHub.Dispose);
+		await DrainAsync(_ndiInputBridge.DisposeAsync).ConfigureAwait(false);
+		await DrainAsync(_networkOutputBridge.DisposeAsync).ConfigureAwait(false);
 		if (_replay is not null)
-			await _replay.DisposeAsync().ConfigureAwait(false);
-		await _recorder.DisposeAsync().ConfigureAwait(false);
-		_sourceAPipeline.Dispose();
-		_sourceBPipeline.Dispose();
+			await DrainAsync(_replay.DisposeAsync).ConfigureAwait(false);
+		await DrainAsync(_recorder.DisposeAsync).ConfigureAwait(false);
+		Release(_sourceAPipeline.Dispose);
+		Release(_sourceBPipeline.Dispose);
 		foreach (var pipeline in _externalSourcePipelines.Values)
-			pipeline.Dispose();
+			Release(pipeline.Dispose);
+
 		var readback = _gpu.ReadbackPoolStatistics;
-		if (readback.ActiveBuffers != 0)
-			throw new InvalidOperationException($"RuntimeHost shutdown retained '{readback.ActiveBuffers}' active Program readback buffer lease(s).");
 		var sharedMonitoring = _gpu.SharedMonitoringResourceStatistics;
+		if (readback.ActiveBuffers != 0)
+			failure ??= new InvalidOperationException($"RuntimeHost shutdown retained '{readback.ActiveBuffers}' active Program readback buffer lease(s).");
 		if (sharedMonitoring.ActiveResources != 0)
-			throw new InvalidOperationException($"RuntimeHost shutdown retained '{sharedMonitoring.ActiveResources}' active shared monitoring resource lease(s).");
-		_gpu.Dispose();
-		_hardwareTelemetry.Dispose();
+			failure ??= new InvalidOperationException($"RuntimeHost shutdown retained '{sharedMonitoring.ActiveResources}' active shared monitoring resource lease(s).");
+		if (readback.ActiveBuffers == 0 && sharedMonitoring.ActiveResources == 0)
+			Release(_gpu.Dispose);
+		Release(_hardwareTelemetry.Dispose);
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
 
 	private MediaFramePipeline CreatePipeline() =>

@@ -92,7 +92,7 @@ public sealed class RuntimeConsumerIsolationTests
             monitor = runtime.MonitoringHub.Subscribe(capacity: 2);
             Assert.True((await runtime.StartRecordingAsync(RecordingSessionId.New(), RecordingOutputId.New())).Succeeded);
             ai.SetEnabled(true);
-            const int boundaries = 32;
+            const int boundaries = ProgramRecorder.DefaultQueueCapacity + 16;
             const int warmup = 3;
             var trace = new List<object>(boundaries);
             var durations = new List<double>(boundaries - warmup);
@@ -129,7 +129,7 @@ public sealed class RuntimeConsumerIsolationTests
                     monitorDrops += monitor.DroppedFrames;
                     monitor = runtime.MonitoringHub.Subscribe(capacity: 1);
                 }
-                if (index == 18)
+                if (index == ProgramRecorder.DefaultQueueCapacity + 2)
                 {
                     Assert.False(recordingWriter.Release.Task.IsCompleted);
                     Assert.False(replayWriter.Release.Task.IsCompleted);
@@ -186,6 +186,7 @@ public sealed class RuntimeConsumerIsolationTests
                         presentationLatenessTicks = Math.Max(0, lateness.Ticks) });
                     if (index == 0) retainedHash = SHA256.HashData(boundary.ProgramPixels.Span);
                 }
+                if (index == warmup - 1) probe.ResetPipelineSamples();
                 if (index == 0)
                 {
                     await Task.WhenAll(recordingWriter.Started.Task, replayWriter.Started.Task,
@@ -258,6 +259,71 @@ public sealed class RuntimeConsumerIsolationTests
             if (shutdown is not null) await shutdown;
             if (repeatedShutdown is not null) await repeatedShutdown;
             if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cleanup_failure_still_drains_other_sessions_and_repeat_shutdown_reports_same_failure(bool throughRuntime)
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var targets = new[]
+        {
+            new RuntimeNetworkOutputTarget("program", new NetworkOutputConfiguration("cleanup-a",
+                NetworkOutputProtocolFamily.Ndi, format, AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("A"))),
+            new RuntimeNetworkOutputTarget("aux", new NetworkOutputConfiguration("cleanup-b",
+                NetworkOutputProtocolFamily.Ndi, format, AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("B")))
+        };
+        var registry = new CleanupRegistry();
+        var writer = new StalledWriter();
+        writer.Release.TrySetResult();
+        writer.FinalizeRelease.TrySetResult();
+        var runtime = throughRuntime ? new V1RuntimeHostService(MediaSourceId.New(), MediaSourceId.New(),
+            format, writer, new ManagedReferenceGpuBackend(), targets, null, null, registry) : null;
+        var bridge = throughRuntime ? null : new RuntimeNetworkOutputBridge(targets, registry);
+        async Task DisposeAsync()
+        {
+            if (runtime is not null) await runtime.DisposeAsync();
+            else await bridge!.DisposeAsync();
+        }
+        var first = await Assert.ThrowsAsync<IOException>(DisposeAsync);
+        var repeated = await Assert.ThrowsAsync<IOException>(DisposeAsync);
+        Assert.Same(first, repeated);
+        Assert.Equal(2, registry.Sessions.Count);
+        Assert.All(registry.Sessions, session => Assert.Equal(1, session.Disposals));
+        if (runtime is not null)
+        {
+            Assert.Equal(0, runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
+            Assert.Throws<ObjectDisposedException>(() => runtime.ProcessNextBoundary());
+        }
+    }
+
+    private sealed class CleanupRegistry : IRuntimeNetworkOutputProviderRegistry
+    {
+        public List<CleanupSession> Sessions { get; } = new();
+        public IReadOnlyList<ProviderDescriptor> ProviderDescriptorsFor(IReadOnlyList<RuntimeNetworkOutputTarget> targets) =>
+            Array.Empty<ProviderDescriptor>();
+        public INetworkOutputSession CreateSession(RuntimeNetworkOutputTarget target)
+        {
+            var session = new CleanupSession(target.Configuration, Sessions.Count == 0);
+            Sessions.Add(session);
+            return session;
+        }
+    }
+
+    private sealed class CleanupSession(NetworkOutputConfiguration configuration, bool fail) : INetworkOutputSession
+    {
+        public NetworkOutputConfiguration Configuration => configuration;
+        public NetworkOutputHealthSnapshot Snapshot => throw new NotSupportedException();
+        public int Disposals { get; private set; }
+        public NetworkOutputEnqueueResult TrySubmit(NetworkOutputProgramSample sample) => throw new NotSupportedException();
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            if (fail) throw new IOException("Native session cleanup failed.");
+            return ValueTask.CompletedTask;
         }
     }
 

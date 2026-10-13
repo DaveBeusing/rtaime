@@ -385,21 +385,71 @@ public sealed class NetworkOutputFoundationTests
         }
     }
 
-    private sealed class CleanupNdiSender(TaskCompletionSource started, TaskCompletionSource release) : INdiSender
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cleanup_failure_is_shared_and_releases_inflight_and_queued_leases(bool ndi)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sender = new CleanupNdiSender(started, release, fail: true, stall: true);
+        var transport = new CleanupSrtTransport(started, release, fail: true, stall: true);
+        INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(NdiConfiguration("Failed cleanup", queueCapacity: 2), _ => sender)
+            : new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live"), queueCapacity: 2),
+                () => transport, () => new PassThroughEncoder());
+        var samples = new[] { Sample(0), Sample(1), Sample(2) };
+        Task? first = null;
+        Task? second = null;
+        try
+        {
+            Assert.True(session.TrySubmit(samples[0]).Accepted);
+            await (ndi ? sender.SendStarted.Task : transport.SendStarted.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(session.TrySubmit(samples[1]).Accepted);
+            Assert.True(session.TrySubmit(samples[2]).Accepted);
+            Assert.Equal(2, session.Snapshot.Statistics.QueueDepth);
+            first = session.DisposeAsync().AsTask();
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = session.DisposeAsync().AsTask();
+            Assert.False(second.IsCompleted);
+            release.TrySetResult();
+            var firstFailure = await Assert.ThrowsAsync<IOException>(() => first);
+            var repeatedFailure = await Assert.ThrowsAsync<IOException>(() => second);
+            Assert.Same(firstFailure, repeatedFailure);
+            Assert.All(samples, sample => Assert.Equal(1, sample.VideoLease.DisposeCount));
+            Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+            Assert.Equal(1, ndi ? sender.Disposals : transport.Disposals);
+        }
+        finally
+        {
+            release.TrySetResult();
+            try { await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (IOException) { }
+        }
+    }
+
+
+    private sealed class CleanupNdiSender(TaskCompletionSource started, TaskCompletionSource release, bool fail = false, bool stall = false) : INdiSender
     {
         public bool IsReady => true;
         public int Disposals { get; private set; }
-        public ValueTask<NdiSendResult> SendAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
-            ValueTask.FromResult(new NdiSendResult(1, 4));
+        public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<NdiSendResult> SendAsync(NetworkOutputProgramSample sample, CancellationToken token)
+        {
+            SendStarted.TrySetResult();
+            if (stall) await Task.Delay(Timeout.Infinite, token);
+            return new NdiSendResult(1, 4);
+        }
         public async ValueTask DisposeAsync()
         {
             Disposals++;
             started.TrySetResult();
             await release.Task;
+            if (fail) throw new IOException("Native cleanup failed.");
         }
     }
 
-    private sealed class CleanupSrtTransport(TaskCompletionSource started, TaskCompletionSource release) : ISrtTransport
+    private sealed class CleanupSrtTransport(TaskCompletionSource started, TaskCompletionSource release, bool fail = false, bool stall = false) : ISrtTransport
     {
         public bool IsConnected { get; private set; }
         public int Disposals { get; private set; }
@@ -408,13 +458,20 @@ public sealed class NetworkOutputFoundationTests
             IsConnected = true;
             return ValueTask.CompletedTask;
         }
-        public ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken token) => ValueTask.FromResult(payload.Length);
+        public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken token)
+        {
+            SendStarted.TrySetResult();
+            if (stall) await Task.Delay(Timeout.Infinite, token);
+            return payload.Length;
+        }
         public async ValueTask DisposeAsync()
         {
             Disposals++;
             started.TrySetResult();
             await release.Task;
             IsConnected = false;
+            if (fail) throw new IOException("Native cleanup failed.");
         }
     }
 

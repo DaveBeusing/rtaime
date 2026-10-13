@@ -272,3 +272,11 @@ SRT and NDI signal the worker only when queue depth grows. Replacing an already 
 NetworkOutputStatistics additionally exposes MaximumQueueDepth and QueueCapacity; Backpressured means current depth is at capacity. The same observations are available in Runtime support snapshots per role. High-water marks are retained for the session. Optional constructor defaults keep older software observations representable without inventing capacity evidence.
 
 Deterministic overload regressions stall each consumer, submit 10,002 samples at both supported media timebases, require a depth/high-water/wakeup bound of one, verify old leases are disposed, and release the consumer to verify drainage and resumed sends. This is software failure-isolation evidence, not NDI/SRT peer interoperability or hardware timing qualification.
+
+## Runtime clock compatibility and cleanup completion
+
+Runtime video uses a rational frame clock (1/50 or 1001/60000); audio uses the 1/48000 sample clock. Equal timebase units are not required for aligned media. Sessions retain compatibility with legacy shared-clock samples. For independent clocks they require the canonical frame/sample timebases, video timestamp matching Program sequence, and exact audio position, timestamp and count derived from that sequence with integer rational arithmetic. Invalid independent-clock windows are rejected and their video lease is returned once. Neither provider rewrites timestamps or resamples audio.
+
+Repeated NDI/SRT Dispose calls join one worker/native cleanup operation. Cancellation stops new admission; every queued lease is returned even if native cleanup fails. The Runtime bridge attempts every session cleanup before propagating the first failure, and repeated bridge disposal reports that same completion/failure. Runtime also drains the other consumers before reporting a cleanup failure; GPU teardown still requires zero active readback and shared monitoring owners.
+
+The mixed-consumer qualification exercises real session queues with simulated NDI/SRT backends. It proves bounded admission and recovery behavior, not peer interoperability, encoder quality or native shutdown latency.
