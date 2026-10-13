@@ -1111,8 +1111,8 @@ public sealed class UnifiedApplicationHost
 					{
 						Transition(ApplicationLifecycleState.Recovering);
 						_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
-						Transition(ApplicationLifecycleState.Healthy);
 						_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime recovered and is qualified.");
+						Transition(ApplicationLifecycleState.Healthy);
 					}
 					degradedSince = null;
 					degradationPublished = false;
@@ -1166,8 +1166,8 @@ public sealed class UnifiedApplicationHost
 					degradedSince = null;
 					degradationPublished = false;
 				}
-				Transition(ApplicationLifecycleState.Healthy);
 				_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
+				Transition(ApplicationLifecycleState.Healthy);
 			}
 
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);

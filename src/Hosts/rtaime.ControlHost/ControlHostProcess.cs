@@ -1167,7 +1167,8 @@ public sealed class ControlHostProcess
 				try { await _journal.FlushAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
 				try { await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
 			}
-			if (durabilityFailure is not null) throw new IOException("ControlHost durability drain failed.", durabilityFailure);
+			if (durabilityFailure is not null)
+				throw new IOException($"ControlHost durability drain failed: {durabilityFailure.GetBaseException().GetType().Name}: {durabilityFailure.GetBaseException().Message}", durabilityFailure);
 
 			Update(ControlHostProcessState.Stopped, ControlHostHealthState.Stopped, "ControlHost stopped cleanly.");
 			return ControlHostExitCode.Success;
