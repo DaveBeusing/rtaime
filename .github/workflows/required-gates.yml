@@ -52,6 +52,17 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Renderer low latency pixel and ownership qualification
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorOptimizationTests|FullyQualifiedName~GpuProcessingTests|FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuSchedulingSynchronizationTests|FullyQualifiedName~GpuReadbackOwnershipConcurrencyTests" --logger "console;verbosity=detailed"
+
+      - name: Renderer scalar fallback parity qualification
+        env:
+          DOTNET_EnableHWIntrinsic: "0"
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorOptimizationTests.Dissolve_matches_independent_integer_equation|FullyQualifiedName~GpuCompositorOptimizationTests.Vector_dissolve_preserves_scalar_tail" --logger "console;verbosity=detailed"
+
+      - name: Renderer comparable low latency software profile
+        run: dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorPerformanceProfileTests" --logger "console;verbosity=detailed"
+
       - name: Legacy authority recovery qualification
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LegacyAuthorityCheckpointRecoveryTests" --logger "console;verbosity=detailed"
 
