@@ -11,6 +11,7 @@ using rtaime.Provider.Contracts;
 using rtaime.Provider.Gpu;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
+using rtaime.Runtime;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Performance;
@@ -63,7 +64,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         {
             try
             {
-                compositorResults.AddRange(RunCompositorMatrix(deviceOrdinal, compositorSamples));
+                compositorResults.AddRange(RunCompositorMatrix(deviceOrdinal, compositorSamples, warmupBoundaries));
             }
             catch (Exception exception)
             {
@@ -128,17 +129,18 @@ public sealed class RendererReferenceHardwareQualificationTests
         Directory.CreateDirectory(Path.GetDirectoryName(fullEvidencePath)!);
         File.WriteAllText(
             fullEvidencePath,
-            JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+            JsonSerializer.Serialize(report, ProgramPipelineEvidence.Options) + Environment.NewLine);
 
         Assert.Empty(failures);
     }
 
-    private static IReadOnlyList<object> RunCompositorMatrix(int deviceOrdinal, int sampleIterations)
+    private static IReadOnlyList<object> RunCompositorMatrix(int deviceOrdinal, int sampleIterations, int warmupBoundaries)
     {
         var results = new List<object>();
         foreach (var format in new[] { VideoFormat.Hd1080p50Rgba8, VideoFormat.Hd1080p59_94Rgba8 })
         {
-            using var cudaBackend = new CudaGpuProcessingBackend(deviceOrdinal);
+            var collector = new CudaGpuTimingCollector(65_536);
+            using var cudaBackend = new CudaGpuProcessingBackend(deviceOrdinal, collector);
             using var cuda = new GpuProcessingProvider(cudaBackend);
             cuda.Start();
 
@@ -198,6 +200,9 @@ public sealed class RendererReferenceHardwareQualificationTests
                         var lifetimeCorrect = true;
                         var monitoringExported = false;
 
+                        for (var index = 0; index < warmupBoundaries; index++)
+                            _ = CompositeHash(cuda, cudaA, cudaB, cudaLayers.Take(layerCount), transition.Value);
+                        collector.Reset();
                         for (var index = 0; index < sampleIterations; index++)
                         {
                             var started = Stopwatch.GetTimestamp();
@@ -235,6 +240,11 @@ public sealed class RendererReferenceHardwareQualificationTests
                             transition = transition.Name,
                             layerCount,
                             samples = samples.Length,
+                            warmupBoundaries,
+                            measurementKind = "CPU_WALL",
+                            scope = "RESIDENT_INPUTS_COMPOSITE_AND_ONE_READBACK",
+                            gpuTimings = BuildGpuTiming(collector.Snapshot()),
+                            telemetryWindow = new { collector.Capacity, collector.OverwrittenSampleCount, collector.ContentionDroppedSamples },
                             frameBudgetMilliseconds = FrameBudget(format),
                             p50Milliseconds = Percentile(samples, 0.50),
                             p95Milliseconds = Percentile(samples, 0.95),
@@ -317,12 +327,15 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         var timingCollector = new CudaGpuTimingCollector(65_536);
         var writer = new BackpressureQualificationWriter();
+        var period = TimeSpan.FromSeconds((double)format.FrameRate.Denominator / format.FrameRate.Numerator);
+        var pipeline = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(period,
+            TimeSpan.FromTicks(period.Ticks / 4), period, 65_536));
         await using var runtime = new V1RuntimeHostService(
             mediaA,
             mediaB,
             format,
             writer,
-            new CudaGpuProcessingBackend(deviceOrdinal, timingCollector));
+            new CudaGpuProcessingBackend(deviceOrdinal, timingCollector), pipelineTimingProbe: pipeline);
 
         var registry = new ProviderRegistry(runtime.ProviderDescriptors);
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
@@ -361,6 +374,8 @@ public sealed class RendererReferenceHardwareQualificationTests
         if (!recording.Succeeded)
             throw new InvalidOperationException(recording.Failure?.Message ?? "Renderer qualification recording failed to start.");
 
+        timingCollector.Reset();
+        pipeline.ResetPipelineSamples();
         var durations = new List<double>();
         var cpuUtilization = new List<double>();
         var gpuUtilization = new List<double>();
@@ -383,16 +398,30 @@ public sealed class RendererReferenceHardwareQualificationTests
         var startedAt = Stopwatch.GetTimestamp();
         var duration = TimeSpan.FromSeconds(durationSeconds);
         var boundaryIndex = 0;
+        var schedule = new RationalFrameSchedule(format.FrameRate, TimeSpan.Zero);
+        ulong missedSchedulerSlots = 0;
 
         try
         {
             while (Stopwatch.GetElapsedTime(startedAt) < duration)
             {
+                var observedAt = Stopwatch.GetElapsedTime(startedAt);
+                if (!schedule.TryTake(observedAt, out var opportunity))
+                {
+                    var wait = schedule.NextDeadline - observedAt;
+                    if (wait > TimeSpan.Zero) await Task.Delay(wait);
+                    continue;
+                }
+                missedSchedulerSlots += opportunity.MissedSlots;
                 var boundaryStarted = Stopwatch.GetTimestamp();
                 using (var boundary = runtime.ProcessNextBoundary())
                 {
                     var elapsedMilliseconds = Stopwatch.GetElapsedTime(boundaryStarted).TotalMilliseconds;
                     durations.Add(elapsedMilliseconds);
+                    pipeline.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, boundary.SequenceNumber, opportunity.StartLateness);
+                    var completedAt = Stopwatch.GetElapsedTime(startedAt);
+                    pipeline.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, boundary.SequenceNumber,
+                        completedAt > opportunity.PresentationDeadline ? completedAt - opportunity.PresentationDeadline : TimeSpan.Zero);
 
                     if (boundary.SequenceNumber != expectedSequence)
                     {
@@ -473,9 +502,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                     if (performance.GpuVramUsedBytes is { } vram) vramUsedMiB.Add(vram / 1024.0 / 1024.0);
                 }
 
-                var remaining = TimeSpan.FromMilliseconds(frameBudgetMilliseconds - durations[^1]);
-                if (remaining > TimeSpan.Zero)
-                    await Task.Delay(remaining);
+
             }
         }
         finally
@@ -536,6 +563,11 @@ public sealed class RendererReferenceHardwareQualificationTests
             format = FormatName(format),
             durationSeconds,
             boundaries = durations.Count,
+            warmupBoundaries,
+            boundaryScope = "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO",
+            missedSchedulerSlots,
+            pipelineTiming = pipeline.PipelineSnapshot(),
+            cudaTimingWindow = new { timingCollector.Capacity, timingCollector.OverwrittenSampleCount, timingCollector.ContentionDroppedSamples },
             frameBudgetMilliseconds,
             cpuBoundary = new
             {
@@ -546,6 +578,12 @@ public sealed class RendererReferenceHardwareQualificationTests
                 deadlineViolations
             },
             gpuTimings = gpuTiming,
+            gpuLockTimings = timingCollector.Snapshot().Where(sample => sample.Scope is not null)
+                .GroupBy(sample => (sample.Operation, sample.Scope)).Select(group => new
+                {
+                    operation = group.Key.Operation.ToString(), scope = group.Key.Scope.ToString(), measurementKind = "CPU_WALL",
+                    summary = Percentiles(group.Select(sample => sample.Milliseconds).ToArray())
+                }).ToArray(),
             telemetry = new
             {
                 cpuUtilizationPercent = Percentiles(cpuUtilization),
@@ -636,6 +674,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             results.Add(new
             {
                 operation = operation.ToString(),
+                measurementKind = operation == CudaGpuTimingOperation.KernelGpuElapsed ? "GPU_EVENT" : "CPU_WALL",
                 samples = values.Length,
                 p50Milliseconds = Percentile(values, 0.50),
                 p95Milliseconds = Percentile(values, 0.95),
