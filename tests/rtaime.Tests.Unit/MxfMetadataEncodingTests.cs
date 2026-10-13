@@ -44,6 +44,22 @@ public sealed class MxfMetadataEncodingTests
     }
 
     [Fact]
+    public void Large_local_set_roundtrips_unique_tags_and_enforces_reader_limit()
+    {
+        const int count = 60_000;
+        var properties = Enumerable.Range(1, count)
+            .Select(tag => new MxfLocalSet.Property(checked((ushort)tag), [(byte)(tag % 256)]))
+            .ToArray();
+        var bytes = MxfLocalSet.Encode(properties);
+        var decoded = MxfLocalSet.Decode(bytes, count);
+        Assert.Equal(count, decoded.Count);
+        Assert.Equal(properties[0].Tag, decoded[0].Tag);
+        Assert.Equal(properties[^1].Tag, decoded[^1].Tag);
+        Assert.Equal(properties[^1].Value, decoded[^1].Value);
+        Assert.Throws<InvalidDataException>(() => MxfLocalSet.Decode(bytes, count - 1));
+    }
+
+    [Fact]
     public void Local_set_rejects_duplicate_property_or_corrupted_length()
     {
         Assert.Throws<ArgumentException>(() => MxfLocalSet.Encode([

@@ -575,7 +575,7 @@ internal static class MediaFoundationNetwork
 	}
 	public static void ReleaseComObject(object value)
 	{
-		if (Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
+		if (OperatingSystem.IsWindows() && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
 	}
 }
 

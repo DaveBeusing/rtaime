@@ -58,6 +58,23 @@ public sealed class MxfKlvReaderTests
     }
 
     [Fact]
+    public void Scan_handles_large_bounded_stream_without_per_record_stack_growth()
+    {
+        const int count = 100_000;
+        using var stream = new MemoryStream(count * 17);
+        for (var index = 0; index < count; index++)
+        {
+            stream.Write(Key);
+            stream.WriteByte(0);
+        }
+        var elements = MxfKlvReader.Scan(stream, count);
+        Assert.Equal(count, elements.Count);
+        Assert.Equal((count - 1) * 17L, elements[^1].Offset);
+        Assert.Equal(stream.Length, elements[^1].EndOffset);
+        Assert.Throws<InvalidDataException>(() => MxfKlvReader.Scan(stream, count - 1));
+    }
+
+    [Fact]
     public void Scan_enforces_element_limit()
     {
         using var stream = new MemoryStream();
