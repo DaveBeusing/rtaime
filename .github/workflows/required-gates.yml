@@ -500,6 +500,7 @@ jobs:
             throw "Expected exactly one qualification bundle, found $($bundles.Count)."
           }
           ./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath $bundles[0].FullName
+          ./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath $bundles[0].FullName -LegacyAuthorityCheckpointPath ./tests/rtaime.Tests.Integration/TestData/LegacyAuthorityV1.json -LegacyShowProjectPath ./tests/rtaime.Tests.Integration/TestData/LegacyShowProjectV1.json
 
       - name: Qualify packaged investor demo bootstrap
         shell: pwsh

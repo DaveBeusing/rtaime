@@ -3,7 +3,9 @@
 [CmdletBinding()]
 param(
 	[Parameter(Mandatory)]
-	[string]$BundlePath
+	[string]$BundlePath,
+	[string]$LegacyAuthorityCheckpointPath = '',
+	[string]$LegacyShowProjectPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -76,11 +78,75 @@ $workRoot = Join-Path $root 'lifecycle'
 $instanceId = "qualification-$([Guid]::NewGuid().ToString('N'))"
 $lifecycle = $null
 
+$legacyQualification = -not [string]::IsNullOrWhiteSpace($LegacyAuthorityCheckpointPath)
+Assert-Condition ($legacyQualification -eq (-not [string]::IsNullOrWhiteSpace($LegacyShowProjectPath))) 'Legacy authority and show-project fixtures must be supplied together.'
+$legacyDatabase = Join-Path $stateRoot ("70000000-0000-0000-0000-000000000001-rtaime.v1.control.{0}/management.db" -f $instanceId)
+$python = $null
+
+function Invoke-LegacyCheckpointFixture {
+	param([Parameter(Mandatory)][ValidateSet('seed', 'verify')][string]$Mode)
+	if ($null -eq $script:python) {
+		$script:python = Get-Command python3, python -ErrorAction SilentlyContinue |
+			Where-Object { $_.CommandType -eq 'Application' } | Select-Object -First 1
+		Assert-Condition ($null -ne $script:python) 'Python 3 is required for disposable legacy-checkpoint qualification.'
+	}
+	$fixtureCode = @'
+import hashlib, json, pathlib, sqlite3, sys
+mode, database_path, authority_path, project_path = sys.argv[1:]
+database = pathlib.Path(database_path)
+payload = pathlib.Path(authority_path).read_bytes()
+project_json = pathlib.Path(project_path).read_text(encoding='utf-8')
+authority = json.loads(payload)
+project = json.loads(project_json)
+assert authority['Version'] == '1.0' and authority['Revision'] == 8
+assert authority['ProductionId'] == '70000000-0000-0000-0000-000000000001'
+assert project['productionId'] == authority['ProductionId']
+checksum = hashlib.sha256(payload).hexdigest().upper()
+if mode == 'seed':
+    assert not database.exists(), 'Refusing to replace an existing qualification database'
+    database.parent.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(database)
+    c.executescript("""
+        CREATE TABLE schema_metadata(component TEXT PRIMARY KEY, schema_version INTEGER NOT NULL);
+        INSERT INTO schema_metadata VALUES('management', 1);
+        CREATE TABLE management_documents(
+            area TEXT NOT NULL, document_key TEXT NOT NULL, version TEXT NOT NULL,
+            updated_utc TEXT NOT NULL, payload_json TEXT NOT NULL, checksum_sha256 TEXT NOT NULL,
+            PRIMARY KEY(area, document_key));
+        CREATE TABLE production_checkpoints(
+            checkpoint_id TEXT PRIMARY KEY, production_id TEXT NOT NULL, authoritative_revision TEXT NOT NULL,
+            created_utc TEXT NOT NULL, format TEXT NOT NULL, payload BLOB NOT NULL, checksum_sha256 TEXT NOT NULL,
+            UNIQUE(production_id, authoritative_revision));
+    """)
+    c.execute("INSERT INTO management_documents VALUES(?,?,?,?,?,?)",
+        ('show.project', authority['ProductionId'], '00000000000000000001',
+         '2026-09-26T19:51:13.1453784+00:00', project_json,
+         hashlib.sha256(project_json.encode('utf-8')).hexdigest().upper()))
+    c.execute("INSERT INTO production_checkpoints VALUES(?,?,?,?,?,?,?)",
+        ('73000000-0000-0000-0000-000000000001', authority['ProductionId'], '00000000000000000008',
+         '2026-09-26T19:51:13.1453784+00:00', 'rtaime.control.authority.v1', payload, checksum))
+    c.commit()
+else:
+    c = sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)
+    row = c.execute("SELECT authoritative_revision,payload,checksum_sha256 FROM production_checkpoints WHERE checkpoint_id=?",
+        ('73000000-0000-0000-0000-000000000001',)).fetchone()
+    assert row == ('00000000000000000008', payload, checksum), 'Original legacy authority was changed'
+    assert c.execute("SELECT COUNT(*) FROM production_checkpoints").fetchone()[0] == 1, 'Lifecycle invented a new authority revision'
+    assert c.execute("PRAGMA integrity_check").fetchone()[0] == 'ok'
+    print('Legacy checkpoint preservation PASS: contract 1.0, revision 8, unchanged payload/checksum')
+c.close()
+'@
+	& $script:python.Source -c $fixtureCode $Mode $legacyDatabase ([System.IO.Path]::GetFullPath($LegacyAuthorityCheckpointPath)) ([System.IO.Path]::GetFullPath($LegacyShowProjectPath))
+	if ($LASTEXITCODE -ne 0) { throw "Legacy checkpoint fixture $Mode failed." }
+}
+
 try {
 	New-Item -ItemType Directory -Path $root -Force | Out-Null
 	& (Join-Path $repositoryRoot 'build/release/Install-OfflineRelease.ps1') -BundlePath $bundle -InstallPath $install
 	$lifecycle = Join-Path $install 'tools/Invoke-ManagedHostLifecycle.ps1'
 	Assert-Condition (Test-Path -LiteralPath $lifecycle -PathType Leaf) "Installed qualification bundle does not contain managed lifecycle controller."
+
+	if ($legacyQualification) { Invoke-LegacyCheckpointFixture -Mode seed }
 
 	$start = & $lifecycle -Action Start -InstallPath $install -StateRoot $stateRoot -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$start.status -eq 'PASS') "Managed lifecycle Start did not return PASS."
@@ -109,6 +175,8 @@ try {
 	$stoppedStatus = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$stoppedStatus.status -eq 'STOPPED') "Managed lifecycle Status after Stop did not report STOPPED."
 	Assert-Condition ([string]$stoppedStatus.runtimeReadiness -eq 'NOT_APPLICABLE') "Stopped lifecycle must not report runtime readiness PASS."
+
+	if ($legacyQualification) { Invoke-LegacyCheckpointFixture -Mode verify }
 
 	Write-Host 'Managed host lifecycle qualification PASS'
 	Write-Host 'Sequence: Start -> Status -> Restart -> Status -> Stop'
