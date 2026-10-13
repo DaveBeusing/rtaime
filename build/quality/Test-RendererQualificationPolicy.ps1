@@ -140,3 +140,31 @@ Assert-Condition ($documentation -match 'Physical typed-processing acceleration/
 
 Write-Host "Renderer qualification policy verification PASS"
 Write-Host "Hosted CI validates structure only; physical CUDA/D3D11/long-run evidence remains UNVERIFIED until the self-hosted workflow runs."
+
+# Execute the evidence summary validator independently with valid and invalid fixtures.
+$verifierAst = [System.Management.Automation.Language.Parser]::ParseFile($verifierPath, [ref]$null, [ref]$null)
+$summaryFunction = $verifierAst.Find({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq "Assert-TimingSummary"
+}, $true)
+Assert-Condition ($null -ne $summaryFunction) "Renderer summary validator is missing."
+. ([scriptblock]::Create($summaryFunction.Extent.Text))
+$validSummary = [pscustomobject]@{
+    samples = 12; measurementKind = "CPU_WALL"; p50Milliseconds = 1.0; p95Milliseconds = 2.0
+    p99Milliseconds = 3.0; maximumMilliseconds = 4.0
+}
+Assert-TimingSummary $validSummary "valid fixture"
+foreach ($mutation in @(
+    @{ field = "samples"; value = 0 },
+    @{ field = "p50Milliseconds"; value = -1.0 },
+    @{ field = "p95Milliseconds"; value = [double]::NaN },
+    @{ field = "p99Milliseconds"; value = [double]::PositiveInfinity },
+    @{ field = "maximumMilliseconds"; value = 0.0 },
+    @{ field = "measurementKind"; value = "GPU_GUESSED" }
+)) {
+    $invalidSummary = $validSummary | ConvertTo-Json | ConvertFrom-Json
+    $invalidSummary.($mutation.field) = $mutation.value
+    $rejected = $false
+    try { Assert-TimingSummary $invalidSummary "invalid fixture" } catch { $rejected = $true }
+    Assert-Condition $rejected "Renderer timing validator accepted invalid '$($mutation.field)' evidence."
+}
+Write-Host "Renderer timing summary negative fixtures PASS"

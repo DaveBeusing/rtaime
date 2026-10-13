@@ -14,6 +14,8 @@ permissions:
   contents: read
 
 env:
+  RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  RTAIME_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   RTAIME_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
   RTAIME_VALIDATION_SEQUENCE: ${{ github.run_id }}.${{ github.run_attempt }}
   RTAIME_BUILD_ID: validation-${{ github.run_id }}-${{ github.run_attempt }}
@@ -60,8 +62,22 @@ jobs:
           DOTNET_EnableHWIntrinsic: "0"
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorOptimizationTests.Dissolve_matches_independent_integer_equation|FullyQualifiedName~GpuCompositorOptimizationTests.Vector_dissolve_preserves_scalar_tail" --logger "console;verbosity=detailed"
 
+      - name: Program pipeline bounded telemetry qualification
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~TimingQualificationTests" --logger "console;verbosity=detailed"
+
       - name: Renderer comparable low latency software profile
-        run: dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorPerformanceProfileTests" --logger "console;verbosity=detailed"
+        env:
+          RTAIME_PIPELINE_BASELINE_EVIDENCE: ${{ github.workspace }}/artifacts/qualification/program-pipeline
+          RTAIME_BASELINE_SDK: "10.0.401"
+        run: dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuCompositorPerformanceProfileTests|FullyQualifiedName~ProgramPipelineMeasurementBaselineTests|FullyQualifiedName~RuntimePerformanceStatusBarPerformanceTests" --logger "console;verbosity=detailed"
+
+      - name: Preserve Program pipeline software measurements
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-program-pipeline-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/program-pipeline
+          if-no-files-found: warn
 
       - name: Legacy authority recovery qualification
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LegacyAuthorityCheckpointRecoveryTests" --logger "console;verbosity=detailed"

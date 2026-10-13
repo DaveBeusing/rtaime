@@ -26,6 +26,23 @@ if ($ExpectedSourceCommit -notmatch '^[0-9a-f]{40}$') {
     throw "ExpectedSourceCommit must be an exact lowercase 40-character SHA."
 }
 
+function Assert-TimingSummary {
+    param([Parameter(Mandatory)]$Summary, [Parameter(Mandatory)][string]$Context)
+    $countProperty = if ($null -ne $Summary.PSObject.Properties["retainedSamples"]) { "retainedSamples" } else { "samples" }
+    if ([int]$Summary.$countProperty -le 0) { throw "Timing sample count is invalid for '$Context'." }
+    $values = @([double]$Summary.p50Milliseconds, [double]$Summary.p95Milliseconds,
+        [double]$Summary.p99Milliseconds, [double]$Summary.maximumMilliseconds)
+    foreach ($value in $values) {
+        if (-not [double]::IsFinite($value) -or $value -lt 0) { throw "Timing evidence is negative or non-finite for '$Context'." }
+    }
+    if ($values[0] -gt $values[1] -or $values[1] -gt $values[2] -or $values[2] -gt $values[3]) {
+        throw "Timing percentile ordering is invalid for '$Context'."
+    }
+    if ([string]$Summary.measurementKind -notin @("CPU_WALL", "GPU_EVENT", "SCHEDULER_LATENESS", "PRESENTATION_LATENESS")) {
+        throw "Timing measurement kind is invalid for '$Context'."
+    }
+}
+
 $evidence = Get-Content -LiteralPath (Require-File $EvidencePath) -Raw | ConvertFrom-Json
 $manifest = Get-Content -LiteralPath (Require-File $ManifestPath) -Raw | ConvertFrom-Json
 $software = Get-Content -LiteralPath (Require-File $SoftwareEvidencePath) -Raw | ConvertFrom-Json
@@ -68,6 +85,13 @@ foreach ($format in @("1080p50", "1080p59.94")) {
             if (-not [bool]$case.pixelIntegrity) { throw "Renderer compositor pixel integrity failed for '$format/$transition/$layerCount'." }
             if (-not [bool]$case.surfaceLifetimeCorrect) { throw "Renderer compositor surface lifetime failed for '$format/$transition/$layerCount'." }
             if (-not [bool]$case.monitoringExported) { throw "Renderer D3D11 monitoring export failed for '$format/$transition/$layerCount'." }
+            Assert-TimingSummary $case "$format/$transition/$layerCount"
+            if ([int]$case.warmupBoundaries -le 0) { throw "Compositor warmup is missing." }
+            foreach ($timing in @($case.gpuTimings)) {
+                Assert-TimingSummary $timing "$format/$transition/$layerCount/$($timing.operation)"
+                $expectedKind = if ([string]$timing.operation -eq "KernelGpuElapsed") { "GPU_EVENT" } else { "CPU_WALL" }
+                if ([string]$timing.measurementKind -ne $expectedKind) { throw "CUDA/CPU measurement kind mismatch." }
+            }
             $p50 = [double]$case.p50Milliseconds
             $p95 = [double]$case.p95Milliseconds
             $p99 = [double]$case.p99Milliseconds
@@ -120,8 +144,26 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     }
     if ([double]$result.frameBudgetMilliseconds -le 0) { throw "Renderer frame budget is invalid for '$format'." }
 
+    if ([int]$result.warmupBoundaries -le 0) { throw "Runtime warmup is missing." }
+    $pipeline = $result.pipelineTiming
+    if ([int]$pipeline.capacity -le 0 -or @($pipeline.samples).Count -gt [int]$pipeline.capacity) { throw "Pipeline timing window is unbounded." }
+    if ([ulong]$pipeline.recordedSamples -ne ([ulong]$pipeline.overwrittenSamples + [ulong]@($pipeline.samples).Count)) {
+        throw "Pipeline retained/overwritten counters do not reconcile."
+    }
+    foreach ($stage in @($pipeline.stages)) { Assert-TimingSummary $stage "$format/$($stage.stage)" }
+    $stages = @($pipeline.stages | ForEach-Object { [string]$_.stage })
+    foreach ($required in @("ServiceBoundaryAttempt", "ExecutionLockWait", "ExecutionLockHold", "CaptureLockWait",
+        "CaptureLockHold", "MetadataLockWait", "MetadataLockHold", "Composite", "Readback", "MonitoringExport",
+        "ConsumerSubmission", "SchedulerStartLateness", "PresentationLateness")) {
+        if ($stages -notcontains $required) { throw "Pipeline stage '$required' is missing for '$format'." }
+    }
+    foreach ($timing in @($result.gpuTimings)) {
+        Assert-TimingSummary $timing "$format/$($timing.operation)"
+        $expectedKind = if ([string]$timing.operation -eq "KernelGpuElapsed") { "GPU_EVENT" } else { "CPU_WALL" }
+        if ([string]$timing.measurementKind -ne $expectedKind) { throw "CUDA/CPU measurement kind mismatch." }
+    }
     $timings = @($result.gpuTimings | ForEach-Object { [string]$_.operation })
-    foreach ($required in @("UploadHostToDevice", "KernelLaunch", "ContextSynchronize", "KernelGpuElapsed", "ReadbackDeviceToHost", "MonitoringExport")) {
+    foreach ($required in @("UploadHostToDevice", "KernelLaunch", "ContextSynchronize", "KernelGpuElapsed", "ReadbackDeviceToHost", "MonitoringExport", "BackendLockWait", "BackendLockHold")) {
         if ($timings -notcontains $required) {
             throw "Renderer runtime evidence is missing CUDA timing '$required' for '$format'."
         }
