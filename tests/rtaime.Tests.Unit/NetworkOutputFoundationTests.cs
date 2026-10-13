@@ -452,6 +452,47 @@ public sealed class NetworkOutputFoundationTests
     }
 
 
+    [Fact]
+    public async Task Srt_encoder_cleanup_failure_still_releases_transport_once()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        release.TrySetResult();
+        var transport = new CleanupSrtTransport(started, release);
+        var encoder = new FailedCleanupEncoder();
+        var session = new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live")),
+            () => transport, () => encoder);
+        try
+        {
+            Assert.True(session.TrySubmit(Sample(0)).Accepted);
+            await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 1, TimeSpan.FromSeconds(5));
+            var failure = await Assert.ThrowsAsync<IOException>(() => session.DisposeAsync().AsTask());
+            Assert.Equal("Encoder cleanup failed.", failure.Message);
+            Assert.Equal(1, encoder.Disposals);
+            Assert.Equal(1, transport.Disposals);
+            Assert.False(transport.IsConnected);
+        }
+        finally
+        {
+            try { await session.DisposeAsync(); } catch (IOException) { }
+        }
+    }
+
+    private sealed class FailedCleanupEncoder : ISrtPayloadEncoder
+    {
+        public int Disposals { get; private set; }
+        public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => ValueTask.CompletedTask;
+        public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
+            ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 0x47 });
+        public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token) => ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            throw new IOException("Encoder cleanup failed.");
+        }
+    }
+
+
     private sealed class CleanupNdiSender(TaskCompletionSource started, TaskCompletionSource release, bool fail = false, bool stall = false) : INdiSender
     {
         public bool IsReady => true;

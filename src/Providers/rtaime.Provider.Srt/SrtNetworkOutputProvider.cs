@@ -385,14 +385,21 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	{
 		var encoder = Interlocked.Exchange(ref _encoder, null);
 		var transport = Interlocked.Exchange(ref _transport, null);
+		Exception? failure = null;
 		if (encoder is not null)
 		{
 			try { _ = await encoder.DrainAsync(CancellationToken.None).ConfigureAwait(false); }
 			catch { }
-			await encoder.DisposeAsync().ConfigureAwait(false);
+			try { await encoder.DisposeAsync().ConfigureAwait(false); }
+			catch (Exception exception) { failure = exception; }
 		}
 		if (transport is not null)
-			await transport.DisposeAsync().ConfigureAwait(false);
+		{
+			try { await transport.DisposeAsync().ConfigureAwait(false); }
+			catch (Exception exception) { failure ??= exception; }
+		}
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
 
 	public ValueTask DisposeAsync()
