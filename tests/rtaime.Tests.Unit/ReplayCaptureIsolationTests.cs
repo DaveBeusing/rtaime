@@ -22,7 +22,7 @@ public sealed class ReplayCaptureIsolationTests
             RgbaFrameBuffer.Solid(new VideoFormat(2, 1, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive), 1, 2, 3),
             new FrameTiming(0, 0, new Timebase(1, 50)), Generation.Initial, "replay-drain");
         var audio = new AudioBufferDescriptor(MediaContractVersion.Current, AudioStreamId.New(),
-            AudioFormat.Stereo48kFloat32, new TimingDomainId(Identity.New()),
+            AudioFormat.Stereo48kFloat32, Identity.New(),
             new AudioBufferTiming(0, 960, 0, new Timebase(1, 50)), new OpaqueAudioHandle("replay-drain", "0"));
         Task? first = null;
         Task? second = null;
@@ -67,7 +67,7 @@ public sealed class ReplayCaptureIsolationTests
             RgbaFrameBuffer.Solid(new VideoFormat(2, 1, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive), 1, 2, 3),
             new FrameTiming(0, 0, new Timebase(1, 50)), Generation.Initial, "replay-open");
         var audio = new AudioBufferDescriptor(MediaContractVersion.Current, AudioStreamId.New(),
-            AudioFormat.Stereo48kFloat32, new TimingDomainId(Identity.New()),
+            AudioFormat.Stereo48kFloat32, Identity.New(),
             new AudioBufferTiming(0, 960, 0, new Timebase(1, 50)), new OpaqueAudioHandle("replay-open", "0"));
         try
         {
