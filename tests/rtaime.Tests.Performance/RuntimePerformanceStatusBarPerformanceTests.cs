@@ -15,17 +15,21 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
 		var counter = new RuntimeFrameDropCounter();
 		var framePeriod = TimeSpan.FromMilliseconds(20);
 
-		for (var index = 0; index < 128; index++)
+		const int warmup = 16_384;
+		const int samples = 100_000;
+		// Match the other steady-state guards: warm tiered entry points before measuring frame allocations.
+		for (var index = 0; index < warmup; index++)
 			counter.Observe(TimeSpan.FromTicks(index * framePeriod.Ticks), framePeriod);
 
 		var start = GC.GetAllocatedBytesForCurrentThread();
-		for (var index = 128; index < 100_128; index++)
+		for (var index = warmup; index < warmup + samples; index++)
 			counter.Observe(TimeSpan.FromTicks(index * framePeriod.Ticks), framePeriod);
 		var allocated = GC.GetAllocatedBytesForCurrentThread() - start;
 
 		Assert.Equal(0, allocated);
 		Assert.NotNull(counter.OutputFramesPerSecond);
 		Assert.Equal(50, counter.OutputFramesPerSecond.Value, 6);
+		Console.WriteLine($"PROGRAM CADENCE samples={samples} allocated={allocated} warmup={warmup}");
 	}
 	[Theory]
 	[InlineData(50, 1)]
