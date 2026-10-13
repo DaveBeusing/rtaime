@@ -72,7 +72,7 @@ public sealed class GpuLifecycleRecoveryTests
             Output,
             recoveredA,
             recoveredB,
-            GpuTransition.CutToA));
+            GpuTransition.Dissolve(127)));
 
         Assert.True(recovered.Succeeded, recovered.Failure?.ToString());
         recovered.Frame!.Dispose();

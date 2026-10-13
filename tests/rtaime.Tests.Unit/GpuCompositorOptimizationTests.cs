@@ -276,6 +276,28 @@ public sealed class GpuCompositorOptimizationTests
     }
 
     [Fact]
+    public void Retained_output_preserves_pixels_when_reusable_source_is_replaced()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+        var oldContent = Pattern(11);
+        var newContent = Pattern(71);
+        var source = new DynamicRgbaSource(MediaSourceId.New(), oldContent);
+        var first = source.MaterializeReusable(provider, Timing(1));
+        var result = provider.Composite(new GpuCompositeRequest(OutputSource, first, first, GpuTransition.CutToA));
+        using var retained = result.Frame!;
+        first.Dispose();
+        source.Update(newContent);
+        using var current = source.MaterializeReusable(provider, Timing(2));
+        Assert.NotEqual(retained.SurfaceId, current.SurfaceId);
+        Assert.Equal(oldContent.Pixels.ToArray(), provider.Readback(retained));
+        Assert.Equal(newContent.Pixels.ToArray(), provider.Readback(current));
+        retained.Dispose();
+        current.Dispose();
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Noop_transition_rejects_foreign_frame_with_colliding_surface_identity()
     {
         using var first = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
