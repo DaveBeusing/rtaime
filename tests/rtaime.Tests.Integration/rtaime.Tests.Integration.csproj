@@ -35,4 +35,8 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="TestData\LegacyAuthorityV1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="TestData\LegacyShowProjectV1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

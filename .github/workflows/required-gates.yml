@@ -52,6 +52,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Legacy authority recovery qualification
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LegacyAuthorityCheckpointRecoveryTests" --logger "console;verbosity=detailed"
+
       - name: Output evidence and AUX routing qualification
         shell: pwsh
         run: |

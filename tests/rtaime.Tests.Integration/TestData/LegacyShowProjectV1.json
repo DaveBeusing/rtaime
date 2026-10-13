@@ -1,0 +1,82 @@
+{
+  "format": "rtaime.show-project.v1",
+  "projectId": "72000000-0000-0000-0000-000000000001",
+  "productionId": "70000000-0000-0000-0000-000000000001",
+  "name": "Legacy production recovery",
+  "scenes": [
+    {
+      "sceneId": "71000000-0000-0000-0000-000000000001",
+      "name": "Legacy scene",
+      "previewSourceId": "70000000-0000-0000-0000-00000000000a",
+      "programSourceId": "70000000-0000-0000-0000-00000000000a",
+      "compositingState": null
+    }
+  ],
+  "graphics": {
+    "bitmap": null,
+    "productionCgText": {
+      "text": "LIVE FROM RTAIME",
+      "typeface": "Segoe UI",
+      "fallbackTypeface": "Arial",
+      "fontSizePixels": 54,
+      "foreground": {
+        "red": 255,
+        "green": 255,
+        "blue": 255,
+        "alpha": 255
+      },
+      "positionX": 0.05,
+      "positionY": 0.91,
+      "boxWidth": 900,
+      "boxHeight": 144,
+      "alignment": 1,
+      "anchor": 7,
+      "panel": {
+        "enabled": true,
+        "color": {
+          "red": 18,
+          "green": 23,
+          "blue": 32,
+          "alpha": 224
+        },
+        "cornerRadiusPixels": 14,
+        "paddingPixels": 28
+      },
+      "visible": true,
+      "layer": 1,
+      "zOrder": 0
+    },
+    "compositingState": {
+      "version": "1.0",
+      "layers": [
+        {
+          "layerId": "production-cg",
+          "kind": 3,
+          "order": 0,
+          "visible": true,
+          "opacity": 255,
+          "positionX": 0.05002605523710266,
+          "positionY": 0.7766450417052827,
+          "scale": 1,
+          "contentIdentity": "LIVE FROM RTAIME",
+          "rotationDegrees": 0,
+          "anchorX": 0,
+          "anchorY": 0,
+          "cropLeft": 0,
+          "cropTop": 0,
+          "cropRight": 0,
+          "cropBottom": 0,
+          "processingNode": null
+        }
+      ]
+    }
+  },
+  "showControlWorkspaceJson": null,
+  "showControlStorageVersion": 0,
+  "audioRouting": {
+    "mode": 1,
+    "breakawaySourceId": null
+  },
+  "rundownJson": null,
+  "rundownStorageVersion": 0
+}
