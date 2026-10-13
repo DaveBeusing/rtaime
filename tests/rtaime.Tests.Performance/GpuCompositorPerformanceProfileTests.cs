@@ -221,6 +221,9 @@ public sealed class GpuCompositorPerformanceProfileTests
                     var result = provider.Composite(request);
                     Assert.True(result.Succeeded, result.Failure?.ToString());
                     using var output = result.Frame!;
+                    var identityAlias = !dissolve && layerCount == 0;
+                    Assert.Equal(identityAlias ? 10 : 11, provider.ActiveSurfaceCount);
+                    Assert.Equal(identityAlias, output.SurfaceId == a.SurfaceId);
                     using var readback = provider.RentReadback(output);
                     Assert.Equal(RgbaFrameBuffer.RequiredByteLength(format), readback.Memory.Length);
                 }

@@ -92,6 +92,14 @@ foreach ($format in @("1080p50", "1080p59.94")) {
                 $expectedKind = if ([string]$timing.operation -eq "KernelGpuElapsed") { "GPU_EVENT" } else { "CPU_WALL" }
                 if ([string]$timing.measurementKind -ne $expectedKind) { throw "CUDA/CPU measurement kind mismatch." }
             }
+            $identityCase = $transition -eq "CUT" -and $layerCount -eq 0
+            $expectedPath = if ($identityCase) { "IDENTITY_ALIAS" } else { "COMPOSITE_KERNEL" }
+            if ([string]$case.executionPath -ne $expectedPath) { throw "Renderer matrix execution-path evidence is invalid." }
+            $operations = @($case.gpuTimings | ForEach-Object { [string]$_.operation })
+            foreach ($kernelOperation in @("KernelLaunch", "ContextSynchronize", "KernelGpuElapsed")) {
+                if ($identityCase -and $operations -contains $kernelOperation) { throw "Identity renderer CUT must not execute a kernel." }
+                if (-not $identityCase -and $operations -notcontains $kernelOperation) { throw "Renderer matrix kernel timing is missing." }
+            }
             $p50 = [double]$case.p50Milliseconds
             $p95 = [double]$case.p95Milliseconds
             $p99 = [double]$case.p99Milliseconds

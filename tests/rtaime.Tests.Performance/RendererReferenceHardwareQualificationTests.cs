@@ -187,6 +187,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                 {
                     foreach (var layerCount in new[] { 0, 1, 2, 4, 8 })
                     {
+                        var identityAlias = layerCount == 0 && transition.Value.BlendWeight == 0;
                         var expectedHash = CompositeHash(
                             reference,
                             refA,
@@ -229,7 +230,8 @@ public sealed class RendererReferenceHardwareQualificationTests
                                 }
                             }
 
-                            lifetimeCorrect &= cuda.ActiveSurfaceCount == baselineSurfaceCount + 1;
+                            lifetimeCorrect &= cuda.ActiveSurfaceCount == baselineSurfaceCount + (identityAlias ? 0 : 1);
+                            if (identityAlias) lifetimeCorrect &= output.SurfaceId == cudaA.SurfaceId;
                         }
 
                         lifetimeCorrect &= cuda.ActiveSurfaceCount == baselineSurfaceCount;
@@ -239,6 +241,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                             format = FormatName(format),
                             transition = transition.Name,
                             layerCount,
+                            executionPath = identityAlias ? "IDENTITY_ALIAS" : "COMPOSITE_KERNEL",
                             samples = samples.Length,
                             warmupBoundaries,
                             measurementKind = "CPU_WALL",
