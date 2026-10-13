@@ -114,6 +114,92 @@ public sealed class GpuCompositorPerformanceProfileTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Managed_1080p_low_latency_path_reports_comparable_tail_latency_and_allocations(bool use5994, bool dissolve)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var backend = new CountingCompositeBackend();
+        using var provider = new GpuProcessingProvider(backend, readbackBufferCapacity: 1);
+        provider.Start();
+        var timing = new FrameTiming(1, 1, new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator));
+        var aContent = RgbaFrameBuffer.Solid(format, 11, 29, 67, 113);
+        var bContent = RgbaFrameBuffer.Solid(format, 231, 151, 97, 201);
+        using var a = new StaticRgbaSource(MediaSourceId.New(), aContent).Materialize(provider, timing);
+        using var b = new StaticRgbaSource(MediaSourceId.New(), bContent).Materialize(provider, timing);
+        var weight = dissolve ? (byte)137 : (byte)0;
+        var request = new GpuCompositeRequest(MediaSourceId.New(), a, b, GpuTransition.Dissolve(weight));
+        var scalarOutput = new byte[aContent.ByteLength];
+        var scalarReadback = new byte[aContent.ByteLength];
+        void Scalar()
+        {
+            ScalarBlendBaseline(aContent.Pixels.Span, bContent.Pixels.Span, scalarOutput, weight);
+            scalarOutput.AsSpan().CopyTo(scalarReadback);
+        }
+        void Optimized()
+        {
+            var result = provider.Composite(request);
+            if (!result.Succeeded) throw new InvalidOperationException(result.Failure?.ToString());
+            using var output = result.Frame!;
+            using var pixels = provider.RentReadback(output);
+            Assert.Equal(scalarReadback.AsSpan(0, 4).ToArray(), pixels.Memory.Span[..4].ToArray());
+        }
+        for (var index = 0; index < 3; index++) { Scalar(); Optimized(); }
+        const int samples = 12;
+        var scalarMs = new double[samples];
+        var optimizedMs = new double[samples];
+        var allocations = new long[samples];
+        var passes = backend.CompositeCalls;
+        for (var index = 0; index < samples; index++)
+        {
+            void MeasureScalar()
+            {
+                var start = Stopwatch.GetTimestamp();
+                Scalar();
+                scalarMs[index] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            }
+            void MeasureOptimized()
+            {
+                var bytes = GC.GetAllocatedBytesForCurrentThread();
+                var start = Stopwatch.GetTimestamp();
+                Optimized();
+                optimizedMs[index] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                allocations[index] = GC.GetAllocatedBytesForCurrentThread() - bytes;
+            }
+            // Alternate order to avoid consistently giving either path the warmer cache.
+            if (index % 2 == 0) { MeasureScalar(); MeasureOptimized(); }
+            else { MeasureOptimized(); MeasureScalar(); }
+        }
+        Array.Sort(scalarMs); Array.Sort(optimizedMs);
+        Assert.Equal(dissolve ? samples : 0, backend.CompositeCalls - passes);
+        Assert.Equal(2, provider.ActiveSurfaceCount);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.AllocatedBuffers);
+        Assert.InRange(allocations.Max(), 0, 16 * 1024);
+        if (System.Numerics.Vector.IsHardwareAccelerated)
+            Assert.True(Percentile(optimizedMs, 0.50) < Percentile(scalarMs, 0.50),
+                $"Managed low-latency median regressed: scalar={Percentile(scalarMs, 0.50):0.###}ms optimized={Percentile(optimizedMs, 0.50):0.###}ms.");
+        Console.WriteLine(
+            $"LOW LATENCY SOFTWARE {format.FrameRate} {(dissolve ? "DISSOLVE" : "CUT")} samples={samples} " +
+            $"scalar-p50={Percentile(scalarMs, 0.50):0.###}ms scalar-p95={Percentile(scalarMs, 0.95):0.###}ms scalar-p99={Percentile(scalarMs, 0.99):0.###}ms " +
+            $"optimized-p50={Percentile(optimizedMs, 0.50):0.###}ms optimized-p95={Percentile(optimizedMs, 0.95):0.###}ms optimized-p99={Percentile(optimizedMs, 0.99):0.###}ms " +
+            $"maxAllocated={allocations.Max()} passes={backend.CompositeCalls - passes} vector={System.Numerics.Vector.IsHardwareAccelerated}; " +
+            "resident inputs + composite + one readback; excludes upload, output devices and physical GPU timing.");
+    }
+
+    private static void ScalarBlendBaseline(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, Span<byte> output, byte weight)
+    {
+        for (var offset = 0; offset < output.Length; offset += 4)
+        {
+            output[offset] = (byte)((a[offset] * (255 - weight) + b[offset] * weight + 127) / 255);
+            output[offset + 1] = (byte)((a[offset + 1] * (255 - weight) + b[offset + 1] * weight + 127) / 255);
+            output[offset + 2] = (byte)((a[offset + 2] * (255 - weight) + b[offset + 2] * weight + 127) / 255);
+            output[offset + 3] = (byte)((a[offset + 3] * (255 - weight) + b[offset + 3] * weight + 127) / 255);
+        }
+    }
+
     private static double Percentile(double[] ordered, double percentile)
     {
         if (ordered.Length == 0)

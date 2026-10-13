@@ -271,7 +271,7 @@ public sealed class GpuProcessingTests
 
         using var a = Upload(provider, SourceA, Solid(10, 20, 30, 255), 0);
         using var b = Upload(provider, SourceB, Solid(40, 50, 60, 255), 0);
-        var request = new GpuCompositeRequest(OutputSource, a, b, GpuTransition.CutToA);
+        var request = new GpuCompositeRequest(OutputSource, a, b, GpuTransition.Dissolve(127));
 
         var failed = provider.Composite(request);
         var recovered = provider.Composite(request);
@@ -281,7 +281,7 @@ public sealed class GpuProcessingTests
         Assert.True(recovered.Succeeded, recovered.Failure?.ToString());
         using var output = recovered.Frame!;
         Assert.Contains(provider.Observations, observation => observation.Code == "gpu.composite.failed");
-        Assert.Contains(provider.Observations, observation => observation.Code == "gpu.composite.cut");
+        Assert.Contains(provider.Observations, observation => observation.Code == "gpu.composite.dissolve");
     }
 
     [Fact]
@@ -439,6 +439,30 @@ public sealed class GpuProcessingTests
         Assert.NotEqual(firstInstance, provider.MonitoringProviderInstanceId);
         Assert.False(provider.IsMonitoringResourceActive(stale));
         lease.Dispose();
+    }
+
+    [Fact]
+    public void Passthrough_output_survives_input_release_and_monitoring_owns_final_surface()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var input = Upload(provider, SourceA, Solid(11, 22, 33, 255), 1);
+        var result = provider.Composite(new GpuCompositeRequest(OutputSource, input, input, GpuTransition.CutToA));
+        Assert.True(result.Succeeded, result.Failure?.ToString());
+        var output = result.Frame!;
+        input.Dispose();
+        Assert.True(provider.TryExportMonitoringResource(output, out var lease));
+        Assert.Equal(output.SurfaceId, lease!.Descriptor.SurfaceId);
+        AssertPixel(provider.Readback(output), 11, 22, 33, 255);
+        output.Dispose();
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal(1, backend.ActiveAllocationCount);
+        Assert.True(provider.IsMonitoringResourceActive(lease.Descriptor));
+        lease.Dispose();
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, backend.ActiveAllocationCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
     }
 
     [Fact]

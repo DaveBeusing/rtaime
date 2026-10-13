@@ -48,7 +48,9 @@ $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 
 Assert-Condition ($gpu -match 'LayerContributesToComposite\(GpuKeyLayer layer\)\s*=>\s*\r?\n?\s*layer\.Visible && layer\.Opacity != 0') "Compositor pass reduction must be limited to exact hidden/zero-opacity no-op semantics."
 Assert-Condition ($gpu -match 'contributingLayerCount' -and $gpu -match 'if \(!LayerContributesToComposite\(layer\)\)\s*\r?\n\s*continue;') "Composite execution must skip only classified no-op layers."
-Assert-Condition ($gpu -match 'Math\.Max\(1, contributingLayerCount\)') "Composite execution must retain at least one background transition pass."
+Assert-Condition ($gpu -match 'Math\.Max\(1, contributingLayerCount\)') "Contributing layers and nontrivial transitions must retain the compositor path."
+Assert-Condition ($gpu -match 'contributingLayerCount == 0' -and $gpu -match 'request\.Transition\.BlendWeight is 0 or byte\.MaxValue' -and $gpu -match 'request\.BackgroundA\.SurfaceId == request\.BackgroundB\.SurfaceId' -and $gpu -match 'CreateFrameReferenceUnsafe\(_activeFrames\[selected\.SurfaceId\]' -and $gpu -match 'gpu\.composite\.passes:0') "Zero-pass output requires exact no-op semantics and tracked frame ownership."
+Assert-Condition ($gpu -match 'OwnsFrameUnsafe' -and $gpu -match 'entry\.Frames\.Contains\(frame\)') "Composite inputs must own tracked frame references, not only matching surface identities."
 Assert-Condition ($gpu -match 'gpu\.composite\.passes:') "Provider observations must retain bounded backend-pass evidence."
 Assert-Condition ($gpu -match 'ValidateCompositeRequest\(request\)') "All requested layers must remain validated before no-op pass elimination."
 
@@ -59,7 +61,10 @@ Assert-Condition ($cuda -notmatch '(?i)nvrtc|compileProgram|compileKernel') "Run
 foreach ($testName in @(
 	'Ordered_layer_matrix_matches_independent_integer_reference',
 	'Hidden_and_zero_opacity_layers_skip_backend_passes_with_exact_pixels',
-	'Transparent_boundaries_and_opacity_extremes_are_byte_exact')) {
+	'Transparent_boundaries_and_opacity_extremes_are_byte_exact',
+	'Noop_transition_retains_selected_surface_without_backend_work',
+	'Noop_transition_validates_hidden_layers_and_unselected_background_before_retaining',
+	'Dissolve_matches_independent_integer_equation_for_every_byte_pair_and_weight')) {
 	Assert-Condition ($unitTests -match [Regex]::Escape($testName)) "Compositor golden regression '$testName' is required."
 }
 Assert-Condition ($unitTests -match '\[InlineData\(0\)\]' -and
@@ -84,6 +89,6 @@ Assert-Condition ($documentation -match '0 / 1 / 2 / 4 / 8') "Documentation must
 Assert-Condition ($requiredGates -match 'Test-CompositorOptimizationPolicy\.ps1') "Required Gates must execute the compositor optimization policy."
 
 Write-Host "Compositor optimization policy verification PASS"
-Write-Host "Safe pass reduction: hidden and zero-opacity layers only"
+Write-Host "Safe pass reduction: validated no-op layers and retained exact identity transitions"
 Write-Host "Fused CUDA multi-layer kernel: NOT INTRODUCED"
 Write-Host "Physical CUDA P95/P99 performance evidence: UNVERIFIED"

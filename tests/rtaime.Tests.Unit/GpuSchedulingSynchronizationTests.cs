@@ -35,7 +35,7 @@ public sealed class GpuSchedulingSynchronizationTests
 
         using var a = Upload(provider, SourceA, 1, 2, 3, 0);
         using var b = Upload(provider, SourceB, 4, 5, 6, 0);
-        var request = new GpuCompositeRequest(Output, a, b, GpuTransition.CutToA);
+        var request = new GpuCompositeRequest(Output, a, b, GpuTransition.Dissolve(127));
 
         var compositeTask = Task.Run(() => provider.Composite(request));
         Assert.True(backend.CompositeStarted.Wait(TimeSpan.FromSeconds(5)));

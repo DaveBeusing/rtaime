@@ -2,7 +2,7 @@
 
 ## Status
 
-- implementation baseline: master at `587146aeca98efb2deecf2cedd331fae7d33106e`
+- implementation baseline: master at `5ae480d09486995c9532c0126eaee924f200419b`
 - .NET SDK: 10.0.401
 - stable contract version change: none
 - compositor authority change: none
@@ -79,7 +79,8 @@ A hidden layer or an opacity-zero layer is an exact no-op for every RGBA input b
 The resulting backend-pass count is:
 
 ```text
-max(1, contributingLayerCount)
+0 for an exact identity transition with zero contributing layers;
+max(1, contributingLayerCount) otherwise
 ```
 
 Requested layer count, ordering metadata and validation behavior remain unchanged. This is not a heuristic and does not inspect vendor state or raw pixels.
@@ -104,6 +105,8 @@ For fully contributing layer counts this gives the following source-level logica
 | 8 | 8 | 265,420,800 bytes |
 
 For later passes the current backend receives the same prior intermediate surface as both background inputs with CUT-to-A semantics. The CUDA kernel still contains both background loads. That is a source-level optimization candidate, not proof of physical DRAM traffic because GPU caches, compiler behavior and driver execution are hardware-dependent.
+
+An identity transition without contributing layers performs no backend pass and no composite full-frame memory access. It retains the selected, already completed input surface through a distinct provider-owned frame reference. The normal Program readback remains mandatory.
 
 Skipping explicit no-op layers reduces submitted backend passes and their logical full-frame accesses exactly. Physical GPU memory bandwidth, kernel time and PCIe behavior remain UNVERIFIED until measured on reference hardware.
 
@@ -190,3 +193,17 @@ Software CI can prove exact integer semantics, pass-count reduction for explicit
 It cannot prove physical GPU memory bandwidth, occupancy, cache behavior, kernel P95/P99 or the value of a fused kernel.
 
 Those hardware-only claims remain **UNVERIFIED** without exact-source reference-hardware evidence.
+
+## Low-latency paths
+
+The source audit finds three avoidable costs: a full pass for CUT/identity backgrounds without contributing overlays; LINQ iterator, delegate and duplicate-set allocation during per-frame input validation; and scalar per-channel division in the managed background-only DISSOLVE path. These are established source costs, not measured physical GPU bottleneck claims.
+
+After full input validation, a transition is an exact identity only when its byte weight is 0 or 255, or both background surface identities match, and there are no visible nonzero-opacity layers. Output keeps the requested source identity and boundary timing through a distinct tracked frame reference to the selected surface. Disposing input frames, reusable-upload invalidation, shared monitoring retention and provider stop use the existing reference/lifetime machinery. No backend allocation, kernel launch or context barrier is submitted for this case. Intermediate DISSOLVE and contributing overlays retain the established compositor path.
+
+Validation uses bounded index loops for at most eight layers. Duplicate/disposed/foreign/format/timing rejection order is preserved. Ownership checks include the actual tracked frame, so a foreign object with a colliding surface identity cannot enter the retained-output path.
+
+The managed background-only path uses portable .NET SIMD widening, integer multiply/add, exact division by 255 and narrowing; odd tails and nonaccelerated machines retain the scalar equation. Numerators are at most 65152, so `(n + 1 + (n >> 8)) >> 8` equals `n / 255` without overflowing ushort. Exhaustive golden coverage checks every byte pair and all 256 weights, including alpha, plus odd lengths. Overlay integer equations and CUDA PTX are unchanged.
+
+The comparable software benchmark reports P50/P95/P99 and allocations at 1080p50 and 1080p59.94 for resident inputs + composite + one readback. It alternates a warmed scalar baseline and the production provider path, retains explicit sample counts and checks bounded surfaces/readback ownership. A median improvement check applies only when SIMD is available. It excludes input upload, monitoring export, professional output and physical end-to-end latency.
+
+CUDA barriers, D3D11 interop and mandatory host readback remain structural latency candidates requiring exact-SHA reference-GPU instrumentation before synchronization or output contract changes. Physical P95/P99 improvement and end-to-end low-latency qualification remain **UNVERIFIED** until the reference workflow supplies comparable hardware evidence.

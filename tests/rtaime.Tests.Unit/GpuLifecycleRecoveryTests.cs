@@ -50,7 +50,7 @@ public sealed class GpuLifecycleRecoveryTests
 
         using var a = Upload(provider, SourceA, 10, 20, 30, 0);
         using var b = Upload(provider, SourceB, 40, 50, 60, 0);
-        var request = new GpuCompositeRequest(Output, a, b, GpuTransition.CutToA);
+        var request = new GpuCompositeRequest(Output, a, b, GpuTransition.Dissolve(127));
 
         var failed = provider.Composite(request);
 
@@ -72,7 +72,7 @@ public sealed class GpuLifecycleRecoveryTests
             Output,
             recoveredA,
             recoveredB,
-            GpuTransition.CutToA));
+            GpuTransition.Dissolve(127)));
 
         Assert.True(recovered.Succeeded, recovered.Failure?.ToString());
         recovered.Frame!.Dispose();
