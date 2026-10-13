@@ -271,7 +271,7 @@ public sealed class ProductionIntegrationGatewayTests
 	[Fact]
 	public async Task Gateway_serializes_client_snapshot_refresh_with_production_commands()
 	{
-		var transport = new ProbeTransport(delayMilliseconds: 80);
+		var transport = new ProbeTransport();
 		var client = new OperatorControlClient(transport);
 		var adapter = new PassiveAdapter("control");
 		var options = GatewayOptions(
@@ -290,10 +290,24 @@ public sealed class ProductionIntegrationGatewayTests
 		gateway.RegisterAdapter(adapter);
 		await gateway.StartAsync();
 
-		Assert.True(gateway.TryEnqueue(new IntegrationTrigger("control", "cut")));
-		await WaitUntilAsync(() => transport.CutCalls > 0 && transport.GetSnapshotCalls >= 3);
-
-		Assert.Equal(1, transport.MaxConcurrentCalls);
+		transport.BlockNextSnapshot();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			var command = gateway.ProcessTriggerAsync(new IntegrationTrigger("control", "cut")).AsTask();
+			Assert.False(command.IsCompleted);
+			Assert.Equal(0, transport.CutCalls);
+			Assert.Equal(1, transport.MaxConcurrentCalls);
+			transport.ReleaseSnapshot.TrySetResult();
+			await command.WaitAsync(TimeSpan.FromSeconds(3));
+			Assert.Equal(1, transport.CutCalls);
+			Assert.True(transport.GetSnapshotCalls >= 3);
+			Assert.Equal(1, transport.MaxConcurrentCalls);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
 	}
 
 	[Fact]
@@ -472,6 +486,10 @@ public sealed class ProductionIntegrationGatewayTests
 		private readonly int _delayMilliseconds;
 		private int _snapshotFailuresRemaining;
 		private int _activeCalls;
+		private int _blockNextSnapshot;
+		public TaskCompletionSource SnapshotBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public TaskCompletionSource ReleaseSnapshot { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public void BlockNextSnapshot() => Interlocked.Exchange(ref _blockNextSnapshot, 1);
 
 		public ProbeTransport(int delayMilliseconds = 0, int snapshotFailures = 0)
 		{
@@ -505,6 +523,11 @@ public sealed class ProductionIntegrationGatewayTests
 			await EnterAsync(cancellationToken);
 			try
 			{
+				if (Interlocked.Exchange(ref _blockNextSnapshot, 0) != 0)
+				{
+					SnapshotBlocked.TrySetResult();
+					await ReleaseSnapshot.Task.WaitAsync(cancellationToken);
+				}
 				lock (_gate)
 				{
 					GetSnapshotCalls++;
