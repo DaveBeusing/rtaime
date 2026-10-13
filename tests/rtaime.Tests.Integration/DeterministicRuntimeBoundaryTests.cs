@@ -58,13 +58,13 @@ public sealed class DeterministicRuntimeBoundaryTests
 		var boundaryTask = Task.Run(() => fixture.Runtime.ProcessNextBoundary());
 		await backend.CompositeEntered.WaitAsync(TimeSpan.FromSeconds(3));
 
-		fixture.Runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+		fixture.Runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
 		backend.ReleaseComposite();
 		using var first = await boundaryTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-		Assert.Equal(V1VisualLayerMode.Disabled, first.VisualLayerMode);
+		Assert.Equal(V1VisualLayerMode.Static, first.VisualLayerMode);
 		using var second = fixture.Runtime.ProcessNextBoundary();
-		Assert.Equal(V1VisualLayerMode.Static, second.VisualLayerMode);
+		Assert.Equal(V1VisualLayerMode.Dynamic, second.VisualLayerMode);
 	}
 
 	[Fact]
@@ -199,6 +199,8 @@ public sealed class DeterministicRuntimeBoundaryTests
 			VideoFormat.Hd1080p50Rgba8,
 			new NullRecordingWriter(),
 			backend);
+		// Force real compositor work so the barriers cannot be bypassed by an identity transition.
+		runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
 		var initialized = ControlDomainEngine.Initialize(specification);
 		Assert.True(initialized.Succeeded);
 		var planning = CapabilityPlanningEngine.Plan(
