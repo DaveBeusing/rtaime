@@ -74,10 +74,14 @@ public sealed class ProgramPipelineMeasurementBaselineTests
             }
             if (recordingEnabled)
                 Assert.Equal(RecordingStopStatus.Stopped, (await runtime.StopRecordingAsync()).Status);
-            if (monitoring is not null) await monitoring.DisposeAsync();
             var drain = Stopwatch.StartNew();
             while (runtime.ProgramReadbackPoolStatistics.ActiveBuffers != 0 && drain.Elapsed < TimeSpan.FromSeconds(5))
                 await Task.Delay(10);
+            var monitoringStatistics = runtime.MonitoringHub.Statistics;
+            var monitoringQueueStatistics = runtime.MonitoringHub.QueueStatistics;
+            Assert.True(monitoringQueueStatistics.QueueDepth <= monitoringQueueStatistics.QueueCapacity);
+            Assert.True(monitoringQueueStatistics.SumSubscriberMaximumQueueDepth <= monitoringQueueStatistics.QueueCapacity);
+            if (monitoring is not null) await monitoring.DisposeAsync();
             var final = runtime.Snapshot;
             Assert.Equal((ulong)(count + warmup), final.NextSequenceNumber);
             Assert.Equal(0, final.ActiveGpuSurfaces);
@@ -95,7 +99,7 @@ public sealed class ProgramPipelineMeasurementBaselineTests
                 boundaryScope = "V1_SERVICE_AND_OPTIONAL_SYNTHETIC_OUTPUT_COPY",
                 p50Milliseconds = P(.50), p95Milliseconds = P(.95), p99Milliseconds = P(.99), maximumMilliseconds = ordered[^1],
                 pipelineTiming = summary,
-                queues = new { recording = final.Recording.Statistics, monitoring = runtime.MonitoringHub.Statistics },
+                queues = new { recording = final.Recording.Statistics, monitoring = monitoringStatistics, monitoringQueues = monitoringQueueStatistics },
                 transfers = runtime.GpuMemoryTransfers,
                 physicalOutput = "UNVERIFIED", gpuEventTiming = "UNVERIFIED"
             };

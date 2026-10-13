@@ -113,6 +113,7 @@ public static class RuntimeHostDiagnostics
 			var snapshot = runtime.Snapshot;
 			var monitorTap = runtime.MonitoringStatistics;
 			var monitorHub = runtime.MonitoringHub.Statistics;
+			var monitorQueues = runtime.MonitoringHub.QueueStatistics;
 			var recording = snapshot.Recording;
 			var performance = snapshot.Performance;
 			var gpuTransfers = runtime.GpuMemoryTransfers;
@@ -177,6 +178,9 @@ public static class RuntimeHostDiagnostics
 				.Counter("monitoring.hubPublished", ToCounter(monitorHub.Published))
 				.Counter("monitoring.hubDropped", ToCounter(monitorHub.DroppedBySubscribers))
 				.Counter("monitoring.subscribers", monitorHub.Subscribers)
+                .Counter("monitoring.subscriberQueues.depth", monitorQueues.QueueDepth)
+                .Counter("monitoring.subscriberQueues.sumMaximumDepth", monitorQueues.SumSubscriberMaximumQueueDepth)
+                .Counter("monitoring.subscriberQueues.capacity", monitorQueues.QueueCapacity)
 				.Counter("recording.accepted", ToCounter(recording.Statistics.Accepted))
 				.Counter("recording.written", ToCounter(recording.Statistics.Written))
 				.Counter("recording.dropped", ToCounter(recording.Statistics.Dropped))

@@ -25,10 +25,14 @@ public sealed class OperatorMonitoringPlaneTests
 		hub.Publish(CreateFrame(MonitoringStreamKind.Program, SourceA, 2, 40, 50, 60));
 		hub.Publish(CreateFrame(MonitoringStreamKind.Program, SourceB, 3, 70, 80, 90));
 
+		Assert.Equal(new RuntimeMonitoringQueueStatistics(1, 1, 1), subscription.QueueStatistics);
+        Assert.Equal(new RuntimeMonitoringSubscriberQueueStatistics(1, 1, 1), hub.QueueStatistics);
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 		var latest = await subscription.ReadAsync(timeout.Token);
 
 		Assert.Equal(2UL, subscription.DroppedFrames);
+        Assert.Equal(new RuntimeMonitoringQueueStatistics(0, 1, 1), subscription.QueueStatistics);
+        Assert.Equal(new RuntimeMonitoringSubscriberQueueStatistics(0, 1, 1), hub.QueueStatistics);
 		Assert.Equal(3UL, latest.Descriptor.Timing.SequenceNumber);
 		Assert.Equal(SourceB, latest.Descriptor.SourceId);
 		Assert.Equal((byte)70, latest.Pixels.Span[0]);

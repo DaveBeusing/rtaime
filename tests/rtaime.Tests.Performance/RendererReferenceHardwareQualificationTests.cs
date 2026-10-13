@@ -389,6 +389,9 @@ public sealed class RendererReferenceHardwareQualificationTests
         var acceptedAfterBackpressure = false;
         var monitoringDisconnected = false;
         var monitoringReconnected = false;
+        ulong monitoringSubscriberDrops = 0;
+        long maximumMonitoringQueueDepth = 0;
+        var monitoringQueueCapacity = 4;
         var reconnectCountdown = -1;
         var transitionApplied = false;
         var maxReadbackActive = 0;
@@ -451,6 +454,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                 boundaryIndex++;
                 var readback = runtime.ProgramReadbackPoolStatistics;
                 var transfers = runtime.GpuMemoryTransfers;
+                maximumMonitoringQueueDepth = Math.Max(maximumMonitoringQueueDepth, runtime.MonitoringHub.QueueStatistics.QueueDepth);
                 maxReadbackActive = Math.Max(maxReadbackActive, readback.ActiveBuffers);
                 maxReadbackAllocated = Math.Max(maxReadbackAllocated, readback.AllocatedBuffers);
                 maxSharedMonitoringActive = Math.Max(
@@ -463,6 +467,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                 if (!monitoringDisconnected && boundaryIndex >= Math.Max(8, recordingBackpressureBoundaries / 2))
                 {
                     await (monitoring ?? throw new InvalidOperationException("Monitoring subscription was lost before the disconnect boundary.")).DisposeAsync();
+                    monitoringSubscriberDrops += monitoring.DroppedFrames;
                     monitoring = null;
                     monitoringDisconnected = true;
                     reconnectCountdown = 3;
@@ -509,7 +514,10 @@ public sealed class RendererReferenceHardwareQualificationTests
         {
             writer.Release();
             if (monitoring is not null)
+            {
                 await monitoring.DisposeAsync();
+                monitoringSubscriberDrops += monitoring.DroppedFrames;
+            }
         }
 
         var stop = await runtime.StopRecordingAsync();
@@ -618,7 +626,9 @@ public sealed class RendererReferenceHardwareQualificationTests
                 droppedBeforeProcessing = monitoringStats.DroppedBeforeProcessing,
                 processed = monitoringStats.Processed,
                 published = hubStats.Published,
-                droppedBySubscribers = hubStats.DroppedBySubscribers,
+                droppedBySubscribers = monitoringSubscriberDrops,
+                maximumMonitoringQueueDepth,
+                monitoringQueueCapacity,
                 totalSharedExports = finalTransfers.MonitoringResources.TotalExports,
                 rejectedSharedExports = finalTransfers.MonitoringResources.RejectedExports,
                 maxActiveSharedResources = maxSharedMonitoringActive

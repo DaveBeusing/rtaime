@@ -12,6 +12,9 @@ public readonly record struct RuntimeMonitoringHubStatistics(
 	ulong DroppedBySubscribers,
 	int Subscribers);
 
+public readonly record struct RuntimeMonitoringQueueStatistics(int QueueDepth, int MaximumQueueDepth, int QueueCapacity);
+public readonly record struct RuntimeMonitoringSubscriberQueueStatistics(long QueueDepth, long SumSubscriberMaximumQueueDepth, long QueueCapacity);
+
 public sealed class RuntimeMonitoringHub : IDisposable
 {
 	private readonly object _gate = new();
@@ -50,6 +53,25 @@ public sealed class RuntimeMonitoringHub : IDisposable
 					_subscriptions.Count);
 		}
 	}
+
+    public RuntimeMonitoringSubscriberQueueStatistics QueueStatistics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                long depth = 0; long maximum = 0; long capacity = 0;
+                foreach (var subscription in _subscriptions)
+                {
+                    var queue = subscription.QueueStatistics;
+                    depth += queue.QueueDepth;
+                    maximum += queue.MaximumQueueDepth;
+                    capacity += queue.QueueCapacity;
+                }
+                return new(depth, maximum, capacity);
+            }
+        }
+    }
 
 	public RuntimeMonitoringSubscription Subscribe(int capacity = 2, bool requiresCpuFallback = true)
 	{
@@ -121,6 +143,7 @@ public sealed class RuntimeMonitoringSubscription : IAsyncDisposable
 	private readonly CancellationTokenSource _stop = new();
 	private readonly int _capacity;
 	private ulong _dropped;
+	private int _maximumQueueDepth;
 	private bool _disposed;
 
 	internal RuntimeMonitoringSubscription(RuntimeMonitoringHub hub, int capacity, bool requiresCpuFallback)
@@ -131,6 +154,11 @@ public sealed class RuntimeMonitoringSubscription : IAsyncDisposable
 	}
 
 	public bool RequiresCpuFallback { get; }
+
+    public RuntimeMonitoringQueueStatistics QueueStatistics
+    {
+        get { lock (_gate) return new(_frames.Count, _maximumQueueDepth, _capacity); }
+    }
 
 	public ulong DroppedFrames
 	{
@@ -153,6 +181,7 @@ public sealed class RuntimeMonitoringSubscription : IAsyncDisposable
 				signal = true;
 			}
 			_frames.Enqueue(frame);
+			_maximumQueueDepth = Math.Max(_maximumQueueDepth, _frames.Count);
 		}
 		if (signal) _available.Release();
 	}
