@@ -134,8 +134,8 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     if ([int]$result.cpuBoundary.histogram.capacity -ne 10001 -or
         [string]$result.cpuBoundary.histogram.percentileMethod -ne "WHOLE_RUN_NEAREST_RANK_UPPER_BIN_BOUND" -or
         [ulong]$result.cpuBoundary.histogram.count -ne [ulong]$result.boundaries -or
-        @($result.telemetry.resourceWindows).Count -gt 96) { throw "Renderer whole-run evidence is unbounded or incomplete." }
-    if ($minimumSeconds -ge 14400 -and [string]$result.telemetry.resourcePlateau -ne "PASS") {
+        @($result.telemetry.resourceWindows).Count -gt 96 -or @($result.telemetry.vramWindows).Count -gt 96) { throw "Renderer whole-run evidence is unbounded or incomplete." }
+    if ($minimumSeconds -ge 14400 -and ([string]$result.telemetry.resourcePlateau -ne "PASS" -or [string]$result.telemetry.vramPlateau -ne "PASS")) {
         throw "Long renderer profile requires measured resource plateau evidence."
     }
     if ([int]$result.recording.effectivePressureReleaseBoundary -le [int]$result.recording.queueCapacity + 1) {

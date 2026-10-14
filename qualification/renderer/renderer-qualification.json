@@ -47,7 +47,8 @@
       "resourcePlateau": {
         "minimumCompletedPostWarmupHours": 3,
         "maximumPrivateGrowthBytes": 536870912,
-        "maximumHandleGrowth": 128
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
       }
     },
     {
@@ -60,7 +61,8 @@
       "resourcePlateau": {
         "minimumCompletedPostWarmupHours": 3,
         "maximumPrivateGrowthBytes": 536870912,
-        "maximumHandleGrowth": 128
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
       }
     },
     {
@@ -73,7 +75,8 @@
       "resourcePlateau": {
         "minimumCompletedPostWarmupHours": 3,
         "maximumPrivateGrowthBytes": 536870912,
-        "maximumHandleGrowth": 128
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
       }
     }
   ],

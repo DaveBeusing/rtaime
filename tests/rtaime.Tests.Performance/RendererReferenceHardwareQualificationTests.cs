@@ -414,6 +414,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         var processMemoryMiB = new BoundedSoakHistogram(1, 65536);
         var processHandles = new BoundedSoakHistogram(1, 65536);
         var resources = new BoundedSoakResourceTrend();
+        var vramResources = new BoundedSoakResourceTrend();
         using var process = Process.GetCurrentProcess();
         var expectedSequence = runtime.Snapshot.NextSequenceNumber;
         ulong sequenceDiscontinuities = 0;
@@ -553,7 +554,11 @@ public sealed class RendererReferenceHardwareQualificationTests
                     var performance = runtime.Snapshot.Performance;
                     if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Observe(cpu);
                     if (performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Observe(gpu);
-                    if (performance.GpuVramUsedBytes is { } vram) vramUsedMiB.Observe(vram / 1024.0 / 1024.0);
+                    if (performance.GpuVramUsedBytes is { } vram)
+                    {
+                        vramUsedMiB.Observe(vram / 1024.0 / 1024.0);
+                        vramResources.Observe(Stopwatch.GetElapsedTime(startedAt), checked((long)vram), 0);
+                    }
                     process.Refresh();
                     processMemoryMiB.Observe(process.PrivateMemorySize64 / 1024.0 / 1024.0);
                     processHandles.Observe(process.HandleCount);
@@ -583,6 +588,9 @@ public sealed class RendererReferenceHardwareQualificationTests
             TimeSpan.FromSeconds(5));
 
         var resourcePlateau = resources.Assess(512 * 1024.0 * 1024.0, 128);
+        var vramPlateau = vramResources.Assess(512 * 1024.0 * 1024.0, 0);
+        if (physical && durationSeconds >= 14400 && vramPlateau != "PASS")
+            throw new InvalidOperationException("Long renderer profile lacks complete bounded GPU VRAM plateau evidence.");
         if (resourcePlateau == "FAIL" || (durationSeconds >= 14400 && resourcePlateau != "PASS"))
             throw new InvalidOperationException("Renderer resource plateau did not meet the declared growth policy.");
         var finalSnapshot = runtime.Snapshot;
@@ -659,6 +667,9 @@ public sealed class RendererReferenceHardwareQualificationTests
                 processPrivateMiB = processMemoryMiB.Summary(),
                 processHandles = processHandles.Summary(),
                 resourceWindows = resources.Snapshot(),
+                vramWindows = vramResources.Snapshot(),
+                vramPlateau,
+                maximumVramGrowthBytes = 512 * 1024L * 1024L,
                 resourcePlateau,
                 maximumPrivateGrowthBytes = 512 * 1024L * 1024L,
                 maximumHandleGrowth = 128
