@@ -555,7 +555,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 
 	public void PreviewTrim(string trimKind, double logicalX, double logicalWidth)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0 || trimKind is not ("IN" or "OUT"))
+		if (!CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0 || trimKind is not ("IN" or "OUT"))
 			return;
 
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
@@ -617,7 +617,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		InvalidateDraftHistory();
@@ -629,7 +629,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		InvalidateDraftHistory();
@@ -745,11 +745,11 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 
 	private long ApplySnap(long frame, double logicalWidth = 0)
 	{
-		var threshold = logicalWidth > 0 ? (long)Math.Ceiling(8 * (VisibleFrameCount - 1) / logicalWidth) : VisibleFrameCount / 100;
+		var threshold = logicalWidth > 0 ? (long)Math.Ceiling(8d * (VisibleFrameCount - 1) / logicalWidth) : VisibleFrameCount / 100;
 		var targets = Cues.Select(cue => new TimelineSnapTarget(cue.Frame, TimelineSnapKind.Cue))
 			.Concat(Tracks.SelectMany(track => track.Items).SelectMany(item => new[] {
 				new TimelineSnapTarget(item.StartFrame, TimelineSnapKind.Clip),
-				new TimelineSnapTarget(item.StartFrame + item.DurationFrames - 1, TimelineSnapKind.Clip) }))
+				new TimelineSnapTarget(item.StartFrame > long.MaxValue - item.DurationFrames + 1 ? long.MaxValue : item.StartFrame + item.DurationFrames - 1, TimelineSnapKind.Clip) }))
 			.Append(new TimelineSnapTarget(ConfirmedFrame, TimelineSnapKind.Playhead));
 		var result = TimelineSnapPolicy.SnapFrame(frame, targets, threshold, TotalFrames, SnapEnabled);
 		_snapFeedback = (SnapEnabled ? result.Kind.ToString().ToUpperInvariant() : "OFF · FRAME GRID") + " · " + FormatFrame(result.Frame);

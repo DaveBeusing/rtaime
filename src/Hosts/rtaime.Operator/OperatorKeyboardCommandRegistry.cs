@@ -58,7 +58,7 @@ public sealed class OperatorKeyboardCommandRegistry
 		if (key == Key.Escape && Keyboard.FocusedElement is RtaimeNumericField) return false;
 		if (key == Key.Escape)
 		{
-			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = VisualTreeHelper.GetParent(current))
+			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
 		var modifiers = Keyboard.Modifiers;
