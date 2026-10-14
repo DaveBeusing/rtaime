@@ -376,3 +376,5 @@ Portable production setup templates add reviewed scene/cue definitions through t
 Optional workspace docking adds tab groups, resizable splits and detachable existing panels with safe monitor/DPI restoration. Built-in workspace layouts remain the default. See [Operator workspaces](docs/OperatorWorkspaces.md#optional-docking-and-detached-panels) for keyboard controls and recovery.
 
 The [Context Inspector](docs/ContextInspector.md) provides precise numeric draft editing, compatible attribute copy/paste and explicit authoritative Apply.
+
+[Timeline editing](docs/LayeredTimeline.md#draft-cursor-snapping-and-reversible-editing) adds explicit draft/confirmed positions, prioritized snapping and bounded local authoring undo without replaying production operations.
