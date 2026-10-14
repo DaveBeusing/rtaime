@@ -34,7 +34,7 @@ public sealed class OperatorDockController : IDisposable
         _homes = _panels.ToDictionary(p => p.Key, p =>
         {
             var parent = (Panel)p.Value.Parent;
-            return (parent, parent.Children.IndexOf(p.Value), BindingOperations.GetBindingBase(p.Value, UIElement.VisibilityProperty), p.Value.Visibility);
+            return (parent, parent.Children.IndexOf(p.Value), (BindingBase?)BindingOperations.GetBindingBase(p.Value, UIElement.VisibilityProperty), p.Value.Visibility);
         }, StringComparer.Ordinal);
         ToggleCommand = new OperatorShellCommand(Toggle);
         FloatCommand = new OperatorShellCommand(() => Float(_selected));
@@ -305,6 +305,7 @@ public sealed class OperatorDockController : IDisposable
         {
             Interlocked.Exchange(ref _displayUpdate, 0);
             if (_disposed) return;
+            if (_owner.WindowState == WindowState.Normal) OperatorMonitorGeometry.Restore(_owner, OperatorMonitorGeometry.Capture(_owner));
             foreach (var pair in _floating)
             {
                 var placement = _owner.Shell.Docking.Floating.Single(p => p.Panel == pair.Key).Placement;

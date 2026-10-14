@@ -305,3 +305,19 @@ A bounded workflow is:
 Cue selection alone never changes Program state. The Operator does not own cue timing or infer completion locally; it presents synchronized Control state.
 
 See `docs/ShowControlCueSequencing.md`.
+
+## Optional docking and detached panels
+
+The built-in layouts remain the default. SETTINGS offers **BUILT-IN / DOCKING LAYOUT**; Ctrl+Shift+D toggles the same presentation. Docking moves the existing TOOLS, MONITORS, INSPECTOR and TIMELINE view instances into bounded LEFT/CENTER/RIGHT/BOTTOM split groups. Drag a panel tab to another group to combine panels as tabs, or use the named group buttons. Splitters support mouse dragging and arrow keys. No arbitrary plug-in panels, replacement renderers or additional control/monitoring sessions are created.
+
+FLOAT (Ctrl+Shift+W) detaches the focused panel into an owned secondary window. Closing that window returns the panel to its remembered group; it does not shut down the engine. The window presents the same source identities, view models and shortcut commands as the primary Operator. Text-entry suppression and confirmed-state mutation gating continue through the central shortcut registry. Moving or selecting a panel never performs a TAKE.
+
+Ctrl+Shift+N cycles panels, Ctrl+Shift+F focuses/restores the current docked panel, and Ctrl+Alt+Left/Up/Right/Down moves it to LEFT/CENTER/RIGHT/BOTTOM. Ctrl+Shift+R resets only the selected workspace to its built-in reference layout. Focus is transient. The existing Ctrl+1/Ctrl+2/Ctrl+0 viewer commands, Enter AUTO and Ctrl+Enter CUT retain their meanings in both main and detached windows.
+
+Each workspace stores its own optional docking preferences within the existing schema-6 layout envelope. The additive docking component has version 1, four known panel identities, at most four groups/windows, selected tabs and bounded split ratios. Older layouts with no component retain their widths, viewer modes and window placement and start in built-in mode. Unknown component versions, duplicate/unknown panels, invalid ratios and non-finite geometry recover safely without carrying production values. Layout loading is capped at 1 MiB and uses the existing serialized atomic replacement path.
+
+At compact viewport size, docked groups are temporarily presented as one tab group; their persisted split arrangement is preserved. Floating windows retain independent physical monitor/work-area coordinates and DPI. On restore or display topology change, missing displays fall back to the primary available work area, offsets/sizes are rescaled for the selected monitor and the entire window is clamped to a real work area. Gaps in the virtual desktop are not treated as displays. The same native work-area check recovers the primary window. Small work areas may reduce the window's minimum size so its chrome remains reachable.
+
+If a panel is missing, use Ctrl+Shift+N to select it, Ctrl+Alt+Up to dock it centrally, or Ctrl+Shift+R for a workspace reset. The primary navigation/status and transport regions remain outside docking. Closing the Operator closes all owned panel windows and removes display-event subscriptions before normal monitoring/control teardown.
+
+Automated qualification covers migration, independent workspace persistence/reset, monitor removal and 100/125/150/200% synthetic DPI geometry, invalid/off-screen placement, bounded identities, real STA dock/float/close cycles, shared bindings/shortcut identity and unchanged Preview/Program source identity. Hosted single-display results do not certify physical mixed-DPI hot-unplug behavior; that remains UNVERIFIED until exercised on the retained Windows reference configuration.

@@ -30,14 +30,23 @@ internal static class OperatorMonitorGeometry
     {
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero || !GetWindowRect(handle, out var bounds)) return OperatorPanelPlacement.Default;
-        var monitor = Read().OrderByDescending(m => Intersection(m, bounds)).FirstOrDefault();
+        var monitors = Read();
+        var monitor = monitors.Where(m => Intersection(m, bounds) > 0).OrderByDescending(m => Intersection(m, bounds)).FirstOrDefault()
+            ?? monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault();
         var dpi = GetDpiForWindow(handle);
         return new(monitor?.Id ?? "", bounds.Left, bounds.Top, bounds.Right - bounds.Left,
             bounds.Bottom - bounds.Top, monitor?.Left ?? 0, monitor?.Top ?? 0, dpi == 0 ? 96 : dpi);
     }
     public static void Restore(Window window, OperatorPanelPlacement placement)
     {
-        var bounds = OperatorPanelRestore.Restore(placement, Read());
+        var monitors = Read();
+        var monitor = monitors.FirstOrDefault(m => m.Id == placement.Monitor) ?? monitors.FirstOrDefault(m => m.Primary) ?? monitors.FirstOrDefault();
+        if (monitor is not null)
+        {
+            window.MinWidth = Math.Min(window.MinWidth, monitor.Width * 96 / monitor.Dpi);
+            window.MinHeight = Math.Min(window.MinHeight, monitor.Height * 96 / monitor.Dpi);
+        }
+        var bounds = OperatorPanelRestore.Restore(placement, monitors);
         var handle = new WindowInteropHelper(window).Handle;
         if (handle != IntPtr.Zero)
             SetWindowPos(handle, IntPtr.Zero, (int)Math.Round(bounds.Left), (int)Math.Round(bounds.Top),

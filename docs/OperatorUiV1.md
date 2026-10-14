@@ -883,3 +883,7 @@ See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md
 ## Governed AI capability workflow
 
 The reference showcase now has provider-advertised capability selection, descriptor-only tests, explicit Program approval, revision-bound activation and separate accepted/executed/fallback evidence. See [Governed AI operator workflow](GovernedAIOperatorWorkflow.md) for the current inventory, private command compatibility, transport limitations, freshness bounds and qualification scope.
+
+## Optional dock workspace
+
+Existing Operator regions support an optional bounded docking presentation with tabs, split groups and owned panel windows. The same view instances, confirmed source identity and central shortcut/mutation gate are reused. Built-in layouts and reset remain available; no new renderer or authority is introduced. See [OperatorWorkspaces.md](OperatorWorkspaces.md#optional-docking-and-detached-panels) for controls, persistence, monitor recovery and qualification limits.

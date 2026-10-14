@@ -261,6 +261,8 @@ public partial class MainWindow : Window
 	{
 		base.OnSourceInitialized(e);
 		ApplyDarkWindowCaption();
+        if (WindowState == WindowState.Normal)
+            OperatorMonitorGeometry.Restore(this, OperatorMonitorGeometry.Capture(this));
 	}
 
 	protected override void OnPreviewKeyDown(KeyEventArgs e)
