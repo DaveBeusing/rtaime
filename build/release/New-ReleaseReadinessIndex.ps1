@@ -28,18 +28,45 @@ function Retain-Input([string]$Path, [string]$Kind) {
     $inputs.Add([ordered]@{ kind = $Kind; path = $full; sha256 = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant() })
     return $full
 }
-$stableArgs = @{ ExpectedSourceCommit = $ExpectedSourceCommit; RequiredGatesPath = $RequiredGatesPath }
-$stable = & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") @stableArgs
 $domains = [Collections.Generic.List[object]]::new()
 function Add-Result([string]$Name, [string]$Status, [string]$Source, [string]$Details) {
     $domains.Add([ordered]@{ name = $Name; status = $Status; source = $Source; details = $Details })
 }
+$assessedProduct = $null
+$identityCandidatePath = if (-not [string]::IsNullOrWhiteSpace($QualificationCandidatePath)) { $QualificationCandidatePath } else { $ReleaseCandidatePath }
+if (-not [string]::IsNullOrWhiteSpace($identityCandidatePath)) {
+    try {
+        $identityRoot = Resolve-Input $identityCandidatePath
+        if (Test-Path -LiteralPath $identityRoot -PathType Leaf) { $identityRoot = Split-Path -Parent $identityRoot }
+        & (Join-Path $PSScriptRoot "Test-ReleaseCandidate.ps1") -CandidatePath $identityRoot
+        $identityCandidate = Get-Content -LiteralPath (Join-Path $identityRoot "release-candidate.json") -Raw | ConvertFrom-Json
+        if ([string]$identityCandidate.source.sourceCommit -ne $ExpectedSourceCommit -or
+            [string]$identityCandidate.source.buildCommit -ne $ExpectedSourceCommit) { throw "Assessed candidate source/build mismatch." }
+        $assessedProduct = $identityCandidate.product
+    } catch { Add-Result "assessedCandidateIdentity" "FAIL" $identityCandidatePath $_.Exception.Message }
+}
+function Invoke-StableAssessment($Parameters) {
+    $previousVersion = $env:RTAIME_PRODUCT_VERSION
+    $previousStage = $env:RTAIME_RELEASE_STAGE
+    try {
+        if ($null -ne $assessedProduct) {
+            $env:RTAIME_PRODUCT_VERSION = [string]$assessedProduct.version
+            $env:RTAIME_RELEASE_STAGE = [string]$assessedProduct.releaseStage
+        }
+        & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") @Parameters
+    } finally {
+        $env:RTAIME_PRODUCT_VERSION = $previousVersion
+        $env:RTAIME_RELEASE_STAGE = $previousStage
+    }
+}
+$stableArgs = @{ ExpectedSourceCommit = $ExpectedSourceCommit; RequiredGatesPath = $RequiredGatesPath }
+$stable = Invoke-StableAssessment $stableArgs
 try {
     foreach ($key in @("ReleaseEvidencePath", "ReleaseCandidatePath", "CoordinatedUpgradeQualificationPath")) {
         $value = Get-Variable -Name $key -ValueOnly
         if (-not [string]::IsNullOrWhiteSpace($value)) { $stableArgs[$key] = $value }
     }
-    $stable = & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") @stableArgs
+    $stable = Invoke-StableAssessment $stableArgs
 } catch { Add-Result "releaseInputVerification" "FAIL" "existing release verifiers" $_.Exception.Message }
 foreach ($domain in @($stable.domains)) { $domains.Add($domain) }
 foreach ($entry in @(
