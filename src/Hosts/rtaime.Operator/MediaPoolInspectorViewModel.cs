@@ -84,7 +84,7 @@ public sealed class MediaAssetCollection : ObservableCollection<MediaPoolItemVie
 	}
 }
 
-public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDisposable
 {
 	private const int MaxProjectedItems = 4096;
 	private static readonly string[] SupportedCategories = ["All", "Sources", "Clips", "Audio", "Graphics", "Compositions"];
@@ -128,6 +128,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private double _selectedChromaKeyTolerance = 0.1;
 	private double _selectedChromaKeySoftness = 0.1;
 	private double _selectedChromaKeySpillSuppression;
+	private bool _transformDraftDirty;
+	private string? _confirmedTransformSignature;
 	private bool _processingDraftDirty;
 	private string? _confirmedProcessingSignature;
 	private string _emptyState = "No assets are available.";
@@ -182,6 +184,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			_operator.GraphicsScale = 1.0;
 			return Task.CompletedTask;
 		});
+		CopyAttributesCommand = new AsyncRelayCommand(CopyAttributesAsync, () => HasAuthoritativeCompositingSelection && InspectorInputsValid);
+		PasteAttributesCommand = new AsyncRelayCommand(PasteAttributesAsync, CanPasteAttributes);
 		ApplyCompositingTransformCommand = new AsyncRelayCommand(
 			ApplySelectedCompositingTransformAsync,
 			CanEditAuthoritativeCompositingSelection);
@@ -1518,6 +1522,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(IsGraphicsSelection));
 		OnPropertyChanged(nameof(IsCompositionSelection));
 		OnPropertyChanged(nameof(IsCueSelection));
+		OnPropertyChanged(nameof(EditingSelectionIdentity));
+		OnPropertyChanged(nameof(InspectorEditState));
+		OnPropertyChanged(nameof(AttributeCompatibilityLabel));
+		(CopyAttributesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(PasteAttributesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		OnPropertyChanged(nameof(InspectorTitle));
 		OnPropertyChanged(nameof(InspectorDetail));
 		OnPropertyChanged(nameof(SelectionCount));
@@ -1603,7 +1612,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	}
 
 	private bool CanEditAuthoritativeCompositingSelection() =>
-		HasAuthoritativeCompositingSelection && _operator.CanManageCompositingLayers();
+		HasAuthoritativeCompositingSelection && InspectorInputsValid && _operator.CanManageCompositingLayers();
 
 	private async Task ApplySelectedCompositingTransformAsync()
 	{
@@ -1802,16 +1811,22 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (layer is null)
 			return;
 
-		_selectedLayerPositionX = layer.PositionX;
-		_selectedLayerPositionY = layer.PositionY;
-		_selectedLayerScale = layer.Scale;
-		_selectedLayerRotationDegrees = layer.RotationDegrees;
-		_selectedLayerAnchorX = layer.AnchorX;
-		_selectedLayerAnchorY = layer.AnchorY;
-		_selectedLayerCropLeft = layer.CropLeft;
-		_selectedLayerCropTop = layer.CropTop;
-		_selectedLayerCropRight = layer.CropRight;
-		_selectedLayerCropBottom = layer.CropBottom;
+		var transformSignature = $"{layer.LayerId}|{layer.PositionX}|{layer.PositionY}|{layer.Scale}|{layer.RotationDegrees}|{layer.AnchorX}|{layer.AnchorY}|{layer.CropLeft}|{layer.CropTop}|{layer.CropRight}|{layer.CropBottom}";
+		if (force || !_transformDraftDirty || !string.Equals(transformSignature, _confirmedTransformSignature, StringComparison.Ordinal))
+		{
+			_selectedLayerPositionX = layer.PositionX;
+			_selectedLayerPositionY = layer.PositionY;
+			_selectedLayerScale = layer.Scale;
+			_selectedLayerRotationDegrees = layer.RotationDegrees;
+			_selectedLayerAnchorX = layer.AnchorX;
+			_selectedLayerAnchorY = layer.AnchorY;
+			_selectedLayerCropLeft = layer.CropLeft;
+			_selectedLayerCropTop = layer.CropTop;
+			_selectedLayerCropRight = layer.CropRight;
+			_selectedLayerCropBottom = layer.CropBottom;
+			_transformDraftDirty = false;
+			_confirmedTransformSignature = transformSignature;
+		}
 		var selectedProcessing = SelectedProcessingNode;
 		var signature = selectedProcessing is null
 			? null
@@ -1884,7 +1899,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	{
 		if (!double.IsFinite(value) || value < minimum || value > maximum)
 			throw new ArgumentOutOfRangeException(propertyName, $"Value must be finite and in the inclusive range {minimum}..{maximum}.");
-		return Set(ref field, value, propertyName);
+		var changed = Set(ref field, value, propertyName);
+		if (changed && propertyName?.StartsWith("SelectedLayer", StringComparison.Ordinal) == true)
+			_transformDraftDirty = true;
+		if (changed) OnPropertyChanged(nameof(InspectorEditState));
+		return changed;
 	}
 
 	private OperatorSourceTileViewModel? SelectedTestSignalSource
