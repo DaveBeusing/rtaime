@@ -182,3 +182,27 @@ Required Gates preserves two source/build-SHA-bound JSON reports beside the exis
 ### Drop accounting
 
 Scheduler missed slots are opportunities not executed; Program/media/audio sequence advances only on committed boundaries. Physical output losses retain their separate existing counters. Recording and replay queue-full drops apply to that consumer only; network drop-oldest releases one complete paired A/V sample; monitoring drops describe its sampled observational stream. None is added to Program drop totals. Queue depths exclude the worker's one in-flight sample, which still owns its lease. Monitoring high-water/drop evidence is captured per subscription before/after detach because hub aggregates contain only current subscriptions. Cancelling shutdown discards outstanding network samples by releasing their leases; those teardown discards are not reported as transmitted media or added as production-frame losses.
+
+
+## Bounded sustained-load evidence
+
+The physical timing test now measures soak duration with a monotonic stopwatch and binds evidence to matching exact source/build revisions. Its sampled host-cycle latency uses the shared fixed whole-run histogram; p95 is a conservative upper bin bound at 0.01 ms resolution, overflow uses the actual maximum, and the existing p95 threshold is not relaxed. No-sample evidence retains null quantiles and a failed status.
+
+The opt-in staged software runner complements the existing hardware lanes:
+
+```powershell
+./build/qualification/Invoke-SustainedMixedLoadQualification.ps1 -Profile smoke
+./build/qualification/Invoke-SustainedMixedLoadQualification.ps1 -Profile 8h
+```
+
+Profiles `24h` and `72h` use the same source-controlled descriptor at `qualification/soak/sustained-mixed-load.json`. Long profiles require actual elapsed wall/monotonic duration; accelerated or short runs cannot satisfy them. `smoke` requires two complete cycles and remains `SHORT_SOFTWARE_PASS`, with long-soak status `UNVERIFIED`.
+
+Each staged cycle runs the existing mixed consumer workload at 1080p50 and 1080p59.94, decoded playback/format normalization, cue/scene-template semantics and authoritative audio through Client/Control/Runtime. Mixed sessions include CUT/DISSOLVE, recording/replay pressure, simulated NDI/SRT interruption/reconnect and monitoring open/close. Controlled RuntimeHost/AIHost crashes and ambiguous TAKE recovery run at the first cycle and every tenth cycle. The factored existing 0/1/2/4/8-layer software matrix runs before these stages.
+
+The staged workload remains in one testhost across repeated session creation/drain, so testhost resource growth remains observable across cycles. It is **not one uninterrupted production instance**. Short fixture clips, simulated network backends and cue fixtures are labeled software evidence; they do not qualify native NDI/SRT delivery, physical GPU/VRAM, broadcast A/V synchronization or professional output.
+
+One atomically replaced bounded summary retains whole-run CPU latency quantiles, exact deadline misses, scheduler misses, separate consumer-drop totals, queue evidence, software A/V drift, CPU time/utilization, RAM/handle peaks, recoveries and up to 96 hourly resource windows. No per-frame/cycle file or growing console trace is emitted by the repeated mixed harness. Every mixed session must release its resources; a long software plateau additionally requires consecutive completed post-warm-up hourly evidence within the descriptor's private-memory/handle budgets.
+
+The verifier checks source/build/profile hash, real duration, workload coverage, quantile method/order, bounded retention and resource-window growth independently of a reported PASS. Negative verifier fixtures reject short runs, source/workload mismatches, missing stages, false physical claims and hidden memory/handle growth. They are verifier tests, not real soak results.
+
+Required Gates run the short staged smoke and retain its manifest, SHA-256-bound summaries and TRX results. Hosted CI does not run the 8/24/72-hour profiles. Those durations, continuous single-production stability, native network transport and physical reference-hardware status remain **UNVERIFIED** until matching immutable evidence is available.

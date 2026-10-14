@@ -175,3 +175,9 @@ foreach ($hours in @(8, 24, 72)) {
 }
 Assert-Condition ($hardwareTest -match 'BoundedSoakHistogram' -and $hardwareTest -match 'BoundedSoakResourceTrend') "Long renderer observations must remain bounded."
 Assert-Condition ($hardwareTest -match 'ProgramRecorder.DefaultQueueCapacity \+ 2') "Recording pressure must follow the actual bounded queue capacity."
+
+foreach ($long in @($profiles | Where-Object { [string]$_.name -like "soak*h" })) {
+    Assert-Condition ([long]$long.resourcePlateau.maximumPrivateGrowthBytes -eq 536870912 -and
+        [long]$long.resourcePlateau.maximumVramGrowthBytes -eq 536870912 -and
+        [int]$long.resourcePlateau.maximumHandleGrowth -eq 128) "Long renderer resource budgets must match the executable qualification."
+}

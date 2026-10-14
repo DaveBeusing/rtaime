@@ -134,3 +134,24 @@ Hosted Required Gates retain six JSON reports in `rtaime-program-pipeline-<run>-
 No new P99 acceptance limit is introduced. The current health thresholds, strict CUDA limits and approved-baseline regression policy remain authoritative. Hardware results require the existing dedicated self-hosted workflow on the exact source commit; hosted software success cannot satisfy that requirement.
 
 The strict CUDA reference wrapper distinguishes identity CUT (input uploads plus readback, no compositor kernel) from DISSOLVE/layer work (kernel launch, GPU event elapsed time and context synchronization required). It rejects missing DISSOLVE kernel evidence and invented CUT kernel activity. The strict report also labels CPU/GPU measurements, warmup, pre-steady-state upload samples and bounded-window retention/loss. Existing 5 ms P95 and 10 ms maximum limits remain unchanged.
+
+
+## Sustained profile duration and bounded statistics
+
+The opt-in local profiles `soak8h`, `soak24h` and `soak72h` extend the same reference renderer runner. Their nominal Runtime duration is **8 / 24 / 72 hours total across both formats**, respectively **4 / 12 / 36 uninterrupted hours per format**. Warm-up, compositor matrix, software faults and setup/drain add overhead. These names do not claim an uninterrupted 72-hour production at each format.
+
+Run the existing strict CUDA qualification first, then use the established renderer runner on the approved reference machine:
+
+```powershell
+./build/qualification/Invoke-RendererReferenceQualification.ps1 -Profile soak8h -ExpectedDeviceName "<approved NVIDIA reference GPU>" -OutputRoot "artifacts/qualification/renderer-8h"
+```
+
+Use `soak24h` or `soak72h` for the corresponding total duration. Source, profile hash, device/PCI identity, driver, SDK and run identity remain captured by the existing manifest. The manual CUDA workflow retains its smoke/stress/one-hour-per-format selections. Long local profiles avoid relying on a GitHub token for uploads after 24 hours; [GitHub documents that token lifetime](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes). Preserve the resulting local source-bound evidence through the established qualification process.
+
+Boundary latency, CPU/GPU utilization and VRAM use fixed whole-run histograms instead of growing observation lists. P50/P95/P99 are nearest-rank **upper bin bounds**, with 0.01 ms latency resolution and actual maximum for overflow. Early outliers remain in the distribution for the entire run. Deadline exceedances remain exact counters. Retained CUDA events and pipeline-stage windows keep their existing bounded-window scope and overwrite counts; they are not relabeled as whole-run GPU timing distributions.
+
+The production workload repeats CUT/DISSOLVE and 0/1/2-layer Runtime load changes, recording stop/start and monitor disconnect/reconnect. The existing direct compositor matrix separately covers 0/1/2/4/8 layers on both formats. Controlled recording pressure holds admission beyond the actual recorder queue plus its in-flight sample before release; configured short profiles cannot accidentally miss saturation when queue capacity changes.
+
+Resource summaries retain at most 96 hourly windows. The first hour is warm-up; the still-open final hour cannot qualify a plateau. At least three consecutive completed post-warm-up hours with repeated samples are required. The declared budgets are 512 MiB private-memory growth, 128 process handles and 512 MiB device VRAM growth relative to the first eligible hourly mean. Long profiles fail if required plateau evidence is missing or growth exceeds these budgets. GPU VRAM telemetry describes the observed physical device; isolate unrelated GPU workloads on the approved machine when interpreting it.
+
+Short managed regressions exercise the same cycle/pressure/drain code with an explicit `MANAGED_HARNESS_REGRESSION` scope. Hardware verification refuses this scope. No 8/24/72-hour or physical result is PASS until the corresponding exact-source run actually completes.
