@@ -29,6 +29,11 @@ $elapsed = [double]$e.elapsedSeconds
 if (-not [double]::IsFinite($elapsed) -or $elapsed -lt $required -or [ulong]$e.cycles -lt [ulong]$profile.minimumCycles) {
     throw "Staged run did not complete its real elapsed duration or repeated workload cycles."
 }
+$start = [DateTimeOffset]::Parse([string]$e.startedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+$end = [DateTimeOffset]::Parse([string]$e.capturedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+if (($end - $start).TotalSeconds -lt $required -or [Math]::Abs(($end - $start).TotalSeconds - $elapsed) -gt 300) {
+    throw "Wall-time provenance does not agree with elapsed soak duration."
+}
 $completion = if ($ExpectedProfile -eq "smoke") { "SHORT_SOFTWARE_PASS" } else { "STAGED_SOFTWARE_SOAK_PASS" }
 if ([string]$e.completion -ne $completion -or $null -ne $e.failure) { throw "Staged run is not successfully complete." }
 if ((@($e.formats) -join ",") -ne "1080p50,1080p59.94" -or [ulong]$e.frames -eq 0 -or
@@ -48,7 +53,33 @@ foreach ($name in @("physicalGpu", "nativeNetworkTransport", "physicalAvSynchron
 }
 if ($ExpectedProfile -eq "smoke") {
     if ([string]$e.longSoak -ne "UNVERIFIED") { throw "A short run cannot qualify long soak." }
-} elseif ([string]$e.longSoak -ne $completion -or [string]$e.resourcePlateau -ne "PASS") {
-    throw "Long software soak requires elapsed duration and post-warmup resource plateau evidence."
+} else {
+    if ([string]$e.longSoak -ne $completion -or [string]$e.resourcePlateau -ne "PASS") {
+        throw "Long software soak requires elapsed duration and post-warmup resource plateau evidence."
+    }
+    $closed = [long][Math]::Floor($elapsed / 3600)
+    $windows = @($e.resourceWindows | Where-Object { [long]$_.index -gt 0 -and [long]$_.index -lt $closed } | Sort-Object index)
+    if ($windows.Count -lt 3 -or [long]$windows[0].index -ne 1 -or
+        [long]$windows[-1].index -ne $closed - 1) { throw "Completed post-warmup hourly windows are missing." }
+    for ($i = 0; $i -lt $windows.Count; $i++) {
+        $window = $windows[$i]
+        if ([ulong]$window.samples -lt 2 -or ($i -gt 0 -and [long]$window.index -ne [long]$windows[$i - 1].index + 1)) {
+            throw "Resource window samples or chronological continuity are incomplete."
+        }
+        foreach ($value in @([double]$window.meanPrivateBytes, [double]$window.meanHandles)) {
+            if (-not [double]::IsFinite($value) -or $value -lt 0) { throw "Invalid resource mean." }
+        }
+    }
+    $memoryBudget = [double]$d.resourcePolicy.maximumPrivateGrowthBytes
+    $handleBudget = [double]$d.resourcePolicy.maximumHandleGrowth
+    if ([double]$e.resourcePolicy.maximumPrivateGrowth -ne $memoryBudget -or
+        [double]$e.resourcePolicy.maximumHandleGrowth -ne $handleBudget) { throw "Resource budgets differ from the source workload." }
+    $first = $windows[0]
+    foreach ($window in $windows) {
+        if ([double]$window.meanPrivateBytes - [double]$first.meanPrivateBytes -gt $memoryBudget -or
+            [double]$window.meanHandles - [double]$first.meanHandles -gt $handleBudget) {
+            throw "Reported PASS contradicts measured resource growth."
+        }
+    }
 }
 Write-Host "Staged mixed-load evidence verification PASS ($ExpectedProfile); physical status UNVERIFIED."
