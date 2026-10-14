@@ -120,6 +120,10 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     $matches = @($runtimeResults | Where-Object { [string]$_.format -eq $format })
     if ($matches.Count -ne 1) { throw "Renderer runtime evidence is missing '$format'." }
     $result = $matches[0]
+    if (-not [bool]$result.hardwareBackend -or
+        [string]$result.boundaryScope -ne "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO") {
+        throw "Software workload cannot be renderer hardware evidence."
+    }
     $minimumSeconds = switch ($ExpectedProfile) {
         "smoke" { 30 } "stress" { 300 } "soak" { 3600 }
         "soak8h" { 14400 } "soak24h" { 43200 } "soak72h" { 129600 }

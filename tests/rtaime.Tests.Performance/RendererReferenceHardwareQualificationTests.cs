@@ -134,6 +134,28 @@ public sealed class RendererReferenceHardwareQualificationTests
         Assert.Empty(failures);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Renderer_workload_cycles_and_pressure_use_real_queue_capacity_in_managed_regression(bool fractional)
+    {
+        var result = await RunRuntimeFormatAsync(
+            fractional ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8,
+            0, 1, 3, 16, new ManagedReferenceGpuBackend(), physical: false,
+            phasePeriod: 30, recordingPeriod: 90, minimumBoundaries: 100);
+        var report = JsonSerializer.SerializeToElement(result);
+        Assert.False(report.GetProperty("hardwareBackend").GetBoolean());
+        Assert.Equal("MANAGED_HARNESS_REGRESSION", report.GetProperty("boundaryScope").GetString());
+        Assert.True(report.GetProperty("transitions").GetUInt64() >= 3);
+        var recording = report.GetProperty("recording");
+        Assert.True(recording.GetProperty("cycles").GetUInt64() >= 1);
+        Assert.True(recording.GetProperty("rejectedDuringPressure").GetUInt64() > 0);
+        Assert.Equal(ProgramRecorder.DefaultQueueCapacity + 2, recording.GetProperty("effectivePressureReleaseBoundary").GetInt32());
+        Assert.Equal(0, report.GetProperty("cleanup").GetProperty("activeGpuSurfaces").GetInt32());
+        Assert.Equal(0, report.GetProperty("cleanup").GetProperty("activeReadbackBuffers").GetInt32());
+        Assert.Equal("UNVERIFIED", report.GetProperty("telemetry").GetProperty("resourcePlateau").GetString());
+    }
+
     private static IReadOnlyList<object> RunCompositorMatrix(int deviceOrdinal, int sampleIterations, int warmupBoundaries)
     {
         var results = new List<object>();
@@ -311,7 +333,12 @@ public sealed class RendererReferenceHardwareQualificationTests
         int deviceOrdinal,
         int durationSeconds,
         int warmupBoundaries,
-        int recordingBackpressureBoundaries)
+        int recordingBackpressureBoundaries,
+        IGpuProcessingBackend? backend = null,
+        bool physical = true,
+        int phasePeriod = 300,
+        int recordingPeriod = 900,
+        int minimumBoundaries = 0)
     {
         var sourceA = new ProductionSourceId(Identity.New());
         var sourceB = new ProductionSourceId(Identity.New());
@@ -338,7 +365,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             mediaB,
             format,
             writer,
-            new CudaGpuProcessingBackend(deviceOrdinal, timingCollector), pipelineTimingProbe: pipeline);
+            backend ?? new CudaGpuProcessingBackend(deviceOrdinal, timingCollector), pipelineTimingProbe: pipeline);
 
         var registry = new ProviderRegistry(runtime.ProviderDescriptors);
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
@@ -417,7 +444,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         try
         {
-            while (Stopwatch.GetElapsedTime(startedAt) < duration)
+            while (Stopwatch.GetElapsedTime(startedAt) < duration || boundaryIndex < minimumBoundaries)
             {
                 var observedAt = Stopwatch.GetElapsedTime(startedAt);
                 if (!schedule.TryTake(observedAt, out var opportunity))
@@ -476,7 +503,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                 if (boundaryIndex == pressureReleaseBoundary)
                     writer.Release();
 
-                if (monitoring is not null && boundaryIndex % 300 == Math.Max(8, Math.Min(100, recordingBackpressureBoundaries / 2)))
+                if (monitoring is not null && boundaryIndex % phasePeriod == Math.Max(8, Math.Min(phasePeriod / 3, recordingBackpressureBoundaries / 2)))
                 {
                     await (monitoring ?? throw new InvalidOperationException("Monitoring subscription was lost before the disconnect boundary.")).DisposeAsync();
                     monitoringSubscriberDrops += monitoring.DroppedFrames;
@@ -491,7 +518,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                     monitorReconnects++;
                 }
 
-                if (boundaryIndex % 300 == 0)
+                if (boundaryIndex % phasePeriod == 0)
                 {
                     var from = programOnB ? mediaB : mediaA;
                     var target = programOnB ? mediaA : mediaB;
@@ -511,7 +538,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                     runtime.SetVisualLayerMode(transitions % 3 == 0 ? V1VisualLayerMode.Disabled : V1VisualLayerMode.Static);
                     runtime.SetGraphicsOverlay(transitions % 3 == 2, .15, .12, 1);
                 }
-                if (boundaryIndex % 900 == 0)
+                if (boundaryIndex % recordingPeriod == 0)
                 {
                     var cycleStop = await runtime.StopRecordingAsync();
                     if (cycleStop.Status != RecordingStopStatus.Stopped)
@@ -580,7 +607,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             throw new InvalidOperationException("Renderer qualification did not execute the governed DISSOLVE transition.");
         if (sequenceDiscontinuities != 0)
             throw new InvalidOperationException($"Renderer qualification observed {sequenceDiscontinuities} sequence discontinuities.");
-        if (finalTransfers.MonitoringResources.TotalExports == 0)
+        if (physical && finalTransfers.MonitoringResources.TotalExports == 0)
             throw new InvalidOperationException("Renderer qualification did not export CUDA/D3D11 monitoring resources.");
 
 
@@ -602,7 +629,8 @@ public sealed class RendererReferenceHardwareQualificationTests
             transitions,
             boundaries = durations.Count,
             warmupBoundaries,
-            boundaryScope = "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO",
+            hardwareBackend = physical,
+            boundaryScope = physical ? "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO" : "MANAGED_HARNESS_REGRESSION",
             missedSchedulerSlots,
             pipelineTiming = pipeline.PipelineSnapshot(),
             cudaTimingWindow = new { timingCollector.Capacity, timingCollector.OverwrittenSampleCount, timingCollector.ContentionDroppedSamples },
