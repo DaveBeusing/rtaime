@@ -37,6 +37,7 @@ public sealed class ProcessSupervisionRecoveryTests
 			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
 		});
 		var controlRun = control.RunAsync(controlStop.Token);
+		Exception? recoveryFailure = null;
 
 		try
 		{
@@ -66,11 +67,23 @@ public sealed class ProcessSupervisionRecoveryTests
 			Assert.True(next.Accepted, next.Failure?.ToString());
 			Assert.True(control.Control.State.Revision.Value > authorityRevision.Value);
 		}
+		catch (Exception exception)
+		{
+			recoveryFailure = exception;
+			throw;
+		}
 		finally
 		{
 			controlStop.Cancel();
-			Assert.Equal(ControlHostExitCode.Success, await controlRun);
-			DeleteDirectory(root);
+			var exit = await controlRun;
+			try
+			{
+				Assert.True(exit == ControlHostExitCode.Success,
+					$"ControlHost shutdown returned {exit}: {control.Lifecycle.Detail}. " +
+					$"Runtime supervisor: {runtimeSupervisor.Snapshot}. " +
+					$"Original recovery failure: {recoveryFailure?.ToString() ?? "none"}");
+			}
+			finally { DeleteDirectory(root); }
 		}
 	}
 
