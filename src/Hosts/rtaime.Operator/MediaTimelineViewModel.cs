@@ -584,7 +584,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 
 	public void PreviewPointerSeek(double logicalX, double logicalWidth)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if ((!CanSeek && !EditCursorMode) || !IsLoaded || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return;
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		frame = ApplySnap(frame, logicalWidth);
@@ -597,7 +597,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if ((!CanSeek && !EditCursorMode) || !IsLoaded || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.CompletedTask;
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		frame = ApplySnap(frame, logicalWidth);

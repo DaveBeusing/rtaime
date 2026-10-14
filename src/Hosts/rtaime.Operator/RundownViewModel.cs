@@ -100,7 +100,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		set
 		{
 			var normalized = (value ?? string.Empty);
-			if (normalized.Length > 256) normalized = normalized[..256];
+			if (normalized.Length > RundownDefinition.MaximumNameLength) normalized = normalized[..RundownDefinition.MaximumNameLength];
 			if (_name == normalized || (!_applyingSnapshot && !CanEditDraft())) return;
 			RememberDraft("name");
 			Set(ref _name, normalized);
