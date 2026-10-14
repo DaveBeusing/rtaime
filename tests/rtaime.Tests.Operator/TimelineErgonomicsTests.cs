@@ -160,6 +160,7 @@ public sealed class TimelineErgonomicsTests
 		Assert.False(model.UndoDraftCommand.CanExecute(null));
 		Assert.False(model.RedoDraftCommand.CanExecute(null));
 		Assert.False(model.AddHoldCommand.CanExecute(null));
+		Assert.False(model.CanEditAuthoring);
 		model.Name = "Cannot rename active production";
 		Assert.Equal("Remote", model.Name);
 		Assert.Equal(1, transport.Calls);

@@ -133,6 +133,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	public string FollowCountdown { get => _followCountdown; private set => Set(ref _followCountdown, value); }
 	public string RepeatStatus { get => _repeatStatus; private set => Set(ref _repeatStatus, value); }
 	public bool HasItems => Items.Count > 0;
+	public bool CanEditAuthoring => CanEditDraft();
 	public string StorageLabel => $"SAVED V{_storageVersion}";
 
 	public RundownOperatorItemViewModel? SelectedItem
@@ -458,6 +459,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 
 	private void RaiseCommandState()
 	{
+		OnPropertyChanged(nameof(CanEditAuthoring));
 		OnPropertyChanged(nameof(DraftHistoryLabel));
 		(UndoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
 		(RedoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();

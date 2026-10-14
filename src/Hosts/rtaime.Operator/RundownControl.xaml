@@ -22,7 +22,7 @@
 			</Grid.ColumnDefinitions>
 			<StackPanel>
 				<TextBlock Text="RUNDOWN" Style="{StaticResource OperatorLabel}" />
-				<controls:RtaimeTextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" Margin="0,2,0,0" />
+				<controls:RtaimeTextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditAuthoring}" MaxLength="128" IsCompact="True" Margin="0,2,0,0" />
 			</StackPanel>
 			<controls:RtaimeButton Grid.Column="2" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 		</Grid>
