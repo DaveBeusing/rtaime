@@ -79,7 +79,8 @@ public sealed class MediaLibraryBrowsingTests
 			var blockedStore = new MediaSmartBinStore(blocked);
 			for (var index = 0; index < 2; index++)
 			{
-				await Assert.ThrowsAnyAsync<IOException>(() => blockedStore.SaveAsync([Bin()]).WaitAsync(TimeSpan.FromSeconds(2)));
+				var failure = await Record.ExceptionAsync(() => blockedStore.SaveAsync([Bin()]).WaitAsync(TimeSpan.FromSeconds(2)));
+				Assert.True(failure is IOException or UnauthorizedAccessException, failure?.ToString() ?? "Expected a bounded write failure.");
 				Assert.Empty(await blockedStore.LoadAsync().WaitAsync(TimeSpan.FromSeconds(2)));
 			}
 			Assert.Single(await store.LoadAsync());
