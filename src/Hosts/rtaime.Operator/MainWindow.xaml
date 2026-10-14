@@ -255,6 +255,7 @@
 									<controls:RtaimeIconButton.ContextMenu>
 										<controls:RtaimeContextMenu>
 											<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+											<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
 											<controls:RtaimeMenuSeparator />
 											<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
 											<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />

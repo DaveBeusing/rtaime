@@ -544,6 +544,11 @@ public partial class MainWindow : Window
 		}
 	}
 
+	private void OnMediaPoolRefreshClick(object sender, RoutedEventArgs e)
+	{
+		if (MediaPool.RefreshCatalogCommand.CanExecute(null)) MediaPool.RefreshCatalogCommand.Execute(null);
+		e.Handled = true;
+	}
 	private async void OnMediaLibraryHover(object sender, MouseEventArgs e)
 	{
 		if (e.LeftButton == MouseButtonState.Released && sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })

@@ -1079,43 +1079,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasItems));
 	}
 
-	private bool CategoryMatches(MediaPoolItemViewModel item) =>
-		string.Equals(SelectedCategory, "All", StringComparison.Ordinal) ||
-		string.Equals(item.Category, SelectedCategory, StringComparison.Ordinal);
-
-	private bool FilterMatches(MediaPoolItemViewModel item) =>
-		SelectedFilter switch
-		{
-			"All" => true,
-			"Video" => item.Kind is MediaPoolItemKind.Source or MediaPoolItemKind.Clip,
-			"Audio" => item.Kind == MediaPoolItemKind.Audio,
-			"Graphics" => item.Kind == MediaPoolItemKind.Graphics,
-			"Online" => item.IsOnline,
-			"Offline" => !item.IsOnline,
-			_ => true
-		};
-
-	private static bool SearchMatches(MediaPoolItemViewModel item, string query)
-	{
-		if (query.Length == 0)
-			return true;
-
-		return Contains(item.Name, query) ||
-			Contains(item.Detail, query) ||
-			Contains(item.Format, query) ||
-			Contains(item.State, query) ||
-			Contains(item.ReferenceId, query) ||
-			Contains(item.LocalPath, query);
-	}
-
-
 	private static string FormatDuration(TimeSpan duration) =>
 		duration.TotalHours >= 1
 			? duration.ToString(@"hh\:mm\:ss")
 			: duration.ToString(@"mm\:ss");
-
-	private static bool Contains(string? value, string query) =>
-		value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 
 	private static bool IsOnlineState(string value) =>
 		!value.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase) &&
