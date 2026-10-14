@@ -758,6 +758,8 @@
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeNumericField}" BasedOn="{StaticResource {x:Type controls:RtaimeTextBox}}">
+		<Setter Property="MinHeight" Value="{DynamicResource OperatorCompactControlHeight}" />
+		<Setter Property="Padding" Value="{DynamicResource OperatorCompactControlPadding}" />
 		<Setter Property="IsCompact" Value="True" />
 		<Setter Property="Template">
 			<Setter.Value>

@@ -272,8 +272,20 @@
 				</Grid>
 			</Border>
 		</DataTemplate>
+
+		<DataTemplate x:Key="InspectorAttributeActionsTemplate">
+			<StackPanel Margin="0,4">
+				<TextBlock Text="{Binding InspectorEditState}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+				<WrapPanel>
+					<controls:RtaimeButton Content="COPY ATTRIBUTES" Command="{Binding CopyAttributesCommand}" IsCompact="True" Margin="0,4,4,4" AutomationProperties.Name="Copy compatible selected attributes" />
+					<controls:RtaimeButton Content="PASTE DRAFT" Command="{Binding PasteAttributesCommand}" IsCompact="True" Margin="0,4" AutomationProperties.Name="Paste compatible attributes into local draft" />
+				</WrapPanel>
+				<TextBlock Text="{Binding AttributeCompatibilityLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+			</StackPanel>
+		</DataTemplate>
 		<DataTemplate x:Key="CompositingProcessingEditorTemplate">
 			<StackPanel>
+				<ContentControl Content="{Binding}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}" />
 				<TextBlock Text="{Binding ProcessingStateLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,6" />
 				<Grid Margin="0,0,0,6">
 					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -369,7 +381,7 @@
 											</StackPanel.Style>
 
 											<TextBlock
-												Text="{Binding Inspector.SelectionSummary, ElementName=Root}"
+												Text="{Binding Inspector.AttributeCompatibilityLabel, ElementName=Root}"
 												
 												Foreground="{DynamicResource OperatorWarningBrush}"
 												Margin="10,6,10,4">
@@ -795,6 +807,7 @@
 													</Style>
 												</Border.Style>
 												<StackPanel>
+													<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}" />
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerPositionX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerPositionX}" /></Grid>
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerPositionY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerPositionY}" /></Grid>
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerScale, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerScale}" /></Grid>

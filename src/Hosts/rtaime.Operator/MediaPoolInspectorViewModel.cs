@@ -473,57 +473,57 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public bool SelectedColorGradeEnabled
 	{
 		get => _selectedColorGradeEnabled;
-		set { if (Set(ref _selectedColorGradeEnabled, value)) _processingDraftDirty = true; }
+		set { if (Set(ref _selectedColorGradeEnabled, value)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedColorGradeBrightness
 	{
 		get => _selectedColorGradeBrightness;
-		set { if (SetValidated(ref _selectedColorGradeBrightness, value, -1, 1)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedColorGradeBrightness, value, -1, 1)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedColorGradeContrast
 	{
 		get => _selectedColorGradeContrast;
-		set { if (SetValidated(ref _selectedColorGradeContrast, value, 0, 2)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedColorGradeContrast, value, 0, 2)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedColorGradeSaturation
 	{
 		get => _selectedColorGradeSaturation;
-		set { if (SetValidated(ref _selectedColorGradeSaturation, value, 0, 2)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedColorGradeSaturation, value, 0, 2)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public bool SelectedChromaKeyEnabled
 	{
 		get => _selectedChromaKeyEnabled;
-		set { if (Set(ref _selectedChromaKeyEnabled, value)) _processingDraftDirty = true; }
+		set { if (Set(ref _selectedChromaKeyEnabled, value)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public int SelectedChromaKeyRed
 	{
 		get => _selectedChromaKeyRed;
-		set { if (SetValidated(ref _selectedChromaKeyRed, value, 0, 255)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeyRed, value, 0, 255)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public int SelectedChromaKeyGreen
 	{
 		get => _selectedChromaKeyGreen;
-		set { if (SetValidated(ref _selectedChromaKeyGreen, value, 0, 255)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeyGreen, value, 0, 255)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public int SelectedChromaKeyBlue
 	{
 		get => _selectedChromaKeyBlue;
-		set { if (SetValidated(ref _selectedChromaKeyBlue, value, 0, 255)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeyBlue, value, 0, 255)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedChromaKeyTolerance
 	{
 		get => _selectedChromaKeyTolerance;
-		set { if (SetValidated(ref _selectedChromaKeyTolerance, value, 0, 1)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeyTolerance, value, 0, 1)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedChromaKeySoftness
 	{
 		get => _selectedChromaKeySoftness;
-		set { if (SetValidated(ref _selectedChromaKeySoftness, value, 0, 1)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeySoftness, value, 0, 1)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 	public double SelectedChromaKeySpillSuppression
 	{
 		get => _selectedChromaKeySpillSuppression;
-		set { if (SetValidated(ref _selectedChromaKeySpillSuppression, value, 0, 1)) _processingDraftDirty = true; }
+		set { if (SetValidated(ref _selectedChromaKeySpillSuppression, value, 0, 1)) _processingDraftDirty = true; OnPropertyChanged(nameof(InspectorEditState)); }
 	}
 
 	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;

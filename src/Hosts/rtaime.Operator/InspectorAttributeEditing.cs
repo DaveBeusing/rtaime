@@ -61,10 +61,10 @@ public sealed partial class MediaPoolInspectorViewModel
 		var values = attributes.Values;
 		var definitions = attributes.Kind switch
 		{
-			"COLOR GRADE" => new[] { InspectorProperties.Brightness, InspectorProperties.Contrast, InspectorProperties.Saturation },
-			"CHROMA KEY" => new[] { InspectorProperties.KeyRed, InspectorProperties.KeyGreen, InspectorProperties.KeyBlue, InspectorProperties.Tolerance, InspectorProperties.Softness, InspectorProperties.Spill },
-			_ => new[] { InspectorProperties.LayerPositionX, InspectorProperties.LayerPositionY, InspectorProperties.LayerScale, InspectorProperties.LayerRotation,
-				InspectorProperties.AnchorX, InspectorProperties.AnchorY, InspectorProperties.CropLeft, InspectorProperties.CropTop, InspectorProperties.CropRight, InspectorProperties.CropBottom }
+			"COLOR GRADE" => new[] { global::rtaime.Operator.InspectorProperties.Brightness, global::rtaime.Operator.InspectorProperties.Contrast, global::rtaime.Operator.InspectorProperties.Saturation },
+			"CHROMA KEY" => new[] { global::rtaime.Operator.InspectorProperties.KeyRed, global::rtaime.Operator.InspectorProperties.KeyGreen, global::rtaime.Operator.InspectorProperties.KeyBlue, global::rtaime.Operator.InspectorProperties.Tolerance, global::rtaime.Operator.InspectorProperties.Softness, global::rtaime.Operator.InspectorProperties.Spill },
+			_ => new[] { global::rtaime.Operator.InspectorProperties.LayerPositionX, global::rtaime.Operator.InspectorProperties.LayerPositionY, global::rtaime.Operator.InspectorProperties.LayerScale, global::rtaime.Operator.InspectorProperties.LayerRotation,
+				global::rtaime.Operator.InspectorProperties.AnchorX, global::rtaime.Operator.InspectorProperties.AnchorY, global::rtaime.Operator.InspectorProperties.CropLeft, global::rtaime.Operator.InspectorProperties.CropTop, global::rtaime.Operator.InspectorProperties.CropRight, global::rtaime.Operator.InspectorProperties.CropBottom }
 		};
 		if (values.Length != definitions.Length || values.Where((v, i) => !definitions[i].Accepts(v)).Any() ||
 			(attributes.Kind == "TRANSFORM" && (values[6] + values[8] >= 1 || values[7] + values[9] >= 1)))
