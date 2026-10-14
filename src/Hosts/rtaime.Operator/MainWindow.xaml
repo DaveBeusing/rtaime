@@ -349,7 +349,7 @@
 								<controls:RtaimeComboBox Grid.Column="1" ItemsSource="{Binding MediaPool.ReadinessChoices, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValue="{Binding MediaPool.ReadinessFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
 									ToolTip="Current presentation readiness; not a production qualification." AutomationProperties.Name="Media readiness filter" />
 							</Grid>
-							
+
 						</Grid>
 
 						<Grid Grid.Row="4" Margin="0,10,0,0">

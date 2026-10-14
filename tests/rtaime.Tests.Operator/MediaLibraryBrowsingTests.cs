@@ -222,6 +222,11 @@ public sealed class MediaLibraryBrowsingTests
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 			Assert.True(combo.IsVisible); Assert.True(combo.ActualWidth > 0); Assert.True(combo.Focus());
 			Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
+			Assert.Equal(Visibility.Collapsed, owner.MediaPool.MetadataFiltersVisibility);
+			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
+			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+			Assert.Equal(Visibility.Visible, owner.MediaPool.MetadataFiltersVisibility);
+			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
 			owner.MediaPool.FilteredItems.ReplaceWith(items);
 			foreach (var browser in new[] { grid, list })
 			{

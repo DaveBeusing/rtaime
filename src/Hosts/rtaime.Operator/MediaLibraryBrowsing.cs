@@ -157,10 +157,10 @@ public sealed partial class MediaPoolInspectorViewModel
 		{
 			if (_binStore is not null) await _binStore.SaveAsync(snapshot);
 			BinStatus = "Saved locally · no production state changed.";
-			HoverStatus = BinStatus;
+			HoverStatus = BinStatus; SetFeedbackVisible(true);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-		{ BinStatus = "Preferences were not saved: " + ex.Message; HoverStatus = BinStatus; }
+		{ BinStatus = "Preferences were not saved: " + ex.Message; HoverStatus = BinStatus; SetFeedbackVisible(true); }
 	}
 	public Task FlushSmartBinsAsync() => _binSave;
 	public async Task BeginHoverAsync(MediaPoolItemViewModel item)
