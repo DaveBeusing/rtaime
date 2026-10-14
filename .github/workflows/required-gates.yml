@@ -631,8 +631,6 @@ jobs:
             $jobs += @($response.jobs); $page++
           } while (@($response.jobs).Count -eq 100)
           New-Item -ItemType Directory -Path artifacts/readiness -Force | Out-Null
-          $ciJobs = @($jobs | Where-Object name -eq "CI")
-          if ($ciJobs.Count -eq 1) { "ci-attempt=$($ciJobs[0].run_attempt)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 }
           @{ repository = $env:GITHUB_REPOSITORY; selection = "latest"; run = $run; jobs = $jobs } |
             ConvertTo-Json -Depth 64 | Set-Content -LiteralPath artifacts/readiness/required-gates.json -Encoding utf8
       - name: Collect packaged evidence
@@ -641,11 +639,31 @@ jobs:
         with:
           name: rtaime-packaged-e2e-${{ github.run_id }}
           path: artifacts/readiness/packaged
+      - name: Select retained mixed-load artifact by run and source
+        if: ${{ needs.ci.result == 'success' }}
+        id: mixed-artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RTAIME_ASSESSED_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
+          $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts"
+          $artifacts = @(); $page = 1
+          do {
+            $response = Invoke-RestMethod -Uri "$api\?per_page=100&page=$page" -Headers $headers
+            $artifacts += @($response.artifacts); $page++
+          } while (@($response.artifacts).Count -eq 100)
+          $catalogPath = "artifacts/readiness/workflow-artifacts.json"
+          @{ artifacts = $artifacts } | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $catalogPath -Encoding utf8
+          $selected = ./build/release/Select-MixedLoadArtifact.ps1 -CatalogPath $catalogPath -RunId $env:GITHUB_RUN_ID -MaximumRunAttempt $env:GITHUB_RUN_ATTEMPT -ExpectedSourceCommit $env:RTAIME_ASSESSED_SOURCE
+          "name=$($selected.name)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8
+          $selected | ConvertTo-Json | Set-Content -LiteralPath artifacts/readiness/selected-mixed-artifact.json -Encoding utf8
       - name: Collect short staged software evidence
         if: ${{ needs.ci.result == 'success' }}
         uses: actions/download-artifact@v6
         with:
-          name: rtaime-mixed-soak-smoke-${{ github.run_id }}-${{ steps.gate-evidence.outputs.ci-attempt }}
+          name: ${{ steps.mixed-artifact.outputs.name }}
           path: artifacts/readiness/mixed
       - name: Assess exact-source evidence and operational handoff
         shell: pwsh

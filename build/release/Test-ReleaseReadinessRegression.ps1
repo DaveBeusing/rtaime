@@ -63,6 +63,20 @@ try {
     & (Join-Path $PSScriptRoot "Test-RequiredGateEvidence.ps1") -EvidencePath $snapshot -ExpectedSourceCommit $head
     Write-Json $fixture $snapshot
     Expect-Rejected { & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit ("a" * 64) -OutputPath (Join-Path $temp "invalid-source.json") } "unsupported source identity"
+    $artifactCatalogPath = Join-Path $temp "artifacts.json"
+    $artifactFixture = @{ artifacts = @(
+        @{ id = 11; name = "rtaime-mixed-soak-smoke-1-1"; expired = $false; workflow_run = @{ id = 1; head_sha = $head } },
+        @{ id = 12; name = "rtaime-other-1-2"; expired = $false; workflow_run = @{ id = 1; head_sha = $head } }
+    ) }
+    Write-Json $artifactFixture $artifactCatalogPath
+    $selectedArtifact = & (Join-Path $PSScriptRoot "Select-MixedLoadArtifact.ps1") -CatalogPath $artifactCatalogPath -RunId 1 -MaximumRunAttempt 2 -ExpectedSourceCommit $head
+    Require ($selectedArtifact.name -eq "rtaime-mixed-soak-smoke-1-1") "Carried-forward job metadata must not invent an attempt-2 artifact."
+    $artifactFixture.artifacts[0].workflow_run.head_sha = $wrong
+    Write-Json $artifactFixture $artifactCatalogPath
+    Expect-Rejected { & (Join-Path $PSScriptRoot "Select-MixedLoadArtifact.ps1") -CatalogPath $artifactCatalogPath -RunId 1 -MaximumRunAttempt 2 -ExpectedSourceCommit $head } "artifact source mismatch"
+    $artifactFixture.artifacts[0].workflow_run.head_sha = $head; $artifactFixture.artifacts[0].expired = $true
+    Write-Json $artifactFixture $artifactCatalogPath
+    Expect-Rejected { & (Join-Path $PSScriptRoot "Select-MixedLoadArtifact.ps1") -CatalogPath $artifactCatalogPath -RunId 1 -MaximumRunAttempt 2 -ExpectedSourceCommit $head } "expired artifact"
     $indexPath = Join-Path $temp "readiness.json"
     $r = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -OutputPath $indexPath
     Require ($r.decision -eq "NO-GO" -and $r.overallStatus -eq "UNVERIFIED" -and $r.releasePromotionPerformed -eq $false) "Five software gates cannot grant Stable readiness."
