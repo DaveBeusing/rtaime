@@ -129,7 +129,7 @@ public sealed class InspectorPrecisionTests
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
-		owner.Shell.IsRightCollapsed = false;
+		if (owner.Shell.IsRightCollapsed) owner.Shell.ToggleRightPanelCommand.Execute(null);
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var inspector = Descendants(owner).OfType<OperatorInspectorControl>().First(control => control.IsVisible);
 		var surface = Assert.IsType<Grid>(Assert.IsType<Border>(inspector.Content).Child);
