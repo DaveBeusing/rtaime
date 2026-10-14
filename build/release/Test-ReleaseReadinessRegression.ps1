@@ -62,6 +62,7 @@ try {
     Write-Json $retainedAttempt $snapshot
     & (Join-Path $PSScriptRoot "Test-RequiredGateEvidence.ps1") -EvidencePath $snapshot -ExpectedSourceCommit $head
     Write-Json $fixture $snapshot
+    Expect-Rejected { & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit ("a" * 64) -OutputPath (Join-Path $temp "invalid-source.json") } "unsupported source identity"
     $indexPath = Join-Path $temp "readiness.json"
     $r = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -OutputPath $indexPath
     Require ($r.decision -eq "NO-GO" -and $r.overallStatus -eq "UNVERIFIED" -and $r.releasePromotionPerformed -eq $false) "Five software gates cannot grant Stable readiness."

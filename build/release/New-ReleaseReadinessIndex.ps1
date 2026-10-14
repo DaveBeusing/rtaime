@@ -13,6 +13,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($ExpectedSourceCommit -notmatch '^[0-9a-f]{40}$') { throw "Readiness index requires an exact lowercase 40-character source SHA." }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 function Resolve-Input([string]$Path) {
     if ([IO.Path]::IsPathRooted($Path)) { return [IO.Path]::GetFullPath($Path) }

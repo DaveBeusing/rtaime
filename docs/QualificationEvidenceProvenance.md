@@ -27,13 +27,13 @@ A physical result may affect release compatibility evidence only when all of the
 
 | Qualification type | Release requirements |
 | --- | --- |
-| `CUDA_REFERENCE` | `REFERENCE_GPU` |
+| `CUDA_REFERENCE` | `CUDA_GPU_EXECUTION`, `GPU_FRAME_LATENCY`, `GPU_SURFACE_LIFETIME` |
 | `MEDIA_IO_REFERENCE` | `PROFESSIONAL_MEDIA_IO` |
-| `TIMING_REFERENCE_SOAK` | `GENLOCK`, `PHYSICAL_END_TO_END_LATENCY`, `LONG_SOAK` |
+| `TIMING_REFERENCE_SOAK` | `SUSTAINED_FRAME_CADENCE`, `DROPPED_FRAME_BEHAVIOR`, `SYSTEM_TELEMETRY_CONTINUITY`, `TIMING_REFERENCE_LOCK`, `AUDIO_VIDEO_SYNCHRONIZATION`, `RECOVERY_UNDER_LOAD`, `PHYSICAL_END_TO_END_LATENCY`, `LONG_SOAK_STABILITY` |
 
 The static release policy intentionally keeps every physical requirement at `UNVERIFIED`. Editing `release-policy.json` cannot create a hardware `PASS`.
 
-Reference Platform Qualification projects the same three source-bound qualification types into twelve explicit physical evidence dimensions:
+Release policy and Reference Platform Qualification use the same twelve explicit physical evidence dimensions:
 
 | Qualification type | Reference-platform dimensions |
 | --- | --- |
