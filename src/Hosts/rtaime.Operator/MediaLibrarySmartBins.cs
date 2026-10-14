@@ -107,8 +107,9 @@ public sealed class MediaSmartBinStore(string? path = null)
 		}
 		finally
 		{
-			try { if (File.Exists(temporary)) File.Delete(temporary); } catch (IOException) { }
-			_gate.Release();
+			try { if (File.Exists(temporary)) File.Delete(temporary); }
+			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+			finally { _gate.Release(); }
 		}
 	}
 }

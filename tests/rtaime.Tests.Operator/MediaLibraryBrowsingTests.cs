@@ -74,6 +74,15 @@ public sealed class MediaLibraryBrowsingTests
 			using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
 			await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.SaveAsync([], cancelled.Token));
 			Assert.Single(await store.LoadAsync());
+			var blocked = Path.Combine(root, "blocked");
+			Directory.CreateDirectory(blocked);
+			var blockedStore = new MediaSmartBinStore(blocked);
+			for (var index = 0; index < 2; index++)
+			{
+				await Assert.ThrowsAnyAsync<IOException>(() => blockedStore.SaveAsync([Bin()]).WaitAsync(TimeSpan.FromSeconds(2)));
+				Assert.Empty(await blockedStore.LoadAsync().WaitAsync(TimeSpan.FromSeconds(2)));
+			}
+			Assert.Single(await store.LoadAsync());
 		}
 		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 	}
