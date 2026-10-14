@@ -39,6 +39,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	private double _verticalOffset;
 	private int _itemsPerRow = 1;
 	private bool _generatorRetryPending;
+	private long _measureCount, _generateCount, _nullContainerCount, _generatorDeferredCount;
+	private int _lastFirstIndex, _lastLastIndex;
+	internal string RealizationDetail => $"measure={_measureCount}; generate={_generateCount}; null={_nullContainerCount}; deferred={_generatorDeferredCount}; children={InternalChildren.Count}; range={_lastFirstIndex}..{_lastLastIndex}; ownerItems={ItemsControl.GetItemsOwner(this)?.Items.Count}; generatorReady={ResolveGenerator() is not null}";
 
 	public double ItemWidth
 	{
@@ -76,6 +79,7 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 	protected override Size MeasureOverride(Size availableSize)
 	{
+		_measureCount++;
 		var owner = ItemsControl.GetItemsOwner(this);
 		var itemCount = owner?.Items.Count ?? 0;
 		var itemWidth = NormalizeLength(ItemWidth, 168.0);
@@ -111,10 +115,12 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		var generator = ResolveGenerator();
 		if (generator is null)
 		{
+			_generatorDeferredCount++;
 			QueueGeneratorRetry();
 			return new Size(viewportWidth, Math.Min(_extent.Height, viewportHeight));
 		}
 
+		_lastFirstIndex = firstIndex; _lastLastIndex = lastIndex;
 		RealizeItems(generator, firstIndex, lastIndex, itemWidth, itemHeight);
 		CleanUpItems(generator, firstIndex, lastIndex);
 
@@ -234,9 +240,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		{
 			for (var itemIndex = firstIndex; itemIndex <= lastIndex; itemIndex++, childIndex++)
 			{
+				_generateCount++;
 				var child = generator.GenerateNext(out var newlyRealized) as UIElement;
-				if (child is null)
-					continue;
+				if (child is null) { _nullContainerCount++; continue; }
 
 				// Recycled containers can be returned with newlyRealized=false even though
 				// cleanup detached them from this panel. They must rejoin the visual tree.

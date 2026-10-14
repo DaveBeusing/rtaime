@@ -249,8 +249,14 @@ public sealed class MediaLibraryBrowsingTests
 				{
 					browser.ScrollIntoView(items[index]);
 					await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+					var deadline = DateTime.UtcNow.AddSeconds(2);
+					while (browser.ItemContainerGenerator.ContainerFromIndex(index) is null && DateTime.UtcNow < deadline)
+					{
+						await Task.Delay(20);
+						await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+					}
 					var wrap = Descendants(browser).OfType<VirtualizingWrapPanel>().FirstOrDefault();
-					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}.");
+					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}; generator={browser.ItemContainerGenerator.Status}; detail={wrap?.RealizationDetail}.");
 					Assert.NotNull(browser.ItemContainerGenerator.ContainerFromIndex(index));
 					Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
 				}
