@@ -155,6 +155,10 @@ public sealed class MediaLibraryBrowsingTests
 			Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
 			Assert.Equal(revision, catalog.Snapshot.Revision); Assert.Equal(0, catalog.Mutations);
 			Assert.Equal(0, transport.Calls);
+			pool.SelectedSmartBin = saved;
+			pool.DeleteSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
+			Assert.Empty(pool.SmartBins);
+			Assert.Empty(await new MediaSmartBinStore(path).LoadAsync());
 		}
 		finally { if (File.Exists(path)) File.Delete(path); }
 	}
@@ -210,8 +214,13 @@ public sealed class MediaLibraryBrowsingTests
 				else owner.MediaPool.ListViewCommand.Execute(null);
 				await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 				Assert.True(browser.IsVisible);
-				browser.ScrollIntoView(items[^1]);
-				await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+				foreach (var index in new[] { 2048, 4095, 0, 4095 })
+				{
+					browser.ScrollIntoView(items[index]);
+					await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+					Assert.NotNull(browser.ItemContainerGenerator.ContainerFromIndex(index));
+					Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
+				}
 				Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));

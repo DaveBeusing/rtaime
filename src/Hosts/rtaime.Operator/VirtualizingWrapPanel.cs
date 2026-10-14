@@ -148,6 +148,16 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		return finalSize;
 	}
 
+	protected override void BringIndexIntoView(int index)
+	{
+		var count = ItemsControl.GetItemsOwner(this)?.Items.Count ?? 0;
+		if (index < 0 || index >= count) return;
+		var height = NormalizeLength(ItemHeight, 126.0);
+		var top = (index / Math.Max(1, _itemsPerRow)) * (height + NormalizeSpacing(VerticalSpacing));
+		if (top < VerticalOffset) SetVerticalOffset(top);
+		else if (top + height > VerticalOffset + ViewportHeight) SetVerticalOffset(top + height - ViewportHeight);
+	}
+
 	public void LineDown() => SetVerticalOffset(VerticalOffset + NormalizeLength(ItemHeight, 126.0) + NormalizeSpacing(VerticalSpacing));
 	public void LineUp() => SetVerticalOffset(VerticalOffset - NormalizeLength(ItemHeight, 126.0) - NormalizeSpacing(VerticalSpacing));
 	public void LineLeft() { }
