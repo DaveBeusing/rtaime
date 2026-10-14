@@ -38,7 +38,12 @@ public sealed class OperatorDockController : IDisposable
         }, StringComparer.Ordinal);
         ToggleCommand = new OperatorShellCommand(Toggle);
         FloatCommand = new OperatorShellCommand(() => Float(_selected));
-        FocusCommand = new OperatorShellCommand(() => { _focus = _focus is null ? _selected : null; Rebuild(); });
+        FocusCommand = new OperatorShellCommand(() =>
+        {
+            if (_floating.TryGetValue(_selected, out var floating)) { floating.Activate(); FocusSelected(); return; }
+            if (!_owner.Shell.Docking.Enabled) _owner.Shell.SetDocking(_owner.Shell.Docking with { Enabled = true });
+            _focus = _focus is null ? _selected : null; Rebuild();
+        });
         NextCommand = new OperatorShellCommand(Next);
         LeftCommand = new OperatorShellCommand(() => Dock(_selected, "LEFT"));
         CenterCommand = new OperatorShellCommand(() => Dock(_selected, "CENTER"));

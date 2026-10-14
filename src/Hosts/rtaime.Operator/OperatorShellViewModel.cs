@@ -239,7 +239,7 @@ public sealed class OperatorLayoutStore
 	{
 		try
 		{
-			if (!File.Exists(_path))
+			if (!File.Exists(_path) || new FileInfo(_path).Length > 1024 * 1024)
 				return OperatorLayoutSettings.Default;
 
 			var json = File.ReadAllText(_path);

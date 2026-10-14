@@ -7,6 +7,15 @@ public sealed record OperatorPanelPlacement(string Monitor, double Left, double 
     double WorkLeft, double WorkTop, double Dpi)
 {
     public static OperatorPanelPlacement Default { get; } = new("", 80, 80, 800, 600, 0, 0, 96);
+    public OperatorPanelPlacement Normalize() => this with
+    {
+        Monitor = (Monitor ?? "")[..Math.Min(128, (Monitor ?? "").Length)],
+        Left = Number(Left, 80, -1000000, 1000000), Top = Number(Top, 80, -1000000, 1000000),
+        Width = Number(Width, 800, 1, 16000), Height = Number(Height, 600, 1, 16000),
+        WorkLeft = Number(WorkLeft, 0, -1000000, 1000000), WorkTop = Number(WorkTop, 0, -1000000, 1000000),
+        Dpi = Number(Dpi, 96, 48, 768)
+    };
+    private static double Number(double value, double fallback, double min, double max) => double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
 }
 public sealed record OperatorMonitorArea(string Id, double Left, double Top, double Width, double Height, double Dpi, bool Primary);
 public sealed record OperatorPanelBounds(double Left, double Top, double Width, double Height);
@@ -39,7 +48,7 @@ public sealed record OperatorDockLayout
         var floating = (Floating ?? []).Take(4)
             .Where(p => p is not null && PanelIds.Contains(p.Panel) && seen.Add(p.Panel))
             .Select(p => p with { ReturnGroup = GroupIds.Contains(p.ReturnGroup) ? p.ReturnGroup : "CENTER",
-                Placement = p.Placement is null ? OperatorPanelPlacement.Default : p.Placement }).ToArray();
+                Placement = (p.Placement ?? OperatorPanelPlacement.Default).Normalize() }).ToArray();
         for (var i = 0; i < PanelIds.Count; i++)
         {
             if (!seen.Add(PanelIds[i])) continue;
