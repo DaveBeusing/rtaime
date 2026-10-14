@@ -185,3 +185,10 @@ A recovery-capable build must preserve all of the following:
 Operator preview D3D11/D3D9Ex target allocation is a separate lifetime from provider CUDA execution. `OperatorDrawingSurface` validates/coalesces layout targets and projects unavailable preview state through existing fallback controls. It releases the failed device's presentation resources and allows at most three recovery attempts on restoration transitions per loaded lifetime; frame cadence and resize do not restart a failed surface.
 
 These actions never authorize provider/runtime recovery, mutate Program or claim production GPU health restored. Surface state and full descriptor/HRESULT events are written through the existing Operator HostLog under `gpu-surface`. After budget exhaustion, retain diagnostics and use the existing operational recovery procedure after classifying the cause. The ownership and fields are documented in [OperatorMonitoringPlane.md](OperatorMonitoringPlane.md); actual Windows tests and the remaining physical matrix are in [OperatorVisualQualification.md](OperatorVisualQualification.md).
+
+
+## Initialization and final disposal failures
+
+When the initial backend Start fails and its cleanup also fails, the thrown aggregate retains both original exception objects, in initialization/cleanup order. The provider remains Failed with `gpu.provider.start_failed`; no successful-start generation is published.
+
+If final backend disposal fails after Stop, the provider records Failed with `gpu.provider.dispose_failed` and keeps the original exception visible to its caller. It must not report Stopped or Disposed for incomplete final disposal. A later explicit Dispose retries tracked cleanup and final backend disposal; success alone publishes Disposed. Stopped/Unavailable may therefore transition to Failed for final-disposal failure. Software regressions cover disposal before and after Start, unchanged generation, refused work and idempotent successful disposal. Physical device-loss cleanup remains UNVERIFIED.
