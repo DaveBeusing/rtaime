@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)][string]$SoftwareEvidencePath,
     [Parameter(Mandatory)][string]$BaselineComparisonPath,
     [Parameter(Mandatory)][string]$ExpectedSourceCommit,
-    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak")][string]$ExpectedProfile
+    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")][string]$ExpectedProfile
 )
 
 Set-StrictMode -Version Latest

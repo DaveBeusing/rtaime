@@ -42,8 +42,8 @@ Assert-Condition ([int]$profile.artifactRetentionDays -eq 90) "Renderer qualific
 Assert-Condition (@($profile.formats).Count -eq 2 -and @($profile.formats) -contains "1080p50" -and @($profile.formats) -contains "1080p59.94") "Renderer qualification must retain both V1 formats."
 Assert-Condition ((@($profile.compositorLayerCounts) -join ",") -eq "0,1,2,4,8") "Renderer qualification must retain the 0/1/2/4/8 layer matrix."
 $profiles = @($profile.profiles)
-Assert-Condition ($profiles.Count -eq 3) "Renderer qualification must declare exactly smoke, stress and soak profiles."
-foreach ($name in @("smoke", "stress", "soak")) {
+Assert-Condition ($profiles.Count -eq 6) "Renderer qualification must declare smoke, stress, soak and 8/24/72-hour profiles."
+foreach ($name in @("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")) {
     Assert-Condition (@($profiles | Where-Object name -eq $name).Count -eq 1) "Renderer qualification profile '$name' is required."
 }
 Assert-Condition ([int](@($profiles | Where-Object name -eq "smoke")[0].durationSecondsPerFormat) -eq 30) "Renderer smoke profile must retain 30 seconds per format."

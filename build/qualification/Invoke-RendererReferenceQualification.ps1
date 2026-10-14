@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak")][string]$Profile,
+    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")][string]$Profile,
     [Parameter(Mandatory)][string]$ExpectedDeviceName,
     [int]$DeviceOrdinal = 0,
     [string]$ProfilePath = "qualification/renderer/renderer-qualification.json",
