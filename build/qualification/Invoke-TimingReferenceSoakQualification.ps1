@@ -29,6 +29,10 @@ if (-not [double]::IsFinite($MaximumAvSyncP95Milliseconds) -or $MaximumAvSyncP95
 if (-not $RequireReferenceRelock) { throw "Full physical timing qualification requires an explicit external-reference loss/re-lock exercise." }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
+$sourceCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw "Exact timing qualification source is required." }
+& git -C $repositoryRoot diff --quiet HEAD --
+if ($LASTEXITCODE -ne 0) { throw "Timing source differs from its qualified commit." }
 $evidenceFullPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $EvidencePath))
 $externalLatencyFullPath = [System.IO.Path]::GetFullPath($ExternalLatencyEvidencePath)
 $externalAvSyncFullPath = [System.IO.Path]::GetFullPath($ExternalAvSyncEvidencePath)
@@ -65,6 +69,8 @@ if ($externalAvSyncP95 -gt $MaximumAvSyncP95Milliseconds) {
 }
 
 $previous = @{
+    RTAIME_TIMING_SOURCE_COMMIT = $env:RTAIME_TIMING_SOURCE_COMMIT
+    RTAIME_TIMING_BUILD_COMMIT = $env:RTAIME_TIMING_BUILD_COMMIT
 	RTAIME_TIMING_REFERENCE_QUALIFICATION = $env:RTAIME_TIMING_REFERENCE_QUALIFICATION
 	RTAIME_TIMING_EXPECTED_ADAPTER = $env:RTAIME_TIMING_EXPECTED_ADAPTER
 	RTAIME_TIMING_REFERENCE_EVIDENCE = $env:RTAIME_TIMING_REFERENCE_EVIDENCE
@@ -76,7 +82,9 @@ $previous = @{
 }
 
 try {
-	$env:RTAIME_TIMING_REFERENCE_QUALIFICATION = "1"
+	$env:RTAIME_TIMING_SOURCE_COMMIT = $sourceCommit
+    $env:RTAIME_TIMING_BUILD_COMMIT = $sourceCommit
+    $env:RTAIME_TIMING_REFERENCE_QUALIFICATION = "1"
 	$env:RTAIME_TIMING_EXPECTED_ADAPTER = $ExpectedAdapterName
 	$env:RTAIME_TIMING_REFERENCE_EVIDENCE = $evidenceFullPath
 	$env:RTAIME_TIMING_SOAK_SECONDS = $SoakSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)
@@ -96,7 +104,9 @@ try {
 
 	$evidence = Get-Content -LiteralPath $evidenceFullPath -Raw | ConvertFrom-Json
 	if ([string]$evidence.schemaVersion -ne "1.0") { throw "Timing evidence schemaVersion must be 1.0." }
-	if ([string]$evidence.status -ne "PASSED") { throw "Timing hardware evidence is '$($evidence.status)', not PASSED." }
+	if ([string]$evidence.sourceCommit -ne $sourceCommit -or [string]$evidence.buildCommit -ne $sourceCommit) { throw "Timing source/build binding is invalid." }
+    if ([int]$evidence.hostCycle.sampleCount -lt 10 -or [int]$evidence.hostCycle.histogram.capacity -ne 10001) { throw "Bounded whole-run host-cycle evidence is missing." }
+    if ([string]$evidence.status -ne "PASSED") { throw "Timing hardware evidence is '$($evidence.status)', not PASSED." }
 	if ([int]$evidence.soakSeconds -lt 1800) { throw "Timing evidence does not contain a qualifying long soak." }
 	if (-not [bool]$evidence.reference.seenInitialReferenceLock) { throw "Initial external-reference lock was not evidenced." }
 	if (-not [bool]$evidence.reference.referenceLossObserved) { throw "External-reference loss was not evidenced." }
