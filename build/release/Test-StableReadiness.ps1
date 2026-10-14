@@ -211,7 +211,7 @@ $productVersion = $buildProps.SelectSingleNode('//RtaimeProductVersion').InnerTe
 if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
 if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
-Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Unsupported source release stage '$releaseStage'."
+Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE")) "Unsupported source release stage '$releaseStage'."
 $repositorySourceCommit = Get-RepositorySourceCommit
 $explicitSourceCommit = Normalize-SourceCommit $ExpectedSourceCommit
 $expectedSourceCommit = if ($null -ne $explicitSourceCommit) { $explicitSourceCommit } else { $repositorySourceCommit }

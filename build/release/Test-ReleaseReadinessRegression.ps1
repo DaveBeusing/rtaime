@@ -70,6 +70,13 @@ try {
     Require ((Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash -eq $indexHash) "Existing index bytes changed."
     $stale = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $wrong -OutputPath (Join-Path $temp "stale.json")
     Require ($stale.overallStatus -eq "FAIL" -and $stale.decision -eq "NO-GO") "Mismatched source must fail the aggregate."
+    $oldVersion = $env:RTAIME_PRODUCT_VERSION; $oldStage = $env:RTAIME_RELEASE_STAGE
+    try {
+        $env:RTAIME_PRODUCT_VERSION = "0.1.0-rc.1"; $env:RTAIME_RELEASE_STAGE = "RELEASE_CANDIDATE"
+        $rc = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -OutputPath (Join-Path $temp "rc.json")
+        Require ($rc.product.releaseStage -eq "RELEASE_CANDIDATE" -and $rc.decision -eq "NO-GO" -and $rc.releasePromotionPerformed -eq $false) "An RC identity must remain unpromoted without completed release obligations."
+        Require ($env:RTAIME_PRODUCT_VERSION -eq "0.1.0-rc.1" -and $env:RTAIME_RELEASE_STAGE -eq "RELEASE_CANDIDATE") "Assessment failed to restore caller build identity."
+    } finally { $env:RTAIME_PRODUCT_VERSION = $oldVersion; $env:RTAIME_RELEASE_STAGE = $oldStage }
     # Exercise the actual platform evidence function without mutating production support policy.
     $tokens = $null; $errors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "Test-StableReadiness.ps1"), [ref]$tokens, [ref]$errors)
