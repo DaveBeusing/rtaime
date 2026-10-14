@@ -374,10 +374,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
     public OperatorDockLayout Docking => _docking;
-    public void SetDocking(OperatorDockLayout layout)
+    public void SetDocking(OperatorDockLayout layout, bool notify = true)
     {
         _docking = layout.Normalize();
-        OnPropertyChanged(nameof(Docking));
+        if (notify) OnPropertyChanged(nameof(Docking));
         Save();
     }
 	public bool IsCompactViewport =>
