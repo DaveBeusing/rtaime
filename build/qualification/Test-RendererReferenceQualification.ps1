@@ -157,7 +157,7 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     }
     if ([ulong]$result.monitoring.totalSharedExports -eq 0) { throw "Renderer monitoring shared-resource export was not exercised for '$format'." }
     if ([int]$result.cleanup.activeGpuSurfaces -ne 0 -or
-        [int]$result.cleanup.activeReadbackBuffers -ne 0 -or
+        [int]$result.cleanup.activeReadbackBuffers -ne 0 -or [int]$result.cleanup.allocatedReadbackBuffers -ne 0 -or
         [int]$result.cleanup.activeSharedMonitoringResources -ne 0) {
         throw "Renderer cleanup retained GPU/readback/monitoring resources for '$format'."
     }

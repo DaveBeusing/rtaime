@@ -589,12 +589,17 @@ public sealed class RendererReferenceHardwareQualificationTests
                   runtime.GpuMemoryTransfers.MonitoringResources.ActiveResources == 0,
             TimeSpan.FromSeconds(5));
 
+        process.Refresh();
+        resources.Observe(Stopwatch.GetElapsedTime(startedAt), process.PrivateMemorySize64, process.HandleCount);
+        if (physical && deviceOrdinal == 0 && runtime.Snapshot.Performance.GpuVramUsedBytes is { } finalVram)
+            vramResources.Observe(Stopwatch.GetElapsedTime(startedAt), checked((long)finalVram), 0);
         var resourcePlateau = resources.Assess(512 * 1024.0 * 1024.0, 128);
         var vramPlateau = vramResources.Assess(512 * 1024.0 * 1024.0, 0);
         if (physical && durationSeconds >= 14400 && vramPlateau != "PASS")
             throw new InvalidOperationException("Long renderer profile lacks complete bounded GPU VRAM plateau evidence.");
         if (resourcePlateau == "FAIL" || (durationSeconds >= 14400 && resourcePlateau != "PASS"))
             throw new InvalidOperationException("Renderer resource plateau did not meet the declared growth policy.");
+        await runtime.DisposeAsync();
         var finalSnapshot = runtime.Snapshot;
         var finalReadback = runtime.ProgramReadbackPoolStatistics;
         var finalTransfers = runtime.GpuMemoryTransfers;
@@ -603,7 +608,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         if (finalSnapshot.ActiveGpuSurfaces != 0)
             throw new InvalidOperationException("Renderer qualification retained active GPU surfaces after the final boundary.");
-        if (finalReadback.ActiveBuffers != 0)
+        if (finalReadback.ActiveBuffers != 0 || finalReadback.AllocatedBuffers != 0)
             throw new InvalidOperationException("Renderer qualification retained active Program readback buffers.");
         if (finalTransfers.MonitoringResources.ActiveResources != 0)
             throw new InvalidOperationException("Renderer qualification retained shared monitoring resources.");
@@ -748,6 +753,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             {
                 activeGpuSurfaces = finalSnapshot.ActiveGpuSurfaces,
                 activeReadbackBuffers = finalReadback.ActiveBuffers,
+                allocatedReadbackBuffers = finalReadback.AllocatedBuffers,
                 activeSharedMonitoringResources = finalTransfers.MonitoringResources.ActiveResources
             }
         };

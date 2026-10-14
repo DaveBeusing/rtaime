@@ -82,6 +82,10 @@ if ([string]::IsNullOrWhiteSpace($resolvedCommit)) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to resolve renderer qualification source commit." }
 }
 if ($resolvedCommit -notmatch '^[0-9a-f]{40}$') { throw "Renderer qualification requires an exact 40-character source commit." }
+$actualCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $resolvedCommit) { throw "Declared renderer source differs from checked-out HEAD." }
+& git -C $repositoryRoot diff --quiet HEAD --
+if ($LASTEXITCODE -ne 0) { throw "Tracked renderer source differs from its qualification commit." }
 
 $resolvedOutputRoot = Resolve-RepositoryPath $OutputRoot
 if (Test-Path -LiteralPath $resolvedOutputRoot) { throw "Evidence output already exists; choose a fresh OutputRoot to preserve previous qualification." }
