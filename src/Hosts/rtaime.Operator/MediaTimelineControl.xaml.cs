@@ -117,6 +117,8 @@ public partial class MediaTimelineControl : UserControl
 	{
 		InitializeComponent();
 		DataContextChanged += (_, _) => UpdateRouting();
+		foreach (var (property, path) in new[] { (PreviewSourceIdProperty, "PreviewSourceId"), (ProgramSourceIdProperty, "ProgramSourceId"), (RoutingConnectedProperty, "IsConnected"), (RoutingStaleProperty, "IsStale") })
+			SetBinding(property, new Binding("DataContext." + path) { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(Window), 1) });
 	}
 
 	private MediaTimelineViewModel? ViewModel => DataContext as MediaTimelineViewModel;

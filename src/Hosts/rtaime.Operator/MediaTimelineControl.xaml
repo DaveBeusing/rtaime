@@ -10,11 +10,7 @@
 	Focusable="True"
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True"
-	PreviewKeyDown="Timeline_PreviewKeyDown"
-	PreviewSourceId="{Binding DataContext.PreviewSourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-	ProgramSourceId="{Binding DataContext.ProgramSourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-	RoutingConnected="{Binding DataContext.IsConnected, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-	RoutingStale="{Binding DataContext.IsStale, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+	PreviewKeyDown="Timeline_PreviewKeyDown">
 	<UserControl.Resources>
 		<local:TimelineFrameToCanvasLeftConverter x:Key="TimelineFrameToCanvasLeftConverter" />
 		<local:TimelineItemWidthConverter x:Key="TimelineItemWidthConverter" />
