@@ -20,6 +20,7 @@ public sealed partial class MediaPoolInspectorViewModel
 	private string _hoverStatus = "Hover or focus an asset · scrub capability unavailable";
 	private ImageSource? _hoverThumbnail;
 	private string? _hoverKey;
+	private MediaPoolItemViewModel? _hoverItem;
 	private bool _browsingDisposed;
 	private bool _loadingBins;
 	private bool _binsLoaded;
@@ -62,7 +63,9 @@ public sealed partial class MediaPoolInspectorViewModel
 		get => _selectedSmartBin;
 		set
 		{
-			if (!Set(ref _selectedSmartBin, value) || value is null || !value.IsValid) return;
+			if (!Set(ref _selectedSmartBin, value)) return;
+			RaiseBrowsingCommands();
+			if (value is null || !value.IsValid) return;
 			_restoringBin = true;
 			try
 			{
@@ -95,7 +98,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			foreach (var bin in bins) SmartBins.Add(bin);
 			_binsLoaded = true;
 		}
-		finally { _loadingBins = false; }
+		finally { _loadingBins = false; RaiseBrowsingCommands(); }
 	}
 
 	private async Task SaveSmartBinAsync()
@@ -145,14 +148,30 @@ public sealed partial class MediaPoolInspectorViewModel
 		if (_browsingDisposed || _hoverKey == item.Key) return;
 		CancelHover();
 		_hoverKey = item.Key;
+		_hoverItem = item;
 		var preview = await _hoverPreview.RequestAsync(item);
 		if (_browsingDisposed || _hoverKey != item.Key || preview is null) return;
 		HoverThumbnail = preview.Thumbnail; HoverStatus = preview.Status;
 	}
 	public void CancelHover()
 	{
-		_hoverPreview.Cancel(); _hoverKey = null; HoverThumbnail = null;
+		_hoverPreview.Cancel(); _hoverKey = null; _hoverItem = null; HoverThumbnail = null;
 		HoverStatus = "Hover or focus an asset · scrub capability unavailable";
+	}
+	private void RaiseBrowsingCommands()
+	{
+		(SaveSmartBinCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(DeleteSmartBinCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+	}
+	private void ReconcileHoverContext()
+	{
+		if (_hoverItem is not { } previous) return;
+		var current = _allItems.FirstOrDefault(item => item.Key == previous.Key);
+		// Monitoring image replacement must not repeatedly cancel the dwell timer.
+		if (current is null || current.LocalPath != previous.LocalPath || current.ReferenceId != previous.ReferenceId ||
+			current.IsOnline != previous.IsOnline || current.KnownDuration != previous.KnownDuration ||
+			MediaLibraryHoverPreview.Capability(current) != MediaLibraryHoverPreview.Capability(previous))
+			CancelHover();
 	}
 	private void DisposeBrowsing()
 	{

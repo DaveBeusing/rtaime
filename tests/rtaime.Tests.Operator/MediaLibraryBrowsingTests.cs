@@ -133,6 +133,7 @@ public sealed class MediaLibraryBrowsingTests
 			Assert.Single(pool.FilteredItems);
 			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
 			Assert.Single(pool.SmartBins);
+			Assert.True(pool.DeleteSmartBinCommand.CanExecute(null));
 			var saved = pool.SmartBins[0];
 			pool.SearchText = "missing-query"; Assert.Empty(pool.FilteredItems); Assert.Null(pool.SelectedSmartBin);
 			pool.SelectedSmartBin = saved; Assert.Single(pool.FilteredItems);
@@ -145,7 +146,11 @@ public sealed class MediaLibraryBrowsingTests
 			pool.UpdateSelection(pool.FilteredItems.Take(3)); Assert.True(pool.HasMultipleSelection);
 			pool.SearchText = "no-matches"; Assert.Empty(pool.SelectedItems);
 			pool.SearchText = "";
-			await pool.BeginHoverAsync(pool.FilteredItems[0]); pool.CancelHover();
+			var hover = pool.BeginHoverAsync(pool.FilteredItems[0]);
+			for (var index = 0; index < 5; index++) { pool.Refresh(); await Task.Delay(10); }
+			await hover;
+			Assert.Contains("UNSUPPORTED", pool.HoverStatus);
+			pool.CancelHover();
 			Assert.Null(pool.HoverThumbnail);
 			Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
 			Assert.Equal(revision, catalog.Snapshot.Revision); Assert.Equal(0, catalog.Mutations);
@@ -216,7 +221,6 @@ public sealed class MediaLibraryBrowsingTests
 		public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
 		public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 		public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId id, string path, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
-		public ValueTask<MediaAssetCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
 		public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(MediaAssetId id, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 	}
 	private sealed class ForbiddenTransport : IOperatorControlTransport

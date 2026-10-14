@@ -1009,7 +1009,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		if (_allItems.Count > MaxProjectedItems)
 			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
 
-		ApplyFilter(selectedKey);
+		ReconcileHoverContext();
+		ApplyFilter(selectedKey, cancelHover: false);
 		RaiseTestSignalState();
 	}
 
@@ -1028,16 +1029,17 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_audioSubscriptions.Clear();
 	}
 
-	private void ApplyFilter(string? preferredSelectionKey = null)
+	private void ApplyFilter(string? preferredSelectionKey = null, bool cancelHover = true)
 	{
 		if (_restoringBin) return;
-		CancelHover();
+		if (cancelHover) CancelHover();
 		preferredSelectionKey ??= SelectedItem?.Key;
 		var bin = CurrentBin();
 		if (_selectedSmartBin is { } saved && saved with { Name = bin.Name } != bin)
 		{
 			_selectedSmartBin = null;
 			OnPropertyChanged(nameof(SelectedSmartBin));
+			RaiseBrowsingCommands();
 		}
 
 		var filtered = _allItems
