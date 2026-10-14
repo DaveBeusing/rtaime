@@ -756,4 +756,34 @@
 		<Setter Property="Cursor" Value="SizeNS" />
 		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
 	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeNumericField}" BasedOn="{StaticResource {x:Type controls:RtaimeTextBox}}">
+		<Setter Property="MinHeight" Value="{DynamicResource OperatorCompactControlHeight}" />
+		<Setter Property="Padding" Value="{DynamicResource OperatorCompactControlPadding}" />
+		<Setter Property="IsCompact" Value="True" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeNumericField}">
+					<Border x:Name="NumericChrome" Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}" Padding="{TemplateBinding Padding}">
+						<Grid>
+							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+							<ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+								Template="{StaticResource RtaimeTextContentHostTemplate}" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding Definition.Unit, RelativeSource={RelativeSource TemplatedParent}}"
+								Foreground="{DynamicResource OperatorMutedTextBrush}" Margin="4,0,0,0"
+								FontSize="{DynamicResource OperatorFontSizeMicro}" VerticalAlignment="Center" IsHitTestVisible="False" />
+						</Grid>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NumericChrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" /></Trigger>
+						<Trigger Property="HasInputError" Value="True"><Setter TargetName="NumericChrome" Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
+						<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
 </ResourceDictionary>

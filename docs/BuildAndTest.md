@@ -378,3 +378,11 @@ See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exa
 ## Dock workspace qualification
 
 Run `dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~OperatorDockLayoutTests` after the canonical Release build. The existing real-STA `OperatorXamlStartupTests` also exercises shared panel identity, tabs, owned windows, focus, compact layout and main-window teardown. Retain physical mixed-DPI hot-unplug qualification separately; hosted geometry tests do not substitute for it.
+
+## Precision Inspector regressions
+
+```powershell
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~InspectorPrecisionTests
+```
+
+The existing OperatorXamlStartupTests qualification also exercises the live themed numeric field and invalid-input Apply gate. Physical mixed-DPI interaction remains UNVERIFIED until reference-platform execution.
