@@ -43,6 +43,27 @@ function Assert-TimingSummary {
     }
 }
 
+function Assert-RendererEvidenceIdentity {
+    param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)]$Evidence, [Parameter(Mandatory)][string]$ExpectedProfileHash)
+    if ([string]$Manifest.repository -ne "DaveBeusing/rtaime" -or
+        [string]$Manifest.profileSha256 -ne $ExpectedProfileHash) { throw "Renderer repository/workload hash mismatch." }
+    if ([int]$Manifest.gpu.ordinal -ne [int]$Evidence.deviceOrdinal -or [int]$Manifest.gpu.ordinal -lt 0 -or
+        [string]::IsNullOrWhiteSpace([string]$Manifest.gpu.pciBusId) -or [long]$Manifest.gpu.totalMemoryMiB -le 0) {
+        throw "Renderer device ordinal/PCI/memory identity is inconsistent or missing."
+    }
+    if ([string]$Manifest.operatingSystem.architecture -ne "X64" -or [string]$Manifest.dotnet.processArchitecture -ne "X64" -or
+        [string]::IsNullOrWhiteSpace([string]$Manifest.operatingSystem.version) -or
+        [string]::IsNullOrWhiteSpace([string]$Manifest.operatingSystem.buildNumber)) { throw "Renderer reference Windows x64 identity is incomplete." }
+    $local = [string]$Manifest.workflow.runId -eq "local" -and [string]$Manifest.workflow.runAttempt -eq "local"
+    $remote = [string]$Manifest.workflow.runId -match '^[1-9][0-9]*$' -and [string]$Manifest.workflow.runAttempt -match '^[1-9][0-9]*$'
+    if (-not ($local -or $remote) -or [string]::IsNullOrWhiteSpace([string]$Manifest.workflow.runnerName)) {
+        throw "Renderer workflow run/attempt identity is invalid."
+    }
+    $start = [DateTimeOffset]::Parse([string]$Manifest.capturedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+    $end = [DateTimeOffset]::Parse([string]$Evidence.capturedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+    if ($end -lt $start -or $end -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { throw "Renderer capture time provenance is invalid." }
+}
+
 $evidence = Get-Content -LiteralPath (Require-File $EvidencePath) -Raw | ConvertFrom-Json
 $manifest = Get-Content -LiteralPath (Require-File $ManifestPath) -Raw | ConvertFrom-Json
 $software = Get-Content -LiteralPath (Require-File $SoftwareEvidencePath) -Raw | ConvertFrom-Json
@@ -65,6 +86,10 @@ if ([string]$manifest.gpu.detectedName -ne [string]$evidence.detectedDeviceName)
 }
 if ([string]$manifest.dotnet.sdk -ne "10.0.401") { throw "Renderer manifest must retain the pinned .NET SDK." }
 if ([string]::IsNullOrWhiteSpace([string]$manifest.gpu.driverVersion)) { throw "Renderer manifest is missing the NVIDIA driver version." }
+
+$profilePath = Join-Path ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))) "qualification/renderer/renderer-qualification.json"
+$expectedProfileHash = (Get-FileHash -LiteralPath $profilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+Assert-RendererEvidenceIdentity -Manifest $manifest -Evidence $evidence -ExpectedProfileHash $expectedProfileHash
 
 $compositorCases = @($evidence.compositor)
 if ($compositorCases.Count -ne 20) {

@@ -73,7 +73,7 @@ The current product remains `DEV`.
 
 ## Source commit vs build commit
 
-Pull-request CI builds GitHub's tested merge ref rather than the branch head in isolation. The evidence bundle therefore records both identities:
+The current Required Gates workflow checks out the exact pull-request head for every build and packaged qualification. It records both the proposed source identity and the Git object actually compiled. If another controlled workflow deliberately builds a tested merge ref, those identities must remain distinct. The evidence bundle therefore records both identities:
 
 - `sourceCommit`: the proposed source branch commit,
 - `buildCommit`: the exact Git object used for the CI build.
@@ -152,14 +152,21 @@ Those claims require separate evidence.
 
 `qualification-evidence-manifest.json` is the release-local bridge between dedicated physical qualification workflows and compatibility evidence.
 
-The static release policy never grants physical hardware `PASS`. Its five V1 requirements remain configured as `UNVERIFIED`:
+The static release policy never grants physical hardware `PASS`. Its twelve explicit V1 requirements remain configured as `UNVERIFIED`:
 
 ```text
-REFERENCE_GPU
+CUDA_GPU_EXECUTION
+GPU_FRAME_LATENCY
+GPU_SURFACE_LIFETIME
 PROFESSIONAL_MEDIA_IO
-GENLOCK
+SUSTAINED_FRAME_CADENCE
+DROPPED_FRAME_BEHAVIOR
+SYSTEM_TELEMETRY_CONTINUITY
+TIMING_REFERENCE_LOCK
+AUDIO_VIDEO_SYNCHRONIZATION
+RECOVERY_UNDER_LOAD
 PHYSICAL_END_TO_END_LATENCY
-LONG_SOAK
+LONG_SOAK_STABILITY
 ```
 
 A requirement becomes `PASSED` in the qualification manifest only when a repository-authorized binding exists for the same source commit and the exact binding/payload bytes pass their fail-closed verifier. The manifest also carries a `supportedPerformance` reference containing status, path and SHA-256 for machine-readable performance evidence derived exclusively from verified physical payloads. The accepted binding, payload and supported-performance bytes are copied into the release-evidence bundle and hashed again after the copy.
@@ -341,3 +348,7 @@ The Stable-readiness verifier does not mutate `RtaimeProductVersion`, `RtaimeRel
 
 A valid release-evidence bundle is therefore necessary but not sufficient for Stable readiness. Missing approved support duration, supported platform evidence, known-issues PASS, physical qualification or production signing trust remains `UNVERIFIED` and cannot be inferred from managed CI.
 
+
+## Evidence-bound readiness index
+
+See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exact-source Required Gates correlation, the retained candidate evidence inventory, individual long-profile scopes and the NO-GO operational handoff. The workflow collects this report after the five required jobs; missing physical, production-trust and approved support evidence remains UNVERIFIED. Run `build/release/Test-ReleaseReadinessRegression.ps1` for stale/pending/cancelled evidence and no-false-Stable regressions.

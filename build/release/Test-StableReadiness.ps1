@@ -5,6 +5,7 @@ param(
 	[string]$ReleaseEvidencePath = "",
 	[string]$ReleaseCandidatePath = "",
 	[string]$ExpectedSourceCommit = "",
+	[string]$RequiredGatesPath = "",
 	[string]$CoordinatedUpgradeQualificationPath = "",
 	[string]$OutputPath = ""
 )
@@ -158,7 +159,9 @@ function Test-PassedQualificationEvidence {
 		}
 		return $passed -and
 			$properties -contains "sourceCommit" -and
-			[string]$document.sourceCommit -match '^[0-9a-fA-F]{40,64}$'
+			[string]$document.sourceCommit -match '^[0-9a-fA-F]{40,64}$' -and
+			$null -ne $expectedSourceCommit -and
+			(Normalize-IdentityValue $document.sourceCommit) -eq $expectedSourceCommit
 	} catch {
 		return $false
 	}
@@ -208,7 +211,7 @@ $productVersion = $buildProps.SelectSingleNode('//RtaimeProductVersion').InnerTe
 if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
 if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
-Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Unsupported source release stage '$releaseStage'."
+Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE")) "Unsupported source release stage '$releaseStage'."
 $repositorySourceCommit = Get-RepositorySourceCommit
 $explicitSourceCommit = Normalize-SourceCommit $ExpectedSourceCommit
 $expectedSourceCommit = if ($null -ne $explicitSourceCommit) { $explicitSourceCommit } else { $repositorySourceCommit }
@@ -238,6 +241,20 @@ Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "checked-out git sour
 		"Checked-out Git source or expected source commit could not be established; Stable readiness cannot become PASS."
 	}
 )
+
+$requiredGatesStatus = "UNVERIFIED"
+$requiredGatesDetail = "No retained exact-source Required Gates snapshot was supplied."
+if (-not [string]::IsNullOrWhiteSpace($RequiredGatesPath)) {
+    try {
+        & (Join-Path $PSScriptRoot "Test-RequiredGateEvidence.ps1") -EvidencePath (Resolve-RepositoryPath $RequiredGatesPath) -ExpectedSourceCommit $expectedSourceCommit
+        $requiredGatesStatus = "PASS"
+        $requiredGatesDetail = "All five governed jobs completed successfully for this exact source, run and attempt."
+    } catch {
+        $requiredGatesStatus = "FAIL"
+        $requiredGatesDetail = $_.Exception.Message
+    }
+}
+Add-Domain $domains "requiredGates" $requiredGatesStatus "Required Gates workflow/jobs snapshot" $requiredGatesDetail
 
 $stableLifecycle = $supportPolicy.lifecycle.stableRelease
 $supportPeriodStatus = if ([string]$stableLifecycle.status -eq "PASS") {

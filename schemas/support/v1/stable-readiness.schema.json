@@ -46,6 +46,7 @@
           "enum": [
             "DEV",
             "PREVIEW",
+            "RELEASE_CANDIDATE",
             "STABLE"
           ]
         }

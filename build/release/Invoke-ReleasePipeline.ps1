@@ -15,6 +15,7 @@ param(
 	[string]$SecurityAssessmentPath = "",
 	[string]$KnownIssuesAssessmentPath = "",
 	[string]$CoordinatedUpgradeQualificationPath = "",
+	[string]$RequiredGatesPath = "",
 	[string]$OutputRoot = "artifacts/release-pipeline"
 )
 
@@ -288,6 +289,7 @@ try {
 			-ReleaseCandidatePath $candidateRoot `
 			-ExpectedSourceCommit ([string]$identity.sourceCommit) `
 			-CoordinatedUpgradeQualificationPath $CoordinatedUpgradeQualificationPath `
+			-RequiredGatesPath $RequiredGatesPath `
 			-OutputPath $stableReadinessPath
 		if ([string]$stableReadiness.overallStatus -ne "PASS") {
 			throw "STABLE release candidate failed Stable readiness with status '$($stableReadiness.overallStatus)'."
