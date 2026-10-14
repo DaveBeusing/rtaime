@@ -11,7 +11,7 @@ using rtaime.Core;
 
 namespace rtaime.Operator;
 
-public sealed class RundownViewModel : INotifyPropertyChanged
+public sealed partial class RundownViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorControlClient _client;
 	private readonly OperatorViewModel _operator;
@@ -47,6 +47,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		_operator = operatorViewModel ?? throw new ArgumentNullException(nameof(operatorViewModel));
 		_mediaPool = mediaPool ?? throw new ArgumentNullException(nameof(mediaPool));
 		Items = [];
+		InitializeDraftHistory();
 		FollowActions = Enum.GetValues<RundownFollowActionKind>();
 		RepeatModes = Enum.GetValues<RundownRepeatMode>();
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
@@ -54,9 +55,9 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		AddMediaCommand = new AsyncRelayCommand(AddMediaAsync, CanAddMedia);
 		AddSceneCommand = new AsyncRelayCommand(AddSceneAsync, CanAddScene);
 		AddAudioBreakawayCommand = new AsyncRelayCommand(AddAudioBreakawayAsync, CanAddAudio);
-		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => CanEditDraft() && CanUseSelectedFollowForNonMedia());
+		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => CanAddDraft() && CanUseSelectedFollowForNonMedia());
 		AddGraphicsCommand = new AsyncRelayCommand(AddGraphicsAsync, CanAddGraphics);
-		AddHoldCommand = new AsyncRelayCommand(AddHoldAsync, () => !IsBusy && CanUseSelectedFollowForNonMedia());
+		AddHoldCommand = new AsyncRelayCommand(AddHoldAsync, () => CanAddDraft() && CanUseSelectedFollowForNonMedia());
 		RemoveCommand = new AsyncRelayCommand(RemoveAsync, () => CanEditDraft() && SelectedItem is not null && Items.Count > 1);
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
@@ -93,7 +94,19 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	public ICommand ResumeRecoveryCommand { get; }
 	public ICommand CancelRecoveryCommand { get; }
 
-	public string Name { get => _name; set { if (Set(ref _name, value ?? string.Empty)) RaiseCommandState(); } }
+	public string Name
+	{
+		get => _name;
+		set
+		{
+			var normalized = (value ?? string.Empty);
+			if (normalized.Length > 256) normalized = normalized[..256];
+			if (_name == normalized || (!_applyingSnapshot && !CanEditDraft())) return;
+			RememberDraft("name");
+			Set(ref _name, normalized);
+			if (!_applyingSnapshot) MarkDraft();
+		}
+	}
 	public string State { get => _state; private set => Set(ref _state, value); }
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string Failure { get => _failure; private set => Set(ref _failure, value); }
@@ -224,6 +237,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	{
 		if (!CanEditDraft() || SelectedItem is null || Items.Count <= 1)
 			return Task.CompletedTask;
+		RememberDraft();
 		var index = Items.IndexOf(SelectedItem);
 		Items.Remove(SelectedItem);
 		SelectedItem = Items[Math.Clamp(index, 0, Items.Count - 1)];
@@ -239,6 +253,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		var to = from + offset;
 		if (from < 0 || to < 0 || to >= Items.Count)
 			return Task.CompletedTask;
+		RememberDraft();
 		Items.Move(from, to);
 		MarkDraft();
 		return Task.CompletedTask;
@@ -296,6 +311,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	{
 		if (!CanEditDraft())
 			return;
+		if (Items.Count >= RundownDefinition.MaximumItems) return;
+		RememberDraft();
 		var viewModel = new RundownOperatorItemViewModel(item);
 		Items.Add(viewModel);
 		SelectedItem = viewModel;
@@ -324,12 +341,15 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private void ApplySnapshot(RundownWorkspaceSnapshot snapshot)
 	{
+		ClearDraftHistory();
 		var selectedId = SelectedItem?.Item.ItemId;
 		Items.Clear();
 		if (snapshot.Rundown is { } rundown)
 		{
 			_rundownId = rundown.RundownId;
-			Name = rundown.Name;
+			_applyingSnapshot = true;
+			try { Name = rundown.Name; }
+			finally { _applyingSnapshot = false; }
 			foreach (var item in rundown.Items)
 				Items.Add(new RundownOperatorItemViewModel(item));
 		}
@@ -385,6 +405,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	{
 		if (IsBusy)
 			return;
+		ClearDraftHistory();
 		IsBusy = true;
 		RaiseCommandState();
 		try
@@ -413,13 +434,14 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private bool CanSave() => CanEditDraft() && Items.Count > 0;
 	private bool CanEditDraft() => !IsBusy && State is not ("EXECUTING" or "RECOVERYREQUIRED");
-	private bool CanAddMedia() => CanEditDraft() &&
+	private bool CanAddDraft() => CanEditDraft() && Items.Count < RundownDefinition.MaximumItems;
+	private bool CanAddMedia() => CanAddDraft() &&
 		_mediaPool.SelectedItem?.Kind == MediaPoolItemKind.Clip &&
 		!string.IsNullOrWhiteSpace(_mediaPool.SelectedItem.ReferenceId) &&
 		_operator.SelectedSource is not null;
-	private bool CanAddScene() => CanEditDraft() && _operator.SelectedScene is not null && CanUseSelectedFollowForNonMedia();
-	private bool CanAddAudio() => CanEditDraft() && _operator.SelectedAudioInput is not null && CanUseSelectedFollowForNonMedia();
-	private bool CanAddGraphics() => CanEditDraft() && CanUseSelectedFollowForNonMedia() &&
+	private bool CanAddScene() => CanAddDraft() && _operator.SelectedScene is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddAudio() => CanAddDraft() && _operator.SelectedAudioInput is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddGraphics() => CanAddDraft() && CanUseSelectedFollowForNonMedia() &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
 	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
@@ -436,6 +458,9 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private void RaiseCommandState()
 	{
+		OnPropertyChanged(nameof(DraftHistoryLabel));
+		(UndoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
+		(RedoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
 		foreach (var command in new[]
 		{
 			RefreshCommand, SaveCommand, AddMediaCommand, AddSceneCommand, AddAudioBreakawayCommand,

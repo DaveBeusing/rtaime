@@ -4,7 +4,7 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	DataContext="{Binding Rundown, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-	AutomationProperties.Name="Production rundown">
+	AutomationProperties.Name="Production rundown" PreviewKeyDown="Rundown_PreviewKeyDown">
 	<Grid Margin="8">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
@@ -141,6 +141,11 @@
 		</controls:RtaimeListBox>
 
 		<StackPanel Grid.Row="3" Margin="0,6,0,0">
+			<WrapPanel>
+				<controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Z: undo local authoring only." AutomationProperties.Name="Undo rundown authoring draft" Margin="0,0,4,4" />
+				<controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Y: redo local authoring only." AutomationProperties.Name="Redo rundown authoring draft" />
+			</WrapPanel>
+			<TextBlock Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
