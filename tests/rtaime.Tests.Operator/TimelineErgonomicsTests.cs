@@ -59,7 +59,11 @@ public sealed class TimelineErgonomicsTests
 		model.RedoDraftCommand.Execute(null);
 		Assert.Equal(74, model.EditCursorFrame);
 		Assert.Empty(sent);
+		model.ZoomInCommand.Execute(null);
+		model.SetEditCursor(99);
+		Assert.Equal(99, model.VisibleEndFrame);
 		Apply(model, Snapshot(12)); // Transport movement is evidence, not an authoring edit.
+		Assert.Equal(99, model.VisibleEndFrame);
 		Assert.True(model.UndoDraftCommand.CanExecute(null));
 		Apply(model, Snapshot(12, changedMarkers: true));
 		Assert.False(model.UndoDraftCommand.CanExecute(null));

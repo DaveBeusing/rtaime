@@ -682,7 +682,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 			return;
 
 		_zoom = normalized;
-		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, _zoom, DisplayFrame);
+		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, _zoom, EditCursorMode && HasEditCursor ? EditCursorFrame : DisplayFrame);
 		RaiseViewport();
 	}
 
@@ -706,10 +706,11 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 	{
 		if (!IsLoaded || Zoom <= MediaTimelineGeometry.MinimumZoom || _visibleRange.FrameCount <= 0)
 			return;
-		if (DisplayFrame >= _visibleRange.StartFrame && DisplayFrame <= _visibleRange.EndFrame)
+		var focusFrame = EditCursorMode && HasEditCursor ? EditCursorFrame : DisplayFrame;
+		if (focusFrame >= _visibleRange.StartFrame && focusFrame <= _visibleRange.EndFrame)
 			return;
 
-		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, Zoom, DisplayFrame);
+		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, Zoom, focusFrame);
 		RaiseViewport();
 	}
 

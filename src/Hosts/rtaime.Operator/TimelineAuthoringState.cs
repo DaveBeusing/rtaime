@@ -97,13 +97,13 @@ public sealed partial class MediaTimelineViewModel
 		frame = Math.Clamp(frame, 0, TotalFrames - 1);
 		if (_editCursorFrame == frame) return;
 		if (remember) _draftHistory.Remember(CaptureDraft());
-		_editCursorFrame = frame; RaiseEditingState();
+		_editCursorFrame = frame; EnsurePlayheadVisible(); RaiseEditingState();
 	}
 	public void StepEditCursor(long delta)
 	{
 		if (!IsLoaded) return;
 		var current = EditCursorFrame;
-		var target = delta > 0 ? current + Math.Min(delta, TotalFrames - 1 - current) : current - Math.Min(-delta, current);
+		var target = delta > 0 ? current + Math.Min(delta, TotalFrames - 1 - current) : current - Math.Min(delta == long.MinValue ? long.MaxValue : -delta, current);
 		SetEditCursor(target);
 	}
 	public void CancelPointerEdit()
