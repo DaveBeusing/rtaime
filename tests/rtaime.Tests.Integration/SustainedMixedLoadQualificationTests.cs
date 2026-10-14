@@ -3,7 +3,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Runtime.InteropServices;
 using rtaime.Runtime;
 
@@ -46,9 +45,14 @@ public sealed class SustainedMixedLoadQualificationTests
         if (faultInterval is < 1 or > 100) throw new InvalidOperationException("Invalid bounded fault schedule.");
         var latency = new BoundedSoakHistogram(.01, 10000);
         var resources = new BoundedSoakResourceTrend();
+        var cpuUtilization = new BoundedSoakHistogram(.1, 1000);
+        var queueEvidence = new JsonElement[2];
         using var process = Process.GetCurrentProcess();
         var clock = Stopwatch.StartNew();
         var startedAtUtc = DateTimeOffset.UtcNow;
+        var initialCpu = process.TotalProcessorTime;
+        var previousCpu = initialCpu;
+        var previousElapsed = TimeSpan.Zero;
         ulong cycles = 0, frames = 0, schedulerMisses = 0, monitorDrops = 0;
         ulong recordingDrops = 0, replayDrops = 0, ndiDrops = 0, srtDrops = 0;
         ulong deadlineMisses = 0, recoveries = 0;
@@ -65,6 +69,13 @@ public sealed class SustainedMixedLoadQualificationTests
         {
             var report = JsonSerializer.SerializeToElement(value,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            queueEvidence[fractional ? 1 : 0] = JsonSerializer.SerializeToElement(new
+            {
+                recording = report.GetProperty("recording").Clone(),
+                replay = report.GetProperty("replay").Clone(),
+                ndi = report.GetProperty("ndi").Clone(),
+                srt = report.GetProperty("srt").Clone()
+            });
             var format = fractional ? "1080p59.94" : "1080p50";
             observedFormats.Add(format);
             var budget = fractional ? 1000 * 1001.0 / 60000 : 20;
@@ -88,6 +99,13 @@ public sealed class SustainedMixedLoadQualificationTests
         void Checkpoint()
         {
             process.Refresh();
+            var elapsed = clock.Elapsed;
+            var cpu = process.TotalProcessorTime;
+            if (elapsed > previousElapsed)
+                cpuUtilization.Observe(Math.Clamp(100 * (cpu - previousCpu).TotalSeconds /
+                    ((elapsed - previousElapsed).TotalSeconds * Environment.ProcessorCount), 0, 100));
+            previousCpu = cpu;
+            previousElapsed = elapsed;
             resources.Observe(clock.Elapsed, process.PrivateMemorySize64, process.HandleCount);
             maximumPrivateBytes = Math.Max(maximumPrivateBytes, process.PrivateMemorySize64);
             maximumWorkingSetBytes = Math.Max(maximumWorkingSetBytes, process.WorkingSet64);
@@ -112,7 +130,9 @@ public sealed class SustainedMixedLoadQualificationTests
                 resourcePlateau = resources.Assess(maximumPrivateGrowth, maximumHandleGrowth),
                 resourcePolicy = new { maximumPrivateGrowth, maximumHandleGrowth },
                 maximumPrivateBytes, maximumWorkingSetBytes, maximumHandles,
-                processCpuSeconds = process.TotalProcessorTime.TotalSeconds,
+                processCpuSeconds = (process.TotalProcessorTime - initialCpu).TotalSeconds,
+                cpuUtilization = cpuUtilization.Summary(),
+                latestConsumerQueues = cycles == 0 ? Array.Empty<JsonElement>() : queueEvidence,
                 cleanup = "ASSERTED_AFTER_EACH_MIXED_SESSION",
                 physicalGpu = "UNVERIFIED", gpuUtilization = "UNVERIFIED", vram = "UNVERIFIED",
                 driver = "UNVERIFIED", nativeNetworkTransport = "UNVERIFIED",
