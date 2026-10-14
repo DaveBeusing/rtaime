@@ -42,7 +42,8 @@ public sealed record MediaPoolItemViewModel(
 	ImageSource? Thumbnail,
 	bool IsOnline,
 	bool IsReady,
-	string? LocalPath = null)
+	string? LocalPath = null,
+	TimeSpan? KnownDuration = null)
 {
 	public string DurationLabel =>
 		Kind == MediaPoolItemKind.Clip
@@ -920,7 +921,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 					: null,
 				online,
 				online && !_catalogBusy,
-				asset.SourceLocation));
+				asset.SourceLocation,
+				asset.Duration));
 		}
 
 		if (_mediaDeck.IsLoaded &&
