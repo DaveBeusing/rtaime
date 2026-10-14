@@ -63,6 +63,31 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseEvidencePath)) {
         }
     } catch { Add-Result "releaseEvidenceInventory" "FAIL" $ReleaseEvidencePath $_.Exception.Message }
 }
+$releaseVerified = @($stable.domains | Where-Object { $_.name -eq "releaseEvidence" -and $_.status -eq "PASS" }).Count -eq 1
+foreach ($name in @("ARCHITECTURE", "CONTRACTS", "BEHAVIOR", "FAILURE", "PERFORMANCE", "COMPATIBILITY", "SECURITY", "SUPPLY_CHAIN", "DOCUMENTATION", "COMPLIANCE", "KNOWN_ISSUES")) {
+    $status = "UNVERIFIED"; $detail = "No verified current-source release domain evidence supplied."
+    if ($null -ne $release) {
+        $matches = @($release.evidenceDomains | Where-Object { $_.domain -eq $name })
+        if (-not $releaseVerified -or $matches.Count -ne 1) { $status = "FAIL"; $detail = "Release evidence did not verify against the assessed source or domain is ambiguous." }
+        else { $status = [string]$matches[0].status; $detail = "Status retained from verified exact-source release evidence; software domains do not grant physical support." }
+    }
+    Add-Result "releaseDomain.$name" $status "release-evidence.json" $detail
+}
+$releasePolicy = Get-Content -LiteralPath (Join-Path $root "build/release/release-policy.json") -Raw | ConvertFrom-Json
+foreach ($requirement in @($releasePolicy.hardwareQualification)) {
+    $name = [string]$requirement.requirement
+    $status = "UNVERIFIED"; $detail = "No verified physical qualification binding for the current source."
+    if ($null -ne $release) {
+        if (-not $releaseVerified) { $status = "FAIL"; $detail = "Physical claims cannot be inherited from rejected release evidence." }
+        else {
+            $compatibility = Get-Content -LiteralPath (Join-Path $evidenceRoot "compatibility-manifest.json") -Raw | ConvertFrom-Json
+            $matches = @($compatibility.hardwareQualification | Where-Object { $_.requirement -eq $name })
+            if ($matches.Count -ne 1) { $status = "FAIL"; $detail = "Missing or ambiguous physical domain." }
+            else { $status = [string]$matches[0].status; $detail = "Retained verified source-bound compatibility status; no substitution from software smoke or a different source." }
+        }
+    }
+    Add-Result "physicalRequirement.$name" $status "compatibility-manifest.json" $detail
+}
 $packageStatus = "UNVERIFIED"; $packageDetail = "No exact-source verified packaged candidate was supplied."
 if (-not [string]::IsNullOrWhiteSpace($QualificationCandidatePath)) {
     try {

@@ -341,3 +341,7 @@ The Stable-readiness verifier does not mutate `RtaimeProductVersion`, `RtaimeRel
 
 A valid release-evidence bundle is therefore necessary but not sufficient for Stable readiness. Missing approved support duration, supported platform evidence, known-issues PASS, physical qualification or production signing trust remains `UNVERIFIED` and cannot be inferred from managed CI.
 
+
+## Evidence-bound readiness index
+
+See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exact-source Required Gates correlation, the retained candidate evidence inventory, individual long-profile scopes and the NO-GO operational handoff. The workflow collects this report after the five required jobs; missing physical, production-trust and approved support evidence remains UNVERIFIED. Run `build/release/Test-ReleaseReadinessRegression.ps1` for stale/pending/cancelled evidence and no-false-Stable regressions.

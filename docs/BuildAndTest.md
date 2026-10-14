@@ -370,3 +370,7 @@ For an opt-in Windows x64 software run, use:
 The `24h` and `72h` profiles require their complete elapsed duration. Each invocation creates a unique evidence directory; manifests bind source/build, pinned SDK, workload hash, summary and TRX hashes. `-NoBuild` is for already-built outputs from the same source only.
 
 Physical reference renderer profiles `soak8h`, `soak24h` and `soak72h` reuse the existing approved-machine runner, with explicit total duration over both formats. See [Renderer Qualification](RendererQualificationAndSoakTesting.md#sustained-profile-duration-and-bounded-statistics) and [Timing/Soak Qualification](TimingReferenceLatencySoakQualification.md#bounded-sustained-load-evidence) for scope, metrics, resource budgets and unavailable-evidence status.
+
+## Evidence-bound readiness index
+
+See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exact-source Required Gates correlation, the retained candidate evidence inventory, individual long-profile scopes and the NO-GO operational handoff. The workflow collects this report after the five required jobs; missing physical, production-trust and approved support evidence remains UNVERIFIED. Run `build/release/Test-ReleaseReadinessRegression.ps1` for stale/pending/cancelled evidence and no-false-Stable regressions.
