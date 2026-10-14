@@ -17,11 +17,11 @@ Timeline state is represented in integral frame numbers. Timecode labels are der
 The viewport supports:
 
 - a visible time ruler;
-- an explicit Program playhead;
+- distinct pending, confirmed media and optional draft edit positions;
 - horizontal scrolling;
 - 1x through 32x horizontal zoom;
 - Fit;
-- bounded snapping to IN, OUT and cue frames;
+- optional prioritized snapping to cues, clip boundaries and the confirmed playhead;
 - current, duration and remaining timecode.
 
 Playback observation does not recreate timeline clips or cue objects on every refresh. Stable projections are rebuilt only when the loaded source, marker range or cue metadata changes.
@@ -160,3 +160,33 @@ The persistent lower workspace now hosts the governed Production Rundown beside 
 Rundown Media items reference persistent Media Library asset identity and a governed production source. Scene, graphics and audio-routing entries reuse their established production models. Reserved V2/A2/A3 lanes remain non-authoritative unless a real backing execution model exists; the Operator does not turn those rows into synthetic NLE tracks.
 
 Rundown selection is local presentation state. PREPARE, GO, NEXT, PREVIOUS and HOLD cross `rtaime.Client` into ControlHost and reuse Show Control execution primitives. Deterministic media auto-advance is based on confirmed Media Deck completion, never on a UI timer. See `docs/ProductionRundown.md`.
+
+## Draft cursor, snapping and reversible editing
+
+Existing frame stepping, IN/OUT commands, named cues, trim preview, stable selection, zoom, bounded seek coalescing and resource projections remain in place. The new controls extend these paths.
+
+### Magnetic snapping
+
+Frame quantization is always integral and uses the existing nearest-frame rounding. SNAP toggles optional magnetic targets. Within an eight-DIP pointer radius, capped at ten frames, the nearest candidate wins. Equal distances prefer cue, clip boundary, then confirmed media playhead; equal candidates of one kind prefer the lower frame. The visible feedback names the target kind and exact timecode. Candidate inspection is bounded to 4,096 entries.
+
+Alt-drag uses one tenth of the pointer displacement for precise seeking or trim preview. Snap can be turned off for single-frame precision. Coordinates remain device-independent; synthetic 100/125/150/200% mapping is tested. Physical mixed-DPI interaction remains UNVERIFIED until reference-platform execution.
+
+### Edit and confirmed positions
+
+EDIT toggles a local draft cursor. In this mode pointer movement and Left/Right change only the edit frame. Shift+Left/Right moves ten frames; Home/End uses the asset bounds. Escape or capture loss cancels the local drag. Playback can continue without adopting the edit cursor as a confirmed position.
+
+The yellow edit line is separate from the confirmed transport line and pending seek display. PREVIEW and PROGRAM labels require current routing evidence and a matching loaded source. Program position is shown only when the confirmed media transport also reports Program participation. An independent Program position that the current contract does not expose is explicitly unavailable.
+
+The diamond action places the edit cursor on a selected cue or clip start without seeking. The adjacent seek action explicitly seeks Preview to the draft cursor through the existing controller; it is disabled for stale/unavailable routing, another Preview source or Program participation. Marker and seek commands remain confirmed operations, with no implicit undo.
+
+J requests one Preview frame backwards, K retains the existing Pause command, and L requests normal-rate Preview playback. J/L are guarded to the confirmed Preview source and excluded while that source participates in Program. Reverse/shuttle speed is not exposed by the current contract. Text entry retains its typing behavior and TAKE shortcuts retain their existing guards.
+
+### Selection and authoring history
+
+Ctrl-click toggles item selection. Shift-click selects the contiguous range from the primary item in track/item order. Ctrl+A selects current timeline items; the clear action clears selection. These are presentation operations. Cue double-click and Page Up/Down retain the existing explicit transport paths.
+
+The ruler provides custom Undo/Redo, cursor-to-selection, explicit seek and clear buttons without changing the 44-pixel toolbar or 30-pixel ruler contract. Ctrl+Z/Ctrl+Y apply only when focus is inside the timeline and outside text entry.
+
+Undo/Redo retains at most 32 local cursor/resource-projection snapshots. A drag is one history entry. Local resource projections are capped at 256. Confirmed seek/trim/marker changes are never replayed or rolled back. Asset/source or marker/cue changes invalidate history and active gestures; a completed explicit seek clears history. Pointer capture loss cancels queued unsent seek intent; an in-flight or confirmed transport command is not rolled back.
+
+Rundown has its own authoring history described in [Production Rundown](ProductionRundown.md). The two scopes never consume each other's shortcuts. Existing cue creation/rename/deletion and transport execution are not authoring-history entries.

@@ -386,3 +386,11 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 ```
 
 The existing OperatorXamlStartupTests qualification also exercises the live themed numeric field and invalid-input Apply gate. Physical mixed-DPI interaction remains UNVERIFIED until reference-platform execution.
+
+## Timeline and cue ergonomics regressions
+
+```powershell
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~TimelineErgonomicsTests
+```
+
+The real OperatorXamlStartupTests qualification also checks the themed timeline's focused edit-cursor key, local undo and unchanged confirmed transport. Required source-bound visual, lifecycle, failure and packaged checks remain in place. Physical mixed-DPI behavior remains UNVERIFIED until reference-platform execution.

@@ -3,6 +3,7 @@
 using System.Text;
 using rtaime.Operator.Controls;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 
@@ -55,6 +56,11 @@ public sealed class OperatorKeyboardCommandRegistry
 		var key = args.Key == Key.System ? args.SystemKey : args.Key;
 		// Numeric Escape cancels the current field/gesture before the shell fullscreen command.
 		if (key == Key.Escape && Keyboard.FocusedElement is RtaimeNumericField) return false;
+		if (key == Key.Escape)
+		{
+			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
+				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
+		}
 		var modifiers = Keyboard.Modifiers;
 		var definition = _definitions.FirstOrDefault(item =>
 			item.Key == key &&
@@ -104,6 +110,8 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("media-search", "Focus Media Library search", Key.F, ModifierKeys.Control, focusMediaSearchCommand, true),
 			new("preview", "Set selected source to Preview", Key.P, ModifierKeys.Control, @operator.SetPreviewCommand),
 			new("play-pause", "Preview Play / Pause", Key.Space, ModifierKeys.None, PreviewTransport(mediaDeck.TogglePlayPauseCommand)),
+			new("j-step", "Preview back one frame (reverse shuttle unavailable)", Key.J, ModifierKeys.None, new ContextGuardCommand(timeline.StepBackwardCommand, () => previewTransportContext() && mediaDeck.ConfirmedSnapshot.Transport?.IsOnProgram != true)),
+			new("l-play", "Preview play at normal rate", Key.L, ModifierKeys.None, new ContextGuardCommand(mediaDeck.PlayCommand, () => previewTransportContext() && mediaDeck.ConfirmedSnapshot.Transport?.IsOnProgram != true)),
 			new("pause", "Preview Pause", Key.K, ModifierKeys.None, PreviewTransport(mediaDeck.PauseCommand)),
 			new("stop", "Preview Stop", Key.S, ModifierKeys.None, PreviewTransport(mediaDeck.StopCommand)),
 			new("set-in", "Set Preview IN", Key.I, ModifierKeys.None, PreviewTransport(mediaDeck.SetInCommand)),

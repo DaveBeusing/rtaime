@@ -136,3 +136,13 @@ The rundown does not provide blade editing, arbitrary clip movement, destructive
 Production Rundown and Production Macros are complementary bounded orchestration surfaces. A rundown expresses ordered show/planning progression and follow behavior; a Macro expresses one explicitly triggered reusable sequence of existing governed production actions.
 
 Neither surface embeds the other in the current contract. Rundown items cannot invoke Macros and Macro actions cannot invoke rundowns or nested Macros. This keeps execution bounded and prevents recursive orchestration. Both remain ControlHost-owned and reuse established Show Control/production command paths. See `docs/ProductionMacros.md`.
+
+## Reversible local authoring
+
+The existing add/remove/reorder and named rundown draft remain presentation data until an explicit SAVE. Custom UNDO DRAFT and REDO DRAFT controls retain at most 32 snapshots of the local name, item order/content and selection. Consecutive name keystrokes form one entry. Ctrl+Z/Ctrl+Y work only within rundown focus; text editors retain native text undo.
+
+Undo restores authoring data with DRAFT state. It never restores execution state, replays GO, rewinds Program or rolls back SAVE. PREPARE, GO, navigation, HOLD, recovery acknowledgement, SAVE and REFRESH all clear history before crossing the existing Client boundary. Applying an authoritative snapshot, including a changed storage/execution revision, also clears it. Execution and recovery disable authoring and history. Active rundown names cannot be changed locally.
+
+Adding items respects the existing 256-item contract bound before changing the local draft. Item identity and typed contracts remain unchanged. Existing follow/repeat scheduling and completion evidence are not reimplemented.
+
+The timeline has a separate local history scope; see [Layered Timeline](LayeredTimeline.md). Neither scope offers undo of a confirmed live operation.

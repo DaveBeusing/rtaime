@@ -287,6 +287,13 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		RaiseStateChanged();
 	}
 
+	// Cancels unsent intent only. Already-confirmed or in-flight transport is never rolled back.
+	public void CancelPointerSeek()
+	{
+		lock (_gate) { _isDragging = false; _previewFrame = null; _queuedFrame = null; }
+		RaiseStateChanged();
+	}
+
 	public void PreviewPointerSeek(long targetFrame)
 	{
 		ThrowIfDisposed();

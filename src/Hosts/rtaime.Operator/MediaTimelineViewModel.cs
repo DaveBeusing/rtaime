@@ -142,7 +142,7 @@ public sealed record TimelineSelection(
 	TimelineCueViewModel? Cue,
 	IReadOnlyList<TimelineTrackItemViewModel> Items);
 
-public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDisposable
+public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly MediaTimelineController _controller;
 	private readonly MediaTimelineMarkerController? _markers;
@@ -174,6 +174,8 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		_synchronizationContext = SynchronizationContext.Current;
 		_state = _controller.State;
 		_visibleRange = new MediaTimelineVisibleRange(0, 0);
+
+		InitializeAuthoringCommands();
 
 		Tracks =
 		[
@@ -319,6 +321,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	public void ApplyMediaDeckSnapshot(MediaDeckSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+		UpdateEditingEvidence(snapshot);
 		var hash = ProjectionHash(snapshot);
 		if (_projectionInitialized && hash == _projectionHash)
 			return;
@@ -443,6 +446,8 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			return true;
 		}
 
+		if (_resourceProjections.Count >= 256 && !_resourceProjections.Any(candidate => candidate.Key == item.Key && candidate.Category == category)) return false;
+		_draftHistory.Remember(CaptureDraft());
 		_resourceProjections.RemoveAll(candidate =>
 			string.Equals(candidate.Key, item.Key, StringComparison.Ordinal) &&
 			candidate.Category == category);
@@ -453,6 +458,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			item.ReferenceId,
 			item.State));
 		RebuildResourceTrack(category);
+		RaiseEditingState();
 
 		var track = Tracks.Single(candidate => candidate.Category == category);
 		var projectedItem = track.Items.LastOrDefault(candidate =>
@@ -465,7 +471,8 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	public void SelectItem(
 		TimelineTrackItemViewModel? item,
 		bool extendSelection = false,
-		bool toggleSelection = false)
+		bool toggleSelection = false,
+		bool rangeSelection = false)
 	{
 		if (item is null)
 		{
@@ -480,7 +487,18 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			return;
 		}
 
-		if (!extendSelection)
+		if (rangeSelection && _selectedItem is { } anchor)
+		{
+			var ordered = Tracks.SelectMany(track => track.Items).ToArray();
+			var first = Array.IndexOf(ordered, anchor); var last = Array.IndexOf(ordered, item);
+			if (first >= 0 && last >= 0)
+			{
+				ClearSelectedItems();
+				foreach (var selected in ordered.Skip(Math.Min(first, last)).Take(Math.Abs(first - last) + 1))
+				{ selected.IsSelected = true; SelectedItems.Add(selected); }
+			}
+		}
+		else if (!extendSelection)
 			ClearSelectedItems();
 
 		if (toggleSelection && item.IsSelected)
@@ -537,11 +555,11 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 
 	public void PreviewTrim(string trimKind, double logicalX, double logicalWidth)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0 || trimKind is not ("IN" or "OUT"))
+		if (!CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0 || trimKind is not ("IN" or "OUT"))
 			return;
 
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
-		frame = ApplySnap(frame);
+		frame = ApplySnap(frame, logicalWidth);
 		if (string.Equals(trimKind, "IN", StringComparison.Ordinal))
 			_previewInPointFrame = frame;
 		else
@@ -558,14 +576,20 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		RaiseTrimPreview();
 	}
 
-	public void BeginPointerSeek() => _controller.BeginPointerSeek();
+	public void BeginPointerSeek()
+	{
+		if (EditCursorMode) { _cursorGestureStart = CaptureDraft(); RaiseEditingState(); }
+		else _controller.BeginPointerSeek();
+	}
 
 	public void PreviewPointerSeek(double logicalX, double logicalWidth)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if ((!CanSeek && !EditCursorMode) || !IsLoaded || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return;
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
-		_controller.PreviewPointerSeek(ApplySnap(frame));
+		frame = ApplySnap(frame, logicalWidth);
+		if (EditCursorMode) SetEditCursor(frame, remember: false);
+		else _controller.PreviewPointerSeek(frame);
 	}
 
 	public ValueTask CompletePointerSeekAsync(
@@ -573,10 +597,19 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (!CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if ((!CanSeek && !EditCursorMode) || !IsLoaded || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.CompletedTask;
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
-		return _controller.CompletePointerSeekAsync(ApplySnap(frame), cancellationToken);
+		frame = ApplySnap(frame, logicalWidth);
+		if (EditCursorMode)
+		{
+			SetEditCursor(frame, remember: false);
+			if (_cursorGestureStart is { } before && before.Cursor != _editCursorFrame) _draftHistory.Remember(before);
+			_cursorGestureStart = null; RaiseEditingState();
+			return ValueTask.CompletedTask;
+		}
+		InvalidateDraftHistory();
+		return _controller.CompletePointerSeekAsync(frame, cancellationToken);
 	}
 
 	public ValueTask<bool> TrimInAsync(
@@ -584,10 +617,11 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
-		return _markers.SetInAtFrameAsync(ApplySnap(frame), cancellationToken);
+		InvalidateDraftHistory();
+		return _markers.SetInAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken);
 	}
 
 	public ValueTask<bool> TrimOutAsync(
@@ -595,10 +629,11 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		double logicalWidth,
 		CancellationToken cancellationToken = default)
 	{
-		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || !double.IsFinite(logicalX) || !double.IsFinite(logicalWidth) || logicalWidth <= 0)
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
-		return _markers.SetOutAtFrameAsync(ApplySnap(frame), cancellationToken);
+		InvalidateDraftHistory();
+		return _markers.SetOutAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken);
 	}
 
 	public async ValueTask DisposeAsync()
@@ -647,7 +682,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			return;
 
 		_zoom = normalized;
-		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, _zoom, DisplayFrame);
+		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, _zoom, EditCursorMode && HasEditCursor ? EditCursorFrame : DisplayFrame);
 		RaiseViewport();
 	}
 
@@ -671,10 +706,11 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	{
 		if (!IsLoaded || Zoom <= MediaTimelineGeometry.MinimumZoom || _visibleRange.FrameCount <= 0)
 			return;
-		if (DisplayFrame >= _visibleRange.StartFrame && DisplayFrame <= _visibleRange.EndFrame)
+		var focusFrame = EditCursorMode && HasEditCursor ? EditCursorFrame : DisplayFrame;
+		if (focusFrame >= _visibleRange.StartFrame && focusFrame <= _visibleRange.EndFrame)
 			return;
 
-		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, Zoom, DisplayFrame);
+		_visibleRange = MediaTimelineGeometry.CalculateVisibleRange(TotalFrames, Zoom, focusFrame);
 		RaiseViewport();
 	}
 
@@ -708,12 +744,18 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		track.RefreshVisibleItems(VisibleStartFrame, VisibleEndFrame);
 	}
 
-	private long ApplySnap(long frame)
+	private long ApplySnap(long frame, double logicalWidth = 0)
 	{
-		if (!SnapEnabled || _snapFrames.Count == 0 || VisibleFrameCount <= 0)
-			return frame;
-		var threshold = Math.Clamp(VisibleFrameCount / 100, 1, 10);
-		return MediaTimelineGeometry.SnapFrame(frame, _snapFrames, threshold);
+		var threshold = logicalWidth > 0 ? (long)Math.Ceiling(8d * (VisibleFrameCount - 1) / logicalWidth) : VisibleFrameCount / 100;
+		var targets = Cues.Select(cue => new TimelineSnapTarget(cue.Frame, TimelineSnapKind.Cue))
+			.Concat(Tracks.SelectMany(track => track.Items).SelectMany(item => new[] {
+				new TimelineSnapTarget(item.StartFrame, TimelineSnapKind.Clip),
+				new TimelineSnapTarget(item.StartFrame > long.MaxValue - item.DurationFrames + 1 ? long.MaxValue : item.StartFrame + item.DurationFrames - 1, TimelineSnapKind.Clip) }))
+			.Append(new TimelineSnapTarget(ConfirmedFrame, TimelineSnapKind.Playhead));
+		var result = TimelineSnapPolicy.SnapFrame(frame, targets, threshold, TotalFrames, SnapEnabled);
+		_snapFeedback = (SnapEnabled ? result.Kind.ToString().ToUpperInvariant() : "OFF · FRAME GRID") + " · " + FormatFrame(result.Frame);
+		OnPropertyChanged(nameof(SnapFeedback));
+		return result.Frame;
 	}
 
 	private void RefreshViewportProjection()
@@ -765,7 +807,8 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	private void RefreshState()
 	{
 		_state = _controller.State;
-		EnsurePlayheadVisible();
+		if (_cursorGestureStart is null) EnsurePlayheadVisible();
+		RaiseEditingState();
 		RaiseAll();
 	}
 
@@ -822,6 +865,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		OnPropertyChanged(nameof(SelectedCue));
 		OnPropertyChanged(nameof(SelectedItemCount));
 		OnPropertyChanged(nameof(HasMultipleItemSelection));
+		RaiseEditingState();
 		OnPropertyChanged(nameof(SelectionStatus));
 	}
 
