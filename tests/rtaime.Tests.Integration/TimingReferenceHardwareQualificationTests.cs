@@ -8,6 +8,7 @@ using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
+using rtaime.Runtime;
 
 namespace rtaime.Tests.Integration;
 
@@ -41,7 +42,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 			format,
 			new NullRecordingWriter());
 
-		var hostCycleSamples = new List<double>();
+		var hostCycleSamples = new BoundedSoakHistogram(.01, 10000);
 		var seenInitialReferenceLock = false;
 		var referenceLossObserved = false;
 		var referenceRelockObserved = false;
@@ -104,7 +105,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 					{
 						lastSubmittedCapture = latestA.CaptureSequence;
 						if (mediaIo.Statistics.OutputAccepted % 10UL == 0)
-							hostCycleSamples.Add(Stopwatch.GetElapsedTime(cycleStarted).TotalMilliseconds);
+							hostCycleSamples.Observe(Stopwatch.GetElapsedTime(cycleStarted).TotalMilliseconds);
 					}
 					else
 					{
@@ -155,8 +156,8 @@ public sealed class TimingReferenceHardwareQualificationTests
 
 		var expectedFrames = format.FrameRate.Numerator / (double)format.FrameRate.Denominator * soakSeconds;
 		var minimumContinuityFrames = checked((ulong)Math.Floor(expectedFrames * 0.85));
-		var hostCycleP95 = Percentile(hostCycleSamples, 0.95);
-		var hostCycleMaximum = hostCycleSamples.Count == 0 ? double.PositiveInfinity : hostCycleSamples.Max();
+		var hostCycleP95 = hostCycleSamples.PercentileUpperBound(.95) ?? double.PositiveInfinity;
+		var hostCycleMaximum = hostCycleSamples.Maximum ?? double.PositiveInfinity;
 		var continuityPassed = statistics.CapturedA >= minimumContinuityFrames &&
 			statistics.CapturedB >= minimumContinuityFrames &&
 			statistics.OutputAccepted >= minimumContinuityFrames &&
@@ -198,6 +199,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 			hostCycle = new
 			{
 				sampleCount = hostCycleSamples.Count,
+				histogram = hostCycleSamples.Summary(),
 				p95Milliseconds = hostCycleP95,
 				maximumMilliseconds = hostCycleMaximum,
 				maximumAllowedP95Milliseconds = maximumHostCycleP95Milliseconds

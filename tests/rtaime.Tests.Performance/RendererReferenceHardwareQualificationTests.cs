@@ -379,10 +379,15 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         timingCollector.Reset();
         pipeline.ResetPipelineSamples();
-        var durations = new List<double>();
-        var cpuUtilization = new List<double>();
-        var gpuUtilization = new List<double>();
-        var vramUsedMiB = new List<double>();
+        var durations = new BoundedSoakHistogram(.01, 100000 / 10);
+        ulong deadlineViolations = 0;
+        var cpuUtilization = new BoundedSoakHistogram(.1, 1000);
+        var gpuUtilization = new BoundedSoakHistogram(.1, 1000);
+        var vramUsedMiB = new BoundedSoakHistogram(1, 65536);
+        var processMemoryMiB = new BoundedSoakHistogram(1, 65536);
+        var processHandles = new BoundedSoakHistogram(1, 65536);
+        var resources = new BoundedSoakResourceTrend();
+        using var process = Process.GetCurrentProcess();
         var expectedSequence = runtime.Snapshot.NextSequenceNumber;
         ulong sequenceDiscontinuities = 0;
         ulong duplicateSequenceFrames = 0;
@@ -423,7 +428,8 @@ public sealed class RendererReferenceHardwareQualificationTests
                 using (var boundary = runtime.ProcessNextBoundary())
                 {
                     var elapsedMilliseconds = Stopwatch.GetElapsedTime(boundaryStarted).TotalMilliseconds;
-                    durations.Add(elapsedMilliseconds);
+                    durations.Observe(elapsedMilliseconds);
+                    if (elapsedMilliseconds > frameBudgetMilliseconds) deadlineViolations++;
                     pipeline.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, boundary.SequenceNumber, opportunity.StartLateness);
                     var completedAt = Stopwatch.GetElapsedTime(startedAt);
                     pipeline.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, boundary.SequenceNumber,
@@ -505,9 +511,13 @@ public sealed class RendererReferenceHardwareQualificationTests
                 if (boundaryIndex % 30 == 0)
                 {
                     var performance = runtime.Snapshot.Performance;
-                    if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Add(cpu);
-                    if (performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Add(gpu);
-                    if (performance.GpuVramUsedBytes is { } vram) vramUsedMiB.Add(vram / 1024.0 / 1024.0);
+                    if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Observe(cpu);
+                    if (performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Observe(gpu);
+                    if (performance.GpuVramUsedBytes is { } vram) vramUsedMiB.Observe(vram / 1024.0 / 1024.0);
+                    process.Refresh();
+                    processMemoryMiB.Observe(process.PrivateMemorySize64 / 1024.0 / 1024.0);
+                    processHandles.Observe(process.HandleCount);
+                    resources.Observe(Stopwatch.GetElapsedTime(startedAt), process.PrivateMemorySize64, process.HandleCount);
                 }
 
 
@@ -557,8 +567,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         if (finalTransfers.MonitoringResources.TotalExports == 0)
             throw new InvalidOperationException("Renderer qualification did not export CUDA/D3D11 monitoring resources.");
 
-        durations.Sort();
-        var deadlineViolations = checked((ulong)durations.Count(value => value > frameBudgetMilliseconds));
+
         var gpuTiming = BuildGpuTiming(timingCollector.Snapshot());
         var runtimeDroppedFrames = finalSnapshot.Performance.DroppedFrames;
         var deviceFaultObservations = runtime.RecentObservations(V1RuntimeHostService.RetainedObservationCapacity)
@@ -582,10 +591,11 @@ public sealed class RendererReferenceHardwareQualificationTests
             frameBudgetMilliseconds,
             cpuBoundary = new
             {
-                p50Milliseconds = Percentile(durations, 0.50),
-                p95Milliseconds = Percentile(durations, 0.95),
-                p99Milliseconds = Percentile(durations, 0.99),
-                maximumMilliseconds = durations[^1],
+                p50Milliseconds = durations.PercentileUpperBound(.50),
+                p95Milliseconds = durations.PercentileUpperBound(.95),
+                p99Milliseconds = durations.PercentileUpperBound(.99),
+                maximumMilliseconds = durations.Maximum,
+                histogram = durations.Summary(),
                 deadlineViolations
             },
             gpuTimings = gpuTiming,
@@ -597,9 +607,15 @@ public sealed class RendererReferenceHardwareQualificationTests
                 }).ToArray(),
             telemetry = new
             {
-                cpuUtilizationPercent = Percentiles(cpuUtilization),
-                gpuUtilizationPercent = Percentiles(gpuUtilization),
-                vramUsedMiB = Percentiles(vramUsedMiB)
+                cpuUtilizationPercent = cpuUtilization.Summary(),
+                gpuUtilizationPercent = gpuUtilization.Summary(),
+                vramUsedMiB = vramUsedMiB.Summary(),
+                processPrivateMiB = processMemoryMiB.Summary(),
+                processHandles = processHandles.Summary(),
+                resourceWindows = resources.Snapshot(),
+                resourcePlateau = resources.Assess(512 * 1024.0 * 1024.0, 128),
+                maximumPrivateGrowthBytes = 512 * 1024L * 1024L,
+                maximumHandleGrowth = 128
             },
             continuity = new
             {
