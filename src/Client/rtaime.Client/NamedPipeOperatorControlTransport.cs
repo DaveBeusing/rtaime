@@ -1175,12 +1175,14 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			{
 				string oldHost;
 				string currentHost;
+				bool hostReplaced;
 				lock (_gate)
 				{
 					oldHost = _previousHostInstanceId ?? previous ?? "unknown";
 					currentHost = _hostInstanceId ?? serverHello.HostInstanceId;
+					hostReplaced = _previousHostInstanceId is not null;
 				}
-				if (_previousHostInstanceId is not null)
+				if (hostReplaced)
 					throw new RemoteHostSessionChangedException(oldHost, currentHost);
 				throw new InvalidOperationException("Operator must synchronize a full authoritative snapshot after ControlHost transport loss before issuing another command.");
 			}
