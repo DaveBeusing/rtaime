@@ -374,3 +374,7 @@ Physical reference renderer profiles `soak8h`, `soak24h` and `soak72h` reuse the
 ## Evidence-bound readiness index
 
 See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exact-source Required Gates correlation, the retained candidate evidence inventory, individual long-profile scopes and the NO-GO operational handoff. The workflow collects this report after the five required jobs; missing physical, production-trust and approved support evidence remains UNVERIFIED. Run `build/release/Test-ReleaseReadinessRegression.ps1` for stale/pending/cancelled evidence and no-false-Stable regressions.
+
+## Dock workspace qualification
+
+Run `dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~OperatorDockLayoutTests` after the canonical Release build. The existing real-STA `OperatorXamlStartupTests` also exercises shared panel identity, tabs, owned windows, focus, compact layout and main-window teardown. Retain physical mixed-DPI hot-unplug qualification separately; hosted geometry tests do not substitute for it.

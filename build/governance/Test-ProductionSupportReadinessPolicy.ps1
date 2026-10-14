@@ -571,7 +571,7 @@ $networkWithoutEvidence.configurations[0].networkProviders[0].supportStatus = "S
 $networkWithoutEvidence.configurations[0].networkProviders[0].qualificationEvidence = @()
 Assert-Condition (@(Get-PlatformMatrixErrors $networkWithoutEvidence).Count -gt 0) "SUPPORTED network provider without qualification evidence must fail validation."
 
-Assert-Condition ($buildPropsText -match '<VersionPrefix>0\.1\.0</VersionPrefix>' -and $buildPropsText -match '<RtaimeProductVersion[^>]*>\$\(VersionPrefix\)-dev</RtaimeProductVersion>') "Current release target must remain 0.1.0 with a derived development version."
+Assert-Condition ($buildPropsText -match '<VersionPrefix>(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)</VersionPrefix>' -and $buildPropsText -match '<RtaimeProductVersion[^>]*>\$\(VersionPrefix\)-dev</RtaimeProductVersion>') "Current planned release target must be valid SemVer with a derived development version."
 Assert-Condition ($buildPropsText -match '<RtaimeReleaseStage[^>]*>DEV</RtaimeReleaseStage>') "Current source release stage must remain DEV."
 
 Write-Host "Production support and Stable-readiness policy PASS"

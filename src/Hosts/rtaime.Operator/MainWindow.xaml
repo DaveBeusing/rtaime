@@ -152,7 +152,7 @@
 			</Grid>
 		</Border>
 
-		<Grid Grid.Row="1" ClipToBounds="True">
+		<Grid x:Name="LegacyWorkspaceGrid" Grid.Row="1" ClipToBounds="True">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="*" />
 				<RowDefinition Height="{Binding Shell.LowerRowHeight, ElementName=RootWindow, Mode=TwoWay}" MinHeight="0" />
@@ -167,6 +167,7 @@
 				<ColumnDefinition Width="{Binding Shell.RightColumnWidth, ElementName=RootWindow, Mode=TwoWay}" MinWidth="0" />
 			</Grid.ColumnDefinitions>
 
+			<Grid x:Name="DockWorkspaceHost" Grid.RowSpan="2" Grid.Column="2" Grid.ColumnSpan="5" Panel.ZIndex="10" Visibility="Collapsed" />
 			<Border x:Name="WorkspaceNavigation" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource OperatorNavigationRail}" Padding="0" ClipToBounds="True">
 				<DockPanel LastChildFill="False">
 					<StackPanel DockPanel.Dock="Top">
@@ -1206,7 +1207,12 @@
 								<controls:RtaimeButton Grid.Column="2" Content="{Binding Shell.CenterModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
 								<controls:RtaimeButton Grid.Column="4" Content="RESET LAYOUT" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Restore the 1920x1080 mockup reference dimensions." />
 							</Grid>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Global Readiness" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GlobalReadinessLabel}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<controls:RtaimeButton Content="BUILT-IN / DOCKING LAYOUT"
+                                Command="{Binding Docking.ToggleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                IsCompact="True" Margin="0,0,0,8"
+                                ToolTip="Ctrl+Shift+D toggles docking. Drag panel tabs to group them; FLOAT detaches an existing panel."
+                                AutomationProperties.Name="Toggle optional dock workspace" />
+                            <DockPanel Margin="0,0,0,6"><TextBlock Text="Global Readiness" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GlobalReadinessLabel}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Performance Verification" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding PerformanceVerificationState}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<TextBlock Text="{Binding GlobalReadinessSummary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>

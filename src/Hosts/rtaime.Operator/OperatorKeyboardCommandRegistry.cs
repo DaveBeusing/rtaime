@@ -77,7 +77,8 @@ public sealed class OperatorKeyboardCommandRegistry
 		MediaTimelineViewModel timeline,
 		OperatorShellViewModel shell,
 		ShowControlViewModel showControl,
-		ICommand focusMediaSearchCommand)
+		ICommand focusMediaSearchCommand,
+		OperatorDockController? docking = null)
 	{
 		ArgumentNullException.ThrowIfNull(@operator);
 		ArgumentNullException.ThrowIfNull(mediaDeck);
@@ -116,9 +117,26 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("exit-fullscreen", "Exit fullscreen", Key.Escape, ModifierKeys.None, shell.ExitFullscreenCommand, true),
 			new("preview-view", "Maximize Preview viewer", Key.D1, ModifierKeys.Control, shell.MaximizePreviewCommand, true),
 			new("program-view", "Maximize Program viewer", Key.D2, ModifierKeys.Control, shell.MaximizeProgramCommand, true),
-			new("dual-view", "Restore dual viewer", Key.D0, ModifierKeys.Control, shell.RestoreViewersCommand, true)
+			new("dual-view", "Restore dual viewer", Key.D0, ModifierKeys.Control, shell.RestoreViewersCommand, true),
+            .. DockShortcuts(docking, shell)
 		]);
 	}
+
+    private static IEnumerable<OperatorShortcutDefinition> DockShortcuts(OperatorDockController? docking, OperatorShellViewModel shell)
+    {
+        if (docking is null) return [];
+        return [
+            new("dock-toggle", "Built-in / docking layout", Key.D, ModifierKeys.Control | ModifierKeys.Shift, docking.ToggleCommand, true),
+            new("dock-float", "Float focused panel", Key.W, ModifierKeys.Control | ModifierKeys.Shift, docking.FloatCommand, true),
+            new("dock-focus", "Focus / restore panel layout", Key.F, ModifierKeys.Control | ModifierKeys.Shift, docking.FocusCommand, true),
+            new("dock-next", "Next dock panel", Key.N, ModifierKeys.Control | ModifierKeys.Shift, docking.NextCommand, true),
+            new("dock-left", "Dock focused panel left", Key.Left, ModifierKeys.Control | ModifierKeys.Alt, docking.LeftCommand, true),
+            new("dock-center", "Dock focused panel center", Key.Up, ModifierKeys.Control | ModifierKeys.Alt, docking.CenterCommand, true),
+            new("dock-right", "Dock focused panel right", Key.Right, ModifierKeys.Control | ModifierKeys.Alt, docking.RightCommand, true),
+            new("dock-bottom", "Dock focused panel below", Key.Down, ModifierKeys.Control | ModifierKeys.Alt, docking.BottomCommand, true),
+            new("dock-reset", "Reset workspace layout", Key.R, ModifierKeys.Control | ModifierKeys.Shift, shell.ResetLayoutCommand, true)
+        ];
+    }
 
 	public static IReadOnlyList<string> FindConflicts(IEnumerable<OperatorShortcutDefinition> definitions)
 	{

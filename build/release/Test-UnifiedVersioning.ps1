@@ -31,6 +31,12 @@ foreach ($file in @('Reserve-PrereleaseVersion.ps1', 'Resolve-ReleaseIdentity.ps
     Copy-Item (Join-Path $PSScriptRoot $file) (Join-Path $source "build/release/$file")
 }
 Copy-Item (Join-Path $root 'Directory.Build.props') (Join-Path $source 'Directory.Build.props')
+# The reservation fixture uses its own declared target, independent of the product's current planned version.
+[xml]$fixtureProps = Get-Content -LiteralPath (Join-Path $source 'Directory.Build.props') -Raw
+$declaredPrefix = $fixtureProps.SelectSingleNode('//VersionPrefix')
+Assert ($null -ne $declaredPrefix -and $declaredPrefix.InnerText -match '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') 'The current planned release target must be valid SemVer.'
+$declaredPrefix.InnerText = '0.1.0'
+$fixtureProps.Save((Join-Path $source 'Directory.Build.props'))
 [IO.File]::WriteAllText((Join-Path $source '.gitignore'), "artifacts/`n")
 Invoke-TestGit $source @('add', '.') | Out-Null
 Invoke-TestGit $source @('commit', '-m', 'Define release target') | Out-Null

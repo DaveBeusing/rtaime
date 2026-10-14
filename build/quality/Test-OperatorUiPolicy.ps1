@@ -330,7 +330,8 @@ foreach ($binding in $readOnlyGaugeBindings) {
 }
 
 $topBarStart = $window.IndexOf('x:Name="TopBar"', [StringComparison]::Ordinal)
-$bodyStart = $window.IndexOf('<Grid Grid.Row="1" ClipToBounds="True">', [StringComparison]::Ordinal)
+$bodyMatch = [Regex]::Match($window, '<Grid\s+x:Name="LegacyWorkspaceGrid"\s+Grid.Row="1"\s+ClipToBounds="True">')
+$bodyStart = if ($bodyMatch.Success) { $bodyMatch.Index } else { -1 }
 $navigationStart = $window.IndexOf('x:Name="WorkspaceNavigation"', [StringComparison]::Ordinal)
 $leftRegionStart = $window.IndexOf('x:Name="LeftToolRegion"', [StringComparison]::Ordinal)
 Assert-Condition ($topBarStart -ge 0 -and $bodyStart -gt $topBarStart) "Operator top bar must precede the production body."
