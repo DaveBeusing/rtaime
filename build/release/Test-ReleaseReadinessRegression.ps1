@@ -77,6 +77,10 @@ try {
     $artifactFixture.artifacts[0].workflow_run.head_sha = $head; $artifactFixture.artifacts[0].expired = $true
     Write-Json $artifactFixture $artifactCatalogPath
     Expect-Rejected { & (Join-Path $PSScriptRoot "Select-MixedLoadArtifact.ps1") -CatalogPath $artifactCatalogPath -RunId 1 -MaximumRunAttempt 2 -ExpectedSourceCommit $head } "expired artifact"
+    $artifactFixture.artifacts[0].expired = $false
+    $artifactFixture.artifacts = @($artifactFixture.artifacts) + @($artifactFixture.artifacts[0])
+    Write-Json $artifactFixture $artifactCatalogPath
+    Expect-Rejected { & (Join-Path $PSScriptRoot "Select-MixedLoadArtifact.ps1") -CatalogPath $artifactCatalogPath -RunId 1 -MaximumRunAttempt 2 -ExpectedSourceCommit $head } "duplicate latest artifact"
     $indexPath = Join-Path $temp "readiness.json"
     $r = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -OutputPath $indexPath
     Require ($r.decision -eq "NO-GO" -and $r.overallStatus -eq "UNVERIFIED" -and $r.releasePromotionPerformed -eq $false) "Five software gates cannot grant Stable readiness."

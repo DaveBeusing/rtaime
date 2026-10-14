@@ -651,7 +651,7 @@ jobs:
           $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts"
           $artifacts = @(); $page = 1
           do {
-            $response = Invoke-RestMethod -Uri "$api\?per_page=100&page=$page" -Headers $headers
+            $response = Invoke-RestMethod -Uri "$($api)?per_page=100&page=$page" -Headers $headers
             $artifacts += @($response.artifacts); $page++
           } while (@($response.artifacts).Count -eq 100)
           $catalogPath = "artifacts/readiness/workflow-artifacts.json"
