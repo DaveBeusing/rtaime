@@ -1180,7 +1180,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 					oldHost = _previousHostInstanceId ?? previous ?? "unknown";
 					currentHost = _hostInstanceId ?? serverHello.HostInstanceId;
 				}
-				throw new RemoteHostSessionChangedException(oldHost, currentHost);
+				if (_previousHostInstanceId is not null)
+					throw new RemoteHostSessionChangedException(oldHost, currentHost);
+				throw new InvalidOperationException("Operator must synchronize a full authoritative snapshot after ControlHost transport loss before issuing another command.");
 			}
 
 			var requestId = Identity.New().ToString();
@@ -2146,7 +2148,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 	private void MarkDisconnected()
 	{
-		lock (_gate) _connected = false;
+		lock (_gate)
+		{
+			_connected = false;
+			// A request may have committed even when its response never arrived.
+			// Reconnect observes authority; it never retries the unconfirmed command.
+			_requiresFullSnapshot = true;
+		}
 	}
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
