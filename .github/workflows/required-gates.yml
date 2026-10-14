@@ -54,6 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Dock workspace model and restore regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests" --logger "console;verbosity=detailed"
+
       - name: Release readiness correlation regressions
         shell: pwsh
         run: ./build/release/Test-ReleaseReadinessRegression.ps1
