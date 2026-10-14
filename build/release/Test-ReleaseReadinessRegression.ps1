@@ -94,6 +94,23 @@ try {
     Require (-not (Test-PassedQualificationEvidence $platformPath)) "Stale platform PASS accepted."
     Write-Json @{ status = "UNVERIFIED"; sourceCommit = $head } $platformPath
     Require (-not (Test-PassedQualificationEvidence $platformPath)) "Unverified platform accepted."
+    $rendererAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root "build/qualification/Test-RendererReferenceQualification.ps1"), [ref]$tokens, [ref]$errors)
+    Require (@($errors).Count -eq 0) "Renderer verifier parse errors."
+    $identityFunction = $rendererAst.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq "Assert-RendererEvidenceIdentity" }, $true)
+    . ([scriptblock]::Create($identityFunction.Extent.Text))
+    $workloadHash = (Get-FileHash -LiteralPath (Join-Path $root "qualification/renderer/renderer-qualification.json") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestFixture = @{ repository = "DaveBeusing/rtaime"; profileSha256 = $workloadHash; capturedAtUtc = $started
+        gpu = @{ ordinal = 0; pciBusId = "00000000:01:00.0"; totalMemoryMiB = 16384 }
+        operatingSystem = @{ architecture = "X64"; version = "10.0"; buildNumber = "synthetic" }
+        dotnet = @{ processArchitecture = "X64" }; workflow = @{ runId = "local"; runAttempt = "local"; runnerName = "synthetic" } } | ConvertTo-Json -Depth 32 | ConvertFrom-Json
+    $executionFixture = @{ deviceOrdinal = 0; capturedAtUtc = $completed }
+    Assert-RendererEvidenceIdentity $manifestFixture $executionFixture $workloadHash
+    $manifestFixture.profileSha256 = "0" * 64
+    Expect-Rejected { Assert-RendererEvidenceIdentity $manifestFixture $executionFixture $workloadHash } "renderer workload mismatch"
+    $manifestFixture.profileSha256 = $workloadHash; $manifestFixture.gpu.ordinal = 1
+    Expect-Rejected { Assert-RendererEvidenceIdentity $manifestFixture $executionFixture $workloadHash } "renderer device mismatch"
+    $manifestFixture.gpu.ordinal = 0; $manifestFixture.workflow.runAttempt = "2"
+    Expect-Rejected { Assert-RendererEvidenceIdentity $manifestFixture $executionFixture $workloadHash } "mixed local/remote renderer identity"
     Require ((Get-FileHash -LiteralPath $props -Algorithm SHA256).Hash -eq $before) "Readiness changed the product release identity."
     Write-Host "Release readiness correlation and no-false-Stable regressions PASS. Synthetic fixtures are not release or hardware evidence."
 } finally {
