@@ -116,14 +116,14 @@ if (-not [string]::IsNullOrWhiteSpace($RendererRunsPath)) {
             if ($profile -notin @("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h") -or $rendererResults.ContainsKey($profile)) {
                 throw "Unknown or duplicate renderer profile."
             }
-            $args = @{ ExpectedSourceCommit = $ExpectedSourceCommit; ExpectedProfile = $profile }
+            $rendererArgs = @{ ExpectedSourceCommit = $ExpectedSourceCommit; ExpectedProfile = $profile }
             foreach ($key in @("EvidencePath", "ManifestPath", "SoftwareEvidencePath", "BaselineComparisonPath")) {
                 $path = [string]$run.$key
                 if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path (Split-Path -Parent $catalogFile) $path }
-                $args[$key] = Retain-Input $path "renderer-$key"
+                $rendererArgs[$key] = Retain-Input $path "renderer-$key"
             }
             & (Join-Path $root "build/qualification/Test-RendererReferenceQualification.ps1") @args
-            $rendererResults[$profile] = @{ status = "PASS"; source = $args.ManifestPath; details = "Verified physical renderer workload. Long profile duration is total across both formats; no external Media I/O/A/V synchronization claim." }
+            $rendererResults[$profile] = @{ status = "PASS"; source = $rendererArgs.ManifestPath; details = "Verified physical renderer workload. Long profile duration is total across both formats; no external Media I/O/A/V synchronization claim." }
         }
     } catch { Add-Result "rendererInputVerification" "FAIL" $RendererRunsPath $_.Exception.Message }
 }

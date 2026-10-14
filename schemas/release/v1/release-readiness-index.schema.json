@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rtaime.dev/schemas/release/v1/release-readiness-index.schema.json",
+  "$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "title": "rtaime Evidence-Bound Release Readiness Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "copyright",
+    "schemaVersion",
+    "repository",
+    "generatedAtUtc",
+    "sourceCommit",
+    "product",
+    "overallStatus",
+    "decision",
+    "releasePromotionPerformed",
+    "evidenceInputs",
+    "domains",
+    "blockers",
+    "operationalHandoff"
+  ],
+  "properties": {
+    "copyright": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "repository": {
+      "const": "DaveBeusing/rtaime"
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "product": {
+      "$ref": "../../support/v1/stable-readiness.schema.json#/properties/product"
+    },
+    "overallStatus": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "GO",
+        "NO-GO"
+      ]
+    },
+    "releasePromotionPerformed": {
+      "const": false
+    },
+    "evidenceInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "domains": {
+      "$ref": "../../support/v1/stable-readiness.schema.json#/properties/domains"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "operationalHandoff": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "overallStatus": {
+            "const": "PASS"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "const": "GO"
+          },
+          "blockers": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "decision": {
+            "const": "NO-GO"
+          },
+          "blockers": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
