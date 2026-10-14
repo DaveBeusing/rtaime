@@ -551,7 +551,7 @@ public partial class MainWindow : Window
 	}
 	private async void OnMediaLibraryFocus(object sender, KeyboardFocusChangedEventArgs e)
 	{
-		if (sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })
+		if (e.NewFocus is FrameworkElement { DataContext: MediaPoolItemViewModel item })
 			await MediaPool.BeginHoverAsync(item);
 	}
 	private void OnMediaLibraryLeave(object sender, MouseEventArgs e) => MediaPool.CancelHover();

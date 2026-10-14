@@ -1034,6 +1034,11 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		CancelHover();
 		preferredSelectionKey ??= SelectedItem?.Key;
 		var bin = CurrentBin();
+		if (_selectedSmartBin is { } saved && saved with { Name = bin.Name } != bin)
+		{
+			_selectedSmartBin = null;
+			OnPropertyChanged(nameof(SelectedSmartBin));
+		}
 
 		var filtered = _allItems
 			.Where(item => MediaSmartBinPolicy.Matches(item, bin))
@@ -1044,6 +1049,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			.ToArray();
 
 		FilteredItems.ReplaceWith(filtered);
+		var keys = filtered.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+		if (SelectedItems.Any(item => !keys.Contains(item.Key)))
+			UpdateSelection(SelectedItems.Where(item => keys.Contains(item.Key)).ToArray());
 
 		var preferred = preferredSelectionKey is null
 			? null

@@ -375,7 +375,7 @@
 								VirtualizingPanel.IsVirtualizing="True"
 								VirtualizingPanel.VirtualizationMode="Recycling"
 								ScrollViewer.CanContentScroll="True"
-								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus"
+								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
 								AutomationProperties.Name="Media Library grid">
 								<controls:RtaimeListBox.Style>
 									<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">
@@ -455,7 +455,7 @@
 								VirtualizingPanel.IsVirtualizing="True"
 								VirtualizingPanel.VirtualizationMode="Recycling"
 								ScrollViewer.CanContentScroll="True"
-								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus"
+								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
 								AutomationProperties.Name="Media Library list">
 								<controls:RtaimeListBox.Style>
 									<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">

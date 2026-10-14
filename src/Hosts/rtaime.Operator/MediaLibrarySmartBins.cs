@@ -47,9 +47,10 @@ public static class MediaSmartBinPolicy
 			_ => true
 		})) return false;
 		var query = bin.Search.Trim();
-		return query.Length == 0 || new[] { item.Name, item.Detail, item.Format, item.State, item.ReferenceId, item.LocalPath }
-			.Any(value => value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true);
+		return query.Length == 0 || Contains(item.Name, query) || Contains(item.Detail, query) ||
+			Contains(item.Format, query) || Contains(item.State, query) || Contains(item.ReferenceId, query) || Contains(item.LocalPath, query);
 	}
+	private static bool Contains(string? text, string query) => text?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 }
 
 // Local presentation preferences; never contains catalogue records or production state.
