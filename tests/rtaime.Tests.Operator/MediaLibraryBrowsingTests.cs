@@ -173,7 +173,7 @@ public sealed class MediaLibraryBrowsingTests
 		using var pool = new MediaPoolInspectorViewModel(owner, deck);
 		var source = new OperatorSourceTileViewModel(new OperatorSourceDescriptor("source-monitor", "Camera"));
 		owner.Sources.Add(source);
-		var item = Assert.Single(pool.FilteredItems.Where(i => i.Kind == MediaPoolItemKind.Source));
+		var item = Assert.Single(pool.FilteredItems, i => i.Kind == MediaPoolItemKind.Source);
 		var resets = 0;
 		pool.FilteredItems.CollectionChanged += (_, _) => resets++;
 		var hover = pool.BeginHoverAsync(item);
@@ -195,33 +195,50 @@ public sealed class MediaLibraryBrowsingTests
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
-		if (owner.Shell.IsLeftCollapsed) owner.Shell.ToggleLeftPanelCommand.Execute(null);
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var combo = Assert.IsType<RtaimeComboBox>(owner.FindName("MediaSmartBins"));
-		Assert.True(combo.IsVisible); Assert.True(combo.Focus());
-		Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
 		var grid = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetGrid"));
 		var list = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetList"));
+		// Hosted displays can constrain the main window to compact mode, where the shell
+		// deliberately allocates no left column. Host the actual Library subtree visibly
+		// within the same Window; preserve its bindings, commands, resources and handlers.
+		var library = Assert.IsType<Grid>(Assert.IsType<Grid>(grid.Parent).Parent);
+		var parent = Assert.IsAssignableFrom<Panel>(library.Parent);
+		var root = Assert.IsType<Grid>(owner.Content);
+		var originalIndex = parent.Children.IndexOf(library);
+		var width = library.Width; var height = library.Height;
+		var horizontal = library.HorizontalAlignment; var vertical = library.VerticalAlignment;
+		var span = Grid.GetRowSpan(library); var z = Panel.GetZIndex(library);
 		var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
 		var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;
 		var items = Enumerable.Range(0, 4096).Select(index => Item(index, key: "clip:" + index)).ToArray();
-		owner.MediaPool.FilteredItems.ReplaceWith(items);
+		parent.Children.Remove(library);
+		library.Width = 400; library.Height = 640;
+		library.HorizontalAlignment = HorizontalAlignment.Left; library.VerticalAlignment = VerticalAlignment.Top;
+		Grid.SetRowSpan(library, 3); Panel.SetZIndex(library, 100);
+		root.Children.Add(library);
 		try
 		{
+			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+			Assert.True(combo.IsVisible); Assert.True(combo.ActualWidth > 0); Assert.True(combo.Focus());
+			Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
+			owner.MediaPool.FilteredItems.ReplaceWith(items);
 			foreach (var browser in new[] { grid, list })
 			{
 				if (browser == grid) owner.MediaPool.GridViewCommand.Execute(null);
 				else owner.MediaPool.ListViewCommand.Execute(null);
 				await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 				Assert.True(browser.IsVisible);
+				Assert.True(browser.ActualWidth > 0 && browser.ActualHeight > 100);
 				foreach (var index in new[] { 2048, 4095, 0, 4095 })
 				{
 					browser.ScrollIntoView(items[index]);
 					await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+					var wrap = Descendants(browser).OfType<VirtualizingWrapPanel>().FirstOrDefault();
+					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}.");
 					Assert.NotNull(browser.ItemContainerGenerator.ContainerFromIndex(index));
 					Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
 				}
-				Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));
 			}
@@ -230,9 +247,17 @@ public sealed class MediaLibraryBrowsingTests
 			owner.MediaPool.CancelHover();
 			Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
 			Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
-			Console.WriteLine("MEDIA LIBRARY PASS: real custom controls, accessible keyboard focus, 4096-item grid/list recycling and unchanged production identities.");
+			Console.WriteLine("MEDIA LIBRARY PASS: actual Library subtree in bounded visible host, accessible custom-control focus, 4096-item grid/list recycling and unchanged production identities.");
 		}
-		finally { owner.MediaPool.Refresh(); owner.MediaPool.GridViewCommand.Execute(null); }
+		finally
+		{
+			root.Children.Remove(library);
+			library.Width = width; library.Height = height;
+			library.HorizontalAlignment = horizontal; library.VerticalAlignment = vertical;
+			Grid.SetRowSpan(library, span); Panel.SetZIndex(library, z);
+			parent.Children.Insert(originalIndex, library);
+			owner.MediaPool.Refresh(); owner.MediaPool.GridViewCommand.Execute(null);
+		}
 	}
 	private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
 	{
