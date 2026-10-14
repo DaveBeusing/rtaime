@@ -1,0 +1,62 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-staged-mixed-load",
+  "lane": "MANAGED_STAGED_SINGLE_TESTHOST",
+  "formats": [
+    "1080p50",
+    "1080p59.94"
+  ],
+  "layerCounts": [
+    0,
+    1,
+    2,
+    4,
+    8
+  ],
+  "latencyScope": "V1_SERVICE_WITH_SIMULATED_CONSUMER_BACKENDS_AND_GOVERNED_AI_OBSERVATION",
+  "profiles": [
+    {
+      "name": "smoke",
+      "minimumElapsedSeconds": 0,
+      "minimumCycles": 2
+    },
+    {
+      "name": "8h",
+      "minimumElapsedSeconds": 28800,
+      "minimumCycles": 4
+    },
+    {
+      "name": "24h",
+      "minimumElapsedSeconds": 86400,
+      "minimumCycles": 4
+    },
+    {
+      "name": "72h",
+      "minimumElapsedSeconds": 259200,
+      "minimumCycles": 4
+    }
+  ],
+  "resourcePolicy": {
+    "windowHours": 1,
+    "capacity": 96,
+    "minimumCompletedPostWarmupWindows": 3,
+    "maximumPrivateGrowthBytes": 536870912,
+    "maximumHandleGrowth": 128
+  },
+  "faultSchedule": {
+    "everyCycles": 10,
+    "firstCycle": true
+  },
+  "stages": [
+    "MIXED_CONSUMERS_BOTH_FORMATS",
+    "DECODED_PLAYBACK",
+    "CUES_AND_SCENE_TEMPLATES",
+    "AUTHORITATIVE_AUDIO",
+    "CONTROLLED_HOST_FAULTS"
+  ],
+  "physicalGpu": "UNVERIFIED",
+  "nativeNetworkTransport": "UNVERIFIED",
+  "physicalAvSynchronization": "UNVERIFIED",
+  "continuousSingleProduction": "UNVERIFIED"
+}
