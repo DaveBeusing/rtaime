@@ -238,8 +238,10 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 				if (child is null)
 					continue;
 
-				if (newlyRealized)
-				InsertInternalChild(Math.Min(childIndex, InternalChildren.Count), child);
+				// Recycled containers can be returned with newlyRealized=false even though
+				// cleanup detached them from this panel. They must rejoin the visual tree.
+				if (newlyRealized || !InternalChildren.Contains(child))
+					InsertInternalChild(Math.Min(childIndex, InternalChildren.Count), child);
 
 				generator.PrepareItemContainer(child);
 				child.Measure(new Size(itemWidth, itemHeight));
