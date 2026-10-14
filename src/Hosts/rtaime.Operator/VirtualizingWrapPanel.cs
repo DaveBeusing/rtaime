@@ -281,6 +281,7 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	{
 		// WPF connects an items-host panel to its generator on first access to
 		// InternalChildren. Reading the generator alone cannot initialize it.
+		if (ItemsControl.GetItemsOwner(this) is null) return null;
 		_ = InternalChildren;
 		return ItemContainerGenerator;
 	}
