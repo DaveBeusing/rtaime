@@ -63,6 +63,13 @@ public sealed record MediaPoolItemViewModel(
 	public string AvailabilityLabel => State.Contains("MISSING", StringComparison.OrdinalIgnoreCase)
 		? "MISSING"
 		: IsOnline ? "ONLINE" : "OFFLINE";
+	public string ReadinessLabel => !IsOnline ? AvailabilityLabel : IsReady ? "ONLINE · READY" : "ONLINE · NOT READY";
+	public string PreviewCapabilityLabel => MediaLibraryHoverPreview.Capability(this) switch
+	{
+		MediaHoverCapability.Offline => "Offline: hover preview unavailable.",
+		MediaHoverCapability.ExistingThumbnail => "Existing monitoring thumbnail only; independent scrubbing unsupported.",
+		_ => "No independent thumbnail or scrub capability is available."
+	};
 	public bool CanRevealInExplorer => Kind == MediaPoolItemKind.Clip && !string.IsNullOrWhiteSpace(LocalPath);
 }
 

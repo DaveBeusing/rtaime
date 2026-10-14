@@ -462,6 +462,7 @@ public partial class MainWindow : Window
 	{
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
+		_ = MediaPool.LoadSmartBinsAsync();
 		_ = MediaPool.LoadCatalogAsync();
 		_ = NdiSources.RefreshAsync();
 		_ = Rundown.RefreshAsync();
@@ -490,6 +491,8 @@ public partial class MainWindow : Window
 				CaptureWindowPlacement();
 			Docking.Dispose();
 			await Shell.SaveAsync();
+			MediaPool.CancelHover();
+			await MediaPool.FlushSmartBinsAsync();
 			Shell.PropertyChanged -= OnShellPropertyChanged;
 			Startup.PropertyChanged -= OnStartupPropertyChanged;
 			WorkspaceStates.Dispose();
@@ -541,6 +544,32 @@ public partial class MainWindow : Window
 		}
 	}
 
+	private async void OnMediaLibraryHover(object sender, MouseEventArgs e)
+	{
+		if (e.LeftButton == MouseButtonState.Released && sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })
+			await MediaPool.BeginHoverAsync(item);
+	}
+	private async void OnMediaLibraryFocus(object sender, KeyboardFocusChangedEventArgs e)
+	{
+		if (sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })
+			await MediaPool.BeginHoverAsync(item);
+	}
+	private void OnMediaLibraryLeave(object sender, MouseEventArgs e) => MediaPool.CancelHover();
+	private void OnMediaLibraryItemLeave(object sender, MouseEventArgs e) => MediaPool.CancelHover();
+	private void OnMediaLibraryLostFocus(object sender, KeyboardFocusChangedEventArgs e) => MediaPool.CancelHover();
+	private void OnMediaLibraryContextOpening(object sender, ContextMenuEventArgs e)
+	{
+		MediaPool.CancelHover();
+		if (sender is not FrameworkElement { ContextMenu: { } menu }) return;
+		foreach (var entry in menu.Items.OfType<Controls.RtaimeMenuItem>())
+		{
+			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer";
+			entry.IsEnabled = readOnly || !MediaPool.HasMultipleSelection;
+			entry.ToolTip = !readOnly && MediaPool.HasMultipleSelection
+				? "Select one asset for this action. No partial bulk mutation is performed." : null;
+		}
+	}
+
 	private void OnMediaPoolPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
 		_mediaPoolDragStart = e.GetPosition(this);
 
@@ -549,6 +578,7 @@ public partial class MainWindow : Window
 		if (e.LeftButton != MouseButtonState.Pressed)
 			return;
 
+		MediaPool.CancelHover();
 		var position = e.GetPosition(this);
 		if (Math.Abs(position.X - _mediaPoolDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
 			Math.Abs(position.Y - _mediaPoolDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
@@ -582,6 +612,7 @@ public partial class MainWindow : Window
 
 	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
 	{
+		MediaPool.CancelHover();
 		if (sender is not ListBox listBox || e.NewValue is not true)
 			return;
 
@@ -684,6 +715,7 @@ public partial class MainWindow : Window
 
 	private async void OnMediaPoolPreviewActionClick(object sender, RoutedEventArgs e)
 	{
+		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item is not null && MediaPool.CanDropToPreview(item))
 			await MediaPool.DropToPreviewAsync(item);
@@ -692,6 +724,7 @@ public partial class MainWindow : Window
 
 	private void OnMediaPoolTimelineActionClick(object sender, RoutedEventArgs e)
 	{
+		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
 		var target = item?.Kind switch
 		{
@@ -714,6 +747,7 @@ public partial class MainWindow : Window
 
 	private void OnMediaPoolCueActionClick(object sender, RoutedEventArgs e)
 	{
+		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item?.Kind == MediaPoolItemKind.Clip &&
 			string.Equals(item.ReferenceId, MediaDeck.AssetId, StringComparison.Ordinal) &&
@@ -727,6 +761,7 @@ public partial class MainWindow : Window
 
 	private async void OnMediaPoolRelinkActionClick(object sender, RoutedEventArgs e)
 	{
+		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item?.Kind == MediaPoolItemKind.Clip)
 		{
@@ -739,6 +774,7 @@ public partial class MainWindow : Window
 
 	private async void OnMediaPoolRemoveActionClick(object sender, RoutedEventArgs e)
 	{
+		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item?.Kind == MediaPoolItemKind.Clip)
 			await MediaPool.RemoveAssetAsync(item);

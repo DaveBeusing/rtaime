@@ -6,6 +6,9 @@ using System.Windows.Media;
 
 namespace rtaime.Operator;
 
+public sealed record MediaDurationChoice(MediaDurationFilter Value, string Label);
+public sealed record MediaReadinessChoice(MediaReadinessFilter Value, string Label);
+
 public sealed partial class MediaPoolInspectorViewModel
 {
 	private readonly MediaLibraryHoverPreview _hoverPreview = new();
@@ -23,8 +26,13 @@ public sealed partial class MediaPoolInspectorViewModel
 	private bool _restoringBin;
 	private Task _binSave = Task.CompletedTask;
 	public ObservableCollection<MediaSmartBin> SmartBins { get; } = [];
-	public IReadOnlyList<MediaDurationFilter> DurationFilters { get; } = Enum.GetValues<MediaDurationFilter>();
-	public IReadOnlyList<MediaReadinessFilter> ReadinessFilters { get; } = Enum.GetValues<MediaReadinessFilter>();
+	public IReadOnlyList<MediaDurationChoice> DurationChoices { get; } =
+		[new(MediaDurationFilter.Any, "Any duration"), new(MediaDurationFilter.UnderOneMinute, "Under 1 minute"),
+		 new(MediaDurationFilter.OneToTenMinutes, "1–10 minutes"), new(MediaDurationFilter.TenMinutesOrLonger, "10+ minutes"),
+		 new(MediaDurationFilter.Unknown, "Unknown duration")];
+	public IReadOnlyList<MediaReadinessChoice> ReadinessChoices { get; } =
+		[new(MediaReadinessFilter.Any, "Any readiness"), new(MediaReadinessFilter.Ready, "Ready"),
+		 new(MediaReadinessFilter.NotReady, "Not ready")];
 	public ICommand SaveSmartBinCommand { get; private set; } = null!;
 	public ICommand DeleteSmartBinCommand { get; private set; } = null!;
 	public ICommand ClearLibrarySelectionCommand { get; private set; } = null!;
