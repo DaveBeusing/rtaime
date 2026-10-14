@@ -1131,6 +1131,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(_requestTimeout);
 		await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous);
+		var confirmedResponse = false;
 		try
 		{
 			using var connect = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
@@ -1195,10 +1196,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			var response = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
 			if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal) || !string.Equals(response.CorrelationId, correlationId, StringComparison.Ordinal))
 				throw new InvalidDataException("ControlHost response correlation is invalid.");
-			EnsureNotError(response);
 			var responsePrevious = MarkConnected(response.HostInstanceId);
 			if (responsePrevious is not null)
 				throw new InvalidDataException("ControlHost process identity changed within one IPC request.");
+			// A correlated reply from the same authority has a known outcome,
+			// including an explicit command rejection. Only ambiguous loss fences recovery.
+			confirmedResponse = true;
+			EnsureNotError(response);
 			return response;
 		}
 		catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
@@ -1210,7 +1214,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		}
 		catch
 		{
-			MarkDisconnected();
+			MarkDisconnected(requireFullSnapshot: !confirmedResponse);
 			throw;
 		}
 	}
@@ -2148,14 +2152,14 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		}
 	}
 
-	private void MarkDisconnected()
+	private void MarkDisconnected(bool requireFullSnapshot = true)
 	{
 		lock (_gate)
 		{
 			_connected = false;
 			// A request may have committed even when its response never arrived.
 			// Reconnect observes authority; it never retries the unconfirmed command.
-			_requiresFullSnapshot = true;
+			_requiresFullSnapshot |= requireFullSnapshot;
 		}
 	}
 

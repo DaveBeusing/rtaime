@@ -197,7 +197,7 @@ AI effect failure is kept separate from core production authority. When an enabl
 
 ## Ambiguous command response loss
 
-A TAKE may commit before its reply reaches Operator. Named Pipe transport therefore marks full synchronization required after any failed exchange, even when the next handshake identifies the same ControlHost. Until `control.snapshot.get` completes, requests other than the full snapshot are refused before dispatch. A changed HostInstanceId retains the existing explicit session-change exception; same-host transport loss reports the required synchronization.
+A TAKE may commit before its reply reaches Operator. Named Pipe transport therefore marks full synchronization required after a transport failure or invalid/unconfirmed response, even when the next handshake identifies the same ControlHost. Until `control.snapshot.get` completes, requests other than the full snapshot are refused before dispatch. An explicit correlated rejection from the same host has a known outcome and does not itself require this transport-loss fence. A changed HostInstanceId retains the existing explicit session-change exception; same-host transport loss reports the required synchronization.
 
 Recovery does not resend the unconfirmed command or infer its outcome from the old UI snapshot. Observe confirmed routing/revision first, then issue a new explicit operator action only if still wanted. An explicitly repeated old command cannot advance authority a second time because its expected revision is fenced. This does not claim a durable exactly-once command receipt across ControlHost replacement.
 
