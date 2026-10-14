@@ -172,6 +172,36 @@ public sealed class ProcessSupervisionRecoveryTests
 		}
 	}
 
+	[Theory]
+	[InlineData("RuntimeHost", "rtaime.RuntimeHost")]
+	[InlineData("AIHost", "rtaime.AIHost")]
+	public async Task Repeated_owned_process_cycles_leave_no_child_or_endpoint_lease(string host, string assemblyName)
+	{
+		var endpoint = Endpoint("owned-cycle");
+		var assembly = HostAssembly(assemblyName);
+		for (var cycle = 0; cycle < 3; cycle++)
+		{
+			var supervisor = Supervisor(host, endpoint, assembly);
+			int? pid = null;
+			await using (supervisor)
+			{
+				await supervisor.StartAsync();
+				await WaitUntilAsync(() => supervisor.Snapshot is
+					{ State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null },
+					ProcessRecoveryTimeoutMilliseconds);
+				pid = supervisor.Snapshot.OwnedProcessId;
+				Assert.True(ProcessIsAlive(pid!.Value));
+				Assert.True(LocalEndpointLease.IsHeld(endpoint));
+				Assert.True(LocalEndpointReadinessLease.IsHeld(endpoint));
+			}
+			Assert.Equal(LocalProcessSupervisionState.Stopped, supervisor.Snapshot.State);
+			Assert.Null(supervisor.Snapshot.OwnedProcessId);
+			if (pid is { } id) Assert.False(ProcessIsAlive(id));
+			Assert.False(LocalEndpointLease.IsHeld(endpoint));
+			Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
+		}
+	}
+
 	[Fact]
 	public async Task Supervisor_adopts_existing_endpoint_without_owning_or_terminating_external_process()
 	{

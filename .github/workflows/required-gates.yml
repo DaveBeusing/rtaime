@@ -54,6 +54,12 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Lifecycle GPU fault qualification
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuBackendResourceSemanticsTests" --logger "console;verbosity=detailed"
+
+      - name: Lifecycle IPC fault and resource baseline qualification
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlTransportFaultQualificationTests|FullyQualifiedName~HostIpcSessionLifecycleIntegrationTests|FullyQualifiedName~OperatorMonitoringPlaneTests" --logger "console;verbosity=detailed"
+
       - name: Consumer timing and shutdown regression qualification
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReplayCaptureIsolationTests|FullyQualifiedName~NetworkOutputFoundationTests|FullyQualifiedName~RecordingFoundationTests" --logger "console;verbosity=detailed"
 

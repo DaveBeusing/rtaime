@@ -343,3 +343,15 @@ dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --con
 ```
 
 Required Gates runs these scopes before wider qualification, retains source-bound mixed-consumer timing/ownership reports and still executes the full solution and packaged lifecycle, including unchanged legacy 1.0 checkpoint qualification. The evidence environment is scoped to the targeted mixed-consumer step so isolated release fixtures do not inherit an unrelated source identity. Native transport/GPU/output and long-soak claims require reference hardware evidence.
+
+
+## Lifecycle fault qualification
+
+After the canonical Release build, targeted GPU lifecycle/resource tests and IPC fault/resource-baseline tests run before wider CI qualification:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuBackendResourceSemanticsTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlTransportFaultQualificationTests|FullyQualifiedName~HostIpcSessionLifecycleIntegrationTests|FullyQualifiedName~OperatorMonitoringPlaneTests"
+```
+
+The existing binding/recovery step also runs actual child-process crash/restart, repeated owned-process shutdown, durable show recovery and old 1.0 checkpoint regressions. All five Required Gates remain mandatory on the exact PR head, including the authoritative packaged release/lifecycle path. The [lifecycle fault matrix](ProcessRecoveryAndSupervision.md#lifecycle-fault-qualification-matrix) distinguishes software counters and fault injection from unavailable physical GPU/driver/soak evidence.

@@ -193,3 +193,29 @@ The startup overlay is used only until the first qualified authoritative synchro
 AI effect failure is kept separate from core production authority. When an enabled governed AI effect reports `UNAVAILABLE`, `TIMEOUT` or `FAILED` while core Control/Runtime evidence remains valid, the engine presentation is `DEGRADED` but Program safety remains valid or cautionary according to the core evidence. The UI does not claim that AI loss is a Program failure.
 
 `FAILED` is reserved for explicit recovery-exhaustion evidence. The Operator does not infer terminal failure merely from missing metrics or from an arbitrary local retry count.
+
+
+## Ambiguous command response loss
+
+A TAKE may commit before its reply reaches Operator. Named Pipe transport therefore marks full synchronization required after a transport failure or invalid/unconfirmed response, even when the next handshake identifies the same ControlHost. Until `control.snapshot.get` completes, requests other than the full snapshot are refused before dispatch. An explicit correlated rejection from the same host has a known outcome and does not itself require this transport-loss fence. A changed HostInstanceId retains the existing explicit session-change exception; same-host transport loss reports the required synchronization.
+
+Recovery does not resend the unconfirmed command or infer its outcome from the old UI snapshot. Observe confirmed routing/revision first, then issue a new explicit operator action only if still wanted. An explicitly repeated old command cannot advance authority a second time because its expected revision is fenced. This does not claim a durable exactly-once command receipt across ControlHost replacement.
+
+## Lifecycle fault qualification matrix
+
+| Fault or transition | Existing/new evidence | Required baseline or fencing |
+| --- | --- | --- |
+| AppHost startup/adoption/deadline/shutdown | `ProcessSupervisionRecoveryTests.AppHost_*`, `StartupEvidenceCaptureTests`, packaged managed lifecycle | correlated pre-shutdown evidence; no fabricated child crash; owned children stopped |
+| RuntimeHost crash/replacement | `Killed_RuntimeHost_is_restarted_and_Control_reapplies_same_authority_revision` | new process identity; same Production revision; Runtime reapply |
+| AIHost crash/replacement | `Killed_AIHost_is_restarted_with_a_new_process_identity` | bounded supervisor restart; no production authority transfer |
+| ControlHost crash/durable show recovery | `Killed_ControlHost_restores_durable_authority_while_Runtime_continues_and_stale_client_fails_closed`, `ControlHostRecoveryIntegrationTests`, legacy checkpoint qualification | same durable authority; independent Runtime continuity; stale session/refused revision |
+| TAKE request lost before dispatch or reply lost after commit | `ControlTransportFaultQualificationTests` (two fault positions, real Control/Runtime IPC behind a framed relay) | snapshot mandatory on same host; no automatic TAKE replay; duplicate old command cannot recommit |
+| Monitoring disconnect/replacement | `OperatorMonitoringPlaneTests`, `RuntimeConsumerIsolationTests` | bounded shared owners and queues; Program authority unaffected |
+| Rapid all-host startup/stop | `HostIpcSessionLifecycleIntegrationTests.Rapid_all_host_cycles_*` | five cycles per 1080p50/1080p59.94; reused listeners; zero active IPC sessions, GPU surfaces and AI reservations after completed drain |
+| Owned child startup/stop | `ProcessSupervisionRecoveryTests.Repeated_owned_process_cycles_*` | three cycles each RuntimeHost/AIHost; recorded PID dead; endpoint and readiness leases released |
+| GPU start, operation, recovery and disposal faults | `GpuLifecycleRecoveryTests`, `GpuBackendResourceSemanticsTests` | original exceptions retained; Failed/Degraded explicit; tracked ownership retryable; no false Ready/Stopped |
+| Recording/replay/network shutdown | `RuntimeConsumerIsolationTests`, `ReplayCaptureIsolationTests`, recording/network foundation tests | all shutdown callers join drain; zero active readback leases; independent cleanup attempted |
+
+Host/IPC faults use Windows Named Pipes and real managed host composition or actual child executables. GPU faults use a managed backend facade classified as CUDA to verify lifecycle policy; they are **not** physical device-loss tests. Mixed-consumer 1080p profiles and the renderer CUT/DISSOLVE 0/1/2/4/8-layer matrix remain covered by their existing suites rather than repeated for faults where layer count is irrelevant.
+
+Physical CUDA/device removal, driver/TDR recovery, professional I/O continuity, arbitrary OS handle-count baselines and long-duration soak remain **UNVERIFIED** without exact-source approved reference-platform evidence. Explicit owned PID, endpoint, IPC-session, surface, shared-resource and readback counters are the software resource evidence; process exit is not presented as graceful drain after a crash.

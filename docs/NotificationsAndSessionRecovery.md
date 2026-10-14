@@ -133,3 +133,8 @@ Unit coverage validates:
 - safe-state persistence containing only the workspace selection
 
 The safety contract is intentionally narrow: restoring presentation must never imply restoring production execution.
+
+
+## Lost command confirmation
+
+After a Control transport failure, the client requires a full authoritative snapshot before another command, including reconnection to the same ControlHost. A lost TAKE reply does not prove TAKE failed: it may already be committed. Operator recovery observes the authoritative result through the existing snapshot refresh and notification flow; it does not replay TAKE, restore an on-air command from session storage, or clear the production workspace. See [Process Recovery & Supervision](ProcessRecoveryAndSupervision.md#ambiguous-command-response-loss) for fault evidence and recovery steps.

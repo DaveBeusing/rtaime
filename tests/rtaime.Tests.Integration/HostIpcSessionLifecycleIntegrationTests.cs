@@ -329,6 +329,97 @@ public sealed class HostIpcSessionLifecycleIntegrationTests
 		}
 	}
 
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Rapid_all_host_cycles_reuse_listeners_and_return_sessions_and_resources_to_baseline(bool fractional)
+	{
+		if (!OperatingSystem.IsWindows()) return;
+		var runtimeEndpoint = Endpoint("rapid-runtime");
+		var controlEndpoint = Endpoint("rapid-control");
+		var aiEndpoint = Endpoint("rapid-ai");
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-lifecycle-cycles", Guid.NewGuid().ToString("N"));
+		try
+		{
+			for (var cycle = 0; cycle < 5; cycle++)
+			{
+				using var runtimeStop = new CancellationTokenSource();
+				using var controlStop = new CancellationTokenSource();
+				using var aiStop = new CancellationTokenSource();
+				var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with
+				{
+					ListenEndpoint = runtimeEndpoint,
+					AIEndpoint = aiEndpoint,
+					Format = fractional ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8
+				});
+				var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+				{
+					ListenEndpoint = controlEndpoint,
+					RuntimeEndpoint = runtimeEndpoint,
+					DurabilityRoot = root,
+					RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+				});
+				var ai = new AIHostProcess(AIHostProcessOptions.Default with { ListenEndpoint = aiEndpoint });
+				var aiRun = ai.RunAsync(aiStop.Token);
+				var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+				var controlRun = control.RunAsync(controlStop.Token);
+				try
+				{
+					await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready &&
+						runtime.MonitoringServer?.Running == true && ai.IpcServer?.Running == true,
+						TimeSpan.FromSeconds(10));
+					await using var controlSession = await OpenSessionAsync(controlEndpoint, "OperatorClient",
+						new Dictionary<string, string> { ["control"] = ControlContractVersion.Current.ToString() });
+					await using var runtimeSession = await OpenSessionAsync(runtimeEndpoint, "ControlHost",
+						new Dictionary<string, string>
+						{
+							["runtime"] = RuntimeContractVersion.Current.ToString(),
+							["provider"] = ProviderContractVersion.Current.ToString()
+						});
+					await using var aiSession = await OpenSessionAsync(aiEndpoint, "ControlHost",
+						new Dictionary<string, string>
+						{
+							["ai"] = AIContractVersion.Current.ToString(),
+							["media"] = MediaContractVersion.Current.ToString()
+						});
+					await using var monitor = new NamedPipeClientStream(".", runtimeEndpoint + ".monitor",
+						PipeDirection.In, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+					await monitor.ConnectAsync(3000);
+					await WaitUntilAsync(() => runtime.MonitoringServer!.Sessions.ActiveSessions == 1 &&
+						control.IpcServer!.Sessions.ActiveSessions >= 1 && ai.IpcServer!.Sessions.ActiveSessions == 1);
+					// Disconnect read-only monitoring while Control remains authoritative.
+					var revision = control.Control!.State.Revision;
+					await monitor.DisposeAsync();
+					await WaitUntilAsync(() => runtime.MonitoringServer!.Sessions.ActiveSessions == 0);
+					Assert.Equal(revision, control.Control.State.Revision);
+				}
+				finally
+				{
+					controlStop.Cancel();
+					Assert.Equal(ControlHostExitCode.Success, await controlRun.WaitAsync(TimeSpan.FromSeconds(10)));
+					runtimeStop.Cancel();
+					aiStop.Cancel();
+					Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun.WaitAsync(TimeSpan.FromSeconds(10)));
+					Assert.Equal(AIHostExitCode.Success, await aiRun.WaitAsync(TimeSpan.FromSeconds(10)));
+				}
+				Assert.True(runtime.RuntimeDisposed);
+				Assert.True(ai.ServiceDisposed);
+				Assert.Equal(0, runtime.FinalRuntimeSnapshot!.ActiveGpuSurfaces);
+				Assert.Equal(0U, ai.FinalExecutionSnapshot!.ActiveRequests);
+				Assert.Equal(0UL, ai.FinalExecutionSnapshot.ReservedVramBytes);
+				Assert.Equal(0, control.IpcServer!.Sessions.ActiveSessions);
+				Assert.Equal(0, runtime.IpcServer!.Sessions.ActiveSessions);
+				Assert.Equal(0, runtime.MonitoringServer!.Sessions.ActiveSessions);
+				Assert.Equal(0, ai.IpcServer!.Sessions.ActiveSessions);
+				Assert.False(control.IpcServer.Sessions.DrainTimedOut);
+				Assert.False(runtime.IpcServer.Sessions.DrainTimedOut);
+				Assert.False(runtime.MonitoringServer.Sessions.DrainTimedOut);
+				Assert.False(ai.IpcServer.Sessions.DrainTimedOut);
+			}
+		}
+		finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+	}
+
 	private static async Task<NamedPipeClientStream> OpenSessionAsync(
 		string endpoint,
 		string role,
