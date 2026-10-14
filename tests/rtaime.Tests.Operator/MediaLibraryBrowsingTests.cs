@@ -184,6 +184,9 @@ public sealed class MediaLibraryBrowsingTests
 		var source = new OperatorSourceTileViewModel(new OperatorSourceDescriptor("source-monitor", "Camera"));
 		owner.Sources.Add(source);
 		var item = Assert.Single(pool.FilteredItems, i => i.Kind == MediaPoolItemKind.Source);
+		var hash = item.GetHashCode();
+		item.PropertyChanged += (_, _) => { };
+		Assert.Equal(hash, item.GetHashCode());
 		var resets = 0;
 		pool.FilteredItems.CollectionChanged += (_, _) => resets++;
 		var hover = pool.BeginHoverAsync(item);
@@ -192,6 +195,7 @@ public sealed class MediaLibraryBrowsingTests
 			var image = new DrawingImage(); image.Freeze();
 			source.ApplyThumbnail(image, "monitor " + index);
 			Assert.Same(image, item.Thumbnail);
+			Assert.Equal(hash, item.GetHashCode());
 			await Task.Delay(10);
 		}
 		await hover;

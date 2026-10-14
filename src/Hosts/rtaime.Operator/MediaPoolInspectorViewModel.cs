@@ -47,6 +47,9 @@ public sealed record MediaPoolItemViewModel(
 {
 	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
 	public event PropertyChangedEventHandler? PropertyChanged;
+	// WPF indexes item containers by item hash. Image replacement and binding
+	// subscriptions must not change that hash while the item is in the view.
+	public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Key);
 	internal void UpdateThumbnail(ImageSource? image)
 	{
 		if (ReferenceEquals(Thumbnail, image)) return;
