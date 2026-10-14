@@ -23,12 +23,13 @@ public sealed class OperatorDockController : IDisposable
     private readonly Dictionary<string, OperatorPanelWindow> _floating = new(StringComparer.Ordinal);
     private readonly List<ContentControl> _presenters = [];
     private bool _rebuilding, _disposed;
+    private bool _compact;
     private string _selected = "MONITORS";
     private string? _focus;
     private int _displayUpdate;
     public OperatorDockController(MainWindow owner, Grid legacy, Grid host, IReadOnlyDictionary<string, FrameworkElement> panels)
     {
-        _owner = owner; _legacy = legacy; _host = host;
+        _owner = owner; _legacy = legacy; _host = host; _compact = owner.Shell.IsCompactViewport;
         _panels = panels.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         _homes = _panels.ToDictionary(p => p.Key, p =>
         {
@@ -87,11 +88,14 @@ public sealed class OperatorDockController : IDisposable
     private void Loaded(object sender, RoutedEventArgs e) => Rebuild();
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace)) _focus = null;
         if (e.PropertyName == nameof(OperatorShellViewModel.Docking)) Rebuild();
     }
     private void Sized(object sender, SizeChangedEventArgs e)
     {
-        if (_owner.Shell.Docking.Enabled && Math.Abs(e.PreviousSize.Width - e.NewSize.Width) >= 1) Rebuild();
+        if (_compact == _owner.Shell.IsCompactViewport) return;
+        _compact = _owner.Shell.IsCompactViewport;
+        if (_owner.Shell.Docking.Enabled) Rebuild();
     }
     private void Next()
     {

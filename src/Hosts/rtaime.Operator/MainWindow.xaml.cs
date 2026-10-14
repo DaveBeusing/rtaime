@@ -94,13 +94,7 @@ public partial class MainWindow : Window
 		ShowControl = new ShowControlViewModel(client);
 		ProductionMacros = new ProductionMacroViewModel(client);
 		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(
-			viewModel,
-			MediaDeck,
-			Timeline,
-			Shell,
-			ShowControl,
-			new AsyncRelayCommand(FocusMediaSearchAsync));
+
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
@@ -132,6 +126,14 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
+        Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
+            new Dictionary<string, FrameworkElement>
+            {
+                ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
+                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
+            });
+        Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
+            new AsyncRelayCommand(FocusMediaSearchAsync), Docking);
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
@@ -186,13 +188,7 @@ public partial class MainWindow : Window
 		ShowControl = new ShowControlViewModel(client);
 		ProductionMacros = new ProductionMacroViewModel(client);
 		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(
-			viewModel,
-			MediaDeck,
-			Timeline,
-			Shell,
-			ShowControl,
-			new AsyncRelayCommand(FocusMediaSearchAsync));
+
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
@@ -224,6 +220,14 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
+        Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
+            new Dictionary<string, FrameworkElement>
+            {
+                ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
+                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
+            });
+        Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
+            new AsyncRelayCommand(FocusMediaSearchAsync), Docking);
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
 		Closing += OnClosingAsync;
@@ -250,6 +254,7 @@ public partial class MainWindow : Window
 	public ShowControlViewModel ShowControl { get; }
 	public ProductionMacroViewModel ProductionMacros { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
+	public OperatorDockController Docking { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
 	protected override void OnSourceInitialized(EventArgs e)
@@ -266,9 +271,11 @@ public partial class MainWindow : Window
 		base.OnPreviewKeyDown(e);
 	}
 
-	private void ApplyDarkWindowCaption()
+	private void ApplyDarkWindowCaption() => ApplyDarkWindowCaption(this);
+
+	internal static void ApplyDarkWindowCaption(Window window)
 	{
-		var handle = new WindowInteropHelper(this).Handle;
+		var handle = new WindowInteropHelper(window).Handle;
 		if (handle == IntPtr.Zero)
 			return;
 
@@ -479,6 +486,7 @@ public partial class MainWindow : Window
 		{
 			if (!_fullscreenApplied)
 				CaptureWindowPlacement();
+			Docking.Dispose();
 			await Shell.SaveAsync();
 			Shell.PropertyChanged -= OnShellPropertyChanged;
 			Startup.PropertyChanged -= OnStartupPropertyChanged;
