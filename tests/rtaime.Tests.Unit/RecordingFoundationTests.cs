@@ -244,6 +244,39 @@ public sealed class RecordingFoundationTests
         await recorder.StopAsync();
     }
 
+
+    [Fact]
+    public async Task Concurrent_dispose_joins_one_recording_drain_without_disposing_lifecycle_waiters()
+    {
+        var writer = new BlockingWriter();
+        var recorder = new ProgramRecorder(writer, capacity: 2);
+        Task? first = null;
+        Task? second = null;
+        try
+        {
+            Assert.True((await recorder.StartAsync(Request())).Succeeded);
+            Assert.True(recorder.TryEnqueue(Frame(0)).Accepted);
+            await writer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            first = recorder.DisposeAsync().AsTask();
+            second = recorder.DisposeAsync().AsTask();
+            Assert.False(first.IsCompleted);
+            Assert.False(second.IsCompleted);
+            writer.Release.TrySetResult();
+            await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(RecordingLifecycleState.Completed, recorder.Snapshot.State);
+            Assert.Equal(1UL, recorder.Snapshot.Statistics.Written);
+            Assert.Equal(0, recorder.Snapshot.Statistics.QueueDepth);
+            Assert.Throws<ObjectDisposedException>(() => recorder.TryEnqueue(Frame(1)));
+        }
+        finally
+        {
+            writer.Release.TrySetResult();
+            if (first is not null) await first.WaitAsync(TimeSpan.FromSeconds(5));
+            if (second is not null) await second.WaitAsync(TimeSpan.FromSeconds(5));
+            await recorder.DisposeAsync();
+        }
+    }
+
     private sealed class BlockingWriter : IProgramRecordingWriter
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

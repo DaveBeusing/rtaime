@@ -89,6 +89,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	private DateTimeOffset? _lastSuccessfulSendUtc;
 	private Failure? _failure;
 	private bool _disposed;
+	private Task? _disposeTask;
 
 	public SrtNetworkOutputSession(
 		NetworkOutputConfiguration configuration,
@@ -155,12 +156,12 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 					new Failure("network.output.stopped", "Network output session is stopping or stopped."));
 			}
 
-			if (sample.VideoTiming.Timebase != sample.AudioTiming.Timebase)
+			if (!sample.HasCompatibleRuntimeTiming(_configuration.VideoFormat, _configuration.AudioFormat))
 			{
 				_rejected++;
 				sample.Video.Dispose();
 				return NetworkOutputEnqueueResult.Rejected(
-					new Failure("network.output.av_timebase_mismatch", "Video and audio must use the same Runtime media timebase."));
+					new Failure("network.output.av_timebase_mismatch", "Video and audio must use a shared clock or the aligned Runtime frame/sample clocks."));
 			}
 
 			Failure? drop = null;
@@ -261,14 +262,20 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		}
 		finally
 		{
-			await ReleaseConnectionAsync().ConfigureAwait(false);
-			lock (_gate)
+			try
 			{
-				while (_queue.Count > 0)
-					_queue.Dequeue().Video.Dispose();
-				_connected = false;
-				if (_lifecycle != NetworkOutputLifecycleState.Faulted)
-					_lifecycle = NetworkOutputLifecycleState.Disabled;
+				await ReleaseConnectionAsync().ConfigureAwait(false);
+			}
+			finally
+			{
+				lock (_gate)
+				{
+					while (_queue.Count > 0)
+						_queue.Dequeue().Video.Dispose();
+					_connected = false;
+					if (_lifecycle != NetworkOutputLifecycleState.Faulted)
+						_lifecycle = NetworkOutputLifecycleState.Disabled;
+				}
 			}
 		}
 	}
@@ -378,28 +385,47 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	{
 		var encoder = Interlocked.Exchange(ref _encoder, null);
 		var transport = Interlocked.Exchange(ref _transport, null);
+		Exception? failure = null;
 		if (encoder is not null)
 		{
 			try { _ = await encoder.DrainAsync(CancellationToken.None).ConfigureAwait(false); }
 			catch { }
-			await encoder.DisposeAsync().ConfigureAwait(false);
+			try { await encoder.DisposeAsync().ConfigureAwait(false); }
+			catch (Exception exception) { failure = exception; }
 		}
 		if (transport is not null)
-			await transport.DisposeAsync().ConfigureAwait(false);
+		{
+			try { await transport.DisposeAsync().ConfigureAwait(false); }
+			catch (Exception exception) { failure ??= exception; }
+		}
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
 		lock (_gate)
 		{
-			if (_disposed) return;
+			if (_disposeTask is not null)
+				return new ValueTask(_disposeTask);
 			_disposed = true;
 			_lifecycle = NetworkOutputLifecycleState.Stopping;
+			return new ValueTask(_disposeTask = DisposeCoreAsync());
 		}
-		_shutdown.Cancel();
-		_queueSignal.Release();
-		try { await _worker.ConfigureAwait(false); } catch (OperationCanceledException) { }
-		_queueSignal.Dispose();
-		_shutdown.Dispose();
+	}
+
+	private async Task DisposeCoreAsync()
+	{
+		try
+		{
+			_shutdown.Cancel();
+			_queueSignal.Release();
+			try { await _worker.ConfigureAwait(false); } catch (OperationCanceledException) { }
+		}
+		finally
+		{
+			_queueSignal.Dispose();
+			_shutdown.Dispose();
+		}
 	}
 }

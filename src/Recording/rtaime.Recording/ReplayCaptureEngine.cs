@@ -5,6 +5,8 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Recording;
 
+public readonly record struct ReplayCaptureQueueStatistics(int QueueDepth, int MaximumQueueDepth, int QueueCapacity);
+
 /// <summary>
 /// Failure-isolated bounded Program replay encoder. The queue owns only a small, bounded set of
 /// retained Program payload leases while encoded history is stored as finalized MP4 segments.
@@ -30,6 +32,8 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	private Failure? _failure;
 	private bool _stopping;
 	private bool _disposed;
+	private Task? _disposeTask;
+	private int _maximumQueueDepth;
 	private ulong? _lastOfferedSequence;
 	private ulong _accepted;
 	private ulong _dropped;
@@ -61,6 +65,10 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 
 	public RollingReplaySegmentStore Store => _store;
 	public int QueueCapacity => _queueCapacity;
+	public ReplayCaptureQueueStatistics QueueStatistics
+	{
+		get { lock (_gate) return new(_queue.Count, _maximumQueueDepth, _queueCapacity); }
+	}
 	public IReadOnlyList<ReplayObservation> Observations => _observations.Snapshot();
 	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
@@ -121,6 +129,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 			}
 
 			_queue.Enqueue(new QueuedSample(programSinkId, video, audio, videoPayload, audioPayload));
+			_maximumQueueDepth = Math.Max(_maximumQueueDepth, _queue.Count);
 			_accepted++;
 			_signal.Release();
 			return ReplayEnqueueResult.AcceptedSample();
@@ -196,21 +205,29 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		Task worker;
 		lock (_gate)
 		{
-			if (_stopping || _state == ReplayCaptureState.Disabled)
-				return;
-			_stopping = true;
-			_state = ReplayCaptureState.Stopping;
+			if (!_stopping)
+			{
+				_stopping = true;
+				_state = ReplayCaptureState.Stopping;
+				_signal.Release();
+			}
 			worker = _worker;
-			_signal.Release();
 		}
 
 		await worker.WaitAsync(cancellationToken).ConfigureAwait(false);
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
-		if (_disposed)
-			return;
+		lock (_gate)
+		{
+			_disposed = true;
+			return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+		}
+	}
+
+	private async Task DisposeCoreAsync()
+	{
 		try
 		{
 			await StopAsync(CancellationToken.None).ConfigureAwait(false);
@@ -323,12 +340,21 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		var outputId = new RecordingOutputId(id.Value);
 		var writer = _writerFactory();
 		var fileName = $"replay-{id}.mp4";
-		writer.ConfigureTarget(_rootDirectory, fileName);
-		var request = new RecordingStartRequest(
-			RecordingContractVersion.Current,
-			RecordingSessionId.New(),
-			new RecordingOutputDescriptor(outputId, first.ProgramSinkId, $"Replay {id}"));
-		await writer.OpenAsync(request, CancellationToken.None).ConfigureAwait(false);
+		try
+		{
+			writer.ConfigureTarget(_rootDirectory, fileName);
+			var request = new RecordingStartRequest(
+				RecordingContractVersion.Current,
+				RecordingSessionId.New(),
+				new RecordingOutputDescriptor(outputId, first.ProgramSinkId, $"Replay {id}"));
+			await writer.OpenAsync(request, CancellationToken.None).ConfigureAwait(false);
+		}
+		catch
+		{
+			try { await writer.AbortAsync(CancellationToken.None).ConfigureAwait(false); }
+			catch { }
+			throw;
+		}
 
 		bool discontinuity;
 		lock (_gate)

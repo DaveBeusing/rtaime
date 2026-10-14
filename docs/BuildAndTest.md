@@ -332,3 +332,14 @@ The unit suite exercises bounded large MXF KLV/local-set inputs and SRT cancella
 Run `TimingQualificationTests`, `RuntimePerformanceStatusBarPerformanceTests`, `GpuCompositorPerformanceProfileTests`, `ProgramPipelineMeasurementBaselineTests` and `DeterministicRuntimeBoundaryTests` for bounded telemetry, diagnostic-contention behavior, warmed allocation overhead, both-format layer/load matrices and unchanged Program pixels/ownership. Required Gates runs the profile subset with detailed console output and preserves source-bound JSON measurements.
 
 For retained local software reports, set `RTAIME_PIPELINE_BASELINE_EVIDENCE` to an output directory, `RTAIME_SOURCE_COMMIT` and `RTAIME_BUILD_COMMIT` to the same exact built SHA, and `RTAIME_BASELINE_SDK` to the verified `10.0.401` SDK. Without an output destination the tests only print measurements. See [Renderer qualification](RendererQualificationAndSoakTesting.md#program-pipeline-measurement-baseline) for scope, warmup, bounded-window semantics and the physical evidence boundary.
+
+## Runtime consumer isolation regressions
+
+After the canonical Release build, run:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReplayCaptureIsolationTests|FullyQualifiedName~NetworkOutputFoundationTests|FullyQualifiedName~RecordingFoundationTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~RuntimeConsumerIsolationTests"
+```
+
+Required Gates runs these scopes before wider qualification, retains source-bound mixed-consumer timing/ownership reports and still executes the full solution and packaged lifecycle, including unchanged legacy 1.0 checkpoint qualification. The evidence environment is scoped to the targeted mixed-consumer step so isolated release fixtures do not inherit an unrelated source identity. Native transport/GPU/output and long-soak claims require reference hardware evidence.

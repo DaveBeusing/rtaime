@@ -279,6 +279,267 @@ public sealed class NetworkOutputFoundationTests
 		Assert.True(sample.VideoLease.IsDisposed);
 	}
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Runtime_frame_clock_and_audio_sample_clock_are_accepted_without_timestamp_rewriting(bool ndi, bool use5994)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        var configuration = ndi
+            ? new NetworkOutputConfiguration("clock-ndi", NetworkOutputProtocolFamily.Ndi, format,
+                AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("Clock evidence"))
+            : new NetworkOutputConfiguration("clock-srt", new Uri("srt://127.0.0.1:9000/live"),
+                NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller, format,
+                AudioFormat.Stereo48kFloat32, NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc,
+                12_000_000, 192_000, 120, 8, NetworkOutputLatencyMode.Normal);
+        await using INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(configuration, _ => new CapturingNdiSender())
+            : new SrtNetworkOutputSession(configuration, () => new BlockingTransport(Task.CompletedTask), () => new PassThroughEncoder());
+        var sequence = 11UL;
+        var window = rtaime.Media.AudioVideoTimingRelationship.GetSampleWindow(format.FrameRate, 48_000, sequence);
+        var lease = new TestLease(new byte[] { 1, 2, 3, 4 });
+        var sample = new NetworkOutputProgramSample(sequence,
+            new FrameTiming(sequence, (long)sequence, new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator)),
+            new AudioBufferTiming(window.SamplePosition, window.SampleCount, window.PresentationTimestamp, window.Timebase),
+            lease, new byte[checked((int)window.SampleCount * 8)]);
+        Assert.NotEqual(sample.VideoTiming.Timebase, sample.AudioTiming.Timebase);
+        Assert.True(session.TrySubmit(sample).Accepted);
+        await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 1, TimeSpan.FromSeconds(5));
+        Assert.Equal(window.PresentationTimestamp, sample.AudioTiming.PresentationTimestamp);
+        Assert.Equal(window.SampleCount, sample.AudioTiming.SampleCount);
+        Assert.Equal(0UL, session.Snapshot.Statistics.RejectedSamples);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Independent_clocks_reject_wrong_audio_window_and_return_each_lease_once(bool ndi, bool use5994)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        var configuration = ndi
+            ? new NetworkOutputConfiguration("invalid-ndi", NetworkOutputProtocolFamily.Ndi, format,
+                AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("Invalid clock"))
+            : new NetworkOutputConfiguration("invalid-srt", new Uri("srt://127.0.0.1:9000/live"),
+                NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller, format,
+                AudioFormat.Stereo48kFloat32, NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc,
+                12_000_000, 192_000, 120, 8, NetworkOutputLatencyMode.Normal);
+        await using INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(configuration, _ => new CapturingNdiSender())
+            : new SrtNetworkOutputSession(configuration, () => new BlockingTransport(Task.CompletedTask), () => new PassThroughEncoder());
+        var window = rtaime.Media.AudioVideoTimingRelationship.GetSampleWindow(format.FrameRate, 48_000, 11);
+        for (var fault = 0; fault < 4; fault++)
+        {
+            var lease = new TestLease(new byte[] { 1, 2, 3, 4 });
+            var sample = new NetworkOutputProgramSample(11,
+                new FrameTiming(11, fault == 3 ? 12 : 11, new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator)),
+                new AudioBufferTiming(window.SamplePosition + (fault == 0 ? 1UL : 0UL),
+                    window.SampleCount + (fault == 1 ? 1U : 0U),
+                    window.PresentationTimestamp + (fault == 2 ? 1 : 0), window.Timebase),
+                lease, new byte[checked((int)window.SampleCount * 8)]);
+            Assert.False(session.TrySubmit(sample).Accepted);
+            Assert.Equal(1, lease.DisposeCount);
+        }
+        Assert.Equal(4UL, session.Snapshot.Statistics.RejectedSamples);
+        Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Every_dispose_waits_for_native_cleanup(bool ndi)
+    {
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sender = new CleanupNdiSender(cleanupStarted, releaseCleanup);
+        var transport = new CleanupSrtTransport(cleanupStarted, releaseCleanup);
+        INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(NdiConfiguration("Cleanup"), _ => sender)
+            : new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live")),
+                () => transport, () => new PassThroughEncoder());
+        Task? first = null;
+        Task? second = null;
+        try
+        {
+            Assert.True(session.TrySubmit(Sample(1)).Accepted);
+            await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 1, TimeSpan.FromSeconds(5));
+            first = session.DisposeAsync().AsTask();
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = session.DisposeAsync().AsTask();
+            Assert.False(first.IsCompleted);
+            Assert.False(second.IsCompleted);
+            releaseCleanup.TrySetResult();
+            await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, ndi ? sender.Disposals : transport.Disposals);
+            Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+        }
+        finally
+        {
+            releaseCleanup.TrySetResult();
+            if (first is not null) await first.WaitAsync(TimeSpan.FromSeconds(5));
+            if (second is not null) await second.WaitAsync(TimeSpan.FromSeconds(5));
+            await session.DisposeAsync();
+        }
+    }
+
+
+    [Fact]
+    public void Warmed_Runtime_clock_validation_does_not_allocate_per_sample()
+    {
+        var format = VideoFormat.Hd1080p59_94Rgba8;
+        var audioFormat = AudioFormat.Stereo48kFloat32;
+        var window = rtaime.Media.AudioVideoTimingRelationship.GetSampleWindow(format.FrameRate, 48_000, 11);
+        var sample = new NetworkOutputProgramSample(11,
+            new FrameTiming(11, 11, new Timebase(1001, 60000)),
+            new AudioBufferTiming(window.SamplePosition, window.SampleCount, window.PresentationTimestamp, window.Timebase),
+            new TestLease(new byte[] { 1, 2, 3, 4 }), new byte[checked((int)window.SampleCount * 8)]);
+        var valid = 0;
+        for (var index = 0; index < 20_000; index++)
+            if (sample.HasCompatibleRuntimeTiming(format, audioFormat)) valid++;
+        Assert.Equal(20_000, valid);
+        valid = 0;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 100_000; index++)
+            if (sample.HasCompatibleRuntimeTiming(format, audioFormat)) valid++;
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(100_000, valid);
+        Assert.Equal(0, allocated);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cleanup_failure_is_shared_and_releases_inflight_and_queued_leases(bool ndi)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sender = new CleanupNdiSender(started, release, fail: true, stall: true);
+        var transport = new CleanupSrtTransport(started, release, fail: true, stall: true);
+        INetworkOutputSession session = ndi
+            ? new NdiNetworkOutputSession(NdiConfiguration("Failed cleanup", queueCapacity: 2), _ => sender)
+            : new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live"), queueCapacity: 2),
+                () => transport, () => new PassThroughEncoder());
+        var samples = new[] { Sample(0), Sample(1), Sample(2) };
+        Task? first = null;
+        Task? second = null;
+        try
+        {
+            Assert.True(session.TrySubmit(samples[0]).Accepted);
+            await (ndi ? sender.SendStarted.Task : transport.SendStarted.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(session.TrySubmit(samples[1]).Accepted);
+            Assert.True(session.TrySubmit(samples[2]).Accepted);
+            Assert.Equal(2, session.Snapshot.Statistics.QueueDepth);
+            first = session.DisposeAsync().AsTask();
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = session.DisposeAsync().AsTask();
+            Assert.False(second.IsCompleted);
+            release.TrySetResult();
+            var firstFailure = await Assert.ThrowsAsync<IOException>(() => first);
+            var repeatedFailure = await Assert.ThrowsAsync<IOException>(() => second);
+            Assert.Same(firstFailure, repeatedFailure);
+            Assert.All(samples, sample => Assert.Equal(1, sample.VideoLease.DisposeCount));
+            Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+            Assert.Equal(1, ndi ? sender.Disposals : transport.Disposals);
+        }
+        finally
+        {
+            release.TrySetResult();
+            try { await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (IOException) { }
+        }
+    }
+
+
+    [Fact]
+    public async Task Srt_encoder_cleanup_failure_still_releases_transport_once()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        release.TrySetResult();
+        var transport = new CleanupSrtTransport(started, release);
+        var encoder = new FailedCleanupEncoder();
+        var session = new SrtNetworkOutputSession(Configuration(new Uri("srt://127.0.0.1:9000/live")),
+            () => transport, () => encoder);
+        try
+        {
+            Assert.True(session.TrySubmit(Sample(0)).Accepted);
+            await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 1, TimeSpan.FromSeconds(5));
+            var failure = await Assert.ThrowsAsync<IOException>(() => session.DisposeAsync().AsTask());
+            Assert.Equal("Encoder cleanup failed.", failure.Message);
+            Assert.Equal(1, encoder.Disposals);
+            Assert.Equal(1, transport.Disposals);
+            Assert.False(transport.IsConnected);
+        }
+        finally
+        {
+            try { await session.DisposeAsync(); } catch (IOException) { }
+        }
+    }
+
+    private sealed class FailedCleanupEncoder : ISrtPayloadEncoder
+    {
+        public int Disposals { get; private set; }
+        public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => ValueTask.CompletedTask;
+        public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
+            ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 0x47 });
+        public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token) => ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            throw new IOException("Encoder cleanup failed.");
+        }
+    }
+
+
+    private sealed class CleanupNdiSender(TaskCompletionSource started, TaskCompletionSource release, bool fail = false, bool stall = false) : INdiSender
+    {
+        public bool IsReady => true;
+        public int Disposals { get; private set; }
+        public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<NdiSendResult> SendAsync(NetworkOutputProgramSample sample, CancellationToken token)
+        {
+            SendStarted.TrySetResult();
+            if (stall) await Task.Delay(Timeout.Infinite, token);
+            return new NdiSendResult(1, 4);
+        }
+        public async ValueTask DisposeAsync()
+        {
+            Disposals++;
+            started.TrySetResult();
+            await release.Task;
+            if (fail) throw new IOException("Native cleanup failed.");
+        }
+    }
+
+    private sealed class CleanupSrtTransport(TaskCompletionSource started, TaskCompletionSource release, bool fail = false, bool stall = false) : ISrtTransport
+    {
+        public bool IsConnected { get; private set; }
+        public int Disposals { get; private set; }
+        public ValueTask ConnectAsync(NetworkOutputConfiguration configuration, string? passphrase, CancellationToken token)
+        {
+            IsConnected = true;
+            return ValueTask.CompletedTask;
+        }
+        public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken token)
+        {
+            SendStarted.TrySetResult();
+            if (stall) await Task.Delay(Timeout.Infinite, token);
+            return payload.Length;
+        }
+        public async ValueTask DisposeAsync()
+        {
+            Disposals++;
+            started.TrySetResult();
+            await release.Task;
+            IsConnected = false;
+            if (fail) throw new IOException("Native cleanup failed.");
+        }
+    }
+
 	private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
 	{
 		var deadline = DateTimeOffset.UtcNow + timeout;

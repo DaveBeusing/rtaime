@@ -101,3 +101,11 @@ The first replay implementation is normal-speed only. Variable speed, slow motio
 Automated qualification covers bounded retention/storage behavior, pinned-history protection, expired/discontinuous range rejection, Operator authority boundaries, build policy and the existing full Required Gates. Windows reference-media regression continues to qualify the shared H.264/AAC decode/encode path.
 
 Long-duration physical-storage qualification and hardware encoder behavior remain separate reference-platform evidence.
+
+## Replay queue and shutdown evidence
+
+ReplayCaptureEngine exposes a fixed-size QueueStatistics snapshot: current depth, maximum observed depth and configured capacity. Capacity remains bounded to 1..64; the default is unchanged. Statistics do not retain frame history or allocate during admission.
+
+Every Stop call waits for the existing capture worker. Cancelling one wait does not cancel or abandon the shared drain. Repeated capture or Runtime replay disposal joins one finalization and resource release; no caller reports success while the first caller still owns a writer. Partial writer configuration/open failure invokes best-effort Abort before reporting the encoder failure and returning the sample lease.
+
+Mixed Runtime qualification retains Program readbacks while replay and recording writers are stalled, replaces source content, exercises monitoring churn and verifies retained pixels stay intact. Simulated replay artifacts only exercise ownership/finalization; they are not MP4 codec qualification.

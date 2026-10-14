@@ -10,6 +10,8 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 {
 	private readonly IReadOnlyDictionary<string, INetworkOutputSession> _sessions;
 	private readonly IReadOnlyList<ProviderDescriptor> _providerDescriptors;
+	private readonly object _disposeGate = new();
+	private Task? _disposeTask;
 
 	public RuntimeNetworkOutputBridge(
 		IReadOnlyList<RuntimeNetworkOutputTarget> targets,
@@ -91,10 +93,22 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 	public IReadOnlyList<NetworkOutputHealthSnapshot> Snapshots =>
 		Array.AsReadOnly(_sessions.Values.Select(session => session.Snapshot).ToArray());
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
+		lock (_disposeGate)
+			return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+	}
+
+	private async Task DisposeCoreAsync()
+	{
+		Exception? failure = null;
 		foreach (var session in _sessions.Values)
-			await session.DisposeAsync().ConfigureAwait(false);
+		{
+			try { await session.DisposeAsync().ConfigureAwait(false); }
+			catch (Exception exception) { failure ??= exception; }
+		}
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
 
 	private sealed class GpuNetworkOutputPayloadLease : INetworkOutputPayloadLease

@@ -166,3 +166,19 @@ The dedicated hardware workflow may emit `PASSED` only when every requested Timi
 - long soak qualification: **UNVERIFIED**.
 
 No Timing/Reference/Latency/Soak Qualification physical-hardware claim is valid until `.github/workflows/timing-reference-qualification.yml` emits retained `PASSED` evidence for the exact tested source, AJA adapter, driver and pinned SDK identity together with the independent physical-latency evidence.
+
+## Simultaneous consumer software qualification
+
+RuntimeConsumerIsolationTests runs the real V1 service at both 1080p50 and 1080p59.94 with virtual media, legacy plus bitmap layers, a two-source Program audio mix, CUT and four-frame DISSOLVE, active recording, replay, NDI Program output, SRT Aux output, monitoring and governed AI observation. The existing internal provider-registry seam supplies simulated transport backends; production uses the unchanged registry.
+
+For each format, 80 committed boundaries saturate the unchanged default recording capacity of 64. Writer, replay and transport barriers are held until boundary 66. The scenario requires Program progress while all barriers remain held, bounded queue high-water marks and readback ownership, unchanged retained pixels after source replacement, NDI disconnect/reconnect, monitoring detach/reattach, AI timeout fallback and two shutdown callers waiting for replay and recording finalization. Native cleanup failure regressions require remaining sessions to drain and all callers to observe the same failure.
+
+The qualification uses RationalFrameSchedule with a monotonic software clock. It reports scheduler slots and skipped opportunities separately from contiguous committed Program sequences. Audio positions/counts/timestamps are checked independently against the exact rational 48 kHz cadence; no compensating audio frames are manufactured for skipped scheduler opportunities. Source identities, Program sequence, virtual output acceptance, start/presentation lateness, consumer queue high-water marks and audio drift are retained separately.
+
+Three warmup boundaries precede the measured CPU P50/P95/P99/max window. The timing scope is V1 service plus governed AI observation. It excludes media-deck admission, process IPC, native Media I/O submission and physical presentation; it is not complete process or hardware latency. The GPU compositor's existing 0/1/2/4/8-layer matrices remain independent coverage; the mixed Runtime scenario uses its two available configured layer types and does not invent extra Runtime layers.
+
+Required Gates preserves two source/build-SHA-bound JSON reports beside the existing Program pipeline artifacts. Canonical SDK 10.0.401, complete managed suites, consumer regressions and Packaged E2E remain mandatory. Physical CUDA/output, NDI/SRT peers, destructive device faults and long soak remain UNVERIFIED until the dedicated reference workflows run.
+
+### Drop accounting
+
+Scheduler missed slots are opportunities not executed; Program/media/audio sequence advances only on committed boundaries. Physical output losses retain their separate existing counters. Recording and replay queue-full drops apply to that consumer only; network drop-oldest releases one complete paired A/V sample; monitoring drops describe its sampled observational stream. None is added to Program drop totals. Queue depths exclude the worker's one in-flight sample, which still owns its lease. Monitoring high-water/drop evidence is captured per subscription before/after detach because hub aggregates contain only current subscriptions. Cancelling shutdown discards outstanding network samples by releasing their leases; those teardown discards are not reported as transmitted media or added as production-frame losses.
