@@ -277,7 +277,13 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		}
 	}
 
-	private IItemContainerGenerator? ResolveGenerator() => ItemContainerGenerator;
+	private IItemContainerGenerator? ResolveGenerator()
+	{
+		// WPF connects an items-host panel to its generator on first access to
+		// InternalChildren. Reading the generator alone cannot initialize it.
+		_ = InternalChildren;
+		return ItemContainerGenerator;
+	}
 
 	private void QueueGeneratorRetry()
 	{
