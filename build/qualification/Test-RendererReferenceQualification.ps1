@@ -120,6 +120,23 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     $matches = @($runtimeResults | Where-Object { [string]$_.format -eq $format })
     if ($matches.Count -ne 1) { throw "Renderer runtime evidence is missing '$format'." }
     $result = $matches[0]
+    $minimumSeconds = switch ($ExpectedProfile) {
+        "smoke" { 30 } "stress" { 300 } "soak" { 3600 }
+        "soak8h" { 14400 } "soak24h" { 43200 } "soak72h" { 129600 }
+    }
+    if ([int]$result.durationSeconds -ne $minimumSeconds -or
+        -not [double]::IsFinite([double]$result.elapsedSeconds) -or
+        [double]$result.elapsedSeconds -lt $minimumSeconds) { throw "Actual renderer duration is incomplete." }
+    if ([int]$result.cpuBoundary.histogram.capacity -ne 10001 -or
+        [string]$result.cpuBoundary.histogram.percentileMethod -ne "WHOLE_RUN_NEAREST_RANK_UPPER_BIN_BOUND" -or
+        [ulong]$result.cpuBoundary.histogram.count -ne [ulong]$result.boundaries -or
+        @($result.telemetry.resourceWindows).Count -gt 96) { throw "Renderer whole-run evidence is unbounded or incomplete." }
+    if ($minimumSeconds -ge 14400 -and [string]$result.telemetry.resourcePlateau -ne "PASS") {
+        throw "Long renderer profile requires measured resource plateau evidence."
+    }
+    if ([int]$result.recording.effectivePressureReleaseBoundary -le [int]$result.recording.queueCapacity + 1) {
+        throw "Controlled pressure must exceed the real queue plus in-flight sample."
+    }
     if ([int]$result.boundaries -le 0) { throw "Renderer runtime evidence has no boundaries for '$format'." }
     if ([ulong]$result.continuity.sequenceDiscontinuities -ne 0 -or
         [ulong]$result.continuity.duplicateSequenceFrames -ne 0 -or

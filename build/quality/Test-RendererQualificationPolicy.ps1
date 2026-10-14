@@ -168,3 +168,10 @@ foreach ($mutation in @(
     Assert-Condition $rejected "Renderer timing validator accepted invalid '$($mutation.field)' evidence."
 }
 Write-Host "Renderer timing summary negative fixtures PASS"
+
+foreach ($hours in @(8, 24, 72)) {
+    $long = @($profiles | Where-Object name -eq ("soak" + $hours + "h"))[0]
+    Assert-Condition ([int]$long.durationSecondsPerFormat * 2 -eq $hours * 3600) "Long renderer profile must describe actual total duration over both formats."
+}
+Assert-Condition ($hardwareTest -match 'BoundedSoakHistogram' -and $hardwareTest -match 'BoundedSoakResourceTrend') "Long renderer observations must remain bounded."
+Assert-Condition ($hardwareTest -match 'ProgramRecorder.DefaultQueueCapacity \+ 2') "Recording pressure must follow the actual bounded queue capacity."
