@@ -682,6 +682,7 @@ public static class GpuProviderLifecycleReasonCodes
     public const string CompositeFailed = "gpu.composite.backend_failure";
     public const string ReadbackFailed = "gpu.readback.backend_failure";
     public const string StopFailed = "gpu.provider.stop_failed";
+    public const string DisposeFailed = "gpu.provider.dispose_failed";
     public const string Disposed = "gpu.provider.disposed";
 }
 
@@ -958,6 +959,8 @@ public sealed class GpuProcessingProvider : IDisposable
                     : $"GPU backend start failed: {exception.GetType().Name}; cleanup also failed: {cleanupFailure.GetType().Name}.";
                 var failure = new Failure(GpuProviderLifecycleReasonCodes.StartFailed, detail);
                 TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.StartFailed, failure);
+                if (cleanupFailure is not null)
+                    throw new AggregateException("GPU start and cleanup both failed.", exception, cleanupFailure);
                 throw;
             }
         }
@@ -1587,9 +1590,20 @@ public sealed class GpuProcessingProvider : IDisposable
             if (_state is not (GpuProviderState.Stopped or GpuProviderState.Unavailable))
                 Stop();
 
-            _backend.Dispose();
-            _readbackPool.Dispose();
-            TransitionStateUnsafe(GpuProviderState.Disposed, GpuProviderLifecycleReasonCodes.Disposed, null);
+            try
+            {
+                _backend.Dispose();
+                _readbackPool.Dispose();
+                TransitionStateUnsafe(GpuProviderState.Disposed, GpuProviderLifecycleReasonCodes.Disposed, null);
+            }
+            catch (Exception exception)
+            {
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.DisposeFailed,
+                    $"GPU backend disposal failed: {exception.GetType().Name}: {exception.Message}");
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.DisposeFailed, failure);
+                throw;
+            }
         }
     }
 
@@ -2027,6 +2041,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private static bool IsAllowedTransition(GpuProviderState current, GpuProviderState next) =>
         (current, next) switch
         {
+            (GpuProviderState.Unavailable, GpuProviderState.Failed) => true,
+            (GpuProviderState.Stopped, GpuProviderState.Failed) => true,
             (GpuProviderState.Unavailable, GpuProviderState.Starting) => true,
             (GpuProviderState.Unavailable, GpuProviderState.Stopped) => true,
             (GpuProviderState.Unavailable, GpuProviderState.Disposed) => true,

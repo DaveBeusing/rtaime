@@ -310,6 +310,82 @@ public sealed class GpuLifecycleRecoveryTests
         Assert.True(lease.IsDisposed);
     }
 
+    [Fact]
+    public void Initial_start_and_cleanup_failures_preserve_both_original_causes()
+    {
+        using var backend = new StartCleanupFailureBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        var failure = Assert.Throws<AggregateException>(provider.Start);
+        Assert.Same(backend.StartFailure, failure.InnerExceptions[0]);
+        Assert.Same(backend.CleanupFailure, failure.InnerExceptions[1]);
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.StartFailed, provider.Lifecycle.ReasonCode);
+        Assert.Equal(0UL, provider.Lifecycle.Generation);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceA, 1, 2, 3, 0));
+        provider.Stop();
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Backend_disposal_failure_is_visible_retryable_and_never_reported_clean(bool start)
+    {
+        var backend = new FailFirstDisposeBackend();
+        var provider = new GpuProcessingProvider(backend);
+        if (start)
+        {
+            provider.Start();
+            using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+        }
+        var generation = provider.Lifecycle.Generation;
+        var failure = Assert.Throws<InvalidOperationException>(provider.Dispose);
+        Assert.Same(backend.Failure, failure);
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.DisposeFailed, provider.Lifecycle.ReasonCode);
+        Assert.Contains(backend.Failure.Message, provider.Lifecycle.Failure!.Value.Message);
+        Assert.Equal(ProviderAvailabilityState.Unavailable, provider.Descriptor.Availability.State);
+        Assert.Equal(generation, provider.Lifecycle.Generation);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceA, 1, 2, 3, 0));
+
+        provider.Dispose();
+        provider.Dispose();
+        Assert.Equal(2, backend.DisposeCalls);
+        Assert.Equal(GpuProviderState.Disposed, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+    }
+
+    private sealed class StartCleanupFailureBackend : HardwareFacadeBackend
+    {
+        public InvalidOperationException StartFailure { get; } = new("Injected context initialization failure.");
+        public InvalidOperationException CleanupFailure { get; } = new("Injected partial-start cleanup failure.");
+        private bool _failCleanup = true;
+        public override void Start() => throw StartFailure;
+        public override void Stop()
+        {
+            if (_failCleanup)
+            {
+                _failCleanup = false;
+                throw CleanupFailure;
+            }
+            base.Stop();
+        }
+    }
+
+    private sealed class FailFirstDisposeBackend : HardwareFacadeBackend
+    {
+        public InvalidOperationException Failure { get; } = new("Injected graphics resource disposal failure.");
+        public int DisposeCalls { get; private set; }
+        public override void Dispose()
+        {
+            if (++DisposeCalls == 1) throw Failure;
+            base.Dispose();
+        }
+    }
+
     private static GpuFrame Upload(
         GpuProcessingProvider provider,
         MediaSourceId sourceId,
