@@ -653,13 +653,16 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	}
 
 
+	internal void SetCatalogSnapshot(MediaAssetCatalogSnapshot snapshot) =>
+		_catalogSnapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+
 	public async Task LoadCatalogAsync()
 	{
 		if (_catalogClient is null)
 			return;
 		await RunCatalogOperationAsync(async () =>
 		{
-			_catalogSnapshot = await _catalogClient.GetMediaAssetCatalogAsync();
+			SetCatalogSnapshot(await _catalogClient.GetMediaAssetCatalogAsync());
 		});
 	}
 
@@ -679,7 +682,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			var result = await _catalogClient.RelinkMediaAssetAsync(
 				new MediaAssetId(Identity.Parse(item.ReferenceId)),
 				sourceLocation);
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -698,7 +701,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		{
 			var result = await _catalogClient.RemoveMediaAssetAsync(
 				new MediaAssetId(Identity.Parse(item.ReferenceId)));
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -714,7 +717,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		await RunCatalogOperationAsync(async () =>
 		{
 			var result = await _catalogClient.ImportMediaAssetsAsync(paths);
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -725,7 +728,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			return;
 		await RunCatalogOperationAsync(async () =>
 		{
-			_catalogSnapshot = await _catalogClient.RefreshMediaAssetAvailabilityAsync();
+			SetCatalogSnapshot(await _catalogClient.RefreshMediaAssetAvailabilityAsync());
 		});
 	}
 

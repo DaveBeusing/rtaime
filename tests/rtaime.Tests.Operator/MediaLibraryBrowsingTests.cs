@@ -221,7 +221,9 @@ public sealed class MediaLibraryBrowsingTests
 		var span = Grid.GetRowSpan(library); var z = Panel.GetZIndex(library);
 		var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
 		var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;
-		var items = Enumerable.Range(0, 4096).Select(index => Item(index, key: "clip:" + index)).ToArray();
+		owner.MediaPool.SetCatalogSnapshot(new Catalog().Snapshot);
+		owner.MediaPool.Refresh();
+		Assert.Equal(4096, owner.MediaPool.FilteredItems.Count);
 		parent.Children.Remove(library);
 		library.Width = 400; library.Height = 640;
 		library.HorizontalAlignment = HorizontalAlignment.Left; library.VerticalAlignment = VerticalAlignment.Top;
@@ -237,7 +239,7 @@ public sealed class MediaLibraryBrowsingTests
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 			Assert.Equal(Visibility.Visible, owner.MediaPool.MetadataFiltersVisibility);
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
-			owner.MediaPool.FilteredItems.ReplaceWith(items);
+			var items = owner.MediaPool.FilteredItems.ToArray();
 			foreach (var browser in new[] { grid, list })
 			{
 				if (browser == grid) owner.MediaPool.GridViewCommand.Execute(null);
@@ -247,7 +249,7 @@ public sealed class MediaLibraryBrowsingTests
 				Assert.True(browser.ActualWidth > 0 && browser.ActualHeight > 100);
 				foreach (var index in new[] { 2048, 4095, 0, 4095 })
 				{
-					browser.ScrollIntoView(items[index]);
+					browser.ScrollIntoView(browser.Items[index]);
 					await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 					var deadline = DateTime.UtcNow.AddSeconds(2);
 					while (browser.ItemContainerGenerator.ContainerFromIndex(index) is null && DateTime.UtcNow < deadline)
@@ -257,7 +259,8 @@ public sealed class MediaLibraryBrowsingTests
 					}
 					var wrap = Descendants(browser).OfType<VirtualizingWrapPanel>().FirstOrDefault();
 					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}; generator={browser.ItemContainerGenerator.Status}; detail={wrap?.RealizationDetail}.");
-					Assert.NotNull(browser.ItemContainerGenerator.ContainerFromIndex(index));
+					Assert.True(browser.ItemContainerGenerator.ContainerFromIndex(index) is not null,
+						$"{browser.Name}: index={index}, items={browser.Items.Count}, realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}, generator={browser.ItemContainerGenerator.Status}, detail={wrap?.RealizationDetail}");
 					Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
 				}
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
@@ -277,6 +280,7 @@ public sealed class MediaLibraryBrowsingTests
 			library.HorizontalAlignment = horizontal; library.VerticalAlignment = vertical;
 			Grid.SetRowSpan(library, span); Panel.SetZIndex(library, z);
 			parent.Children.Insert(originalIndex, library);
+			owner.MediaPool.SetCatalogSnapshot(MediaAssetCatalogSnapshot.Empty);
 			owner.MediaPool.Refresh(); owner.MediaPool.GridViewCommand.Execute(null);
 		}
 	}
