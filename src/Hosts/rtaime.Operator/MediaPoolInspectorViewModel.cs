@@ -149,6 +149,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_catalogClient = catalogClient;
 		_importFilePicker = importFilePicker;
 
+		InitializeBrowsing();
 		FilteredItems = [];
 		SelectedItems = [];
 		InspectorProperties = [];
@@ -281,7 +282,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		get => _searchText;
 		set
 		{
-			if (!Set(ref _searchText, value ?? string.Empty))
+			if (!Set(ref _searchText, (value ?? string.Empty)[..Math.Min(value?.Length ?? 0, 256)]))
 				return;
 			ApplyFilter();
 		}
@@ -1007,6 +1008,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	public void Dispose()
 	{
+		DisposeBrowsing();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;
 		_operator.Sources.CollectionChanged -= OnSourcesChanged;
@@ -1021,11 +1023,13 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void ApplyFilter(string? preferredSelectionKey = null)
 	{
+		if (_restoringBin) return;
+		CancelHover();
 		preferredSelectionKey ??= SelectedItem?.Key;
-		var query = SearchText.Trim();
+		var bin = CurrentBin();
 
 		var filtered = _allItems
-			.Where(item => CategoryMatches(item) && FilterMatches(item) && SearchMatches(item, query))
+			.Where(item => MediaSmartBinPolicy.Matches(item, bin))
 			.OrderBy(item => item.Category, StringComparer.Ordinal)
 			.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.ThenBy(item => item.Key, StringComparer.Ordinal)
