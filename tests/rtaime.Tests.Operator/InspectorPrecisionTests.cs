@@ -160,9 +160,11 @@ public sealed class InspectorPrecisionTests
 			Assert.True(field.HasInputError);
 			Assert.False(inspector.NumericInputsValid);
 			Assert.Equal(0.5, field.Value);
+			var fullscreen = owner.Shell.IsFullscreen;
 			var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(field), 0, Key.Escape) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
 			field.RaiseEvent(escape);
 			Assert.True(escape.Handled);
+			Assert.Equal(fullscreen, owner.Shell.IsFullscreen);
 			Assert.True(inspector.NumericInputsValid);
 			field.Adjust(1, fine: true);
 			Assert.Equal(0.5001, field.Value, 10);

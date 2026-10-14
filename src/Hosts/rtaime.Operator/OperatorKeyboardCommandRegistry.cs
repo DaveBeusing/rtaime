@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text;
+using rtaime.Operator.Controls;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -52,6 +53,8 @@ public sealed class OperatorKeyboardCommandRegistry
 		ArgumentNullException.ThrowIfNull(args);
 
 		var key = args.Key == Key.System ? args.SystemKey : args.Key;
+		// Numeric Escape cancels the current field/gesture before the shell fullscreen command.
+		if (key == Key.Escape && Keyboard.FocusedElement is RtaimeNumericField) return false;
 		var modifiers = Keyboard.Modifiers;
 		var definition = _definitions.FirstOrDefault(item =>
 			item.Key == key &&
