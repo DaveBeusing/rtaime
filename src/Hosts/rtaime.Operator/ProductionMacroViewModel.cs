@@ -147,7 +147,15 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 	};
 
 	public async Task RefreshAsync() =>
-		await RunAsync(async () => ApplySnapshot(await _client.GetProductionMacroSnapshotAsync()));
+		await RunAsync(async () =>
+		{
+			try { ApplySnapshot(await _client.GetProductionMacroSnapshotAsync()); }
+			catch (OperationCanceledException)
+			{
+				Failure = "Macro status request cancelled or timed out.";
+				Status = "UNAVAILABLE · Last confirmed Macro state retained. Refresh status to retry.";
+			}
+		});
 
 	private Task NewMacroAsync()
 	{

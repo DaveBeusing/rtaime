@@ -104,6 +104,41 @@ public sealed class ProductionMacroOperatorTests
 		}
 	}
 
+	[Fact]
+	public async Task Cancelled_status_refresh_retains_confirmed_macro_and_allows_explicit_recovery()
+	{
+		var transport = new MacroStatusTransport();
+		transport.Snapshot = transport.Snapshot with
+		{
+			Execution = ProductionMacroExecutionSnapshot.Idle with
+			{
+				State = ProductionMacroExecutionState.Completed,
+				MacroId = transport.Macro.MacroId,
+				LastCompletedActionId = transport.Macro.Actions[0].ActionId,
+				Revision = 1
+			}
+		};
+		var model = new ProductionMacroViewModel(new OperatorControlClient(transport));
+		await model.RefreshAsync();
+		var selected = model.SelectedMacro;
+		var storage = model.StorageLabel;
+		Assert.Equal("CUT", model.LastCompletedAction);
+		transport.CancelReads = true;
+		await model.RefreshAsync();
+		Assert.False(model.IsBusy);
+		Assert.Equal("COMPLETED", model.State);
+		Assert.Equal("CUT", model.LastCompletedAction);
+		Assert.Same(selected, model.SelectedMacro);
+		Assert.Equal(storage, model.StorageLabel);
+		Assert.Contains("UNAVAILABLE", model.Status);
+		Assert.Contains("cancelled or timed out", model.Failure);
+		Assert.True(model.RefreshCommand.CanExecute(null));
+		transport.CancelReads = false;
+		await model.RefreshAsync();
+		Assert.Equal("NONE", model.Failure);
+		Assert.Equal("COMPLETED", model.State);
+	}
+
 	internal static async Task VerifyReadOnlyStatusBindingsAsync(Dispatcher dispatcher)
 	{
 		Assert.Equal(ApartmentState.STA, Thread.CurrentThread.GetApartmentState());
@@ -259,9 +294,10 @@ public sealed class ProductionMacroOperatorTests
 			Snapshot = new ProductionMacroWorkspaceSnapshot([Macro], 1, ProductionMacroExecutionSnapshot.Idle);
 
 		public ProductionMacroWorkspaceSnapshot Snapshot { get; set; }
+		public bool CancelReads { get; set; }
 
 		public ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
-			ValueTask.FromResult(Snapshot);
+			CancelReads ? ValueTask.FromCanceled<ProductionMacroWorkspaceSnapshot>(new CancellationToken(canceled: true)) : ValueTask.FromResult(Snapshot);
 		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Only confirmed macro snapshots are provided.");
 		public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) =>
