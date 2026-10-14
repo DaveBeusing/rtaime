@@ -30,7 +30,7 @@ try {
             html_url = "https://github.com/DaveBeusing/rtaime/actions/runs/1/job/$id" }
         $id++
     }
-    $fixture = @{ repository = "DaveBeusing/rtaime"; run = @{
+    $fixture = @{ repository = "DaveBeusing/rtaime"; selection = "latest"; run = @{
         id = 1; name = "Required gates"; path = ".github/workflows/required-gates.yml"
         repository = @{ full_name = "DaveBeusing/rtaime" }; head_sha = $head; run_attempt = 2
         event = "pull_request"; status = "in_progress"; conclusion = $null
@@ -42,7 +42,7 @@ try {
         @{ name = "stale source"; mutate = { param($e) $e.run.head_sha = $wrong } },
         @{ name = "stale job source"; mutate = { param($e) $e.jobs[0].head_sha = $wrong } },
         @{ name = "another run"; mutate = { param($e) $e.jobs[0].run_id = 9 } },
-        @{ name = "another attempt"; mutate = { param($e) $e.jobs[0].run_attempt = 1 } },
+        @{ name = "future attempt"; mutate = { param($e) $e.jobs[0].run_attempt = 3 } },
         @{ name = "pending job"; mutate = { param($e) $e.jobs[0].status = "in_progress" } },
         @{ name = "cancelled job"; mutate = { param($e) $e.jobs[0].conclusion = "cancelled" } },
         @{ name = "failed job"; mutate = { param($e) $e.jobs[0].conclusion = "failure" } },
@@ -57,6 +57,10 @@ try {
         Write-Json $e $snapshot
         Expect-Rejected { & (Join-Path $PSScriptRoot "Test-RequiredGateEvidence.ps1") -EvidencePath $snapshot -ExpectedSourceCommit $head } $case.name
     }
+    $retainedAttempt = $fixture | ConvertTo-Json -Depth 64 | ConvertFrom-Json
+    $retainedAttempt.jobs[0].run_attempt = 1
+    Write-Json $retainedAttempt $snapshot
+    & (Join-Path $PSScriptRoot "Test-RequiredGateEvidence.ps1") -EvidencePath $snapshot -ExpectedSourceCommit $head
     Write-Json $fixture $snapshot
     $indexPath = Join-Path $temp "readiness.json"
     $r = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -OutputPath $indexPath

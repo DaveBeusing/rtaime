@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $policy = Get-Content -LiteralPath (Join-Path $root "docs/Governance/RepositoryPolicy.json") -Raw | ConvertFrom-Json
 $e = Get-Content -LiteralPath $EvidencePath -Raw | ConvertFrom-Json
-if ($ExpectedSourceCommit -notmatch '^[0-9a-f]{40}$' -or [string]$e.repository -ne "DaveBeusing/rtaime") {
+if ($ExpectedSourceCommit -notmatch '^[0-9a-f]{40}$' -or [string]$e.repository -ne "DaveBeusing/rtaime" -or [string]$e.selection -ne "latest") {
     throw "Required Gates repository/source identity is invalid."
 }
 $r = $e.run
@@ -25,7 +25,7 @@ foreach ($name in @($policy.requiredChecks)) {
     $matches = @($jobs | Where-Object { [string]$_.name -eq [string]$name })
     if ($matches.Count -ne 1) { throw "Required Gate '$name' is missing or duplicated." }
     $j = $matches[0]
-    if ([long]$j.id -le 0 -or [long]$j.run_id -ne [long]$r.id -or [int]$j.run_attempt -ne [int]$r.run_attempt -or
+    if ([long]$j.id -le 0 -or [long]$j.run_id -ne [long]$r.id -or ([int]$j.run_attempt -lt 1 -or [int]$j.run_attempt -gt [int]$r.run_attempt) -or
         [string]$j.head_sha -ne $ExpectedSourceCommit -or
         [string]$j.html_url -ne "https://github.com/DaveBeusing/rtaime/actions/runs/$($r.id)/job/$($j.id)" -or
         [string]$j.status -ne "completed" -or [string]$j.conclusion -ne "success" -or

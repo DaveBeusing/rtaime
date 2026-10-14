@@ -616,7 +616,8 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Retain current run and attempt job evidence
+      - name: Retain current run and latest job evidence
+        id: gate-evidence
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -626,11 +627,13 @@ jobs:
           $run = Invoke-RestMethod -Uri $api -Headers $headers
           $jobs = @(); $page = 1
           do {
-            $response = Invoke-RestMethod -Uri "$api/attempts/$env:GITHUB_RUN_ATTEMPT/jobs?per_page=100&page=$page" -Headers $headers
+            $response = Invoke-RestMethod -Uri "$api/jobs?filter=latest&per_page=100&page=$page" -Headers $headers
             $jobs += @($response.jobs); $page++
           } while (@($response.jobs).Count -eq 100)
           New-Item -ItemType Directory -Path artifacts/readiness -Force | Out-Null
-          @{ repository = $env:GITHUB_REPOSITORY; run = $run; jobs = $jobs } |
+          $ciJobs = @($jobs | Where-Object name -eq "CI")
+          if ($ciJobs.Count -eq 1) { "ci-attempt=$($ciJobs[0].run_attempt)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 }
+          @{ repository = $env:GITHUB_REPOSITORY; selection = "latest"; run = $run; jobs = $jobs } |
             ConvertTo-Json -Depth 64 | Set-Content -LiteralPath artifacts/readiness/required-gates.json -Encoding utf8
       - name: Collect packaged evidence
         if: ${{ needs.packaged-e2e.result == 'success' }}
@@ -642,7 +645,7 @@ jobs:
         if: ${{ needs.ci.result == 'success' }}
         uses: actions/download-artifact@v6
         with:
-          name: rtaime-mixed-soak-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rtaime-mixed-soak-smoke-${{ github.run_id }}-${{ steps.gate-evidence.outputs.ci-attempt }}
           path: artifacts/readiness/mixed
       - name: Assess exact-source evidence and operational handoff
         shell: pwsh
