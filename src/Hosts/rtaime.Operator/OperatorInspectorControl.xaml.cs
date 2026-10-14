@@ -117,6 +117,8 @@ public partial class OperatorInspectorControl : UserControl
 		for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
 		{
 			var child = VisualTreeHelper.GetChild(root, index);
+			// WPF can expose an empty child slot while an IsVisibleChanged removal event is bubbling.
+			if (child is null) continue;
 			if (child is RtaimeNumericField field) yield return field;
 			else foreach (var descendant in NumericFields(child)) yield return descendant;
 		}
