@@ -321,3 +321,7 @@ At compact viewport size, docked groups are temporarily presented as one tab gro
 If a panel is missing, use Ctrl+Shift+N to select it, Ctrl+Alt+Up to dock it centrally, or Ctrl+Shift+R for a workspace reset. The primary navigation/status and transport regions remain outside docking. Closing the Operator closes all owned panel windows and removes display-event subscriptions before normal monitoring/control teardown.
 
 Automated qualification covers migration, independent workspace persistence/reset, monitor removal and 100/125/150/200% synthetic DPI geometry, invalid/off-screen placement, bounded identities, real STA dock/float/close cycles, shared bindings/shortcut identity and unchanged Preview/Program source identity. Hosted single-display results do not certify physical mixed-DPI hot-unplug behavior; that remains UNVERIFIED until exercised on the retained Windows reference configuration.
+
+## Context Inspector editing
+
+See [Context Inspector and precision editing](ContextInspector.md) for shared numeric ranges/units, Alt-drag scrubbing, fine/coarse keys, reset and compatible attribute drafts. Existing selection, pinned metadata, mixed summaries and Apply confirmation remain in place. Multi-selection property transactions remain deferred.

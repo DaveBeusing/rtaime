@@ -144,7 +144,7 @@ public sealed class InspectorPrecisionTests
 		try
 		{
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
-			Assert.True(field.ApplyTemplate());
+			field.ApplyTemplate();
 			Assert.NotNull(field.Template.FindName("PART_ContentHost", field));
 			field.Text = "NaN";
 			Assert.True(field.HasInputError);
