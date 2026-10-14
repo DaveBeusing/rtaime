@@ -134,6 +134,28 @@ public sealed class RendererReferenceHardwareQualificationTests
         Assert.Empty(failures);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Renderer_workload_cycles_and_pressure_use_real_queue_capacity_in_managed_regression(bool fractional)
+    {
+        var result = await RunRuntimeFormatAsync(
+            fractional ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8,
+            0, 1, 3, 16, new ManagedReferenceGpuBackend(), physical: false,
+            phasePeriod: 30, recordingPeriod: 90, minimumBoundaries: 100);
+        var report = JsonSerializer.SerializeToElement(result);
+        Assert.False(report.GetProperty("hardwareBackend").GetBoolean());
+        Assert.Equal("MANAGED_HARNESS_REGRESSION", report.GetProperty("boundaryScope").GetString());
+        Assert.True(report.GetProperty("transitions").GetUInt64() >= 3);
+        var recording = report.GetProperty("recording");
+        Assert.True(recording.GetProperty("cycles").GetUInt64() >= 1);
+        Assert.True(recording.GetProperty("rejectedDuringPressure").GetUInt64() > 0);
+        Assert.Equal(ProgramRecorder.DefaultQueueCapacity + 2, recording.GetProperty("effectivePressureReleaseBoundary").GetInt32());
+        Assert.Equal(0, report.GetProperty("cleanup").GetProperty("activeGpuSurfaces").GetInt32());
+        Assert.Equal(0, report.GetProperty("cleanup").GetProperty("activeReadbackBuffers").GetInt32());
+        Assert.Equal("UNVERIFIED", report.GetProperty("telemetry").GetProperty("resourcePlateau").GetString());
+    }
+
     private static IReadOnlyList<object> RunCompositorMatrix(int deviceOrdinal, int sampleIterations, int warmupBoundaries)
     {
         var results = new List<object>();
@@ -311,8 +333,15 @@ public sealed class RendererReferenceHardwareQualificationTests
         int deviceOrdinal,
         int durationSeconds,
         int warmupBoundaries,
-        int recordingBackpressureBoundaries)
+        int recordingBackpressureBoundaries,
+        IGpuProcessingBackend? backend = null,
+        bool physical = true,
+        int phasePeriod = 300,
+        int recordingPeriod = 900,
+        int minimumBoundaries = 0)
     {
+        if (physical && durationSeconds >= 14400 && deviceOrdinal != 0)
+            throw new InvalidOperationException("Long renderer VRAM qualification requires ordinal 0; the current Runtime telemetry samples NVIDIA device 0.");
         var sourceA = new ProductionSourceId(Identity.New());
         var sourceB = new ProductionSourceId(Identity.New());
         var mediaA = new MediaSourceId(sourceA.Value);
@@ -338,7 +367,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             mediaB,
             format,
             writer,
-            new CudaGpuProcessingBackend(deviceOrdinal, timingCollector), pipelineTimingProbe: pipeline);
+            backend ?? new CudaGpuProcessingBackend(deviceOrdinal, timingCollector), pipelineTimingProbe: pipeline);
 
         var registry = new ProviderRegistry(runtime.ProviderDescriptors);
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
@@ -379,10 +408,16 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         timingCollector.Reset();
         pipeline.ResetPipelineSamples();
-        var durations = new List<double>();
-        var cpuUtilization = new List<double>();
-        var gpuUtilization = new List<double>();
-        var vramUsedMiB = new List<double>();
+        var durations = new BoundedSoakHistogram(.01, 10000);
+        ulong deadlineViolations = 0;
+        var cpuUtilization = new BoundedSoakHistogram(.1, 1000);
+        var gpuUtilization = new BoundedSoakHistogram(.1, 1000);
+        var vramUsedMiB = new BoundedSoakHistogram(1, 65536);
+        var processMemoryMiB = new BoundedSoakHistogram(1, 65536);
+        var processHandles = new BoundedSoakHistogram(1, 65536);
+        var resources = new BoundedSoakResourceTrend();
+        var vramResources = new BoundedSoakResourceTrend();
+        using var process = Process.GetCurrentProcess();
         var expectedSequence = runtime.Snapshot.NextSequenceNumber;
         ulong sequenceDiscontinuities = 0;
         ulong duplicateSequenceFrames = 0;
@@ -397,6 +432,9 @@ public sealed class RendererReferenceHardwareQualificationTests
         var monitoringQueueCapacity = 4;
         var reconnectCountdown = -1;
         var transitionApplied = false;
+        ulong transitions = 0, recordingCycles = 0, monitorReconnects = 0;
+        var programOnB = false;
+        var pressureReleaseBoundary = Math.Max(recordingBackpressureBoundaries, ProgramRecorder.DefaultQueueCapacity + 2);
         var maxReadbackActive = 0;
         var maxReadbackAllocated = 0;
         var maxSharedMonitoringActive = 0;
@@ -409,7 +447,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         try
         {
-            while (Stopwatch.GetElapsedTime(startedAt) < duration)
+            while (Stopwatch.GetElapsedTime(startedAt) < duration || boundaryIndex < minimumBoundaries)
             {
                 var observedAt = Stopwatch.GetElapsedTime(startedAt);
                 if (!schedule.TryTake(observedAt, out var opportunity))
@@ -423,7 +461,8 @@ public sealed class RendererReferenceHardwareQualificationTests
                 using (var boundary = runtime.ProcessNextBoundary())
                 {
                     var elapsedMilliseconds = Stopwatch.GetElapsedTime(boundaryStarted).TotalMilliseconds;
-                    durations.Add(elapsedMilliseconds);
+                    durations.Observe(elapsedMilliseconds);
+                    if (elapsedMilliseconds > frameBudgetMilliseconds) deadlineViolations++;
                     pipeline.TryObserveStage(RuntimePipelineTimingStage.SchedulerStartLateness, boundary.SequenceNumber, opportunity.StartLateness);
                     var completedAt = Stopwatch.GetElapsedTime(startedAt);
                     pipeline.TryObserveStage(RuntimePipelineTimingStage.PresentationLateness, boundary.SequenceNumber,
@@ -464,10 +503,10 @@ public sealed class RendererReferenceHardwareQualificationTests
                     maxSharedMonitoringActive,
                     transfers.MonitoringResources.ActiveResources);
 
-                if (boundaryIndex == recordingBackpressureBoundaries)
+                if (boundaryIndex == pressureReleaseBoundary)
                     writer.Release();
 
-                if (!monitoringDisconnected && boundaryIndex >= Math.Max(8, recordingBackpressureBoundaries / 2))
+                if (monitoring is not null && boundaryIndex % phasePeriod == Math.Max(8, Math.Min(phasePeriod / 3, recordingBackpressureBoundaries / 2)))
                 {
                     await (monitoring ?? throw new InvalidOperationException("Monitoring subscription was lost before the disconnect boundary.")).DisposeAsync();
                     monitoringSubscriberDrops += monitoring.DroppedFrames;
@@ -475,39 +514,57 @@ public sealed class RendererReferenceHardwareQualificationTests
                     monitoringDisconnected = true;
                     reconnectCountdown = 3;
                 }
-                else if (monitoringDisconnected && !monitoringReconnected && reconnectCountdown-- == 0)
+                else if (monitoring is null && reconnectCountdown-- == 0)
                 {
                     monitoring = runtime.MonitoringHub.Subscribe(capacity: 4, requiresCpuFallback: false);
                     monitoringReconnected = true;
+                    monitorReconnects++;
                 }
 
-                if (!transitionApplied && Stopwatch.GetElapsedTime(startedAt) >= TimeSpan.FromSeconds(durationSeconds / 3.0))
+                if (boundaryIndex % phasePeriod == 0)
                 {
+                    var from = programOnB ? mediaB : mediaA;
+                    var target = programOnB ? mediaA : mediaB;
                     var replacement = new AuthoritativeProductionState(
-                        ControlContractVersion.Current,
-                        specification.ProductionId,
-                        new Revision(1),
-                        new ProductionRoutingState(sourceA, sourceB));
+                        ControlContractVersion.Current, specification.ProductionId,
+                        new Revision(++transitions),
+                        new ProductionRoutingState(programOnB ? sourceB : sourceA, programOnB ? sourceA : sourceB));
                     var replacementPlan = CapabilityPlanningEngine.Plan(specification, replacement, registry);
                     if (!replacementPlan.Succeeded)
-                        throw new InvalidOperationException(
-                            "Renderer qualification transition plan failed: " +
-                            string.Join(" | ", replacementPlan.Validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
-                    var applied = runtime.ApplyExecution(
-                        replacementPlan.PreparedExecution!,
-                        programSink,
-                        RuntimeProgramTransitionIntent.Dissolve(mediaA, mediaB, 4));
-                    if (!applied.Committed)
-                        throw new InvalidOperationException("Renderer qualification DISSOLVE did not commit.");
+                        throw new InvalidOperationException("Renderer qualification transition plan failed.");
+                    var applied = runtime.ApplyExecution(replacementPlan.PreparedExecution!, programSink,
+                        transitions % 2 == 1 ? RuntimeProgramTransitionIntent.Dissolve(from, target, 4)
+                            : RuntimeProgramTransitionIntent.Cut(from, target));
+                    if (!applied.Committed) throw new InvalidOperationException("Renderer qualification transition did not commit.");
+                    programOnB = !programOnB;
                     transitionApplied = true;
+                    runtime.SetVisualLayerMode(transitions % 3 == 0 ? V1VisualLayerMode.Disabled : V1VisualLayerMode.Static);
+                    runtime.SetGraphicsOverlay(transitions % 3 == 2, .15, .12, 1);
+                }
+                if (boundaryIndex % recordingPeriod == 0)
+                {
+                    var cycleStop = await runtime.StopRecordingAsync();
+                    if (cycleStop.Status != RecordingStopStatus.Stopped)
+                        throw new InvalidOperationException("Recording cycle did not drain.");
+                    if (!(await runtime.StartRecordingAsync(RecordingSessionId.New(), RecordingOutputId.New())).Succeeded)
+                        throw new InvalidOperationException("Recording cycle restart failed.");
+                    recordingCycles++;
                 }
 
                 if (boundaryIndex % 30 == 0)
                 {
                     var performance = runtime.Snapshot.Performance;
-                    if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Add(cpu);
-                    if (performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Add(gpu);
-                    if (performance.GpuVramUsedBytes is { } vram) vramUsedMiB.Add(vram / 1024.0 / 1024.0);
+                    if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Observe(cpu);
+                    if (physical && deviceOrdinal == 0 && performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Observe(gpu);
+                    if (physical && deviceOrdinal == 0 && performance.GpuVramUsedBytes is { } vram)
+                    {
+                        vramUsedMiB.Observe(vram / 1024.0 / 1024.0);
+                        vramResources.Observe(Stopwatch.GetElapsedTime(startedAt), checked((long)vram), 0);
+                    }
+                    process.Refresh();
+                    processMemoryMiB.Observe(process.PrivateMemorySize64 / 1024.0 / 1024.0);
+                    processHandles.Observe(process.HandleCount);
+                    resources.Observe(Stopwatch.GetElapsedTime(startedAt), process.PrivateMemorySize64, process.HandleCount);
                 }
 
 
@@ -532,6 +589,17 @@ public sealed class RendererReferenceHardwareQualificationTests
                   runtime.GpuMemoryTransfers.MonitoringResources.ActiveResources == 0,
             TimeSpan.FromSeconds(5));
 
+        process.Refresh();
+        resources.Observe(Stopwatch.GetElapsedTime(startedAt), process.PrivateMemorySize64, process.HandleCount);
+        if (physical && deviceOrdinal == 0 && runtime.Snapshot.Performance.GpuVramUsedBytes is { } finalVram)
+            vramResources.Observe(Stopwatch.GetElapsedTime(startedAt), checked((long)finalVram), 0);
+        var resourcePlateau = resources.Assess(512 * 1024.0 * 1024.0, 128);
+        var vramPlateau = vramResources.Assess(512 * 1024.0 * 1024.0, 0);
+        if (physical && durationSeconds >= 14400 && vramPlateau != "PASS")
+            throw new InvalidOperationException("Long renderer profile lacks complete bounded GPU VRAM plateau evidence.");
+        if (resourcePlateau == "FAIL" || (durationSeconds >= 14400 && resourcePlateau != "PASS"))
+            throw new InvalidOperationException("Renderer resource plateau did not meet the declared growth policy.");
+        await runtime.DisposeAsync();
         var finalSnapshot = runtime.Snapshot;
         var finalReadback = runtime.ProgramReadbackPoolStatistics;
         var finalTransfers = runtime.GpuMemoryTransfers;
@@ -540,7 +608,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         if (finalSnapshot.ActiveGpuSurfaces != 0)
             throw new InvalidOperationException("Renderer qualification retained active GPU surfaces after the final boundary.");
-        if (finalReadback.ActiveBuffers != 0)
+        if (finalReadback.ActiveBuffers != 0 || finalReadback.AllocatedBuffers != 0)
             throw new InvalidOperationException("Renderer qualification retained active Program readback buffers.");
         if (finalTransfers.MonitoringResources.ActiveResources != 0)
             throw new InvalidOperationException("Renderer qualification retained shared monitoring resources.");
@@ -554,11 +622,10 @@ public sealed class RendererReferenceHardwareQualificationTests
             throw new InvalidOperationException("Renderer qualification did not execute the governed DISSOLVE transition.");
         if (sequenceDiscontinuities != 0)
             throw new InvalidOperationException($"Renderer qualification observed {sequenceDiscontinuities} sequence discontinuities.");
-        if (finalTransfers.MonitoringResources.TotalExports == 0)
+        if (physical && finalTransfers.MonitoringResources.TotalExports == 0)
             throw new InvalidOperationException("Renderer qualification did not export CUDA/D3D11 monitoring resources.");
 
-        durations.Sort();
-        var deadlineViolations = checked((ulong)durations.Count(value => value > frameBudgetMilliseconds));
+
         var gpuTiming = BuildGpuTiming(timingCollector.Snapshot());
         var runtimeDroppedFrames = finalSnapshot.Performance.DroppedFrames;
         var deviceFaultObservations = runtime.RecentObservations(V1RuntimeHostService.RetainedObservationCapacity)
@@ -573,19 +640,23 @@ public sealed class RendererReferenceHardwareQualificationTests
         {
             format = FormatName(format),
             durationSeconds,
+            elapsedSeconds = Stopwatch.GetElapsedTime(startedAt).TotalSeconds,
+            transitions,
             boundaries = durations.Count,
             warmupBoundaries,
-            boundaryScope = "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO",
+            hardwareBackend = physical,
+            boundaryScope = physical ? "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO" : "MANAGED_HARNESS_REGRESSION",
             missedSchedulerSlots,
             pipelineTiming = pipeline.PipelineSnapshot(),
             cudaTimingWindow = new { timingCollector.Capacity, timingCollector.OverwrittenSampleCount, timingCollector.ContentionDroppedSamples },
             frameBudgetMilliseconds,
             cpuBoundary = new
             {
-                p50Milliseconds = Percentile(durations, 0.50),
-                p95Milliseconds = Percentile(durations, 0.95),
-                p99Milliseconds = Percentile(durations, 0.99),
-                maximumMilliseconds = durations[^1],
+                p50Milliseconds = durations.PercentileUpperBound(.50),
+                p95Milliseconds = durations.PercentileUpperBound(.95),
+                p99Milliseconds = durations.PercentileUpperBound(.99),
+                maximumMilliseconds = durations.Maximum,
+                histogram = durations.Summary(),
                 deadlineViolations
             },
             gpuTimings = gpuTiming,
@@ -597,9 +668,19 @@ public sealed class RendererReferenceHardwareQualificationTests
                 }).ToArray(),
             telemetry = new
             {
-                cpuUtilizationPercent = Percentiles(cpuUtilization),
-                gpuUtilizationPercent = Percentiles(gpuUtilization),
-                vramUsedMiB = Percentiles(vramUsedMiB)
+                gpuTelemetryScope = physical && deviceOrdinal == 0 ? "NVIDIA_NVML_DEVICE_0" : "UNVERIFIED",
+                cpuUtilizationPercent = cpuUtilization.Summary(),
+                gpuUtilizationPercent = gpuUtilization.Summary(),
+                vramUsedMiB = vramUsedMiB.Summary(),
+                processPrivateMiB = processMemoryMiB.Summary(),
+                processHandles = processHandles.Summary(),
+                resourceWindows = resources.Snapshot(),
+                vramWindows = vramResources.Snapshot(),
+                vramPlateau,
+                maximumVramGrowthBytes = 512 * 1024L * 1024L,
+                resourcePlateau,
+                maximumPrivateGrowthBytes = 512 * 1024L * 1024L,
+                maximumHandleGrowth = 128
             },
             continuity = new
             {
@@ -616,6 +697,10 @@ public sealed class RendererReferenceHardwareQualificationTests
             },
             recording = new
             {
+                cycles = recordingCycles,
+                requestedBackpressureBoundaries = recordingBackpressureBoundaries,
+                effectivePressureReleaseBoundary = pressureReleaseBoundary,
+                queueCapacity = ProgramRecorder.DefaultQueueCapacity,
                 accepted = recordingAccepted,
                 rejectedDuringPressure = recordingRejected,
                 writerWrites = writer.Writes,
@@ -623,6 +708,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             },
             monitoring = new
             {
+                reconnectCycles = monitorReconnects,
                 disconnected = monitoringDisconnected,
                 reconnected = monitoringReconnected,
                 captured = monitoringStats.Captured,
@@ -667,6 +753,7 @@ public sealed class RendererReferenceHardwareQualificationTests
             {
                 activeGpuSurfaces = finalSnapshot.ActiveGpuSurfaces,
                 activeReadbackBuffers = finalReadback.ActiveBuffers,
+                allocatedReadbackBuffers = finalReadback.AllocatedBuffers,
                 activeSharedMonitoringResources = finalTransfers.MonitoringResources.ActiveResources
             }
         };

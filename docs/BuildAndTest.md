@@ -355,3 +355,18 @@ dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --con
 ```
 
 The existing binding/recovery step also runs actual child-process crash/restart, repeated owned-process shutdown, durable show recovery and old 1.0 checkpoint regressions. All five Required Gates remain mandatory on the exact PR head, including the authoritative packaged release/lifecycle path. The [lifecycle fault matrix](ProcessRecoveryAndSupervision.md#lifecycle-fault-qualification-matrix) distinguishes software counters and fault injection from unavailable physical GPU/driver/soak evidence.
+
+
+## Sustained mixed-load qualification
+
+After the canonical Release build, Required Gates run bounded histogram/resource regressions, evidence-verifier negative fixtures, the short staged mixed-load smoke and managed renderer cycle/pressure regressions. The short smoke reuses the existing integration and factored layer/consumer matrices; it emits `SHORT_SOFTWARE_PASS` and never qualifies long soak.
+
+For an opt-in Windows x64 software run, use:
+
+```powershell
+./build/qualification/Invoke-SustainedMixedLoadQualification.ps1 -Profile 8h
+```
+
+The `24h` and `72h` profiles require their complete elapsed duration. Each invocation creates a unique evidence directory; manifests bind source/build, pinned SDK, workload hash, summary and TRX hashes. `-NoBuild` is for already-built outputs from the same source only.
+
+Physical reference renderer profiles `soak8h`, `soak24h` and `soak72h` reuse the existing approved-machine runner, with explicit total duration over both formats. See [Renderer Qualification](RendererQualificationAndSoakTesting.md#sustained-profile-duration-and-bounded-statistics) and [Timing/Soak Qualification](TimingReferenceLatencySoakQualification.md#bounded-sustained-load-evidence) for scope, metrics, resource budgets and unavailable-evidence status.

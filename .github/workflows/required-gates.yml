@@ -54,6 +54,28 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Bounded soak summary regressions
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~BoundedSoakEvidenceTests" --logger "console;verbosity=detailed"
+
+      - name: Soak evidence verifier negative regressions
+        shell: pwsh
+        run: ./build/qualification/Test-SustainedMixedLoadVerifierRegression.ps1
+
+      - name: Staged mixed-load software smoke
+        shell: pwsh
+        run: ./build/qualification/Invoke-SustainedMixedLoadQualification.ps1 -Profile smoke -NoBuild
+
+      - name: Renderer workload cycle software regressions
+        run: dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --no-build --filter "FullyQualifiedName~RendererReferenceHardwareQualificationTests.Renderer_workload_cycles_and_pressure" --logger "console;verbosity=detailed"
+
+      - name: Preserve bounded mixed-load software evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-mixed-soak-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/mixed-soak
+          if-no-files-found: error
+
       - name: Lifecycle GPU fault qualification
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuBackendResourceSemanticsTests" --logger "console;verbosity=detailed"
 
@@ -327,6 +349,10 @@ jobs:
       - name: Verify renderer qualification policy
         shell: pwsh
         run: ./build/quality/Test-RendererQualificationPolicy.ps1
+
+      - name: Verify bounded soak qualification policy
+        shell: pwsh
+        run: ./build/quality/Test-SoakQualificationPolicy.ps1
 
       - name: Verify GPU lifecycle recovery policy
         shell: pwsh

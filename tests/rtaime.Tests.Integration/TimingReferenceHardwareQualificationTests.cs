@@ -8,6 +8,7 @@ using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
+using rtaime.Runtime;
 
 namespace rtaime.Tests.Integration;
 
@@ -22,6 +23,10 @@ public sealed class TimingReferenceHardwareQualificationTests
 		var expectedAdapter = RequireEnvironment("RTAIME_TIMING_EXPECTED_ADAPTER");
 		var expectedSdkRevision = RequireEnvironment("RTAIME_AJA_SDK_REVISION");
 		var evidencePath = RequireEnvironment("RTAIME_TIMING_REFERENCE_EVIDENCE");
+        var sourceCommit = RequireEnvironment("RTAIME_TIMING_SOURCE_COMMIT");
+        if (sourceCommit.Length != 40 || sourceCommit.Any(c => !Uri.IsHexDigit(c)) ||
+            sourceCommit != RequireEnvironment("RTAIME_TIMING_BUILD_COMMIT"))
+            throw new InvalidOperationException("Timing evidence requires matching exact source/build revisions.");
 		var soakSeconds = ParsePositiveInt("RTAIME_TIMING_SOAK_SECONDS");
 		var requireRelock = bool.Parse(RequireEnvironment("RTAIME_TIMING_REQUIRE_REFERENCE_RELOCK"));
 		var maximumHostCycleP95Milliseconds = ParsePositiveDouble("RTAIME_TIMING_MAX_HOST_CYCLE_P95_MS");
@@ -41,7 +46,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 			format,
 			new NullRecordingWriter());
 
-		var hostCycleSamples = new List<double>();
+		var hostCycleSamples = new BoundedSoakHistogram(.01, 10000);
 		var seenInitialReferenceLock = false;
 		var referenceLossObserved = false;
 		var referenceRelockObserved = false;
@@ -63,9 +68,9 @@ public sealed class TimingReferenceHardwareQualificationTests
 
 		using (var mediaIo = new MediaIoVerticalSlice(adapter, sourceA, sourceB, format, requireExternalReference: true))
 		{
-			var deadline = DateTimeOffset.UtcNow.AddSeconds(soakSeconds);
+			var soakClock = Stopwatch.StartNew();
 			var nextTelemetrySampleAt = DateTimeOffset.UtcNow.AddSeconds(1);
-			while (DateTimeOffset.UtcNow < deadline)
+			while (soakClock.Elapsed < TimeSpan.FromSeconds(soakSeconds))
 			{
 				var cycleStarted = Stopwatch.GetTimestamp();
 				mediaIo.PumpInputs();
@@ -104,7 +109,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 					{
 						lastSubmittedCapture = latestA.CaptureSequence;
 						if (mediaIo.Statistics.OutputAccepted % 10UL == 0)
-							hostCycleSamples.Add(Stopwatch.GetElapsedTime(cycleStarted).TotalMilliseconds);
+							hostCycleSamples.Observe(Stopwatch.GetElapsedTime(cycleStarted).TotalMilliseconds);
 					}
 					else
 					{
@@ -155,8 +160,8 @@ public sealed class TimingReferenceHardwareQualificationTests
 
 		var expectedFrames = format.FrameRate.Numerator / (double)format.FrameRate.Denominator * soakSeconds;
 		var minimumContinuityFrames = checked((ulong)Math.Floor(expectedFrames * 0.85));
-		var hostCycleP95 = Percentile(hostCycleSamples, 0.95);
-		var hostCycleMaximum = hostCycleSamples.Count == 0 ? double.PositiveInfinity : hostCycleSamples.Max();
+		var hostCycleP95 = hostCycleSamples.PercentileUpperBound(.95) ?? double.PositiveInfinity;
+		var hostCycleMaximum = hostCycleSamples.Maximum ?? double.PositiveInfinity;
 		var continuityPassed = statistics.CapturedA >= minimumContinuityFrames &&
 			statistics.CapturedB >= minimumContinuityFrames &&
 			statistics.OutputAccepted >= minimumContinuityFrames &&
@@ -177,7 +182,8 @@ public sealed class TimingReferenceHardwareQualificationTests
 			copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 			schemaVersion = "1.0",
 			status = passed ? "PASSED" : "FAILED",
-			sourceCommit = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local",
+			sourceCommit,
+            buildCommit = sourceCommit,
 			capturedAtUtc = DateTimeOffset.UtcNow,
 			expectedAdapter,
 			detectedAdapter = adapter.Metadata.AdapterName,
@@ -198,8 +204,9 @@ public sealed class TimingReferenceHardwareQualificationTests
 			hostCycle = new
 			{
 				sampleCount = hostCycleSamples.Count,
-				p95Milliseconds = hostCycleP95,
-				maximumMilliseconds = hostCycleMaximum,
+				histogram = hostCycleSamples.Summary(),
+				p95Milliseconds = hostCycleSamples.PercentileUpperBound(.95),
+				maximumMilliseconds = hostCycleSamples.Maximum,
 				maximumAllowedP95Milliseconds = maximumHostCycleP95Milliseconds
 			},
 			telemetry = new

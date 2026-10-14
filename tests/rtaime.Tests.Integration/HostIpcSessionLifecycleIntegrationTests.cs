@@ -226,19 +226,36 @@ public sealed class HostIpcSessionLifecycleIntegrationTests
 				process.Lifecycle.State == RuntimeHostProcessState.Ready &&
 				process.IpcServer?.Running == true);
 
-			var exchanges = Enumerable.Range(0, clients)
-				.Select(_ => ExchangeAsync(
-					endpoint,
-					"ControlHost",
-					new Dictionary<string, string>
-					{
-						["runtime"] = RuntimeContractVersion.Current.ToString(),
-						["provider"] = ProviderContractVersion.Current.ToString()
-					},
-					"runtime.graphics.overlay.clear",
-					new { }))
-				.ToArray();
-			var responses = await Task.WhenAll(exchanges);
+			var sessions = new List<NamedPipeClientStream>(clients);
+			JsonDocument[] responses;
+			try
+			{
+				// Qualify simultaneous requests after ordinary handshakes complete.
+				// ConnectAsync uses blocking pool work on Windows; a connect wave can
+				// starve the accept continuations rather than exercise sequence allocation.
+				for (var index = 0; index < clients; index++)
+					sessions.Add(await OpenSessionAsync(endpoint, "ControlHost",
+						new Dictionary<string, string>
+						{
+							["runtime"] = RuntimeContractVersion.Current.ToString(),
+							["provider"] = ProviderContractVersion.Current.ToString()
+						}));
+				var start = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+				async Task<JsonDocument> RequestAsync(NamedPipeClientStream session)
+				{
+					await start.Task;
+					var correlation = Identity.New().ToString();
+					await WriteEnvelopeAsync(session, "runtime.graphics.overlay.clear", Identity.New().ToString(), correlation, new { });
+					return await ReadEnvelopeAsync(session);
+				}
+				var exchanges = sessions.Select(RequestAsync).ToArray();
+				start.SetResult(true);
+				responses = await Task.WhenAll(exchanges);
+			}
+			finally
+			{
+				foreach (var session in sessions) await session.DisposeAsync();
+			}
 
 			try
 			{

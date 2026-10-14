@@ -42,8 +42,8 @@ Assert-Condition ([int]$profile.artifactRetentionDays -eq 90) "Renderer qualific
 Assert-Condition (@($profile.formats).Count -eq 2 -and @($profile.formats) -contains "1080p50" -and @($profile.formats) -contains "1080p59.94") "Renderer qualification must retain both V1 formats."
 Assert-Condition ((@($profile.compositorLayerCounts) -join ",") -eq "0,1,2,4,8") "Renderer qualification must retain the 0/1/2/4/8 layer matrix."
 $profiles = @($profile.profiles)
-Assert-Condition ($profiles.Count -eq 3) "Renderer qualification must declare exactly smoke, stress and soak profiles."
-foreach ($name in @("smoke", "stress", "soak")) {
+Assert-Condition ($profiles.Count -eq 6) "Renderer qualification must declare smoke, stress, soak and 8/24/72-hour profiles."
+foreach ($name in @("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")) {
     Assert-Condition (@($profiles | Where-Object name -eq $name).Count -eq 1) "Renderer qualification profile '$name' is required."
 }
 Assert-Condition ([int](@($profiles | Where-Object name -eq "smoke")[0].durationSecondsPerFormat) -eq 30) "Renderer smoke profile must retain 30 seconds per format."
@@ -168,3 +168,16 @@ foreach ($mutation in @(
     Assert-Condition $rejected "Renderer timing validator accepted invalid '$($mutation.field)' evidence."
 }
 Write-Host "Renderer timing summary negative fixtures PASS"
+
+foreach ($hours in @(8, 24, 72)) {
+    $long = @($profiles | Where-Object name -eq ("soak" + $hours + "h"))[0]
+    Assert-Condition ([int]$long.durationSecondsPerFormat * 2 -eq $hours * 3600) "Long renderer profile must describe actual total duration over both formats."
+}
+Assert-Condition ($hardwareTest -match 'BoundedSoakHistogram' -and $hardwareTest -match 'BoundedSoakResourceTrend') "Long renderer observations must remain bounded."
+Assert-Condition ($hardwareTest -match 'ProgramRecorder.DefaultQueueCapacity \+ 2') "Recording pressure must follow the actual bounded queue capacity."
+
+foreach ($long in @($profiles | Where-Object { [string]$_.name -like "soak*h" })) {
+    Assert-Condition ([long]$long.resourcePlateau.maximumPrivateGrowthBytes -eq 536870912 -and
+        [long]$long.resourcePlateau.maximumVramGrowthBytes -eq 536870912 -and
+        [int]$long.resourcePlateau.maximumHandleGrowth -eq 128) "Long renderer resource budgets must match the executable qualification."
+}

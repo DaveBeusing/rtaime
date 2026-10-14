@@ -25,7 +25,10 @@ public sealed class RuntimeConsumerIsolationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Mixed_consumers_preserve_Program_cadence_audio_ownership_and_join_shutdown(bool use5994)
+    public async Task Mixed_consumers_preserve_Program_cadence_audio_ownership_and_join_shutdown(bool use5994) =>
+        await RunMixedAsync(use5994);
+
+    internal async Task RunMixedAsync(bool use5994, Action<object, IReadOnlyList<double>>? observe = null)
     {
         var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var root = Path.Combine(Path.GetTempPath(), "rtaime-consumer-isolation-" + Guid.NewGuid().ToString("N"));
@@ -230,7 +233,7 @@ public sealed class RuntimeConsumerIsolationTests
             Assert.Equal(1, replayWriter.Finalizations);
             var ordered = durations.Order().ToArray();
             double P(double rank) => ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * rank) - 1, 0, ordered.Length - 1)];
-            WriteEvidence(use5994, new
+            var evidence = new
             {
                 scope = "V1_SERVICE_WITH_SIMULATED_CONSUMER_BACKENDS_AND_GOVERNED_AI_OBSERVATION",
                 measurementKind = "CPU_WALL", warmupBoundaries = warmup, measuredBoundaries = ordered.Length,
@@ -241,8 +244,11 @@ public sealed class RuntimeConsumerIsolationTests
                 ndi = network.Ndi.Snapshot.Statistics, srt = network.Srt.Snapshot.Statistics,
                 maximumReadbackBuffers, maximumMonitoringDepth, monitorDrops,
                 singleProgramReadback = true, nativeTransport = "UNVERIFIED", physicalOutput = "UNVERIFIED",
-                gpuAndLongSoak = "UNVERIFIED", trace
-            });
+                gpuAndLongSoak = "UNVERIFIED", trace,
+                replayDroppedSamples = replay.Snapshot.Statistics.DroppedSamples
+            };
+            if (observe is null) WriteEvidence(use5994, evidence);
+            else observe(evidence, ordered);
         }
         finally
         {

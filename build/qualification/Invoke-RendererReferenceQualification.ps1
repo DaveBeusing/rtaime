@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak")][string]$Profile,
+    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")][string]$Profile,
     [Parameter(Mandatory)][string]$ExpectedDeviceName,
     [int]$DeviceOrdinal = 0,
     [string]$ProfilePath = "qualification/renderer/renderer-qualification.json",
@@ -72,6 +72,9 @@ if ([string]$profileDocument.qualification -ne "rtaime-renderer-reference") { th
 $selectedProfiles = @($profileDocument.profiles | Where-Object { [string]$_.name -eq $Profile })
 if ($selectedProfiles.Count -ne 1) { throw "Renderer qualification profile '$Profile' is not defined exactly once." }
 $selected = $selectedProfiles[0]
+if ([int]$selected.durationSecondsPerFormat -ge 14400 -and $DeviceOrdinal -ne 0) {
+    throw "Long profiles require NVIDIA ordinal 0 because current Runtime telemetry observes device 0."
+}
 
 $resolvedCommit = $SourceCommit.Trim().ToLowerInvariant()
 if ([string]::IsNullOrWhiteSpace($resolvedCommit)) {
@@ -79,9 +82,13 @@ if ([string]::IsNullOrWhiteSpace($resolvedCommit)) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to resolve renderer qualification source commit." }
 }
 if ($resolvedCommit -notmatch '^[0-9a-f]{40}$') { throw "Renderer qualification requires an exact 40-character source commit." }
+$actualCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $resolvedCommit) { throw "Declared renderer source differs from checked-out HEAD." }
+& git -C $repositoryRoot diff --quiet HEAD --
+if ($LASTEXITCODE -ne 0) { throw "Tracked renderer source differs from its qualification commit." }
 
 $resolvedOutputRoot = Resolve-RepositoryPath $OutputRoot
-if (Test-Path -LiteralPath $resolvedOutputRoot) { Remove-Item -LiteralPath $resolvedOutputRoot -Recurse -Force }
+if (Test-Path -LiteralPath $resolvedOutputRoot) { throw "Evidence output already exists; choose a fresh OutputRoot to preserve previous qualification." }
 $logsRoot = Join-Path $resolvedOutputRoot "logs"
 New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
 

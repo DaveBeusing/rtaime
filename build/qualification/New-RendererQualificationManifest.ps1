@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak")][string]$Profile,
+    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")][string]$Profile,
     [Parameter(Mandatory)][string]$ExpectedDeviceName,
     [int]$DeviceOrdinal = 0,
     [string]$ProfilePath = "qualification/renderer/renderer-qualification.json",
@@ -57,6 +57,10 @@ if ([string]::IsNullOrWhiteSpace($resolvedCommit)) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to resolve renderer qualification source commit." }
 }
 if ($resolvedCommit -notmatch '^[0-9a-f]{40}$') { throw "Renderer qualification requires an exact 40-character source commit." }
+$actualCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $resolvedCommit) { throw "Declared renderer source differs from checked-out HEAD." }
+& git -C $repositoryRoot diff --quiet HEAD --
+if ($LASTEXITCODE -ne 0) { throw "Tracked renderer source differs from its qualification commit." }
 if ($env:GITHUB_SHA -match '^[0-9a-fA-F]{40}$' -and $resolvedCommit -ne $env:GITHUB_SHA.ToLowerInvariant()) {
     throw "Resolved source commit '$resolvedCommit' differs from workflow source '$($env:GITHUB_SHA)'."
 }

@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)][string]$SoftwareEvidencePath,
     [Parameter(Mandatory)][string]$BaselineComparisonPath,
     [Parameter(Mandatory)][string]$ExpectedSourceCommit,
-    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak")][string]$ExpectedProfile
+    [Parameter(Mandatory)][ValidateSet("smoke", "stress", "soak", "soak8h", "soak24h", "soak72h")][string]$ExpectedProfile
 )
 
 Set-StrictMode -Version Latest
@@ -120,6 +120,27 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     $matches = @($runtimeResults | Where-Object { [string]$_.format -eq $format })
     if ($matches.Count -ne 1) { throw "Renderer runtime evidence is missing '$format'." }
     $result = $matches[0]
+    if (-not [bool]$result.hardwareBackend -or
+        [string]$result.boundaryScope -ne "V1_SERVICE_WITH_CONSUMERS_EXCLUDES_EXTERNAL_MEDIA_IO") {
+        throw "Software workload cannot be renderer hardware evidence."
+    }
+    $minimumSeconds = switch ($ExpectedProfile) {
+        "smoke" { 30 } "stress" { 300 } "soak" { 3600 }
+        "soak8h" { 14400 } "soak24h" { 43200 } "soak72h" { 129600 }
+    }
+    if ([int]$result.durationSeconds -ne $minimumSeconds -or
+        -not [double]::IsFinite([double]$result.elapsedSeconds) -or
+        [double]$result.elapsedSeconds -lt $minimumSeconds) { throw "Actual renderer duration is incomplete." }
+    if ([int]$result.cpuBoundary.histogram.capacity -ne 10001 -or
+        [string]$result.cpuBoundary.histogram.percentileMethod -ne "WHOLE_RUN_NEAREST_RANK_UPPER_BIN_BOUND" -or
+        [ulong]$result.cpuBoundary.histogram.count -ne [ulong]$result.boundaries -or
+        @($result.telemetry.resourceWindows).Count -gt 96 -or @($result.telemetry.vramWindows).Count -gt 96) { throw "Renderer whole-run evidence is unbounded or incomplete." }
+    if ($minimumSeconds -ge 14400 -and ([string]$result.telemetry.resourcePlateau -ne "PASS" -or [string]$result.telemetry.vramPlateau -ne "PASS")) {
+        throw "Long renderer profile requires measured resource plateau evidence."
+    }
+    if ([int]$result.recording.effectivePressureReleaseBoundary -le [int]$result.recording.queueCapacity + 1) {
+        throw "Controlled pressure must exceed the real queue plus in-flight sample."
+    }
     if ([int]$result.boundaries -le 0) { throw "Renderer runtime evidence has no boundaries for '$format'." }
     if ([ulong]$result.continuity.sequenceDiscontinuities -ne 0 -or
         [ulong]$result.continuity.duplicateSequenceFrames -ne 0 -or
@@ -136,7 +157,7 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     }
     if ([ulong]$result.monitoring.totalSharedExports -eq 0) { throw "Renderer monitoring shared-resource export was not exercised for '$format'." }
     if ([int]$result.cleanup.activeGpuSurfaces -ne 0 -or
-        [int]$result.cleanup.activeReadbackBuffers -ne 0 -or
+        [int]$result.cleanup.activeReadbackBuffers -ne 0 -or [int]$result.cleanup.allocatedReadbackBuffers -ne 0 -or
         [int]$result.cleanup.activeSharedMonitoringResources -ne 0) {
         throw "Renderer cleanup retained GPU/readback/monitoring resources for '$format'."
     }

@@ -36,12 +36,54 @@
       "warmupBoundaries": 60,
       "compositorSamplesPerCase": 120,
       "recordingBackpressureBoundaries": 64
+    },
+    {
+      "name": "soak8h",
+      "durationSecondsPerFormat": 14400,
+      "warmupBoundaries": 60,
+      "compositorSamplesPerCase": 120,
+      "recordingBackpressureBoundaries": 64,
+      "nominalTotalRuntimeSeconds": 28800,
+      "resourcePlateau": {
+        "minimumCompletedPostWarmupHours": 3,
+        "maximumPrivateGrowthBytes": 536870912,
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
+      }
+    },
+    {
+      "name": "soak24h",
+      "durationSecondsPerFormat": 43200,
+      "warmupBoundaries": 60,
+      "compositorSamplesPerCase": 120,
+      "recordingBackpressureBoundaries": 64,
+      "nominalTotalRuntimeSeconds": 86400,
+      "resourcePlateau": {
+        "minimumCompletedPostWarmupHours": 3,
+        "maximumPrivateGrowthBytes": 536870912,
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
+      }
+    },
+    {
+      "name": "soak72h",
+      "durationSecondsPerFormat": 129600,
+      "warmupBoundaries": 60,
+      "compositorSamplesPerCase": 120,
+      "recordingBackpressureBoundaries": 64,
+      "nominalTotalRuntimeSeconds": 259200,
+      "resourcePlateau": {
+        "minimumCompletedPostWarmupHours": 3,
+        "maximumPrivateGrowthBytes": 536870912,
+        "maximumHandleGrowth": 128,
+        "maximumVramGrowthBytes": 536870912
+      }
     }
   ],
   "performancePolicy": {
     "frameBudgetAssessment": "P99_REPORTED",
     "baselineComparison": "REQUIRED_FOR_REGRESSION_CLAIM",
-    "maximumP99RegressionPercent": 20.0,
+    "maximumP99RegressionPercent": 20,
     "cudaReferenceQualificationRequired": true
   },
   "physicalScenarios": [
