@@ -159,6 +159,35 @@ public sealed class MediaLibraryBrowsingTests
 		finally { if (File.Exists(path)) File.Delete(path); }
 	}
 
+	[Fact]
+	public async Task Monitoring_frame_arrivals_update_shared_images_without_resetting_library_or_starving_hover()
+	{
+		var transport = new ForbiddenTransport();
+		var client = new OperatorControlClient(transport);
+		await using var owner = new OperatorViewModel();
+		await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+		using var pool = new MediaPoolInspectorViewModel(owner, deck);
+		var source = new OperatorSourceTileViewModel(new OperatorSourceDescriptor("source-monitor", "Camera"));
+		owner.Sources.Add(source);
+		var item = Assert.Single(pool.FilteredItems.Where(i => i.Kind == MediaPoolItemKind.Source));
+		var resets = 0;
+		pool.FilteredItems.CollectionChanged += (_, _) => resets++;
+		var hover = pool.BeginHoverAsync(item);
+		for (var index = 0; index < 25; index++)
+		{
+			var image = new DrawingImage(); image.Freeze();
+			source.ApplyThumbnail(image, "monitor " + index);
+			Assert.Same(image, item.Thumbnail);
+			await Task.Delay(10);
+		}
+		await hover;
+		Assert.Equal(0, resets);
+		Assert.NotNull(pool.HoverThumbnail);
+		Assert.Contains("MONITOR THUMBNAIL", pool.HoverStatus);
+		Assert.Same(item, pool.FilteredItems.First(i => i.Key == item.Key));
+		Assert.Equal(0, transport.Calls);
+	}
+
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");

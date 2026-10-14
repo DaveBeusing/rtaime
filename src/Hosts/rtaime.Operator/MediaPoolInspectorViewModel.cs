@@ -43,8 +43,17 @@ public sealed record MediaPoolItemViewModel(
 	bool IsOnline,
 	bool IsReady,
 	string? LocalPath = null,
-	TimeSpan? KnownDuration = null)
+	TimeSpan? KnownDuration = null) : INotifyPropertyChanged
 {
+	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
+	public event PropertyChangedEventHandler? PropertyChanged;
+	internal void UpdateThumbnail(ImageSource? image)
+	{
+		if (ReferenceEquals(Thumbnail, image)) return;
+		Thumbnail = image;
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PreviewCapabilityLabel)));
+	}
 	public string DurationLabel =>
 		Kind == MediaPoolItemKind.Clip
 			? Detail.Split('·', 2, StringSplitOptions.TrimEntries)[0]
@@ -1499,7 +1508,22 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasError));
 		OnPropertyChanged(nameof(ErrorState));
 	}
-	private void OnSourceItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
+	private void OnSourceItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (sender is OperatorSourceTileViewModel source &&
+			e.PropertyName is nameof(OperatorSourceTileViewModel.Thumbnail) or nameof(OperatorSourceTileViewModel.ThumbnailFormat))
+		{
+			// A frame arrival must not reset virtualization, selection, or hover admission.
+			foreach (var item in _allItems)
+			{
+				if (item.Kind == MediaPoolItemKind.Source && item.ReferenceId == source.Id ||
+					item.Kind == MediaPoolItemKind.Clip && item.ReferenceId == _mediaDeck.AssetId && source.Id == _mediaDeck.SourceId)
+					item.UpdateThumbnail(source.Thumbnail);
+			}
+			return;
+		}
+		Refresh();
+	}
 	private void OnAudioItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
 
 	private void RaiseSelectionState()
