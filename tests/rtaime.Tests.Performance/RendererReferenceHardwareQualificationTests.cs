@@ -340,6 +340,8 @@ public sealed class RendererReferenceHardwareQualificationTests
         int recordingPeriod = 900,
         int minimumBoundaries = 0)
     {
+        if (physical && durationSeconds >= 14400 && deviceOrdinal != 0)
+            throw new InvalidOperationException("Long renderer VRAM qualification requires ordinal 0; the current Runtime telemetry samples NVIDIA device 0.");
         var sourceA = new ProductionSourceId(Identity.New());
         var sourceB = new ProductionSourceId(Identity.New());
         var mediaA = new MediaSourceId(sourceA.Value);
@@ -553,8 +555,8 @@ public sealed class RendererReferenceHardwareQualificationTests
                 {
                     var performance = runtime.Snapshot.Performance;
                     if (performance.CpuUtilizationPercent is { } cpu) cpuUtilization.Observe(cpu);
-                    if (performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Observe(gpu);
-                    if (performance.GpuVramUsedBytes is { } vram)
+                    if (physical && deviceOrdinal == 0 && performance.GpuUtilizationPercent is { } gpu) gpuUtilization.Observe(gpu);
+                    if (physical && deviceOrdinal == 0 && performance.GpuVramUsedBytes is { } vram)
                     {
                         vramUsedMiB.Observe(vram / 1024.0 / 1024.0);
                         vramResources.Observe(Stopwatch.GetElapsedTime(startedAt), checked((long)vram), 0);
@@ -661,6 +663,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                 }).ToArray(),
             telemetry = new
             {
+                gpuTelemetryScope = physical && deviceOrdinal == 0 ? "NVIDIA_NVML_DEVICE_0" : "UNVERIFIED",
                 cpuUtilizationPercent = cpuUtilization.Summary(),
                 gpuUtilizationPercent = gpuUtilization.Summary(),
                 vramUsedMiB = vramUsedMiB.Summary(),
