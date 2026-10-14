@@ -350,6 +350,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-RendererQualificationPolicy.ps1
 
+      - name: Verify bounded soak qualification policy
+        shell: pwsh
+        run: ./build/quality/Test-SoakQualificationPolicy.ps1
+
       - name: Verify GPU lifecycle recovery policy
         shell: pwsh
         run: ./build/quality/Test-GpuLifecycleRecoveryPolicy.ps1

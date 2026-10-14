@@ -30,6 +30,10 @@ public sealed class SustainedMixedLoadQualificationTests
         if (configuration.GetProperty("schemaVersion").GetString() != "1.0" ||
             configuration.GetProperty("lane").GetString() != "MANAGED_STAGED_SINGLE_TESTHOST")
             throw new InvalidOperationException("Unsupported mixed-load workload descriptor.");
+        var expectedStages = new[] { "MIXED_CONSUMERS_BOTH_FORMATS", "DECODED_PLAYBACK",
+            "CUES_AND_SCENE_TEMPLATES", "AUTHORITATIVE_AUDIO", "CONTROLLED_HOST_FAULTS" };
+        if (!configuration.GetProperty("stages").EnumerateArray().Select(e => e.GetString()).SequenceEqual(expectedStages))
+            throw new InvalidOperationException("Descriptor stages differ from executable workload.");
         var profile = configuration.GetProperty("profiles").EnumerateArray()
             .Single(p => p.GetProperty("name").GetString() == profileName);
         var requiredSeconds = profile.GetProperty("minimumElapsedSeconds").GetInt32();

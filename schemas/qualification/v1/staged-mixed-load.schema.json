@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rtaime staged mixed-load evidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "qualification",
+    "sourceCommit",
+    "buildCommit",
+    "descriptorSha256",
+    "profile",
+    "completion",
+    "scope",
+    "elapsedSeconds",
+    "requiredSeconds",
+    "cycles",
+    "frames",
+    "latency",
+    "resourceWindows",
+    "resourcePlateau",
+    "physicalGpu",
+    "nativeNetworkTransport",
+    "physicalAvSynchronization",
+    "continuousSingleProduction",
+    "longSoak"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "qualification": {
+      "const": "rtaime-staged-mixed-load"
+    },
+    "scope": {
+      "const": "STAGED_MANAGED_SESSIONS_IN_ONE_TESTHOST"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "buildCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "descriptorSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "profile": {
+      "enum": [
+        "smoke",
+        "8h",
+        "24h",
+        "72h"
+      ]
+    },
+    "completion": {
+      "enum": [
+        "RUNNING",
+        "SHORT_SOFTWARE_PASS",
+        "STAGED_SOFTWARE_SOAK_PASS",
+        "FAILED"
+      ]
+    },
+    "elapsedSeconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "requiredSeconds": {
+      "enum": [
+        0,
+        28800,
+        86400,
+        259200
+      ]
+    },
+    "cycles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frames": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "latency": {
+      "type": "object",
+      "required": [
+        "count",
+        "capacity",
+        "percentileMethod",
+        "p50",
+        "p95",
+        "p99",
+        "maximum"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capacity": {
+          "const": 10001
+        },
+        "percentileMethod": {
+          "const": "WHOLE_RUN_NEAREST_RANK_UPPER_BIN_BOUND"
+        },
+        "p50": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p95": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p99": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "maximum": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "resourceWindows": {
+      "type": "array",
+      "maxItems": 96
+    },
+    "resourcePlateau": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ]
+    },
+    "longSoak": {
+      "enum": [
+        "UNVERIFIED",
+        "RUNNING",
+        "STAGED_SOFTWARE_SOAK_PASS",
+        "FAILED"
+      ]
+    },
+    "physicalGpu": {
+      "const": "UNVERIFIED"
+    },
+    "nativeNetworkTransport": {
+      "const": "UNVERIFIED"
+    },
+    "physicalAvSynchronization": {
+      "const": "UNVERIFIED"
+    },
+    "continuousSingleProduction": {
+      "const": "UNVERIFIED"
+    }
+  }
+}
