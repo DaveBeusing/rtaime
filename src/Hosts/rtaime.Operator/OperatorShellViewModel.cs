@@ -18,6 +18,8 @@ public sealed record OperatorWorkspaceLayoutSettings(
 	bool IsCenterMaximized,
 	string ViewerMode)
 {
+	public OperatorDockLayout Docking { get; init; } = OperatorDockLayout.Default;
+
 	public OperatorWorkspaceLayoutSettings Normalize() => this with
 	{
 		LeftPanelWidth = ClampFinite(
@@ -35,7 +37,8 @@ public sealed record OperatorWorkspaceLayoutSettings(
 			OperatorLayoutSettings.MinimumLowerPanelHeight,
 			OperatorLayoutSettings.MaximumLowerPanelHeight,
 			OperatorLayoutSettings.DefaultLowerPanelHeight),
-		ViewerMode = ViewerMode is "PREVIEW" or "PROGRAM" ? ViewerMode : "DUAL"
+		ViewerMode = ViewerMode is "PREVIEW" or "PROGRAM" ? ViewerMode : "DUAL",
+		Docking = (Docking ?? OperatorDockLayout.Default).Normalize()
 	};
 
 	private static double ClampFinite(double value, double minimum, double maximum, double fallback) =>
@@ -316,6 +319,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private bool _monitorFullscreenRestoreCenterMaximized;
 	private string _selectedWorkspace;
 	private string _viewerMode;
+	private OperatorDockLayout _docking;
 	private OperatorWindowPlacementSettings _windowPlacement;
 	private double _viewportWidth = 1600;
 	private double _viewportHeight = 900;
@@ -341,6 +345,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		_isRightCollapsed = layout.IsRightCollapsed;
 		_isCenterMaximized = layout.IsCenterMaximized;
 		_viewerMode = layout.ViewerMode;
+		_docking = layout.Docking;
 
 		ToggleLeftPanelCommand = new OperatorShellCommand(
 			ToggleLeftPanel,
@@ -368,6 +373,13 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
+    public OperatorDockLayout Docking => _docking;
+    public void SetDocking(OperatorDockLayout layout)
+    {
+        _docking = layout.Normalize();
+        OnPropertyChanged(nameof(Docking));
+        Save();
+    }
 	public bool IsCompactViewport =>
 		_viewportWidth < OperatorLayoutSettings.CompactViewportWidth ||
 		_viewportHeight < OperatorLayoutSettings.CompactViewportHeight;
@@ -813,7 +825,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			IsLeftCollapsed,
 			IsRightCollapsed,
 			IsCenterMaximized,
-			ViewerMode).Normalize();
+			ViewerMode) { Docking = _docking }.Normalize();
 
 	private void ApplyWorkspaceLayout(OperatorWorkspaceLayoutSettings layout)
 	{
@@ -825,6 +837,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		_isRightCollapsed = normalized.IsRightCollapsed;
 		_isCenterMaximized = normalized.IsCenterMaximized;
 		_viewerMode = normalized.ViewerMode;
+		_docking = normalized.Docking;
+		OnPropertyChanged(nameof(Docking));
 		RaiseLayoutGeometryChanged();
 		OnPropertyChanged(nameof(IsLeftCollapsed));
 		OnPropertyChanged(nameof(IsRightCollapsed));
