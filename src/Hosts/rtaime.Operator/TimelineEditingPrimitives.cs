@@ -15,7 +15,7 @@ public static class TimelineSnapPolicy
 		frame = Math.Clamp(frame, 0, totalFrames - 1);
 		if (!enabled) return new(frame, TimelineSnapKind.Frame, false);
 		threshold = Math.Clamp(threshold, 0, 10);
-		var nearest = targets.Where(t => t.Frame >= 0 && t.Frame < totalFrames && t.Kind != TimelineSnapKind.Frame)
+		var nearest = targets.Take(4096).Where(t => t.Frame >= 0 && t.Frame < totalFrames && t.Kind != TimelineSnapKind.Frame)
 			.Select(t => (Target: t, Distance: t.Frame >= frame ? t.Frame - frame : frame - t.Frame))
 			.Where(t => t.Distance <= threshold)
 			.OrderBy(t => t.Distance).ThenBy(t => t.Target.Kind).ThenBy(t => t.Target.Frame).FirstOrDefault();
