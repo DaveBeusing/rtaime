@@ -12,7 +12,8 @@ public sealed class OperatorDockLayoutTests
     public void Tabs_float_and_return_keep_each_panel_exactly_once()
     {
         var layout = OperatorDockLayout.Default.Dock("TOOLS", "CENTER").Float("MONITORS", OperatorPanelPlacement.Default);
-        Assert.Equal(new[] { "MONITORS", "TOOLS" }, layout.Groups.Single(g => g.Id == "CENTER").Panels.Where(p => p != "MONITORS").Prepend("MONITORS"));
+        Assert.Equal(new[] { "TOOLS" }, layout.Groups.Single(g => g.Id == "CENTER").Panels);
+        Assert.Equal("MONITORS", layout.Floating[0].Panel);
         Assert.Single(layout.Floating);
         layout = layout.Dock("MONITORS", layout.Floating[0].ReturnGroup);
         Assert.Empty(layout.Floating);
