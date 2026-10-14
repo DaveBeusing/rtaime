@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -22,6 +23,8 @@ public sealed partial class MediaPoolInspectorViewModel
 	private string? _hoverKey;
 	private MediaPoolItemViewModel? _hoverItem;
 	private bool _browsingDisposed;
+	private bool _metadataFiltersExpanded;
+	private bool _feedbackVisible;
 	private bool _loadingBins;
 	private bool _binsLoaded;
 	private bool _restoringBin;
@@ -37,7 +40,18 @@ public sealed partial class MediaPoolInspectorViewModel
 	public ICommand SaveSmartBinCommand { get; private set; } = null!;
 	public ICommand DeleteSmartBinCommand { get; private set; } = null!;
 	public ICommand ClearLibrarySelectionCommand { get; private set; } = null!;
-	public string BinStatus { get => _binStatus; private set => Set(ref _binStatus, value); }
+	public ICommand ToggleMetadataFiltersCommand { get; private set; } = null!;
+	public Visibility MetadataFiltersVisibility => _metadataFiltersExpanded ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility LibraryFeedbackVisibility => _feedbackVisible ? Visibility.Visible : Visibility.Collapsed;
+	public string BinStatus
+	{
+		get => _binStatus;
+		private set
+		{
+			if (!Set(ref _binStatus, value)) return;
+			HoverStatus = value; SetFeedbackVisible(true);
+		}
+	}
 	public string HoverStatus { get => _hoverStatus; private set => Set(ref _hoverStatus, value); }
 	public ImageSource? HoverThumbnail { get => _hoverThumbnail; private set => Set(ref _hoverThumbnail, value); }
 
@@ -45,6 +59,12 @@ public sealed partial class MediaPoolInspectorViewModel
 	{
 		SaveSmartBinCommand = new AsyncRelayCommand(SaveSmartBinAsync, () => !_loadingBins && !_browsingDisposed);
 		DeleteSmartBinCommand = new AsyncRelayCommand(DeleteSmartBinAsync, () => SelectedSmartBin is not null && !_loadingBins && !_browsingDisposed);
+		ToggleMetadataFiltersCommand = new AsyncRelayCommand(() =>
+		{
+			_metadataFiltersExpanded = !_metadataFiltersExpanded;
+			OnPropertyChanged(nameof(MetadataFiltersVisibility));
+			return Task.CompletedTask;
+		});
 		ClearLibrarySelectionCommand = new AsyncRelayCommand(() => { UpdateSelection([]); return Task.CompletedTask; });
 	}
 
@@ -149,6 +169,7 @@ public sealed partial class MediaPoolInspectorViewModel
 		CancelHover();
 		_hoverKey = item.Key;
 		_hoverItem = item;
+		SetFeedbackVisible(true);
 		var preview = await _hoverPreview.RequestAsync(item);
 		if (_browsingDisposed || _hoverKey != item.Key || preview is null) return;
 		HoverThumbnail = preview.Thumbnail; HoverStatus = preview.Status;
@@ -156,7 +177,13 @@ public sealed partial class MediaPoolInspectorViewModel
 	public void CancelHover()
 	{
 		_hoverPreview.Cancel(); _hoverKey = null; _hoverItem = null; HoverThumbnail = null;
+		SetFeedbackVisible(false);
 		HoverStatus = "Hover or focus an asset · scrub capability unavailable";
+	}
+	private void SetFeedbackVisible(bool value)
+	{
+		if (_feedbackVisible == value) return;
+		_feedbackVisible = value; OnPropertyChanged(nameof(LibraryFeedbackVisibility));
 	}
 	private void RaiseBrowsingCommands()
 	{

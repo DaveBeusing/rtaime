@@ -82,7 +82,7 @@ The catalogue therefore does not create a second playback path or routing author
 
 ## Context actions
 
-**Clear** clears the entire local selection. **Refresh availability** in the Add menu uses the existing catalogue-wide availability refresh. Single-target Preview, Timeline, Cue, Relink and Remove context actions are disabled during multi-selection; the handlers also reject them, so no implicit partial bulk operation is performed. Reveal and Properties remain read-only single-target inspection actions. No source file is deleted.
+**Clear selection** in the Add menu clears the entire local selection. **Refresh availability** in the Add menu uses the existing catalogue-wide availability refresh. Single-target Preview, Timeline, Cue, Relink and Remove context actions are disabled during multi-selection; the handlers also reject them, so no implicit partial bulk operation is performed. Reveal and Properties remain read-only single-target inspection actions. No source file is deleted.
 
 Catalogue Clip cards and list rows expose **Open in Preview**, **Add to Timeline**, **Add Cue at Playhead**, **Reveal in Explorer**, **Relink Media…**, **Remove from Library** and **Properties**.
 
@@ -102,7 +102,7 @@ The Client restarts a paged read if catalogue revision changes between pages, pr
 
 ## Smart Bins
 
-The custom controls below the existing search/type filters save up to 16 named filter combinations. Choose a known-duration range (under one minute, one to ten minutes, ten minutes or longer, or unknown) and presentation readiness, then **Save**. Selecting a saved entry restores search, category, type/availability, duration and readiness together. Changing a filter detaches the saved selection without overwriting its definition. **Del** removes only the saved filter.
+The custom controls below the existing search/type filters save up to 16 named filter combinations. Use **Filters** to reveal the duration/readiness row without permanently reducing the browser viewport. Choose a known-duration range (under one minute, one to ten minutes, ten minutes or longer, or unknown) and presentation readiness, then **Save**. Selecting a saved entry restores search, category, type/availability, duration and readiness together. Changing a filter detaches the saved selection without overwriting its definition. **Del** removes only the saved filter.
 
 Duration comes directly from the immutable catalogue descriptor, never from formatted text or a file probe. Non-catalogue items without typed duration remain unknown. Readiness is the existing presentation hint and does not qualify Program or startup production readiness. Tags are not supported by the catalogue and are not offered.
 
@@ -114,7 +114,7 @@ Hovering or keyboard-focusing an asset admits a latest-only preview after 180 ms
 
 Leaving an item/browser, hiding a browser, changing a filter/catalogue context, starting a drag or closing the window cancels pending admission and clears the image. Generation checks prevent cancelled work from publishing a stale thumbnail.
 
-The footer distinguishes **MONITOR THUMBNAIL**, **OFFLINE** and **UNSUPPORTED**. Independent position scrubbing and asynchronous asset thumbnail extraction are **unsupported** by the current backend and are explicitly capability gated. Hover never opens or seeks the Media Deck and never changes Preview or Program. Existing monitoring thumbnails can show the current source image; they are not claimed as time-indexed proxies.
+The non-interactive footer overlay preserves the browser viewport and distinguishes **MONITOR THUMBNAIL**, **OFFLINE** and **UNSUPPORTED**. Independent position scrubbing and asynchronous asset thumbnail extraction are **unsupported** by the current backend and are explicitly capability gated. Hover never opens or seeks the Media Deck and never changes Preview or Program. Existing monitoring thumbnails can show the current source image; they are not claimed as time-indexed proxies.
 
 There is no expensive thumbnail worker to pool in this implementation. A future extraction capability must provide a bounded, cancelable worker pool outside Program processing before the gate can be enabled.
 

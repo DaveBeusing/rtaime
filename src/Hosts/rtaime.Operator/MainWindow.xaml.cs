@@ -544,6 +544,11 @@ public partial class MainWindow : Window
 		}
 	}
 
+	private void OnMediaPoolClearSelectionClick(object sender, RoutedEventArgs e)
+	{
+		MediaPool.ClearLibrarySelectionCommand.Execute(null);
+		e.Handled = true;
+	}
 	private void OnMediaPoolRefreshClick(object sender, RoutedEventArgs e)
 	{
 		if (MediaPool.RefreshCatalogCommand.CanExecute(null)) MediaPool.RefreshCatalogCommand.Execute(null);
