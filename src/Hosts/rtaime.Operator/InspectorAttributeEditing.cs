@@ -22,6 +22,7 @@ public sealed partial class MediaPoolInspectorViewModel
         _operator.IsStale ? "STALE · resynchronize before editing" : !_operator.IsConnected ? "DISCONNECTED" :
         !InspectorInputsValid || CaptureInspectorValues() is { IsValid: false } ? "INVALID INPUT · correct the typed attributes" :
         !string.IsNullOrWhiteSpace(_operator.LastError) ? "REJECTED · " + _operator.LastError :
+        !string.IsNullOrWhiteSpace(_mediaDeck.LastError) ? "REJECTED · " + _mediaDeck.LastError :
         HasInspectorDraft ? "DRAFT · APPLY requires confirmation" : "CONFIRMED · local edits require APPLY";
     public string AttributeCompatibilityLabel => _attributeStatus.Length > 0 ? _attributeStatus :
         HasMultipleSelection ? "Batch editing deferred: no atomic multi-selection property contract." :

@@ -598,7 +598,7 @@
 															<TextBlock Text="Cue Name" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
 															<controls:RtaimeTextBox
 																Grid.Column="1"
-																MaxLength="128" Text="{Binding Inspector.CueNameDraft, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+																MaxLength="64" Text="{Binding Inspector.CueNameDraft, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 																IsCompact="True" />
 														</Grid>
 														<Grid Margin="96,4,0,4">

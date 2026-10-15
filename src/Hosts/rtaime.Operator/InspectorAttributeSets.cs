@@ -40,6 +40,6 @@ public sealed record InspectorGainAttributes(double Gain) : InspectorAttributeVa
 public sealed record InspectorCueAttributes(string Name) : InspectorAttributeValues
 {
     public override string Kind => "CUE NAME";
-    public override bool IsValid => !string.IsNullOrWhiteSpace(Name) && Name.Length <= 128 && !Name.Any(char.IsControl);
+    public override bool IsValid => !string.IsNullOrWhiteSpace(Name) && Name.Length <= global::rtaime.Media.Contracts.MediaCuePoint.MaximumNameLength && !Name.Any(char.IsControl);
 }
 public sealed record InspectorAttributePayload(int Version, string RevisionToken, InspectorAttributeValues Values);

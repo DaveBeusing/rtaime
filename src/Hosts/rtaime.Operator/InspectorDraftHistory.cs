@@ -16,7 +16,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private readonly List<string> _draftContextOrder = [];
     private InspectorDraftContext? _activeDraft;
     private InspectorAttributeValues? _transactionStart;
-    private string? _draftRevision;
+    private string? _draftRevision, _activeDraftKey;
     private bool _restoringInspector;
     private double _audioGainDraft = 1;
     private string _cueNameDraft = "";
@@ -30,7 +30,7 @@ public sealed partial class MediaPoolInspectorViewModel
         get => _cueNameDraft;
         set
         {
-            if (value is null || value.Length > 128) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value is null || value.Length > global::rtaime.Media.Contracts.MediaCuePoint.MaximumNameLength) throw new ArgumentOutOfRangeException(nameof(value));
             Set(ref _cueNameDraft, value);
         }
     }
@@ -121,7 +121,12 @@ public sealed partial class MediaPoolInspectorViewModel
         }
         var binding = InspectorBinding();
         if (binding is null || HasMultipleSelection)
-        { EndDraftTransaction(); _activeDraft = null; _transactionStart = null; NotifyInspectorHistory(); return; }
+        {
+            EndDraftTransaction();
+            if (_activeDraftKey?.StartsWith(EditingSelectionIdentity + ":", StringComparison.Ordinal) == true)
+            { _inspectorDrafts.Remove(_activeDraftKey); _draftContextOrder.Remove(_activeDraftKey); }
+            _activeDraft = null; _activeDraftKey = null; _transactionStart = null; NotifyInspectorHistory(); return;
+        }
         var (key, baseline) = binding.Value;
         if (!_inspectorDrafts.TryGetValue(key, out var draft) || draft.Baseline != baseline)
         {
@@ -134,7 +139,7 @@ public sealed partial class MediaPoolInspectorViewModel
             }
         }
         if (!ReferenceEquals(_activeDraft, draft)) { EndDraftTransaction(); _transactionStart = null; }
-        _activeDraft = draft;
+        _activeDraft = draft; _activeDraftKey = key;
         RestoreInspectorValues(draft.Current);
         NotifyInspectorHistory();
     }

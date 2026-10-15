@@ -1036,6 +1036,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
+        RefreshInspectorDraftContext();
 		RaiseTestSignalState();
 	}
 

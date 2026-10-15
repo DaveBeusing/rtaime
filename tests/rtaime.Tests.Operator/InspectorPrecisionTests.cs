@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
@@ -194,7 +195,7 @@ public sealed class InspectorPrecisionTests
 		while (!condition() && DateTime.UtcNow < end) await Task.Delay(10);
 		Assert.True(condition());
 	}
-	private sealed class InspectorTransport : IOperatorControlTransport
+	internal sealed class InspectorTransport : IOperatorControlTransport
 	{
 		private readonly ProductionSourceId _source = ProductionSourceId.New();
 		private readonly ProductionId _production = ProductionId.New();
@@ -202,13 +203,49 @@ public sealed class InspectorPrecisionTests
 			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1))]);
 		internal int MutationCalls;
 		internal TaskCompletionSource? Hold;
-		internal bool Reject, FailSnapshots;
+		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut;
+        internal ulong RevisionValue = 1;
+        internal string SourceId => _source.ToString();
+        internal readonly ProductionSourceId OtherSource = ProductionSourceId.New();
+        internal Dictionary<string, double> Gains = new(StringComparer.Ordinal);
+        internal string[] CueNames = ["Same name", "Same name"];
+        internal static readonly MediaAssetId Asset = new(Identity.Parse("45000000-0000-0000-0000-000000000001"));
+        internal static readonly MediaCuePointId[] CueIds = [
+            new(Identity.Parse("45000000-0000-0000-0000-000000000003")), new(Identity.Parse("45000000-0000-0000-0000-000000000004"))];
+        internal MediaDeckSnapshot MediaSnapshot()
+        {
+            var source = new MediaSourceId(Identity.Parse(SourceId)); var duration = TimeSpan.FromSeconds(2);
+            var transport = new MediaTransportSnapshot(MediaContractVersion.Current, Asset, source, MediaTransportState.Paused,
+                new MediaTransportPosition(10, 100, TimeSpan.FromMilliseconds(200), duration, duration - TimeSpan.FromMilliseconds(200), FrameRate.Fps50), null);
+            var probe = new LocalMediaProbe(MediaContractVersion.Current, Asset, source, "reference.mp4", MediaContainerFormat.Mp4,
+                MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32, duration);
+            var markers = new MediaMarkerSnapshot(MediaContractVersion.Current, Asset, 100, 0, 99,
+                CueIds.Select((id, i) => new MediaCuePoint(id, CueNames[i], 20 + i)).ToArray());
+            return new(MediaContractVersion.Current, MediaDeckState.Paused, source, probe, transport, markers);
+        }
+        private OperatorAudioInputDescriptor Audio(string id) => new(id, "audio-stream", Gains.GetValueOrDefault(id, 1), false, 0, 0, 0, false, "HEALTHY");
+        public ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(string sourceId, double gain, bool muted, CancellationToken cancellationToken = default)
+        {
+            MutationCalls++; if (Reject) throw new InvalidOperationException("rejected audio");
+            Gains[sourceId] = gain; return ValueTask.FromResult(Audio(sourceId));
+        }
+        public ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(MediaMarkerCommand command, CancellationToken cancellationToken = default)
+        {
+            MutationCalls++; if (Reject) throw new InvalidOperationException("rejected cue");
+            var index = Array.IndexOf(CueIds, command.CuePointId!.Value);
+            CueNames[index] = command.Name!;
+            return ValueTask.FromResult(MediaSnapshot());
+        }
+        private IReadOnlyList<OperatorCompositingLayerDescriptor> Layers => ManyLayers ?
+            Enumerable.Range(0, 8).Select(i => new OperatorCompositingLayerDescriptor("layer" + i, 2, i, true, 255, 0.1, 0.2, 1, "logo.rgba",
+                processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1))])).ToArray() :
+            [_layer, new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba")];
 		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
 			FailSnapshots ? ValueTask.FromException<OperatorStatusSnapshot>(new TimeoutException("Unavailable")) :
 			ValueTask.FromResult(new OperatorStatusSnapshot(
-				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(1), new ProductionRoutingState(_source, _source)),
-				[new(_source.ToString(), "Camera")], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0,
-				compositingLayers: [_layer]));
+				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(RevisionValue), new ProductionRoutingState(_source, RemoteCut ? OtherSource : _source)),
+				[new(_source.ToString(), "Camera"), new(OtherSource.ToString(), "Camera 2")], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0,
+				compositingLayers: Layers, audioInputs: [Audio(SourceId), Audio(OtherSource.ToString())]));
 		public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerTransformAsync(
 			string layerId, double x, double y, double scale, double rotation, double ax, double ay,
 			double left, double top, double right, double bottom, CancellationToken cancellationToken = default)
@@ -226,7 +263,7 @@ public sealed class InspectorPrecisionTests
 		public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) =>
 			ValueTask.FromException<OperatorMutationResponse>(new NotSupportedException());
 	}
-	private sealed class ReadyService : IRuntimeReadinessService
+	internal sealed class ReadyService : IRuntimeReadinessService
 	{
 		public RuntimeReadinessSnapshot Current { get; } = new(RuntimeReadinessState.Ready, DateTimeOffset.UnixEpoch,
 			DateTimeOffset.UnixEpoch, Array.Empty<ReadinessReason>(), true, RuntimePerformanceVerificationSnapshot.Unverified);
