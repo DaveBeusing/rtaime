@@ -15,19 +15,25 @@ public sealed record OperatorShortcutDefinition(
 	Key Key,
 	ModifierKeys Modifiers,
 	ICommand Command,
-	bool AllowInTextEntry = false)
+	bool AllowInTextEntry = false,
+	OperatorShortcutScope Scope = OperatorShortcutScope.Global)
 {
 	public string Gesture => OperatorKeyboardCommandRegistry.FormatGesture(Key, Modifiers);
 }
 
 public sealed class OperatorKeyboardCommandRegistry
 {
-	private readonly IReadOnlyList<OperatorShortcutDefinition> _definitions;
+	private IReadOnlyList<OperatorShortcutDefinition> _definitions;
+	private readonly IReadOnlyList<OperatorShortcutDefinition> _canonical;
+	public event EventHandler? Changed;
+	public OperatorShortcutProfile CurrentProfile { get; private set; } = OperatorShortcutProfile.Defaults;
 
 	public OperatorKeyboardCommandRegistry(IEnumerable<OperatorShortcutDefinition> definitions)
 	{
 		ArgumentNullException.ThrowIfNull(definitions);
-		_definitions = definitions.ToArray();
+		_definitions = _canonical = definitions.ToArray();
+		if (_definitions.Count > 96 || _definitions.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count() != _definitions.Count || _definitions.Any(d => !Enum.IsDefined(d.Scope)))
+			throw new ArgumentException("Invalid or duplicate shortcut descriptors.", nameof(definitions));
 		var conflicts = FindConflicts(_definitions);
 		if (conflicts.Count > 0)
 		{
@@ -37,6 +43,14 @@ public sealed class OperatorKeyboardCommandRegistry
 	}
 
 	public IReadOnlyList<OperatorShortcutDefinition> Definitions => _definitions;
+	public IReadOnlyList<OperatorShortcutDefinition> CanonicalDefinitions => _canonical;
+	public bool TryApplyProfile(OperatorShortcutProfile profile, out string error)
+	{
+		if (!OperatorShortcutProfiles.TryResolve(profile, _canonical, out var normalized, out var resolved, out error)) return false;
+		_definitions = resolved; CurrentProfile = normalized;
+		Changed?.Invoke(this, EventArgs.Empty);
+		return true;
+	}
 
 	public string ReferenceText
 	{
@@ -61,22 +75,18 @@ public sealed class OperatorKeyboardCommandRegistry
 			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
-		var modifiers = Keyboard.Modifiers;
-		var definition = _definitions.FirstOrDefault(item =>
-			item.Key == key &&
-			item.Modifiers == modifiers);
-		if (definition is null)
-			return false;
+		var handled = TryHandle(key, Keyboard.Modifiers, args.IsRepeat, IsTextEntryContext(), ResolveScope());
+		if (handled) args.Handled = true;
+		return handled;
+	}
 
-		if (!definition.AllowInTextEntry && IsTextEntryContext())
-			return false;
-
-		args.Handled = true;
-		if (args.IsRepeat)
-			return true;
-
-		if (definition.Command.CanExecute(null))
-			definition.Command.Execute(null);
+	public bool TryHandle(Key key, ModifierKeys modifiers, bool isRepeat, bool textEntry,
+		OperatorShortcutScope scope = OperatorShortcutScope.Global)
+	{
+		var definition = _definitions.FirstOrDefault(item => item.Key == key && item.Modifiers == modifiers &&
+			(item.Scope == OperatorShortcutScope.Global || item.Scope == scope));
+		if (definition is null || (!definition.AllowInTextEntry && textEntry)) return false;
+		if (!isRepeat && definition.Command.CanExecute(null)) definition.Command.Execute(null);
 		return true;
 	}
 
@@ -87,7 +97,8 @@ public sealed class OperatorKeyboardCommandRegistry
 		OperatorShellViewModel shell,
 		ShowControlViewModel showControl,
 		ICommand focusMediaSearchCommand,
-		OperatorDockController? docking = null)
+		OperatorDockController? docking = null,
+		ICommand? openPaletteCommand = null)
 	{
 		ArgumentNullException.ThrowIfNull(@operator);
 		ArgumentNullException.ThrowIfNull(mediaDeck);
@@ -117,7 +128,7 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("set-in", "Set Preview IN", Key.I, ModifierKeys.None, PreviewTransport(mediaDeck.SetInCommand)),
 			new("set-out", "Set Preview OUT", Key.O, ModifierKeys.None, PreviewTransport(mediaDeck.SetOutCommand)),
 			new("add-cue", "Add Preview marker / cue", Key.M, ModifierKeys.None, PreviewTransport(mediaDeck.AddCueCommand)),
-			new("delete-cue", "Delete selected Preview cue", Key.Delete, ModifierKeys.None, mediaDeck.DeleteCueCommand),
+			new("delete-cue", "Delete selected Preview cue", Key.Delete, ModifierKeys.None, PreviewTransport(mediaDeck.DeleteCueCommand)),
 			new("previous-cue", "Previous Preview cue", Key.Up, ModifierKeys.None, PreviewTransport(timeline.PreviousCueCommand)),
 			new("next-cue", "Next Preview cue", Key.Down, ModifierKeys.None, PreviewTransport(timeline.NextCueCommand)),
 			new("auto", "AUTO Preview to Program", Key.Return, ModifierKeys.None, @operator.DissolveCommand),
@@ -129,7 +140,8 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("preview-view", "Maximize Preview viewer", Key.D1, ModifierKeys.Control, shell.MaximizePreviewCommand, true),
 			new("program-view", "Maximize Program viewer", Key.D2, ModifierKeys.Control, shell.MaximizeProgramCommand, true),
 			new("dual-view", "Restore dual viewer", Key.D0, ModifierKeys.Control, shell.RestoreViewersCommand, true),
-            .. DockShortcuts(docking, shell)
+            .. DockShortcuts(docking, shell),
+			.. (openPaletteCommand is null ? Array.Empty<OperatorShortcutDefinition>() : [new("command-palette", "Open command palette", Key.K, ModifierKeys.Control, openPaletteCommand, true)])
 		]);
 	}
 
@@ -152,12 +164,14 @@ public sealed class OperatorKeyboardCommandRegistry
 	public static IReadOnlyList<string> FindConflicts(IEnumerable<OperatorShortcutDefinition> definitions)
 	{
 		ArgumentNullException.ThrowIfNull(definitions);
-		return definitions
-			.GroupBy(item => (item.Key, item.Modifiers))
-			.Where(group => group.Count() > 1)
-			.Select(group => FormatGesture(group.Key.Key, group.Key.Modifiers))
-			.OrderBy(value => value, StringComparer.Ordinal)
-			.ToArray();
+		var items = definitions.ToArray();
+		var conflicts = new HashSet<string>(StringComparer.Ordinal);
+		for (var i = 0; i < items.Length; i++)
+			for (var j = i + 1; j < items.Length; j++)
+				if (items[i].Key == items[j].Key && items[i].Modifiers == items[j].Modifiers &&
+					(items[i].Scope == OperatorShortcutScope.Global || items[j].Scope == OperatorShortcutScope.Global || items[i].Scope == items[j].Scope))
+					conflicts.Add(FormatGesture(items[i].Key, items[i].Modifiers));
+		return conflicts.OrderBy(value => value, StringComparer.Ordinal).ToArray();
 	}
 
 	public static string FormatGesture(Key key, ModifierKeys modifiers)
@@ -247,13 +261,22 @@ public sealed class OperatorKeyboardCommandRegistry
 			CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 	}
 
-	private static bool IsTextEntryContext()
+	private static bool IsTextEntryContext() => IsTextEntryContext(Keyboard.FocusedElement as System.Windows.DependencyObject);
+	public static bool IsTextEntryContext(System.Windows.DependencyObject? focused)
 	{
-		var focused = Keyboard.FocusedElement;
-		if (focused is TextBoxBase or PasswordBox)
-			return true;
-		if (focused is ComboBox comboBox)
-			return comboBox.IsEditable || comboBox.IsKeyboardFocusWithin;
+		for (var current = focused; current is not null; current = Parent(current))
+			if (current is TextBoxBase or PasswordBox or ComboBox) return true;
 		return false;
 	}
+	private static OperatorShortcutScope ResolveScope()
+	{
+		for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = Parent(current))
+		{
+			if (current is MediaTimelineControl) return OperatorShortcutScope.Timeline;
+			if (current is System.Windows.FrameworkElement { Name: "MediaAssetGrid" or "MediaAssetList" }) return OperatorShortcutScope.MediaLibrary;
+		}
+		return OperatorShortcutScope.Global;
+	}
+	private static System.Windows.DependencyObject? Parent(System.Windows.DependencyObject current) =>
+		current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current);
 }
