@@ -213,7 +213,15 @@ public sealed class InspectorDraftTransactionTests
             var up = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(field)!, 0, Key.Up) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
             field.RaiseEvent(up); field.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(field)!, 0, Key.Up) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             var undo = Descendants(control).OfType<RtaimeButton>().Single(b => AutomationProperties.GetName(b) == "Undo selected Inspector draft");
-            Assert.True(undo.Command!.CanExecute(null)); undo.Focus(); undo.Command.Execute(null);
+            Assert.True(undo.Command!.CanExecute(null));
+            var tabs = Assert.IsType<RtaimeTabControl>(control.FindName("InspectorTopTabs"));
+            var selectedTab = tabs.SelectedIndex;
+            tabs.SelectedIndex = 1; await dispatcher.InvokeAsync(main.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.True(undo.IsVisible);
+            tabs.SelectedIndex = 2; await dispatcher.InvokeAsync(main.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.True(undo.IsVisible);
+            tabs.SelectedIndex = selectedTab;
+            undo.Focus(); undo.Command.Execute(null);
             Assert.Equal(0.1, f.Model.SelectedLayerPositionX); Assert.True(f.Model.RedoInspectorDraftCommand.CanExecute(null));
             Assert.Equal(0, f.Transport.MutationCalls);
             Console.WriteLine("INSPECTOR DRAFT PASS: productive themed controls, focused numeric grouping, accessible undo/redo, unchanged production transport.");

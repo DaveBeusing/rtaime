@@ -330,7 +330,8 @@
 		BorderBrush="{DynamicResource OperatorBorderBrush}"
 		BorderThickness="1,0,0,0">
 		<Grid>
-			<controls:RtaimeStatePlaceholder
+            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+			<controls:RtaimeStatePlaceholder Grid.RowSpan="2"
 							State="{Binding WorkspaceStates.Inspector.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Title="{Binding WorkspaceStates.Inspector.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Detail="{Binding WorkspaceStates.Inspector.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -345,18 +346,15 @@
 					<Grid>
 						<Grid.RowDefinitions>
 							<RowDefinition Height="72" />
-                            <RowDefinition Height="Auto" />
 							<RowDefinition Height="*" />
 						</Grid.RowDefinitions>
 						<ContentControl
 							Content="{Binding Inspector, ElementName=Root}"
 							ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
 
-                        <controls:RtaimeScrollViewer Grid.Row="1" MaxHeight="160" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="8,0">
-                            <ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}"/>
-                        </controls:RtaimeScrollViewer>
+
 						<controls:RtaimeTabControl
-							Grid.Row="2"
+							Grid.Row="1"
 							Background="{DynamicResource OperatorSurfaceBrush}"
 							BorderThickness="0">
 							<controls:RtaimeTabItem Header="Video" Style="{StaticResource InspectorCategoryTab}">
