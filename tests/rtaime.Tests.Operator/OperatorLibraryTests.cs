@@ -187,6 +187,28 @@ public sealed class OperatorLibraryTests
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
             Assert.True(Assert.IsType<RtaimeTextBox>(main.LibraryWindow!.FindName("SearchBox")).IsKeyboardFocusWithin);
             Assert.Equal(program, owner.ProgramSourceId);
+            await main.Library.LoadAsync();
+            main.Library.ToggleHistoryCommand.Execute(null);
+            main.Shell.SelectWorkspace("MEDIA"); main.Shell.SelectWorkspace("OUTPUTS");
+            main.Library.View = "Recent"; main.Library.Query = "";
+            main.Library.Selected = main.Library.Rows.Single(r => r.Reference?.Id == "MEDIA");
+            main.Library.OpenCommand.Execute(null);
+            Assert.Equal("MEDIA", main.Shell.SelectedWorkspace);
+            Assert.Equal(program, owner.ProgramSourceId);
+            main.CommandPalette.Query = "cut";
+            main.CommandPalette.Selected = main.CommandPalette.Entries.Single(e => e.Id == "cut");
+            main.Library.FavoriteCommandCommand.Execute(null);
+            main.Library.View = "Favorites"; main.Library.Refresh();
+            main.Library.Selected = main.Library.Rows.Single(r => r.Reference?.Id == "cut");
+            main.Library.OpenCommand.Execute(null);
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+            Assert.True(main.CommandPaletteWindow!.IsVisible);
+            Assert.Equal("cut", main.CommandPalette.Selected!.Id);
+            Assert.Equal(program, owner.ProgramSourceId);
+            Assert.Equal(scene, owner.ActiveSceneId);
+            main.CommandPaletteWindow.Close();
+            main.Library.ToggleHistoryCommand.Execute(null);
+            await main.Library.FlushAsync();
         }
         finally { main.LibraryWindow?.Close(); if (window.IsVisible) window.Close(); }
         Console.WriteLine("RECENT FAVORITES HELP PASS: compact productive window, embedded help, active shortcut search, protected Enter, close/reopen focus, no Program activation.");

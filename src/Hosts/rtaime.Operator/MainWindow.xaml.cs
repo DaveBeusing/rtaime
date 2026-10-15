@@ -162,7 +162,8 @@ public partial class MainWindow : Window
 	internal MainWindow(
 		OperatorViewModel viewModel,
 		OperatorLayoutStore layoutStore,
-		OperatorSessionRecoveryStore sessionRecoveryStore)
+		OperatorSessionRecoveryStore sessionRecoveryStore,
+        OperatorLibraryPreferenceStore? libraryPreferenceStore = null)
 	{
 		_sessionRecoveryStore = sessionRecoveryStore;
 		ArgumentNullException.ThrowIfNull(viewModel);
@@ -251,7 +252,7 @@ public partial class MainWindow : Window
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
 			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
-        InitializeLibrary(viewModel);
+        InitializeLibrary(viewModel, libraryPreferenceStore);
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
 		Closing += OnClosingAsync;

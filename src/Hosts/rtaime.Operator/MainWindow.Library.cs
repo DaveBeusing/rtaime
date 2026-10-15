@@ -17,11 +17,11 @@ public partial class MainWindow
     private OperatorLibraryReference? CurrentMediaReference() =>
         MediaPool.SelectedItem is { Kind: MediaPoolItemKind.Source or MediaPoolItemKind.Clip or MediaPoolItemKind.Audio } item &&
         LibraryScope is { } scope ? new("media", scope, item.Key) : null;
-    private void InitializeLibrary(OperatorViewModel owner)
+    private void InitializeLibrary(OperatorViewModel owner, OperatorLibraryPreferenceStore? store = null)
     {
         Library = new(ResolveLibraryReference, OpenLibraryReference, BuildInlineHelp, CurrentMediaReference,
             () => owner.SelectedScene is { } scene && LibraryScope is { } scope ? new("scene", scope, scene.Id) : null,
-            () => CommandPalette.Selected is { } entry ? new("command", "", entry.Id) : null);
+            () => CommandPalette.Selected is { } entry ? new("command", "", entry.Id) : null, store);
         Library.HistoryChanged += OnLibraryHistoryChanged;
         MediaPool.LibraryItemVisited += OnLibraryItemVisited;
         owner.PropertyChanged += OnLibraryOwnerChanged;
