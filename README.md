@@ -384,3 +384,7 @@ The [Context Inspector](docs/ContextInspector.md) provides precise numeric draft
 ## Operator command palette
 
 Ctrl+K or **Commands** opens searchable commands with visible availability reasons and protected production activation. Versioned shortcut profiles support validated import/export, collision checks and reset without modifying production data. See [Commands and shortcut profiles](docs/OperatorCommandsAndShortcuts.md).
+
+## Show checks and activity
+
+The navigation rail and Commands expose [Show checks and activity](docs/ShowPreflightAndActivity.md): read-only preflight evidence, a bounded correlated request history and consolidated notification acknowledgement/review. Missing or stale evidence stays UNKNOWN; ControlHost retains launch and Program authority.

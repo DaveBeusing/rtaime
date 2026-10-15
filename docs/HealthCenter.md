@@ -102,3 +102,7 @@ Health retains current rows and state timestamps only. A slow UI has at most one
 Transient event history remains owned by the existing keyed notifications and structured logs. Health is a current-state projection: intermediate projections may be coalesced and are not a lossless event journal.
 
 Deterministic regressions cover simultaneous monitoring/audio/recording failures, 5,000 delayed UI updates, selection retention, stale evidence, reconnect, recovery gating, clipboard failure/redaction, transport send freshness, export metadata/cancellation and notification deduplication. Surface checks cover named custom keyboard controls and scrollable incident evidence. Existing shell geometry/DPI tests continue to apply; physical multi-monitor interaction remains separately UNVERIFIED.
+
+## Show checks and activity
+
+Open **Show checks** in the navigation rail or search **Show preflight** in Commands (Ctrl+K). The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state observations with recent correlated requests and the existing notifications. Review links lead to existing workspaces. Health incidents, recovery and support bundles remain in their established services; acknowledgement does not change production health or permit show launch.

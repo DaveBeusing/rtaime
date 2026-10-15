@@ -329,3 +329,7 @@ See [Context Inspector and precision editing](ContextInspector.md) for shared nu
 ## Commands and shortcut profiles
 
 Ctrl+K and the Commands navigation item open the shared palette from the main or detached Operator. Search workspace, library, viewer, draft and production commands; disabled results explain their context. Production actions require the Execute button. See [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md) for safe overrides, import/export, reserved keys and reset.
+
+## Show checks and activity
+
+Open **Show checks** in the navigation rail or search **Show preflight** in Commands (Ctrl+K). The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state observations with recent correlated requests and the existing notifications. Review links lead to existing workspaces. Health incidents, recovery and support bundles remain in their established services; acknowledgement does not change production health or permit show launch.

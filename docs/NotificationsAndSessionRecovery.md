@@ -138,3 +138,7 @@ The safety contract is intentionally narrow: restoring presentation must never i
 ## Lost command confirmation
 
 After a Control transport failure, the client requires a full authoritative snapshot before another command, including reconnection to the same ControlHost. A lost TAKE reply does not prove TAKE failed: it may already be committed. Operator recovery observes the authoritative result through the existing snapshot refresh and notification flow; it does not replay TAKE, restore an on-air command from session storage, or clear the production workspace. See [Process Recovery & Supervision](ProcessRecoveryAndSupervision.md#ambiguous-command-response-loss) for fault evidence and recovery steps.
+
+## Show checks and activity
+
+[Show checks and activity](ShowPreflightAndActivity.md) provides the consolidated notification list with severity, occurrence count, presentation acknowledgement/dismissal, workspace Review and opt-in technical details. Retention is bounded to 64 conditions; transient toasts remain bounded to four. Acknowledgement never resolves an incident. Free-form footer text is informational; correlated Control responses determine request-outcome notifications. Expanded details and acknowledgement survive identical observations.

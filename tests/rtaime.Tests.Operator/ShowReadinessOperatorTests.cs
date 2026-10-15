@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
@@ -133,7 +134,7 @@ public sealed class ShowReadinessOperatorTests
 	}
 	private sealed class QueuedContext : SynchronizationContext
 	{
-		public Queue<Action> Pending { get; } = new();
+		public ConcurrentQueue<Action> Pending { get; } = new();
 		public override void Post(SendOrPostCallback action, object? state) => Pending.Enqueue(() => action(state));
 		public void Drain() { while (Pending.TryDequeue(out var action)) action(); }
 	}
