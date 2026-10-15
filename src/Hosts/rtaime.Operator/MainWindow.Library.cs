@@ -73,8 +73,9 @@ public partial class MainWindow
         if (reference.Kind == "media")
         {
             var item = MediaPool.FindLibraryItem(reference.Id);
+            var confidence = owner.IsConnected && !owner.IsStale ? "" : "Unconfirmed catalogue · ";
             return item is null ? Missing("Catalogue item unavailable or removed. Refresh Media Library or remove this reference.") :
-                new(item.Name, item.ReadinessLabel + ". Open inspects only. Missing files: use Relink in Media Library.", true);
+                new(item.Name, confidence + item.ReadinessLabel + ". Open inspects only. Missing files: use Relink in Media Library.", true);
         }
         if (reference.Kind == "scene")
         {
@@ -121,7 +122,7 @@ public partial class MainWindow
         var preferred = Shell.SelectedWorkspace switch
         { "MEDIA" => "MediaLibrary", "HEALTH" or "OUTPUTS" => "WindowsProduction", "SCENES" => "DurableShow", _ => "OperatorCommands" };
         topics.AddRange(OperatorInlineHelp.RepositoryTopics.OrderByDescending(t => t.Id.StartsWith(preferred, StringComparison.Ordinal)));
-        return topics;
+        return topics.Select(t => t with { Body = t.Body[..Math.Min(t.Body.Length, 8194)] }).ToArray();
     }
     internal void OpenLibrary(string view = "Recent")
     {

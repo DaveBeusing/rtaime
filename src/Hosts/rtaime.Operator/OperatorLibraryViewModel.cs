@@ -92,7 +92,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
             Status = "Local references loaded. Open inspects an item; it never activates Program.";
         }
         catch (OperationCanceledException) { if (!_disposed) Status = "Preference loading canceled; retry by reopening."; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
         {
             if (_disposed) return;
             _loaded = true;
@@ -168,7 +168,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
                 await _store.WriteAsync(snapshot);
                 if (!_disposed && ReferenceEquals(_settings, snapshot)) Status = "Saved locally. No production state changed.";
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
             {
                 if (!_disposed && ReferenceEquals(_settings, snapshot)) Status = "Session only: local preferences could not be saved.";
             }

@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Threading;
+using rtaime.Client;
+using rtaime.Control.Contracts;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
@@ -213,4 +215,40 @@ public sealed class OperatorLibraryTests
         finally { main.LibraryWindow?.Close(); if (window.IsVisible) window.Close(); }
         Console.WriteLine("RECENT FAVORITES HELP PASS: compact productive window, embedded help, active shortcut search, protected Enter, close/reopen focus, no Program activation.");
     }
+    [Fact]
+    public async Task Browse_resolves_current_unfiltered_items_and_inspects_renamed_or_offline_sources_without_transport()
+    {
+        var transport = new ForbiddenTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel();
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var source = new OperatorSourceTileViewModel(new OperatorSourceDescriptor("source-1", "Before rename"));
+        owner.Sources.Add(source);
+        var key = "source:source-1";
+        var preview = owner.PreviewSourceId; var program = owner.ProgramSourceId;
+        var visits = new List<string>(); pool.LibraryItemVisited += item => visits.Add(item.Key);
+        pool.SearchText = "no-match"; pool.SelectedCategory = "Graphics";
+        pool.ReadinessFilter = MediaReadinessFilter.Ready;
+        Assert.Empty(pool.FilteredItems);
+        Assert.NotNull(pool.FindLibraryItem(key)); Assert.True(pool.BrowseLibraryItem(key));
+        Assert.Equal(key, pool.SelectedItem!.Key); Assert.Contains(key, visits);
+        Assert.Equal("", pool.SearchText); Assert.Equal("All", pool.SelectedCategory);
+        Assert.Equal(MediaReadinessFilter.Any, pool.ReadinessFilter);
+        owner.Sources.Remove(source);
+        owner.Sources.Add(new OperatorSourceTileViewModel(new OperatorSourceDescriptor("source-1", "After rename")));
+        Assert.True(pool.BrowseLibraryItem(key)); Assert.Equal("After rename", pool.SelectedItem!.Name);
+        owner.Sources.Clear(); Assert.Null(pool.FindLibraryItem(key)); Assert.False(pool.BrowseLibraryItem(key));
+        Assert.Equal(preview, owner.PreviewSourceId); Assert.Equal(program, owner.ProgramSourceId);
+        Assert.Equal(0, transport.Calls);
+    }
+	private sealed class ForbiddenTransport : IOperatorControlTransport
+	{
+		public int Calls;
+		private ValueTask<T> Forbidden<T>() { Calls++; return ValueTask.FromException<T>(new InvalidOperationException("Browsing must not call production transport.")); }
+		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) => Forbidden<OperatorStatusSnapshot>();
+		public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();
+		public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();
+		public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();
+	}
 }
