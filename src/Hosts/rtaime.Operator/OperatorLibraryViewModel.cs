@@ -82,7 +82,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         if (_loaded || _loading || _disposed) return;
-        _loading = true; RaiseCommands();
+        _loading = true; Status = "Loading local references…"; RaiseCommands();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
         try
         {
