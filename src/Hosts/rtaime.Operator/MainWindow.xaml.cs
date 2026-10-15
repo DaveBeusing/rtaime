@@ -334,7 +334,12 @@ public partial class MainWindow : Window
 		window.Closed += (_, _) =>
 		{
 			_showReadinessWindow = null;
-			if (!_shutdownStarted && previousFocus is IInputElement focus) Keyboard.Focus(focus);
+			if (!_shutdownStarted && previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
+				previous.Dispatcher.BeginInvoke(() =>
+				{
+					if (!_shutdownStarted && _showReadinessWindow is null && _commandPaletteWindow is null &&
+						previous.IsVisible && previous.IsEnabled) previous.Focus();
+				}, DispatcherPriority.Input);
 		};
 		window.Show();
 	}
