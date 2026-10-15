@@ -34,7 +34,7 @@
       <StackPanel>
        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
        <TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}"/>
-       <TextBlock Text="{Binding State}" TextWrapping="Wrap" FontSize="11"/>
+       <TextBlock Text="{Binding State}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeCompact}"/>
       </StackPanel>
       <TextBlock Grid.Column="1" Text="{Binding Gesture}" Margin="8,0,0,0"/>
      </Grid>
