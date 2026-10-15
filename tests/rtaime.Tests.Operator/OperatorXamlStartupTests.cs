@@ -174,6 +174,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
 						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
 					}
+					target = "Combined workspace visual qualification";
+					await OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher);
 					// Qualify secondary GPU windows while the productive primary window owns
 					// the application lifetime, as in the real Clean Program workflow.
 					target = "GPU surface lifetime";

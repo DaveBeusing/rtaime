@@ -196,12 +196,24 @@ jobs:
 
       - name: Operator real XAML startup qualification
         shell: pwsh
+        env:
+          RTAIME_OPERATOR_VISUAL_EVIDENCE: ${{ github.workspace }}/artifacts/qualification/operator-visual
+          RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RTAIME_BASELINE_SDK: "10.0.401"
         run: |
           $diagnosticsPath = Join-Path $env:RUNNER_TEMP "operator-diagnostics"
           dotnet tool install dotnet-stack --tool-path $diagnosticsPath --version 10.0.750501
           if ($LASTEXITCODE -ne 0) { throw "Unable to install pinned STA diagnostic tool." }
           $env:RTAIME_STACK_TOOL = Join-Path $diagnosticsPath "dotnet-stack.exe"
           dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+
+      - name: Preserve combined Operator visual evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-operator-visual-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/operator-visual
+          if-no-files-found: warn
 
       - name: Operator UI regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build
@@ -443,12 +455,24 @@ jobs:
 
       - name: Operator real XAML startup qualification
         shell: pwsh
+        env:
+          RTAIME_OPERATOR_VISUAL_EVIDENCE: ${{ github.workspace }}/artifacts/qualification/operator-visual
+          RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RTAIME_BASELINE_SDK: "10.0.401"
         run: |
           $diagnosticsPath = Join-Path $env:RUNNER_TEMP "operator-diagnostics"
           dotnet tool install dotnet-stack --tool-path $diagnosticsPath --version 10.0.750501
           if ($LASTEXITCODE -ne 0) { throw "Unable to install pinned STA diagnostic tool." }
           $env:RTAIME_STACK_TOOL = Join-Path $diagnosticsPath "dotnet-stack.exe"
           dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+
+      - name: Preserve combined Operator visual evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-operator-visual-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/operator-visual
+          if-no-files-found: warn
 
       - name: Operator startup tests
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests"
