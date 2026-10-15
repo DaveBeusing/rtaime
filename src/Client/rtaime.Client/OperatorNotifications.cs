@@ -121,6 +121,7 @@ public sealed class NotificationService : INotificationService
 		};
 		var now = _clock();
 		OperatorNotification normalized;
+		OperatorNotification? evicted = null;
 		lock (_gate)
 		{
 			_current.TryGetValue(notification.Key, out var existing);
@@ -142,11 +143,13 @@ public sealed class NotificationService : INotificationService
 			{
 				var oldest = _current.Values.OrderBy(Priority).ThenBy(item => item.PublishedAtUtc).First();
 				if (Priority(normalized) < Priority(oldest)) return;
+				evicted = oldest;
 				_current.Remove(oldest.Key);
 			}
 			_current[normalized.Key] = normalized;
 		}
 
+		if (evicted is not null) Removed?.Invoke(this, new OperatorNotificationEventArgs(evicted));
 		Published?.Invoke(this, new OperatorNotificationEventArgs(normalized));
 	}
 
