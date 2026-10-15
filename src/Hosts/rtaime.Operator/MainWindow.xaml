@@ -202,6 +202,11 @@
 							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="HEALTH"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
 						</controls:RtaimeNavigationItem>
 					</StackPanel>
+					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Show checks"
+						IconData="{StaticResource RtaimeIconHealthGeometry}"
+						Command="{Binding OpenShowChecksCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						ToolTip="Show preflight, correlated action history and notifications. Also available through Commands."
+						AutomationProperties.Name="Open show checks and activity"/>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Commands"
 						IconData="{StaticResource RtaimeIconSettingsGeometry}"
 						Click="OnCommandPaletteClick"
