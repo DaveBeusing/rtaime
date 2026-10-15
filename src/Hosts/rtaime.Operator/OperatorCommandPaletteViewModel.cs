@@ -148,12 +148,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		set
 		{
 			if (!Set(ref _editingShortcut, value)) return;
-			if (value is not null)
-			{
-				var binding = _registry.Definitions.First(item => item.Id == value.Id);
-				EditingKey = AllowedKeys.Contains(binding.Key) ? binding.Key : Key.Q;
-				EditingModifiers = AllowedModifiers.Contains(binding.Modifiers) ? binding.Modifiers : ModifierKeys.Control | ModifierKeys.Shift;
-			}
+			SyncEditingGesture();
 			RaiseCommands();
 		}
 	}
@@ -263,7 +258,14 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		if (ReferenceEquals(sender, Selected) && e.PropertyName == nameof(OperatorPaletteEntry.State))
 		{ OnPropertyChanged(nameof(SelectedState)); ((AsyncRelayCommand)ExecuteCommand).RaiseCanExecuteChanged(); }
 	}
-	private void OnRegistryChanged(object? sender, EventArgs e) => Refresh();
+	private void SyncEditingGesture()
+	{
+		if (EditingShortcut is null) return;
+		var binding = _registry.Definitions.First(item => item.Id == EditingShortcut.Id);
+		EditingKey = AllowedKeys.Contains(binding.Key) ? binding.Key : Key.Q;
+		EditingModifiers = AllowedModifiers.Contains(binding.Modifiers) ? binding.Modifiers : ModifierKeys.Control | ModifierKeys.Shift;
+	}
+	private void OnRegistryChanged(object? sender, EventArgs e) { SyncEditingGesture(); Refresh(); }
 	private void OnOperatorChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (e.PropertyName is null or nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or

@@ -388,7 +388,8 @@ public partial class MainWindow : Window
 		if (_commandPaletteWindow is { } existing) { existing.Activate(); existing.FocusSearch(); return; }
 		CommandPalette.Query = "";
 		CommandPalette.Refresh();
-		var palette = new OperatorCommandPaletteWindow(CommandPalette) { Owner = this };
+		var focusedWindow = Keyboard.FocusedElement is DependencyObject focused ? Window.GetWindow(focused) : null;
+		var palette = new OperatorCommandPaletteWindow(CommandPalette) { Owner = focusedWindow is OperatorPanelWindow ? focusedWindow : this };
 		_commandPaletteWindow = palette;
 		palette.Closed += (_, _) => _commandPaletteWindow = null;
 		palette.Show();
@@ -409,15 +410,18 @@ public partial class MainWindow : Window
 	private Task FocusMediaSearchAsync()
 	{
 		Shell.SelectWorkspace("MEDIA");
-		if (Shell.LeftColumnWidth.Value <= 0 || !MediaSearchBox.IsVisible || !LeftToolRegion.IsVisible)
-			Docking.Float("TOOLS");
-		Dispatcher.BeginInvoke(
-			() =>
+		Dispatcher.BeginInvoke(() =>
+		{
+			if (_shutdownStarted) return;
+			if (Shell.LeftColumnWidth.Value <= 0 || !MediaSearchBox.IsVisible || !LeftToolRegion.IsVisible)
+				Docking.Float("TOOLS");
+			Dispatcher.BeginInvoke(() =>
 			{
+				if (_shutdownStarted) return;
 				MediaSearchBox.Focus();
 				MediaSearchBox.SelectAll();
-			},
-			DispatcherPriority.Input);
+			}, DispatcherPriority.Input);
+		}, DispatcherPriority.Input);
 		return Task.CompletedTask;
 	}
 

@@ -79,12 +79,14 @@ public sealed class OperatorCommandPaletteTests
 			await store.WriteAsync(new(1, null, [new("draft", Key.E, ModifierKeys.Control)]), imported);
 			await model.ImportProfileAsync(imported);
 			Assert.Equal(Key.E, registry.Definitions[0].Key);
+			Assert.Equal(Key.E, model.EditingKey);
 			Assert.Equal(2, (await store.ReadAsync()).Version);
 			await model.ExportProfileAsync(imported);
 			Assert.Equal("Imported shortcuts", (await store.ReadAsync(imported)).Name);
 			model.ResetShortcutsCommand.Execute(null);
 			await model.FlushAsync();
 			Assert.Equal(Key.B, registry.Definitions[0].Key);
+			Assert.Equal(Key.B, model.EditingKey);
 			Assert.Empty((await store.ReadAsync()).Bindings);
 		}
 		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -120,6 +122,7 @@ public sealed class OperatorCommandPaletteTests
 
 	internal static async Task VerifyWindowAsync(MainWindow main, Dispatcher dispatcher)
 	{
+		Assert.True(OperatorKeyboardCommandRegistry.IsTextEntryContext(new RtaimeComboBoxItem()));
 		var selectedWorkspace = main.Shell.SelectedWorkspace;
 		var previous = Assert.IsAssignableFrom<RtaimeButton>(main.FindName("SynchronizeButton"));
 		previous.Focus();
@@ -165,7 +168,24 @@ public sealed class OperatorCommandPaletteTests
 			palette.RaiseEvent(escape);
 			Assert.True(escape.Handled);
 			Assert.Null(main.CommandPaletteWindow);
-			Console.WriteLine("COMMAND PALETTE PASS: real BAML, shared router, blocked TAKE, navigation, compact profiles and Escape.");
+			main.Shell.SelectWorkspace("MEDIA");
+			var docking = main.Shell.Docking;
+			try
+			{
+				main.Docking.Float("TOOLS");
+				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+				var panel = main.Docking.FloatingWindows["TOOLS"];
+				panel.Activate();
+				var mediaSearch = Assert.IsType<RtaimeSearchBox>(main.FindName("MediaSearchBox"));
+				mediaSearch.Focus();
+				Assert.Same(main.Shortcuts, panel.Shortcuts);
+				Assert.True(panel.Shortcuts.TryHandle(Key.K, ModifierKeys.Control, false, true));
+				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+				Assert.Same(panel, main.CommandPaletteWindow!.Owner);
+				main.CommandPaletteWindow.Close();
+			}
+			finally { main.Shell.SetDocking(docking); }
+			Console.WriteLine("COMMAND PALETTE PASS: real BAML, shared router, blocked TAKE, navigation, compact profiles, detached owner and Escape.");
 		}
 		finally
 		{

@@ -23,7 +23,7 @@ public partial class OperatorCommandPaletteWindow : Window
 		{
 			model.ExecutionCompleted -= OnExecuted;
 			if (!_executed && _previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
-				previous.Dispatcher.BeginInvoke(() => previous.Focus(), DispatcherPriority.Input);
+				previous.Dispatcher.BeginInvoke(() => { if (previous.IsVisible && previous.IsEnabled) previous.Focus(); }, DispatcherPriority.Input);
 		};
 	}
 	public void FocusSearch() { SearchBox.Focus(); SearchBox.SelectAll(); }
