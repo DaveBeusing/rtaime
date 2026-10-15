@@ -194,7 +194,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			var confirmed = item.Outcome == OperatorActionOutcome.Confirmed;
 			var rejected = item.Outcome == OperatorActionOutcome.Rejected;
 			_notifications.Publish(new OperatorNotification("operator.command-outcome",
-				confirmed ? OperatorNotificationCategory.Success : rejected ? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
+				confirmed ? OperatorNotificationCategory.Information : rejected ? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
 				confirmed ? OperatorNotificationCondition.Informational : OperatorNotificationCondition.Active,
 				confirmed ? "Control response confirmed" : rejected ? "Control request rejected" : "Command outcome unconfirmed",
 				"Open action history for request identity, timestamps and available revision correlation.",

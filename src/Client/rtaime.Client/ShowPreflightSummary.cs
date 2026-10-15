@@ -74,11 +74,11 @@ public static class ShowPreflightSummary
 			SubsystemHealthState.Warning or SubsystemHealthState.Degraded => ShowPreflightState.Warning, _ => ShowPreflightState.Unknown },
 			audioFresh ? audio!.Detail : "Current Health Center audio evidence is unavailable.", "LIVE");
 		var ai = snapshot.AIShowcase;
-		Add("ai", "AI readiness", ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? ShowPreflightState.Unknown : !ai.Enabled ? ShowPreflightState.NotApplicable :
-			ai.Failure is not null ? ShowPreflightState.Fail :
+		Add("ai", "AI readiness", ai.Failure is not null ? ShowPreflightState.Fail :
+			ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? ShowPreflightState.Unknown : !ai.Enabled ? ShowPreflightState.NotApplicable :
 			ai.UpdatedAtUtc is not { } updated || now < updated || now - updated > TimeSpan.FromSeconds(10) ? ShowPreflightState.Unknown :
 			ai.EffectVisible && ai.SourceSequence.HasValue && ai.AppliedSequence.HasValue ? ShowPreflightState.Pass : ShowPreflightState.Unknown,
-			ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? "Current AI evidence is unavailable." : !ai.Enabled ? "AI is disabled; no effect is required for clean Program." : ai.Failure is not null ? "The active effect reports a failure; inspect governed AI diagnostics." :
+			ai.Failure is not null ? "The effect reports a failure; inspect governed AI diagnostics." : ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? "Current AI evidence is unavailable." : !ai.Enabled ? "AI is disabled; no effect is required for clean Program." :
 			"Enabled effect requires current synchronized application evidence. Production provider qualification is separate.", "SETTINGS");
 		Add("durable", "Saved show", snapshot.ShowProject.State is "SAVED" or "RESTORED" ? ShowPreflightState.Pass :
 			snapshot.ShowProject.State == "RECOVERY_REQUIRED" ? ShowPreflightState.Warning : ShowPreflightState.Unknown,
