@@ -145,6 +145,7 @@ public sealed class OperatorCombinedVisualQualification
         var handles = process.HandleCount; var memory = process.PrivateMemorySize64;
         var managed = GC.GetTotalMemory(false);
         var surfaces = Descendants(root).OfType<OperatorDrawingSurface>().ToArray();
+        Assert.NotEmpty(surfaces);
         var creates = surfaces.Sum(surface => surface.TargetCreateCount);
         var draws = 0; var layouts = 0;
         EventHandler layout = (_, _) => layouts++;
