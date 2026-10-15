@@ -39,6 +39,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	private double _verticalOffset;
 	private int _itemsPerRow = 1;
 	private bool _generatorRetryPending;
+	private long _measureCount, _generateCount, _nullContainerCount, _generatorDeferredCount;
+	private int _lastFirstIndex, _lastLastIndex;
+	internal string RealizationDetail => $"measure={_measureCount}; generate={_generateCount}; null={_nullContainerCount}; deferred={_generatorDeferredCount}; children={InternalChildren.Count}; range={_lastFirstIndex}..{_lastLastIndex}; ownerItems={ItemsControl.GetItemsOwner(this)?.Items.Count}; generatorReady={ResolveGenerator() is not null}";
 
 	public double ItemWidth
 	{
@@ -76,6 +79,7 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 	protected override Size MeasureOverride(Size availableSize)
 	{
+		_measureCount++;
 		var owner = ItemsControl.GetItemsOwner(this);
 		var itemCount = owner?.Items.Count ?? 0;
 		var itemWidth = NormalizeLength(ItemWidth, 168.0);
@@ -111,10 +115,12 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		var generator = ResolveGenerator();
 		if (generator is null)
 		{
+			_generatorDeferredCount++;
 			QueueGeneratorRetry();
 			return new Size(viewportWidth, Math.Min(_extent.Height, viewportHeight));
 		}
 
+		_lastFirstIndex = firstIndex; _lastLastIndex = lastIndex;
 		RealizeItems(generator, firstIndex, lastIndex, itemWidth, itemHeight);
 		CleanUpItems(generator, firstIndex, lastIndex);
 
@@ -146,6 +152,16 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		}
 
 		return finalSize;
+	}
+
+	protected override void BringIndexIntoView(int index)
+	{
+		var count = ItemsControl.GetItemsOwner(this)?.Items.Count ?? 0;
+		if (index < 0 || index >= count) return;
+		var height = NormalizeLength(ItemHeight, 126.0);
+		var top = (index / Math.Max(1, _itemsPerRow)) * (height + NormalizeSpacing(VerticalSpacing));
+		if (top < VerticalOffset) SetVerticalOffset(top);
+		else if (top + height > VerticalOffset + ViewportHeight) SetVerticalOffset(top + height - ViewportHeight);
 	}
 
 	public void LineDown() => SetVerticalOffset(VerticalOffset + NormalizeLength(ItemHeight, 126.0) + NormalizeSpacing(VerticalSpacing));
@@ -224,12 +240,14 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		{
 			for (var itemIndex = firstIndex; itemIndex <= lastIndex; itemIndex++, childIndex++)
 			{
+				_generateCount++;
 				var child = generator.GenerateNext(out var newlyRealized) as UIElement;
-				if (child is null)
-					continue;
+				if (child is null) { _nullContainerCount++; continue; }
 
-				if (newlyRealized)
-				InsertInternalChild(Math.Min(childIndex, InternalChildren.Count), child);
+				// Recycled containers can be returned with newlyRealized=false even though
+				// cleanup detached them from this panel. They must rejoin the visual tree.
+				if (newlyRealized || !InternalChildren.Contains(child))
+					InsertInternalChild(Math.Min(childIndex, InternalChildren.Count), child);
 
 				generator.PrepareItemContainer(child);
 				child.Measure(new Size(itemWidth, itemHeight));
@@ -259,7 +277,14 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		}
 	}
 
-	private IItemContainerGenerator? ResolveGenerator() => ItemContainerGenerator;
+	private IItemContainerGenerator? ResolveGenerator()
+	{
+		// WPF connects an items-host panel to its generator on first access to
+		// InternalChildren. Reading the generator alone cannot initialize it.
+		if (ItemsControl.GetItemsOwner(this) is null) return null;
+		_ = InternalChildren;
+		return ItemContainerGenerator;
+	}
 
 	private void QueueGeneratorRetry()
 	{

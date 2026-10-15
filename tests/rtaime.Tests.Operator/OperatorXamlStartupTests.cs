@@ -177,6 +177,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					// Qualify secondary GPU windows while the productive primary window owns
 					// the application lifetime, as in the real Clean Program workflow.
 					target = "GPU surface lifetime";
+					await MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher);
 					await TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher);
 					await InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher);
 					await OperatorDockingWindowTests.VerifyAsync(window, dispatcher);

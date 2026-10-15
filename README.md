@@ -96,6 +96,8 @@ Hardware and production-readiness claims remain limited to evidence explicitly r
 
 Production-support policy and Stable-readiness governance are source-controlled in [Production Support and Stable Readiness](docs/ProductionSupport.md), with the generated [Support and Compatibility Matrix](docs/SupportCompatibilityMatrix.md) and [Production Deployment Baseline](docs/ProductionDeploymentBaseline.md). The current DEV source remains Stable-readiness `UNVERIFIED`; the readiness verifier does not promote release stage.
 
+The Media Library provides bounded local Smart Bins for existing duration, availability and readiness metadata, with cancelable reuse of monitoring thumbnails. Independent hover scrubbing is explicitly unsupported; filters and hover do not open or seek production media. See [Media Library & Asset Browser](docs/MediaLibraryAssetBrowser.md).
+
 ## Architecture
 
 The canonical product entry point is:

@@ -82,6 +82,8 @@ The catalogue therefore does not create a second playback path or routing author
 
 ## Context actions
 
+**Clear selection** in the Add menu clears the entire local selection. **Refresh availability** in the Add menu uses the existing catalogue-wide availability refresh. Single-target Preview, Timeline, Cue, Relink and Remove context actions are disabled during multi-selection; the handlers also reject them, so no implicit partial bulk operation is performed. Reveal and Properties remain read-only single-target inspection actions. No source file is deleted.
+
 Catalogue Clip cards and list rows expose **Open in Preview**, **Add to Timeline**, **Add Cue at Playhead**, **Reveal in Explorer**, **Relink Media…**, **Remove from Library** and **Properties**.
 
 The current Scene model has no governed media-assignment mutation path. Scene assignment remains out of scope until that authority path exists.
@@ -98,11 +100,23 @@ Operator/Client/ControlHost transport carries catalogue metadata only. Catalogue
 
 The Client restarts a paged read if catalogue revision changes between pages, preventing a mixed-revision snapshot. Mutation responses carry bounded result metadata; the Client then reads the resulting catalogue through the same paged snapshot path. Raw media bytes are never sent through management/control IPC.
 
-## Thumbnails
+## Smart Bins
 
-The persistent catalogue does not introduce a second decoder or thumbnail-extraction stack. When the currently loaded catalogue asset already has an Operator source thumbnail, that existing presentation image can be reused.
+The custom controls below the existing search/type filters save up to 16 named filter combinations. Use **Filters** to reveal the duration/readiness row without permanently reducing the browser viewport. Choose a known-duration range (under one minute, one to ten minutes, ten minutes or longer, or unknown) and presentation readiness, then **Save**. Selecting a saved entry restores search, category, type/availability, duration and readiness together. Changing a filter detaches the saved selection without overwriting its definition. **Del** removes only the saved filter.
 
-Persistent asynchronous thumbnail extraction/cache generation is not currently claimed and can be added later only through the established media capability without entering production-critical paths.
+Duration comes directly from the immutable catalogue descriptor, never from formatted text or a file probe. Non-catalogue items without typed duration remain unknown. Readiness is the existing presentation hint and does not qualify Program or startup production readiness. Tags are not supported by the catalogue and are not offered.
+
+Preferences live separately in `%LOCALAPPDATA%/rtaime/operator-media-bins.json`, version 1. Reads are asynchronous and limited to 64 KiB, names to 128 characters and search to 256. Invalid, oversized or future-version documents are ignored. Saves are serialized and atomically replace only this presentation file; failures are displayed in the Library footer and retained in the saved-bin tooltip. Shutdown waits for the pending preference save. Catalogue persistence, recovery checkpoints and production state are unaffected.
+
+## Hover thumbnails and capability limits
+
+Hovering or keyboard-focusing an asset admits a latest-only preview after 180 ms. It shares the existing Operator monitoring image, if present. At most the active image is retained; images are not copied and no asset thumbnail cache, media read, hashing, probe, decoding or control/monitoring request is started.
+
+Leaving an item/browser, hiding a browser, changing a filter/catalogue context, starting a drag or closing the window cancels pending admission and clears the image. Generation checks prevent cancelled work from publishing a stale thumbnail.
+
+The non-interactive footer overlay preserves the browser viewport and distinguishes **MONITOR THUMBNAIL**, **OFFLINE** and **UNSUPPORTED**. Independent position scrubbing and asynchronous asset thumbnail extraction are **unsupported** by the current backend and are explicitly capability gated. Hover never opens or seeks the Media Deck and never changes Preview or Program. Existing monitoring thumbnails can show the current source image; they are not claimed as time-indexed proxies.
+
+There is no expensive thumbnail worker to pool in this implementation. A future extraction capability must provide a bounded, cancelable worker pool outside Program processing before the gate can be enabled.
 
 ## Performance and authority boundaries
 
@@ -115,3 +129,9 @@ There is no recursive automatic indexing and no second media index. There is als
 Regression coverage verifies stable `AssetId` across store close/reopen, duplicate import identity, unsupported-media rejection, missing-file projection, relink preserving identity, relink conflict rejection, remove-from-library without source-file deletion, optimistic persistence conflict behavior, bounded import size and cancellation without partial catalogue records.
 
 The Operator UI policy gate verifies persistent catalogue projection, bounded/virtualized presentation, multi-file import, Relink and Remove workflow wiring, and the existing production interaction paths.
+
+## Smart Bin and hover qualification
+
+`MediaLibraryBrowsingTests` checks duration boundaries and unknown metadata, independent readiness/availability, bounded preference round-trip and corrupt/future/oversized files, cancellation without replacing valid preferences, 1000 rapid hover requests, existing-image/offline capability handling and a 30,000-record catalogue projected to at most 4096 items. Repeated search and saved-filter restoration assert no production transport calls, catalogue mutations or routing changes. Hidden selections are pruned.
+
+The real `OperatorXamlStartupTests` window verifies custom control keyboard focus/accessibility names and scrolls both 4096-item Grid/List views while bounding realized containers. Existing compact-window and source-bound functional/visual checks remain required. Physical keyboard/screen-reader usability, mixed-DPI interaction and hardware Program render/IPC latency under hover/search load remain **UNVERIFIED** until reference-platform execution. Hosted tests do not substitute for those measurements.

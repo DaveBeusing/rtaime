@@ -42,8 +42,21 @@ public sealed record MediaPoolItemViewModel(
 	ImageSource? Thumbnail,
 	bool IsOnline,
 	bool IsReady,
-	string? LocalPath = null)
+	string? LocalPath = null,
+	TimeSpan? KnownDuration = null) : INotifyPropertyChanged
 {
+	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
+	public event PropertyChangedEventHandler? PropertyChanged;
+	// WPF indexes item containers by item hash. Image replacement and binding
+	// subscriptions must not change that hash while the item is in the view.
+	public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Key);
+	internal void UpdateThumbnail(ImageSource? image)
+	{
+		if (ReferenceEquals(Thumbnail, image)) return;
+		Thumbnail = image;
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PreviewCapabilityLabel)));
+	}
 	public string DurationLabel =>
 		Kind == MediaPoolItemKind.Clip
 			? Detail.Split('·', 2, StringSplitOptions.TrimEntries)[0]
@@ -62,6 +75,13 @@ public sealed record MediaPoolItemViewModel(
 	public string AvailabilityLabel => State.Contains("MISSING", StringComparison.OrdinalIgnoreCase)
 		? "MISSING"
 		: IsOnline ? "ONLINE" : "OFFLINE";
+	public string ReadinessLabel => !IsOnline ? AvailabilityLabel : IsReady ? "ONLINE · READY" : "ONLINE · NOT READY";
+	public string PreviewCapabilityLabel => MediaLibraryHoverPreview.Capability(this) switch
+	{
+		MediaHoverCapability.Offline => "Offline: hover preview unavailable.",
+		MediaHoverCapability.ExistingThumbnail => "Existing monitoring thumbnail only; independent scrubbing unsupported.",
+		_ => "No independent thumbnail or scrub capability is available."
+	};
 	public bool CanRevealInExplorer => Kind == MediaPoolItemKind.Clip && !string.IsNullOrWhiteSpace(LocalPath);
 }
 
@@ -148,6 +168,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_catalogClient = catalogClient;
 		_importFilePicker = importFilePicker;
 
+		InitializeBrowsing();
 		FilteredItems = [];
 		SelectedItems = [];
 		InspectorProperties = [];
@@ -280,7 +301,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		get => _searchText;
 		set
 		{
-			if (!Set(ref _searchText, value ?? string.Empty))
+			if (!Set(ref _searchText, (value ?? string.Empty)[..Math.Min(value?.Length ?? 0, 256)]))
 				return;
 			ApplyFilter();
 		}
@@ -635,13 +656,16 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	}
 
 
+	internal void SetCatalogSnapshot(MediaAssetCatalogSnapshot snapshot) =>
+		_catalogSnapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+
 	public async Task LoadCatalogAsync()
 	{
 		if (_catalogClient is null)
 			return;
 		await RunCatalogOperationAsync(async () =>
 		{
-			_catalogSnapshot = await _catalogClient.GetMediaAssetCatalogAsync();
+			SetCatalogSnapshot(await _catalogClient.GetMediaAssetCatalogAsync());
 		});
 	}
 
@@ -661,7 +685,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			var result = await _catalogClient.RelinkMediaAssetAsync(
 				new MediaAssetId(Identity.Parse(item.ReferenceId)),
 				sourceLocation);
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -680,7 +704,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		{
 			var result = await _catalogClient.RemoveMediaAssetAsync(
 				new MediaAssetId(Identity.Parse(item.ReferenceId)));
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -696,7 +720,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		await RunCatalogOperationAsync(async () =>
 		{
 			var result = await _catalogClient.ImportMediaAssetsAsync(paths);
-			_catalogSnapshot = result.Snapshot;
+			SetCatalogSnapshot(result.Snapshot);
 			_catalogError = FormatMutationFailures(result);
 		});
 	}
@@ -707,7 +731,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			return;
 		await RunCatalogOperationAsync(async () =>
 		{
-			_catalogSnapshot = await _catalogClient.RefreshMediaAssetAvailabilityAsync();
+			SetCatalogSnapshot(await _catalogClient.RefreshMediaAssetAvailabilityAsync());
 		});
 	}
 
@@ -920,7 +944,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 					: null,
 				online,
 				online && !_catalogBusy,
-				asset.SourceLocation));
+				asset.SourceLocation,
+				asset.Duration));
 		}
 
 		if (_mediaDeck.IsLoaded &&
@@ -999,12 +1024,14 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		if (_allItems.Count > MaxProjectedItems)
 			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
 
-		ApplyFilter(selectedKey);
+		ReconcileHoverContext();
+		ApplyFilter(selectedKey, cancelHover: false);
 		RaiseTestSignalState();
 	}
 
 	public void Dispose()
 	{
+		DisposeBrowsing();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;
 		_operator.Sources.CollectionChanged -= OnSourcesChanged;
@@ -1017,13 +1044,21 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_audioSubscriptions.Clear();
 	}
 
-	private void ApplyFilter(string? preferredSelectionKey = null)
+	private void ApplyFilter(string? preferredSelectionKey = null, bool cancelHover = true)
 	{
+		if (_restoringBin) return;
+		if (cancelHover) CancelHover();
 		preferredSelectionKey ??= SelectedItem?.Key;
-		var query = SearchText.Trim();
+		var bin = CurrentBin();
+		if (_selectedSmartBin is { } saved && saved with { Name = bin.Name } != bin)
+		{
+			_selectedSmartBin = null;
+			OnPropertyChanged(nameof(SelectedSmartBin));
+			RaiseBrowsingCommands();
+		}
 
 		var filtered = _allItems
-			.Where(item => CategoryMatches(item) && FilterMatches(item) && SearchMatches(item, query))
+			.Where(item => MediaSmartBinPolicy.Matches(item, bin))
 			.OrderBy(item => item.Category, StringComparer.Ordinal)
 			.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.ThenBy(item => item.Key, StringComparer.Ordinal)
@@ -1031,6 +1066,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			.ToArray();
 
 		FilteredItems.ReplaceWith(filtered);
+		var keys = filtered.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+		if (SelectedItems.Any(item => !keys.Contains(item.Key)))
+			UpdateSelection(SelectedItems.Where(item => keys.Contains(item.Key)).ToArray());
 
 		var preferred = preferredSelectionKey is null
 			? null
@@ -1058,43 +1096,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasItems));
 	}
 
-	private bool CategoryMatches(MediaPoolItemViewModel item) =>
-		string.Equals(SelectedCategory, "All", StringComparison.Ordinal) ||
-		string.Equals(item.Category, SelectedCategory, StringComparison.Ordinal);
-
-	private bool FilterMatches(MediaPoolItemViewModel item) =>
-		SelectedFilter switch
-		{
-			"All" => true,
-			"Video" => item.Kind is MediaPoolItemKind.Source or MediaPoolItemKind.Clip,
-			"Audio" => item.Kind == MediaPoolItemKind.Audio,
-			"Graphics" => item.Kind == MediaPoolItemKind.Graphics,
-			"Online" => item.IsOnline,
-			"Offline" => !item.IsOnline,
-			_ => true
-		};
-
-	private static bool SearchMatches(MediaPoolItemViewModel item, string query)
-	{
-		if (query.Length == 0)
-			return true;
-
-		return Contains(item.Name, query) ||
-			Contains(item.Detail, query) ||
-			Contains(item.Format, query) ||
-			Contains(item.State, query) ||
-			Contains(item.ReferenceId, query) ||
-			Contains(item.LocalPath, query);
-	}
-
-
 	private static string FormatDuration(TimeSpan duration) =>
 		duration.TotalHours >= 1
 			? duration.ToString(@"hh\:mm\:ss")
 			: duration.ToString(@"mm\:ss");
-
-	private static bool Contains(string? value, string query) =>
-		value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 
 	private static bool IsOnlineState(string value) =>
 		!value.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase) &&
@@ -1509,7 +1514,22 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasError));
 		OnPropertyChanged(nameof(ErrorState));
 	}
-	private void OnSourceItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
+	private void OnSourceItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (sender is OperatorSourceTileViewModel source &&
+			e.PropertyName is nameof(OperatorSourceTileViewModel.Thumbnail) or nameof(OperatorSourceTileViewModel.ThumbnailFormat))
+		{
+			// A frame arrival must not reset virtualization, selection, or hover admission.
+			foreach (var item in _allItems)
+			{
+				if (item.Kind == MediaPoolItemKind.Source && item.ReferenceId == source.Id ||
+					item.Kind == MediaPoolItemKind.Clip && item.ReferenceId == _mediaDeck.AssetId && source.Id == _mediaDeck.SourceId)
+					item.UpdateThumbnail(source.Thumbnail);
+			}
+			return;
+		}
+		Refresh();
+	}
 	private void OnAudioItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
 
 	private void RaiseSelectionState()

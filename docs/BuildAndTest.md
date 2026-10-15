@@ -394,3 +394,15 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 ```
 
 The real OperatorXamlStartupTests qualification also checks the themed timeline's focused edit-cursor key, local undo and unchanged confirmed transport. Required source-bound visual, lifecycle, failure and packaged checks remain in place. Physical mixed-DPI behavior remains UNVERIFIED until reference-platform execution.
+
+## Media Library Smart Bin and hover regressions
+
+After the canonical pinned-SDK Release build:
+
+```powershell
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~MediaLibraryBrowsingTests
+```
+
+The required CI job runs these focused metadata, persistence-fault, large-catalogue and hover-cancellation checks before the full suite. The existing real-STA OperatorXamlStartupTests also scrolls 4096 Grid/List entries and checks custom-control keyboard focus and bounded recycling. See [MediaLibraryAssetBrowser.md](MediaLibraryAssetBrowser.md) for the explicit unsupported scrubbing gate. Physical mixed-DPI, screen-reader interaction and hardware render/IPC latency remain UNVERIFIED. CI, Quality, Security, Provider Smoke and Packaged E2E must be checked at the exact PR head; existing source-bound evidence requirements are unchanged.
+
+The focused Media Library step also runs `ProductionMacroOperatorTests.Cancelled_status_refresh_retains_confirmed_macro_and_allows_explicit_recovery`. A cancelled/timed-out startup Macro status read displays unavailability while retaining confirmed execution and allowing explicit refresh; it must not escape the loaded-window handler or crash the Operator. Mutation outcomes are unaffected by this status-read handling.

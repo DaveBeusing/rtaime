@@ -54,6 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Media Library metadata, preferences and hover isolation regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaLibraryBrowsingTests|FullyQualifiedName~ProductionMacroOperatorTests.Cancelled_status_refresh" --logger "console;verbosity=detailed"
+
       - name: Timeline ergonomics and authoring history regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~TimelineErgonomicsTests --logger "console;verbosity=detailed"
       - name: Precision Inspector and draft authority regressions

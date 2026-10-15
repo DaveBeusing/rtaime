@@ -225,6 +225,7 @@
 							<RowDefinition Height="34" />
 							<RowDefinition Height="34" />
 							<RowDefinition Height="32" />
+							<RowDefinition Height="Auto" />
 							<RowDefinition Height="*" />
 							<RowDefinition Height="220" />
 						</Grid.RowDefinitions>
@@ -254,6 +255,8 @@
 									<controls:RtaimeIconButton.ContextMenu>
 										<controls:RtaimeContextMenu>
 											<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+											<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
+											<controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
 											<controls:RtaimeMenuSeparator />
 											<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
 											<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
@@ -329,7 +332,33 @@
 							</controls:RtaimeListBox.ItemsPanel>
 						</controls:RtaimeListBox>
 
-						<Grid Grid.Row="3" Margin="0,10,0,0">
+						<Grid Grid.Row="3" Margin="0,2,0,0">
+							<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+							<Grid>
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /><ColumnDefinition Width="36" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
+								<controls:RtaimeComboBox x:Name="MediaSmartBins" ItemsSource="{Binding MediaPool.SmartBins, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedItem="{Binding MediaPool.SelectedSmartBin, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									DisplayMemberPath="Name" ToolTip="{Binding MediaPool.BinStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" AutomationProperties.Name="Saved Smart Bin" />
+								<controls:RtaimeButton Grid.Column="1" Content="Save" Command="{Binding MediaPool.SaveSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Save current search and metadata filters (maximum 16)." AutomationProperties.Name="Save Smart Bin" />
+								<controls:RtaimeButton Grid.Column="2" Content="Del" Command="{Binding MediaPool.DeleteSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Delete selected Smart Bin; media stays in the library." AutomationProperties.Name="Delete Smart Bin" />
+								<controls:RtaimeButton Grid.Column="3" Content="Filters" Command="{Binding MediaPool.ToggleMetadataFiltersCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Show or hide duration and readiness filters." AutomationProperties.Name="Show media metadata filters" />
+							</Grid>
+							<Grid Grid.Row="1" Height="30" Visibility="{Binding MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<controls:RtaimeComboBox ItemsSource="{Binding MediaPool.DurationChoices, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValue="{Binding MediaPool.DurationFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+									ToolTip="Known catalogue duration; unknown durations stay explicit." AutomationProperties.Name="Media duration filter" />
+								<controls:RtaimeComboBox Grid.Column="1" ItemsSource="{Binding MediaPool.ReadinessChoices, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValue="{Binding MediaPool.ReadinessFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+									ToolTip="Current presentation readiness; not a production qualification." AutomationProperties.Name="Media readiness filter" />
+							</Grid>
+
+						</Grid>
+
+						<Grid Grid.Row="4" Margin="0,10,0,0">
+							<Grid Height="36" VerticalAlignment="Bottom" Panel.ZIndex="20" IsHitTestVisible="False" Background="{DynamicResource OperatorSurfaceBrush}" Visibility="{Binding MediaPool.LibraryFeedbackVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<Image Source="{Binding MediaPool.HoverThumbnail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="Uniform" Margin="0,2,4,2" />
+								<TextBlock Grid.Column="1" Text="{Binding MediaPool.HoverStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" VerticalAlignment="Center"
+									ToolTip="{Binding MediaPool.BinStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" AutomationProperties.LiveSetting="Polite" />
+							</Grid>
 							<controls:RtaimeStatePlaceholder
 											State="{Binding WorkspaceStates.MediaLibrary.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 											Title="{Binding WorkspaceStates.MediaLibrary.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -349,6 +378,7 @@
 								VirtualizingPanel.IsVirtualizing="True"
 								VirtualizingPanel.VirtualizationMode="Recycling"
 								ScrollViewer.CanContentScroll="True"
+								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
 								AutomationProperties.Name="Media Library grid">
 								<controls:RtaimeListBox.Style>
 									<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">
@@ -372,12 +402,13 @@
 								</controls:RtaimeListBox.ItemsPanel>
 								<controls:RtaimeListBox.ItemTemplate>
 									<DataTemplate>
-										<controls:RtaimeMediaTile
+										<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
 											Thumbnail="{Binding Thumbnail}"
 											AssetName="{Binding Name}"
 											Duration="{Binding DurationLabel}"
 											FileType="{Binding FileTypeLabel}"
-											Availability="{Binding AvailabilityLabel}"
+											Availability="{Binding ReadinessLabel}"
+											ToolTip="{Binding PreviewCapabilityLabel}"
 											IsOnline="{Binding IsOnline}"
 											IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
 											<controls:RtaimeMediaTile.ContextMenu>
@@ -427,6 +458,7 @@
 								VirtualizingPanel.IsVirtualizing="True"
 								VirtualizingPanel.VirtualizationMode="Recycling"
 								ScrollViewer.CanContentScroll="True"
+								MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
 								AutomationProperties.Name="Media Library list">
 								<controls:RtaimeListBox.Style>
 									<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">
@@ -445,7 +477,7 @@
 								</controls:RtaimeListBox.ItemsPanel>
 								<controls:RtaimeListBox.ItemTemplate>
 									<DataTemplate>
-										<Grid>
+										<Grid MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
 											<Grid.ContextMenu>
 												<controls:RtaimeContextMenu>
 													<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
@@ -468,7 +500,7 @@
 											</StackPanel>
 											<StackPanel Grid.Column="1" HorizontalAlignment="Right">
 												<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
-												<TextBlock Text="{Binding AvailabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
+												<TextBlock Text="{Binding ReadinessLabel}" ToolTip="{Binding PreviewCapabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
 											</StackPanel>
 										</Grid>
 									</DataTemplate>
@@ -523,7 +555,7 @@
 						</Grid>
 
 						<local:NdiSourceDiscoveryControl
-							Grid.Row="4"
+							Grid.Row="5"
 							DataContext="{Binding NdiSources, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid>
 
