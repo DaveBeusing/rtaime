@@ -21,13 +21,18 @@ public partial class OperatorCommandPaletteWindow : Window
 		DataContext = model;
 		model.ExecutionCompleted += OnExecuted;
 		model.PropertyChanged += OnModelChanged;
-		Loaded += (_, _) => FocusCurrentMode();
+		Loaded += (_, _) => QueueFocus();
 		Closed += (_, _) =>
 		{
 			model.ExecutionCompleted -= OnExecuted;
             model.PropertyChanged -= OnModelChanged;
 			if (!_executed && _previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
-				previous.Dispatcher.BeginInvoke(() => { if (previous.IsVisible && previous.IsEnabled) previous.Focus(); }, DispatcherPriority.Input);
+				previous.Dispatcher.BeginInvoke(() =>
+                {
+                    var newerSurface = Application.Current?.Windows.OfType<Window>().Any(window =>
+                        window.IsVisible && window is OperatorCommandPaletteWindow or ShowReadinessWindow) == true;
+                    if (!newerSurface && previous.IsVisible && previous.IsEnabled) previous.Focus();
+                }, DispatcherPriority.Input);
 		};
 	}
 	public void FocusSearch() { FocusCurrentMode(); }
@@ -38,12 +43,16 @@ public partial class OperatorCommandPaletteWindow : Window
     }
     private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands) || _focusQueued) return;
+        if (e.PropertyName == nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands)) QueueFocus();
+    }
+    private void QueueFocus()
+    {
+        if (_focusQueued) return;
         _focusQueued = true;
         Dispatcher.BeginInvoke(() =>
         {
             _focusQueued = false;
-            if (IsVisible) FocusCurrentMode();
+            if (IsVisible) { Activate(); FocusCurrentMode(); }
         }, DispatcherPriority.Input);
     }
 	protected override void OnSourceInitialized(EventArgs e)
