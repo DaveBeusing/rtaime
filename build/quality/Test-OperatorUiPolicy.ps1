@@ -152,6 +152,8 @@ $compositingGraphProjection = Get-Content -LiteralPath $compositingGraphProjecti
 $compositingGraphDocumentation = Get-Content -LiteralPath $compositingGraphDocumentationPath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
+$inspectorDraft = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/InspectorDraftHistory.cs") -Raw
+$inspectorAttributes = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/InspectorAttributeSets.cs") -Raw
 $inspectorSurface = "$window`n$inspectorHost"
 $virtualizingWrapPanel = Get-Content -LiteralPath $virtualizingWrapPanelPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
@@ -912,7 +914,7 @@ Assert-Condition ($timelineViewModel -match 'MediaPoolItemKind\.Clip' -and $time
 Assert-Condition ($timelineViewModel -match 'PROJECTED ·' -and $timelineViewModel -match 'CanTrim,?\s*false|false\)') "Unsupported timed Audio/Graphics semantics must remain explicitly projected and non-trimmable."
 Assert-Condition ($timelineViewModel -match '_activeTimelineContextReference' -and $timelineViewModel -match 'snapshot\.Probe\?\.AssetId') "Timeline-only resource projections must reset when the loaded media asset or source context changes."
 Assert-Condition ($windowCode -match 'Timeline\.SelectionChanged \+= OnTimelineSelectionChanged' -and $windowCode -match 'MediaPool\.SelectTimelineItem' -and $windowCode -match 'MediaPool\.SelectTimelineCue') "Timeline selection must project into the existing context Inspector."
-Assert-Condition ($windowCode -match 'MediaDeck\.SelectedCue = MediaDeck\.Cues\.FirstOrDefault' -and $inspectorSurface -match 'MediaDeck\.RenameCueCommand' -and $inspectorSurface -match 'MediaDeck\.DeleteCueCommand') "Selected timeline cues must reuse existing Media Deck rename/delete commands in the shared Inspector."
+Assert-Condition ($windowCode -match 'MediaDeck\.SelectedCue = MediaDeck\.Cues\.FirstOrDefault' -and $inspectorSurface -match 'Inspector\.ApplyCueDraftCommand' -and $inspectorDraft -match '_mediaDeck\.RenameCueCommand\.Execute\(null\)' -and $inspectorDraft -match '_mediaDeck\.CueName = CueNameDraft' -and $inspectorSurface -match 'MediaDeck\.DeleteCueCommand') "Selected timeline cues must reuse existing Media Deck rename/delete commands in the shared Inspector."
 foreach ($timelinePropertyId in @("timeline.item.label", "timeline.item.start", "timeline.item.in", "timeline.item.out", "timeline.cue.name", "timeline.cue.time")) {
 	Assert-Condition ($mediaPool -match [Regex]::Escape($timelinePropertyId)) "Timeline Inspector stable property id '$timelinePropertyId' is required."
 }
@@ -921,7 +923,7 @@ foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autopla
 	Assert-Condition ($mediaPool -match [Regex]::Escape($propertyId)) "Inspector stable property id '$propertyId' is required."
 }
 Assert-Condition ($inspectorSurface -match 'METADATA is read-only' -and $inspectorSurface -match 'DESIRED edits' -and $inspectorSurface -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
-Assert-Condition ($inspectorHost -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $inspectorHost -match 'ApplyAudioGainCommand' -and $inspectorHost -match 'ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
+Assert-Condition ($inspectorHost -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $inspectorHost -match 'Inspector\.ApplyAudioDraftCommand' -and $inspectorDraft -match '_operator\.ApplyAudioGainCommand\.Execute\(null\)' -and $inspectorDraft -match '_operator\.ApplyAudioGainCommand\.CanExecute\(null\)' -and $inspectorHost -match 'ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
 Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
 Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Inspector"' -and $inspectorHost -match 'Header="Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must retain the mockup top-level Inspector, Processing and Metadata tabs."
 Assert-Condition (($inspectorHost | Select-String -Pattern 'Height" Value="40"' -AllMatches).Matches.Count -ge 1 -and $inspectorHost -match 'InspectorTopTab') "Inspector top tab row must retain the 40px mockup height."
@@ -1175,3 +1177,9 @@ Assert-Condition ($workspaceDocumentation -match 'eight task-oriented workspaces
 Assert-Condition ($monitorView -match 'ZoomModeProperty' -and $monitorView -match '"FILL"' -and $monitorView -match '"25%"' -and $monitorView -match '"200%"' -and $monitorView -match '"400%"') "Shared monitor state must expose explicit Fit/Fill and professional inspection zoom presets."
 Assert-Condition ($monitorWorkspaceTheme -match 'RenderOptions.BitmapScalingMode="HighQuality"') "Shared monitor presentation must retain high-quality bitmap scaling."
 Assert-Condition ($monitorWorkspaceTheme -notmatch '<Viewbox[^>]+Monitor.ImageStretch') "Shared monitor media must not reintroduce a Viewbox scaling stage around the monitoring image."
+
+# Inspector authoring remains a bounded local draft layered over the existing Client commands.
+Assert-Condition ($inspectorDraft -match 'MaximumInspectorContexts = 8' -and $inspectorDraft -match 'AuthoringDraftHistory<InspectorAttributeValues>' -and $inspectorDraft -match 'CurrentRevisionToken == _draftRevision') "Inspector history must remain bounded and revision-qualified."
+Assert-Condition ($inspectorHost -match 'UndoInspectorDraftCommand' -and $inspectorHost -match 'RedoInspectorDraftCommand' -and $inspectorHost -match 'Inspector\.AudioGainDraft' -and $inspectorHost -match 'Inspector\.CueNameDraft') "Inspector must expose explicit local history and audio/cue draft bindings."
+Assert-Condition ($inspectorAttributes -match 'MediaCuePoint\.MaximumNameLength' -and $inspectorAttributes -match 'Left \+ Right < 1' -and $inspectorAttributes -match 'Top \+ Bottom < 1') "Typed attribute compatibility must retain canonical cue and coupled-crop validation."
+Assert-Condition ($inspectorDraft -notmatch 'NamedPipe|new OperatorControlClient|new RuntimeHost|new ControlHost') "Inspector draft history must not acquire a production host or transport."

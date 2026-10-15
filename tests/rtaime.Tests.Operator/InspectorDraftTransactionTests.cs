@@ -97,6 +97,22 @@ public sealed class InspectorDraftTransactionTests
         f.Model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(0.1, f.Model.SelectedLayerPositionX);
         Assert.Equal(0, f.Transport.MutationCalls);
     }
+    [Fact]
+    public async Task Grade_and_key_sets_paste_and_replay_as_single_compatible_transactions()
+    {
+        await using var f = await Fixture.Create();
+        f.Model.SelectCompositingNode(Node("processing:bitmap-graphics:grade"));
+        Assert.True(f.Model.TryPasteAttributeSet(new(1, Token(f), new InspectorGradeAttributes(false, 0.4, 1.2, 0.8))));
+        Assert.Equal(0.4, f.Model.SelectedColorGradeBrightness); Assert.False(f.Model.SelectedColorGradeEnabled);
+        f.Model.UndoInspectorDraftCommand.Execute(null);
+        Assert.Equal(0, f.Model.SelectedColorGradeBrightness); Assert.True(f.Model.SelectedColorGradeEnabled);
+        f.Model.SelectCompositingNode(Node("processing:bitmap-graphics:key"));
+        Assert.True(f.Model.TryPasteAttributeSet(new(1, Token(f), new InspectorKeyAttributes(false, 12, 255, 23, 0.4, 0.2, 0.3))));
+        Assert.Equal(12, f.Model.SelectedChromaKeyRed); Assert.Equal(0.4, f.Model.SelectedChromaKeyTolerance);
+        f.Model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(0, f.Model.SelectedChromaKeyRed);
+        Assert.Equal(0.1, f.Model.SelectedChromaKeyTolerance); Assert.True(f.Model.SelectedChromaKeyEnabled);
+        Assert.Equal(0, f.Transport.MutationCalls);
+    }
     [Theory]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
@@ -151,12 +167,22 @@ public sealed class InspectorDraftTransactionTests
         Assert.Contains("REJECTED", f.Model.InspectorEditState);
         f.Transport.Reject = false; f.Model.ApplyCueDraftCommand.Execute(null); await Until(() => !f.Deck.IsBusy);
         Assert.Equal("Copied name", f.Deck.Cues[1].Name); Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+        f.Model.CueNameDraft = "Unsaved"; Assert.True(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+        f.Transport.OmitSecondCue = true; f.Deck.ApplyConfirmedSnapshot(f.Transport.MediaSnapshot());
+        Assert.False(f.Model.CopyAttributesCommand.CanExecute(null)); Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+        f.Transport.OmitSecondCue = false; f.Deck.ApplyConfirmedSnapshot(f.Transport.MediaSnapshot());
+        Assert.Equal("Copied name", f.Model.CueNameDraft); Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
     }
     [Fact]
     public async Task Stale_invalid_multi_selection_and_pending_confirmation_block_history_and_paste()
     {
         await using var f = await Fixture.Create();
         f.Model.SelectedLayerPositionX = 0.6; f.Model.CopyAttributesCommand.Execute(null);
+        f.Model.UpdateSelection(f.Model.FilteredItems.Where(i => i.Kind == MediaPoolItemKind.Audio).ToArray());
+        Assert.True(f.Model.HasMultipleSelection); Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+        Assert.False(f.Model.PasteAttributesCommand.CanExecute(null));
+        f.Model.SelectCompositingNode(Node("layer:bitmap-graphics"));
+        Assert.Equal(0.6, f.Model.SelectedLayerPositionX);
         f.Model.InspectorInputsValid = false; Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null)); Assert.False(f.Model.PasteAttributesCommand.CanExecute(null));
         f.Model.InspectorInputsValid = true;
         f.Transport.Hold = new(TaskCreationOptions.RunContinuationsAsynchronously); f.Model.ApplyCompositingTransformCommand.Execute(null);

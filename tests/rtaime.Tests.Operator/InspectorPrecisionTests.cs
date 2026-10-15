@@ -200,10 +200,10 @@ public sealed class InspectorPrecisionTests
 		private readonly ProductionSourceId _source = ProductionSourceId.New();
 		private readonly ProductionId _production = ProductionId.New();
 		private OperatorCompositingLayerDescriptor _layer = new("bitmap-graphics", 2, 0, true, 255, 0.1, 0.2, 1, "logo.rgba",
-			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1))]);
+			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1)), new("key", 2, true, chromaKey: new(0, 255, 0, 0.1, 0.1, 0))]);
 		internal int MutationCalls;
 		internal TaskCompletionSource? Hold;
-		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut;
+		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue;
         internal ulong RevisionValue = 1;
         internal string SourceId => _source.ToString();
         internal readonly ProductionSourceId OtherSource = ProductionSourceId.New();
@@ -220,7 +220,7 @@ public sealed class InspectorPrecisionTests
             var probe = new LocalMediaProbe(MediaContractVersion.Current, Asset, source, "reference.mp4", MediaContainerFormat.Mp4,
                 MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32, duration);
             var markers = new MediaMarkerSnapshot(MediaContractVersion.Current, Asset, 100, 0, 99,
-                CueIds.Select((id, i) => new MediaCuePoint(id, CueNames[i], 20 + i)).ToArray());
+                CueIds.Take(OmitSecondCue ? 1 : 2).Select((id, i) => new MediaCuePoint(id, CueNames[i], 20 + i)).ToArray());
             return new(MediaContractVersion.Current, MediaDeckState.Paused, source, probe, transport, markers);
         }
         private OperatorAudioInputDescriptor Audio(string id) => new(id, "audio-stream", Gains.GetValueOrDefault(id, 1), false, 0, 0, 0, false, "HEALTHY");
