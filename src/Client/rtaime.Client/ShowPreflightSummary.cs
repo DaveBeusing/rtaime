@@ -36,7 +36,7 @@ public static class ShowPreflightSummary
 			!catalogueFresh ? ShowPreflightState.Unknown :
 			assetIds.Any(id => !assets!.TryGetValue(id, out var asset) || asset.Availability != MediaAssetAvailability.Online) ? ShowPreflightState.Fail : ShowPreflightState.Pass,
 			selected is null ? "No authoritative cue list is selected." : assetIds.Length == 0 ? "Selected show has no media asset references." :
-			!catalogueFresh ? "Read the catalogue again; availability evidence is missing or older than 10 seconds." :
+			!catalogueFresh ? "Refresh availability in Media Library; evidence is missing or older than 10 seconds." :
 			$"{assetIds.Length} distinct media references checked against catalogue revision {catalogue!.Revision}. Availability is observed, not guaranteed at execution.", "MEDIA");
 
 		var sourceIds = snapshot.Sources.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);

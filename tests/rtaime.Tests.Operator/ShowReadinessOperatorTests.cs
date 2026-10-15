@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.Media.Contracts;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
@@ -88,6 +89,12 @@ public sealed class ShowReadinessOperatorTests
 			Assert.Same(main, window.Owner);
 			Assert.True(window.IsKeyboardFocusWithin);
 			Assert.Equal(6, main.ShowReadiness.Checks.Count);
+			main.MediaPool.SetCatalogSnapshot(MediaAssetCatalogSnapshot.Empty);
+			var catalogueObservedAt = main.MediaPool.CatalogObservedAtUtc;
+			main.ShowReadiness.RefreshChecksCommand.Execute(null);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+			Assert.Equal(catalogueObservedAt, main.MediaPool.CatalogObservedAtUtc);
+			Assert.Contains("no server request", main.ShowReadiness.ReadStatus);
 			foreach (var scale in new[] { 1d, 1.25, 1.5, 2d })
 			{
 				window.Width = 960; window.Height = 500;

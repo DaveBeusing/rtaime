@@ -113,7 +113,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 			now >= observed && now - observed <= TimeSpan.FromSeconds(10);
 		var catalogueCurrent = _mediaPool?.CatalogObservedAtUtc is { } catalogueAt && catalogueAt >= _catalogueEpochStartUtc;
 		var current = ShowPreflightSummary.Build(_client.Snapshot, fresh,
-			catalogueCurrent && _mediaPool?.IsLoading == false ? _mediaPool.CatalogEvidence : null,
+			catalogueCurrent && _mediaPool?.IsLoading == false ? _mediaPool?.CatalogEvidence : null,
 			_mediaPool?.CatalogObservedAtUtc, _health.GetCurrent(), now);
 		foreach (var check in current)
 		{
