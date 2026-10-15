@@ -73,6 +73,55 @@ public sealed class ApplicationEvidencePublicationTests
 		finally { Directory.Delete(root, true); }
 	}
 
+	[Fact]
+	public async Task Concurrent_publication_and_production_reads_keep_complete_JSON_snapshots()
+	{
+		var root = CreateRoot();
+		var path = Path.Combine(root, "lifecycle.json");
+		var platform = new SystemApplicationHostPlatform();
+		Task? reading = null;
+		try
+		{
+			platform.WriteAllTextAtomic(path, "{\"revision\":0}");
+			reading = Task.Run(() =>
+			{
+				for (var index = 0; index < 100; index++)
+				{
+					using var document = JsonDocument.Parse(platform.ReadAllText(path));
+					Assert.InRange(document.RootElement.GetProperty("revision").GetInt32(), 0, 100);
+				}
+			});
+			for (var revision = 1; revision <= 100; revision++)
+				platform.WriteAllTextAtomic(path, JsonSerializer.Serialize(new { revision }));
+			await reading.WaitAsync(TimeSpan.FromSeconds(10));
+			using var final = JsonDocument.Parse(platform.ReadAllText(path));
+			Assert.Equal(100, final.RootElement.GetProperty("revision").GetInt32());
+			Assert.Single(Directory.GetFiles(root));
+		}
+		finally
+		{
+			try { if (reading is not null) await reading; }
+			finally { Directory.Delete(root, true); }
+		}
+	}
+
+	[Fact]
+	public void Persistent_read_sharing_denial_is_reported_instead_of_returning_empty_or_stale_data()
+	{
+		if (!OperatingSystem.IsWindows()) return;
+		var root = CreateRoot();
+		var path = Path.Combine(root, "lifecycle.json");
+		var platform = new SystemApplicationHostPlatform();
+		try
+		{
+			platform.WriteAllTextAtomic(path, "{\"revision\":7}");
+			using (var blocker = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+				Assert.ThrowsAny<IOException>(() => platform.ReadAllText(path));
+			Assert.Equal("{\"revision\":7}", platform.ReadAllText(path));
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
 	private static string CreateRoot()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-publication-" + Guid.NewGuid().ToString("N"));

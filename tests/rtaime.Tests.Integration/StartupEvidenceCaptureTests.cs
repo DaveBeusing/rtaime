@@ -155,12 +155,8 @@ public sealed class StartupEvidenceCaptureTests
 		}
 	}
 
-	private static string ReadShared(string path)
-	{
-		using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-		using var reader = new StreamReader(input);
-		return reader.ReadToEnd();
-	}
+	private static readonly SystemApplicationHostPlatform EvidenceReader = new();
+	private static string ReadShared(string path) => EvidenceReader.ReadAllText(path);
 
 	private sealed class Fixture : IApplicationHostPlatform, IAsyncDisposable
 	{

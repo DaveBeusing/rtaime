@@ -526,9 +526,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 					break;
 				}
 				catch (Exception exception) when (
-					attempt < 5 && OperatingSystem.IsWindows() &&
-					exception is IOException or UnauthorizedAccessException &&
-					(exception.HResult & 0xffff) is 5 or 32 or 33)
+					attempt < 5 && IsTransientWindowsSharingFailure(exception))
 				{
 					Thread.Sleep(Math.Min(20 << attempt, 200));
 				}
@@ -548,10 +546,25 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 	public bool FileExists(string path) => File.Exists(path);
 	public string ReadAllText(string path)
 	{
-		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-		using var reader = new StreamReader(stream);
-		return reader.ReadToEnd();
+		for (var attempt = 0; ; attempt++)
+		{
+			try
+			{
+				using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+				using var reader = new StreamReader(stream);
+				return reader.ReadToEnd();
+			}
+			catch (Exception exception) when (attempt < 5 && IsTransientWindowsSharingFailure(exception))
+			{
+				// ReplaceFile can briefly exclude new opens while swapping the names.
+				Thread.Sleep(Math.Min(20 << attempt, 200));
+			}
+		}
 	}
+
+	private static bool IsTransientWindowsSharingFailure(Exception exception) =>
+		OperatingSystem.IsWindows() && (exception is IOException or UnauthorizedAccessException) &&
+		(exception.HResult & 0xffff) is 5 or 32 or 33;
 
 	public void WriteAllText(string path, string content)
 	{
