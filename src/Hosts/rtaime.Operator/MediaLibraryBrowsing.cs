@@ -12,7 +12,17 @@ public sealed record MediaReadinessChoice(MediaReadinessFilter Value, string Lab
 
 public sealed partial class MediaPoolInspectorViewModel
 {
-	private readonly MediaLibraryHoverPreview _hoverPreview = new();
+	public event Action<MediaPoolItemViewModel>? LibraryItemVisited;
+    public MediaPoolItemViewModel? FindLibraryItem(string key) => _allItems.FirstOrDefault(item => item.Key == key);
+    public bool BrowseLibraryItem(string key)
+    {
+        if (FindLibraryItem(key) is not { } item) return false;
+        SearchText = ""; SelectedCategory = "All"; SelectedFilter = "All";
+        DurationFilter = MediaDurationFilter.Any; ReadinessFilter = MediaReadinessFilter.Any;
+        UpdateSelection([item]);
+        return true;
+    }
+    private readonly MediaLibraryHoverPreview _hoverPreview = new();
 	private MediaSmartBinStore? _binStore;
 	private MediaSmartBin? _selectedSmartBin;
 	private MediaDurationFilter _durationFilter;

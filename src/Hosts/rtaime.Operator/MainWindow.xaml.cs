@@ -139,12 +139,15 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
-		OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
+		OpenLibraryCommand = new OperatorShellCommand(() => OpenLibrary(), () => !_shutdownStarted);
+        OpenInlineHelpCommand = new OperatorShellCommand(() => OpenLibrary("Help"), () => !_shutdownStarted);
+        OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
+        InitializeLibrary(viewModel);
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
@@ -240,12 +243,15 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
-		OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
+		OpenLibraryCommand = new OperatorShellCommand(() => OpenLibrary(), () => !_shutdownStarted);
+        OpenInlineHelpCommand = new OperatorShellCommand(() => OpenLibrary("Help"), () => !_shutdownStarted);
+        OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
+        InitializeLibrary(viewModel);
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
 		Closing += OnClosingAsync;
@@ -413,7 +419,8 @@ public partial class MainWindow : Window
 		if (e.PropertyName != nameof(OperatorShellViewModel.SelectedWorkspace))
 			return;
 
-		_ = _sessionRecoveryStore.CheckpointAsync(
+		Library?.Visit(new("workspace", "", Shell.SelectedWorkspace));
+        _ = _sessionRecoveryStore.CheckpointAsync(
 			new OperatorSafeSessionState(Shell.SelectedWorkspace));
 	}
 
@@ -543,6 +550,7 @@ public partial class MainWindow : Window
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
 		_ = CommandPalette.LoadPreferencesAsync();
+        _ = LoadLibraryAsync();
 		_ = MediaPool.LoadSmartBinsAsync();
 		_ = MediaPool.LoadCatalogAsync();
 		_ = NdiSources.RefreshAsync();
@@ -571,6 +579,8 @@ public partial class MainWindow : Window
 			if (!_fullscreenApplied)
 				CaptureWindowPlacement();
 			_commandPaletteWindow?.Close();
+            CloseLibrary();
+            await Library.FlushAsync();
 			await CommandPalette.FlushAsync();
 			_showReadinessWindow?.Close();
 			ShowReadiness.Dispose();
@@ -1047,14 +1057,7 @@ public partial class MainWindow : Window
 		element.ContextMenu.IsOpen = true;
 	}
 
-	private void OnHelpClick(object sender, RoutedEventArgs e)
-	{
-		MessageBox.Show(
-			$"WORKSPACES\nMEDIA  Media preparation\nEDIT  Timeline-focused editing\nLIVE  Multiview, source/cue selection and explicit take controls\nSCENES  Scene/layer presentation using existing graphics state\nCOMPOSITING  Graphics/compositing presentation\nOUTPUTS  Output and operational evidence\nHEALTH  Subsystem health and diagnostics\nSETTINGS  Shell configuration\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nLIVE  Select sources/cues without activation; use SET PVW, CUT/AUTO or JUMP CUE explicitly. Double-click a multiview tile only enlarges its monitor image.\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
-			"rtaime Operator — Workspace & Keyboard Reference",
-			MessageBoxButton.OK,
-			MessageBoxImage.Information);
-	}
+	private void OnHelpClick(object sender, RoutedEventArgs e) => OpenLibrary("Help");
 
 	private sealed class UnavailableOperatorControlTransport : IOperatorControlTransport
 	{

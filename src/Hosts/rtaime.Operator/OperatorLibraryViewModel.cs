@@ -40,8 +40,11 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
         _resolve = resolve; _open = open; _help = help; _currentMedia = currentMedia;
         _currentScene = currentScene; _currentCommand = currentCommand; _store = store ?? new();
         OpenCommand = new OperatorShellCommand(OpenSelected, () => !_disposed && Selected?.Available == true);
-        ToggleHistoryCommand = new OperatorShellCommand(() => Change(_settings with
-        { RememberRecent = !RememberRecent, Recent = [] }), CanEdit);
+        ToggleHistoryCommand = new OperatorShellCommand(() =>
+        {
+            Change(_settings with { RememberRecent = !RememberRecent, Recent = [] });
+            HistoryChanged?.Invoke(this, EventArgs.Empty);
+        }, CanEdit);
         ClearHistoryCommand = new OperatorShellCommand(() => Change(_settings with { Recent = [] }), CanEdit);
         RemoveCommand = new OperatorShellCommand(RemoveSelected, () => CanEdit() && Selected?.Reference is not null);
         FavoriteMediaCommand = new OperatorShellCommand(() => ToggleFavorite(_currentMedia()), CanEdit);
@@ -50,6 +53,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
         RefreshCommand = new OperatorShellCommand(Refresh);
     }
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler? HistoryChanged;
     public ObservableCollection<OperatorLibraryRow> Rows { get; } = [];
     public IReadOnlyList<string> Views { get; } = ["Recent", "Favorites", "Help"];
     public ICommand OpenCommand { get; }
@@ -103,6 +107,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
     public void Visit(OperatorLibraryReference? reference)
     {
         if (!CanEdit() || !RememberRecent || reference?.IsValid != true || reference.Kind is not ("workspace" or "media" or "show")) return;
+        if (_settings.Recent.FirstOrDefault(r => r.Kind == reference.Kind) == reference) return;
         var recent = new[] { reference }.Concat(_settings.Recent.Where(r => r != reference))
             .GroupBy(r => r.Kind).SelectMany(g => g.Take(OperatorLibraryPreferences.MaximumRecentPerKind)).ToArray();
         // Grouping retains per-kind MRU order; display groups are explicit.

@@ -653,6 +653,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
+        if (SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
 	}
 
 
