@@ -30,7 +30,7 @@ public sealed class ShowPreflightAndActionHistoryTests
 	{
 		var cut = Selected(new(ShowControlActionId.New(), ShowControlActionKind.Cut));
 		Assert.Equal(ShowPreflightState.NotApplicable, Checks(Snapshot(cut)).Single(check => check.Id == "assets").State);
-		var media = Selected(new(ShowControlActionId.New(), ShowControlActionKind.MediaPlay, mediaAssetId: Identity.New().ToString()));
+		var media = Selected(new(ShowControlActionId.New(), ShowControlActionKind.MediaPlay, mediaAssetId: Identity.New().ToString().ToUpperInvariant()));
 		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(media)).Single(check => check.Id == "assets").State);
 		var assetId = new MediaAssetId(Identity.Parse(media.CueLists[0].Cues[0].Actions[0].MediaAssetId!));
 		foreach (var availability in new[] { MediaAssetAvailability.Online, MediaAssetAvailability.Missing, MediaAssetAvailability.Offline })
@@ -60,7 +60,7 @@ public sealed class ShowPreflightAndActionHistoryTests
 			mediaAssetId: Identity.New().ToString(), mediaCuePointId: Identity.New().ToString())));
 		Assert.Equal(ShowPreflightState.Unknown, Checks(unloadedCue).Single(check => check.Id == "cues").State);
 		Assert.Equal(ShowPreflightState.Pass, Checks(Snapshot(Selected(new(ShowControlActionId.New(), ShowControlActionKind.SetPreview,
-			sourceId: Source.ToString())))).Single(check => check.Id == "cues").State);
+			sourceId: Source.ToString().ToUpperInvariant())))).Single(check => check.Id == "cues").State);
 	}
 
 	[Fact]

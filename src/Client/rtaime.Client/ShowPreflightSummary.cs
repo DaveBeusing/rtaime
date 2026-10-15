@@ -28,9 +28,9 @@ public static class ShowPreflightSummary
 		}
 		var selected = snapshot.ShowControl.CueLists.FirstOrDefault(list => list.CueListId == snapshot.ShowControl.SelectedCueListId);
 		var actions = selected?.Cues.SelectMany(cue => cue.Actions).ToArray() ?? [];
-		var assetIds = actions.Where(action => action.MediaAssetId is not null).Select(action => action.MediaAssetId!).Distinct(StringComparer.Ordinal).ToArray();
+		var assetIds = actions.Where(action => action.MediaAssetId is not null).Select(action => action.MediaAssetId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 		var catalogueFresh = catalogue is not null && catalogueObservedAtUtc is { } observed && now >= observed && now - observed <= TimeSpan.FromSeconds(10);
-		var assets = catalogue?.Assets.ToDictionary(asset => asset.AssetId.ToString(), StringComparer.Ordinal);
+		var assets = catalogue?.Assets.ToDictionary(asset => asset.AssetId.ToString(), StringComparer.OrdinalIgnoreCase);
 		Add("assets", "Show assets",
 			selected is null ? ShowPreflightState.Unknown : assetIds.Length == 0 ? ShowPreflightState.NotApplicable :
 			!catalogueFresh ? ShowPreflightState.Unknown :
@@ -39,10 +39,10 @@ public static class ShowPreflightSummary
 			!catalogueFresh ? "Refresh availability in Media Library; evidence is missing or older than 10 seconds." :
 			$"{assetIds.Length} distinct media references checked against catalogue revision {catalogue!.Revision}. Availability is observed, not guaranteed at execution.", "MEDIA");
 
-		var sourceIds = snapshot.Sources.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
-		var sceneIds = snapshot.Scenes.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+		var sourceIds = snapshot.Sources.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var sceneIds = snapshot.Scenes.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var layerIds = snapshot.CompositingLayers.Select(item => item.LayerId).ToHashSet(StringComparer.Ordinal);
-		var outputIds = snapshot.OutputRoles.Select(item => item.RoleId).ToHashSet(StringComparer.Ordinal);
+		var outputIds = snapshot.OutputRoles.Select(item => item.RoleId).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var missingReference = actions.Any(action =>
 			action.SourceId is { } source && !sourceIds.Contains(source) ||
 			action.SceneId is { } scene && !sceneIds.Contains(scene) ||
@@ -52,8 +52,8 @@ public static class ShowPreflightSummary
 		foreach (var action in actions.Where(item => item.MediaCuePointId is not null))
 		{
 			var markers = snapshot.MediaDeck.Markers;
-			if (markers is null || markers.AssetId.ToString() != action.MediaAssetId) markerUnknown = true;
-			else if (!markers.CuePoints.Any(cue => cue.Id.ToString() == action.MediaCuePointId)) missingReference = true;
+			if (markers is null || !string.Equals(markers.AssetId.ToString(), action.MediaAssetId, StringComparison.OrdinalIgnoreCase)) markerUnknown = true;
+			else if (!markers.CuePoints.Any(cue => string.Equals(cue.Id.ToString(), action.MediaCuePointId, StringComparison.OrdinalIgnoreCase))) missingReference = true;
 		}
 		Add("cues", "Cue references", selected is null ? ShowPreflightState.Unknown :
 			missingReference ? ShowPreflightState.Fail : markerUnknown ? ShowPreflightState.Unknown : ShowPreflightState.Pass,
