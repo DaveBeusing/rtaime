@@ -2,10 +2,8 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
-using System.IO;
 using System.Windows.Input;
 using rtaime.Client;
-using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
@@ -49,23 +47,23 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 	private readonly OperatorControlClient _client;
 	private readonly OperatorViewModel _operator;
 	private readonly IHealthSnapshotProvider _health;
+	private readonly MediaPoolInspectorViewModel? _mediaPool;
 	private readonly Action<string> _navigate;
 	private readonly SynchronizationContext? _context;
 	private readonly object _gate = new();
 	private readonly Timer _timer;
-	private readonly CancellationTokenSource _stop = new();
-	private bool _queued, _disposed, _reading;
-	private MediaAssetCatalogSnapshot? _catalogue;
-	private DateTimeOffset? _catalogueAt;
+	private bool _queued, _disposed;
+	private DateTimeOffset _catalogueEpochStartUtc = DateTimeOffset.MinValue;
 	private IReadOnlyList<OperatorActionObservation> _previousHistory = [];
-	private string _readStatus = "Catalogue has not been read in this session.";
 	public ShowReadinessViewModel(OperatorControlClient client, OperatorViewModel owner,
 		IHealthSnapshotProvider health, OperatorNotificationCenterViewModel notifications, Action<string> navigate,
-		SynchronizationContext? context = null)
+		SynchronizationContext? context = null, MediaPoolInspectorViewModel? mediaPool = null)
 	{
+		_mediaPool = mediaPool;
+		if (_mediaPool is not null) _mediaPool.PropertyChanged += CatalogueChanged;
 		_client = client; _operator = owner; _health = health; Notifications = notifications; _navigate = navigate;
 		_context = context ?? SynchronizationContext.Current;
-		ReadCatalogueCommand = new AsyncRelayCommand(ReadCatalogueAsync, () => !_reading && !_disposed && owner.IsConnected && !owner.IsStale);
+		RefreshChecksCommand = new NotificationCommand(QueueRefresh, () => !_disposed);
 		_client.ActionHistory.Changed += Changed;
 		_client.SnapshotChanged += Changed;
 		_health.Changed += HealthChanged;
@@ -77,33 +75,18 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 	public ObservableCollection<ShowPreflightCheckViewModel> Checks { get; } = [];
 	public ObservableCollection<OperatorActionHistoryRow> History { get; } = [];
 	public OperatorNotificationCenterViewModel Notifications { get; }
-	public ICommand ReadCatalogueCommand { get; }
-	public string ReadStatus => _readStatus;
+	public ICommand RefreshChecksCommand { get; }
+	public string ReadStatus => _mediaPool?.CatalogObservedAtUtc is { } at
+		? $"Media Library evidence received {at:HH:mm:ss} UTC. Refresh checks performs no server request. Use Media Library to refresh availability."
+		: "UNKNOWN · Media Library catalogue evidence has not been received.";
 	public string Summary { get; private set; } = "Read-only observations; ControlHost owns launch policy.";
 	public string Revision => _operator.IsConnected && !_operator.IsStale && _client.Snapshot is { } s
 		? $"Production revision {s.Production.Revision.Value} · observed {_client.SnapshotObservedAtUtc:HH:mm:ss} UTC"
 		: "UNKNOWN · current authoritative state unavailable";
 
-	public async Task ReadCatalogueAsync()
+	private void CatalogueChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (_reading || _disposed || !_operator.IsConnected || _operator.IsStale) return;
-		_reading = true; ((AsyncRelayCommand)ReadCatalogueCommand).RaiseCanExecuteChanged();
-		try
-		{
-			using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-			deadline.CancelAfter(TimeSpan.FromSeconds(5));
-			var result = await _client.GetMediaAssetCatalogAsync(deadline.Token);
-			if (_disposed) return;
-			_catalogue = result; _catalogueAt = DateTimeOffset.UtcNow;
-			_readStatus = $"Catalogue revision {result.Revision} read at {_catalogueAt:HH:mm:ss} UTC. No availability rescan or production command was sent.";
-		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or NotSupportedException or TimeoutException or OperationCanceledException)
-		{
-			if (_disposed) return;
-			_catalogue = null; _catalogueAt = null;
-			_readStatus = "UNKNOWN · catalogue read unavailable. Review the existing Media Library connection.";
-		}
-		finally { _reading = false; QueueRefresh(); }
+		if (e.PropertyName is nameof(MediaPoolInspectorViewModel.CatalogEvidence) or nameof(MediaPoolInspectorViewModel.IsLoading)) QueueRefresh();
 	}
 	private void Changed(object? sender, EventArgs e) => QueueRefresh();
 	private void HealthChanged(object? sender, HealthSnapshotChangedEventArgs e) => QueueRefresh();
@@ -111,7 +94,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 	{
 		if (e.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale))
 		{
-			if (!_operator.IsConnected || _operator.IsStale) { _catalogue = null; _catalogueAt = null; }
+			if (!_operator.IsConnected || _operator.IsStale) _catalogueEpochStartUtc = DateTimeOffset.UtcNow;
 			QueueRefresh();
 		}
 	}
@@ -128,8 +111,10 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 		var now = DateTimeOffset.UtcNow;
 		var fresh = _operator.IsConnected && !_operator.IsStale && _client.SnapshotObservedAtUtc is { } observed &&
 			now >= observed && now - observed <= TimeSpan.FromSeconds(10);
+		var catalogueCurrent = _mediaPool?.CatalogObservedAtUtc is { } catalogueAt && catalogueAt >= _catalogueEpochStartUtc;
 		var current = ShowPreflightSummary.Build(_client.Snapshot, fresh,
-			_catalogue, _catalogueAt, _health.GetCurrent(), DateTimeOffset.UtcNow);
+			catalogueCurrent && _mediaPool?.IsLoading == false ? _mediaPool.CatalogEvidence : null,
+			_mediaPool?.CatalogObservedAtUtc, _health.GetCurrent(), now);
 		foreach (var check in current)
 		{
 			var item = Checks.FirstOrDefault(candidate => candidate.Id == check.Id);
@@ -144,13 +129,13 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 			History.Clear();
 			foreach (var item in history.Reverse()) History.Add(new(item));
 		}
-		((AsyncRelayCommand)ReadCatalogueCommand).RaiseCanExecuteChanged();
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
 	}
 	public void Dispose()
 	{
 		lock (_gate) { if (_disposed) return; _disposed = true; }
-		_timer.Dispose(); _stop.Cancel(); _stop.Dispose();
+		_timer.Dispose();
+		if (_mediaPool is not null) _mediaPool.PropertyChanged -= CatalogueChanged;
 		_client.ActionHistory.Changed -= Changed; _client.SnapshotChanged -= Changed;
 		_health.Changed -= HealthChanged; _operator.PropertyChanged -= OperatorChanged;
 	}

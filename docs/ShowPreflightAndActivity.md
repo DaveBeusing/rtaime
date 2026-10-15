@@ -17,7 +17,7 @@ Six checks consume already published evidence:
 - **AI readiness:** current enabled-effect evidence, synchronization observations and reported failure. Missing evidence is UNKNOWN; explicitly disabled AI is NOT APPLICABLE. Provider and physical inference qualification remain separate.
 - **Saved show:** the existing durable-project state; this view never saves, rewrites, migrates or restores production.
 
-The view rejects authoritative, catalogue and audio observations older than ten seconds. **Read catalogue** invokes only the existing read-only catalogue query with a five-second cancellation budget, without rescanning asset availability or changing production. Use Media Library's established explicit refresh/relink workflow to update missing assets. Disconnect/stale connection clears retained catalogue evidence. The displayed production revision and observation timestamp come from the last completed authoritative synchronization.
+The view rejects authoritative, catalogue and audio observations older than ten seconds. **Refresh checks** only reevaluates already received evidence locally; it sends no catalogue or production request. The Media Library supplies its snapshot and original receipt timestamp. The existing server catalogue query also refreshes availability, so preflight deliberately does not invoke it. Use Media Library's established explicit refresh/relink workflow to update missing assets. Disconnect/stale connection invalidates retained catalogue evidence until Media Library receives a new snapshot. The displayed production revision and observation timestamp come from the last completed authoritative synchronization.
 
 ## Correlated session history
 
@@ -33,7 +33,7 @@ The existing service retains at most 64 keyed notifications, with at most four t
 
 **Acknowledge** records presentation acknowledgement while retaining the active/fatal condition. Identical observations preserve it; a materially changed condition resets it. **Dismiss** removes presentation; a subsequent observation can publish the condition again. Neither operation changes Health, recovery state, production revision or launch policy. **Review** navigates only to an existing workspace. Technical details remain opt-in and expanded state survives duplicate refreshes.
 
-Free-form footer events are informational. Success notifications use correlated response outcomes rather than keyword matching in event text. UI projections coalesce queued updates and keep bounded storage; the advisory freshness update runs once per second.
+Free-form footer events are informational. Correlated response outcomes drive informational/negative command notifications rather than keyword matching in event text; response receipt alone is not an execution-success claim. UI projections coalesce queued updates and keep bounded storage; the advisory freshness update runs once per second.
 
 ## Qualification
 

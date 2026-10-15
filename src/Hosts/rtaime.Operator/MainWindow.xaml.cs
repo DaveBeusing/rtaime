@@ -119,7 +119,7 @@ public partial class MainWindow : Window
 			viewModel,
 			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
 		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
-			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher));
+			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher), MediaPool);
 		OpenShowChecksCommand = new NotificationCommand(OpenShowChecks, () => !_shutdownStarted);
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;
@@ -220,7 +220,7 @@ public partial class MainWindow : Window
 			viewModel,
 			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
 		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
-			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher));
+			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher), MediaPool);
 		OpenShowChecksCommand = new NotificationCommand(OpenShowChecks, () => !_shutdownStarted);
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;

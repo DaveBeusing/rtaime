@@ -8,7 +8,7 @@ public partial class ShowReadinessWindow : Window
 	{
 		DataContext = model;
 		InitializeComponent();
-		Loaded += (_, _) => { if (ReadCatalogueButton.IsEnabled) ReadCatalogueButton.Focus(); else CloseChecksButton.Focus(); };
+		Loaded += (_, _) => RefreshChecksButton.Focus();
 	}
 	protected override void OnPreviewKeyDown(KeyEventArgs e)
 	{

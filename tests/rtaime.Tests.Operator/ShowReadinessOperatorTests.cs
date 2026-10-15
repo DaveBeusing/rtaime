@@ -33,7 +33,9 @@ public sealed class ShowReadinessOperatorTests
 		context.Drain();
 		Assert.Equal(OperatorActionHistory.Capacity, model.History.Count);
 		Assert.All(model.Checks, check => Assert.Equal("UNKNOWN", check.State));
-		Assert.False(model.ReadCatalogueCommand.CanExecute(null));
+		Assert.True(model.RefreshChecksCommand.CanExecute(null));
+		model.RefreshChecksCommand.Execute(null);
+		context.Drain();
 		var before = model.History.Count;
 		model.Dispose();
 		await client.CreateShowTemplateAsync("later", null);

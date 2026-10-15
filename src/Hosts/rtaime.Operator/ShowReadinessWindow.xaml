@@ -11,8 +11,8 @@
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <WrapPanel Margin="0,0,0,8">
    <TextBlock Text="SHOW CHECKS AND ACTIVITY" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,4"/>
-   <controls:RtaimeButton x:Name="ReadCatalogueButton" Content="Read catalogue" Command="{Binding ReadCatalogueCommand}"
-    IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Read catalogue evidence without changing production"/>
+   <controls:RtaimeButton x:Name="RefreshChecksButton" Content="Refresh checks" Command="{Binding RefreshChecksCommand}"
+    IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Refresh local checks without sending a server request"/>
   </WrapPanel>
   <controls:RtaimeScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
    <StackPanel>
