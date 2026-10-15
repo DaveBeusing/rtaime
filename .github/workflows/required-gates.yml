@@ -66,7 +66,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Show checks Operator regressions failed." }
 
       - name: Command palette authority and shortcut profile regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
 
       - name: Media Library metadata, preferences and hover isolation regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaLibraryBrowsingTests|FullyQualifiedName~ProductionMacroOperatorTests.Cancelled_status_refresh" --logger "console;verbosity=detailed"
@@ -454,7 +454,7 @@ jobs:
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
 
       - name: Shortcut editor and strict profile regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
 
       - name: Operator real XAML startup qualification
         shell: pwsh
