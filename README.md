@@ -392,3 +392,5 @@ The navigation rail and Commands expose [Show checks and activity](docs/ShowPref
 The [Operator visual qualification](docs/OperatorVisualQualification.md#combined-workspace-regression-evidence)
 retains combined workspace geometry, review images and bounded Windows UI measurements.
 Injected DPI scaling does not establish physical mixed-monitor qualification.
+
+Recent items, stable-ID favorites and contextual help are available through Commands or its context menu. History is opt-in and local; opening references only inspects existing items. See [Operator commands and shortcuts](docs/OperatorCommandsAndShortcuts.md#recent-items-favorites-and-inline-help) for privacy, limits, help search and unavailable-item recovery.

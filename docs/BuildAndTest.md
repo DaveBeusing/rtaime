@@ -458,3 +458,9 @@ canceled import, active binding/scope presentation and a 5,000-update coalesced-
 burst. Productive compact-window focus, Enter suppression and binding text run in
 the existing `OperatorXamlStartupTests` STA fixture without changing its deadline.
 See [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md).
+
+## Recent, favorites and contextual help qualification
+
+`OperatorLibraryTests` covers opt-in and bounded per-kind MRU, stable-ID persistence and rename resolution, removal of missing references, cross-production/unavailable boundary rechecks without automatic execution, strict/corrupt/oversize preference handling, cancellation, bounded favorites, burst persistence, failed saves and embedded canonical help. CI and Quality run these alongside command/shortcut regressions before productive XAML composition.
+
+The shared real MainWindow STA fixture also opens the productive Recent/Favorites/Help window at compact size, searches embedded help and active shortcut hints, checks automation names, protects Enter from production routing and verifies Escape/reopen focus. The existing 45-second fixture deadline and production assertions are unchanged. Final full-suite, Provider Smoke and packaged lifecycle evidence must refer to the exact PR head; physical DPI/IME/screen-reader results remain UNVERIFIED without direct evidence.
