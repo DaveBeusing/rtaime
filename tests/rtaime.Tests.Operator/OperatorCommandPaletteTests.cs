@@ -141,7 +141,9 @@ public sealed class OperatorCommandPaletteTests
         model.MoveSelection(1);
         Assert.Same(selected, model.Selected);
         Assert.Equal(0, action.Calls);
-        model.ToggleProfilesCommand.Execute(null);
+        model.Query = "action";
+        model.BeginSearch();
+        Assert.Equal("", model.Query);
         Assert.True(model.IsBrowsingCommands);
         Assert.True(model.ExecuteCommand.CanExecute(null));
         Assert.Equal(0, action.Calls);
@@ -340,11 +342,19 @@ public sealed class OperatorCommandPaletteTests
 			main.CommandPalette.ToggleProfilesCommand.Execute(null);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
             Assert.True(Assert.IsType<RtaimeTextBox>(palette.FindName("SearchBox")).IsKeyboardFocusWithin);
+            main.CommandPalette.ToggleProfilesCommand.Execute(null);
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
 			var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(palette)!, 0, Key.Escape)
 			{ RoutedEvent = Keyboard.PreviewKeyDownEvent };
 			palette.RaiseEvent(escape);
 			Assert.True(escape.Handled);
 			Assert.Null(main.CommandPaletteWindow);
+            main.OpenCommandPalette();
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+            Assert.True(main.CommandPalette.IsBrowsingCommands);
+            Assert.Equal("", main.CommandPalette.Query);
+            Assert.True(Assert.IsType<RtaimeTextBox>(main.CommandPaletteWindow!.FindName("SearchBox")).IsKeyboardFocusWithin);
+            main.CommandPaletteWindow.Close();
 			main.Shell.SelectWorkspace("MEDIA");
 			var docking = main.Shell.Docking;
 			try

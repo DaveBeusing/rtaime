@@ -106,10 +106,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		ExecuteCommand = new AsyncRelayCommand(() => { ExecuteSelected(false); return Task.CompletedTask; }, () => !_disposed && IsBrowsingCommands && Selected?.IsAvailable == true);
 		ToggleProfilesCommand = new AsyncRelayCommand(() =>
 		{
-			_showProfiles = !_showProfiles;
-            OnPropertyChanged(nameof(ProfilesVisibility)); OnPropertyChanged(nameof(ResultsVisibility));
-            OnPropertyChanged(nameof(IsBrowsingCommands)); OnPropertyChanged(nameof(SelectedState));
-            RaiseCommands(); return Task.CompletedTask;
+			SetProfileMode(!_showProfiles); return Task.CompletedTask;
 		});
 		AssignShortcutCommand = new AsyncRelayCommand(AssignAsync, () => !_disposed && !IsProfileBusy && EditingShortcut is not null);
 		RemoveOverrideCommand = new AsyncRelayCommand(RemoveOverrideAsync, () => !_disposed && !IsProfileBusy && EditingShortcut is not null);
@@ -122,6 +119,19 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		EditingShortcut = EditableShortcuts.FirstOrDefault();
 		Filter();
 	}
+    private void SetProfileMode(bool showProfiles)
+    {
+        _showProfiles = showProfiles;
+        OnPropertyChanged(nameof(ProfilesVisibility)); OnPropertyChanged(nameof(ResultsVisibility));
+        OnPropertyChanged(nameof(IsBrowsingCommands)); OnPropertyChanged(nameof(SelectedState));
+        RaiseCommands();
+    }
+    public void BeginSearch()
+    {
+        if (_disposed) return;
+        SetProfileMode(false); Query = ""; Refresh();
+    }
+
 	public ObservableCollection<OperatorPaletteEntry> Results { get; } = [];
 	public IReadOnlyList<OperatorPaletteEntry> Entries => _entries;
 	public IReadOnlyList<OperatorShortcutDefinition> EditableShortcuts => _registry.CanonicalDefinitions
