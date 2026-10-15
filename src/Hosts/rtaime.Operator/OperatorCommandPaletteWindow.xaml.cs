@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
+using System.ComponentModel;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -11,6 +12,7 @@ public partial class OperatorCommandPaletteWindow : Window
 	private readonly OperatorCommandPaletteViewModel _model;
 	private readonly IInputElement? _previousFocus;
 	private bool _executed;
+    private bool _focusQueued;
 	public OperatorCommandPaletteWindow(OperatorCommandPaletteViewModel model)
 	{
 		_model = model;
@@ -18,15 +20,41 @@ public partial class OperatorCommandPaletteWindow : Window
 		InitializeComponent();
 		DataContext = model;
 		model.ExecutionCompleted += OnExecuted;
-		Loaded += (_, _) => FocusSearch();
+		model.PropertyChanged += OnModelChanged;
+		Loaded += (_, _) => QueueFocus();
 		Closed += (_, _) =>
 		{
 			model.ExecutionCompleted -= OnExecuted;
+            model.PropertyChanged -= OnModelChanged;
 			if (!_executed && _previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
-				previous.Dispatcher.BeginInvoke(() => { if (previous.IsVisible && previous.IsEnabled) previous.Focus(); }, DispatcherPriority.Input);
+				previous.Dispatcher.BeginInvoke(() =>
+                {
+                    var newerSurface = Application.Current?.Windows.OfType<Window>().Any(window =>
+                        window.IsVisible && window is OperatorCommandPaletteWindow or ShowReadinessWindow) == true;
+                    if (!newerSurface && previous.IsVisible && previous.IsEnabled) previous.Focus();
+                }, DispatcherPriority.Input);
 		};
 	}
-	public void FocusSearch() { SearchBox.Focus(); SearchBox.SelectAll(); }
+	public void FocusSearch() { FocusCurrentMode(); }
+    private void FocusCurrentMode()
+    {
+        if (_model.IsBrowsingCommands) { SearchBox.Focus(); SearchBox.SelectAll(); }
+        else { ProfileNameBox.Focus(); ProfileNameBox.SelectAll(); }
+    }
+    private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands)) QueueFocus();
+    }
+    private void QueueFocus()
+    {
+        if (_focusQueued) return;
+        _focusQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _focusQueued = false;
+            if (IsVisible) { Activate(); FocusCurrentMode(); }
+        }, DispatcherPriority.Input);
+    }
 	protected override void OnSourceInitialized(EventArgs e)
 	{
 		base.OnSourceInitialized(e);
@@ -41,7 +69,7 @@ public partial class OperatorCommandPaletteWindow : Window
 		if ((key == Key.Escape && modifiers == ModifierKeys.None) || (key == Key.K && modifiers == ModifierKeys.Control))
 		{ e.Handled = true; if (!e.IsRepeat) Close(); return; }
 		if (e.IsRepeat && key is Key.Return or Key.Space) { e.Handled = true; return; }
-		var searching = SearchBox.IsKeyboardFocusWithin || CommandResults.IsKeyboardFocusWithin;
+		var searching = _model.IsBrowsingCommands && (SearchBox.IsKeyboardFocusWithin || CommandResults.IsKeyboardFocusWithin);
 		if (searching && modifiers == ModifierKeys.None && key is Key.Up or Key.Down)
 		{
 			e.Handled = true; _model.MoveSelection(key == Key.Up ? -1 : 1);

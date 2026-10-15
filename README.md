@@ -383,7 +383,7 @@ The [Context Inspector](docs/ContextInspector.md) provides precise numeric draft
 
 ## Operator command palette
 
-Ctrl+K or **Commands** opens searchable commands with visible availability reasons and protected production activation. Versioned shortcut profiles support validated import/export, collision checks and reset without modifying production data. See [Commands and shortcut profiles](docs/OperatorCommandsAndShortcuts.md).
+Ctrl+K or **Commands** opens searchable commands with visible availability reasons and protected production activation. Versioned shortcut profiles show the active gesture and focus area, isolate editing from command execution, and support strict validated import/export, collision checks and reset without modifying production data. See [Commands and shortcut profiles](docs/OperatorCommandsAndShortcuts.md).
 
 ## Show checks and activity
 

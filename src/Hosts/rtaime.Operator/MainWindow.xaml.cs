@@ -422,9 +422,8 @@ public partial class MainWindow : Window
 	internal void OpenCommandPalette()
 	{
 		if (_shutdownStarted) return;
+		CommandPalette.BeginSearch();
 		if (_commandPaletteWindow is { } existing) { existing.Activate(); existing.FocusSearch(); return; }
-		CommandPalette.Query = "";
-		CommandPalette.Refresh();
 		var focusedWindow = Keyboard.FocusedElement is DependencyObject focused ? Window.GetWindow(focused) : null;
 		var palette = new OperatorCommandPaletteWindow(CommandPalette) { Owner = focusedWindow is OperatorPanelWindow ? focusedWindow : this };
 		_commandPaletteWindow = palette;
