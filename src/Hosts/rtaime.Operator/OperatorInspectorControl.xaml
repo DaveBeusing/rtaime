@@ -279,13 +279,16 @@
 				<WrapPanel>
 					<controls:RtaimeButton Content="COPY ATTRIBUTES" Command="{Binding CopyAttributesCommand}" IsCompact="True" Margin="0,4,4,4" AutomationProperties.Name="Copy compatible selected attributes" />
 					<controls:RtaimeButton Content="PASTE DRAFT" Command="{Binding PasteAttributesCommand}" IsCompact="True" Margin="0,4" AutomationProperties.Name="Paste compatible attributes into local draft" />
+                    <controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoInspectorDraftCommand}" IsCompact="True" Margin="0,4,4,4" AutomationProperties.Name="Undo selected Inspector draft" ToolTip="Undo local edits only. Ctrl+Z outside text editors." />
+                    <controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoInspectorDraftCommand}" IsCompact="True" Margin="0,4" AutomationProperties.Name="Redo selected Inspector draft" ToolTip="Redo local edits only. Ctrl+Y outside text editors." />
 				</WrapPanel>
 				<TextBlock Text="{Binding AttributeCompatibilityLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding InspectorDraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
 			</StackPanel>
 		</DataTemplate>
 		<DataTemplate x:Key="CompositingProcessingEditorTemplate">
 			<StackPanel>
-				<ContentControl Content="{Binding}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}" />
+				
 				<TextBlock Text="{Binding ProcessingStateLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,6" />
 				<Grid Margin="0,0,0,6">
 					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -342,14 +345,18 @@
 					<Grid>
 						<Grid.RowDefinitions>
 							<RowDefinition Height="72" />
+                            <RowDefinition Height="Auto" />
 							<RowDefinition Height="*" />
 						</Grid.RowDefinitions>
 						<ContentControl
 							Content="{Binding Inspector, ElementName=Root}"
 							ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
 
+                        <controls:RtaimeScrollViewer Grid.Row="1" MaxHeight="160" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="8,0">
+                            <ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}"/>
+                        </controls:RtaimeScrollViewer>
 						<controls:RtaimeTabControl
-							Grid.Row="1"
+							Grid.Row="2"
 							Background="{DynamicResource OperatorSurfaceBrush}"
 							BorderThickness="0">
 							<controls:RtaimeTabItem Header="Video" Style="{StaticResource InspectorCategoryTab}">
@@ -591,7 +598,7 @@
 															<TextBlock Text="Cue Name" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
 															<controls:RtaimeTextBox
 																Grid.Column="1"
-																Text="{Binding MediaDeck.CueName, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+																MaxLength="128" Text="{Binding Inspector.CueNameDraft, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 																IsCompact="True" />
 														</Grid>
 														<Grid Margin="96,4,0,4">
@@ -603,7 +610,7 @@
 																<ColumnDefinition Width="*" />
 															</Grid.ColumnDefinitions>
 															<controls:RtaimeButton Grid.Column="0" Content="JUMP" Command="{Binding MediaDeck.JumpCueCommand, ElementName=Root}" IsCompact="True" />
-															<controls:RtaimeButton Grid.Column="2" Content="RENAME" Command="{Binding MediaDeck.RenameCueCommand, ElementName=Root}" IsCompact="True" />
+															<controls:RtaimeButton Grid.Column="2" Content="RENAME" Command="{Binding Inspector.ApplyCueDraftCommand, ElementName=Root}" IsCompact="True" />
 															<controls:RtaimeButton Grid.Column="4" Content="DELETE" Command="{Binding MediaDeck.DeleteCueCommand, ElementName=Root}" IsCompact="True" />
 														</Grid>
 													</StackPanel>
@@ -677,7 +684,7 @@
 														<TextBlock Text="Gain" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
 														<controls:RtaimeNumericField
 															Grid.Column="1"
-															Value="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
+															Value="{Binding Inspector.AudioGainDraft, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
 															Definition="{x:Static local:InspectorProperties.AudioGain}" />
 														<controls:RtaimeButton
 															Grid.Column="2"
@@ -696,11 +703,11 @@
 															Minimum="0"
 															Maximum="4"
 															TickFrequency="0.1"
-															Value="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay}" />
+															Value="{Binding Inspector.AudioGainDraft, ElementName=Root, Mode=TwoWay}" />
 													</Grid>
 													<Grid Margin="96,4,0,4">
 														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-														<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding ControlState.ApplyAudioGainCommand, ElementName=Root}" IsCompact="True" IsEnabled="{Binding NumericInputsValid, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}" />
+														<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding Inspector.ApplyAudioDraftCommand, ElementName=Root}" IsCompact="True" IsEnabled="{Binding NumericInputsValid, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}" />
 														<controls:RtaimeButton Grid.Column="2" Content="{Binding ControlState.SelectedAudioInput.MuteActionLabel, ElementName=Root}" Command="{Binding ControlState.ToggleAudioMuteCommand, ElementName=Root}" IsCompact="True" />
 													</Grid>
 												</StackPanel>
@@ -807,7 +814,7 @@
 													</Style>
 												</Border.Style>
 												<StackPanel>
-													<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}" />
+													
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerPositionX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerPositionX}" /></Grid>
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerPositionY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerPositionY}" /></Grid>
 													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding Inspector.SelectedLayerScale, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.LayerScale}" /></Grid>

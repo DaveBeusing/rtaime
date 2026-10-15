@@ -97,7 +97,6 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 			throw new InvalidOperationException("Audio input source identity cannot change.");
 
 		_descriptor = descriptor;
-        OnPropertyChanged(nameof(ConfirmedGain));
 		OnPropertyChanged(nameof(StreamId));
 		OnPropertyChanged(nameof(TestSignalEnabled));
 		OnPropertyChanged(nameof(TestSignalMode));

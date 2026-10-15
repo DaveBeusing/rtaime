@@ -142,7 +142,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		set
 		{
 			if (Set(ref _selectedItem, value))
-				RaiseCommandState();
+            { EndDraftNameEdit(); RaiseCommandState(); }
 		}
 	}
 

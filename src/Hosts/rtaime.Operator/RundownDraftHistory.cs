@@ -18,6 +18,7 @@ public sealed partial class RundownViewModel
 		UndoDraftCommand = new OperatorShellCommand(() => RestoreDraft(_draftHistory.Undo(CaptureDraft())), () => CanEditDraft() && _draftHistory.CanUndo);
 		RedoDraftCommand = new OperatorShellCommand(() => RestoreDraft(_draftHistory.Redo(CaptureDraft())), () => CanEditDraft() && _draftHistory.CanRedo);
 	}
+    public void EndDraftNameEdit() => _lastDraftEdit = null;
 	private Draft CaptureDraft() => new(Name, Items.Select(item => item.Item).ToArray(), SelectedItem?.Item.ItemId);
 	private void RememberDraft(string kind = "items")
 	{
