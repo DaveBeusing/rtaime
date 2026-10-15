@@ -15,7 +15,7 @@
   </Grid.RowDefinitions>
   <TextBlock Text="COMMANDS · Ctrl+K" FontWeight="SemiBold" Margin="0,0,0,8"/>
   <controls:RtaimeTextBox x:Name="SearchBox" Grid.Row="1" MaxLength="128"
-   Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"
+   IsEnabled="{Binding IsBrowsingCommands}" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"
    AutomationProperties.Name="Search commands" ToolTip="Search labels, command IDs and categories. Up/Down selects; Escape closes."/>
   <controls:RtaimeListBox x:Name="CommandResults" Grid.Row="2" Visibility="{Binding ResultsVisibility}" ItemsSource="{Binding Results}"
    SelectedItem="{Binding Selected, Mode=TwoWay}" ScrollViewer.CanContentScroll="True"
@@ -44,7 +44,7 @@
   <StackPanel Grid.Row="3" Margin="0,8,0,0">
    <TextBlock Text="{Binding SelectedState}" TextWrapping="Wrap" MaxHeight="48" ToolTip="{Binding SelectedState}"/>
    <WrapPanel Margin="0,6,0,0">
-    <controls:RtaimeButton x:Name="ExecuteButton" Content="Execute" Command="{Binding ExecuteCommand}" IsDefault="False" Margin="0,0,8,4" AutomationProperties.Name="Execute selected command"/>
+    <controls:RtaimeButton x:Name="ExecuteButton" Content="Execute" Command="{Binding ExecuteCommand}" IsDefault="False" Visibility="{Binding ResultsVisibility}" Margin="0,0,8,4" AutomationProperties.Name="Execute selected command"/>
     <controls:RtaimeButton Content="Shortcut profiles" Command="{Binding ToggleProfilesCommand}" Margin="0,0,8,4" AutomationProperties.Name="Edit shortcut profiles"/>
     <controls:RtaimeButton Content="Close (Esc)" Click="OnCloseClick" Margin="0,0,0,4" AutomationProperties.Name="Close command palette"/>
    </WrapPanel>
@@ -52,18 +52,20 @@
   <controls:RtaimeScrollViewer Grid.Row="2" Visibility="{Binding ProfilesVisibility}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
    <StackPanel Margin="0,8,0,0">
     <TextBlock Text="SHORTCUT PROFILE" FontWeight="SemiBold"/>
-    <controls:RtaimeTextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" MaxLength="64" Margin="0,4" AutomationProperties.Name="Shortcut profile name"/>
+    <controls:RtaimeTextBox x:Name="ProfileNameBox" Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" MaxLength="64" Margin="0,4" AutomationProperties.Name="Shortcut profile name"/>
     <controls:RtaimeComboBox ItemsSource="{Binding EditableShortcuts}" SelectedItem="{Binding EditingShortcut, Mode=TwoWay}" DisplayMemberPath="Label" Margin="0,4" AutomationProperties.Name="Command to customize"/>
+    <TextBlock x:Name="CurrentBindingSummary" Text="{Binding EditingBindingSummary}" TextWrapping="Wrap" Margin="0,4"
+     AutomationProperties.Name="{Binding EditingBindingSummary}"/>
     <WrapPanel>
      <controls:RtaimeComboBox ItemsSource="{Binding AllowedModifiers}" SelectedItem="{Binding EditingModifiers, Mode=TwoWay}" Width="160" Margin="0,4,8,4" AutomationProperties.Name="Shortcut modifiers"/>
      <controls:RtaimeComboBox ItemsSource="{Binding AllowedKeys}" SelectedItem="{Binding EditingKey, Mode=TwoWay}" Width="100" Margin="0,4" AutomationProperties.Name="Shortcut key"/>
     </WrapPanel>
     <WrapPanel>
-     <controls:RtaimeButton Content="Assign" Command="{Binding AssignShortcutCommand}" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Remove override" Command="{Binding RemoveOverrideCommand}" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Reset defaults" Command="{Binding ResetShortcutsCommand}" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Import" Command="{Binding ImportCommand}" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Export" Command="{Binding ExportCommand}" Margin="0,0,0,4"/>
+     <controls:RtaimeButton Content="Assign" AutomationProperties.Name="Assign shortcut" Command="{Binding AssignShortcutCommand}" Margin="0,0,6,4"/>
+     <controls:RtaimeButton Content="Remove override" AutomationProperties.Name="Remove shortcut override" Command="{Binding RemoveOverrideCommand}" Margin="0,0,6,4"/>
+     <controls:RtaimeButton Content="Reset defaults" AutomationProperties.Name="Restore default shortcuts" Command="{Binding ResetShortcutsCommand}" Margin="0,0,6,4"/>
+     <controls:RtaimeButton Content="Import" AutomationProperties.Name="Import shortcut profile" Command="{Binding ImportCommand}" Margin="0,0,6,4"/>
+     <controls:RtaimeButton Content="Export" AutomationProperties.Name="Export shortcut profile" Command="{Binding ExportCommand}" Margin="0,0,0,4"/>
     </WrapPanel>
     <TextBlock Text="TAKE, recording, GO, recovery and system keys stay reserved. Conflicts reject the entire profile. Overrides retain their focus and readiness rules." TextWrapping="Wrap"/>
    </StackPanel>

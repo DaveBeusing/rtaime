@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
+using System.ComponentModel;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -18,15 +19,27 @@ public partial class OperatorCommandPaletteWindow : Window
 		InitializeComponent();
 		DataContext = model;
 		model.ExecutionCompleted += OnExecuted;
-		Loaded += (_, _) => FocusSearch();
+		model.PropertyChanged += OnModelChanged;
+		Loaded += (_, _) => FocusCurrentMode();
 		Closed += (_, _) =>
 		{
 			model.ExecutionCompleted -= OnExecuted;
+            model.PropertyChanged -= OnModelChanged;
 			if (!_executed && _previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
 				previous.Dispatcher.BeginInvoke(() => { if (previous.IsVisible && previous.IsEnabled) previous.Focus(); }, DispatcherPriority.Input);
 		};
 	}
-	public void FocusSearch() { SearchBox.Focus(); SearchBox.SelectAll(); }
+	public void FocusSearch() { FocusCurrentMode(); }
+    private void FocusCurrentMode()
+    {
+        if (_model.IsBrowsingCommands) { SearchBox.Focus(); SearchBox.SelectAll(); }
+        else { ProfileNameBox.Focus(); ProfileNameBox.SelectAll(); }
+    }
+    private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands))
+            Dispatcher.BeginInvoke(() => { if (IsVisible) FocusCurrentMode(); }, DispatcherPriority.Input);
+    }
 	protected override void OnSourceInitialized(EventArgs e)
 	{
 		base.OnSourceInitialized(e);
@@ -41,7 +54,7 @@ public partial class OperatorCommandPaletteWindow : Window
 		if ((key == Key.Escape && modifiers == ModifierKeys.None) || (key == Key.K && modifiers == ModifierKeys.Control))
 		{ e.Handled = true; if (!e.IsRepeat) Close(); return; }
 		if (e.IsRepeat && key is Key.Return or Key.Space) { e.Handled = true; return; }
-		var searching = SearchBox.IsKeyboardFocusWithin || CommandResults.IsKeyboardFocusWithin;
+		var searching = _model.IsBrowsingCommands && (SearchBox.IsKeyboardFocusWithin || CommandResults.IsKeyboardFocusWithin);
 		if (searching && modifiers == ModifierKeys.None && key is Key.Up or Key.Down)
 		{
 			e.Handled = true; _model.MoveSelection(key == Key.Up ? -1 : 1);

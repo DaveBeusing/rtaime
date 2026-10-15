@@ -139,7 +139,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	public bool IsBrowsingCommands => !_showProfiles;
     public bool IsProfileBusy => _loading || _importing || _exporting;
     public string EditingBindingSummary => EditingShortcut is null ? "No editable command." :
-        $"Current: {_registry.Definitions.First(item => item.Id == EditingShortcut.Id).Gesture} · Focus: {EditingShortcut.Scope}";
+        $"Current: {_registry.Definitions.First(item => item.Id == EditingShortcut.Id).Gesture} · Focus: {EditingShortcut.Scope switch { OperatorShortcutScope.Global => "Operator", OperatorShortcutScope.Timeline => "Timeline", _ => "Media Library" }}";
     public Visibility ResultsVisibility => _showProfiles ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility ProfilesVisibility => _showProfiles ? Visibility.Visible : Visibility.Collapsed;
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -215,7 +215,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 			else Status = "Shortcut preferences rejected; canonical defaults retained. " + error;
 		}
 		catch (Exception ex) when (IsFileFailure(ex))
-		{ Status = "Shortcut preferences unavailable; canonical defaults retained. " + ex.Message; }
+		{ if (!_disposed) Status = "Shortcut preferences unavailable; canonical defaults retained. " + ex.Message; }
 		finally { _loading = false; RaiseProfileState(); }
 	}
 	private Task AssignAsync()
@@ -307,6 +307,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	public Task FlushAsync() { lock (_saveGate) return _save; }
     private void RaiseProfileState()
     {
+        if (_disposed) return;
         OnPropertyChanged(nameof(IsProfileBusy));
         RaiseCommands();
     }
