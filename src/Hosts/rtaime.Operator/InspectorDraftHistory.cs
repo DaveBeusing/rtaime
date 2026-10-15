@@ -150,11 +150,11 @@ public sealed partial class MediaPoolInspectorViewModel
         if (HasAuthoritativeCompositingSelection && SelectedCompositingLayer is { } layer)
         {
             if (IsSelectedColorGradeProcessingNode && SelectedProcessingNode?.ColorGrade is { } grade)
-                return (prefix + ":grade", new InspectorGradeAttributes(SelectedProcessingNode.Enabled, grade.Brightness, grade.Contrast, grade.Saturation));
+                return (layer.LayerId + ":" + SelectedProcessingNode!.NodeId + ":grade", new InspectorGradeAttributes(SelectedProcessingNode.Enabled, grade.Brightness, grade.Contrast, grade.Saturation));
             if (IsSelectedChromaKeyProcessingNode && SelectedProcessingNode?.ChromaKey is { } key)
-                return (prefix + ":key", new InspectorKeyAttributes(SelectedProcessingNode.Enabled, key.KeyRed, key.KeyGreen, key.KeyBlue, key.Tolerance, key.Softness, key.SpillSuppression));
+                return (layer.LayerId + ":" + SelectedProcessingNode!.NodeId + ":key", new InspectorKeyAttributes(SelectedProcessingNode.Enabled, key.KeyRed, key.KeyGreen, key.KeyBlue, key.Tolerance, key.Softness, key.SpillSuppression));
             if (ResolveSelectedProcessingNodeId() is not null) return null;
-            return (prefix + ":transform", new InspectorTransformAttributes(layer.PositionX, layer.PositionY, layer.Scale, layer.RotationDegrees,
+            return (layer.LayerId + ":transform", new InspectorTransformAttributes(layer.PositionX, layer.PositionY, layer.Scale, layer.RotationDegrees,
                 layer.AnchorX, layer.AnchorY, layer.CropLeft, layer.CropTop, layer.CropRight, layer.CropBottom));
         }
         if (IsAudioSelection && _operator.SelectedAudioInput is { } input &&

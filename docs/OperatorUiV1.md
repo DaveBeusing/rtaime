@@ -453,7 +453,7 @@ The previous separate Bottom Transport visual is collapsed because its active tr
 
 Rendering remains viewport-bounded through VisibleItems and VisibleCues, so zoom/scroll do not allocate a second timeline or present off-screen objects. Selection, Shift-add/Ctrl-toggle multi-selection, cue focus, trim preview, marker commit/cancel and shared Inspector projection remain on their existing paths.
 
-The current backend exposes no governed clip-move edit command, timeline undo/redo history, section/show-marker domain, transition projection or reusable audio-waveform projection. The Operator therefore renders no fake waveform, transition or edit history merely to imitate the mockup.
+The current backend exposes no governed clip-move edit command, undo of committed timeline operations, section/show-marker domain, transition projection or reusable audio-waveform projection. The Operator therefore renders no fake waveform, transition or edit history merely to imitate the mockup.
 
 The detailed operator and authority semantics are documented in docs/LayeredTimeline.md.
 
@@ -891,3 +891,9 @@ Existing Operator regions support an optional bounded docking presentation with 
 ## Command palette and shortcut preferences
 
 The shared Ctrl+K palette and its custom-control profile editor are described in [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md). Search text never performs TAKE; confirmed-state gates remain on existing command instances. Profiles contain presentation preferences only.
+
+## Local Inspector transactions
+
+The existing custom Inspector toolbar provides bounded, grouped local undo/redo and typed Copy/Paste for supported transforms, processing nodes, audio-gain drafts and cue-name drafts. Stable IDs separate contexts; confirmed revision/property rebases invalidate history. Audio gain and cue rename remain explicit existing Client commands. The toolbar is shared across the Inspector category tabs and exposes automation names and draft status; text editing retains its native shortcuts.
+
+See [Operator commands and shortcuts](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) for compatibility, limits, grouping and authority exclusions. These are reversible presentation drafts, not a backend live-undo capability.

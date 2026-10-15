@@ -29,6 +29,7 @@ public sealed class InspectorDraftTransactionTests
         model.RedoInspectorDraftCommand.Execute(null); Assert.Equal(0.3, model.SelectedLayerPositionX);
         model.UndoInspectorDraftCommand.Execute(null); model.SelectedLayerPositionX = 0.5;
         Assert.False(model.RedoInspectorDraftCommand.CanExecute(null));
+        model.SelectCompositingNode(Node("transform:bitmap-graphics")); Assert.Equal(0.5, model.SelectedLayerPositionX);
         model.SelectCompositingNode(Node("layer:other")); model.SelectedLayerPositionX = 0.8;
         model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(0.1, model.SelectedLayerPositionX);
         model.SelectCompositingNode(Node("layer:bitmap-graphics")); Assert.Equal(0.5, model.SelectedLayerPositionX);
