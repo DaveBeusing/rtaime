@@ -380,3 +380,7 @@ Optional workspace docking adds tab groups, resizable splits and detachable exis
 The [Context Inspector](docs/ContextInspector.md) provides precise numeric draft editing, compatible attribute copy/paste and explicit authoritative Apply.
 
 [Timeline editing](docs/LayeredTimeline.md#draft-cursor-snapping-and-reversible-editing) adds explicit draft/confirmed positions, prioritized snapping and bounded local authoring undo without replaying production operations.
+
+## Operator command palette
+
+Ctrl+K or **Commands** opens searchable commands with visible availability reasons and protected production activation. Versioned shortcut profiles support validated import/export, collision checks and reset without modifying production data. See [Commands and shortcut profiles](docs/OperatorCommandsAndShortcuts.md).

@@ -325,3 +325,7 @@ Automated qualification covers migration, independent workspace persistence/rese
 ## Context Inspector editing
 
 See [Context Inspector and precision editing](ContextInspector.md) for shared numeric ranges/units, Alt-drag scrubbing, fine/coarse keys, reset and compatible attribute drafts. Existing selection, pinned metadata, mixed summaries and Apply confirmation remain in place. Multi-selection property transactions remain deferred.
+
+## Commands and shortcut profiles
+
+Ctrl+K and the Commands navigation item open the shared palette from the main or detached Operator. Search workspace, library, viewer, draft and production commands; disabled results explain their context. Production actions require the Execute button. See [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md) for safe overrides, import/export, reserved keys and reset.

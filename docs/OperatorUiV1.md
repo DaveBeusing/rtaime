@@ -887,3 +887,7 @@ The reference showcase now has provider-advertised capability selection, descrip
 ## Optional dock workspace
 
 Existing Operator regions support an optional bounded docking presentation with tabs, split groups and owned panel windows. The same view instances, confirmed source identity and central shortcut/mutation gate are reused. Built-in layouts and reset remain available; no new renderer or authority is introduced. See [OperatorWorkspaces.md](OperatorWorkspaces.md#optional-docking-and-detached-panels) for controls, persistence, monitor recovery and qualification limits.
+
+## Command palette and shortcut preferences
+
+The shared Ctrl+K palette and its custom-control profile editor are described in [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md). Search text never performs TAKE; confirmed-state gates remain on existing command instances. Profiles contain presentation preferences only.
