@@ -199,7 +199,8 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 				confirmed ? "Control response confirmed" : rejected ? "Control request rejected" : "Command outcome unconfirmed",
 				"Open action history for request identity, timestamps and available revision correlation.",
 				"Control", confirmed ? "Inspect execution state for scheduled actions." : "Synchronize and inspect authoritative state before retrying.",
-				"Program availability follows current authoritative state.", Persistent: !confirmed));
+				"Program availability follows current authoritative state.", Persistent: !confirmed,
+				TechnicalDetail: $"Request {item.Id:N} · {item.Operation} · wire command {item.CommandId ?? "not exposed"}"));
 		}
 	}
 

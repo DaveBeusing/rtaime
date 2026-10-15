@@ -243,6 +243,11 @@ public sealed class OperatorNotificationTests
 		Assert.Equal(2, Assert.Single(service.Current).OccurrenceCount);
 		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(service.Current).Condition);
 		now = now.AddSeconds(1);
+		service.Publish(fault with { TechnicalDetail = "A different failure cause." });
+		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
+		Assert.True(service.Acknowledge(fault.Key));
+		service.Publish(fault with { TechnicalDetail = "A different failure cause.", TargetWorkspace = "OUTPUTS" });
+		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
 		service.Publish(fault with { Condition = OperatorNotificationCondition.Fatal });
 		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
 		Assert.Equal(1, Assert.Single(service.Current).OccurrenceCount);
