@@ -202,6 +202,10 @@
 							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="HEALTH"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
 						</controls:RtaimeNavigationItem>
 					</StackPanel>
+					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Commands"
+						IconData="{StaticResource RtaimeIconSettingsGeometry}"
+						Command="{Binding OpenCommandPaletteCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						ToolTip="Commands and shortcut profiles (Ctrl+K)" AutomationProperties.Name="Open commands and shortcut profiles"/>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom"
 						Label="Settings"
 						IconData="{StaticResource RtaimeIconSettingsGeometry}"

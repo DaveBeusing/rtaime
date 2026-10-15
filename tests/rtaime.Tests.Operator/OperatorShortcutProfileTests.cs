@@ -63,7 +63,7 @@ public sealed class OperatorShortcutProfileTests
 	public void Focus_scope_conflicts_include_global_but_allow_disjoint_local_scopes()
 	{
 		var timeline = new OperatorShortcutDefinition("timeline", "Timeline", Key.B, ModifierKeys.Control, new Probe(), Scope: OperatorShortcutScope.Timeline);
-		var library = timeline with { Id = "library", Scope = OperatorShortcutScope.MediaLibrary };
+		var library = timeline with { Id = "library", Command = new Probe(), Scope = OperatorShortcutScope.MediaLibrary };
 		Assert.Empty(OperatorKeyboardCommandRegistry.FindConflicts([timeline, library]));
 		Assert.Single(OperatorKeyboardCommandRegistry.FindConflicts([timeline, library with { Scope = OperatorShortcutScope.Global }]));
 		var registry = new OperatorKeyboardCommandRegistry([timeline, library]);

@@ -31,6 +31,8 @@ public partial class MainWindow : Window
 	private const int DarkBorderColor = 0x003F3425;
 	private const int LightCaptionTextColor = 0x00F6F3EE;
 
+	private OperatorCommandPaletteWindow? _commandPaletteWindow;
+	internal OperatorCommandPaletteWindow? CommandPaletteWindow => _commandPaletteWindow;
 	private bool _shutdownStarted;
 	private bool _shutdownComplete;
 	private bool _fullscreenApplied;
@@ -132,8 +134,12 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
-        Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
-            new AsyncRelayCommand(FocusMediaSearchAsync), Docking);
+		OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
+			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
+		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool),
+			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
@@ -226,8 +232,12 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
-        Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
-            new AsyncRelayCommand(FocusMediaSearchAsync), Docking);
+		OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
+			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
+		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool),
+			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
 		Closing += OnClosingAsync;
@@ -254,6 +264,8 @@ public partial class MainWindow : Window
 	public ShowControlViewModel ShowControl { get; }
 	public ProductionMacroViewModel ProductionMacros { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
+	public OperatorCommandPaletteViewModel CommandPalette { get; }
+	public ICommand OpenCommandPaletteCommand { get; }
 	public OperatorDockController Docking { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
@@ -368,9 +380,35 @@ public partial class MainWindow : Window
 			new OperatorSafeSessionState(Shell.SelectedWorkspace));
 	}
 
+	internal void OpenCommandPalette()
+	{
+		if (_shutdownStarted) return;
+		if (_commandPaletteWindow is { } existing) { existing.Activate(); existing.FocusSearch(); return; }
+		CommandPalette.Query = "";
+		CommandPalette.Refresh();
+		var palette = new OperatorCommandPaletteWindow(CommandPalette) { Owner = this };
+		_commandPaletteWindow = palette;
+		palette.Closed += (_, _) => _commandPaletteWindow = null;
+		palette.Show();
+		_ = CommandPalette.LoadPreferencesAsync();
+	}
+	private static string? PickShortcutImport()
+	{
+		var dialog = new OpenFileDialog { Title = "Import shortcut profile", Filter = "Shortcut profile (*.json)|*.json", CheckFileExists = true };
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
+	}
+	private static string? PickShortcutExport()
+	{
+		var dialog = new SaveFileDialog { Title = "Export shortcut profile", Filter = "Shortcut profile (*.json)|*.json",
+			DefaultExt = ".json", AddExtension = true, OverwritePrompt = true, FileName = "rtaime-shortcuts.json" };
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
+	}
+
 	private Task FocusMediaSearchAsync()
 	{
 		Shell.SelectWorkspace("MEDIA");
+		if (Shell.LeftColumnWidth.Value <= 0 || !MediaSearchBox.IsVisible || !LeftToolRegion.IsVisible)
+			Docking.Float("TOOLS");
 		Dispatcher.BeginInvoke(
 			() =>
 			{
@@ -462,6 +500,7 @@ public partial class MainWindow : Window
 	{
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
+		_ = CommandPalette.LoadPreferencesAsync();
 		_ = MediaPool.LoadSmartBinsAsync();
 		_ = MediaPool.LoadCatalogAsync();
 		_ = NdiSources.RefreshAsync();
@@ -489,6 +528,9 @@ public partial class MainWindow : Window
 		{
 			if (!_fullscreenApplied)
 				CaptureWindowPlacement();
+			_commandPaletteWindow?.Close();
+			await CommandPalette.FlushAsync();
+			CommandPalette.Dispose();
 			Docking.Dispose();
 			await Shell.SaveAsync();
 			MediaPool.CancelHover();
