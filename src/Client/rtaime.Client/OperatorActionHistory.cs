@@ -6,8 +6,8 @@ public enum OperatorActionOutcome { Pending, Confirmed, Rejected, Unconfirmed }
 // Session-only metadata: never retain arguments, paths, payloads or exception messages.
 public sealed record OperatorActionObservation(
 	Guid Id, string Operation, DateTimeOffset PendingAtUtc, DateTimeOffset? CompletedAtUtc,
-	OperatorActionOutcome Outcome, ulong? ExpectedProductionRevision,
-	ulong? ResponseProductionRevision = null, string? CommandId = null);
+	OperatorActionOutcome Outcome, ulong? ObservedProductionRevision,
+	ulong? ResponseProductionRevision = null, string? CommandId = null, ulong? ExpectedProductionRevision = null);
 
 public sealed class OperatorActionHistory
 {
@@ -19,10 +19,10 @@ public sealed class OperatorActionHistory
 	public event EventHandler? Changed;
 	public IReadOnlyList<OperatorActionObservation> Current { get { lock (_gate) return _items.ToArray(); } }
 
-	internal Guid Begin(string operation, ulong? expectedRevision, string? commandId)
+	internal Guid Begin(string operation, ulong? observedRevision, string? commandId, ulong? expectedRevision)
 	{
 		var item = new OperatorActionObservation(Guid.NewGuid(), operation, _clock(), null,
-			OperatorActionOutcome.Pending, expectedRevision, CommandId: commandId);
+			OperatorActionOutcome.Pending, observedRevision, CommandId: commandId, ExpectedProductionRevision: expectedRevision);
 		lock (_gate)
 		{
 			if (_items.Count == Capacity) _items.RemoveAt(0);

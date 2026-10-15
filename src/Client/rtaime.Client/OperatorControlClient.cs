@@ -1319,7 +1319,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         var current = RequireSnapshot();
         var command = new SelectPreviewCommand(Metadata(current.Production), sourceId);
-        var result = await ObserveOperationAsync("SelectPreviewAsync", () => _transport.SelectPreviewAsync(command, cancellationToken), command.Metadata.CommandId.ToString()).ConfigureAwait(false);
+        var result = await ObserveOperationAsync("SelectPreviewAsync", () => _transport.SelectPreviewAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -1334,7 +1334,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         var current = RequireSnapshot();
         var command = new ActivateSceneCommand(Metadata(current.Production), sceneId);
-        var result = await ObserveOperationAsync("ActivateSceneAsync", () => _transport.ActivateSceneAsync(command, cancellationToken), command.Metadata.CommandId.ToString()).ConfigureAwait(false);
+        var result = await ObserveOperationAsync("ActivateSceneAsync", () => _transport.ActivateSceneAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -1364,7 +1364,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         var current = RequireSnapshot();
         var command = new RouteOutputRoleCommand(Metadata(current.Production), roleId, sourceId, audioBusId);
-        var result = await ObserveOperationAsync("RouteOutputRoleAsync", () => _transport.RouteOutputRoleAsync(command, cancellationToken), command.Metadata.CommandId.ToString()).ConfigureAwait(false);
+        var result = await ObserveOperationAsync("RouteOutputRoleAsync", () => _transport.RouteOutputRoleAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -1382,7 +1382,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         var current = RequireSnapshot();
         var command = new CutProgramCommand(Metadata(current.Production), sourceId);
-        var result = await ObserveOperationAsync("CutAsync", () => _transport.CutProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString()).ConfigureAwait(false);
+        var result = await ObserveOperationAsync("CutAsync", () => _transport.CutProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -1406,7 +1406,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         var current = RequireSnapshot();
         var command = new DissolveProgramCommand(Metadata(current.Production), sourceId, durationFrames);
-        var result = await ObserveOperationAsync("DissolveAsync", () => _transport.DissolveProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString()).ConfigureAwait(false);
+        var result = await ObserveOperationAsync("DissolveAsync", () => _transport.DissolveProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -2035,9 +2035,9 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     }
 
 
-    private async ValueTask<T> ObserveOperationAsync<T>(string operation, Func<ValueTask<T>> send, string? commandId = null)
+    private async ValueTask<T> ObserveOperationAsync<T>(string operation, Func<ValueTask<T>> send, string? commandId = null, ulong? expectedRevision = null)
     {
-        var id = ActionHistory.Begin(operation, _snapshot?.Production.Revision.Value, commandId);
+        var id = ActionHistory.Begin(operation, _snapshot?.Production.Revision.Value, commandId, expectedRevision);
         try
         {
             var result = await send().ConfigureAwait(false);

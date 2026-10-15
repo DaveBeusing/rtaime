@@ -39,6 +39,7 @@ public sealed record OperatorActionHistoryRow(OperatorActionObservation Observat
 	public string Times => $"Requested {Observation.PendingAtUtc.ToLocalTime():HH:mm:ss.fff} · " +
 		(Observation.CompletedAtUtc is { } completed ? $"response {completed.ToLocalTime():HH:mm:ss.fff}" : "awaiting response");
 	public string Correlation => $"Request {Observation.Id:N} · wire command {Observation.CommandId ?? "not exposed"} · " +
+		$"observed production revision {Observation.ObservedProductionRevision?.ToString(CultureInfo.InvariantCulture) ?? "unknown"} · " +
 		$"expected production revision {Observation.ExpectedProductionRevision?.ToString(CultureInfo.InvariantCulture) ?? "unknown"} · " +
 		$"response production revision {Observation.ResponseProductionRevision?.ToString(CultureInfo.InvariantCulture) ?? "not exposed"}";
 }
