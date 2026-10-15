@@ -48,6 +48,7 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 	public string StreamId => _descriptor.StreamId;
 	public string SourceName { get => _sourceName; private set => Set(ref _sourceName, value); }
 	public string SourceType { get => _sourceType; private set => Set(ref _sourceType, value); }
+    public double ConfirmedGain => _descriptor.Gain;
 	public double Gain
 	{
 		get => _gain;
@@ -96,6 +97,7 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 			throw new InvalidOperationException("Audio input source identity cannot change.");
 
 		_descriptor = descriptor;
+        OnPropertyChanged(nameof(ConfirmedGain));
 		OnPropertyChanged(nameof(StreamId));
 		OnPropertyChanged(nameof(TestSignalEnabled));
 		OnPropertyChanged(nameof(TestSignalMode));
