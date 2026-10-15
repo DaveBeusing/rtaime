@@ -197,3 +197,64 @@ Physical matrix results must be recorded with Windows build, adapter/driver, mon
 
 
 Windows software-adapter evidence: [Required gates run 38292301980](https://github.com/DaveBeusing/rtaime/actions/runs/38292301980), source `fcc4f0db23c70558e3ce3bc9286ad0403109d659`, SDK 10.0.401. CI's focused qualification passed 34/34, including the real primary/secondary-window lifetime; the complete Operator suite passed 229/229. All three productive control windows reported eight targets created/eight released, three device generations, and successful native BGRA8 red-pixel readback both initially and after injected device restoration. The injected 100/125/150/200% target matrix and exact three-retry exhaustion also passed. The later show-template integration step failed the separate AUX active-confirmation prerequisite; these results do not constitute a complete Required Gates pass. Final candidate status is recorded on the relevant pull request's exact head.
+
+## Combined workspace regression evidence
+
+`OperatorCombinedVisualQualification.VerifyWindowAsync` runs inside the existing real
+MainWindow STA fixture, before the docking/Inspector/timeline/library/palette/show-check
+interaction fixtures and native GPU recovery fixture. It reuses all five viewport rows
+above across all eight workspaces (40 cases). Layout transforms inject the row's
+100/125/150/200% scale; they do not simulate Windows monitor messages. Both requested
+logical dimensions and actual Windows DPI are recorded separately.
+
+The reusable geometry golden evaluates the rendered TopBar, navigation, center and
+status bar: positive finite bounds, containment with 0.5 DIP rounding tolerance,
+fixed 60/30 DIP chrome, region ordering and repeat-layout stability. A negative
+regression rejects empty, nonfinite, displaced and overflowing regions. This is a
+semantic layout baseline, not a saved screenshot comparison or a duplicate shell
+size formula.
+
+CI and Quality retain `rtaime-operator-visual-<job>-<run>-<attempt>` artifacts:
+five LIVE PNG review images and `combined-ui.json` with the exact source, SDK,
+40 geometry observations, actual DPI, injected scale, overlay visibility and measurements.
+The environment variable `RTAIME_OPERATOR_VISUAL_EVIDENCE` opts into artifact writing.
+Images capture WPF composition; D3DImage hardware pixels may be absent. The startup
+overlay visibility is recorded rather than silently removed. Images require human
+review for typography, contrast and content clipping; their existence is not a
+visual-review PASS. Authored production content is not loaded by this fixture.
+
+After workspace warmup, 24 same-viewport cycles measure Input-priority dispatcher
+queue delay (p95/max), LayoutUpdated events, native surface Draw events, target
+creations, process handles/private bytes and managed heap observations. Ceilings are
+5 seconds per dispatcher sample, 192 layout events, 192 draws per discovered surface,
+one target creation per surface, 64 handles, 128 MiB private growth and 32 MiB managed
+growth. These detect gross bounded-loop regressions on Windows runners; they are
+not a low-latency service level, exclusive allocation accounting or a long soak.
+No forced collection or increased existing STA deadline is used. Existing native
+GPU target lifetime/retry tests remain the stronger failure/resource contract.
+
+### Coverage and remaining qualification
+
+| Scenario | Existing or combined executable evidence | Boundary |
+| --- | --- | --- |
+| Eight workspaces, compact/reference layout | Combined geometry golden and original viewport matrix | Real WPF, injected scale |
+| Resize, float, restore, shared focus/shortcuts | `OperatorDockingWindowTests`, `OperatorDockLayoutTests` | Existing panel instances |
+| Numeric validation and focused local editing | `InspectorPrecisionTests`, `TimelineErgonomicsTests` | Draft/confirmed separation |
+| Text entry, repeats, no implicit TAKE | `OperatorShortcutProfileTests`, command registry and real palette fixture | No production bypass |
+| WPF modal editor focus and Return isolation | Combined real owned ShowDialog fixture | Owner shortcut route receives no event; native file dialogs remain UNVERIFIED |
+| Stale state and pending/rejected requests | `InspectorPrecisionTests`, `ShowReadinessOperatorTests`, preflight/action-history tests | Explicit UNKNOWN and pending evidence |
+| Missing assets | `ShowPreflightAndActionHistoryTests`, media library tests | No inferred readiness |
+| Fit, Fill, Pixel Perfect, zoom and fallback geometry | `MediaViewportVisualQualityQualificationTests`, `MonitoringVisualPerformanceQualificationTests` | Renderer-independent semantics |
+| GPU failure, restoration and bounded draw targets | `GpuDrawingSurfaceTests` in the same STA lifetime | Real native APIs with injected faults |
+| Actual in-flight TAKE during physical monitor movement, native file-dialog focus, cross-monitor clipping | Reference desktop procedure below | UNVERIFIED by the combined disconnected fixture |
+
+This addition does not reimplement existing controls or promote software checks into
+physical qualification. The combined window uses a disconnected, non-authoritative
+model and verifies unchanged Preview/Program identity and disabled CUT throughout.
+The backend TAKE/fault suites remain required separately.
+
+For release review, retain the five images and JSON with their workflow run and exact
+source; inspect text/contrast/clip behavior, then execute the physical procedure above
+with connected/stale state, an explicitly initiated TAKE, missing assets and approved
+monitoring failure. Record monitor topology, Windows build, GPU/driver, actual DPI,
+focus/modal observations and outcomes. Cases without that evidence stay UNVERIFIED.
