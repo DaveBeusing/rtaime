@@ -12,6 +12,7 @@ public partial class OperatorCommandPaletteWindow : Window
 	private readonly OperatorCommandPaletteViewModel _model;
 	private readonly IInputElement? _previousFocus;
 	private bool _executed;
+    private bool _focusQueued;
 	public OperatorCommandPaletteWindow(OperatorCommandPaletteViewModel model)
 	{
 		_model = model;
@@ -37,8 +38,13 @@ public partial class OperatorCommandPaletteWindow : Window
     }
     private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands))
-            Dispatcher.BeginInvoke(() => { if (IsVisible) FocusCurrentMode(); }, DispatcherPriority.Input);
+        if (e.PropertyName != nameof(OperatorCommandPaletteViewModel.IsBrowsingCommands) || _focusQueued) return;
+        _focusQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _focusQueued = false;
+            if (IsVisible) FocusCurrentMode();
+        }, DispatcherPriority.Input);
     }
 	protected override void OnSourceInitialized(EventArgs e)
 	{
