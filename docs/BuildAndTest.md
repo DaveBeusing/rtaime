@@ -438,3 +438,14 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 ```
 
 Required Gates retains existing architecture, failure, integration, visual and packaged lifecycle qualifications. The new real-window assertions run inside the existing STA MainWindow qualification, including compact/injected DPI scales. See [Show checks and activity](ShowPreflightAndActivity.md) for evidence and authority limits.
+
+## Combined Operator visual evidence
+
+The existing `OperatorXamlStartupTests` filter now includes the 40-case rendered
+workspace/viewport matrix, injected scale and bounded dispatcher/resource measurements.
+CI and Quality retain PNG/JSON evidence as documented in
+[Operator visual qualification](OperatorVisualQualification.md#combined-workspace-regression-evidence).
+The original 45-second STA deadline and all existing interaction/GPU checks remain.
+Run `OperatorCombinedVisualQualification` to exercise the geometry evaluator's
+negative regression; the complete Operator suite includes it automatically.
+Physical monitor movement and human image review remain separate evidence obligations.

@@ -388,3 +388,7 @@ Ctrl+K or **Commands** opens searchable commands with visible availability reaso
 ## Show checks and activity
 
 The navigation rail and Commands expose [Show checks and activity](docs/ShowPreflightAndActivity.md): read-only preflight evidence, a bounded correlated request history and consolidated notification acknowledgement/review. Missing or stale evidence stays UNKNOWN; ControlHost retains launch and Program authority.
+
+The [Operator visual qualification](docs/OperatorVisualQualification.md#combined-workspace-regression-evidence)
+retains combined workspace geometry, review images and bounded Windows UI measurements.
+Injected DPI scaling does not establish physical mixed-monitor qualification.
