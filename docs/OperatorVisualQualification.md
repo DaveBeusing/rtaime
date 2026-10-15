@@ -240,7 +240,8 @@ GPU target lifetime/retry tests remain the stronger failure/resource contract.
 | Eight workspaces, compact/reference layout | Combined geometry golden and original viewport matrix | Real WPF, injected scale |
 | Resize, float, restore, shared focus/shortcuts | `OperatorDockingWindowTests`, `OperatorDockLayoutTests` | Existing panel instances |
 | Numeric validation and focused local editing | `InspectorPrecisionTests`, `TimelineErgonomicsTests` | Draft/confirmed separation |
-| Text entry, repeats, modal exclusion, no implicit TAKE | `OperatorShortcutProfileTests`, command registry and real palette fixture | No production bypass |
+| Text entry, repeats, no implicit TAKE | `OperatorShortcutProfileTests`, command registry and real palette fixture | No production bypass |
+| WPF modal editor focus and Return isolation | Combined real owned ShowDialog fixture | Owner shortcut route receives no event; native file dialogs remain UNVERIFIED |
 | Stale state and pending/rejected requests | `InspectorPrecisionTests`, `ShowReadinessOperatorTests`, preflight/action-history tests | Explicit UNKNOWN and pending evidence |
 | Missing assets | `ShowPreflightAndActionHistoryTests`, media library tests | No inferred readiness |
 | Fit, Fill, Pixel Perfect, zoom and fallback geometry | `MediaViewportVisualQualityQualificationTests`, `MonitoringVisualPerformanceQualificationTests` | Renderer-independent semantics |

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using rtaime.Client;
@@ -49,6 +50,7 @@ public sealed class OperatorCombinedVisualQualification
         try
         {
             Assert.False(owner.CutCommand.CanExecute(null));
+            VerifyModalRouting(window);
             window.MinWidth = 960; window.MinHeight = 500;
             foreach (var row in OperatorVisualQualificationTests.QualificationMatrix())
             {
@@ -135,6 +137,49 @@ public sealed class OperatorCombinedVisualQualification
             window.Shell.SelectWorkspace(original.Workspace);
             window.Shell.UpdateViewportSize(window.Width, window.Height);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        }
+    }
+
+    private static void VerifyModalRouting(MainWindow owner)
+    {
+        var editor = new RtaimeTextBox { Width = 220, Height = 32 };
+        var dialog = new Window
+        {
+            Owner = owner, Content = editor, Width = 300, Height = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+        var ownerKeys = 0;
+        Exception? failure = null;
+        KeyEventHandler ownerKey = (_, _) => ownerKeys++;
+        owner.AddHandler(Keyboard.PreviewKeyDownEvent, ownerKey, true);
+        dialog.Loaded += (_, _) => dialog.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                Assert.True(editor.Focus());
+                Assert.True(dialog.IsKeyboardFocusWithin);
+                var enter = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(editor)!, 0, Key.Return)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+                editor.RaiseEvent(enter);
+                Assert.Equal(0, ownerKeys);
+                Assert.True(dialog.IsVisible);
+                Console.WriteLine("MODAL ROUTING PASS: focused custom editor owns Return; owner shortcut route receives no event.");
+            }
+            catch (Exception exception) { failure = exception; }
+            finally { dialog.Close(); }
+        }), DispatcherPriority.Input);
+        try
+        {
+            dialog.ShowDialog();
+            if (failure is not null) throw new InvalidOperationException("Modal keyboard qualification failed.", failure);
+            Assert.Equal(0, ownerKeys);
+        }
+        finally
+        {
+            owner.RemoveHandler(Keyboard.PreviewKeyDownEvent, ownerKey);
+            if (dialog.IsVisible) dialog.Close();
+            owner.Activate();
         }
     }
 
