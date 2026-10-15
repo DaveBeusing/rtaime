@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Input;
 
 namespace rtaime.Operator;
@@ -71,6 +72,8 @@ public sealed class OperatorShortcutProfileStore(string? path = null)
 	private readonly string _path = path ?? Path.Combine(
 		Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "operator-shortcuts.json");
 	private readonly SemaphoreSlim _gate = new(1, 1);
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 	public async Task<OperatorShortcutProfile> ReadAsync(string? path = null, CancellationToken cancellationToken = default)
 	{
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -89,11 +92,28 @@ public sealed class OperatorShortcutProfileStore(string? path = null)
 				count += read;
 			}
 			if (count > MaximumBytes) throw new InvalidDataException("Shortcut profile exceeds 64 KiB.");
-			return JsonSerializer.Deserialize<OperatorShortcutProfile>(bytes.AsSpan(0, count))
+			using var document = JsonDocument.Parse(bytes.AsMemory(0, count));
+            RejectDuplicateProperties(document.RootElement);
+            return JsonSerializer.Deserialize<OperatorShortcutProfile>(bytes.AsSpan(0, count), ReadOptions)
 				?? throw new InvalidDataException("Shortcut profile is empty.");
 		}
 		finally { _gate.Release(); }
 	}
+    private static void RejectDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!names.Add(property.Name)) throw new JsonException("Duplicate shortcut profile field: " + property.Name);
+                RejectDuplicateProperties(property.Value);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+            foreach (var item in element.EnumerateArray()) RejectDuplicateProperties(item);
+    }
+
 	public async Task WriteAsync(OperatorShortcutProfile profile, string? path = null, CancellationToken cancellationToken = default)
 	{
 		var bytes = JsonSerializer.SerializeToUtf8Bytes(profile);

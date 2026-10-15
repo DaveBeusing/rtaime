@@ -85,7 +85,11 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	private OperatorShortcutDefinition? _editingShortcut;
 	private Key _editingKey = Key.Q;
 	private ModifierKeys _editingModifiers = ModifierKeys.Control | ModifierKeys.Shift;
-	private bool _showProfiles, _disposed, _loaded, _loading;
+	private bool _showProfiles, _disposed, _loaded, _loading, _importing, _exporting;
+    private readonly CancellationTokenSource _lifetime = new();
+    private readonly object _saveGate = new();
+    private OperatorShortcutProfile? _pendingSave;
+    private bool _saveRunning;
 	private Task _save = Task.CompletedTask;
 
 	public OperatorCommandPaletteViewModel(OperatorKeyboardCommandRegistry registry,
@@ -99,16 +103,19 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 			throw new ArgumentException("Command catalogue must contain at most 96 unique commands.", nameof(commands));
 		_entries = descriptors.Select(command => new OperatorPaletteEntry(command,
 			() => _registry.Definitions.FirstOrDefault(item => item.Id == command.Id)?.Gesture ?? "")).ToArray();
-		ExecuteCommand = new AsyncRelayCommand(() => { ExecuteSelected(false); return Task.CompletedTask; }, () => !_disposed && Selected?.IsAvailable == true);
+		ExecuteCommand = new AsyncRelayCommand(() => { ExecuteSelected(false); return Task.CompletedTask; }, () => !_disposed && IsBrowsingCommands && Selected?.IsAvailable == true);
 		ToggleProfilesCommand = new AsyncRelayCommand(() =>
 		{
-			_showProfiles = !_showProfiles; OnPropertyChanged(nameof(ProfilesVisibility)); OnPropertyChanged(nameof(ResultsVisibility)); return Task.CompletedTask;
+			_showProfiles = !_showProfiles;
+            OnPropertyChanged(nameof(ProfilesVisibility)); OnPropertyChanged(nameof(ResultsVisibility));
+            OnPropertyChanged(nameof(IsBrowsingCommands)); OnPropertyChanged(nameof(SelectedState));
+            RaiseCommands(); return Task.CompletedTask;
 		});
-		AssignShortcutCommand = new AsyncRelayCommand(AssignAsync, () => !_disposed && !_loading && EditingShortcut is not null);
-		RemoveOverrideCommand = new AsyncRelayCommand(RemoveOverrideAsync, () => !_disposed && !_loading && EditingShortcut is not null);
-		ResetShortcutsCommand = new AsyncRelayCommand(() => ApplyAndSaveAsync(OperatorShortcutProfile.Defaults), () => !_disposed && !_loading);
-		ImportCommand = new AsyncRelayCommand(ImportAsync, () => !_disposed && !_loading && _importPicker is not null);
-		ExportCommand = new AsyncRelayCommand(ExportAsync, () => !_disposed && !_loading && _exportPicker is not null);
+		AssignShortcutCommand = new AsyncRelayCommand(AssignAsync, () => !_disposed && !IsProfileBusy && EditingShortcut is not null);
+		RemoveOverrideCommand = new AsyncRelayCommand(RemoveOverrideAsync, () => !_disposed && !IsProfileBusy && EditingShortcut is not null);
+		ResetShortcutsCommand = new AsyncRelayCommand(() => ApplyAndSaveAsync(OperatorShortcutProfile.Defaults), () => !_disposed && !IsProfileBusy);
+		ImportCommand = new AsyncRelayCommand(ImportAsync, () => !_disposed && !IsProfileBusy && _importPicker is not null);
+		ExportCommand = new AsyncRelayCommand(ExportAsync, () => !_disposed && !IsProfileBusy && _exportPicker is not null);
 		foreach (var entry in _entries) entry.PropertyChanged += OnEntryChanged;
 		_registry.Changed += OnRegistryChanged;
 		if (_operator is not null) _operator.PropertyChanged += OnOperatorChanged;
@@ -129,7 +136,11 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	public ICommand ResetShortcutsCommand { get; }
 	public ICommand ImportCommand { get; }
 	public ICommand ExportCommand { get; }
-	public Visibility ResultsVisibility => _showProfiles ? Visibility.Collapsed : Visibility.Visible;
+	public bool IsBrowsingCommands => !_showProfiles;
+    public bool IsProfileBusy => _loading || _importing || _exporting;
+    public string EditingBindingSummary => EditingShortcut is null ? "No editable command." :
+        $"Current: {_registry.Definitions.First(item => item.Id == EditingShortcut.Id).Gesture} · Focus: {EditingShortcut.Scope}";
+    public Visibility ResultsVisibility => _showProfiles ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility ProfilesVisibility => _showProfiles ? Visibility.Visible : Visibility.Collapsed;
 	public event PropertyChangedEventHandler? PropertyChanged;
 	public event EventHandler? ExecutionCompleted;
@@ -141,7 +152,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		get => _selected;
 		set { if (Set(ref _selected, value)) { OnPropertyChanged(nameof(SelectedState)); RaiseCommands(); } }
 	}
-	public string SelectedState => Selected?.State ?? "No commands match this search.";
+	public string SelectedState => _showProfiles ? "Editing shortcuts. Command execution is paused." : Selected?.State ?? "No commands match this search.";
 	public OperatorShortcutDefinition? EditingShortcut
 	{
 		get => _editingShortcut;
@@ -149,6 +160,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		{
 			if (!Set(ref _editingShortcut, value)) return;
 			SyncEditingGesture();
+            OnPropertyChanged(nameof(EditingBindingSummary));
 			RaiseCommands();
 		}
 	}
@@ -157,7 +169,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 
 	public bool ExecuteSelected(bool fromTextEntry)
 	{
-		if (_disposed || Selected is not { } entry) return false;
+		if (_disposed || !IsBrowsingCommands || Selected is not { } entry) return false;
 		var reason = entry.Reason;
 		if (reason.Length > 0) { Status = reason; Refresh(); return false; }
 		if (fromTextEntry && entry.Descriptor.RequiresExplicitButton)
@@ -170,7 +182,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	}
 	public void MoveSelection(int direction)
 	{
-		if (Results.Count == 0) return;
+		if (!IsBrowsingCommands || Results.Count == 0) return;
 		var index = Selected is null ? 0 : Results.IndexOf(Selected);
 		Selected = Results[Math.Clamp(index + direction, 0, Results.Count - 1)];
 	}
@@ -190,20 +202,21 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		foreach (var entry in _entries) entry.Refresh();
 		OnPropertyChanged(nameof(SelectedState)); RaiseCommands();
 	}
-	public async Task LoadPreferencesAsync()
+	public async Task LoadPreferencesAsync(CancellationToken cancellationToken = default)
 	{
-		if (_loaded || _loading || _disposed) return;
-		_loading = true; RaiseCommands();
+		if (_loaded || IsProfileBusy || _disposed) return;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+		_loading = true; RaiseProfileState();
 		try
 		{
-			var profile = await _store.ReadAsync();
+			var profile = await _store.ReadAsync(cancellationToken: linked.Token);
 			if (_disposed) return;
 			if (_registry.TryApplyProfile(profile, out var error)) { _loaded = true; ProfileName = _registry.CurrentProfile.Name!; }
 			else Status = "Shortcut preferences rejected; canonical defaults retained. " + error;
 		}
 		catch (Exception ex) when (IsFileFailure(ex))
 		{ Status = "Shortcut preferences unavailable; canonical defaults retained. " + ex.Message; }
-		finally { _loading = false; RaiseCommands(); }
+		finally { _loading = false; RaiseProfileState(); }
 	}
 	private Task AssignAsync()
 	{
@@ -214,44 +227,89 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	}
 	private Task RemoveOverrideAsync() => ApplyAndSaveAsync(new(2, ProfileName,
 		_registry.CurrentProfile.Bindings.Where(item => item.CommandId != EditingShortcut?.Id).ToArray()));
-	public Task ApplyAndSaveAsync(OperatorShortcutProfile profile)
-	{
-		if (_disposed || _loading) return Task.CompletedTask;
-		if (!_registry.TryApplyProfile(profile, out var error)) { Status = error; return Task.CompletedTask; }
-		_loaded = true; ProfileName = _registry.CurrentProfile.Name!;
-		var snapshot = _registry.CurrentProfile;
-		_save = SaveAfterAsync(_save, snapshot);
-		return _save;
-	}
-	private async Task SaveAfterAsync(Task previous, OperatorShortcutProfile profile)
-	{
-		await previous;
-		try { await _store.WriteAsync(profile); Status = "Shortcut profile saved locally."; }
-		catch (Exception ex) when (IsFileFailure(ex)) { Status = "Profile active for this session; save failed. " + ex.Message; }
-	}
-	public async Task ImportProfileAsync(string path)
-	{
-		try
-		{
-			var profile = await _store.ReadAsync(path);
-			if (_disposed) return;
-			await ApplyAndSaveAsync(profile);
-		}
-		catch (Exception ex) when (IsFileFailure(ex)) { Status = "Import rejected; current profile retained. " + ex.Message; }
-	}
-	public async Task ExportProfileAsync(string path)
-	{
-		if (_disposed) return;
-		try
-		{
-			await _store.WriteAsync(_registry.CurrentProfile, path);
-			Status = "Shortcut preset exported.";
-		}
-		catch (Exception ex) when (IsFileFailure(ex)) { Status = "Export failed. " + ex.Message; }
-	}
+    public Task ApplyAndSaveAsync(OperatorShortcutProfile profile) =>
+        _disposed || IsProfileBusy ? Task.CompletedTask : ApplyProfileAsync(profile);
+
+    private Task ApplyProfileAsync(OperatorShortcutProfile profile)
+    {
+        if (!_registry.TryApplyProfile(profile, out var error)) { Status = error; return Task.CompletedTask; }
+        _loaded = true; ProfileName = _registry.CurrentProfile.Name!;
+        lock (_saveGate)
+        {
+            _pendingSave = _registry.CurrentProfile;
+            if (!_saveRunning)
+            {
+                _saveRunning = true;
+                _save = SavePendingAsync();
+            }
+            return _save;
+        }
+    }
+    private async Task SavePendingAsync()
+    {
+        // One dispatcher turn coalesces a burst before any disk work begins.
+        await Task.Yield();
+        while (true)
+        {
+            OperatorShortcutProfile profile;
+            lock (_saveGate)
+            {
+                if (_pendingSave is null) { _saveRunning = false; return; }
+                profile = _pendingSave; _pendingSave = null;
+            }
+            try
+            {
+                await _store.WriteAsync(profile);
+                if (!_disposed && ReferenceEquals(profile, _registry.CurrentProfile)) Status = "Shortcut profile saved locally.";
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                if (!_disposed && ReferenceEquals(profile, _registry.CurrentProfile))
+                    Status = "Profile active for this session; save failed. " + ex.Message;
+            }
+        }
+    }
+    public async Task ImportProfileAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (_disposed || IsProfileBusy) return;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        _importing = true; RaiseProfileState();
+        try
+        {
+            var profile = await _store.ReadAsync(path, linked.Token);
+            linked.Token.ThrowIfCancellationRequested();
+            if (_disposed) return;
+            await ApplyProfileAsync(profile);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            if (!_disposed) Status = ex is OperationCanceledException ? "Import canceled; current profile retained." :
+                "Import rejected; current profile retained. " + ex.Message;
+        }
+        finally { _importing = false; RaiseProfileState(); }
+    }
+    public async Task ExportProfileAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (_disposed || IsProfileBusy) return;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        _exporting = true; RaiseProfileState();
+        try
+        {
+            await _store.WriteAsync(_registry.CurrentProfile, path, linked.Token);
+            if (!_disposed) Status = "Shortcut preset exported.";
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        { if (!_disposed) Status = "Export failed. " + ex.Message; }
+        finally { _exporting = false; RaiseProfileState(); }
+    }
 	private async Task ImportAsync() { if (_importPicker?.Invoke() is { } path) await ImportProfileAsync(path); }
 	private async Task ExportAsync() { if (_exportPicker?.Invoke() is { } path) await ExportProfileAsync(path); }
-	public Task FlushAsync() => _save;
+	public Task FlushAsync() { lock (_saveGate) return _save; }
+    private void RaiseProfileState()
+    {
+        OnPropertyChanged(nameof(IsProfileBusy));
+        RaiseCommands();
+    }
 	private static bool IsFileFailure(Exception ex) => ex is IOException or UnauthorizedAccessException or JsonException or OperationCanceledException;
 	private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
 	{
@@ -265,7 +323,7 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 		EditingKey = AllowedKeys.Contains(binding.Key) ? binding.Key : Key.Q;
 		EditingModifiers = AllowedModifiers.Contains(binding.Modifiers) ? binding.Modifiers : ModifierKeys.Control | ModifierKeys.Shift;
 	}
-	private void OnRegistryChanged(object? sender, EventArgs e) { SyncEditingGesture(); Refresh(); }
+	private void OnRegistryChanged(object? sender, EventArgs e) { SyncEditingGesture(); OnPropertyChanged(nameof(EditingBindingSummary)); Refresh(); }
 	private void OnOperatorChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (e.PropertyName is null or nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or
@@ -279,7 +337,9 @@ public sealed class OperatorCommandPaletteViewModel : INotifyPropertyChanged, ID
 	}
 	public void Dispose()
 	{
-		_disposed = true; _registry.Changed -= OnRegistryChanged;
+		if (_disposed) return;
+        _disposed = true; _lifetime.Cancel(); _lifetime.Dispose();
+        _registry.Changed -= OnRegistryChanged;
 		if (_operator is not null) _operator.PropertyChanged -= OnOperatorChanged;
 		foreach (var entry in _entries) { entry.PropertyChanged -= OnEntryChanged; entry.Dispose(); }
 	}
