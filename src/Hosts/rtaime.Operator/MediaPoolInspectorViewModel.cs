@@ -186,8 +186,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		});
 		ResetAudioGainCommand = new AsyncRelayCommand(() =>
 		{
-			if (_operator.SelectedAudioInput is { } input)
-				input.Gain = 1.0;
+			AudioGainDraft = 1.0;
 			return Task.CompletedTask;
 		});
 		ResetGraphicsPositionXCommand = new AsyncRelayCommand(() =>

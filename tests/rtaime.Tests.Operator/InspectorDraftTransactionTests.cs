@@ -142,6 +142,10 @@ public sealed class InspectorDraftTransactionTests
         Assert.Equal(0, f.Transport.MutationCalls); Assert.Equal(1, f.Owner.SelectedAudioInput!.ConfirmedGain);
         f.Model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(1, f.Model.AudioGainDraft);
         f.Model.RedoInspectorDraftCommand.Execute(null);
+        f.Model.ResetAudioGainCommand.Execute(null); Assert.Equal(1, f.Model.AudioGainDraft);
+        Assert.Equal(1, f.Owner.SelectedAudioInput!.Gain); Assert.Equal(1, f.Owner.SelectedAudioInput.ConfirmedGain);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        f.Model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(2, f.Model.AudioGainDraft);
         Assert.True(f.Model.ApplyAudioDraftCommand.CanExecute(null)); f.Model.ApplyAudioDraftCommand.Execute(null);
         await Until(() => !f.Owner.IsBusy);
         Assert.Equal(1, f.Transport.MutationCalls); Assert.Equal(2, f.Owner.SelectedAudioInput!.ConfirmedGain);
