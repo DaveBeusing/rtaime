@@ -313,6 +313,7 @@ public sealed class OperatorCommandPaletteTests
 			// Reopen at compact sizes; profile editing occupies the bounded result area.
 			main.OpenCommandPalette();
 			palette = Assert.IsType<OperatorCommandPaletteWindow>(main.CommandPaletteWindow);
+            search = Assert.IsType<RtaimeTextBox>(palette.FindName("SearchBox"));
 			palette.Width = 360; palette.Height = 360;
 			main.CommandPalette.ToggleProfilesCommand.Execute(null);
 			await dispatcher.InvokeAsync(palette.UpdateLayout, DispatcherPriority.Render);

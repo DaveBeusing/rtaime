@@ -453,6 +453,9 @@ jobs:
       - name: Unit tests
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
 
+      - name: Shortcut editor and strict profile regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests" --logger "console;verbosity=detailed"
+
       - name: Operator real XAML startup qualification
         shell: pwsh
         env:

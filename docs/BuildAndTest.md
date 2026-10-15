@@ -449,3 +449,12 @@ The original 45-second STA deadline and all existing interaction/GPU checks rema
 Run `OperatorCombinedVisualQualification` to exercise the geometry evaluator's
 negative regression; the complete Operator suite includes it automatically.
 Physical monitor movement and human image review remain separate evidence obligations.
+
+## Shortcut editor safety regressions
+
+The existing focused `OperatorCommandPaletteTests|OperatorShortcutProfileTests` filter
+also verifies editor-mode command isolation, duplicate/unknown JSON rejection,
+canceled import, active binding/scope presentation and a 5,000-update coalesced-save
+burst. Productive compact-window focus, Enter suppression and binding text run in
+the existing `OperatorXamlStartupTests` STA fixture without changing its deadline.
+See [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md).
