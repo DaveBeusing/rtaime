@@ -953,6 +953,9 @@
 					</Grid>
 				</controls:RtaimeTabItem>
 			</controls:RtaimeTabControl>
+            <controls:RtaimeScrollViewer Grid.Row="1" MaxHeight="160" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="8,0">
+                <ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorAttributeActionsTemplate}"/>
+            </controls:RtaimeScrollViewer>
 
 			<controls:RtaimeIconButton
 				IconData="{StaticResource RtaimeIconChevronRightGeometry}"
