@@ -554,9 +554,11 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 				using var reader = new StreamReader(stream);
 				return reader.ReadToEnd();
 			}
-			catch (Exception exception) when (attempt < 5 && IsTransientWindowsSharingFailure(exception))
+			catch (Exception exception) when (
+				attempt < 5 && OperatingSystem.IsWindows() &&
+				(IsTransientWindowsSharingFailure(exception) || exception is FileNotFoundException))
 			{
-				// ReplaceFile can briefly exclude new opens while swapping the names.
+				// ReplaceFile can briefly exclude opens or hide the old name while swapping.
 				Thread.Sleep(Math.Min(20 << attempt, 200));
 			}
 		}

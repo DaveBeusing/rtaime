@@ -122,6 +122,20 @@ public sealed class ApplicationEvidencePublicationTests
 		finally { Directory.Delete(root, true); }
 	}
 
+	[Fact]
+	public void Permanently_missing_evidence_remains_an_error_and_is_never_synthesized()
+	{
+		var root = CreateRoot();
+		var path = Path.Combine(root, "missing.json");
+		try
+		{
+			var platform = new SystemApplicationHostPlatform();
+			Assert.Throws<FileNotFoundException>(() => platform.ReadAllText(path));
+			Assert.Empty(Directory.GetFiles(root));
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
 	private static string CreateRoot()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-publication-" + Guid.NewGuid().ToString("N"));
