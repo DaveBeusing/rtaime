@@ -416,3 +416,14 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 ```
 
 The required CI job runs these before the unchanged full suites. OperatorXamlStartupTests also qualifies the real palette, text-entry protection, workspace execution and compact profile view. Exact-head CI, Quality, Security, Provider Smoke, Packaged E2E and source evidence correlation remain mandatory. Physical DPI/IME/accessibility and latency evidence remain UNVERIFIED; see [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md).
+
+## Startup evidence publication regressions
+
+After the pinned-SDK Release build:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ApplicationEvidencePublicationTests|FullyQualifiedName~UnifiedApplicationHostTests.Evidence_publication_failure"
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~StartupLifecycleViewModelTests
+```
+
+The Windows sharing regression holds the same delete-sharing read handle as the Operator while repeatedly replacing lifecycle JSON. A persistent non-cooperative reader must fail with path context and leave the previous document intact. The existing full suites and packaged lifecycle, restart and legacy 1.0 checkpoint preservation checks remain in place.

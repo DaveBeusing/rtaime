@@ -54,6 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Startup atomic evidence publication regressions
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ApplicationEvidencePublicationTests|FullyQualifiedName~UnifiedApplicationHostTests.Evidence_publication_failure" --logger "console;verbosity=detailed"
+
       - name: Command palette authority and shortcut profile regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests" --logger "console;verbosity=detailed"
 

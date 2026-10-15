@@ -309,7 +309,10 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 				warnings.Add("Lifecycle evidence exceeds the bounded startup diagnostic size.");
 				return 0;
 			}
-			using var document = JsonDocument.Parse(await File.ReadAllTextAsync(lifecyclePath, token).ConfigureAwait(false));
+			await using var lifecycleStream = new FileStream(lifecyclePath, FileMode.Open, FileAccess.Read,
+				FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous);
+			using var lifecycleReader = new StreamReader(lifecycleStream);
+			using var document = JsonDocument.Parse(await lifecycleReader.ReadToEndAsync(token).ConfigureAwait(false));
 			if (!document.RootElement.TryGetProperty("captureId", out var value) ||
 				!Guid.TryParseExact(value.GetString(), "N", out var capture)) return 0;
 			var lifecycleDirectory = Path.GetDirectoryName(Path.GetFullPath(lifecyclePath))!;
