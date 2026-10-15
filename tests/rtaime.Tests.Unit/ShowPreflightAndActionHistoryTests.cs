@@ -32,6 +32,17 @@ public sealed class ShowPreflightAndActionHistoryTests
 		Assert.Equal(ShowPreflightState.NotApplicable, Checks(Snapshot(cut)).Single(check => check.Id == "assets").State);
 		var media = Selected(new(ShowControlActionId.New(), ShowControlActionKind.MediaPlay, mediaAssetId: Identity.New().ToString()));
 		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(media)).Single(check => check.Id == "assets").State);
+		var assetId = new MediaAssetId(Identity.Parse(media.CueLists[0].Cues[0].Actions[0].MediaAssetId!));
+		foreach (var availability in new[] { MediaAssetAvailability.Online, MediaAssetAvailability.Missing, MediaAssetAvailability.Offline })
+		{
+			var timestamp = new UtcTimestamp(Now);
+			var descriptor = new MediaAssetDescriptor(assetId, MediaAssetOriginKind.LocalFile, @"D:\show\clip.mp4", "Clip",
+				MediaContainerFormat.Mp4, MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8,
+				AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(10), 1024, new string('A', 64), timestamp, timestamp, availability);
+			var catalogue = new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 7, [descriptor]);
+			var check = ShowPreflightSummary.Build(Snapshot(media), true, catalogue, Now, [], Now).Single(item => item.Id == "assets");
+			Assert.Equal(availability == MediaAssetAvailability.Online ? ShowPreflightState.Pass : ShowPreflightState.Fail, check.State);
+		}
 		var knownMissing = ShowPreflightSummary.Build(Snapshot(media), true, MediaAssetCatalogSnapshot.Empty, Now, [], Now);
 		Assert.Equal(ShowPreflightState.Fail, knownMissing.Single(check => check.Id == "assets").State);
 		var expired = ShowPreflightSummary.Build(Snapshot(media), true, MediaAssetCatalogSnapshot.Empty, Now.AddSeconds(-11), [], Now);
@@ -64,6 +75,18 @@ public sealed class ShowPreflightAndActionHistoryTests
 		Assert.Equal(ShowPreflightState.Pass, current.Single(check => check.Id == "audio").State);
 		Assert.Equal(ShowPreflightState.Unknown, current.Single(check => check.Id == "outputs").State);
 		Assert.Equal(ShowPreflightState.Unknown, ShowPreflightSummary.Build(snapshot, true, null, null, [audio], Now.AddSeconds(11)).Single(check => check.Id == "audio").State);
+	}
+
+	[Fact]
+	public void AI_requires_current_application_evidence_and_preserves_explicit_failure_over_unknown_status()
+	{
+		var ai = new OperatorAIShowcaseDescriptor(false, "Effect", "DISABLED", "Reference", TimeSpan.Zero, 0,
+			null, null, null, false, null, Now);
+		Assert.Equal(ShowPreflightState.NotApplicable, Checks(Snapshot(ai: ai)).Single(item => item.Id == "ai").State);
+		ai = ai with { Enabled = true, Status = "ACTIVE", SourceSequence = 5, AppliedSequence = 5, EffectVisible = true };
+		Assert.Equal(ShowPreflightState.Pass, Checks(Snapshot(ai: ai)).Single(item => item.Id == "ai").State);
+		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(ai: ai with { UpdatedAtUtc = Now.AddSeconds(-11) })).Single(item => item.Id == "ai").State);
+		Assert.Equal(ShowPreflightState.Fail, Checks(Snapshot(ai: ai with { Status = "UNAVAILABLE", Failure = new Failure("ai.failed", "Unavailable") })).Single(item => item.Id == "ai").State);
 	}
 
 	[Fact]
@@ -153,9 +176,9 @@ public sealed class ShowPreflightAndActionHistoryTests
 	private static AuthoritativeProductionState State(ulong revision) =>
 		new(ControlContractVersion.Current, Production, new Revision(revision), new(Source, Source));
 	private static OperatorStatusSnapshot Snapshot(ShowControlWorkspaceSnapshot? show = null,
-		IReadOnlyList<OperatorOutputRoleDescriptor>? outputs = null) =>
+		IReadOnlyList<OperatorOutputRoleDescriptor>? outputs = null, OperatorAIShowcaseDescriptor? ai = null) =>
 		new(State(1), [new(Source.ToString(), "Camera")], "READY", "READY", "READY", "UNKNOWN", "IDLE", false, 0,
-			showControl: show, outputRoles: outputs);
+			showControl: show, outputRoles: outputs, aiShowcase: ai);
 
 	private sealed class Transport : IOperatorControlTransport
 	{
