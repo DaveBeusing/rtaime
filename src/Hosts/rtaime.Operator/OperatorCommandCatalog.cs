@@ -13,7 +13,7 @@ public static class OperatorCommandCatalog
 
 	public static IReadOnlyList<OperatorPaletteCommand> Create(OperatorKeyboardCommandRegistry registry,
 		OperatorViewModel owner, MediaDeckViewModel deck, OperatorShellViewModel shell, MediaPoolInspectorViewModel pool,
-		ICommand? openShowChecks = null)
+		ICommand? openShowChecks = null, ICommand? openLibrary = null, ICommand? openHelp = null)
 	{
 		string? ProductionReason()
 		{
@@ -60,6 +60,8 @@ public static class OperatorCommandCatalog
 		commands.Add(new("inspector-copy", "Copy compatible Inspector attributes", "Draft editing", pool.CopyAttributesCommand));
 		commands.Add(new("inspector-paste", "Paste compatible Inspector attribute draft", "Draft editing", pool.PasteAttributesCommand));
 		if (openShowChecks is not null) commands.Add(new("show-checks", "Show preflight, action history and notifications", "Navigation", openShowChecks));
-		return commands;
+		if (openLibrary is not null) commands.Add(new("recent-favorites", "Recent items and favorites", "Navigation", openLibrary));
+        if (openHelp is not null) commands.Add(new("inline-help", "Contextual help and searchable shortcut hints", "Help", openHelp));
+        return commands;
 	}
 }

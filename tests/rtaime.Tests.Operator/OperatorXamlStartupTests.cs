@@ -98,7 +98,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						window = new MainWindow(
 							owner,
 							new OperatorLayoutStore(Path.Combine(root, "layout.json")),
-							new OperatorSessionRecoveryStore(Path.Combine(root, "session.json")));
+							new OperatorSessionRecoveryStore(Path.Combine(root, "session.json")),
+                            new OperatorLibraryPreferenceStore(Path.Combine(root, "library.json")));
 					}
 					catch (Exception exception) { failures.Add(new InvalidOperationException(target, exception)); }
 					if (failures.Count != 0)
@@ -184,6 +185,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					await InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher);
 					await OperatorDockingWindowTests.VerifyAsync(window, dispatcher);
 					await OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher);
+                    await OperatorLibraryTests.VerifyWindowAsync(window, dispatcher);
 					await ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher);
 					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
 					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

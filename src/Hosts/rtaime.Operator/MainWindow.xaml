@@ -210,7 +210,14 @@
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Commands"
 						IconData="{StaticResource RtaimeIconSettingsGeometry}"
 						Click="OnCommandPaletteClick"
-						ToolTip="Commands and shortcut profiles (Ctrl+K)" AutomationProperties.Name="Open commands and shortcut profiles"/>
+						ToolTip="Commands and shortcut profiles (Ctrl+K). Right-click for Recent, Favorites and Help." AutomationProperties.Name="Open commands and shortcut profiles">
+                        <controls:RtaimeNavigationItem.ContextMenu>
+                            <controls:RtaimeContextMenu>
+                                <controls:RtaimeMenuItem Header="Recent and Favorites" Click="OnLibraryClick"/>
+                                <controls:RtaimeMenuItem Header="Contextual Help" Click="OnHelpClick"/>
+                            </controls:RtaimeContextMenu>
+                        </controls:RtaimeNavigationItem.ContextMenu>
+                    </controls:RtaimeNavigationItem>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom"
 						Label="Settings"
 						IconData="{StaticResource RtaimeIconSettingsGeometry}"

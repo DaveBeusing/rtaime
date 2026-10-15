@@ -1,0 +1,52 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<Window x:Class="rtaime.Operator.OperatorLibraryWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+ Title="rtaime — Recent, Favorites and Help" Width="760" Height="680" MinWidth="320" MinHeight="320"
+ Background="{DynamicResource OperatorBackgroundBrush}" Foreground="{DynamicResource OperatorTextBrush}"
+ FontFamily="{StaticResource OperatorFontFamily}" WindowStartupLocation="CenterOwner"
+ UseLayoutRounding="True" SnapsToDevicePixels="True" ShowInTaskbar="False" KeyboardNavigation.TabNavigation="Cycle">
+ <Grid Margin="12">
+  <Grid.RowDefinitions>
+   <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+   <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+  </Grid.RowDefinitions>
+  <controls:RtaimeComboBox x:Name="ViewChoice" ItemsSource="{Binding Views}" SelectedItem="{Binding View, Mode=TwoWay}"
+   AutomationProperties.Name="Recent items, favorites or help" Margin="0,0,0,6"/>
+  <controls:RtaimeTextBox x:Name="SearchBox" Grid.Row="1" MaxLength="128" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+   AutomationProperties.Name="Search recent items, favorites or help" ToolTip="Search labels, IDs, help and active shortcut hints. Enter never activates production." Margin="0,0,0,6"/>
+  <controls:RtaimeListBox x:Name="LibraryRows" Grid.Row="2" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected, Mode=TwoWay}"
+   ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+   ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Recent items, favorites and help results">
+   <controls:RtaimeListBox.ItemContainerStyle>
+    <Style TargetType="{x:Type controls:RtaimeListBoxItem}" BasedOn="{StaticResource {x:Type controls:RtaimeListBoxItem}}">
+     <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="AutomationProperties.Name" Value="{Binding AutomationLabel}"/>
+     <Setter Property="ToolTip" Value="{Binding Detail}"/>
+    </Style>
+   </controls:RtaimeListBox.ItemContainerStyle>
+   <controls:RtaimeListBox.ItemTemplate><DataTemplate><StackPanel Margin="4">
+    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+    <TextBlock Text="{Binding Marker}" Style="{StaticResource OperatorLabel}"/>
+    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" MaxHeight="48" ToolTip="{Binding Detail}"/>
+   </StackPanel></DataTemplate></controls:RtaimeListBox.ItemTemplate>
+  </controls:RtaimeListBox>
+  <controls:RtaimeScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,6">
+   <TextBlock Text="{Binding SelectedHelp}" TextWrapping="Wrap" AutomationProperties.Name="Selected item details and contextual help"/>
+  </controls:RtaimeScrollViewer>
+  <controls:RtaimeScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="152">
+   <WrapPanel>
+    <controls:RtaimeButton x:Name="OpenItemButton" Content="Open for inspection" Command="{Binding OpenCommand}" IsDefault="False" AutomationProperties.Name="Open selected reference for inspection" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Remove selected" Command="{Binding RemoveCommand}" AutomationProperties.Name="Remove selected local reference" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Favorite media" Command="{Binding FavoriteMediaCommand}" ToolTip="Toggle the selected Media Library item. Only its stable ID is stored." AutomationProperties.Name="Toggle selected media favorite" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Favorite scene" Command="{Binding FavoriteSceneCommand}" ToolTip="Toggle the selected scene without activation." AutomationProperties.Name="Toggle selected scene favorite" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Favorite command" Command="{Binding FavoriteCommandCommand}" ToolTip="Toggle the palette selection. Opening a command shows details and never executes it." AutomationProperties.Name="Toggle selected command favorite" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="{Binding HistoryLabel}" Command="{Binding ToggleHistoryCommand}" AutomationProperties.Name="Toggle local recent history and erase when disabled" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Clear history" Command="{Binding ClearHistoryCommand}" AutomationProperties.Name="Erase recent history" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Refresh" Command="{Binding RefreshCommand}" AutomationProperties.Name="Resolve current item availability and help" Margin="0,0,6,4"/>
+    <controls:RtaimeButton Content="Close (Esc)" Click="OnCloseClick" AutomationProperties.Name="Close recent items and help" Margin="0,0,6,4"/>
+   </WrapPanel>
+  </controls:RtaimeScrollViewer>
+  <TextBlock Grid.Row="5" Text="{Binding Status}" TextWrapping="Wrap" MaxHeight="48" ToolTip="{Binding Status}" AutomationProperties.LiveSetting="Polite"/>
+ </Grid>
+</Window>
