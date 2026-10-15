@@ -217,5 +217,6 @@ public sealed class NotificationService : INotificationService
 		string.Equals(existing.AffectedComponent, incoming.AffectedComponent, StringComparison.Ordinal) &&
 		string.Equals(existing.OperatorAction, incoming.OperatorAction, StringComparison.Ordinal) &&
 		string.Equals(existing.ProductionImpact, incoming.ProductionImpact, StringComparison.Ordinal) &&
-		string.Equals(existing.TechnicalDetail, incoming.TechnicalDetail, StringComparison.Ordinal);
+		string.Equals(existing.TechnicalDetail, incoming.TechnicalDetail, StringComparison.Ordinal) &&
+		string.Equals(existing.TargetWorkspace, incoming.TargetWorkspace, StringComparison.Ordinal);
 }
