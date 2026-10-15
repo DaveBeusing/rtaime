@@ -95,13 +95,16 @@ public sealed class InspectorDraftTransactionTests
         Assert.True(f.Model.TryPasteAttributeSet(new(1, token, good))); Assert.Equal(0.6, f.Model.SelectedLayerPositionX);
         Assert.Contains("UNDO 1", f.Model.InspectorDraftHistoryLabel);
         f.Model.UndoInspectorDraftCommand.Execute(null); Assert.Equal(0.1, f.Model.SelectedLayerPositionX);
-        Assert.Equal(0, f.Transport.MutationCalls);
+        f.Model.SelectedLayerCropLeft = 0.8; f.Model.SelectedLayerCropRight = 0.8;
+        Assert.False(f.Model.ApplyCompositingTransformCommand.CanExecute(null));
+        f.Model.ApplyCompositingTransformCommand.Execute(null); Assert.Equal(0, f.Transport.MutationCalls);
     }
     [Fact]
     public async Task Grade_and_key_sets_paste_and_replay_as_single_compatible_transactions()
     {
         await using var f = await Fixture.Create();
         f.Model.SelectCompositingNode(Node("processing:bitmap-graphics:grade"));
+        Assert.False(f.Model.IsTransformDraftContext); Assert.False(f.Model.ApplyCompositingTransformCommand.CanExecute(null));
         Assert.True(f.Model.TryPasteAttributeSet(new(1, Token(f), new InspectorGradeAttributes(false, 0.4, 1.2, 0.8))));
         Assert.Equal(0.4, f.Model.SelectedColorGradeBrightness); Assert.False(f.Model.SelectedColorGradeEnabled);
         f.Model.UndoInspectorDraftCommand.Execute(null);

@@ -209,12 +209,12 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		PasteAttributesCommand = new AsyncRelayCommand(PasteAttributesAsync, CanPasteAttributes);
 		ApplyCompositingTransformCommand = new AsyncRelayCommand(
 			ApplySelectedCompositingTransformAsync,
-			CanEditAuthoritativeCompositingSelection);
+			CanApplyCompositingTransformDraft);
 		ResetCompositingTransformCommand = new AsyncRelayCommand(() =>
 		{
 			ResetSelectedCompositingTransformDraft();
 			return Task.CompletedTask;
-		}, () => HasAuthoritativeCompositingSelection);
+		}, () => IsTransformDraftContext && CanEditInspectorDraft);
 		ApplyColorGradeCommand = new AsyncRelayCommand(
 			ApplySelectedColorGradeAsync,
 			() => CanEditAuthoritativeCompositingSelection() && IsSelectedColorGradeProcessingNode);

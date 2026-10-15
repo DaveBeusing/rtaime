@@ -20,6 +20,9 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool _restoringInspector;
     private double _audioGainDraft = 1;
     private string _cueNameDraft = "";
+    public bool IsTransformDraftContext => HasAuthoritativeCompositingSelection && !HasSelectedProcessingNode;
+    private bool CanApplyCompositingTransformDraft() => CanEditAuthoritativeCompositingSelection() && IsTransformDraftContext &&
+        CaptureInspectorValues() is InspectorTransformAttributes { IsValid: true };
     public double AudioGainDraft
     {
         get => _audioGainDraft;
@@ -206,6 +209,8 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void NotifyInspectorHistory()
     {
+        OnPropertyChanged(nameof(IsTransformDraftContext));
+        (ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(InspectorDraftHistoryLabel)); OnPropertyChanged(nameof(InspectorEditState));
         OnPropertyChanged(nameof(AttributeCompatibilityLabel));
         foreach (var command in new[] { UndoInspectorDraftCommand, RedoInspectorDraftCommand, ApplyAudioDraftCommand, ApplyCueDraftCommand })

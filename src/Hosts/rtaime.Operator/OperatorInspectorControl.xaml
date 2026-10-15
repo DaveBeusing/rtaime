@@ -797,7 +797,7 @@
 												<Style TargetType="StackPanel">
 													<Setter Property="Visibility" Value="Collapsed" />
 													<Style.Triggers>
-														<DataTrigger Binding="{Binding Inspector.HasAuthoritativeCompositingSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														<DataTrigger Binding="{Binding Inspector.IsTransformDraftContext, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
 													</Style.Triggers>
 												</Style>
 											</StackPanel.Style>
