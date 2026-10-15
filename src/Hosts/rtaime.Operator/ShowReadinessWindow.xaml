@@ -1,0 +1,88 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<Window x:Class="rtaime.Operator.ShowReadinessWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+ Title="rtaime — Show checks and activity" Width="900" Height="760" MinWidth="320" MinHeight="280"
+ Background="{DynamicResource OperatorBackgroundBrush}" Foreground="{DynamicResource OperatorTextBrush}"
+ FontFamily="{StaticResource OperatorFontFamily}" WindowStartupLocation="CenterOwner"
+ UseLayoutRounding="True" SnapsToDevicePixels="True" ShowInTaskbar="False" KeyboardNavigation.TabNavigation="Cycle">
+ <Grid Margin="12">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <WrapPanel Margin="0,0,0,8">
+   <TextBlock Text="SHOW CHECKS AND ACTIVITY" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,4"/>
+   <controls:RtaimeButton x:Name="RefreshChecksButton" Content="Refresh checks" Command="{Binding RefreshChecksCommand}"
+    IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Refresh local checks without sending a server request"/>
+  </WrapPanel>
+  <controls:RtaimeScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+   <StackPanel>
+    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+    <TextBlock Text="{Binding Revision}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+    <TextBlock Text="{Binding ReadStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+    <ItemsControl x:Name="PreflightChecks" ItemsSource="{Binding Checks}" AutomationProperties.Name="Read-only show preflight evidence">
+     <ItemsControl.ItemTemplate><DataTemplate>
+      <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,0,0,1" Padding="4,8">
+       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel Margin="0,0,8,0">
+         <TextBlock Text="{Binding Label}" FontWeight="SemiBold"/>
+         <TextBlock Text="{Binding State}" Foreground="{DynamicResource OperatorAccentBrush}"/>
+         <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+        </StackPanel>
+        <controls:RtaimeButton Grid.Column="1" Content="Review" Command="{Binding NavigateCommand}" IsCompact="True"
+         VerticalAlignment="Top" AutomationProperties.Name="{Binding Label}"/>
+       </Grid>
+      </Border>
+     </DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock Text="RECENT CONTROL REQUESTS · SESSION ONLY · LAST 128" FontWeight="SemiBold" Margin="0,16,0,4" TextWrapping="Wrap"/>
+    <TextBlock Text="CONFIRMED means a Control response was received, not that every scheduled action has finished. UNCONFIRMED requires inspection before retry."
+     Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+    <controls:RtaimeListBox x:Name="ActionHistory" ItemsSource="{Binding History}" Height="210"
+     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True"
+     ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Correlated authorized action history">
+     <controls:RtaimeListBox.ItemContainerStyle>
+      <Style TargetType="{x:Type controls:RtaimeListBoxItem}" BasedOn="{StaticResource {x:Type controls:RtaimeListBoxItem}}">
+       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+       <Setter Property="AutomationProperties.Name" Value="{Binding Operation}"/>
+      </Style>
+     </controls:RtaimeListBox.ItemContainerStyle>
+     <controls:RtaimeListBox.ItemTemplate><DataTemplate><StackPanel Margin="4">
+      <TextBlock Text="{Binding Operation}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+      <TextBlock Text="{Binding Outcome}"/>
+      <TextBlock Text="{Binding Times}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+      <TextBlock Text="{Binding Correlation}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+     </StackPanel></DataTemplate></controls:RtaimeListBox.ItemTemplate>
+    </controls:RtaimeListBox>
+    <TextBlock Text="NOTIFICATIONS · ACKNOWLEDGEMENT IS PRESENTATION ONLY" FontWeight="SemiBold" Margin="0,16,0,8" TextWrapping="Wrap"/>
+    <ItemsControl ItemsSource="{Binding Notifications.Items}" AutomationProperties.Name="Consolidated notifications">
+     <ItemsControl.ItemTemplate><DataTemplate>
+      <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,0,0,1" Padding="4,8">
+       <StackPanel>
+        <WrapPanel><TextBlock Text="{Binding Category}" Foreground="{DynamicResource OperatorAccentBrush}" Margin="0,0,8,0"/>
+         <TextBlock Text="{Binding Condition}" Margin="0,0,8,0"/><TextBlock Text="{Binding OccurrenceLabel}"/></WrapPanel>
+        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding OperatorAction}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding ProductionImpact}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding Acknowledgement}" Style="{StaticResource OperatorLabel}"/>
+        <WrapPanel Margin="0,6,0,0">
+         <controls:RtaimeButton Content="Review" Command="{Binding NavigateCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review notification workspace"/>
+         <controls:RtaimeButton Content="Acknowledge" Command="{Binding AcknowledgeCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Acknowledge notification without resolving its cause"/>
+         <controls:RtaimeButton Content="Dismiss" Command="{Binding DismissCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Dismiss notification presentation"/>
+         <controls:RtaimeButton Content="{Binding TechnicalDetailsActionLabel}" Command="{Binding ToggleTechnicalDetailsCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Toggle notification technical details"/>
+        </WrapPanel>
+        <TextBlock Text="{Binding TechnicalDetail}" TextWrapping="Wrap">
+         <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
+          <Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsTechnicalDetailsVisible}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+         </Style></TextBlock.Style>
+        </TextBlock>
+       </StackPanel>
+      </Border>
+     </DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+   </StackPanel>
+  </controls:RtaimeScrollViewer>
+  <controls:RtaimeButton x:Name="CloseChecksButton" Grid.Row="2" Content="Close (Esc)" Click="CloseClick" HorizontalAlignment="Right" Margin="0,8,0,0"
+   AutomationProperties.Name="Close show checks"/>
+ </Grid>
+</Window>

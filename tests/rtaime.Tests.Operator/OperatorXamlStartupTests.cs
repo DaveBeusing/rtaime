@@ -182,6 +182,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					await InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher);
 					await OperatorDockingWindowTests.VerifyAsync(window, dispatcher);
 					await OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher);
+					await ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher);
 					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
 					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					EventHandler rendering = (_, _) => resumedRender.TrySetResult();

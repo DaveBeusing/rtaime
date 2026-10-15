@@ -427,3 +427,14 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 ```
 
 The Windows sharing regression holds the same delete-sharing read handle as the Operator while repeatedly replacing lifecycle JSON. A persistent non-cooperative reader must fail with path context and leave the previous document intact. The existing full suites and packaged lifecycle, restart and legacy 1.0 checkpoint preservation checks remain in place.
+
+## Show checks and activity regressions
+
+After the canonical pinned-SDK Release build, run:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ShowPreflightAndActionHistoryTests|FullyQualifiedName~OperatorNotificationTests"
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~ShowReadinessOperatorTests|FullyQualifiedName~OperatorXamlStartupTests"
+```
+
+Required Gates retains existing architecture, failure, integration, visual and packaged lifecycle qualifications. The new real-window assertions run inside the existing STA MainWindow qualification, including compact/injected DPI scales. See [Show checks and activity](ShowPreflightAndActivity.md) for evidence and authority limits.

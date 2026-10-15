@@ -57,6 +57,14 @@ jobs:
       - name: Startup atomic evidence publication regressions
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ApplicationEvidencePublicationTests|FullyQualifiedName~UnifiedApplicationHostTests.Evidence_publication_failure" --logger "console;verbosity=detailed"
 
+      - name: Show preflight, action history and notification regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ShowPreflightAndActionHistoryTests|FullyQualifiedName~OperatorNotificationTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Show preflight and action history regressions failed." }
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~ShowReadinessOperatorTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Show checks Operator regressions failed." }
+
       - name: Command palette authority and shortcut profile regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests" --logger "console;verbosity=detailed"
 

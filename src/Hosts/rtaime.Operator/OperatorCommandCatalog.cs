@@ -12,7 +12,8 @@ public static class OperatorCommandCatalog
 	{ "play-pause", "j-step", "l-play", "pause", "stop", "set-in", "set-out", "add-cue", "delete-cue", "previous-cue", "next-cue" };
 
 	public static IReadOnlyList<OperatorPaletteCommand> Create(OperatorKeyboardCommandRegistry registry,
-		OperatorViewModel owner, MediaDeckViewModel deck, OperatorShellViewModel shell, MediaPoolInspectorViewModel pool)
+		OperatorViewModel owner, MediaDeckViewModel deck, OperatorShellViewModel shell, MediaPoolInspectorViewModel pool,
+		ICommand? openShowChecks = null)
 	{
 		string? ProductionReason()
 		{
@@ -58,6 +59,7 @@ public static class OperatorCommandCatalog
 		commands.Add(new("timeline-redo", "Redo local timeline draft", "Draft editing", deck.Timeline.RedoDraftCommand));
 		commands.Add(new("inspector-copy", "Copy compatible Inspector attributes", "Draft editing", pool.CopyAttributesCommand));
 		commands.Add(new("inspector-paste", "Paste compatible Inspector attribute draft", "Draft editing", pool.PasteAttributesCommand));
+		if (openShowChecks is not null) commands.Add(new("show-checks", "Show preflight, action history and notifications", "Navigation", openShowChecks));
 		return commands;
 	}
 }

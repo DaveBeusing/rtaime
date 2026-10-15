@@ -13,9 +13,13 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 	private OperatorNotification _notification;
 	private bool _technicalDetailsVisible;
 
-	public OperatorNotificationItemViewModel(OperatorNotification notification)
+	public OperatorNotificationItemViewModel(OperatorNotification notification,
+		INotificationService? service = null, Action<string>? navigate = null)
 	{
 		_notification = notification ?? throw new ArgumentNullException(nameof(notification));
+		AcknowledgeCommand = new NotificationCommand(() => service?.Acknowledge(Key), () => service is not null && !IsAcknowledged);
+		DismissCommand = new NotificationCommand(() => service?.Dismiss(Key), () => service is not null);
+		NavigateCommand = new NotificationCommand(() => navigate?.Invoke(_notification.TargetWorkspace), () => navigate is not null);
 		ToggleTechnicalDetailsCommand = new NotificationCommand(
 			() => IsTechnicalDetailsVisible = !IsTechnicalDetailsVisible,
 			() => HasTechnicalDetail);
@@ -23,6 +27,16 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	public ICommand AcknowledgeCommand { get; }
+	public ICommand DismissCommand { get; }
+	public ICommand NavigateCommand { get; }
+	public bool IsAcknowledged => _notification.AcknowledgedAtUtc.HasValue;
+	public string Acknowledgement => IsAcknowledged ? $"ACKNOWLEDGED · {_notification.AcknowledgedAtUtc:HH:mm:ss}" : "NOT ACKNOWLEDGED";
+	public void Apply(OperatorNotification notification)
+	{
+		_notification = notification; OnPropertyChanged(string.Empty);
+		(AcknowledgeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
+	}
 	public string Key => _notification.Key;
 	public string Category => _notification.Category.ToString().ToUpperInvariant();
 	public string Condition => _notification.Condition.ToString().ToUpperInvariant();
@@ -62,17 +76,27 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 	private readonly OperatorViewModel _operator;
 	private readonly SynchronizationContext? _synchronizationContext;
 	private readonly Timer _expiryTimer;
+	private readonly OperatorActionHistory? _history;
+	private readonly Dictionary<Guid, OperatorActionOutcome> _actionStates = [];
+	private readonly Action<string>? _navigate;
+	private readonly object _refreshGate = new();
+	private bool _refreshPending;
 	private bool _wasRecovering;
 	private bool _disposed;
 
 	public OperatorNotificationCenterViewModel(
 		INotificationService notifications,
 		OperatorViewModel operatorViewModel,
-		SynchronizationContext? synchronizationContext = null)
+		SynchronizationContext? synchronizationContext = null,
+		Action<string>? navigate = null, OperatorActionHistory? history = null)
 	{
+		_history = history;
+		if (_history is not null) _history.Changed += HistoryChanged;
+		_navigate = navigate;
 		_notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
 		_operator = operatorViewModel ?? throw new ArgumentNullException(nameof(operatorViewModel));
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
+		Items = [];
 		Toasts = new ObservableCollection<OperatorNotificationItemViewModel>();
 		ActiveProblems = new ObservableCollection<OperatorNotificationItemViewModel>();
 
@@ -89,6 +113,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	public ObservableCollection<OperatorNotificationItemViewModel> Items { get; }
 	public ObservableCollection<OperatorNotificationItemViewModel> Toasts { get; }
 	public ObservableCollection<OperatorNotificationItemViewModel> ActiveProblems { get; }
 	public int ActiveProblemCount => ActiveProblems.Count;
@@ -149,13 +174,38 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			return;
 		_disposed = true;
 		_expiryTimer.Dispose();
+		if (_history is not null) _history.Changed -= HistoryChanged;
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_notifications.Published -= OnNotificationChanged;
 		_notifications.Removed -= OnNotificationChanged;
 	}
 
+	private void HistoryChanged(object? sender, EventArgs e) => QueueRefresh();
+	private void PublishActionOutcomes()
+	{
+		if (_disposed || _history is null) return;
+		var current = _history.Current;
+		foreach (var id in _actionStates.Keys.Where(id => !current.Any(item => item.Id == id)).ToArray()) _actionStates.Remove(id);
+		foreach (var item in current)
+		{
+			if (_actionStates.TryGetValue(item.Id, out var outcome) && outcome == item.Outcome) continue;
+			_actionStates[item.Id] = item.Outcome;
+			if (item.Outcome == OperatorActionOutcome.Pending) continue;
+			var confirmed = item.Outcome == OperatorActionOutcome.Confirmed;
+			var rejected = item.Outcome == OperatorActionOutcome.Rejected;
+			_notifications.Publish(new OperatorNotification("operator.command-outcome",
+				confirmed ? OperatorNotificationCategory.Information : rejected ? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
+				confirmed ? OperatorNotificationCondition.Informational : OperatorNotificationCondition.Active,
+				confirmed ? "Control response confirmed" : rejected ? "Control request rejected" : "Command outcome unconfirmed",
+				"Open action history for request identity, timestamps and available revision correlation.",
+				"Control", confirmed ? "Inspect execution state for scheduled actions." : "Synchronize and inspect authoritative state before retrying.",
+				"Program availability follows current authoritative state.", Persistent: !confirmed,
+				TechnicalDetail: $"Request {item.Id:N} · {item.Operation} · wire command {item.CommandId ?? "not exposed"}"));
+		}
+	}
+
 	private void OnNotificationChanged(object? sender, OperatorNotificationEventArgs e) =>
-		Post(Refresh);
+		QueueRefresh();
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
@@ -188,12 +238,12 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			OperatorNotificationCategory.Error,
 			OperatorNotificationCondition.Active,
 			"Operator action could not be completed",
-			"The requested action was not committed. rtaime kept the last confirmed production state.",
+			"The request or its state refresh did not complete. Check correlated action history before retrying.",
 			string.IsNullOrWhiteSpace(_operator.AffectedComponent) ? "Control" : _operator.AffectedComponent,
 			"Review the technical detail and synchronize authoritative state before retrying.",
 			blocked
 				? "Production mutations remain blocked until authoritative state recovers."
-				: "Existing Program state remains available; the failed action was not applied.",
+				: "Inspect authoritative Program state; this diagnostic alone does not establish command outcome.",
 			Persistent: true,
 			TechnicalDetail: _operator.LastError));
 	}
@@ -216,6 +266,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			"Review the recording destination and Runtime diagnostics before starting another recording.",
 			"Program remains available; recording may be unavailable or incomplete.",
 			Persistent: true,
+			TargetWorkspace: "OUTPUTS",
 			TechnicalDetail: _operator.RecordingError));
 	}
 
@@ -278,39 +329,23 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 
 	private void PublishOperatorEvent()
 	{
-		if (string.IsNullOrWhiteSpace(_operator.LastEvent))
-			return;
+		if (string.IsNullOrWhiteSpace(_operator.LastEvent)) return;
+		// Free-form event text is information, never evidence of command acceptance.
+		_notifications.Publish(new OperatorNotification("operator.last-event",
+			OperatorNotificationCategory.Information, OperatorNotificationCondition.Informational,
+			"Operator update", _operator.LastEvent, "Operator", "Review correlated action history for command outcomes.",
+			"Program availability follows authoritative state.", Persistent: false));
+	}
 
-		var success = ContainsAny(
-			_operator.LastEvent,
-			"confirmed",
-			"started",
-			"finalized",
-			"restored",
-			"loaded",
-			"enabled",
-			"disabled",
-			"synchronized",
-			"saved");
-
-		if (success &&
-			_operator.IsConnected &&
-			!_operator.IsStale &&
-			string.IsNullOrWhiteSpace(_operator.LastError))
+	private void QueueRefresh()
+	{
+		lock (_refreshGate)
 		{
-			_notifications.Dismiss("operator.last-error");
+			if (_disposed || _refreshPending) return;
+			_refreshPending = true;
 		}
-
-		_notifications.Publish(new OperatorNotification(
-			"operator.last-event",
-			success ? OperatorNotificationCategory.Success : OperatorNotificationCategory.Information,
-			OperatorNotificationCondition.Informational,
-			success ? "Operation completed" : "Operator update",
-			_operator.LastEvent,
-			"Operator",
-			"No action is required.",
-			"Production state is unchanged unless the event explicitly confirms a committed production action.",
-			Persistent: false));
+		void Drain() { lock (_refreshGate) _refreshPending = false; Refresh(); }
+		if (_synchronizationContext is null) Drain(); else _synchronizationContext.Post(_ => Drain(), null);
 	}
 
 	private void Refresh()
@@ -318,26 +353,25 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 		if (_disposed)
 			return;
 
+		PublishActionOutcomes();
 		var current = _notifications.Current;
+		var previous = Items.ToDictionary(item => item.Key, StringComparer.Ordinal);
+		Items.Clear();
+		foreach (var notification in current.OrderByDescending(item => item.Condition == OperatorNotificationCondition.Fatal)
+			.ThenByDescending(item => item.Persistent).ThenByDescending(item => item.PublishedAtUtc))
+		{
+			if (!previous.TryGetValue(notification.Key, out var item))
+				item = new OperatorNotificationItemViewModel(notification, _notifications, _navigate);
+			else item.Apply(notification);
+			Items.Add(item);
+		}
 		Toasts.Clear();
-		foreach (var notification in current
-			.Where(candidate => !candidate.Persistent)
-			.OrderByDescending(candidate => candidate.PublishedAtUtc)
-			.Take(4))
-		{
-			Toasts.Add(new OperatorNotificationItemViewModel(notification));
-		}
-
+		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && !n.Persistent && n.AcknowledgedAtUtc is null)).Take(4))
+			Toasts.Add(item);
 		ActiveProblems.Clear();
-		foreach (var notification in current
-			.Where(candidate =>
-				candidate.Persistent &&
-				(candidate.Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal))
-			.OrderByDescending(candidate => candidate.Condition == OperatorNotificationCondition.Fatal)
-			.ThenByDescending(candidate => candidate.PublishedAtUtc))
-		{
-			ActiveProblems.Add(new OperatorNotificationItemViewModel(notification));
-		}
+		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && n.Persistent &&
+			n.Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal)))
+			ActiveProblems.Add(item);
 
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveProblemCount)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasActiveProblems)));
@@ -369,11 +403,8 @@ internal sealed class NotificationCommand : ICommand
 		_canExecute = canExecute ?? (() => true);
 	}
 
-	public event EventHandler? CanExecuteChanged
-	{
-		add { }
-		remove { }
-	}
+	public event EventHandler? CanExecuteChanged;
+	public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
 	public bool CanExecute(object? parameter) => _canExecute();
 

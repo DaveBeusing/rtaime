@@ -219,6 +219,56 @@ public sealed class OperatorNotificationTests
 		Assert.Equal(OperatorNotificationCondition.Active, active.Condition);
 	}
 
+	[Fact]
+	public void Notification_capacity_preserves_fatal_incidents_under_transient_flood()
+	{
+		var service = new NotificationService();
+		service.Publish(State(OperatorNotificationCategory.Error, OperatorNotificationCondition.Fatal, "Fatal Runtime failure", true));
+		for (var index = 0; index < 5000; index++)
+			service.Publish(State(OperatorNotificationCategory.Information, OperatorNotificationCondition.Informational, "Update", false) with { Key = "sample-" + index });
+		Assert.Equal(NotificationService.Capacity, service.Current.Count);
+		Assert.Contains(service.Current, item => item.Condition == OperatorNotificationCondition.Fatal);
+	}
+
+	[Fact]
+	public void Acknowledgement_survives_duplicate_observations_but_resets_for_a_changed_condition()
+	{
+		var now = DateTimeOffset.UtcNow;
+		var service = new NotificationService(() => now);
+		var fault = State(OperatorNotificationCategory.Error, OperatorNotificationCondition.Active, "Failure", true);
+		service.Publish(fault);
+		Assert.True(service.Acknowledge(fault.Key));
+		service.Publish(fault);
+		Assert.Equal(now, Assert.Single(service.Current).AcknowledgedAtUtc);
+		Assert.Equal(2, Assert.Single(service.Current).OccurrenceCount);
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(service.Current).Condition);
+		now = now.AddSeconds(1);
+		service.Publish(fault with { TechnicalDetail = "A different failure cause." });
+		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
+		Assert.True(service.Acknowledge(fault.Key));
+		service.Publish(fault with { TechnicalDetail = "A different failure cause.", TargetWorkspace = "OUTPUTS" });
+		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
+		service.Publish(fault with { Condition = OperatorNotificationCondition.Fatal });
+		Assert.Null(Assert.Single(service.Current).AcknowledgedAtUtc);
+		Assert.Equal(1, Assert.Single(service.Current).OccurrenceCount);
+		Assert.True(service.Dismiss(fault.Key));
+		Assert.Empty(service.Current);
+	}
+
+	[Fact]
+	public void Notification_text_and_navigation_are_bounded_and_acknowledgement_cannot_be_injected()
+	{
+		var service = new NotificationService();
+		service.Publish(State(OperatorNotificationCategory.Warning, OperatorNotificationCondition.Active, "Fault", true) with {
+			Detail = new string('d', 9000), TechnicalDetail = new string('t', 9000),
+			TargetWorkspace = "https://untrusted.invalid", AcknowledgedAtUtc = DateTimeOffset.UtcNow });
+		var item = Assert.Single(service.Current);
+		Assert.Equal(2048, item.Detail.Length);
+		Assert.Equal(8192, item.TechnicalDetail!.Length);
+		Assert.Equal("HEALTH", item.TargetWorkspace);
+		Assert.Null(item.AcknowledgedAtUtc);
+	}
+
 	private static OperatorNotification State(
 		OperatorNotificationCategory category,
 		OperatorNotificationCondition condition,

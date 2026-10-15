@@ -656,8 +656,16 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	}
 
 
-	internal void SetCatalogSnapshot(MediaAssetCatalogSnapshot snapshot) =>
+	public MediaAssetCatalogSnapshot? CatalogEvidence { get; private set; }
+	public DateTimeOffset? CatalogObservedAtUtc { get; private set; }
+	internal void SetCatalogSnapshot(MediaAssetCatalogSnapshot snapshot)
+	{
 		_catalogSnapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+		CatalogEvidence = snapshot;
+		CatalogObservedAtUtc = DateTimeOffset.UtcNow;
+		OnPropertyChanged(nameof(CatalogEvidence));
+		OnPropertyChanged(nameof(CatalogObservedAtUtc));
+	}
 
 	public async Task LoadCatalogAsync()
 	{

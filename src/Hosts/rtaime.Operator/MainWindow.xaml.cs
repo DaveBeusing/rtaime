@@ -31,6 +31,8 @@ public partial class MainWindow : Window
 	private const int DarkBorderColor = 0x003F3425;
 	private const int LightCaptionTextColor = 0x00F6F3EE;
 
+	private ShowReadinessWindow? _showReadinessWindow;
+	internal ShowReadinessWindow? ShowReadinessWindow => _showReadinessWindow;
 	private OperatorCommandPaletteWindow? _commandPaletteWindow;
 	internal OperatorCommandPaletteWindow? CommandPaletteWindow => _commandPaletteWindow;
 	private bool _shutdownStarted;
@@ -115,7 +117,10 @@ public partial class MainWindow : Window
 		Notifications = new OperatorNotificationCenterViewModel(
 			new NotificationService(),
 			viewModel,
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
+		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
+			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher), MediaPool);
+		OpenShowChecksCommand = new NotificationCommand(OpenShowChecks, () => !_shutdownStarted);
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
@@ -138,7 +143,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
@@ -213,7 +218,10 @@ public partial class MainWindow : Window
 		Notifications = new OperatorNotificationCenterViewModel(
 			new NotificationService(),
 			viewModel,
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
+		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
+			NavigateFromShowChecks, new DispatcherSynchronizationContext(Dispatcher), MediaPool);
+		OpenShowChecksCommand = new NotificationCommand(OpenShowChecks, () => !_shutdownStarted);
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
@@ -236,7 +244,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
@@ -244,6 +252,8 @@ public partial class MainWindow : Window
 	}
 
 	public StartupLifecycleViewModel Startup { get; }
+	public ShowReadinessViewModel ShowReadiness { get; }
+	public ICommand OpenShowChecksCommand { get; }
 	public OperatorNotificationCenterViewModel Notifications { get; }
 	public OperatorWorkspaceStateViewModel WorkspaceStates { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
@@ -313,6 +323,33 @@ public partial class MainWindow : Window
 		int attribute,
 		ref int attributeValue,
 		int attributeSize);
+
+	private void OpenShowChecks()
+	{
+		if (_shutdownStarted) return;
+		if (_showReadinessWindow is { } existing) { existing.Activate(); return; }
+		var previousFocus = Keyboard.FocusedElement;
+		var window = new ShowReadinessWindow(ShowReadiness) { Owner = this };
+		_showReadinessWindow = window;
+		window.Closed += (_, _) =>
+		{
+			_showReadinessWindow = null;
+			if (!_shutdownStarted && previousFocus is UIElement { IsVisible: true, IsEnabled: true } previous)
+				previous.Dispatcher.BeginInvoke(() =>
+				{
+					if (!_shutdownStarted && _showReadinessWindow is null && _commandPaletteWindow is null &&
+						previous.IsVisible && previous.IsEnabled) previous.Focus();
+				}, DispatcherPriority.Input);
+		};
+		window.Show();
+	}
+	private void NavigateFromShowChecks(string workspace)
+	{
+		if (_shutdownStarted || !OperatorWorkspaceNames.All.Contains(workspace, StringComparer.Ordinal)) return;
+		_showReadinessWindow?.Close();
+		Shell.SelectWorkspace(workspace);
+		Activate();
+	}
 
 	private void StartStartupBrandAnimation()
 	{
@@ -536,6 +573,8 @@ public partial class MainWindow : Window
 				CaptureWindowPlacement();
 			_commandPaletteWindow?.Close();
 			await CommandPalette.FlushAsync();
+			_showReadinessWindow?.Close();
+			ShowReadiness.Dispose();
 			CommandPalette.Dispose();
 			Docking.Dispose();
 			await Shell.SaveAsync();
