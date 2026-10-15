@@ -97,6 +97,11 @@ public sealed class OperatorShortcutProfileStore(string? path = null)
             return JsonSerializer.Deserialize<OperatorShortcutProfile>(bytes.AsSpan(0, count), ReadOptions)
 				?? throw new InvalidDataException("Shortcut profile is empty.");
 		}
+        catch (JsonException exception)
+        {
+            // Keep the public failure contract of the typed deserializer.
+            throw new JsonException(exception.Message, exception);
+        }
 		finally { _gate.Release(); }
 	}
     private static void RejectDuplicateProperties(JsonElement element)
