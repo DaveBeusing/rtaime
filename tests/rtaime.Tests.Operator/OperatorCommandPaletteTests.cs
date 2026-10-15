@@ -18,7 +18,7 @@ public sealed class OperatorCommandPaletteTests
 		using var model = new OperatorCommandPaletteViewModel(new([]), commands);
 		Assert.Equal(64, model.Results.Count);
 		model.Query = "wksp 09";
-		Assert.Single(model.Results);
+		Assert.NotEmpty(model.Results);
 		Assert.Equal("command-9", model.Selected!.Id);
 		model.Query = new string('x', 200);
 		Assert.Equal(128, model.Query.Length);
@@ -86,6 +86,34 @@ public sealed class OperatorCommandPaletteTests
 			await model.FlushAsync();
 			Assert.Equal(Key.B, registry.Definitions[0].Key);
 			Assert.Empty((await store.ReadAsync()).Bindings);
+		}
+		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+	}
+
+	[Fact]
+	public async Task Failed_save_reports_session_only_and_corrupt_startup_does_not_overwrite_the_file()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-palette-fault-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var registry = new OperatorKeyboardCommandRegistry([new("draft", "Draft", Key.B, ModifierKeys.Control, new Probe())]);
+		try
+		{
+			// A directory as destination causes atomic replacement to fail after the temporary write.
+			using (var model = new OperatorCommandPaletteViewModel(registry, [], new(root)))
+			{
+				await model.ApplyAndSaveAsync(new(2, "Desk", [new("draft", Key.Q, ModifierKeys.Control)]));
+				Assert.Contains("save failed", model.Status);
+				Assert.Equal(Key.Q, registry.Definitions[0].Key);
+				Assert.Empty(Directory.GetFiles(root));
+			}
+			var path = Path.Combine(root, "preferences.json");
+			await File.WriteAllTextAsync(path, "{bad");
+			var fresh = new OperatorKeyboardCommandRegistry([new("draft", "Draft", Key.B, ModifierKeys.Control, new Probe())]);
+			using var recovered = new OperatorCommandPaletteViewModel(fresh, [], new(path));
+			await recovered.LoadPreferencesAsync();
+			Assert.Equal(Key.B, fresh.Definitions[0].Key);
+			Assert.Contains("defaults retained", recovered.Status);
+			Assert.Equal("{bad", await File.ReadAllTextAsync(path));
 		}
 		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 	}

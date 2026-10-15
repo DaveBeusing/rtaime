@@ -26,7 +26,7 @@ public static class OperatorShortcutProfiles
 		// Preserve local editing, navigation, system and production gestures.
 		if (key is Key.A or Key.C or Key.V or Key.X or Key.Z or Key.Y or Key.F or Key.K or
 			Key.F1 or Key.F4 or Key.F5 or Key.F9 or Key.F11) return false;
-		return key is >= Key.A and <= Key.Z or >= Key.D0 and <= Key.D9 or >= Key.F1 and <= Key.F24;
+		return (int)key is >= (int)Key.A and <= (int)Key.Z or >= (int)Key.D0 and <= (int)Key.D9 or >= (int)Key.F1 and <= (int)Key.F24;
 	}
 
 	public static bool TryResolve(OperatorShortcutProfile profile, IReadOnlyList<OperatorShortcutDefinition> canonical,

@@ -40,6 +40,7 @@ public partial class OperatorCommandPaletteWindow : Window
 		if (key == Key.Escape && Keyboard.FocusedElement is ComboBox { IsDropDownOpen: true }) { base.OnPreviewKeyDown(e); return; }
 		if ((key == Key.Escape && modifiers == ModifierKeys.None) || (key == Key.K && modifiers == ModifierKeys.Control))
 		{ e.Handled = true; if (!e.IsRepeat) Close(); return; }
+		if (e.IsRepeat && key is Key.Return or Key.Space) { e.Handled = true; return; }
 		var searching = SearchBox.IsKeyboardFocusWithin || CommandResults.IsKeyboardFocusWithin;
 		if (searching && modifiers == ModifierKeys.None && key is Key.Up or Key.Down)
 		{

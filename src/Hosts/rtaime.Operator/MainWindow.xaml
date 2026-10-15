@@ -204,7 +204,7 @@
 					</StackPanel>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Commands"
 						IconData="{StaticResource RtaimeIconSettingsGeometry}"
-						Command="{Binding OpenCommandPaletteCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Click="OnCommandPaletteClick"
 						ToolTip="Commands and shortcut profiles (Ctrl+K)" AutomationProperties.Name="Open commands and shortcut profiles"/>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom"
 						Label="Settings"

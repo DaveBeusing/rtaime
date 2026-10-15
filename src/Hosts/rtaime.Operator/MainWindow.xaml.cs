@@ -380,6 +380,8 @@ public partial class MainWindow : Window
 			new OperatorSafeSessionState(Shell.SelectedWorkspace));
 	}
 
+	private void OnCommandPaletteClick(object sender, RoutedEventArgs e) => OpenCommandPalette();
+
 	internal void OpenCommandPalette()
 	{
 		if (_shutdownStarted) return;
