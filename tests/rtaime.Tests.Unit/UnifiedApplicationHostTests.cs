@@ -9,6 +9,28 @@ namespace rtaime.Tests.Unit;
 public sealed class UnifiedApplicationHostTests
 {
 	[Fact]
+	public async Task Evidence_publication_failure_after_qualified_hosts_is_attributed_and_never_reports_startup_success()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			FailProductionReadinessPublicationOnce = true
+		};
+		var host = new UnifiedApplicationHost(options, platform);
+		var failure = await Assert.ThrowsAsync<ApplicationEvidencePublicationException>(() => host.RunAsync());
+		Assert.Equal(options.LifecycleEvidencePath, failure.TargetPath);
+		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+		Assert.True(platform.StopSignalWritten);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var captured = document.RootElement.GetProperty("readinessFailure");
+		Assert.Equal("startup.evidence.publish.failed", captured.GetProperty("reasonCode").GetString());
+		Assert.Empty(captured.GetProperty("unmetCriteria").EnumerateArray());
+		Assert.Contains(options.LifecycleEvidencePath, captured.GetProperty("originalFailure").GetString());
+		Assert.Equal(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
+	}
+
+	[Fact]
 	public async Task Starts_operator_startup_experience_before_control_readiness()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
@@ -1049,6 +1071,7 @@ public sealed class UnifiedApplicationHostTests
 
 		public DateTimeOffset UtcNow { get; private set; }
 		public bool PublishReadinessOnControlStart { get; init; }
+		public bool FailProductionReadinessPublicationOnce { get; set; }
 		public string PublishedControlState { get; init; } = "READY";
 		public string PublishedControlHealth { get; init; } = "HEALTHY";
 		public string PublishedAIState { get; init; } = "HEALTHY";
@@ -1124,6 +1147,17 @@ public sealed class UnifiedApplicationHostTests
 
 		public void WriteAllText(string path, string content)
 		{
+			if (FailProductionReadinessPublicationOnce && Path.GetFullPath(path) == Path.GetFullPath(_options.LifecycleEvidencePath))
+			{
+				using var document = JsonDocument.Parse(content);
+				if (document.RootElement.GetProperty("stages").EnumerateArray().Any(stage =>
+					stage.GetProperty("id").GetString() == ApplicationLifecycleStages.ProductionReadiness &&
+					stage.GetProperty("status").GetString() == "Ready"))
+				{
+					FailProductionReadinessPublicationOnce = false;
+					throw new ApplicationEvidencePublicationException(path, new UnauthorizedAccessException("Simulated evidence sharing denial."));
+				}
+			}
 			_files[Path.GetFullPath(path)] = content;
 			if (Path.GetFullPath(path) == Path.GetFullPath(_options.StopPath))
 			{

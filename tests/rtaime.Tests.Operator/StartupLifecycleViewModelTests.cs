@@ -224,6 +224,32 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		Assert.Equal("PENDING", viewModel.Stages.Single(stage => stage.Id == "runtime-host").Status);
 	}
 
+	[Fact]
+	public void Evidence_failure_with_ready_hosts_shows_actual_cause_instead_of_empty_blocking_criteria()
+	{
+		var reason = "Atomic startup evidence publication failed for '" + EvidencePath + "'.";
+		WriteEvidence(CreateStages(productionReadinessStatus: "FAILED", productionReadinessFailure: reason),
+			ApplicationLifecycleStages.ProductionReadiness);
+		using var original = JsonDocument.Parse(File.ReadAllText(EvidencePath));
+		var fields = original.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
+		fields["readinessFailure"] = JsonSerializer.SerializeToElement(new
+		{
+			reasonCode = "startup.evidence.publish.failed",
+			originalFailure = reason,
+			aggregateDeadlineExpired = false,
+			hosts = new[] { new { host = "ControlHost", lastProgressPhase = "qualified-ready", phaseOutcome = "completed" } },
+			unmetCriteria = Array.Empty<object>()
+		});
+		File.WriteAllText(EvidencePath, JsonSerializer.Serialize(fields));
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.False(viewModel.HasCompletedInitialStartup);
+		Assert.Contains(reason, viewModel.Summary);
+		Assert.DoesNotContain("Blocking criteria:", viewModel.Summary);
+		Assert.Contains("qualified-ready / completed", viewModel.Summary);
+		Assert.Equal("READY", viewModel.Stages.Single(stage => stage.Id == "control-host").Status);
+	}
+
 	public void Dispose()
 	{
 		try

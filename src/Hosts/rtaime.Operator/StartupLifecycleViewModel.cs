@@ -409,7 +409,9 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		var deadlineExpired = failure.TryGetProperty("aggregateDeadlineExpired", out var expired) &&
 			expired.ValueKind == JsonValueKind.True;
 		_readinessFailureSummary = $"{(deadlineExpired ? "Startup deadline expired" : "Startup qualification failed")}. " +
-			$"Blocking criteria: {string.Join("; ", blockers.Take(4))}." +
+			(blockers.Count > 0
+				? $"Blocking criteria: {string.Join("; ", blockers.Take(4))}."
+				: $"Failure: {ReadString(failure, "originalFailure", "Startup evidence or qualification operation failed; review diagnostics.")}.") +
 			(phases.Count > 0 ? $" Last progress: {string.Join("; ", phases)}." : " No binding phase was observed.");
 		_readinessFailureGuidance =
 			"Open diagnostics and review the recorded host/phase evidence. Correct the reported cause, then restart through the supported application lifecycle. " +

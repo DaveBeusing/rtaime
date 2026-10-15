@@ -515,16 +515,43 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		try
 		{
 			File.WriteAllText(temporary, content);
-			File.Move(temporary, path, overwrite: true);
+			for (var attempt = 0; ; attempt++)
+			{
+				try
+				{
+					// ReplaceFile preserves atomic snapshots while cooperative diagnostic
+					// readers hold the old file open. MoveFileEx(overwrite) can deny this.
+					if (File.Exists(path)) File.Replace(temporary, path, destinationBackupFileName: null);
+					else File.Move(temporary, path);
+					break;
+				}
+				catch (Exception exception) when (
+					attempt < 5 && OperatingSystem.IsWindows() &&
+					exception is IOException or UnauthorizedAccessException &&
+					(exception.HResult & 0xffff) is 5 or 32 or 33)
+				{
+					Thread.Sleep(Math.Min(20 << attempt, 200));
+				}
+			}
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			throw new ApplicationEvidencePublicationException(path, exception);
 		}
 		finally
 		{
-			if (File.Exists(temporary)) File.Delete(temporary);
+			try { if (File.Exists(temporary)) File.Delete(temporary); }
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
 		}
 	}
 
 	public bool FileExists(string path) => File.Exists(path);
-	public string ReadAllText(string path) => File.ReadAllText(path);
+	public string ReadAllText(string path)
+	{
+		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+		using var reader = new StreamReader(stream);
+		return reader.ReadToEnd();
+	}
 
 	public void WriteAllText(string path, string content)
 	{
@@ -772,7 +799,8 @@ public sealed class UnifiedApplicationHost
 			{
 				_readinessTracker.RefreshDiagnosticEvents(_controlProcessId);
 				var failure = _readinessTracker.CaptureFailure(
-					exception is TimeoutException ? "startup.deadline.expired" :
+					exception is ApplicationEvidencePublicationException ? "startup.evidence.publish.failed" :
+						exception is TimeoutException ? "startup.deadline.expired" :
 						_readinessTracker.GetHosts().Any(host => host.ProcessAlive == false) ? "startup.process.exited" :
 						_readinessTracker.GetHosts().Any(host => string.Equals(host.SupervisionState, "Failed", StringComparison.OrdinalIgnoreCase)) ? "startup.supervision.failed" :
 						"startup.qualification.failed",
