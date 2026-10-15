@@ -33,7 +33,9 @@ public sealed record OperatorNotification(
 	TimeSpan? Lifetime = null,
 	DateTimeOffset PublishedAtUtc = default,
 	DateTimeOffset? ExpiresAtUtc = null,
-	int OccurrenceCount = 1)
+	int OccurrenceCount = 1,
+	DateTimeOffset? AcknowledgedAtUtc = null,
+	string TargetWorkspace = "HEALTH")
 {
 	public bool HasTechnicalDetail => !string.IsNullOrWhiteSpace(TechnicalDetail);
 	public bool RequiresOperatorAction =>
@@ -64,12 +66,14 @@ public interface INotificationService
 	event EventHandler<OperatorNotificationEventArgs>? Removed;
 
 	void Publish(OperatorNotification notification);
+	bool Acknowledge(string key) => false;
 	bool Dismiss(string key);
 	int RemoveExpired(DateTimeOffset now);
 }
 
 public sealed class NotificationService : INotificationService
 {
+	public const int Capacity = 64;
 	public static readonly TimeSpan DefaultTransientLifetime = TimeSpan.FromSeconds(6);
 
 	private readonly object _gate = new();
@@ -100,20 +104,28 @@ public sealed class NotificationService : INotificationService
 	public void Publish(OperatorNotification notification)
 	{
 		ArgumentNullException.ThrowIfNull(notification);
-		if (string.IsNullOrWhiteSpace(notification.Key))
+		if (string.IsNullOrWhiteSpace(notification.Key) || notification.Key.Length > 128)
 			throw new ArgumentException("Notification key is required.", nameof(notification));
 		if (string.IsNullOrWhiteSpace(notification.Title))
 			throw new ArgumentException("Notification title is required.", nameof(notification));
 		if (string.IsNullOrWhiteSpace(notification.Detail))
 			throw new ArgumentException("Notification detail is required.", nameof(notification));
 
+		notification = notification with
+		{
+			Title = Bound(notification.Title, 256), Detail = Bound(notification.Detail, 2048),
+			AffectedComponent = Bound(notification.AffectedComponent, 256),
+			OperatorAction = Bound(notification.OperatorAction, 2048), ProductionImpact = Bound(notification.ProductionImpact, 2048),
+			TechnicalDetail = notification.TechnicalDetail is null ? null : Bound(notification.TechnicalDetail, 8192),
+			TargetWorkspace = notification.TargetWorkspace is "LIVE" or "EDIT" or "MEDIA" or "SCENES" or "COMPOSITING" or "OUTPUTS" or "SETTINGS" ? notification.TargetWorkspace : "HEALTH"
+		};
 		var now = _clock();
 		OperatorNotification normalized;
 		lock (_gate)
 		{
 			_current.TryGetValue(notification.Key, out var existing);
 			var occurrenceCount = existing is not null && IsSameOccurrence(existing, notification)
-				? checked(existing.OccurrenceCount + 1)
+				? existing.OccurrenceCount == int.MaxValue ? int.MaxValue : existing.OccurrenceCount + 1
 				: 1;
 			TimeSpan? lifetime = notification.Persistent
 				? null
@@ -123,12 +135,36 @@ public sealed class NotificationService : INotificationService
 			{
 				PublishedAtUtc = now,
 				ExpiresAtUtc = lifetime is { } duration ? now + duration : null,
-				OccurrenceCount = occurrenceCount
+				OccurrenceCount = occurrenceCount,
+				AcknowledgedAtUtc = existing is not null && IsSameOccurrence(existing, notification) ? existing.AcknowledgedAtUtc : null
 			};
+			if (existing is null && _current.Count == Capacity)
+			{
+				var oldest = _current.Values.OrderBy(Priority).ThenBy(item => item.PublishedAtUtc).First();
+				if (Priority(normalized) < Priority(oldest)) return;
+				_current.Remove(oldest.Key);
+			}
 			_current[normalized.Key] = normalized;
 		}
 
 		Published?.Invoke(this, new OperatorNotificationEventArgs(normalized));
+	}
+
+	private static string Bound(string value, int maximum) => value.Length <= maximum ? value : value[..maximum];
+	private static int Priority(OperatorNotification item) =>
+		(item.Condition == OperatorNotificationCondition.Fatal ? 4 : item.Persistent ? 2 : 0) + (item.AcknowledgedAtUtc is null ? 1 : 0);
+
+	public bool Acknowledge(string key)
+	{
+		OperatorNotification? updated;
+		lock (_gate)
+		{
+			if (!_current.TryGetValue(key, out var current) || current.AcknowledgedAtUtc is not null) return false;
+			updated = current with { AcknowledgedAtUtc = _clock() };
+			_current[key] = updated;
+		}
+		Published?.Invoke(this, new OperatorNotificationEventArgs(updated));
+		return true;
 	}
 
 	public bool Dismiss(string key)
