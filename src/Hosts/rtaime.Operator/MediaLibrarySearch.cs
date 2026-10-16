@@ -46,7 +46,7 @@ public sealed class MediaLibrarySearch
                     i => i.SearchMetadata is { } m && m.Video.Width == width && m.Video.Height == height,
                 "fps" when Rate(value, out var fps) => i => i.SearchMetadata is { } m &&
                     Math.Abs(m.Video.FrameRate.FramesPerSecond - fps) < 0.0001,
-                "ready" when value is "true" or "false" => i => i.IsReady == (value == "true"),
+                "ready" when value.ToLowerInvariant() is "true" or "false" => i => i.IsReady == Equal(value, "true"),
                 "availability" when value.ToLowerInvariant() is "online" or "offline" or "missing" =>
                     i => Equal(i.AvailabilityLabel, value),
                 "type" when value.ToLowerInvariant() is "source" or "clip" or "audio" or "graphics" or "composition" =>

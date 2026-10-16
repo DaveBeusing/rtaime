@@ -17,6 +17,7 @@ public sealed class MediaSmartSearchBatchTests
     [InlineData("name:\"Evening show\" codec:h264 resolution:1920x1080 fps:50 ready:true availability:online type:clip", true)]
     [InlineData("evening -name:morning codec:aac", true)]
     [InlineData("fps:50/1", true)]
+    [InlineData("READY:TRUE AVAILABILITY:ONLINE TYPE:CLIP CODEC:H264", true)]
     [InlineData("Z:\\media", true)]
     [InlineData("resolution:1280x720", false)]
     [InlineData("codec:hevc", false)]
@@ -117,6 +118,19 @@ public sealed class MediaSmartSearchBatchTests
         Assert.False(f.Pool.ImportCommand.CanExecute(null)); Assert.False(f.Pool.PrepareBatchRemoveCommand.CanExecute(null));
         Assert.Equal(0, f.Catalog.Mutations);
     }
+    [Fact]
+    public async Task Missing_item_confirmation_is_uncertain_and_never_retried_as_a_rejection()
+    {
+        await using var f = await Fixture.Create(["one.mp4", "two.mp4"]);
+        f.Catalog.MissingConfirmation = true;
+        f.Pool.ImportCommand.Execute(null); f.Pool.ExecuteBatchCommand.Execute(null);
+        await Until(() => !f.Pool.BatchRunning);
+        Assert.Equal(1, f.Catalog.Mutations);
+        Assert.Single(f.Pool.BatchItems, i => i.State == "UNCONFIRMED");
+        Assert.Single(f.Pool.BatchItems, i => i.State == "CANCELLED");
+        f.Pool.RetryBatchCommand.Execute(null);
+        Assert.Equal("two.mp4", Assert.Single(f.Pool.BatchItems).Path);
+    }
     private static async Task Until(Func<bool> predicate)
     {
         var end = DateTime.UtcNow.AddSeconds(5);
@@ -149,7 +163,7 @@ public sealed class MediaSmartSearchBatchTests
     {
         public ulong Revision = 1;
         public int Mutations, MaximumActive, Active;
-        public bool RejectSecond, ThrowTimeout;
+        public bool RejectSecond, ThrowTimeout, MissingConfirmation;
         public TaskCompletionSource? Hold;
         private readonly List<MediaAssetDescriptor> _assets = [Asset(1), Asset(2)];
         public MediaAssetCatalogSnapshot Snapshot => new(MediaContractVersion.Current, Revision, _assets.ToArray());
@@ -171,7 +185,7 @@ public sealed class MediaSmartSearchBatchTests
                 if (Hold is { } pending) await pending.Task;
                 if (ThrowTimeout) throw new TimeoutException("Confirmation lost");
                 Revision++;
-                return new(Snapshot, [new(paths.Single(), null, MediaAssetMutationDisposition.Duplicate, null)]);
+                return new(Snapshot, MissingConfirmation ? [] : [new(paths.Single(), null, MediaAssetMutationDisposition.Duplicate, null)]);
             }
             finally { Active--; }
         }

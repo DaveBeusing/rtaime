@@ -31,7 +31,7 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         PrepareBatchRemoveCommand = new OperatorShellCommand(PrepareBatchRemove, () => CanPrepareBatch && SelectedItems.Count > 0);
         ExecuteBatchCommand = new AsyncRelayCommand(ExecuteBatchAsync, () => CanPrepareBatch && _batchPrepared && BatchItems.Any(i => i.State == "READY"));
-        CancelBatchCommand = new OperatorShellCommand(() => { _batchCancel = true; BatchStatus = "Stopping after the active request is confirmed…"; }, () => _batchRunning && !_batchCancel);
+        CancelBatchCommand = new OperatorShellCommand(() => { _batchCancel = true; BatchStatus = "Stopping after the active request is confirmed…"; NotifyBatch(); }, () => _batchRunning && !_batchCancel);
         RetryBatchCommand = new OperatorShellCommand(() =>
         {
             var retry = BatchItems.Where(i => i.State is "FAILED" or "CANCELLED").Select(i => i with { State = "READY", Detail = "Retry requires confirmation." }).ToArray();
@@ -116,6 +116,12 @@ public sealed partial class MediaPoolInspectorViewModel
                         : await _catalogClient.RemoveMediaAssetAsync(new MediaAssetId(Identity.Parse(item.AssetId!)));
                     SetCatalogSnapshot(result.Snapshot);
                     var outcome = result.Items.SingleOrDefault();
+                    if (outcome is null)
+                    {
+                        BatchItems[index] = item with { State = "UNCONFIRMED", Detail = "No item confirmation returned. Refresh before preparing again." };
+                        _batchCancel = true;
+                        continue;
+                    }
                     BatchItems[index] = item with { State = outcome?.Succeeded == true ? "DONE" : "FAILED",
                         Detail = outcome?.Failure?.Message ?? outcome?.Disposition.ToString() ?? "No item confirmation returned." };
                 }
