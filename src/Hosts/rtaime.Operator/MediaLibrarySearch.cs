@@ -32,7 +32,7 @@ public sealed class MediaLibrarySearch
         {
             var negative = token.StartsWith('-'); var body = negative ? token[1..] : token;
             var colon = body.IndexOf(':');
-            if (colon == 1 && body.Length > 2 && (body[2] == '\\\\' || body[2] == '/')) colon = -1;
+            if (colon == 1 && body.Length > 2 && (body[2] == (char)92 || body[2] == '/')) colon = -1;
             var field = colon < 0 ? "" : body[..colon].ToLowerInvariant();
             var value = colon < 0 ? body : body[(colon + 1)..];
             if (value.Length == 0) { result.Error = "Search terms require a value."; break; }
