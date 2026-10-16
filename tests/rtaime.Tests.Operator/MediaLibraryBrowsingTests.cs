@@ -317,11 +317,11 @@ public sealed class MediaLibraryBrowsingTests
 		var item = Item() with { Thumbnail = image };
 		var pending = pool.BeginHoverAsync(item);
 		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(21), ObservedAtUtc = DateTimeOffset.UtcNow };
-		await Synchronize(); await pending;
+		await client.SynchronizeAsync(); await pending;
 		Assert.Null(pool.HoverThumbnail); Assert.Contains("PAUSED", pool.HoverStatus);
 		await pool.BeginHoverAsync(item); Assert.Null(pool.HoverThumbnail);
 		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(2), ObservedAtUtc = DateTimeOffset.UtcNow };
-		await Synchronize(); Assert.Null(pool.HoverThumbnail); // Recovery does not auto-admit work.
+		await client.SynchronizeAsync(); Assert.Null(pool.HoverThumbnail); // Recovery does not auto-admit work.
 		await pool.BeginHoverAsync(item); Assert.Same(image, pool.HoverThumbnail);
 		Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
 		Assert.Equal(0, transport.Mutations); Assert.Equal(3, transport.Reads);
