@@ -96,3 +96,13 @@ Write-Host "Generated reference media: 1080p25 / 1080p50 / 1080p59.94 H.264+Aac"
 Write-Host "Offline/freeze regression boundary: playback remains healthy beyond five seconds"
 
 Assert-Condition ($callback -notmatch 'TaskCompletionSource|WaitAsync[(]' -and $callback -match 'AutoResetEvent' -and $callback -match '_readAvailable.Dispose[(]' -and $callback -match '_flushAvailable.Dispose[(]') "MF callback wait resources must be session-owned, reusable and explicitly disposed."
+
+$progressPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/LocalMediaSampleProgress.cs"
+$progress = Get-Content -LiteralPath $progressPath -Raw
+$deck = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckRuntimeService.cs") -Raw
+$safetyTests = Get-Content -LiteralPath (Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/LocalMediaDecoderSafetyTests.cs") -Raw
+Assert-Condition ($decoder -match 'progress.BeforeRead' -and $decoder -match 'progress.Observe' -and $progress -match 'MaximumReads = 4096' -and $progress -match 'MaximumEmptyReads = 128') "Native sample loops must retain finite operation and empty-result budgets."
+Assert-Condition ($decoder -match 'ValidatePcmLength' -and $progress -match '192_000') "Decoded PCM lengths must be bounded before allocation."
+Assert-Condition ($source -match '_terminalFailure' -and $source -match 'catch [(]LocalMediaDecodeException') "Terminal native progress faults must fence read and seek."
+Assert-Condition ($worker -match '_disposeGate' -and $worker -match '_resourcesDisposed' -and $deck -match '_quarantinedSession' -and $deck -match 'runtime.media_deck.cleanup_failed') "Failed cleanup must retain owner resources and block deck replacement."
+Assert-Condition ($safetyTests -match 'Repeated_native_open_seek_close' -and $safetyTests -match 'Production_RGB32_copy' -and $safetyTests -match 'operation_deadline') "Lifecycle, native pixel parity and deadline regression coverage is required."
