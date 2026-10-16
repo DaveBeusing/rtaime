@@ -1205,3 +1205,8 @@ $showChecksSurface = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Ho
 Assert-Condition ($showPreflightEvidence -match '"program-output"' -and $showPreflightEvidence -match '"aux-output"' -and $showPreflightEvidence -match '"recording"') "Show preflight must distinguish Program, AUX and recording evidence."
 Assert-Condition ($showPreflightEvidence -notmatch 'File\.|Directory\.|StartRecordingAsync|RouteOutputRoleAsync|GoShowControlAsync') "Advisory preflight must not probe local targets or mutate production."
 Assert-Condition ($showChecksSurface -match 'Notifications.Groups' -and $showChecksSurface -match 'SnoozeCommand' -and $showChecksSurface -match 'Owner.Startup.ExportSupportBundleCommand') "Show checks must reuse grouped notifications and the existing support exporter."
+
+$mediaBrowsingPreferences = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibraryBrowsing.cs") -Raw
+$mediaHoverAdmission = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibraryHoverPreview.cs") -Raw
+Assert-Condition ($window -match 'MediaSmartBinName' -and $window -match 'RenameSmartBinCommand' -and $window -match 'HoverPreviewsEnabled') "Library controls must expose named queries and optional hover/focus admission through shared custom controls."
+Assert-Condition ($mediaBrowsingPreferences -match 'IsUnderPressure' -and $mediaHoverAdmission -match 'FrameBudget' -and $mediaHoverAdmission -notmatch 'OpenMediaDeckAsync|ApplyMediaDeckTransportAsync|FileStream|new.*Decoder') "Optional hover presentation must reuse Runtime evidence and cannot open, seek or decode production media."
