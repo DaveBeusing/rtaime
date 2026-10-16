@@ -22,6 +22,9 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private const int SlotCount = QueueCapacity + 2;
     private const int LowWatermark = QueueCapacity - 1;
     private readonly object _gate = new();
+    private readonly object _disposeGate = new();
+    private readonly TimeSpan _joinTimeout;
+    private bool _resourcesDisposed;
     private readonly LocalMediaFileSource _source;
     private readonly AutoResetEvent _wake = new(false);
     private readonly Thread _thread;
@@ -41,9 +44,10 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private Failure? _failure;
     private LocalMediaPlaybackMeasurements _measurements;
 
-    internal LocalMediaDecodeWorker(LocalMediaFileSource source)
+    internal LocalMediaDecodeWorker(LocalMediaFileSource source, TimeSpan? joinTimeout = null)
     {
         _source = source;
+        _joinTimeout = joinTimeout ?? TimeSpan.FromSeconds(10);
         try
         {
             var bytes = checked((int)((ulong)source.Probe.VideoFormat.Width * source.Probe.VideoFormat.Height * 4));
@@ -72,6 +76,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
         lock (_gate)
         {
             if (_stopped) return new Failure("runtime.media_decode.stopped", "Decode session is stopped.");
+            if (_failure is { } failure) return failure;
             _generation = checked(_generation + 1);
             _seek = frame;
             _ended = false;
@@ -296,23 +301,39 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
 
     public void Dispose()
     {
-        lock (_gate)
+        // Concurrent Close callers share a single join/cleanup operation. A timeout
+        // retains cancellation and wake resources for the still-running owner.
+        lock (_disposeGate)
         {
-            if (_stopped) return;
-            _stopped = true;
-            _epoch.Cancel();
-            _reading?.Cancel();
-            ClearUnsafe();
-            _wake.Set();
-            Monitor.PulseAll(_gate);
+            if (!_resourcesDisposed)
+            {
+                lock (_gate)
+                {
+                    if (!_stopped)
+                    {
+                        _stopped = true;
+                        _epoch.Cancel();
+                        _reading?.Cancel();
+                        ClearUnsafe();
+                        _wake.Set();
+                        Monitor.PulseAll(_gate);
+                    }
+                }
+                // Lifecycle/control only; Program never waits for this join.
+                if (!_thread.Join(_joinTimeout))
+                {
+                    lock (_gate) FailUnsafe(new Failure("runtime.media_decode.shutdown_timeout",
+                        "Decode owner has not stopped; reader remains quarantined. Restart through the supported RuntimeHost lifecycle."));
+                    throw new TimeoutException("Local media decoder did not acknowledge cancellation within its shutdown deadline.");
+                }
+                _epoch.Dispose();
+                _wake.Dispose();
+                _resourcesDisposed = true;
+            }
+            if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" or
+                "runtime.media_decode.dispose_failed" or "runtime.media_decode.shutdown_timeout" } cleanupFailure)
+                throw new IOException(cleanupFailure.Message);
         }
-        // This method is called only by the lifecycle/control path, never by Program admission.
-        if (!_thread.Join(TimeSpan.FromSeconds(10)))
-            throw new TimeoutException("Local media decoder did not acknowledge cancellation within ten seconds.");
-        _epoch.Dispose();
-        _wake.Dispose();
-        if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" or "runtime.media_decode.dispose_failed" } cleanupFailure)
-            throw new IOException(cleanupFailure.Message);
     }
 }
 
