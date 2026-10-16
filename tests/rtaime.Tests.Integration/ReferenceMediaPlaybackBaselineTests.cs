@@ -43,6 +43,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
         long? privateGrowth = null;
         int? handleGrowth = null;
         string? failure = null;
+        object? runtimePerformance = null;
+        double? clientOpenMilliseconds = null;
         var watch = Stopwatch.StartNew();
         var startedAt = DateTimeOffset.UtcNow;
         try
@@ -53,7 +55,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             var state = await client.SynchronizeAsync();
             var source = new MediaSourceId(Identity.Parse(state.Sources[0].Id));
             await using var deck = new MediaDeckController(client);
+            var openStarted = Stopwatch.GetTimestamp();
             var opened = await deck.OpenAsync(asset.Path, source);
+            clientOpenMilliseconds = Stopwatch.GetElapsedTime(openStarted).TotalMilliseconds;
             Assert.True(opened.IsLoaded, opened.Failure?.Message);
             Assert.True(opened.Probe!.Duration >= TimeSpan.FromMinutes(minutes) - TimeSpan.FromSeconds(1));
             await deck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.HoldLastFrame);
@@ -83,7 +87,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                         program = runtime.ScheduleStatistics,
                         processHandles = process.HandleCount, privateBytes = process.PrivateMemorySize64,
                         managedBytes = GC.GetTotalMemory(false), heapBytes = gc.HeapSizeBytes,
-                        fragmentedBytes = gc.FragmentedBytes, allocatedBytes = GC.GetTotalAllocatedBytes(),
+                        fragmentedBytes = gc.FragmentedBytes,
+                        lohBytesAfterLastGc = gc.GenerationInfo.Length > 3 ? gc.GenerationInfo[3].SizeAfterBytes : (long?)null,
+                        allocatedBytes = GC.GetTotalAllocatedBytes(),
                         gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2),
                         io = ReadIo(process.Handle) };
                     nextSample += TimeSpan.FromSeconds(60);
@@ -96,6 +102,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             playback = runtime.MediaDeck.PlaybackMeasurements;
             finalTiming = runtime.PipelineTiming;
             finalSchedule = runtime.ScheduleStatistics;
+            runtimePerformance = runtime.Runtime!.Snapshot.Performance;
             Assert.Equal(MediaDeckState.Ended, ended.State);
             var measurement = runtime.MediaDeck.PlaybackMeasurements!.Value;
             Assert.True(measurement.DecodedFrames >= (ulong)(minutes * 60 * 50 - 4));
@@ -153,7 +160,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     storage = "Hosted runner volume; SSD class, cold cache and device latency UNVERIFIED",
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
-                    playback, finalTiming, finalSchedule, transport, failure, cleanupFailure,
+                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, runtimePerformance, transport, failure, cleanupFailure,
                     collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
                     audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
                     productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",
