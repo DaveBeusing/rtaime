@@ -134,6 +134,52 @@ public sealed class LocalMediaDecoderSafetyTests
         finally { Marshal.FreeHGlobal(native); }
     }
 
+    [Fact]
+    public void Repeated_native_open_seek_close_has_bounded_resources_and_records_allocation_and_read_P99()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var provider = new LocalMediaFileProvider();
+        using var process = Process.GetCurrentProcess();
+        var timings = new List<double>(96);
+        var handles = new List<int>(24);
+        var privateBytes = new List<long>(24);
+        long allocatedAtStart = 0;
+        for (var cycle = 0; cycle < 32; cycle++)
+        {
+            if (cycle == 8) allocatedAtStart = GC.GetTotalAllocatedBytes();
+            var opened = provider.TryOpen(asset.Path, MediaSourceId.New());
+            Assert.True(opened.Succeeded, opened.Failure?.Message);
+            using (var source = opened.Source!)
+            {
+                for (var frame = 0; frame < 3; frame++)
+                {
+                    var started = Stopwatch.GetTimestamp();
+                    Assert.True(source.ReadNext((ulong)frame).Succeeded);
+                    if (cycle >= 8) timings.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                }
+                Assert.True(source.SeekToFrame(20).Succeeded);
+                Assert.True(source.ReadNext(3).Succeeded);
+            }
+            if (cycle >= 8)
+            {
+                process.Refresh();
+                handles.Add(process.HandleCount);
+                privateBytes.Add(process.PrivateMemorySize64);
+            }
+        }
+        timings.Sort();
+        var handleGrowth = handles.Max() - handles[0];
+        var privateGrowth = privateBytes.Max() - privateBytes[0];
+        Console.WriteLine("Native lifecycle: cycles=32 warmup=8 reads=128 seek=32; allocationBytes=" +
+            (GC.GetTotalAllocatedBytes() - allocatedAtStart) + "; readP99Milliseconds=" +
+            timings[(int)Math.Ceiling(timings.Count * .99) - 1] +
+            "; postWarmupHandleGrowth=" + handleGrowth + "; postWarmupPrivateGrowth=" + privateGrowth);
+        // Existing hosted playback ceilings; no forced collection or physical-SLA claim.
+        Assert.InRange(handleGrowth, 0, 64);
+        Assert.InRange(privateGrowth, 0, 512L * 1024 * 1024);
+    }
+
     private sealed class ControlledClock : TimeProvider
     {
         public long Seconds { get; set; }
