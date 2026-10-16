@@ -48,7 +48,7 @@ internal sealed class LocalMediaSampleProgress
         if ((flags & 0x1) != 0)
             throw new LocalMediaDecodeException("media.file.decoder_lost", "Media Foundation reported a terminal reader error.");
         if ((flags & (0x4 | 0x200)) != 0 || ((flags & 0x30) != 0 && !normalizedTypeQualified))
-            throw new LocalMediaDecodeException("media.file.decoded_type_changed", "Decoded stream layout changed; close and reopen the asset.");
+            throw new LocalMediaDecodeException("media.file.decoded_type_changed", $"Decoded stream layout changed (flags 0x{flags:X}); close and reopen the asset.");
         if ((flags & ~(0x1u | 0x2u | 0x4u | 0x10u | 0x20u | 0x100u | 0x200u)) != 0)
             throw new LocalMediaDecodeException("media.file.stream_flags_invalid", "Decoder returned unknown stream flags.");
         if (!hasSample)

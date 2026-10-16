@@ -491,19 +491,25 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                 var rateKey = MediaFoundation.MfMtFrameRate;
                 MediaFoundation.ThrowIfFailed(type.GetUINT64(ref sizeKey, out var size));
                 MediaFoundation.ThrowIfFailed(type.GetUINT64(ref rateKey, out var rate));
-                return GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeVideo &&
+                var qualified = GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeVideo &&
                     GetGuid(type, MediaFoundation.MfMtSubtype) == MediaFoundation.MfVideoFormatRgb32 &&
                     size == MediaFoundation.PackRatio(Probe.VideoFormat.Width, Probe.VideoFormat.Height) &&
                     rate == MediaFoundation.PackRatio(Probe.VideoFormat.FrameRate.Numerator, Probe.VideoFormat.FrameRate.Denominator) &&
                     TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode) == MediaFoundation.MfVideoInterlaceProgressive &&
                     TryGetUInt32(type, MediaFoundation.MfMtDefaultStride) == Probe.VideoFormat.Width * 4;
+                if (!qualified) throw new LocalMediaDecodeException("media.file.decoded_type_changed",
+                    $"Video layout rejected: major={TryGetGuid(type, MediaFoundation.MfMtMajorType)}, subtype={TryGetGuid(type, MediaFoundation.MfMtSubtype)}, size=0x{size:X}, rate=0x{rate:X}, interlace={TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode)}, stride={TryGetUInt32(type, MediaFoundation.MfMtDefaultStride)}.");
+                return true;
             }
-            return GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
+            var audioQualified = GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
                 GetGuid(type, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatPcm &&
                 TryGetUInt32(type, MediaFoundation.MfMtAudioNumChannels) == 2 &&
                 TryGetUInt32(type, MediaFoundation.MfMtAudioSamplesPerSecond) == 48_000 &&
                 TryGetUInt32(type, MediaFoundation.MfMtAudioBitsPerSample) == 16 &&
                 TryGetUInt32(type, MediaFoundation.MfMtAudioBlockAlignment) == 4;
+            if (!audioQualified) throw new LocalMediaDecodeException("media.file.decoded_type_changed",
+                $"Audio layout rejected: subtype={TryGetGuid(type, MediaFoundation.MfMtSubtype)}, channels={TryGetUInt32(type, MediaFoundation.MfMtAudioNumChannels)}, rate={TryGetUInt32(type, MediaFoundation.MfMtAudioSamplesPerSecond)}, bits={TryGetUInt32(type, MediaFoundation.MfMtAudioBitsPerSample)}, alignment={TryGetUInt32(type, MediaFoundation.MfMtAudioBlockAlignment)}.");
+            return true;
         }
         catch (ExternalException exception)
         {
