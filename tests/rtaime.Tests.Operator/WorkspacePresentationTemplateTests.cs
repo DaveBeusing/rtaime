@@ -143,6 +143,25 @@ public sealed class WorkspacePresentationTemplateTests
         Assert.Equal(before, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
         Assert.True(Directory.Exists(blocked)); await shell.SaveAsync();
     }
+    [Fact]
+    public async Task Cinema_from_settings_uses_media_viewer_without_changing_saved_workspace_or_template_destination()
+    {
+        await using var f = await Fixture.Create(false); var shell = f.Shell;
+        shell.SelectWorkspace("SETTINGS");
+        var original = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
+        shell.BeginPresentation("CINEMA"); shell.FullscreenProgramCommand.Execute(null);
+        Assert.Equal("MEDIA", shell.SelectedWorkspace); Assert.Equal("PROGRAM", shell.ViewerMode);
+        shell.TemplateName = "Settings layout"; shell.SaveTemplateCommand.Execute(null);
+        await Until(() => shell.TemplateStatus.StartsWith("Saved"));
+        Assert.Equal("SETTINGS", Assert.Single(shell.WorkspaceTemplates).Workspace);
+        await shell.SaveAsync();
+        Assert.Equal("SETTINGS", new OperatorLayoutStore(f.Path).Load().SelectedWorkspace);
+        shell.RestorePresentation();
+        Assert.Equal("SETTINGS", shell.SelectedWorkspace); Assert.Equal(original, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+        shell.BeginPresentation("CINEMA");
+        shell.SelectWorkspace("MEDIA"); Assert.False(shell.PresentationActive); Assert.Equal("MEDIA", shell.SelectedWorkspace);
+        await shell.SaveAsync();
+    }
     private static async Task Until(Func<bool> condition)
     {
         var end = DateTime.UtcNow.AddSeconds(5);

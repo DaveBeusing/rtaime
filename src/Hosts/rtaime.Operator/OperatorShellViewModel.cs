@@ -727,10 +727,9 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public void SelectWorkspace(string? workspace)
 	{
 		var normalized = OperatorWorkspaceNames.Normalize(workspace);
+		RestorePresentation();
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
 			return;
-
-		RestorePresentation();
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
 		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
@@ -747,7 +746,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			Version = OperatorLayoutSettings.CurrentVersion,
 			IsFullscreen = _presentation?.Fullscreen ?? IsFullscreen,
 			Templates = WorkspaceTemplates.ToArray(),
-			SelectedWorkspace = SelectedWorkspace,
+			SelectedWorkspace = _presentation?.Workspace ?? SelectedWorkspace,
 			WindowPlacement = _windowPlacement,
 			Workspaces = new Dictionary<string, OperatorWorkspaceLayoutSettings>(_workspaceLayouts, StringComparer.Ordinal)
 		});
@@ -832,8 +831,11 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	internal OperatorWorkspaceLayoutSettings CurrentWorkspaceLayout() => new OperatorWorkspaceLayoutSettings(
             LeftPanelWidth, RightPanelWidth, LowerPanelHeight, IsLeftCollapsed, IsRightCollapsed, IsCenterMaximized,
             ViewerMode) { Docking = _docking }.Normalize();
-    private void CaptureCurrentWorkspace() =>
-        _workspaceLayouts[SelectedWorkspace] = _presentation?.Layout ?? CurrentWorkspaceLayout();
+    private void CaptureCurrentWorkspace()
+    {
+        if (_presentation is { } restore) _workspaceLayouts[restore.Workspace] = restore.Layout;
+        else _workspaceLayouts[SelectedWorkspace] = CurrentWorkspaceLayout();
+    }
 
 	private void ApplyWorkspaceLayout(OperatorWorkspaceLayoutSettings layout)
 	{

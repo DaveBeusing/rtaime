@@ -3,7 +3,7 @@ namespace rtaime.Operator;
 
 public sealed partial class OperatorShellViewModel
 {
-    private sealed record PresentationRestore(OperatorWorkspaceLayoutSettings Layout, bool Fullscreen,
+    private sealed record PresentationRestore(string Workspace, OperatorWorkspaceLayoutSettings Layout, bool Fullscreen,
         bool MonitorActive, string MonitorViewer, bool MonitorCenter);
     private PresentationRestore? _presentation;
     private string _presentationMode = "NORMAL";
@@ -12,9 +12,15 @@ public sealed partial class OperatorShellViewModel
     internal void BeginPresentation(string mode)
     {
         RestorePresentation();
-        _presentation = new(CurrentWorkspaceLayout(), IsFullscreen, _monitorFullscreenActive,
+        CaptureCurrentWorkspace();
+        _presentation = new(SelectedWorkspace, CurrentWorkspaceLayout(), IsFullscreen, _monitorFullscreenActive,
             _monitorFullscreenRestoreViewerMode, _monitorFullscreenRestoreCenterMaximized);
         _presentationMode = mode;
+        if (mode == "CINEMA")
+        {
+            SelectedWorkspace = OperatorWorkspaceNames.Media;
+            ApplyWorkspaceLayout(_workspaceLayouts[OperatorWorkspaceNames.Media]);
+        }
         NotifyPresentation();
     }
     public void RestorePresentation()
@@ -24,6 +30,7 @@ public sealed partial class OperatorShellViewModel
         _monitorFullscreenActive = restore.MonitorActive;
         _monitorFullscreenRestoreViewerMode = restore.MonitorViewer;
         _monitorFullscreenRestoreCenterMaximized = restore.MonitorCenter;
+        SelectedWorkspace = restore.Workspace;
         ApplyWorkspaceLayout(restore.Layout);
         _setFullscreen(restore.Fullscreen);
         IsFullscreen = restore.Fullscreen;

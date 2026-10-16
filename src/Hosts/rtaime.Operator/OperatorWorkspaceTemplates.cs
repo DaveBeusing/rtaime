@@ -105,7 +105,7 @@ public sealed partial class OperatorShellViewModel
         SaveTemplateCommand = new AsyncRelayCommand(async () =>
         {
             _capturePanels?.Invoke();
-            var template = new OperatorWorkspaceTemplate(TemplateName.Trim(), SelectedWorkspace, _presentation?.Layout ?? CurrentWorkspaceLayout());
+            var template = new OperatorWorkspaceTemplate(TemplateName.Trim(), _presentation?.Workspace ?? SelectedWorkspace, _presentation?.Layout ?? CurrentWorkspaceLayout());
             if (AddTemplate(template)) await PersistTemplatesAsync("Saved " + template.Name);
         }, () => NewTemplateNameValid());
         ApplyTemplateCommand = new OperatorShellCommand(() =>

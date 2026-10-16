@@ -25,6 +25,7 @@ public sealed class OperatorDockController : IDisposable
     private WeakReference<UIElement>? _presentationFocus;
     private string _presentationSelected = "MONITORS";
     private long _focusGeneration;
+    private bool _hasPresentationRestore;
     private bool _rebuilding, _disposed;
     private bool _compact;
     private string _selected = "MONITORS";
@@ -79,7 +80,7 @@ public sealed class OperatorDockController : IDisposable
         Capture();
         _presentationSelected = _selected;
         _presentationFocus = Keyboard.FocusedElement is UIElement focused ? new(focused) : null;
-        _focusGeneration++;
+        _focusGeneration++; _hasPresentationRestore = true;
         _owner.Shell.BeginPresentation(mode);
         _focus = mode == "CINEMA" ? "MONITORS" : _selected;
         _selected = _focus;
@@ -115,10 +116,14 @@ public sealed class OperatorDockController : IDisposable
     private void Loaded(object sender, RoutedEventArgs e) => Rebuild();
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace)) _focus = null;
+        if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace))
+        {
+            _focus = null;
+            if (!_owner.Shell.PresentationActive && _hasPresentationRestore) _selected = _presentationSelected;
+        }
         if (e.PropertyName == nameof(OperatorShellViewModel.Docking))
         {
-            if (!_owner.Shell.PresentationActive && _focus is not null) { _focus = null; _selected = _presentationSelected; }
+            if (!_owner.Shell.PresentationActive && _hasPresentationRestore) { _focus = null; _selected = _presentationSelected; }
             Rebuild();
         }
         if (e.PropertyName == nameof(OperatorShellViewModel.PresentationActive))
@@ -126,6 +131,7 @@ public sealed class OperatorDockController : IDisposable
             (RestoreCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
             if (!_owner.Shell.PresentationActive)
             {
+                _hasPresentationRestore = false; _focus = null; _selected = _presentationSelected;
                 var generation = ++_focusGeneration;
                 var reference = _presentationFocus; _presentationFocus = null;
                 _owner.Dispatcher.BeginInvoke(() =>
