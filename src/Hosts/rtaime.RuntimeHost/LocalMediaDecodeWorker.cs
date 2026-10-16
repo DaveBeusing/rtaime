@@ -44,11 +44,20 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     internal LocalMediaDecodeWorker(LocalMediaFileSource source)
     {
         _source = source;
-        var bytes = checked((int)((ulong)source.Probe.VideoFormat.Width * source.Probe.VideoFormat.Height * 4));
-        for (var index = 0; index < SlotCount; index++)
-            _free.Push(new LocalMediaFrameSlot(bytes, Release));
-        _thread = new Thread(Run) { IsBackground = true, Name = "Local media decode" };
-        _thread.Start();
+        try
+        {
+            var bytes = checked((int)((ulong)source.Probe.VideoFormat.Width * source.Probe.VideoFormat.Height * 4));
+            for (var index = 0; index < SlotCount; index++)
+                _free.Push(new LocalMediaFrameSlot(bytes, Release));
+            _thread = new Thread(Run) { IsBackground = true, Name = "Local media decode" };
+            _thread.Start();
+        }
+        catch
+        {
+            _epoch.Dispose();
+            _wake.Dispose();
+            throw;
+        }
     }
 
     internal LocalMediaPlaybackMeasurements Measurements { get { lock (_gate) return _measurements; } }
