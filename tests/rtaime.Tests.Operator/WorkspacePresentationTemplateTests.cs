@@ -151,6 +151,7 @@ public sealed class WorkspacePresentationTemplateTests
         var original = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
         shell.BeginPresentation("CINEMA"); shell.FullscreenProgramCommand.Execute(null);
         Assert.Equal("MEDIA", shell.SelectedWorkspace); Assert.Equal("PROGRAM", shell.ViewerMode);
+        Assert.Equal("SETTINGS", shell.TemplateCaptureWorkspace);
         shell.TemplateName = "Settings layout"; shell.SaveTemplateCommand.Execute(null);
         await Until(() => shell.TemplateStatus.StartsWith("Saved"));
         Assert.Equal("SETTINGS", Assert.Single(shell.WorkspaceTemplates).Workspace);

@@ -90,6 +90,7 @@ public sealed partial class OperatorShellViewModel
     private Task _templateImportTask = Task.CompletedTask, _templateExportTask = Task.CompletedTask;
     private bool _templateFilesStopping;
     public ObservableCollection<OperatorWorkspaceTemplate> WorkspaceTemplates { get; } = [];
+    public string TemplateCaptureWorkspace => _presentation?.Workspace ?? SelectedWorkspace;
     public string TemplateName { get => _templateName; set { if (Set(ref _templateName, (value ?? "")[..Math.Min(value?.Length ?? 0, 64)])) NotifyTemplates(); } }
     public string TemplateStatus { get => _templateStatus; private set => Set(ref _templateStatus, value); }
     public OperatorWorkspaceTemplate? SelectedTemplate { get => _selectedTemplate; set { if (Set(ref _selectedTemplate, value)) NotifyTemplates(); } }
@@ -108,7 +109,7 @@ public sealed partial class OperatorShellViewModel
         SaveTemplateCommand = new AsyncRelayCommand(async () =>
         {
             _capturePanels?.Invoke();
-            var template = new OperatorWorkspaceTemplate(TemplateName.Trim(), _presentation?.Workspace ?? SelectedWorkspace, _presentation?.Layout ?? CurrentWorkspaceLayout());
+            var template = new OperatorWorkspaceTemplate(TemplateName.Trim(), TemplateCaptureWorkspace, _presentation?.Layout ?? CurrentWorkspaceLayout());
             if (AddTemplate(template)) await PersistTemplatesAsync("Saved " + template.Name);
         }, () => NewTemplateNameValid());
         ApplyTemplateCommand = new OperatorShellCommand(() =>

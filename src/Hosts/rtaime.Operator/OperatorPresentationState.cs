@@ -39,6 +39,7 @@ public sealed partial class OperatorShellViewModel
     private void NotifyPresentation()
     {
         OnPropertyChanged(nameof(PresentationActive)); OnPropertyChanged(nameof(PresentationMode));
+        OnPropertyChanged(nameof(TemplateCaptureWorkspace));
         (ExitFullscreenCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
     }
 }

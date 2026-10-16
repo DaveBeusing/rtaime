@@ -874,6 +874,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void RaiseWorkspaceChanged()
 	{
+		OnPropertyChanged(nameof(TemplateCaptureWorkspace));
 		OnPropertyChanged(nameof(WorkspaceTitle));
 		OnPropertyChanged(nameof(HasLeftRegion));
 		OnPropertyChanged(nameof(HasTimelineRegion));
