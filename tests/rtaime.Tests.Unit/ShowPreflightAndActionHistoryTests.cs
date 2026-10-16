@@ -120,10 +120,12 @@ public sealed class ShowPreflightAndActionHistoryTests
 		Assert.False((await client.CutPreviewAsync()).Accepted);
 		var rejected = Assert.Single(client.ActionHistory.Current);
 		Assert.Equal(OperatorActionOutcome.Rejected, rejected.Outcome);
+		Assert.False(rejected.ResponseAccepted);
 		transport.LoseResponse = true;
 		await Assert.ThrowsAsync<IOException>(() => client.CutPreviewAsync().AsTask());
 		var uncertain = client.ActionHistory.Current.Last();
 		Assert.Equal(OperatorActionOutcome.Unconfirmed, uncertain.Outcome);
+		Assert.Null(uncertain.ResponseAccepted);
 		client.Disconnect();
 		transport.LoseResponse = false;
 		await client.SynchronizeAsync();
@@ -165,6 +167,83 @@ public sealed class ShowPreflightAndActionHistoryTests
 		Assert.Equal(OperatorActionOutcome.Unconfirmed, client.ActionHistory.Current.Last().Outcome);
 	}
 
+	[Fact]
+	public void Program_and_aux_evidence_are_independent_and_missing_roles_are_unverified()
+	{
+		OperatorOutputRoleDescriptor Role(string id, string kind, string health, bool active = true) =>
+			new(id, kind, Source.ToString(), "target", "virtual", null, null, null, null, null, active ? "RUNNING" : "STOPPED",
+				active, health, "Published role evidence", health == "FAIL" ? new Failure("output.failed", "Unavailable") : null);
+		var program = Role("program", "PROGRAM", "PASS");
+		var aux = Role("aux", "AUX", "FAIL");
+		var snapshot = Snapshot(outputs: [program, aux]);
+		var before = JsonSerializer.Serialize(snapshot);
+		var checks = Checks(snapshot);
+		Assert.Equal(ShowPreflightState.Pass, checks.Single(c => c.Id == "program-output").State);
+		Assert.Equal(ShowPreflightState.Fail, checks.Single(c => c.Id == "aux-output").State);
+		Assert.Equal(before, JsonSerializer.Serialize(snapshot));
+		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(outputs: [program])).Single(c => c.Id == "aux-output").State);
+		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(outputs: [Role("program", "PROGRAM", "PASS", false)])).Single(c => c.Id == "program-output").State);
+		Assert.All(ShowPreflightSummary.Build(snapshot, false, null, null, [], Now), c => Assert.Equal(ShowPreflightState.Unknown, c.State));
+	}
+
+	[Theory]
+	[InlineData("IDLE", 0UL, false, false, ShowPreflightState.Unknown)]
+	[InlineData("RECORDING", 0UL, true, false, ShowPreflightState.Unknown)]
+	[InlineData("RECORDING", 1UL, false, false, ShowPreflightState.Unknown)]
+	[InlineData("RECORDING", 1UL, true, false, ShowPreflightState.Pass)]
+	[InlineData("RECORDING", 1UL, true, true, ShowPreflightState.Fail)]
+	[InlineData("FAILED", 0UL, false, false, ShowPreflightState.Fail)]
+	public void Recording_target_requires_current_Runtime_write_evidence(string state, ulong written, bool target, bool failure, ShowPreflightState expected)
+	{
+		var recording = new OperatorRecordingDescriptor(state, TimeSpan.Zero, target ? "private-destination" : null, null, null,
+			written, written, 0, 0, 0, failure ? new Failure("recording.failed", "Unavailable") : null,
+			activeProfileId: "profile", activeProviderId: "provider");
+		var snapshot = Snapshot(recording: recording);
+		var before = JsonSerializer.Serialize(snapshot);
+		var check = Checks(snapshot).Single(c => c.Id == "recording");
+		Assert.Equal(expected, check.State);
+		Assert.DoesNotContain("private-destination", check.Detail);
+		Assert.Equal(before, JsonSerializer.Serialize(snapshot));
+		Assert.Equal(ShowPreflightState.Unknown, ShowPreflightSummary.Build(snapshot, false, null, null, [], Now).Single(c => c.Id == "recording").State);
+	}
+
+	[Fact]
+	public void AI_provider_name_or_visibility_alone_cannot_qualify_unsynchronized_effects()
+	{
+		var ai = new OperatorAIShowcaseDescriptor(true, "Effect", "ACTIVE", "Provider", TimeSpan.Zero, 0,
+			8, 7, null, true, null, Now);
+		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(ai: ai)).Single(c => c.Id == "ai").State);
+		ai = ai with { AppliedSequence = 8, Provider = "UNVERIFIED" };
+		Assert.Equal(ShowPreflightState.Unknown, Checks(Snapshot(ai: ai)).Single(c => c.Id == "ai").State);
+		Assert.Equal(ShowPreflightState.Pass, Checks(Snapshot(ai: ai with { Provider = "Provider" })).Single(c => c.Id == "ai").State);
+	}
+
+	[Fact]
+	public async Task Captured_provenance_and_acceptance_survive_pending_disconnect_and_reconnect()
+	{
+		var transport = new Transport { Pending = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+		var client = new OperatorControlClient(transport);
+		await client.SynchronizeAsync();
+		var requestedAt = client.SnapshotObservedAtUtc;
+		var request = client.CutPreviewAsync().AsTask();
+		var pending = Assert.Single(client.ActionHistory.Current);
+		Assert.Equal(Production.ToString(), pending.ObservedProductionId);
+		Assert.Equal(requestedAt, pending.SnapshotObservedAtUtc);
+		Assert.NotNull(pending.ClientObservationEpoch);
+		Assert.Null(pending.ResponseAccepted);
+		client.Disconnect(); await client.SynchronizeAsync();
+		transport.Pending.SetResult(new(true, State(2), null));
+		await request;
+		var confirmed = Assert.Single(client.ActionHistory.Current);
+		Assert.Equal(pending.ClientObservationEpoch, confirmed.ClientObservationEpoch);
+		Assert.Equal(pending.SnapshotObservedAtUtc, confirmed.SnapshotObservedAtUtc);
+		Assert.True(confirmed.ResponseAccepted);
+		await client.CreateShowTemplateAsync("private name", null);
+		var later = client.ActionHistory.Current.Last();
+		Assert.NotEqual(pending.ClientObservationEpoch, later.ClientObservationEpoch);
+		Assert.Null(later.ResponseAccepted); // A string response does not expose acceptance or commitment.
+	}
+
 	private static IReadOnlyList<ShowPreflightCheck> Checks(OperatorStatusSnapshot snapshot) =>
 		ShowPreflightSummary.Build(snapshot, true, null, null, [], Now);
 	private static ShowControlWorkspaceSnapshot Selected(ShowControlAction action)
@@ -176,9 +255,9 @@ public sealed class ShowPreflightAndActionHistoryTests
 	private static AuthoritativeProductionState State(ulong revision) =>
 		new(ControlContractVersion.Current, Production, new Revision(revision), new(Source, Source));
 	private static OperatorStatusSnapshot Snapshot(ShowControlWorkspaceSnapshot? show = null,
-		IReadOnlyList<OperatorOutputRoleDescriptor>? outputs = null, OperatorAIShowcaseDescriptor? ai = null) =>
+		IReadOnlyList<OperatorOutputRoleDescriptor>? outputs = null, OperatorAIShowcaseDescriptor? ai = null, OperatorRecordingDescriptor? recording = null) =>
 		new(State(1), [new(Source.ToString(), "Camera")], "READY", "READY", "READY", "UNKNOWN", "IDLE", false, 0,
-			showControl: show, outputRoles: outputs, aiShowcase: ai);
+			showControl: show, outputRoles: outputs, aiShowcase: ai, recording: recording);
 
 	private sealed class Transport : IOperatorControlTransport
 	{

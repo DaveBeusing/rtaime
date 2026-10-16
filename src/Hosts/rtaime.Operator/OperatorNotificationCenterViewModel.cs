@@ -79,10 +79,10 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
-public sealed class OperatorNotificationGroupViewModel(OperatorNotificationCategory category)
+public sealed class OperatorNotificationGroupViewModel(string label)
 {
-	public OperatorNotificationCategory Category { get; } = category;
-	public string Label => Category.ToString().ToUpperInvariant();
+	public string Label { get; } = label;
+	internal bool Includes(OperatorNotificationItemViewModel item) => Label == "FATAL" ? item.Condition == "FATAL" : item.Condition != "FATAL" && item.Category == Label;
 	public ObservableCollection<OperatorNotificationItemViewModel> Items { get; } = [];
 }
 
@@ -134,8 +134,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 	public ObservableCollection<OperatorNotificationItemViewModel> ActiveProblems { get; }
 	public ObservableCollection<OperatorNotificationGroupViewModel> Groups { get; } =
 	[
-		new(OperatorNotificationCategory.Error), new(OperatorNotificationCategory.Warning),
-		new(OperatorNotificationCategory.Recovery), new(OperatorNotificationCategory.Information), new(OperatorNotificationCategory.Success)
+		new("FATAL"), new("ERROR"), new("WARNING"), new("RECOVERY"), new("INFORMATION"), new("SUCCESS")
 	];
 	public int ActiveProblemCount => ActiveProblems.Count;
 	public bool HasActiveProblems => ActiveProblemCount > 0;
@@ -391,7 +390,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 		foreach (var group in Groups)
 		{
 			group.Items.Clear();
-			foreach (var item in Items.Where(item => item.Category == group.Label)) group.Items.Add(item);
+			foreach (var item in Items.Where(group.Includes)) group.Items.Add(item);
 		}
 		Toasts.Clear();
 		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && !n.Persistent && n.AcknowledgedAtUtc is null && !n.IsSnoozed(DateTimeOffset.UtcNow))).Take(4))

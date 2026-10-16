@@ -33,7 +33,7 @@ public sealed class ShowReadinessOperatorTests
 		Assert.Single(context.Pending);
 		context.Drain();
 		Assert.Equal(OperatorActionHistory.Capacity, model.History.Count);
-		Assert.All(model.Checks, check => Assert.Equal("UNKNOWN", check.State));
+		Assert.All(model.Checks, check => Assert.Equal("UNVERIFIED", check.State));
 		Assert.True(model.RefreshChecksCommand.CanExecute(null));
 		model.RefreshChecksCommand.Execute(null);
 		context.Drain();
@@ -67,11 +67,62 @@ public sealed class ShowReadinessOperatorTests
 		Assert.False(item.AcknowledgeCommand.CanExecute(null));
 		Assert.Equal("ACTIVE", item.Condition);
 		Assert.Single(center.ActiveProblems);
+		item.SnoozeCommand.Execute(null); context.Drain();
+		Assert.True(item.IsSnoozed);
+		Assert.False(item.SnoozeCommand.CanExecute(null));
+		Assert.True(item.ResumeCommand.CanExecute(null));
+		Assert.Single(center.ActiveProblems);
+		Assert.Same(item, Assert.Single(center.Groups.Single(group => group.Label == "ERROR").Items));
+		item.ResumeCommand.Execute(null); context.Drain();
+		Assert.False(item.IsSnoozed);
 		item.NavigateCommand.Execute(null);
 		Assert.Equal("OUTPUTS", workspace);
 		item.DismissCommand.Execute(null); context.Drain();
 		Assert.Empty(center.Items);
 		Assert.Equal(OperatorProgramSafetyStates.Unknown, owner.ProgramSafety);
+	}
+
+	[Fact]
+	public async Task Severity_groups_keep_fatal_and_snoozed_conditions_visible_and_queued_updates_bounded()
+	{
+		await using var owner = new OperatorViewModel();
+		var service = new NotificationService();
+		var context = new QueuedContext();
+		using var center = new OperatorNotificationCenterViewModel(service, owner, context);
+		var fatal = new OperatorNotification("fatal", OperatorNotificationCategory.Information, OperatorNotificationCondition.Fatal,
+			"Fatal", "Evidence", "Runtime", "Review Health", "Program blocked", true);
+		service.Publish(fatal);
+		for (var i = 0; i < 5000; i++)
+			service.Publish(fatal with { Key = "transient-" + i, Condition = OperatorNotificationCondition.Informational, Persistent = false });
+		Assert.Single(context.Pending);
+		context.Drain();
+		Assert.Equal(6, center.Groups.Count);
+		var item = Assert.Single(center.Groups[0].Items);
+		Assert.Equal("FATAL", center.Groups[0].Label);
+		Assert.False(item.SnoozeCommand.CanExecute(null));
+		Assert.Single(center.ActiveProblems);
+		Assert.Equal(center.Items.Count, center.Groups.Sum(group => group.Items.Count));
+		Assert.InRange(center.Toasts.Count, 0, 4);
+		var transient = center.Items.First(row => row.Key != "fatal");
+		transient.SnoozeCommand.Execute(null); context.Drain();
+		Assert.DoesNotContain(center.Toasts, row => row.Key == transient.Key);
+		Assert.Contains(center.Items, row => row.Key == transient.Key && row.IsSnoozed);
+		center.Dispose(); context.Drain();
+		service.Publish(fatal);
+		Assert.Empty(context.Pending);
+	}
+
+	[Fact]
+	public void History_rows_never_invent_acceptance_commitment_or_server_epoch()
+	{
+		var pending = new OperatorActionObservation(Guid.NewGuid(), "CutAsync", DateTimeOffset.UtcNow, null,
+			OperatorActionOutcome.Pending, 1);
+		Assert.Contains("NO RESPONSE EVIDENCE", new OperatorActionHistoryRow(pending).ResponseEvidence);
+		var receipt = pending with { Outcome = OperatorActionOutcome.Confirmed, CompletedAtUtc = DateTimeOffset.UtcNow };
+		Assert.Contains("not exposed", new OperatorActionHistoryRow(receipt).ResponseEvidence);
+		Assert.Contains("server epoch not exposed", new OperatorActionHistoryRow(receipt).Provenance);
+		Assert.Contains("ACCEPTED", new OperatorActionHistoryRow(receipt with { ResponseAccepted = true }).ResponseEvidence);
+		Assert.Contains("REJECTED", new OperatorActionHistoryRow(receipt with { ResponseAccepted = false }).ResponseEvidence);
 	}
 
 	internal static async Task VerifyWindowAsync(MainWindow main, Dispatcher dispatcher)
@@ -88,7 +139,9 @@ public sealed class ShowReadinessOperatorTests
 			Assert.True(window.IsVisible);
 			Assert.Same(main, window.Owner);
 			Assert.True(window.IsKeyboardFocusWithin);
-			Assert.Equal(6, main.ShowReadiness.Checks.Count);
+			var export = Assert.IsType<RtaimeButton>(window.FindName("ExportChecksSupportButton"));
+			Assert.Same(main.Startup.ExportSupportBundleCommand, export.Command);
+			Assert.Equal(9, main.ShowReadiness.Checks.Count);
 			main.MediaPool.SetCatalogSnapshot(MediaAssetCatalogSnapshot.Empty);
 			var catalogueObservedAt = main.MediaPool.CatalogObservedAtUtc;
 			main.ShowReadiness.RefreshChecksCommand.Execute(null);
