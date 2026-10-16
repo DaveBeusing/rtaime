@@ -44,6 +44,10 @@ public static class OperatorWorkspaceTemplateFiles
         else
         {
             // Explicit import of an existing layout file uses its established migration policy.
+            if (!json.RootElement.TryGetProperty("Version", out var version) || !version.TryGetInt32(out var schema) ||
+                schema is < 2 or > OperatorLayoutSettings.CurrentVersion ||
+                !json.RootElement.TryGetProperty("Workspaces", out var workspaces) || workspaces.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("A legacy layout requires an explicit supported version and workspace object.");
             var legacy = JsonSerializer.Deserialize<OperatorLayoutSettings>(bytes.AsSpan(0, count));
             if (legacy is null || legacy.Version is < 2 or > OperatorLayoutSettings.CurrentVersion ||
                 !json.RootElement.TryGetProperty("Workspaces", out _))

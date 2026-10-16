@@ -98,7 +98,7 @@ public sealed class WorkspacePresentationTemplateTests
         Assert.Equal(valid, await File.ReadAllBytesAsync(path));
         foreach (var invalid in new[]
         {
-            "{bad", "[]", new string('x', OperatorWorkspaceTemplateFiles.MaximumBytes + 1),
+            "{bad", "[]", "{\"Workspaces\":{}}", "{\"Version\":6,\"Workspaces\":null}", new string('x', OperatorWorkspaceTemplateFiles.MaximumBytes + 1),
             JsonSerializer.Serialize(new OperatorWorkspaceTemplateDocument(OperatorWorkspaceTemplateFiles.Format, 99, 6, template)),
             JsonSerializer.Serialize(new OperatorWorkspaceTemplateDocument(OperatorWorkspaceTemplateFiles.Format, 1, 999, template)),
             JsonSerializer.Serialize(new OperatorWorkspaceTemplateDocument(OperatorWorkspaceTemplateFiles.Format, 1, 6, template with { Workspace = "UNKNOWN" })),
