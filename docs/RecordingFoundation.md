@@ -333,3 +333,15 @@ These fields are exposed by the recorder snapshot and Runtime support diagnostic
 Repeated recorder disposal joins one drain. Closing disposal admission prevents a lifecycle operation that was already waiting from starting a new session. Queue publication and its worker signal occur together under the existing admission gate, so a delayed signal cannot touch a disposed semaphore after shutdown. Already admitted lifecycle waiters may finish against the existing managed admission semaphore; no native wait handle is requested.
 
 The mixed Runtime qualification fills the unchanged default 64-sample recording queue while replay, NDI and SRT are also stalled. Program continues, rejected recording samples do not retain payloads, and the first writer's retained Program hash remains unchanged across later source replacement and transitions. Shutdown waits for recording finalization, including repeated shutdown callers.
+
+## Segmented MP4 conversion scratch ownership
+
+The default two-second Replay segments use distinct Media Foundation writers.
+Their 1080p NV12 conversion buffer is 3,110,400 bytes. Reallocating it per segment
+creates about 93 MB/minute of LOH churn, independent of local playback frame ownership.
+Writers now rent that scratch from the shared byte pool and return it after sink
+release on finalize, abort and initialization failure. Conversion and native sample
+copy use the exact logical NV12 extent even if a pool rental is larger. Media
+Foundation samples own their copied native payload before scratch reuse. Recording,
+Replay policy, codec support and Program authority are unchanged; no forced GC or
+relaxed memory acceptance bound is introduced.

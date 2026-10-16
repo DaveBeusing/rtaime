@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Buffers;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
@@ -85,6 +86,71 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 			DeleteTemporaryRoot(root);
 		}
 	}
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Segment_writers_reuse_exact_NV12_extent_and_return_scratch_after_finalize_or_storage_failure(bool failStorage)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = CreateTemporaryRoot();
+        var buffers = new TrackingConversionPool();
+        try
+        {
+            for (var segment = 0; segment < 3; segment++)
+            {
+                var writer = new WindowsMediaFoundationMp4RecordingWriter(root,
+                    failStorage ? 9L * 1024 * 1024 : null, buffers);
+                await using var fixture = await RuntimeFixture.CreateAsync(VideoFormat.Hd1080p50Rgba8, writer);
+                var start = await fixture.Runtime.StartRecordingAsync(RecordingSessionId.New(),
+                    RecordingOutputId.New(), root, "pooled-" + segment);
+                Assert.True(start.Succeeded, start.Failure?.ToString());
+                for (var frame = 0; frame < 6; frame++)
+                {
+                    fixture.Runtime.ProcessNextBoundary().Dispose();
+                    await Task.Delay(10);
+                }
+                var stop = await fixture.Runtime.StopRecordingAsync();
+                if (failStorage) Assert.Equal(RecordingStopStatus.Failed, stop.Status);
+                else
+                {
+                    Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
+                    using var decoded = OpenIndependently(Path.Combine(root, "pooled-" + segment + ".mp4"),
+                        VideoFormat.Hd1080p50Rgba8);
+                    Assert.True(decoded.ReadNext(0).Succeeded);
+                }
+                Assert.Equal(segment + 1, buffers.Rents);
+                Assert.Equal(segment + 1, buffers.Returns);
+                Assert.Equal(1, buffers.Allocations);
+            }
+        }
+        finally { DeleteTemporaryRoot(root); }
+    }
+
+    private sealed class TrackingConversionPool : ArrayPool<byte>
+    {
+        private byte[]? _available;
+        public int Rents { get; private set; }
+        public int Returns { get; private set; }
+        public int Allocations { get; private set; }
+        public override byte[] Rent(int minimumLength)
+        {
+            Rents++;
+            var buffer = _available;
+            _available = null;
+            if (buffer is not null && buffer.Length >= minimumLength) return buffer;
+            Allocations++;
+            // Oversized rentals prove only the logical NV12 extent reaches MF.
+            return new byte[checked(minimumLength + 4096)];
+        }
+        public override void Return(byte[] array, bool clearArray = false)
+        {
+            Assert.Null(_available);
+            Returns++;
+            _available = array;
+            if (clearArray) Array.Clear(array);
+        }
+    }
 
 	[Fact]
 	public async Task Repeated_recordings_finalize_distinct_mp4_files_in_one_runtime_lifecycle()
