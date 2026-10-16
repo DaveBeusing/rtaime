@@ -148,6 +148,36 @@ public sealed class ShowReadinessOperatorTests
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
 			Assert.Equal(catalogueObservedAt, main.MediaPool.CatalogObservedAtUtc);
 			Assert.Contains("no server request", main.ShowReadiness.ReadStatus);
+			// Exercise the compiled grouped templates and command bindings with an isolated notification source.
+			var service = new NotificationService();
+			var context = new DispatcherSynchronizationContext(dispatcher);
+			using (var center = new OperatorNotificationCenterViewModel(service, owner, context))
+			using (var checksModel = new ShowReadinessViewModel(new OperatorControlClient(new Transport()), owner,
+				new Provider(), center, _ => { }, context))
+			{
+				window.DataContext = checksModel;
+				var fault = new OperatorNotification("qualification.output", OperatorNotificationCategory.Error, OperatorNotificationCondition.Active,
+					"Output fault", "Observed fault", "Output", "Review Outputs", "Output transport only", true);
+				service.Publish(fault);
+				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+				var row = Assert.Single(center.ActiveProblems);
+				var pause = Descendants(window).OfType<RtaimeButton>().Single(button => Equals(button.Content, "Pause reminders 5 min"));
+				Assert.Same(row.SnoozeCommand, pause.Command);
+				Assert.True(pause.IsEnabled); pause.Command.Execute(null);
+				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+				Assert.True(row.IsSnoozed); Assert.Single(center.ActiveProblems); Assert.False(pause.IsEnabled);
+				var resume = Descendants(window).OfType<RtaimeButton>().Single(button => Equals(button.Content, "Resume reminders"));
+				Assert.Same(row.ResumeCommand, resume.Command); Assert.True(resume.IsEnabled); resume.Command.Execute(null);
+				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+				Assert.False(row.IsSnoozed);
+				service.Publish(fault with { Category = OperatorNotificationCategory.Information, Condition = OperatorNotificationCondition.Fatal });
+				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+				Assert.Same(row, Assert.Single(center.Groups[0].Items));
+				pause = Descendants(window).OfType<RtaimeButton>().Single(button => Equals(button.Content, "Pause reminders 5 min"));
+				Assert.False(pause.IsEnabled);
+				window.DataContext = main.ShowReadiness;
+			}
+			await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
 			foreach (var scale in new[] { 1d, 1.25, 1.5, 2d })
 			{
 				window.Width = 960; window.Height = 500;
