@@ -232,7 +232,7 @@ a change. Stable implementation failure codes include:
 | media.file.decoded_type_changed | Stream/layout/effect changed; explicit reopen required |
 | media.file.stream_flags_invalid | Unknown native status flags |
 | media.file.decoder_lost | Native reader error/failing non-Win32 callback status |
-| media.file.storage_failure | Failing Win32 callback status; inspect HRESULT and storage/access |
+| media.file.storage_failure | Known Win32 storage/access callback failure; inspect recorded HRESULT |
 | media.file.audio_payload_invalid | Empty, misaligned or excessive decoded PCM/native extent |
 | runtime.media_deck.cleanup_failed | Owner could not be safely released; supported RuntimeHost restart required |
 

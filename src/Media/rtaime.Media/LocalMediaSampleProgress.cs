@@ -69,6 +69,15 @@ internal sealed class LocalMediaSampleProgress
         return LocalMediaSampleDisposition.Frame;
     }
 
+    internal static string NativeFailureCode(int status) => unchecked((uint)status) switch
+    {
+        // Win32 file/path/access, device-not-ready, sharing, disk-full and I/O failures.
+        0x80070002 or 0x80070003 or 0x80070005 or 0x80070015 or
+        0x80070017 or 0x80070020 or 0x80070021 or 0x80070070 or
+        0x8007045D or 0x8007048F or 0x80070570 => "media.file.storage_failure",
+        _ => "media.file.decoder_lost"
+    };
+
     internal static int ValidatePcmLength(uint length)
     {
         // 48-kHz stereo PCM16: at most one second in a retained native packet.

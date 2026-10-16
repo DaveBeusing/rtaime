@@ -216,6 +216,19 @@ public sealed class LocalMediaDecoderSafetyTests
         finally { Marshal.FreeHGlobal(native); }
     }
 
+    [Theory]
+    [InlineData(0x80070002u, "media.file.storage_failure")]
+    [InlineData(0x80070015u, "media.file.storage_failure")]
+    [InlineData(0x80070020u, "media.file.storage_failure")]
+    [InlineData(0x80070070u, "media.file.storage_failure")]
+    [InlineData(0x8007045Du, "media.file.storage_failure")]
+    [InlineData(0x80070057u, "media.file.decoder_lost")]
+    [InlineData(0x80004005u, "media.file.decoder_lost")]
+    public void Native_error_codes_distinguish_known_storage_faults_from_decoder_faults(uint status, string code)
+    {
+        Assert.Equal(code, LocalMediaSampleProgress.NativeFailureCode(unchecked((int)status)));
+    }
+
     private sealed class ControlledClock : TimeProvider
     {
         public long Seconds { get; set; }
