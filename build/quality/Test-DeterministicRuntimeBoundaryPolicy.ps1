@@ -59,7 +59,8 @@ Assert-Condition (-not ($runtimeProcess -match "RunMediaDeckLoopAsync")) "Runtim
 Assert-Condition ([regex]::Matches($runtimeProcess, "new RationalFrameSchedule").Count -eq 1) "RuntimeHost process must have exactly one rational Program cadence."
 Assert-Condition ($runtimeProcess -notmatch "new PeriodicTimer") "RuntimeHost must not accumulate a rounded periodic frame interval."
 Assert-Condition ($runtimeProcess -match "schedule.TryTake" -and $runtimeProcess -match "schedule.NextDeadline") "The monotonic schedule must gate wakeups and coalesce missed slots."
-Assert-Condition ($runtimeProcess -match "AdmitMediaDeckBoundary\(runtime, mediaDeck\)") "Media-deck admission must execute from the Program cadence."
+Assert-Condition ($runtimeProcess -match "AdmitMediaDeckBoundary\(runtime, mediaDeck, opportunity\.Slot\)") "Media-deck admission must execute from the existing rational Program slot."
+Assert-Condition ($runtimeProcess -match "ProcessBoundary\(out var admittedBoundary, programSlot\)") "Media PTS admission must receive the existing Program slot and retain its boundary payload."
 Assert-Condition ($runtimeProcess -match "RunMediaLoopAsync\(_runtime, _mediaDeck, _mediaIo, _aiShowcase") "The single Program loop must own media-deck admission."
 
 Assert-Condition ($runtime -match "private readonly object _boundaryExecutionGate") "RuntimeHost must retain explicit single-writer boundary serialization."
