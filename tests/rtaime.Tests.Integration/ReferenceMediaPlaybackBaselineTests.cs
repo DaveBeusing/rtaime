@@ -183,6 +183,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                 }, new JsonSerializerOptions { WriteIndented = true }));
                 Console.WriteLine("LOCAL PLAYBACK EVIDENCE: " + Path.Combine(evidence, "local-playback-baseline.json"));
                 Console.WriteLine("LOCAL PLAYBACK OBSERVATIONS: " + JsonSerializer.Serialize(playback ?? diagnostics));
+                Console.WriteLine("LOCAL PLAYBACK RESOURCE SERIES: " + JsonSerializer.Serialize(resources.Take(sampleCount)));
+                Console.WriteLine("LOCAL PLAYBACK RESOURCE GROWTH: " + JsonSerializer.Serialize(new { privateGrowth, handleGrowth }));
                 Console.WriteLine("LOCAL DECODE OBSERVATIONS: " + JsonSerializer.Serialize(finalDecode));
                 Console.WriteLine("LOCAL ADMISSION TIMING: " + JsonSerializer.Serialize(finalTiming));
                 Console.WriteLine("LOCAL PROGRAM SCHEDULE: " + JsonSerializer.Serialize(finalSchedule));

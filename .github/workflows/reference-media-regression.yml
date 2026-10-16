@@ -34,6 +34,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  previous-playback-observations:
+    name: Previous playback resource observations
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Locate bounded prior playback evidence
+        id: prior
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_REPOSITORY: ${{ github.repository }}
+          EVIDENCE_BRANCH: ${{ github.head_ref }}
+          EVIDENCE_CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          $branch = [Uri]::EscapeDataString($env:EVIDENCE_BRANCH)
+          $runs = (gh api "repos/$env:EVIDENCE_REPOSITORY/actions/workflows/reference-media-regression.yml/runs?branch=$branch&per_page=5" | ConvertFrom-Json).workflow_runs
+          foreach ($priorRun in @($runs | Where-Object { "$($_.id)" -ne $env:EVIDENCE_CURRENT_RUN } | Select-Object -First 3)) {
+            $artifacts = (gh api "repos/$env:EVIDENCE_REPOSITORY/actions/runs/$($priorRun.id)/artifacts?per_page=100" | ConvertFrom-Json).artifacts
+            $candidate = @($artifacts | Where-Object { $_.name -like "rtaime-local-playback-*" -and -not $_.expired -and $_.size_in_bytes -le 2MB } | Select-Object -First 1)
+            if ($candidate.Count -eq 0) { continue }
+            "run_id=$($priorRun.id)" >> $env:GITHUB_OUTPUT
+            "artifact_name=$($candidate[0].name)" >> $env:GITHUB_OUTPUT
+            "source_commit=$($priorRun.head_sha)" >> $env:GITHUB_OUTPUT
+            Write-Host "Prior playback evidence source: $($priorRun.head_sha), run $($priorRun.id)"
+            break
+          }
+      - name: Read prior playback observations
+        if: steps.prior.outputs.run_id != ''
+        uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.prior.outputs.run_id }}
+          name: ${{ steps.prior.outputs.artifact_name }}
+          path: ${{ runner.temp }}/previous-local-playback
+      - name: Print bounded prior resource series without changing qualification
+        if: steps.prior.outputs.run_id != ''
+        shell: pwsh
+        env:
+          EVIDENCE_SOURCE: ${{ steps.prior.outputs.source_commit }}
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/previous-local-playback
+        run: |
+          $files = @(Get-ChildItem -LiteralPath $env:EVIDENCE_DIRECTORY -Filter local-playback-baseline.json -File -Recurse)
+          if ($files.Count -ne 1) { Write-Host "No completed prior long-playback report."; exit 0 }
+          if ($files[0].Length -gt 256KB) { throw "Prior report exceeds its bounded schema." }
+          $report = Get-Content -LiteralPath $files[0].FullName -Raw | ConvertFrom-Json
+          if ($report.sourceCommit -ne $env:EVIDENCE_SOURCE) { throw "Prior report source mismatch." }
+          if (@($report.resources).Count -gt 128) { throw "Prior resource capacity exceeded." }
+          Write-Host ("PRIOR PLAYBACK RESOURCE SERIES: " + (ConvertTo-Json -InputObject @($report.resources | Select-Object seconds,privateBytes,managedBytes,heapBytes,lohBytesAfterLastGc,fragmentedBytes,allocatedBytes,processHandles,gen0,gen1,gen2) -Compress -Depth 5))
+          Write-Host ("PRIOR PLAYBACK STATUS: " + ($report | Select-Object sourceCommit,collectionStatus,audioStatus,privateGrowthAfterTwoMinuteWarmup,handleGrowthAfterTwoMinuteWarmup,failure,cleanupFailure | ConvertTo-Json -Compress -Depth 5))
+          Write-Host "Prior observations do not qualify the current source."
+
   reference-media:
     name: H264 AAC reference matrix
     runs-on: windows-latest
