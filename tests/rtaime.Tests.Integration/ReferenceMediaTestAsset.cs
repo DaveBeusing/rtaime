@@ -20,7 +20,11 @@ internal sealed record ReferenceMediaProfile(
 	public static ReferenceMediaProfile Hd50 { get; } = new("hd50", FrameRate.Fps50, TimeSpan.FromSeconds(6));
 	public static ReferenceMediaProfile Hd5994 { get; } = new("hd5994", FrameRate.Fps59_94, TimeSpan.FromSeconds(6));
 
-	public static IReadOnlyList<ReferenceMediaProfile> Required { get; } =
+	public static ReferenceMediaProfile Long(int minutes) => minutes is 10 or 60
+        ? Hd50 with { Id = "hd50-" + minutes + "min", Duration = TimeSpan.FromMinutes(minutes) }
+        : throw new ArgumentOutOfRangeException(nameof(minutes));
+
+    public static IReadOnlyList<ReferenceMediaProfile> Required { get; } =
 	[
 		Hd25,
 		Hd50,
@@ -132,7 +136,9 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 	}
 
 	private static CachedAsset GenerateUnsafe(ReferenceMediaProfile profile, string outputRoot)
-	{
+    {
+        if (profile.Duration > TimeSpan.FromSeconds(6))
+            return GenerateLong(profile, outputRoot);
 		var workRoot = System.IO.Path.Combine(
 			System.IO.Path.GetTempPath(),
 			$"rtaime-reference-media-build-{profile.Id}-{Guid.NewGuid():N}");
@@ -149,7 +155,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 			var sampleCount = GenerateRawAudio(profile, rawAudioPath);
 			Encode(profile, rawVideoPath, rawAudioPath, outputPath);
 
-			var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(outputPath))).ToLowerInvariant();
+			var hash = Convert.ToHexString(HashFile(outputPath)).ToLowerInvariant();
 			var manifest = new ReferenceMediaManifest(
 				SchemaVersion,
 				profile.Id,
@@ -186,6 +192,41 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 			}
 		}
 	}
+
+    private static byte[] HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return SHA256.HashData(stream);
+    }
+
+    private static CachedAsset GenerateLong(ReferenceMediaProfile profile, string root)
+    {
+        if (profile != ReferenceMediaProfile.Long(10) && profile != ReferenceMediaProfile.Long(60))
+            throw new ArgumentException("Only the bounded 10/60-minute long profiles are supported.", nameof(profile));
+        using var seed = Generate(ReferenceMediaProfile.Hd50);
+        var path = System.IO.Path.Combine(root, $"rtaime-reference-{profile.Id}-h264-aac.mp4");
+        var manifestPath = System.IO.Path.ChangeExtension(path, ".json");
+        TryDelete(path);
+        // Remux the existing deterministic six-second signal without raw multi-gigabyte intermediates.
+        var result = RunFfmpeg($"-y -hide_banner -loglevel error -stream_loop -1 -i {Quote(seed.Path)} " +
+            $"-t {profile.Duration.TotalSeconds.ToString(CultureInfo.InvariantCulture)} -map 0:v:0 -map 0:a:0 -c copy " +
+            $"-map_metadata -1 -metadata creation_time=1970-01-01T00:00:00Z -movflags +faststart {Quote(path)}",
+            TimeSpan.FromMinutes(4));
+        if (result.ExitCode != 0 || !File.Exists(path))
+            throw new Xunit.Sdk.XunitException("Long reference generation failed: " + result.Error);
+        if (new FileInfo(path).Length > 2L * 1024 * 1024 * 1024)
+        { TryDelete(path); throw new InvalidDataException("Long reference exceeds the 2 GiB transient-file bound."); }
+        var manifest = seed.Manifest with {
+            Profile = profile.Id, RequestedDurationSeconds = profile.Duration.TotalSeconds,
+            GeneratedVideoFrames = CalculateFrameCount(profile.NativeFrameRate, profile.Duration),
+            GeneratedAudioSamples = checked((ulong)profile.Duration.TotalSeconds * AudioSampleRate),
+            VideoSignal = seed.Manifest.VideoSignal + "; encoded six-second seed repeats; container timestamps advance",
+            AudioSignal = seed.Manifest.AudioSignal + "; remuxed AAC packet continuity is measured, not assumed",
+            Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()
+        };
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+        return new(path, manifestPath, manifest);
+    }
 
 	private static long GenerateRawVideo(ReferenceMediaProfile profile, string path)
 	{
