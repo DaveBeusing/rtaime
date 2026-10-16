@@ -35,12 +35,15 @@ public sealed record OperatorNotification(
 	DateTimeOffset? ExpiresAtUtc = null,
 	int OccurrenceCount = 1,
 	DateTimeOffset? AcknowledgedAtUtc = null,
-	string TargetWorkspace = "HEALTH")
+	string TargetWorkspace = "HEALTH",
+	DateTimeOffset? SnoozedUntilUtc = null)
 {
 	public bool HasTechnicalDetail => !string.IsNullOrWhiteSpace(TechnicalDetail);
 	public bool RequiresOperatorAction =>
 		(Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal) &&
 		!string.IsNullOrWhiteSpace(OperatorAction);
+
+	public bool IsSnoozed(DateTimeOffset now) => Condition != OperatorNotificationCondition.Fatal && SnoozedUntilUtc > now;
 
 	public bool IsExpired(DateTimeOffset now) =>
 		!Persistent &&
@@ -67,6 +70,8 @@ public interface INotificationService
 
 	void Publish(OperatorNotification notification);
 	bool Acknowledge(string key) => false;
+	bool Snooze(string key, TimeSpan duration) => false;
+	bool Resume(string key) => false;
 	bool Dismiss(string key);
 	int RemoveExpired(DateTimeOffset now);
 }
@@ -137,7 +142,8 @@ public sealed class NotificationService : INotificationService
 				PublishedAtUtc = now,
 				ExpiresAtUtc = lifetime is { } duration ? now + duration : null,
 				OccurrenceCount = occurrenceCount,
-				AcknowledgedAtUtc = existing is not null && IsSameOccurrence(existing, notification) ? existing.AcknowledgedAtUtc : null
+				AcknowledgedAtUtc = existing is not null && IsSameOccurrence(existing, notification) ? existing.AcknowledgedAtUtc : null,
+				SnoozedUntilUtc = existing is not null && IsSameOccurrence(existing, notification) && existing.IsSnoozed(now) ? existing.SnoozedUntilUtc : null
 			};
 			if (existing is null && _current.Count == Capacity)
 			{
@@ -170,6 +176,34 @@ public sealed class NotificationService : INotificationService
 		return true;
 	}
 
+	// Snooze affects reminders only. The condition remains in Current and active-problem projections.
+	public bool Snooze(string key, TimeSpan duration)
+	{
+		if (duration < TimeSpan.FromSeconds(1) || duration > TimeSpan.FromMinutes(5)) return false;
+		OperatorNotification updated;
+		lock (_gate)
+		{
+			if (!_current.TryGetValue(key, out var current) || current.Condition == OperatorNotificationCondition.Fatal) return false;
+			updated = current with { SnoozedUntilUtc = _clock() + duration };
+			_current[key] = updated;
+		}
+		Published?.Invoke(this, new OperatorNotificationEventArgs(updated));
+		return true;
+	}
+
+	public bool Resume(string key)
+	{
+		OperatorNotification updated;
+		lock (_gate)
+		{
+			if (!_current.TryGetValue(key, out var current) || current.SnoozedUntilUtc is null) return false;
+			updated = current with { SnoozedUntilUtc = null };
+			_current[key] = updated;
+		}
+		Published?.Invoke(this, new OperatorNotificationEventArgs(updated));
+		return true;
+	}
+
 	public bool Dismiss(string key)
 	{
 		if (string.IsNullOrWhiteSpace(key))
@@ -189,8 +223,14 @@ public sealed class NotificationService : INotificationService
 	public int RemoveExpired(DateTimeOffset now)
 	{
 		List<OperatorNotification>? removed = null;
+		List<OperatorNotification> resumed = [];
 		lock (_gate)
 		{
+			foreach (var notification in _current.Values.Where(item => item.SnoozedUntilUtc is { } until && until <= now).ToArray())
+			{
+				var updated = notification with { SnoozedUntilUtc = null };
+				_current[updated.Key] = updated; resumed.Add(updated);
+			}
 			foreach (var notification in _current.Values.Where(candidate => candidate.IsExpired(now)).ToArray())
 			{
 				if (!_current.Remove(notification.Key))
@@ -200,6 +240,7 @@ public sealed class NotificationService : INotificationService
 			}
 		}
 
+		foreach (var notification in resumed) Published?.Invoke(this, new OperatorNotificationEventArgs(notification));
 		if (removed is null)
 			return 0;
 

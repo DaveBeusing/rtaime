@@ -1290,6 +1290,8 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 {
     private readonly IOperatorControlTransport _transport;
     private OperatorStatusSnapshot? _snapshot;
+    // Local correlation only; this is not a ControlHost or Runtime epoch.
+    private Guid _observationEpoch = Guid.NewGuid();
 
     public OperatorControlClient(IOperatorControlTransport transport)
     {
@@ -2037,7 +2039,9 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     private async ValueTask<T> ObserveOperationAsync<T>(string operation, Func<ValueTask<T>> send, string? commandId = null, ulong? expectedRevision = null)
     {
-        var id = ActionHistory.Begin(operation, _snapshot?.Production.Revision.Value, commandId, expectedRevision);
+        var observed = _snapshot;
+        var id = ActionHistory.Begin(operation, observed?.Production.Revision.Value, commandId, expectedRevision,
+            observed?.Production.ProductionId.ToString(), _observationEpoch, SnapshotObservedAtUtc);
         try
         {
             var result = await send().ConfigureAwait(false);
@@ -2049,7 +2053,10 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
                 _ => false
             };
             ActionHistory.Complete(id, rejected ? OperatorActionOutcome.Rejected : OperatorActionOutcome.Confirmed,
-                result is OperatorMutationResponse mutation ? mutation.State.Revision.Value : null);
+                result is OperatorMutationResponse mutation ? mutation.State.Revision.Value : null,
+                result switch { OperatorMutationResponse response => response.Accepted,
+                    OperatorRecordingCommandResult recording => recording.Succeeded,
+                    MediaAssetCatalogMutationResult catalogue => catalogue.Succeeded, _ => (bool?)null });
             return result;
         }
         catch
@@ -2062,6 +2069,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public void Disconnect()
     {
+        _observationEpoch = Guid.NewGuid();
         _snapshot = null;
         SnapshotObservedAtUtc = null;
         NotifySnapshotChanged();
