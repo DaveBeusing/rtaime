@@ -157,7 +157,7 @@ public sealed partial class OperatorShellViewModel
         TemplateStatus = _store.LastSaveError is { } error ? "Preferences were not saved: " + error : success;
         NotifyTemplates();
     }
-    private static bool TemplateFileFailure(Exception ex) => ex is IOException or UnauthorizedAccessException or JsonException or
+    private static bool TemplateFileFailure(Exception ex) => ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or
         ArgumentException or InvalidOperationException or NotSupportedException;
     private void NotifyTemplates()
     {
