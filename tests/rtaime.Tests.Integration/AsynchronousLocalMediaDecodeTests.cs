@@ -21,7 +21,12 @@ public sealed class AsynchronousLocalMediaDecodeTests
         using var first = worker.TakeDue(0, out _, out _);
         Assert.NotNull(first);
         Assert.Equal((byte)0, first!.Frame.RgbaPixels.Span[0]);
-        Until(() => decoder.Reads == 7);
+        for (var index = 1; index <= 3; index++)
+        {
+            using var consumed = worker.TakeDue(index * 200_000L, out _, out _);
+            Assert.NotNull(consumed);
+        }
+        Until(() => decoder.Reads == 10 && worker.Snapshot.QueuedFrames == 6);
         Assert.Equal((byte)0, first.Frame.RgbaPixels.Span[0]);
         Assert.Equal((byte)0, first.Frame.AudioPayload.Span[0]);
         Assert.Equal(6, worker.Snapshot.QueuedFrames);

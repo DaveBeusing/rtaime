@@ -126,6 +126,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private void Run()
     {
         ulong sequence = 0;
+        long? lastPresentationTicks = null;
         try
         {
             while (true)
@@ -153,6 +154,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                     {
                         epoch.Token.ThrowIfCancellationRequested();
                         var positioned = _source.SeekToFrame(seek.Value);
+                        lastPresentationTicks = null;
                         lock (_gate)
                         {
                             if (generation == _generation && !positioned.Succeeded)
@@ -175,6 +177,9 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                             (decoded.Frame!.Audio is null || decoded.Frame.AudioPayload.IsEmpty))
                             throw new InvalidDataException("Decoded frame has no required audio window.");
                         slot.Copy(decoded.Frame!);
+                        if (lastPresentationTicks is { } previous && slot.PresentationTicks <= previous)
+                            throw new InvalidDataException("Decoded video PTS regressed within one playback generation.");
+                        lastPresentationTicks = slot.PresentationTicks;
                         owned = slot.Lease(generation);
                         sequence = checked(sequence + 1);
                     }
@@ -297,6 +302,7 @@ internal sealed class LocalMediaFrameSlot
     private readonly Action<LocalMediaFrameSlot> _release;
     private int _references;
     internal LocalMediaDecodedFrame Frame { get; private set; } = null!;
+    internal long PresentationTicks { get; private set; }
 
     internal LocalMediaFrameSlot(int videoBytes, Action<LocalMediaFrameSlot> release)
     {
@@ -315,6 +321,9 @@ internal sealed class LocalMediaFrameSlot
             throw new InvalidDataException("Decoded audio extent does not match its timing.");
         if (frame.Video.Timing.PresentationTimestamp < 0)
             throw new InvalidDataException("Decoded video PTS must be nonnegative.");
+        PresentationTicks = checked((long)decimal.Round(
+            (decimal)frame.Video.Timing.PresentationTimestamp * frame.Video.Timing.Timebase.Numerator *
+            TimeSpan.TicksPerSecond / frame.Video.Timing.Timebase.Denominator, 0, MidpointRounding.AwayFromZero));
         Frame = frame with { RgbaPixels = _video, AudioPayload = _audio.AsMemory(0, frame.AudioPayload.Length) };
     }
 
@@ -333,8 +342,7 @@ internal sealed class LocalMediaFrameLease : IDisposable
     internal LocalMediaFrameLease(LocalMediaFrameSlot slot, long generation) { _slot = slot; Generation = generation; }
     internal long Generation { get; }
     internal LocalMediaDecodedFrame Frame => _slot!.Frame;
-    internal long PresentationTicks => checked((long)decimal.Round(
-        (decimal)Frame.Video.Timing.PresentationTimestamp * (decimal)Frame.Video.Timing.Timebase.SecondsPerTick * TimeSpan.TicksPerSecond));
+    internal long PresentationTicks => _slot!.PresentationTicks;
     internal LocalMediaFrameLease Retain()
     {
         var slot = _slot ?? throw new ObjectDisposedException(nameof(LocalMediaFrameLease));
