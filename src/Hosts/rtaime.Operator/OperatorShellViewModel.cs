@@ -774,6 +774,13 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void ToggleFullscreen()
 	{
+		if (PresentationActive)
+		{
+			var target = !IsFullscreen;
+			RestorePresentation();
+			_setFullscreen(target);
+			return;
+		}
 		if (IsFullscreen)
 		{
 			ExitFullscreen();
@@ -815,6 +822,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void SetViewerMode(string mode)
 	{
+		RestorePresentation();
 		ViewerMode = mode is "PREVIEW" or "PROGRAM" ? mode : "DUAL";
 		Save();
 	}

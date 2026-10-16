@@ -162,6 +162,21 @@ public sealed class WorkspacePresentationTemplateTests
         shell.SelectWorkspace("MEDIA"); Assert.False(shell.PresentationActive); Assert.Equal("MEDIA", shell.SelectedWorkspace);
         await shell.SaveAsync();
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Explicit_fullscreen_and_viewer_keys_leave_modes_then_preserve_the_requested_action(bool fullscreen)
+    {
+        await using var f = await Fixture.Create(fullscreen); var shell = f.Shell;
+        shell.SelectWorkspace("SETTINGS");
+        shell.BeginPresentation("CINEMA"); shell.FullscreenProgramCommand.Execute(null);
+        shell.ToggleFullscreenCommand.Execute(null);
+        Assert.False(shell.PresentationActive); Assert.False(shell.IsFullscreen); Assert.Equal("SETTINGS", shell.SelectedWorkspace);
+        shell.BeginPresentation("FOCUS"); shell.MaximizePreviewCommand.Execute(null);
+        Assert.False(shell.PresentationActive); Assert.Equal("PREVIEW", shell.ViewerMode);
+        await shell.SaveAsync();
+        Assert.Equal("PREVIEW", new OperatorLayoutStore(f.Path).Load().Workspaces["SETTINGS"].ViewerMode);
+    }
     private static async Task Until(Func<bool> condition)
     {
         var end = DateTime.UtcNow.AddSeconds(5);
