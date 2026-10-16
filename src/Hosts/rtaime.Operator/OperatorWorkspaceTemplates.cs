@@ -86,6 +86,9 @@ public sealed partial class OperatorShellViewModel
     private OperatorWorkspaceTemplate? _selectedTemplate;
     private Func<string?>? _templateImportPicker, _templateExportPicker;
     private Action? _capturePanels;
+    private readonly CancellationTokenSource _templateFileStop = new();
+    private Task _templateImportTask = Task.CompletedTask, _templateExportTask = Task.CompletedTask;
+    private bool _templateFilesStopping;
     public ObservableCollection<OperatorWorkspaceTemplate> WorkspaceTemplates { get; } = [];
     public string TemplateName { get => _templateName; set { if (Set(ref _templateName, (value ?? "")[..Math.Min(value?.Length ?? 0, 64)])) NotifyTemplates(); } }
     public string TemplateStatus { get => _templateStatus; private set => Set(ref _templateStatus, value); }
@@ -122,24 +125,47 @@ public sealed partial class OperatorShellViewModel
         }, () => SelectedTemplate is not null && WorkspaceTemplates.Contains(SelectedTemplate));
         ImportTemplateCommand = new AsyncRelayCommand(async () =>
         {
-            if (_templateImportPicker?.Invoke() is { } path) await ImportTemplateAsync(path);
-        }, () => _templateImportPicker is not null);
+            if (_templateImportPicker?.Invoke() is { } path && !_templateFilesStopping)
+            { _templateImportTask = ImportTemplateAsync(path); await _templateImportTask; }
+        }, () => !_templateFilesStopping && _templateImportPicker is not null);
         ExportTemplateCommand = new AsyncRelayCommand(async () =>
         {
-            if (SelectedTemplate is { } selected && _templateExportPicker?.Invoke() is { } path)
-                try { await OperatorWorkspaceTemplateFiles.ExportAsync(path, selected); TemplateStatus = "Exported " + selected.Name; }
-                catch (Exception ex) when (TemplateFileFailure(ex)) { TemplateStatus = "Export failed: " + ex.Message; }
-        }, () => SelectedTemplate is not null && WorkspaceTemplates.Contains(SelectedTemplate) && _templateExportPicker is not null);
+            if (SelectedTemplate is { } selected && _templateExportPicker?.Invoke() is { } path && !_templateFilesStopping)
+            { _templateExportTask = ExportTemplateAsync(path, selected); await _templateExportTask; }
+        }, () => !_templateFilesStopping && SelectedTemplate is not null && WorkspaceTemplates.Contains(SelectedTemplate) && _templateExportPicker is not null);
     }
-    internal async Task ImportTemplateAsync(string path)
+    private async Task ExportTemplateAsync(string path, OperatorWorkspaceTemplate selected)
     {
         try
         {
-            var imported = await OperatorWorkspaceTemplateFiles.ImportAsync(path);
+            await Task.Run(() => OperatorWorkspaceTemplateFiles.ExportAsync(path, selected, _templateFileStop.Token), _templateFileStop.Token);
+            TemplateStatus = "Exported " + selected.Name;
+        }
+        catch (OperationCanceledException) when (_templateFilesStopping) { TemplateStatus = "Export cancelled."; }
+        catch (Exception ex) when (TemplateFileFailure(ex)) { TemplateStatus = "Export failed: " + ex.Message; }
+    }
+    internal async Task ImportTemplateAsync(string path)
+    {
+        if (_templateFilesStopping) { TemplateStatus = "Import cancelled."; return; }
+        try
+        {
+            var imported = await Task.Run(() => OperatorWorkspaceTemplateFiles.ImportAsync(path, _templateFileStop.Token), _templateFileStop.Token);
+            _templateFileStop.Token.ThrowIfCancellationRequested();
             if (AddTemplate(imported)) await PersistTemplatesAsync("Imported " + imported.Name + " · select Apply when ready.");
         }
+        catch (OperationCanceledException) when (_templateFilesStopping) { TemplateStatus = "Import cancelled."; }
         catch (Exception ex) when (TemplateFileFailure(ex)) { TemplateStatus = "Import failed: " + ex.Message; }
     }
+    internal async Task StopTemplateFilesAsync()
+    {
+        if (!_templateFilesStopping)
+        {
+            _templateFilesStopping = true; _templateFileStop.Cancel(); NotifyTemplates();
+            await Task.WhenAll(_templateImportTask, _templateExportTask);
+            _templateFileStop.Dispose();
+        }
+    }
+
     private bool NewTemplateNameValid() => WorkspaceTemplates.Count < OperatorWorkspaceTemplate.MaximumTemplates &&
         new OperatorWorkspaceTemplate(TemplateName.Trim(), SelectedWorkspace, CurrentWorkspaceLayout()).IsValid &&
         !WorkspaceTemplates.Any(t => string.Equals(t.Name, TemplateName.Trim(), StringComparison.OrdinalIgnoreCase));

@@ -177,6 +177,19 @@ public sealed class WorkspacePresentationTemplateTests
         await shell.SaveAsync();
         Assert.Equal("PREVIEW", new OperatorLayoutStore(f.Path).Load().Workspaces["SETTINGS"].ViewerMode);
     }
+    [Fact]
+    public async Task Template_file_shutdown_disables_admission_and_drains_without_late_import_or_layout_changes()
+    {
+        await using var f = await Fixture.Create(false); var shell = f.Shell;
+        shell.ConfigureTemplateFiles(() => "not-opened.json", () => "not-written.json", () => { });
+        var before = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
+        Assert.True(shell.ImportTemplateCommand.CanExecute(null));
+        await shell.StopTemplateFilesAsync(); await shell.StopTemplateFilesAsync();
+        Assert.False(shell.ImportTemplateCommand.CanExecute(null)); Assert.False(shell.ExportTemplateCommand.CanExecute(null));
+        await shell.ImportTemplateAsync("not-opened.json");
+        Assert.Empty(shell.WorkspaceTemplates); Assert.Equal("Import cancelled.", shell.TemplateStatus);
+        Assert.Equal(before, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+    }
     private static async Task Until(Func<bool> condition)
     {
         var end = DateTime.UtcNow.AddSeconds(5);
@@ -196,7 +209,7 @@ public sealed class WorkspacePresentationTemplateTests
         }
         public async ValueTask DisposeAsync()
         {
-            Shell.RestorePresentation(); await Shell.SaveAsync();
+            await Shell.StopTemplateFilesAsync(); Shell.RestorePresentation(); await Shell.SaveAsync();
             if (System.IO.Directory.Exists(Directory)) System.IO.Directory.Delete(Directory, true);
         }
     }

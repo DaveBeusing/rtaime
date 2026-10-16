@@ -586,6 +586,7 @@ public partial class MainWindow : Window
 		{
 			if (!_fullscreenApplied)
 				CaptureWindowPlacement();
+			await Shell.StopTemplateFilesAsync();
 			_workspaceTemplatesWindow?.Close();
 			_commandPaletteWindow?.Close();
             CloseLibrary();
