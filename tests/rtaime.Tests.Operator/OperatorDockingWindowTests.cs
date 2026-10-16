@@ -91,6 +91,10 @@ internal static class OperatorDockingWindowTests
         Assert.Equal(fullscreen, owner.Shell.IsFullscreen);
         Assert.Equal(beforeMode, JsonSerializer.Serialize(owner.Shell.CurrentWorkspaceLayout()));
         await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+        owner.Docking.FocusCommand.Execute(null);
+        owner.Docking.Float("INSPECTOR"); Assert.False(owner.Shell.PresentationActive);
+        owner.Docking.FloatingWindows["INSPECTOR"].Close();
+        owner.Shell.ResetLayoutCommand.Execute(null);
         var workspace = owner.Shell.SelectedWorkspace;
         owner.OpenWorkspaceTemplatesCommand.Execute(null);
         await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);

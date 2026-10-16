@@ -98,6 +98,7 @@ public sealed class OperatorDockController : IDisposable
     public void Float(string panel)
     {
         if (!_panels.ContainsKey(panel)) return;
+        _owner.Shell.RestorePresentation();
         _selected = panel; _focus = null;
         if (_floating.TryGetValue(panel, out var existing)) { existing.Activate(); return; }
         var placement = OperatorMonitorGeometry.Capture(_owner) with { Width = 800, Height = 600 };
