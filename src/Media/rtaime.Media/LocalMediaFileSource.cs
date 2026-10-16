@@ -75,6 +75,7 @@ public sealed class LocalMediaFileSource : IDisposable
 	private readonly ILocalMediaDecoder _decoder;
 	private bool _disposed;
     private LocalMediaPlaybackMeasurements _measurements;
+    private readonly long _openedAt = Stopwatch.GetTimestamp();
     private long? _previousVideoTimestamp;
     private double? _expectedAudioSeconds;
 
@@ -114,7 +115,8 @@ public sealed class LocalMediaFileSource : IDisposable
                 var audioSeconds = media.Audio is { } audio
                     ? audio.Timing.PresentationTimestamp * audio.Timing.Timebase.SecondsPerTick : (double?)null;
                 _measurements = _measurements with {
-                    FirstFrameMilliseconds = _measurements.FirstFrameMilliseconds ?? _measurements.Decode.TotalMilliseconds,
+                    FirstFrameMilliseconds = _measurements.FirstFrameMilliseconds ??
+                        _measurements.OpenMilliseconds + Stopwatch.GetElapsedTime(_openedAt).TotalMilliseconds,
                     DecodedFrames = _measurements.DecodedFrames + 1,
                     DecodedAudioSamples = _measurements.DecodedAudioSamples + audioSamples,
                     MissingAudioFrames = _measurements.MissingAudioFrames + (Probe.AudioCodec != MediaAudioCodec.None && audioSeconds is null ? 1UL : 0),

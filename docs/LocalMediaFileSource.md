@@ -114,3 +114,15 @@ See `ReferenceMediaRegression.md` for generation, CI use and interpretation.
 ## Known limitations / handoff to Local Media Transport
 
 Local Media File Source is sequential-read only. End-of-media is reported explicitly. There is intentionally no Play/Pause/Stop/Seek/Frame-Step state machine yet; those semantics belong to Local Media Transport. Decoder seeking, resume behavior and frame-accurate positioning must build on the existing `MediaAssetId`, `LocalMediaProbe`, `MediaSourceId` and Runtime session rather than creating a second playback authority.
+
+
+## Playback measurement boundary
+
+Local source observations now expose constant-space open/first-frame, decode/native
+read and seek durations, decoded counts, retries/failures and timestamp/audio
+discontinuities through the Runtime-owned deck. These implementation diagnostics do
+not change wire contracts or supported formats. Native read wall time includes
+decoder and I/O waiting; actual source-file bytes, SSD latency and installed decoder
+qualification are not inferred. See [long playback evidence](ReferenceMediaRegression.md#long-local-file-playback-baseline)
+for source-bound ten-minute / opt-in hour reproduction, actual host cadence and
+separate collection/audio/physical statuses.
