@@ -62,6 +62,8 @@ public sealed class ReferenceMediaRegressionTests
         var measurements = source.Measurements;
         Assert.Equal(12UL, measurements.DecodedFrames);
         Assert.True(measurements.DecodedAudioSamples > 0);
+        Assert.True(measurements.LastVideoTimestamp > measurements.FirstVideoTimestamp);
+        Assert.True(measurements.VideoSecondsPerTick > 0);
         Assert.True(measurements.NativeVideoRead.Calls >= 12);
         Assert.True(measurements.NativeAudioRead.Calls >= 12);
         Assert.True(measurements.OpenMilliseconds >= 0);

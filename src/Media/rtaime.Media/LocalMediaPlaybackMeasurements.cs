@@ -17,4 +17,11 @@ public readonly record struct LocalMediaPlaybackMeasurements(
     LocalMediaReadMeasurements NativeVideoRead, LocalMediaReadMeasurements NativeAudioRead,
     ulong DecodedFrames, ulong DecodedAudioSamples, ulong MissingAudioFrames,
     ulong VideoTimestampRegressions, ulong AudioTimestampDiscontinuities,
-    double MaximumAvTimestampDistanceMilliseconds, ulong ReadRetries, ulong ReadFailures);
+    double MaximumAvTimestampDistanceMilliseconds, ulong ReadRetries, ulong ReadFailures)
+{
+    public long? FirstVideoTimestamp { get; init; }
+    public long? LastVideoTimestamp { get; init; }
+    public double VideoSecondsPerTick { get; init; }
+    public ulong VideoForwardGapCount { get; init; }
+    public double MaximumVideoIntervalMilliseconds { get; init; }
+}

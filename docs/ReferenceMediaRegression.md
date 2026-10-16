@@ -198,7 +198,8 @@ non-cancelable by this observer; workflow termination is the final hang boundary
 manifest/hash/size, requested duration, elapsed wall time, OS/architecture, actual
 transport outcome, decoded video/audio counts, native video/audio ReadSample CPU wall
 totals/maxima, decode/seek/open/first-frame observations, retries/failures, timestamp
-regressions, audio gaps and maximum A/V timestamp distance. Seek resets the continuity
+regressions, first/last video timestamp and timebase, maximum interval, forward gaps
+against the declared normalized frame interval, audio gaps and maximum A/V distance. Seek resets the continuity
 comparison without clearing cumulative findings.
 
 The existing bounded Runtime pipeline probe supplies admission, scheduler start and

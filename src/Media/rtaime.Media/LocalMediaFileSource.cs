@@ -118,6 +118,16 @@ public sealed class LocalMediaFileSource : IDisposable
                     FirstFrameMilliseconds = _measurements.FirstFrameMilliseconds ??
                         _measurements.OpenMilliseconds + Stopwatch.GetElapsedTime(_openedAt).TotalMilliseconds,
                     DecodedFrames = _measurements.DecodedFrames + 1,
+                    FirstVideoTimestamp = _measurements.FirstVideoTimestamp ?? media.Video.Timing.PresentationTimestamp,
+                    LastVideoTimestamp = media.Video.Timing.PresentationTimestamp,
+                    VideoSecondsPerTick = media.Video.Timing.Timebase.SecondsPerTick,
+                    VideoForwardGapCount = _measurements.VideoForwardGapCount +
+                        (_previousVideoTimestamp is { } prior && videoSeconds -
+                            prior * media.Video.Timing.Timebase.SecondsPerTick >
+                            1.5 * Probe.VideoFormat.FrameRate.Denominator / (double)Probe.VideoFormat.FrameRate.Numerator ? 1UL : 0),
+                    MaximumVideoIntervalMilliseconds = Math.Max(_measurements.MaximumVideoIntervalMilliseconds,
+                        _previousVideoTimestamp is { } last ?
+                            Math.Max(0, videoSeconds - last * media.Video.Timing.Timebase.SecondsPerTick) * 1000 : 0),
                     DecodedAudioSamples = _measurements.DecodedAudioSamples + audioSamples,
                     MissingAudioFrames = _measurements.MissingAudioFrames + (Probe.AudioCodec != MediaAudioCodec.None && audioSeconds is null ? 1UL : 0),
                     VideoTimestampRegressions = _measurements.VideoTimestampRegressions +
