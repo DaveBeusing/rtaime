@@ -529,7 +529,8 @@ public sealed class RuntimeHostProcess
 		LocalMediaDeckRuntimeService mediaDeck)
 	{
 		mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-		var snapshot = mediaDeck.ProcessBoundary();
+		var snapshot = mediaDeck.ProcessBoundary(out var admittedBoundary);
+        using var boundary = admittedBoundary;
 		if (snapshot.SourceId is not { } sourceId)
 		{
 			if (_activeDeckSource is { } previous)
@@ -542,7 +543,6 @@ public sealed class RuntimeHostProcess
 			runtime.ClearExternalAudioMeter(previousSource);
 		_activeDeckSource = sourceId;
 
-		var boundary = mediaDeck.LatestBoundary;
 		if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
 		{
 			if (boundary.Video.Surface.Format == runtime.Format)
@@ -558,13 +558,17 @@ public sealed class RuntimeHostProcess
 			}
 		}
 
-		if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
+        if (snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
+            boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
+            runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
+
+        if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
 		{
 			runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);
 		}
 		else
 		{
-			var available = snapshot.State != MediaDeckState.Error;
+			var available = snapshot.State is not (MediaDeckState.Error or MediaDeckState.Loading);
 			runtime.SetExternalAudioMeter(sourceId, 0, 0, available);
 		}
 	}
