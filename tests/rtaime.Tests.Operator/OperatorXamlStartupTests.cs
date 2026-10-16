@@ -263,24 +263,24 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					catch (Exception exception) { failures.Add(exception); }
 	                try
                 {
-                var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
-                if (!string.IsNullOrWhiteSpace(evidenceRoot))
-                {
-                    Directory.CreateDirectory(evidenceRoot);
-                    File.WriteAllText(Path.Combine(evidenceRoot, "interaction-ui.json"), JsonSerializer.Serialize(new
+                    var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
+                    if (!string.IsNullOrWhiteSpace(evidenceRoot))
                     {
-                        sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
-                        sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
-                        status = failures.Count == 0 ? "PASS" : "FAILED",
-                        scope = "Disconnected real WPF; Input queue delay and event subscription balance; physical touch, mixed-monitor DPI and connected production latency UNVERIFIED",
-                        phases = interactionPhases,
-                        finalRenderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance),
-                        failures = failures.Select(failure => failure.ToString()).ToArray()
-                    }, new JsonSerializerOptions { WriteIndented = true }));
-                }
+                        Directory.CreateDirectory(evidenceRoot);
+                        File.WriteAllText(Path.Combine(evidenceRoot, "interaction-ui.json"), JsonSerializer.Serialize(new
+                        {
+                            sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                            sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                            status = failures.Count == 0 ? "PASS" : "FAILED",
+                            scope = "Disconnected real WPF; Input queue delay and event subscription balance; physical touch, mixed-monitor DPI and connected production latency UNVERIFIED",
+                            phases = interactionPhases,
+                            finalRenderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance),
+                            failures = failures.Select(failure => failure.ToString()).ToArray()
+                        }, new JsonSerializerOptions { WriteIndented = true }));
+                    }
                 }
                 catch (Exception exception) { failures.Add(exception); }
-				dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
+                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
 				}
 			}));
 			try { Dispatcher.Run(); }

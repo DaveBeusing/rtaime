@@ -663,7 +663,7 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(() =>
                 {
                     var newer = Application.Current?.Windows.OfType<Window>().Any(window => window.IsVisible &&
-                        window is WorkspaceTemplatesWindow or OperatorCommandPaletteWindow or OperatorLibraryWindow or ShowReadinessWindow) == true;
+                        window is rtaime.Operator.WorkspaceTemplatesWindow or OperatorCommandPaletteWindow or OperatorLibraryWindow or rtaime.Operator.ShowReadinessWindow) == true;
                     if (!_shutdownStarted && !newer && previous.IsVisible && previous.IsEnabled)
                     { Window.GetWindow(previous)?.Activate(); previous.Focus(); }
                 }, DispatcherPriority.Input);

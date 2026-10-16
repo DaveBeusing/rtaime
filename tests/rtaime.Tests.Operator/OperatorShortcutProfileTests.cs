@@ -148,9 +148,16 @@ public sealed class OperatorShortcutProfileTests
         string id, OperatorShortcutScope scope, bool textEntry, bool repeat, bool allowed)
     {
         var command = new Probe { Allowed = allowed };
-        var definition = new OperatorShortcutDefinition(id, id, Key.F9, ModifierKeys.None, command);
+        var (key, modifiers) = id switch
+        {
+            "cut" => (Key.Return, ModifierKeys.Control),
+            "auto" => (Key.Return, ModifierKeys.None),
+            "record" => (Key.R, ModifierKeys.None),
+            _ => (Key.F9, ModifierKeys.None)
+        };
+        var definition = new OperatorShortcutDefinition(id, id, key, modifiers, command);
         var registry = new OperatorKeyboardCommandRegistry([definition]);
-        Assert.Equal(!textEntry, registry.TryHandle(Key.F9, ModifierKeys.None, repeat, textEntry, scope));
+        Assert.Equal(!textEntry, registry.TryHandle(key, modifiers, repeat, textEntry, scope));
         Assert.Equal(!textEntry && !repeat && allowed ? 1 : 0, command.Calls);
         Assert.Same(command, Assert.Single(registry.Definitions).Command);
         Assert.False(Assert.Single(registry.Definitions).AllowInTextEntry);

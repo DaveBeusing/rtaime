@@ -52,6 +52,16 @@ public sealed class OperatorCombinedVisualQualification
         try
         {
             Assert.False(owner.CutCommand.CanExecute(null));
+            Assert.Empty(OperatorKeyboardCommandRegistry.FindConflicts(window.Shortcuts.Definitions));
+            foreach (var id in new[] { "cut", "auto", "record", "show-control-go" })
+            {
+                var definition = window.Shortcuts.Definitions.Single(item => item.Id == id);
+                Assert.False(definition.AllowInTextEntry);
+                Assert.Equal(OperatorShortcutScope.Global, definition.Scope);
+                Assert.False(window.Shortcuts.TryHandle(definition.Key, definition.Modifiers, false, true));
+            }
+            Assert.Same(owner.CutCommand, window.Shortcuts.Definitions.Single(item => item.Id == "cut").Command);
+            Assert.Same(owner.DissolveCommand, window.Shortcuts.Definitions.Single(item => item.Id == "auto").Command);
             VerifyModalRouting(window);
             window.MinWidth = 960; window.MinHeight = 500;
             foreach (var row in OperatorVisualQualificationTests.QualificationMatrix())
