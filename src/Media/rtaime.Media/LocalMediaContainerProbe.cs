@@ -20,6 +20,7 @@ internal sealed record LocalMediaStreamMetadata(
 {
     public const int CurrentVersion = 1;
     public string SampleEntry { get; init; } = "";
+    public string AudioSampleEntry { get; init; } = "";
     public MediaVideoCodec? VideoCodec { get; init; }
     public int? Profile { get; init; }
     public int? BitDepth { get; init; }
@@ -31,12 +32,13 @@ internal sealed record LocalMediaStreamMetadata(
 internal sealed class Mp4LocalMediaProbe : ILocalMediaProbe
 {
     public int Version => LocalMediaStreamMetadata.CurrentVersion;
-    public LocalMediaStreamMetadata Read(string path)
-    {
-        var metadata = Mp4LocalMediaMetadataReader.Read(path);
-        return new(MediaContainerFormat.Mp4, metadata.Width, metadata.Height,
-            metadata.FrameRateNumerator, metadata.FrameRateDenominator, metadata.Duration);
-    }
+    public LocalMediaStreamMetadata Read(string path) => IsoBaseMediaMetadataReader.Read(path, MediaContainerFormat.Mp4);
+}
+
+internal sealed class QuickTimeLocalMediaProbe : ILocalMediaProbe
+{
+    public int Version => LocalMediaStreamMetadata.CurrentVersion;
+    public LocalMediaStreamMetadata Read(string path) => IsoBaseMediaMetadataReader.Read(path, MediaContainerFormat.QuickTimeMov);
 }
 
 internal sealed class LocalMediaProbeException(string code, string message) : IOException(message)

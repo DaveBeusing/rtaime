@@ -109,14 +109,23 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				{
 					return LocalMediaDecoderOpenResult.Rejected(
 						"media.file.video_codec_unsupported",
-						$"The MP4 video subtype '{videoSubtype}' is not supported by the local media path.");
+						$"The local video subtype '{videoSubtype}' is not supported by the local media path.");
 				}
 
-				var audioCodec = audioNative is not null &&
+				if (metadata.VideoCodec != videoCodec)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.codec_mismatch", "Container sample entry and native video codec disagree.");
+
+                var audioCodec = audioNative is not null &&
 					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio
 						? ResolveAudioCodec(TryGetGuid(audioNative, MediaFoundation.MfMtSubtype))
 						: MediaAudioCodec.None;
 				var hasAudio = audioCodec != MediaAudioCodec.None;
+                if (metadata.Container == MediaContainerFormat.QuickTimeMov &&
+                    (metadata.AudioSampleEntry.Length != 0 && !hasAudio ||
+                     metadata.AudioSampleEntry == "mp4a" && audioCodec != MediaAudioCodec.Aac ||
+                     metadata.AudioSampleEntry == "sowt" && audioCodec != MediaAudioCodec.Pcm))
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.audio_codec_unsupported",
+                        "The QuickTime audio track could not be matched to the admitted AAC/PCM decoder.");
 
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid frame rate.");
@@ -133,7 +142,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (LocalMediaInputPolicy.Validate(inputProfile) is { } inputFailure)
 					return LocalMediaDecoderOpenResult.Rejected(inputFailure.Code, inputFailure.Message);
 
-				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
+				try
+                {
+                    ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
+                }
+                catch (ExternalException exception)
+                {
+                    return LocalMediaDecoderOpenResult.Rejected(
+                        exception.HResult == unchecked((int)0xC00D5212) ? "media.file.decoder_unavailable" : "media.file.normalization_failed",
+                        $"{metadata.Container}/{metadata.SampleEntry} profile {metadata.Profile} ({metadata.BitDepth}-bit) could not negotiate the Windows RGB32 decoder: {exception.Message}");
+                }
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 				if (hasAudio)
 				{
@@ -146,7 +164,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					assetId,
 					sourceId,
 					System.IO.Path.GetFileName(path),
-					MediaContainerFormat.Mp4,
+					metadata.Container,
 					videoCodec.Value,
 					audioCodec,
 					outputFormat,

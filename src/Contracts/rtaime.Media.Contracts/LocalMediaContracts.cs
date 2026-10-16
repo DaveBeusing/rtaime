@@ -21,7 +21,8 @@ public readonly record struct MediaAssetId
 
 public enum MediaContainerFormat
 {
-	Mp4 = 1
+	Mp4 = 1,
+    QuickTimeMov = 2
 }
 
 public enum MediaVideoCodec

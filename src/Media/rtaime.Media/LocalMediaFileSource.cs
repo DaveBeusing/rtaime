@@ -275,8 +275,11 @@ public sealed class LocalMediaFileProvider
 
 		if (!File.Exists(fullPath))
 			return LocalMediaOpenResult.Rejected("media.file.not_found", "The local media file does not exist.");
-		if (!string.Equals(System.IO.Path.GetExtension(fullPath), ".mp4", StringComparison.OrdinalIgnoreCase))
-			return LocalMediaOpenResult.Rejected("media.file.container_unsupported", "V1 local media supports MP4 containers only.");
+		var extension = System.IO.Path.GetExtension(fullPath);
+        ILocalMediaProbe? probe = extension.ToLowerInvariant() switch {
+            ".mp4" => new Mp4LocalMediaProbe(), ".mov" => new QuickTimeLocalMediaProbe(), _ => null };
+        if (probe is null)
+            return LocalMediaOpenResult.Rejected("media.file.container_unsupported", "Local input requires a qualified MP4 or QuickTime MOV container.");
 		if (!OperatingSystem.IsWindows())
 			return LocalMediaOpenResult.Rejected("media.file.platform_unsupported", "The V1 local media provider requires Windows Media Foundation.");
 
@@ -296,7 +299,6 @@ public sealed class LocalMediaFileProvider
 		LocalMediaStreamMetadata metadata;
         try
         {
-            ILocalMediaProbe probe = new Mp4LocalMediaProbe();
             if (probe.Version != LocalMediaStreamMetadata.CurrentVersion)
                 return LocalMediaOpenResult.Rejected("media.file.probe_version_unsupported", "The container probe version is not supported.");
             metadata = probe.Read(fullPath);
