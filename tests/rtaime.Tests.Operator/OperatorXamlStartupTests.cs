@@ -261,7 +261,9 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						app?.Shutdown();
 					}
 					catch (Exception exception) { failures.Add(exception); }
-	                var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
+	                try
+                {
+                var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
                 if (!string.IsNullOrWhiteSpace(evidenceRoot))
                 {
                     Directory.CreateDirectory(evidenceRoot);
@@ -276,6 +278,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
                         failures = failures.Select(failure => failure.ToString()).ToArray()
                     }, new JsonSerializerOptions { WriteIndented = true }));
                 }
+                }
+                catch (Exception exception) { failures.Add(exception); }
 				dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
 				}
 			}));
