@@ -523,7 +523,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 		else
 		{
-			MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
+			MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out var maximumLength, out var currentLength));
 			try
 			{
 				if (currentLength > maximumLength || address == IntPtr.Zero || currentLength < requiredLength)
