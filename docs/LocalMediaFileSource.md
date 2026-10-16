@@ -209,3 +209,70 @@ blocking Task/monitor chain for each sample. A direct cross-thread mailbox regre
 performs 1,024 blocked deliveries after warmup with a bounded handle delta; cancellation
 and abandoned/late delivery are checked separately. The isolated native-reader probe
 records handle types without Runtime or Replay, and never substitutes for Program acceptance.
+
+## Decoder safety and recovery boundary
+
+One decoded-frame operation shares a 30-second managed progress deadline across
+video, audio and key-frame scanning, with at most 4,096 native reads and 128
+consecutive empty non-EOS callbacks. Every iteration checks generation cancellation.
+A stream tick is a gap, not EOF; an EOS callback carrying a sample retains that final
+sample. Seek scanning requires advancing timestamps. An asynchronous read waits only
+for the remaining operation budget. These limits cannot interrupt synchronous native
+open, ReadSample submission, Flush, seek or COM release.
+
+Reader ERROR, unsupported layout/effect changes and unknown flags fail closed before
+payload access. Native/current type notifications, including valid initial negotiation,
+query the actual output type: RGB32 dimensions/rate/progressive scan or PCM16 stereo
+48-kHz/block alignment must match the existing configured representation. A matching
+type may continue; a mismatching layout is never silently reinterpreted. Stable implementation failure codes include:
+
+| Code | Meaning and recovery |
+| --- | --- |
+| media.file.no_progress | Empty callbacks or sample scan exhausted; close/reopen after reviewing the asset |
+| media.file.read_timeout | Managed operation/read deadline expired |
+| media.file.timestamp_discontinuity | Seek scan stopped advancing |
+| media.file.decoded_type_changed | Changed layout failed qualification; explicit reopen required |
+| media.file.stream_flags_invalid | Unknown native status flags |
+| media.file.decoder_lost | Native reader error/failing non-Win32 callback status |
+| media.file.storage_failure | Known Win32 storage/access callback failure; inspect recorded HRESULT |
+| media.file.video_payload_invalid | Contiguous RGB32 extent, capacity or stride is invalid |
+| media.file.audio_payload_invalid | Empty, misaligned or excessive decoded PCM/native extent |
+| runtime.media_deck.cleanup_failed | Owner could not be safely released; supported RuntimeHost restart required |
+
+These terminal source failures are latched: neither another read nor Seek can call
+the damaged reader. Ordinary nonterminal decoder exceptions retain the existing
+single retry. A native PCM packet is bounded to 192,000 bytes (one second of the
+configured 48-kHz stereo PCM16), validated before allocation or copy. Locked buffer
+lengths must fit their reported native capacity.
+
+MFStartup ownership transfers only with a successfully constructed decoder.
+Unsuccessful open, including unexpected metadata/construction exceptions, releases
+native media types, reader, callback events and the matching MFShutdown in nested
+finally scopes. After transfer, the decode thread alone owns read/seek/flush/release;
+callback threads only deliver or release mailbox samples. Close callers serialize
+join/cleanup outside Program admission. Pipeline resources are released even when
+native-owner cleanup fails.
+
+An owner that misses the ten-second join remains quarantined with its cancellation
+and wake resources intact; subsequent cleanup can join it once it returns. The deck
+retains the failed session, stays Error and blocks replacement/probing so repeated
+Open cannot accumulate stuck readers. Close/Dispose continue reporting cleanup failure,
+including after a late native return. Recovery uses the supported RuntimeHost/AppHost
+lifecycle, with its existing process supervision boundary. No thread abort, forced COM
+release concurrent with read, automatic retry loop or global process termination is
+introduced. A permanently blocked driver still requires external lifecycle escalation;
+managed cancellation is not proof of native termination.
+
+The actual RGB32 extraction/swizzle path remains scalar and reusable. Direct parity
+coverage exercises padding, positive/negative pitch, top-row orientation, channels and
+opaque alpha. A full-frame profile records allocation and copy P99 without changing
+the conversion algorithm. Audio Float32 windows/native packets retain their existing
+ownership and allocation strategy: no audio-specific GC attribution yet justifies
+pooling or a longer consumer lifetime.
+
+MF_MT_DEFAULT_STRIDE is optional. A missing attribute derives the default RGB32
+stride from the configured width; an IMF2DBuffer always supplies its actual pitch.
+A present signed stride is retained for contiguous buffers, whose checked visible
+extent, padding and bottom-up orientation are validated before row copy. Both
+contiguous and 2D extraction share the same production row-copy/swizzle routines.
+See [Microsoft's stride attribute contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-default-stride-attribute).

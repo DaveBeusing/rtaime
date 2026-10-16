@@ -99,3 +99,13 @@ An early queued PTS holds video without replaying audio. See
 
 Control/Client/Operator continue to send intent through the existing contracts.
 There is no second playback timer, production state, bulk-media IPC or format expansion.
+
+## Failed decoder cleanup
+
+Read/seek progress failures carry the stable local-media failure code into Error;
+terminal source errors require reopening. A failed worker join/disposal is retained
+by the Runtime deck as runtime.media_deck.cleanup_failed. It cannot become an
+Unloaded success or admit a replacement reader. Use the supported host lifecycle
+restart after reviewing diagnostics. Close, open and probe are serialized on the
+lifecycle path; Program admission retains its independent bounded lock and never
+waits for their native operations.

@@ -6,6 +6,7 @@ using rtaime.Provider.Inference;
 
 namespace rtaime.Tests.Unit;
 
+[Collection("Blocking consumer lifecycle")]
 public sealed class GovernedInferenceRuntimeTests
 {
     private static readonly UtcTimestamp Now = new(new DateTimeOffset(2026, 9, 15, 18, 0, 0, TimeSpan.Zero));
@@ -87,12 +88,17 @@ public sealed class GovernedInferenceRuntimeTests
     [Fact]
     public async Task Caller_cancellation_releases_admitted_resources()
     {
-        var provider = new ManagedReferencePersonSegmentationProvider(executionDelay: TimeSpan.FromSeconds(2));
+        var provider = new BlockingProvider();
         var runtime = Runtime(provider);
-        var request = Request(4, Now.Value.AddSeconds(1));
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(25));
+        var request = Request(4, Now.Value.AddSeconds(1), provider.CapabilityId);
+        using var cancellation = new CancellationTokenSource();
 
-        var result = await runtime.ExecuteAsync(request, cancellation.Token);
+        var pending = runtime.ExecuteAsync(request, cancellation.Token);
+        // ExecuteAsync admits and enters the provider synchronously before yielding.
+        // Cancel at that barrier, not in a race between two ThreadPool timers.
+        Assert.True(provider.Started.Task.IsCompletedSuccessfully);
+        cancellation.Cancel();
+        var result = await pending;
 
         Assert.Equal(InferenceExecutionStatus.Cancelled, result.Result.Status);
         Assert.Equal("ai.inference.cancelled", result.Result.Failure!.Value.Code);

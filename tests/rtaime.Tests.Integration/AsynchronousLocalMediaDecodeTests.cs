@@ -296,6 +296,78 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public async Task Concurrent_close_joins_once_without_read_dispose_overlap()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4 };
+        var worker = new LocalMediaDecodeWorker(Source(decoder));
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(worker.Dispose)));
+        worker.Dispose();
+        Assert.True(decoder.Disposed);
+        Assert.Equal(1, decoder.MaximumConcurrentOperations);
+        Assert.Equal(1, decoder.DisposeCalls);
+    }
+
+    [Fact]
+    public void Noncooperative_reader_is_quarantined_after_close_timeout_and_can_be_joined_later()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4, IgnoreCancellation = true };
+        var worker = new LocalMediaDecodeWorker(Source(decoder), TimeSpan.FromMilliseconds(25));
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            Assert.Throws<TimeoutException>(worker.Dispose);
+            Assert.False(decoder.Disposed);
+            Assert.Equal("runtime.media_decode.shutdown_timeout", worker.Snapshot.Failure?.Code);
+            Assert.NotNull(worker.Reposition(0));
+            Assert.Throws<TimeoutException>(worker.Dispose);
+            Assert.False(decoder.Disposed);
+        }
+        finally
+        {
+            decoder.ReleaseRead.Set();
+            Until(() => decoder.Disposed);
+            Assert.Throws<IOException>(worker.Dispose);
+        }
+        Assert.Throws<IOException>(worker.Dispose);
+        Assert.Equal(1, decoder.MaximumConcurrentOperations);
+        Assert.Equal(1, decoder.DisposeCalls);
+    }
+
+    [Fact]
+    public void Deck_cleanup_failure_remains_ERROR_and_blocks_probe_and_replacement()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4, IgnoreCancellation = true };
+        var provider = new LocalMediaFileProvider();
+        var session = new LocalMediaRuntimeSession(provider, Source(decoder), TimeSpan.FromMilliseconds(25));
+        var deck = new LocalMediaDeckRuntimeService(provider, session);
+        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            var closed = deck.Close();
+            Assert.Equal(MediaDeckState.Error, closed.State);
+            Assert.Equal("runtime.media_deck.cleanup_failed", closed.Failure?.Code);
+            Assert.False(decoder.Disposed);
+            Assert.False(deck.Probe("unused.mp4", MediaAssetId.New()).Succeeded);
+            var replaced = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current,
+                decoder.Probe.SourceId, "unused.mp4"), Prepared(provider, decoder.Probe.SourceId));
+            Assert.Equal(MediaDeckState.Error, replaced.State);
+            Assert.Equal(4, decoder.Reads);
+        }
+        finally
+        {
+            decoder.ReleaseRead.Set();
+            Until(() => decoder.Disposed);
+            Assert.Throws<IOException>(deck.Dispose);
+        }
+        Assert.Throws<IOException>(deck.Dispose);
+        Assert.Equal(1, decoder.DisposeCalls);
+    }
+
+    [Fact]
     public void Decoder_release_failure_is_reported_by_lifecycle_cleanup_instead_of_a_successful_join()
     {
         var decoder = new ControlledDecoder { FailDispose = true };
@@ -484,6 +556,8 @@ public sealed class AsynchronousLocalMediaDecodeTests
         public int MaximumConcurrentOperations { get; private set; }
         public int BlockCall { get; init; }
         public bool FailReads { get; set; }
+        public bool IgnoreCancellation { get; init; }
+        public int DisposeCalls { get; private set; }
         public bool FailCancellation { get; init; }
         public bool FailDispose { get; init; }
         public bool Disposed { get; private set; }
@@ -508,7 +582,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
                 if (call == BlockCall)
                 {
                     ReadBlocked.Set();
-                    try { ReleaseRead.Wait(cancellationToken); }
+                    try { ReleaseRead.Wait(IgnoreCancellation ? CancellationToken.None : cancellationToken); }
                     catch (OperationCanceledException)
                     {
                         CancelledReads++;
@@ -549,6 +623,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
             Enter();
             try
             {
+                DisposeCalls++;
                 Disposed = true;
                 ReadBlocked.Dispose();
                 ReleaseRead.Dispose();

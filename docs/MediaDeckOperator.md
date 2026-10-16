@@ -46,9 +46,7 @@ ControlHost validates that the requested local-media source is one of the author
 
 ## Runtime isolation
 
-The local media deck has a dedicated periodic RuntimeHost worker. It does not decode on the normal Program media-loop hot path.
-
-The deck worker advances only while the confirmed transport state is `Playing`. Paused, ready and ended decks therefore do not consume decode work.
+The local media deck has a dedicated bounded decode worker. Program consumes its owned queue on the existing Runtime cadence. Decode may preroll while Ready/Paused, then backpressures at eight queued frames. Lifecycle open/close/probe operations are serialized outside the Program admission lock.
 
 No raw RGBA video or audio payload is transferred over management Named Pipes. The IPC surface carries commands, metadata and confirmed state only.
 
@@ -176,3 +174,8 @@ Playlist auto-advance, rundown automation and macros remain out of scope.
 Replay clips do not use a replay-specific playback engine. After RuntimeHost materializes and ControlHost adopts a valid clip into the Media Library, the Operator opens that asset through the existing Media Deck path. Preview selection and subsequent CUT/DISSOLVE remain the established governed production commands.
 
 A replay clip is not presented as ready until finalization, media probing and Media Library adoption succeed. See [Replay and Clip Production](ReplayClipProduction.md).
+
+A decoder cleanup failure remains confirmed Error with
+runtime.media_deck.cleanup_failed. Replacement and probe are blocked until the
+supported RuntimeHost lifecycle restart; the Operator displays the returned failure
+and does not invent an automatic retry or successful close.

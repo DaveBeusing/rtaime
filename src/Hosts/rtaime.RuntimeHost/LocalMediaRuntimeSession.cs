@@ -53,14 +53,19 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	private readonly LocalMediaTransportController _transport;
 	private ulong _nextSequenceNumber;
 	private bool _disposed;
+    private readonly object _disposeGate = new();
+    private bool _pipelineDisposed;
 
 	public LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source)
-	{
+        : this(provider, source, null) { }
+
+    internal LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source, TimeSpan? joinTimeout)
+    {
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		try { _decode = new LocalMediaDecodeWorker(source); }
+		try { _decode = new LocalMediaDecodeWorker(source, joinTimeout); }
         catch
         {
             // Ownership transfers only after the worker and fixed payload slots exist.
@@ -317,17 +322,24 @@ public sealed class LocalMediaRuntimeSession : IDisposable
     private LocalMediaRuntimeBoundaryResult Empty(LocalMediaRuntimeBoundaryStatus status) =>
         new(status, null, ReadOnlyMemory<byte>.Empty, null, ReadOnlyMemory<byte>.Empty, _transport.Snapshot, null);
 
-	public void Dispose()
-	{
-		if (_disposed)
-			return;
-
-		_disposed = true;
-		_current?.Dispose();
-        _current = null;
-        _decode.Dispose();
-        _pipeline.Dispose();
-	}
+    public void Dispose()
+    {
+        lock (_disposeGate)
+        {
+            _disposed = true;
+            _current?.Dispose();
+            _current = null;
+            try { _decode.Dispose(); }
+            finally
+            {
+                if (!_pipelineDisposed)
+                {
+                    _pipeline.Dispose();
+                    _pipelineDisposed = true;
+                }
+            }
+        }
+    }
 
 	private LocalMediaRuntimeBoundaryResult Failed(string code, string message)
 	{

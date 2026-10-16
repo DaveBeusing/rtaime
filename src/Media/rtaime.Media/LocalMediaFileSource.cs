@@ -74,6 +74,7 @@ public sealed class LocalMediaFileSource : IDisposable
 {
 	private readonly ILocalMediaDecoder _decoder;
 	private bool _disposed;
+    private Failure? _terminalFailure;
     private LocalMediaPlaybackMeasurements _measurements;
     private readonly long _openedAt = Stopwatch.GetTimestamp();
     private long? _previousVideoTimestamp;
@@ -98,6 +99,7 @@ public sealed class LocalMediaFileSource : IDisposable
 	public LocalMediaFrameReadResult ReadNext(ulong sequenceNumber, CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_terminalFailure is { } terminal) return LocalMediaFrameReadResult.Failed(terminal.Code, terminal.Message);
 		Exception? lastFailure = null;
 		for (var attempt = 0; attempt < 2; attempt++)
 		{
@@ -141,6 +143,12 @@ public sealed class LocalMediaFileSource : IDisposable
                 if (audioSeconds is { } at) _expectedAudioSeconds = at + audioSamples / (double)Probe.AudioFormat.SampleRate;
                 return LocalMediaFrameReadResult.Decoded(media);
 			}
+            catch (LocalMediaDecodeException exception)
+            {
+                _terminalFailure = new Failure(exception.Code, exception.Message);
+                _measurements = _measurements with { ReadFailures = _measurements.ReadFailures + 1 };
+                return LocalMediaFrameReadResult.Failed(exception.Code, exception.Message);
+            }
 			catch (Exception exception) when (exception is not LocalMediaReadCancellationException &&
                 exception is InvalidDataException or IOException or ExternalException)
 			{
@@ -158,6 +166,7 @@ public sealed class LocalMediaFileSource : IDisposable
 	public LocalMediaSeekResult SeekToFrame(long frameNumber)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_terminalFailure is { } terminal) return LocalMediaSeekResult.Rejected(frameNumber, terminal.Code, terminal.Message);
 		var started = Stopwatch.GetTimestamp();
         try
         {

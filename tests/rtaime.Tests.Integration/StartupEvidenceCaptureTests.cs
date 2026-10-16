@@ -181,10 +181,12 @@ public sealed class StartupEvidenceCaptureTests
 			return run;
 		}
 		public int ControlProcessId => _processes.Last();
-		public string CaptureDirectory {
-			get { using var doc = JsonDocument.Parse(ReadShared(Options.LifecycleEvidencePath));
-				return Path.GetDirectoryName(doc.RootElement.GetProperty("retainedEvidencePath").GetString())!; }
-		}
+        private string? _captureDirectory;
+        // The host supplies this identity when acquiring its diagnostic lease.
+        // Reading the frequently replaced aggregate just to discover that identity
+        // races publication; assertions still verify the published path after join.
+        public string CaptureDirectory => Volatile.Read(ref _captureDirectory) ??
+            throw new InvalidOperationException("Startup diagnostic session has not opened.");
 		public string CaptureFile(string name) => Path.Combine(CaptureDirectory, name);
 		public JsonDocument ReadCapture(string name) => JsonDocument.Parse(ReadShared(CaptureFile(name)));
 
@@ -222,6 +224,9 @@ public sealed class StartupEvidenceCaptureTests
 		}
 		public void AssertRetainedAndStopped(bool expectGraceful)
 		{
+            using var published = JsonDocument.Parse(ReadShared(Options.LifecycleEvidencePath));
+            Assert.Equal(CaptureDirectory, Path.GetDirectoryName(published.RootElement.GetProperty("retainedEvidencePath").GetString()));
+            Assert.Equal(Path.GetFileName(CaptureDirectory), published.RootElement.GetProperty("captureId").GetString());
 			using var before = ReadCapture("before-shutdown.json");
 			using var shutdown = ReadCapture("apphost-shutdown.json");
 			using var manifest = ReadCapture("manifest.json");
@@ -269,7 +274,12 @@ public sealed class StartupEvidenceCaptureTests
 		public bool IsProcessAlive(int processId) => _system.IsProcessAlive(processId);
 		public bool IsEndpointLeaseHeld(string endpoint) => _system.IsEndpointLeaseHeld(endpoint);
 		public Task FlushProcessDiagnosticsAsync(int processId, CancellationToken token) => _system.FlushProcessDiagnosticsAsync(processId, token);
-		public IDisposable? OpenDiagnosticSession(string directory) => _system.OpenDiagnosticSession(directory);
+        public IDisposable? OpenDiagnosticSession(string directory)
+        {
+            var lease = _system.OpenDiagnosticSession(directory);
+            Volatile.Write(ref _captureDirectory, directory);
+            return lease;
+        }
 		public IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() => _system.ReadHostDiagnosticEvents();
 		public void WriteAllTextAtomic(string path, string content) => _system.WriteAllTextAtomic(path, content);
 		public void KillProcessTree(int processId) => _system.KillProcessTree(processId);

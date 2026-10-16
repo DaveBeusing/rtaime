@@ -32,18 +32,20 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
     private bool _flushPending;
     private bool _disposed;
 
-    internal LocalMediaNativeRead Read(IMFSourceReader reader, uint stream, CancellationToken cancellationToken)
+    internal LocalMediaNativeRead Read(IMFSourceReader reader, uint stream, CancellationToken cancellationToken, TimeSpan remaining)
     {
         cancellationToken.ThrowIfCancellationRequested();
         BeginRead();
         try
         {
             MediaFoundation.ThrowIfFailed(reader.ReadSample(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero));
-            var result = WaitForRead(cancellationToken);
+            var result = WaitForRead(cancellationToken, remaining);
             if (result.Status < 0)
             {
                 MediaFoundation.ReleaseComObject(result.Sample);
-                Marshal.ThrowExceptionForHR(result.Status);
+                var code = LocalMediaSampleProgress.NativeFailureCode(result.Status);
+                throw new LocalMediaDecodeException(code,
+                    $"Media Foundation read failed (HRESULT 0x{unchecked((uint)result.Status):X8}).");
             }
             return result;
         }
@@ -55,7 +57,7 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
         catch (TimeoutException exception)
         {
             Flush(reader);
-            throw new IOException("Media Foundation read deadline expired.", exception);
+            throw new LocalMediaDecodeException("media.file.read_timeout", "Media Foundation read deadline expired.", exception);
         }
         finally { FinishRead(); }
     }
@@ -74,11 +76,11 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
         }
     }
 
-    internal LocalMediaNativeRead WaitForRead(CancellationToken cancellationToken)
+    internal LocalMediaNativeRead WaitForRead(CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         using var registration = cancellationToken.UnsafeRegister(static state =>
             ((LocalMediaSourceReaderCallback)state!).WakeRead(), this);
-        var deadline = Environment.TickCount64 + 30_000;
+        var deadline = Environment.TickCount64 + Math.Max(1L, (long)(timeout ?? TimeSpan.FromSeconds(30)).TotalMilliseconds);
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
