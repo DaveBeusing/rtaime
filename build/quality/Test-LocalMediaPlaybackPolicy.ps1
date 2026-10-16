@@ -95,4 +95,4 @@ Write-Host "Full-frame managed allocation churn: prohibited on steady-state hand
 Write-Host "Generated reference media: 1080p25 / 1080p50 / 1080p59.94 H.264+Aac"
 Write-Host "Offline/freeze regression boundary: playback remains healthy beyond five seconds"
 
-Assert-Condition ($callback -notmatch 'TaskCompletionSource|WaitAsync\\(' -and $callback -match 'AutoResetEvent' -and $callback -match '_readAvailable.Dispose\\(' -and $callback -match '_flushAvailable.Dispose\\(') "MF callback wait resources must be session-owned, reusable and explicitly disposed."
+Assert-Condition ($callback -notmatch 'TaskCompletionSource|WaitAsync[(]' -and $callback -match 'AutoResetEvent' -and $callback -match '_readAvailable.Dispose[(]' -and $callback -match '_flushAvailable.Dispose[(]') "MF callback wait resources must be session-owned, reusable and explicitly disposed."
