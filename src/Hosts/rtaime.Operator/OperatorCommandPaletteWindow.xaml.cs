@@ -30,7 +30,7 @@ public partial class OperatorCommandPaletteWindow : Window
 				previous.Dispatcher.BeginInvoke(() =>
                 {
                     var newerSurface = Application.Current?.Windows.OfType<Window>().Any(window =>
-                        window.IsVisible && window is OperatorCommandPaletteWindow or ShowReadinessWindow or OperatorLibraryWindow) == true;
+                        window.IsVisible && window is OperatorCommandPaletteWindow or ShowReadinessWindow or OperatorLibraryWindow or WorkspaceTemplatesWindow) == true;
                     if (!newerSurface && previous.IsVisible && previous.IsEnabled) previous.Focus();
                 }, DispatcherPriority.Input);
 		};

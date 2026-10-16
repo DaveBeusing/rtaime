@@ -19,7 +19,7 @@ public partial class OperatorLibraryWindow : Window
                 previous.Dispatcher.BeginInvoke(() =>
                 {
                     var newer = Application.Current?.Windows.OfType<Window>().Any(w => w.IsVisible &&
-                        w is OperatorLibraryWindow or OperatorCommandPaletteWindow or ShowReadinessWindow) == true;
+                        w is OperatorLibraryWindow or OperatorCommandPaletteWindow or ShowReadinessWindow or WorkspaceTemplatesWindow) == true;
                     if (!newer && previous.IsVisible && previous.IsEnabled) previous.Focus();
                 }, DispatcherPriority.Input);
         };
