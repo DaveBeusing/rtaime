@@ -6,6 +6,7 @@ using rtaime.Provider.Gpu;
 
 namespace rtaime.Tests.Unit;
 
+[Collection("Blocking consumer lifecycle")]
 public sealed class GpuSchedulingSynchronizationTests
 {
     private static readonly VideoFormat TestFormat =

@@ -8,6 +8,7 @@ using rtaime.Provider.Srt;
 
 namespace rtaime.Tests.Unit;
 
+[Collection("Blocking consumer lifecycle")]
 public sealed class NetworkOutputFoundationTests
 {
 	[Fact]
