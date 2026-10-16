@@ -44,7 +44,13 @@ public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
             Assert.True((await deck.OpenAsync(asset.Path, source)).IsLoaded);
             await deck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.Loop);
             if (deck.Snapshot.Transport?.State != MediaTransportState.Playing) await deck.PlayAsync();
-            await Task.Delay(TimeSpan.FromSeconds(60));
+            for (var sample = 0; sample <= 12; sample++)
+            {
+                Console.WriteLine("LOCAL HANDLE TYPE DIAGNOSTIC: " + JsonSerializer.Serialize(new {
+                    seconds = sample * 15, resources = LocalPlaybackHandleDiagnostics.Capture()
+                }));
+                if (sample < 12) await Task.Delay(TimeSpan.FromSeconds(15));
+            }
             Assert.False(runtimeRun.IsCompleted);
             Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
             Console.WriteLine("SAMPLED LOH TYPE AND SIZE DIAGNOSTIC: " + JsonSerializer.Serialize(allocations.Snapshot()));

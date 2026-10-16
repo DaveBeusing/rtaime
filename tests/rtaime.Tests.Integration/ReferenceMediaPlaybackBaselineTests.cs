@@ -97,7 +97,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                         lohBytesAfterLastGc = gc.GenerationInfo.Length > 3 ? gc.GenerationInfo[3].SizeAfterBytes : (long?)null,
                         allocatedBytes = GC.GetTotalAllocatedBytes(),
                         gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2),
-                        io = ReadIo(process.Handle) };
+                        io = ReadIo(process.Handle), handleDiagnostics = LocalPlaybackHandleDiagnostics.Capture() };
                     if (allocationDiagnostics is not null)
                         Console.WriteLine("LOCAL LOH ALLOCATION DIAGNOSTIC: " + JsonSerializer.Serialize(allocationDiagnostics.Snapshot()));
                     nextSample += TimeSpan.FromSeconds(60);
