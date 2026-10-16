@@ -105,7 +105,7 @@ public sealed class ReferenceMediaRegressionTests
 
 		for (var frame = 0; frame < 260; frame++)
 		{
-			var snapshot = deck.ProcessBoundary();
+			var snapshot = LocalMediaTestPlayback.Next(deck);
 			Assert.NotEqual(MediaDeckState.Error, snapshot.State);
 			Assert.Equal(MediaTransportState.Playing, snapshot.Transport!.State);
 			Assert.Null(snapshot.Failure);
@@ -125,7 +125,7 @@ public sealed class ReferenceMediaRegressionTests
 
 		for (var frame = 0; frame < 640; frame++)
 		{
-			var snapshot = deck.ProcessBoundary();
+			var snapshot = LocalMediaTestPlayback.Next(deck);
 			Assert.NotEqual(MediaDeckState.Error, snapshot.State);
 			Assert.Equal(MediaTransportState.Playing, snapshot.Transport!.State);
 			Assert.Null(snapshot.Failure);
@@ -208,7 +208,7 @@ public sealed class ReferenceMediaRegressionTests
 			assetId,
 			MediaTransportCommandKind.Play)).Succeeded);
 		for (var index = 0; index < 20; index++)
-			Assert.NotEqual(MediaDeckState.Error, deck.ProcessBoundary().State);
+			Assert.NotEqual(MediaDeckState.Error, LocalMediaTestPlayback.Next(deck).State);
 
 		var stopped = deck.ApplyTransport(new MediaTransportCommand(
 			MediaContractVersion.Current,
@@ -222,7 +222,7 @@ public sealed class ReferenceMediaRegressionTests
 			MediaContractVersion.Current,
 			assetId,
 			MediaTransportCommandKind.Play)).Succeeded);
-		var restarted = deck.ProcessBoundary();
+		var restarted = LocalMediaTestPlayback.Next(deck);
 		Assert.Equal(MediaDeckState.Playing, restarted.State);
 		Assert.NotNull(deck.LatestBoundary);
 		Assert.True(deck.LatestBoundary!.Succeeded, deck.LatestBoundary.Failure?.Message);

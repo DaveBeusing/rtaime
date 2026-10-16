@@ -134,6 +134,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.StopAsync();
+            await Until(() => runtime.MediaDeck!.Snapshot.State == MediaDeckState.Ready, TimeSpan.FromSeconds(8));
+            await deck.RefreshAsync();
             Assert.Equal(MediaDeckState.Ready, deck.Snapshot.State);
             Assert.Equal(0, deck.Snapshot.Transport!.Position.CurrentFrame);
             transportAfterSeeks = new { stop = deck.Snapshot, observations = runtime.MediaDeck!.PlaybackMeasurements };

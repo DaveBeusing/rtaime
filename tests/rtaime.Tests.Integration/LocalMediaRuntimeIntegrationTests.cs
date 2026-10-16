@@ -73,7 +73,7 @@ public sealed class LocalMediaRuntimeIntegrationTests
 			MediaTransportCommandKind.Play));
 		Assert.True(play.Succeeded, play.Failure?.Message);
 
-		var boundary = session.ProcessNextBoundary();
+		var boundary = LocalMediaTestPlayback.Next(session);
 		Assert.True(boundary.Succeeded, $"{boundary.Status}: {boundary.Failure?.Message}");
 		Assert.Equal(mediaSourceId, boundary.Video!.SourceId);
 		Assert.Equal((long)1920 * 1080 * 4, boundary.RgbaPixels.Length);

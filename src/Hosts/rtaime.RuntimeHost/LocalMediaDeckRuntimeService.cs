@@ -39,6 +39,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	}
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
+    public LocalMediaDecodeSnapshot? DecodeSnapshot { get { lock (_gate) return _session?.DecodeSnapshot; } }
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements { get { lock (_gate) return _session?.Measurements; } }
 
 	public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
@@ -91,6 +92,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             previous = _session;
             _session = null;
             _opening = true;
+            _latestBoundary?.Dispose();
             _latestBoundary = null;
             _failure = null;
             _inPointFrame = null;
@@ -173,6 +175,12 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			}
 
 			var result = _session.ApplyTransport(command);
+            if (command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
+                MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
+            {
+                _latestBoundary?.Dispose();
+                _latestBoundary = null;
+            }
 			if (!result.Succeeded && result.Failure is { } failure)
 				_failure = failure;
 			else if (result.Succeeded)
@@ -211,12 +219,14 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		{
 			if (_session is null || _session.Transport.State != MediaTransportState.Playing)
 			{
-				_latestBoundary = null;
+				_latestBoundary?.Dispose();
+            _latestBoundary = null;
 				return CreateSnapshot();
 			}
 
 			var result = _session.ProcessNextBoundary();
-			_latestBoundary = result;
+			_latestBoundary?.Dispose();
+            _latestBoundary = result.Retain();
 			if (result.Status == LocalMediaRuntimeBoundaryStatus.Failed)
 			{
 				_failure = result.Failure;
@@ -253,6 +263,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             previous = _session;
             _session = null;
             _opening = false;
+            _latestBoundary?.Dispose();
             _latestBoundary = null;
             _failure = null;
             _inPointFrame = null;
@@ -273,6 +284,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             ++_openGeneration;
             previous = _session;
             _session = null;
+            _latestBoundary?.Dispose();
             _latestBoundary = null;
         }
         previous?.Dispose();
