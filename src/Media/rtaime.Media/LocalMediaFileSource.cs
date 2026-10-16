@@ -95,7 +95,7 @@ public sealed class LocalMediaFileSource : IDisposable
 	public MediaAssetId AssetId => Probe.AssetId;
 	public MediaSourceId SourceId => Probe.SourceId;
 
-	public LocalMediaFrameReadResult ReadNext(ulong sequenceNumber)
+	public LocalMediaFrameReadResult ReadNext(ulong sequenceNumber, CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		Exception? lastFailure = null;
@@ -106,7 +106,7 @@ public sealed class LocalMediaFileSource : IDisposable
                 var started = Stopwatch.GetTimestamp();
                 bool available;
                 LocalMediaDecodedFrame? frame;
-                try { available = _decoder.TryReadNext(sequenceNumber, out frame); }
+                try { cancellationToken.ThrowIfCancellationRequested(); available = _decoder.TryReadNext(sequenceNumber, cancellationToken, out frame); }
                 finally { _measurements = _measurements with { Decode = _measurements.Decode.Observe(Stopwatch.GetElapsedTime(started).TotalMilliseconds) }; }
                 if (!available) return LocalMediaFrameReadResult.Ended();
                 var media = frame!;
@@ -141,7 +141,8 @@ public sealed class LocalMediaFileSource : IDisposable
                 if (audioSeconds is { } at) _expectedAudioSeconds = at + audioSamples / (double)Probe.AudioFormat.SampleRate;
                 return LocalMediaFrameReadResult.Decoded(media);
 			}
-			catch (Exception exception) when (exception is InvalidDataException or IOException or ExternalException)
+			catch (Exception exception) when (exception is not LocalMediaReadCancellationException &&
+                exception is InvalidDataException or IOException or ExternalException)
 			{
 				lastFailure = exception;
                 _measurements = _measurements with { ReadRetries = _measurements.ReadRetries + (attempt == 0 ? 1UL : 0) };
@@ -298,6 +299,11 @@ internal interface ILocalMediaDecoder : IDisposable
     LocalMediaReadMeasurements VideoReadMeasurements => default;
     LocalMediaReadMeasurements AudioReadMeasurements => default;
 	bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame);
+    bool TryReadNext(ulong sequenceNumber, CancellationToken cancellationToken, out LocalMediaDecodedFrame? frame)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return TryReadNext(sequenceNumber, out frame);
+    }
 	LocalMediaSeekResult SeekToFrame(long frameNumber);
 }
 

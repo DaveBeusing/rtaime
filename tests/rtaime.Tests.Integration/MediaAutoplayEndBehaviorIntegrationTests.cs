@@ -43,7 +43,9 @@ public sealed class MediaAutoplayEndBehaviorIntegrationTests
 		Assert.Equal(5, configured.Snapshot.EffectiveStartFrame);
 		Assert.Equal(7, configured.Snapshot.EffectiveEndFrame);
 
-		var armed = deck.ObserveProgramSource(source);
+		deck.ObserveProgramSource(source);
+        LocalMediaTestPlayback.Ready(deck);
+        var armed = deck.Snapshot;
 		Assert.Equal(MediaDeckState.Playing, armed.State);
 		Assert.True(armed.Transport!.IsOnProgram);
 		Assert.Equal(5, armed.Transport.Position.CurrentFrame);
@@ -61,7 +63,9 @@ public sealed class MediaAutoplayEndBehaviorIntegrationTests
 		if (endBehavior == MediaDeckEndBehavior.HoldLastFrame)
 		{
 			deck.ObserveProgramSource(new MediaSourceId(Id(2)));
-			var retake = deck.ObserveProgramSource(source);
+			deck.ObserveProgramSource(source);
+            LocalMediaTestPlayback.Ready(deck);
+            var retake = deck.Snapshot;
 			Assert.Equal(MediaDeckState.Playing, retake.State);
 			Assert.Equal(5, retake.Transport!.Position.CurrentFrame);
 		}
@@ -95,7 +99,9 @@ public sealed class MediaAutoplayEndBehaviorIntegrationTests
 			MediaTransportCommandKind.Seek,
 			12)).Succeeded);
 
-		var taken = deck.ObserveProgramSource(source);
+		deck.ObserveProgramSource(source);
+        LocalMediaTestPlayback.Ready(deck);
+        var taken = deck.Snapshot;
 		Assert.Equal(MediaDeckState.Playing, taken.State);
 		Assert.Equal(12, taken.Transport!.Position.CurrentFrame);
 
@@ -120,7 +126,7 @@ public sealed class MediaAutoplayEndBehaviorIntegrationTests
 
 	private static long ProcessFrame(LocalMediaDeckRuntimeService deck)
 	{
-		deck.ProcessBoundary();
+		LocalMediaTestPlayback.Next(deck);
 		var boundary = deck.LatestBoundary;
 		Assert.NotNull(boundary);
 		Assert.True(boundary!.Succeeded, boundary.Failure?.Message);

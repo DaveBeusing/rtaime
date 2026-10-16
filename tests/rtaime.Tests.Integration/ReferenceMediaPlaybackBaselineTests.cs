@@ -7,6 +7,7 @@ using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.RuntimeHost;
+using rtaime.Runtime;
 
 namespace rtaime.Tests.Integration;
 
@@ -33,11 +34,15 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint, DurabilityRoot = root });
         var runtimeRun = runtime.RunAsync(runtimeStop.Token);
         var controlRun = control.RunAsync(controlStop.Token);
+        using var allocationDiagnostics = Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") == "1"
+            ? new LocalPlaybackAllocationListener() : null;
         var resources = new object[128];
         var sampleCount = 0;
         object? playback = null;
         object? finalTiming = null;
+        RuntimePipelineTimingSnapshot? rawTiming = null;
         object? finalSchedule = null;
+        object? finalDecode = null;
         object? transport = null;
         object? transportAfterSeeks = null;
         string audioStatus = "UNVERIFIED";
@@ -94,7 +99,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                         lohBytesAfterLastGc = gc.GenerationInfo.Length > 3 ? gc.GenerationInfo[3].SizeAfterBytes : (long?)null,
                         allocatedBytes = GC.GetTotalAllocatedBytes(),
                         gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2),
-                        io = ReadIo(process.Handle) };
+                        io = ReadIo(process.Handle), handleDiagnostics = LocalPlaybackHandleDiagnostics.Capture() };
+                    if (allocationDiagnostics is not null)
+                        Console.WriteLine("LOCAL LOH ALLOCATION DIAGNOSTIC: " + JsonSerializer.Serialize(allocationDiagnostics.Snapshot()));
                     nextSample += TimeSpan.FromSeconds(60);
                 }
                 if (snapshot.State == MediaDeckState.Ended) break;
@@ -103,8 +110,10 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             var ended = runtime.MediaDeck!.Snapshot;
             transport = ended;
             playback = runtime.MediaDeck.PlaybackMeasurements;
-            finalTiming = runtime.PipelineTiming;
+            rawTiming = runtime.PipelineTiming;
+            finalTiming = LocalPlaybackEvidenceJson.Summarize(rawTiming);
             finalSchedule = runtime.ScheduleStatistics;
+            finalDecode = runtime.MediaDeck!.DecodeSnapshot;
             runtimePerformance = runtime.Runtime!.Snapshot.Performance;
             Assert.Equal(MediaDeckState.Ended, ended.State);
             var measurement = runtime.MediaDeck.PlaybackMeasurements!.Value;
@@ -125,15 +134,23 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             await deck.StopAsync();
             await deck.Timeline.SeekToFrameAsync(59);
             Assert.Equal(59, deck.Timeline.State.ConfirmedFrame);
+            await Until(() => runtime.MediaDeck!.Snapshot.State != MediaDeckState.Loading, TimeSpan.FromSeconds(8));
+            Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.PauseAsync();
+            await Until(() => runtime.MediaDeck!.Snapshot.State == MediaDeckState.Paused, TimeSpan.FromSeconds(8));
+            await deck.RefreshAsync();
             Assert.Equal(MediaDeckState.Paused, deck.Snapshot.State);
             await deck.Timeline.SeekToFrameAsync(61);
             Assert.Equal(61, deck.Timeline.State.ConfirmedFrame);
+            await Until(() => runtime.MediaDeck!.Snapshot.State != MediaDeckState.Loading, TimeSpan.FromSeconds(8));
+            Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.StopAsync();
+            await Until(() => runtime.MediaDeck!.Snapshot.State == MediaDeckState.Ready, TimeSpan.FromSeconds(8));
+            await deck.RefreshAsync();
             Assert.Equal(MediaDeckState.Ready, deck.Snapshot.State);
             Assert.Equal(0, deck.Snapshot.Transport!.Position.CurrentFrame);
             transportAfterSeeks = new { stop = deck.Snapshot, observations = runtime.MediaDeck!.PlaybackMeasurements };
@@ -159,7 +176,13 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             {
                 Directory.CreateDirectory(evidence);
                 var diagnostics = playback;
-                File.WriteAllText(Path.Combine(evidence, "local-playback-baseline.json"), JsonSerializer.Serialize(new {
+                var timingPath = Path.Combine(evidence, "local-playback-timing.json");
+                var timingHash = rawTiming is null ? null : LocalPlaybackEvidenceJson.Write(timingPath, new {
+                    schemaVersion = "1.0", sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                    sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                    scope = "Bounded retained timing ring; percentiles do not represent the entire run", timing = rawTiming
+                });
+                LocalPlaybackEvidenceJson.Write(Path.Combine(evidence, "local-playback-baseline.json"), new {
                     schemaVersion = "1.0", sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
                     qualificationClass = "ACTUAL_WINDOWS_RUNTIME_PLAYBACK; HOSTED_STORAGE_NOT_PHYSICAL_SSD_QUALIFICATION",
@@ -170,15 +193,20 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     storage = "Hosted runner volume; SSD class, cold cache and device latency UNVERIFIED",
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
-                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
+                    playback, clientOpenMilliseconds, finalTiming, timingEvidence = timingHash is null ? null : new { path = "local-playback-timing.json", sha256 = timingHash }, finalSchedule, finalDecode, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
                     collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
                     audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
                     productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",
                     audioQualification = "Inspect missing audio, timestamp discontinuities and A/V distance; nonzero findings are not waived as production-ready",
                     physicalStatus = "UNVERIFIED", failureStages = new[] { "probe", "decode", "transport", "scheduler", "GPU", "output" }
-                }, new JsonSerializerOptions { WriteIndented = true }));
+                });
                 Console.WriteLine("LOCAL PLAYBACK EVIDENCE: " + Path.Combine(evidence, "local-playback-baseline.json"));
                 Console.WriteLine("LOCAL PLAYBACK OBSERVATIONS: " + JsonSerializer.Serialize(playback ?? diagnostics));
+                Console.WriteLine("LOCAL PLAYBACK RESOURCE SERIES: " + JsonSerializer.Serialize(resources.Take(sampleCount)));
+                Console.WriteLine("LOCAL PLAYBACK RESOURCE GROWTH: " + JsonSerializer.Serialize(new { privateGrowth, handleGrowth }));
+                Console.WriteLine("LOCAL DECODE OBSERVATIONS: " + JsonSerializer.Serialize(finalDecode));
+                Console.WriteLine("LOCAL ADMISSION TIMING: " + JsonSerializer.Serialize(finalTiming));
+                Console.WriteLine("LOCAL PROGRAM SCHEDULE: " + JsonSerializer.Serialize(finalSchedule));
             }
             if (Directory.Exists(root)) Directory.Delete(root, true);
             Assert.Null(cleanupFailure);

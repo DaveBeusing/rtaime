@@ -13,7 +13,9 @@ public enum LocalMediaRuntimeBoundaryStatus
 	Frame = 1,
 	Ended = 2,
 	Failed = 3,
-	NotPlaying = 4
+	NotPlaying = 4,
+    Buffering = 5,
+    Repeated = 6
 }
 
 public sealed record LocalMediaRuntimeBoundaryResult(
@@ -23,9 +25,12 @@ public sealed record LocalMediaRuntimeBoundaryResult(
 	AudioBufferDescriptor? Audio,
 	ReadOnlyMemory<byte> AudioPayload,
 	MediaTransportSnapshot Transport,
-	Failure? Failure)
+	Failure? Failure) : IDisposable
 {
-	public bool Succeeded => Status == LocalMediaRuntimeBoundaryStatus.Frame && Video is not null;
+    internal LocalMediaFrameLease? Ownership { get; init; }
+    public bool Succeeded => Status is LocalMediaRuntimeBoundaryStatus.Frame or LocalMediaRuntimeBoundaryStatus.Repeated && Video is not null;
+    internal LocalMediaRuntimeBoundaryResult Retain() => this with { Ownership = Ownership?.Retain() };
+    public void Dispose() => Ownership?.Dispose();
 }
 
 /// <summary>
@@ -37,6 +42,12 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 {
 	private readonly LocalMediaFileProvider _provider;
 	private readonly LocalMediaFileSource _source;
+    private readonly LocalMediaDecodeWorker _decode;
+    private LocalMediaRuntimeBoundaryResult? _current;
+    private long _originFrame;
+    private long _cadenceOrdinal;
+    private ulong? _lastProgramSlot;
+    private bool _wasBuffering;
 	private readonly TransactionalRuntime _runtime;
 	private readonly MediaFramePipeline _pipeline;
 	private readonly LocalMediaTransportController _transport;
@@ -49,15 +60,45 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		_transport = new LocalMediaTransportController(
-			source.Probe,
-			frame => source.SeekToFrame(frame).Failure);
+		try { _decode = new LocalMediaDecodeWorker(source); }
+        catch
+        {
+            // Ownership transfers only after the worker and fixed payload slots exist.
+            _pipeline.Dispose();
+            source.Dispose();
+            throw;
+        }
+        _transport = new LocalMediaTransportController(source.Probe, frame =>
+        {
+            _current?.Dispose();
+            _current = null;
+            _originFrame = frame;
+            _cadenceOrdinal = 0;
+            _lastProgramSlot = null;
+            _wasBuffering = false;
+            return _decode.Reposition(frame);
+        });
 	}
 
 	public LocalMediaProbe Probe => _source.Probe;
-    public LocalMediaPlaybackMeasurements Measurements => _source.Measurements;
+    public LocalMediaPlaybackMeasurements Measurements => _decode.Measurements;
+    public LocalMediaDecodeSnapshot DecodeSnapshot => _decode.Snapshot;
+    public bool IsBuffering => !_decode.IsPrepared || _decode.Snapshot.State == LocalMediaDecodeState.Starved;
+    public bool WaitForPreroll(TimeSpan timeout) => _decode.WaitForPreroll(timeout);
 	public RuntimeExecutionState RuntimeState => _runtime.State;
-	public MediaTransportSnapshot Transport => _transport.Snapshot;
+	public MediaTransportSnapshot Transport
+    {
+        get
+        {
+            if (_decode.Snapshot.Failure is { } failure)
+            {
+                _current?.Dispose();
+                _current = null;
+                _transport.MarkError(failure);
+            }
+            return _transport.Snapshot;
+        }
+    }
 	public ulong NextSequenceNumber => _nextSequenceNumber;
 
 	public RuntimeHostApplyResult ApplyExecution(PreparedExecutionContract preparedExecution)
@@ -84,9 +125,39 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			return new RuntimeHostApplyResult(rejection, null, null);
 		}
 
+        if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
+        {
+            var rejection = new RuntimePrepareResult(RuntimeContractVersion.Current,
+                preparedExecution.PreparedExecutionId, RuntimePrepareStatus.Rejected, null,
+                _decode.Snapshot.Failure ?? new Failure("runtime.local_media.preroll_timeout",
+                    "Local media did not produce a qualified preroll within ten seconds."));
+            return new RuntimeHostApplyResult(rejection, null, null);
+        }
+
 		var prepare = _runtime.Prepare(preparedExecution);
 		if (prepare.Status != RuntimePrepareStatus.Prepared)
 			return new RuntimeHostApplyResult(prepare, null, null);
+
+        if (_runtime.ActiveExecution is not null)
+        {
+            var frame = _transport.Snapshot.Position.CurrentFrame;
+            _current?.Dispose();
+            _current = null;
+            _originFrame = frame;
+            _cadenceOrdinal = 0;
+            _lastProgramSlot = null;
+            _wasBuffering = false;
+            _decode.Reposition(frame);
+            if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
+            {
+                _runtime.Abort(preparedExecution.PreparedExecutionId, prepare.ReservationId!.Value);
+                var rejection = new RuntimePrepareResult(RuntimeContractVersion.Current,
+                    preparedExecution.PreparedExecutionId, RuntimePrepareStatus.Rejected, null,
+                    _decode.Snapshot.Failure ?? new Failure("runtime.local_media.preroll_timeout",
+                        "Rebound local media did not produce qualified preroll."));
+                return new RuntimeHostApplyResult(rejection, null, null);
+            }
+        }
 
 		var commit = _runtime.Commit(new RuntimeCommitRequest(
 			RuntimeContractVersion.Current,
@@ -117,10 +188,13 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 				"Media transport requires a committed execution.");
 		}
 
-		return _transport.Apply(command);
+		var result = _transport.Apply(command);
+        if (result.Succeeded && command.Kind is MediaTransportCommandKind.Play or MediaTransportCommandKind.Pause)
+            _lastProgramSlot = null;
+        return result;
 	}
 
-	public LocalMediaRuntimeBoundaryResult ProcessNextBoundary()
+	public LocalMediaRuntimeBoundaryResult ProcessNextBoundary(ulong? programSlot = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var execution = _runtime.ActiveExecution;
@@ -152,41 +226,57 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 				null);
 		}
 
-		var decoded = _source.ReadNext(_nextSequenceNumber);
-		if (decoded.Status == LocalMediaFrameReadStatus.Ended)
-		{
-			_transport.MarkEnded();
-			return new LocalMediaRuntimeBoundaryResult(
-				LocalMediaRuntimeBoundaryStatus.Ended,
-				null,
-				ReadOnlyMemory<byte>.Empty,
-				null,
-				ReadOnlyMemory<byte>.Empty,
-				_transport.Snapshot,
-				null);
-		}
-		if (!decoded.Succeeded)
-		{
-			var failure = decoded.Failure ?? new Failure(
-				"runtime.local_media.decode_failed",
-				"Local media decoding failed without failure details.");
-			_transport.MarkError(failure);
-			return new LocalMediaRuntimeBoundaryResult(
-				LocalMediaRuntimeBoundaryStatus.Failed,
-				null,
-				ReadOnlyMemory<byte>.Empty,
-				null,
-				ReadOnlyMemory<byte>.Empty,
-				_transport.Snapshot,
-				failure);
-		}
+        if (programSlot is { } slot)
+        {
+            if (_lastProgramSlot is { } previous && slot > previous && !_wasBuffering)
+                _cadenceOrdinal = checked(_cadenceOrdinal + (long)(slot - previous - 1));
+            _lastProgramSlot = slot;
+        }
+        var rate = Probe.VideoFormat.FrameRate;
+        var target = checked((long)decimal.Round(
+            (decimal)checked(_originFrame + _cadenceOrdinal) * TimeSpan.TicksPerSecond *
+            rate.Denominator / rate.Numerator, 0, MidpointRounding.AwayFromZero));
+        var owned = _decode.TakeDue(target, out var ended, out var decodeFailure);
+        if (decodeFailure is { } failure) return Failed(failure.Code, failure.Message);
+        if (ended)
+        {
+            _current?.Dispose();
+            _current = null;
+            _transport.MarkEnded();
+            return Empty(LocalMediaRuntimeBoundaryStatus.Ended);
+        }
+        if (owned is null)
+        {
+            // An explicitly queued future PTS permits a hold without replaying audio.
+            // An empty/not-prerolled queue is an underrun: freeze media time, let Program advance.
+            if (_decode.IsPrepared && _decode.Snapshot.QueuedFrames > 0)
+            {
+                _cadenceOrdinal = checked(_cadenceOrdinal + 1);
+                if (_current is not { } previous) return Empty(LocalMediaRuntimeBoundaryStatus.Buffering);
+                _current = previous with {
+                    Status = LocalMediaRuntimeBoundaryStatus.Repeated, Audio = null,
+                    AudioPayload = ReadOnlyMemory<byte>.Empty, Ownership = previous.Ownership?.Retain()
+                };
+                previous.Dispose();
+                return _current;
+            }
+            _current?.Dispose();
+            _current = null;
+             _wasBuffering = true;
+            return Empty(LocalMediaRuntimeBoundaryStatus.Buffering);
+        }
+        _wasBuffering = false;
+        var media = owned.Frame;
+        _current?.Dispose();
+        var timing = new FrameTiming(_nextSequenceNumber, media.Video.Timing.PresentationTimestamp, media.Video.Timing.Timebase);
+        var admitted = new FrameDescriptor(media.Video.Version, media.Video.SourceId, media.Video.Surface, timing);
 
-		var media = decoded.Frame!;
 		var clock = new MediaClockPosition(media.Video.Timing.PresentationTimestamp, media.Video.Timing.Timebase);
-		var submitted = _pipeline.Submit(media.Video, clock);
+		var submitted = _pipeline.Submit(admitted, clock);
 		if (!submitted.Accepted)
 		{
-			return Failed(
+			owned.Dispose();
+            return Failed(
 				submitted.Failure?.Code ?? "runtime.local_media.pipeline_rejected",
 				submitted.Failure?.Message ?? "Local media frame was rejected by the media pipeline.");
 		}
@@ -195,7 +285,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		var consumption = _pipeline.ConsumeNext(clock, frame => consumed = frame);
 		if (!consumption.Consumed || consumed is null)
 		{
-			return Failed(
+			owned.Dispose();
+            return Failed(
 				consumption.Failure?.Code ?? "runtime.local_media.pipeline_empty",
 				consumption.Failure?.Message ?? "Local media frame could not be consumed from the media pipeline.");
 		}
@@ -205,18 +296,26 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			consumed.Timing.Timebase);
 
 		if (_nextSequenceNumber == ulong.MaxValue)
-			return Failed("runtime.local_media.sequence_exhausted", "Local media sequence number exhausted.");
+        {
+            owned.Dispose();
+            return Failed("runtime.local_media.sequence_exhausted", "Local media sequence number exhausted.");
+        }
 		_nextSequenceNumber++;
+        _cadenceOrdinal = checked(_cadenceOrdinal + 1);
 
-		return new LocalMediaRuntimeBoundaryResult(
+		_current = new LocalMediaRuntimeBoundaryResult(
 			LocalMediaRuntimeBoundaryStatus.Frame,
 			consumed,
 			media.RgbaPixels,
 			media.Audio,
 			media.AudioPayload,
 			_transport.Snapshot,
-			null);
+			null) { Ownership = owned };
+        return _current;
 	}
+
+    private LocalMediaRuntimeBoundaryResult Empty(LocalMediaRuntimeBoundaryStatus status) =>
+        new(status, null, ReadOnlyMemory<byte>.Empty, null, ReadOnlyMemory<byte>.Empty, _transport.Snapshot, null);
 
 	public void Dispose()
 	{
@@ -224,14 +323,18 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			return;
 
 		_disposed = true;
-		_pipeline.Dispose();
-		_source.Dispose();
+		_current?.Dispose();
+        _current = null;
+        _decode.Dispose();
+        _pipeline.Dispose();
 	}
 
 	private LocalMediaRuntimeBoundaryResult Failed(string code, string message)
 	{
 		var failure = new Failure(code, message);
-		_transport.MarkError(failure);
+		_current?.Dispose();
+        _current = null;
+        _transport.MarkError(failure);
 		return new LocalMediaRuntimeBoundaryResult(
 			LocalMediaRuntimeBoundaryStatus.Failed,
 			null,

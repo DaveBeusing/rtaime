@@ -470,7 +470,7 @@ public sealed class RuntimeHostProcess
 				continue;
 			var admissionStartedAt = _timingClock.Elapsed;
 			mediaIo?.PumpInputs();
-			AdmitMediaDeckBoundary(runtime, mediaDeck);
+			AdmitMediaDeckBoundary(runtime, mediaDeck, opportunity.Slot);
 			if (!runtime.HasCommittedExecution)
 			{
 				hasCommittedObservation = false;
@@ -526,23 +526,30 @@ public sealed class RuntimeHostProcess
 
 	private void AdmitMediaDeckBoundary(
 		V1RuntimeHostService runtime,
-		LocalMediaDeckRuntimeService mediaDeck)
+		LocalMediaDeckRuntimeService mediaDeck,
+        ulong programSlot)
 	{
 		mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-		var snapshot = mediaDeck.ProcessBoundary();
+		var snapshot = mediaDeck.ProcessBoundary(out var admittedBoundary, programSlot);
+        using var boundary = admittedBoundary;
 		if (snapshot.SourceId is not { } sourceId)
 		{
 			if (_activeDeckSource is { } previous)
-				runtime.ClearExternalAudioMeter(previous);
+            {
+                runtime.ClearExternalAudioMeter(previous);
+                runtime.SetInputSignalState(previous, V1InputSignalState.Lost);
+            }
 			_activeDeckSource = null;
 			return;
 		}
 
 		if (_activeDeckSource is { } previousSource && previousSource != sourceId)
-			runtime.ClearExternalAudioMeter(previousSource);
+        {
+            runtime.ClearExternalAudioMeter(previousSource);
+            runtime.SetInputSignalState(previousSource, V1InputSignalState.Lost);
+        }
 		_activeDeckSource = sourceId;
 
-		var boundary = mediaDeck.LatestBoundary;
 		if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
 		{
 			if (boundary.Video.Surface.Format == runtime.Format)
@@ -558,13 +565,17 @@ public sealed class RuntimeHostProcess
 			}
 		}
 
-		if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
+        if (snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
+            boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
+            runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
+
+        if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
 		{
 			runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);
 		}
 		else
 		{
-			var available = snapshot.State != MediaDeckState.Error;
+			var available = snapshot.State is not (MediaDeckState.Error or MediaDeckState.Loading);
 			runtime.SetExternalAudioMeter(sourceId, 0, 0, available);
 		}
 	}

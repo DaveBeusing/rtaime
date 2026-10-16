@@ -59,7 +59,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		Assert.True(play.Succeeded, play.Failure?.Message);
 		Assert.Equal(MediaTransportState.Playing, play.Snapshot.State);
 
-		var first = session.ProcessNextBoundary();
+		var first = LocalMediaTestPlayback.Next(session);
 		Assert.True(first.Succeeded, $"{first.Status}: {first.Failure?.Message}");
 		Assert.Equal(0, first.Transport.Position.CurrentFrame);
 		Assert.NotNull(first.Audio);
@@ -75,7 +75,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		Assert.Equal(TimeSpan.FromMilliseconds(40), seek.Snapshot.Position.Position);
 
 		Assert.True(session.ApplyTransport(Command(assetId, MediaTransportCommandKind.Play)).Succeeded);
-		var afterSeek = session.ProcessNextBoundary();
+		var afterSeek = LocalMediaTestPlayback.Next(session);
 		Assert.True(afterSeek.Succeeded, $"{afterSeek.Status}: {afterSeek.Failure?.Message}");
 		Assert.Equal(2, afterSeek.Transport.Position.CurrentFrame);
 		Assert.NotNull(afterSeek.Audio);

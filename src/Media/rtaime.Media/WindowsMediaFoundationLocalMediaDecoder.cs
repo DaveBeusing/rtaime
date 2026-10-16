@@ -19,6 +19,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 {
 	private static readonly Timebase MediaFoundationTimebase = new(1, 10_000_000);
 	private readonly IMFSourceReader _reader;
+    private readonly LocalMediaSourceReaderCallback _callback;
+    private CancellationToken _readCancellation;
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
 	private readonly bool _hasAudio;
@@ -32,12 +34,14 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 	private WindowsMediaFoundationLocalMediaDecoder(
 		IMFSourceReader reader,
+        LocalMediaSourceReaderCallback callback,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
 		LocalMediaProbe probe,
 		bool hasAudio)
 	{
 		_reader = reader;
+        _callback = callback;
 		_assetId = assetId;
 		_sourceId = sourceId;
 		Probe = probe;
@@ -60,16 +64,20 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		IMFSourceReader? reader = null;
 		var mediaFoundationStarted = false;
+        var callback = new LocalMediaSourceReaderCallback();
+        var callbackTransferred = false;
 		try
 		{
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFStartup(MediaFoundation.MfVersion, MediaFoundation.MfStartupFull));
 			mediaFoundationStarted = true;
 
-			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateAttributes(out var readerAttributes, 2));
+			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateAttributes(out var readerAttributes, 3));
 			try
 			{
 				var advancedVideoProcessing = MediaFoundation.MfSourceReaderEnableAdvancedVideoProcessing;
 				MediaFoundation.ThrowIfFailed(readerAttributes.SetUINT32(ref advancedVideoProcessing, 1));
+                var callbackKey = new Guid("1E3DBEAC-BB43-4C35-B507-CD644464C965");
+                MediaFoundation.ThrowIfFailed(readerAttributes.SetUnknown(ref callbackKey, callback));
 				MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSourceReaderFromURL(path, readerAttributes, out reader));
 			}
 			finally
@@ -141,12 +149,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
 
-				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(
+				var decoder = new WindowsMediaFoundationLocalMediaDecoder(
 					reader,
+                    callback,
 					assetId,
 					sourceId,
 					probe,
-					hasAudio));
+					hasAudio);
+                callbackTransferred = true;
+                return LocalMediaDecoderOpenResult.Ready(decoder);
 			}
 			finally
 			{
@@ -162,6 +173,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.MFShutdown();
 			return LocalMediaDecoderOpenResult.Rejected("media.file.probe_failed", $"The local media file could not be probed: {exception.Message}");
 		}
+        finally { if (!callbackTransferred) callback.Dispose(); }
 	}
 
 	public LocalMediaSeekResult SeekToFrame(long frameNumber)
@@ -179,7 +191,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		try
 		{
 			var target = LocalMediaFrameMath.FrameToTimeSpan(frameNumber, Probe.VideoFormat.FrameRate).Ticks;
-			MediaFoundation.ThrowIfFailed(_reader.Flush(MediaFoundation.AllStreams));
+			_callback.Flush(_reader);
 			var timeFormat = Guid.Empty;
 			var position = new PropVariant
 			{
@@ -202,8 +214,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	public bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame)
-	{
+	public bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame) =>
+        TryReadNext(sequenceNumber, CancellationToken.None, out frame);
+
+    public bool TryReadNext(ulong sequenceNumber, CancellationToken cancellationToken, out LocalMediaDecodedFrame? frame)
+    {
+        _readCancellation = cancellationToken;
+        cancellationToken.ThrowIfCancellationRequested();
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var minimumTimestamp = _pendingSeekTimestamp;
 		long videoTimestamp;
@@ -333,8 +350,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			return;
 
 		_disposed = true;
-		MediaFoundation.ReleaseComObject(_reader);
-		MediaFoundation.MFShutdown();
+		try { MediaFoundation.ReleaseComObject(_reader); }
+        finally
+        {
+            try { _callback.Dispose(); }
+            finally { MediaFoundation.MFShutdown(); }
+        }
 	}
 
 	private bool TryReadVideoSample(
@@ -347,7 +368,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			var readStarted = Stopwatch.GetTimestamp();
             uint flags;
             IMFSample? sample;
-            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            try
+            {
+                var result = _callback.Read(_reader, streamIndex, _readCancellation);
+                flags = result.Flags;
+                timestamp = result.Timestamp;
+                sample = result.Sample;
+            }
             finally
             {
                 var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
@@ -396,7 +423,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			var readStarted = Stopwatch.GetTimestamp();
             uint flags;
             IMFSample? sample;
-            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            try
+            {
+                var result = _callback.Read(_reader, streamIndex, _readCancellation);
+                flags = result.Flags;
+                timestamp = result.Timestamp;
+                sample = result.Sample;
+            }
             finally
             {
                 var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
@@ -890,13 +923,9 @@ internal interface IMFSourceReader
 	[PreserveSig] int GetCurrentMediaType(uint streamIndex, out IMFMediaType mediaType);
 	[PreserveSig] int SetCurrentMediaType(uint streamIndex, IntPtr reserved, IMFMediaType mediaType);
 	[PreserveSig] int SetCurrentPosition(ref Guid timeFormat, ref PropVariant position);
-	[PreserveSig] int ReadSample(
-		uint streamIndex,
-		uint controlFlags,
-		out uint actualStreamIndex,
-		out uint streamFlags,
-		out long timestamp,
-		[MarshalAs(UnmanagedType.Interface)] out IMFSample? sample);
+    [PreserveSig] int ReadSample(
+        uint streamIndex, uint controlFlags, IntPtr actualStreamIndex,
+        IntPtr streamFlags, IntPtr timestamp, IntPtr sample);
 	[PreserveSig] int Flush(uint streamIndex);
 	[PreserveSig] int GetServiceForStream(uint streamIndex, ref Guid service, ref Guid riid, out IntPtr value);
 	[PreserveSig] int GetPresentationAttribute(uint streamIndex, ref Guid attribute, out PropVariant value);

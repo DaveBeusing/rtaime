@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Buffers.Binary;
+using System.Buffers;
 using System.Runtime.InteropServices;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -38,11 +39,18 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	private long _lastVideoTimestamp = -1;
 	private long _lastAudioTimestamp = -1;
 	private byte[]? _nv12Buffer;
+    private int _nv12ByteLength;
+    private readonly ArrayPool<byte> _conversionBuffers;
 	private byte[]? _pcm16Buffer;
 	private long _payloadBytesWritten;
 
 	public WindowsMediaFoundationMp4RecordingWriter(string rootDirectory, long? maximumPayloadBytes = null)
-	{
+        : this(rootDirectory, maximumPayloadBytes, ArrayPool<byte>.Shared) { }
+
+    internal WindowsMediaFoundationMp4RecordingWriter(string rootDirectory, long? maximumPayloadBytes,
+        ArrayPool<byte> conversionBuffers)
+    {
+        _conversionBuffers = conversionBuffers ?? throw new ArgumentNullException(nameof(conversionBuffers));
 		if (string.IsNullOrWhiteSpace(rootDirectory))
 			throw new ArgumentException("Recording root directory is required.", nameof(rootDirectory));
 
@@ -133,6 +141,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			_lastVideoTimestamp = -1;
 			_lastAudioTimestamp = -1;
 			_nv12Buffer = null;
+            _nv12ByteLength = 0;
 			_pcm16Buffer = null;
 			_payloadBytesWritten = 0;
 			_opened = true;
@@ -357,7 +366,8 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			_videoFormat = videoFormat;
 			_audioFormat = audioFormat;
 			_originHundredNanoseconds = Math.Min(videoTime, audioTime);
-			_nv12Buffer = new byte[checked((int)((long)videoFormat.Width * videoFormat.Height * 3 / 2))];
+			_nv12ByteLength = checked((int)((long)videoFormat.Width * videoFormat.Height * 3 / 2));
+            _nv12Buffer = _conversionBuffers.Rent(_nv12ByteLength);
 			_sinkStarted = true;
 		}
 		catch
@@ -465,7 +475,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	{
 		var format = sample.Video.Surface.Format;
 		var nv12 = _nv12Buffer ?? throw new InvalidOperationException("NV12 buffer is not initialized.");
-		ConvertRgbaToNv12(rgba, nv12, checked((int)format.Width), checked((int)format.Height));
+		ConvertRgbaToNv12(rgba, nv12.AsSpan(0, _nv12ByteLength), checked((int)format.Width), checked((int)format.Height));
 
 		var absolute = ToHundredNanoseconds(sample.Video.Timing.PresentationTimestamp, sample.Video.Timing.Timebase);
 		var timestamp = checked(absolute - _originHundredNanoseconds!.Value);
@@ -475,7 +485,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			checked((Int128)10_000_000 * format.FrameRate.Denominator),
 			format.FrameRate.Numerator);
 
-		WriteMediaFoundationSample(_videoStream, nv12, nv12.Length, timestamp, duration);
+		WriteMediaFoundationSample(_videoStream, nv12, _nv12ByteLength, timestamp, duration);
 		_lastVideoTimestamp = timestamp;
 	}
 
@@ -648,20 +658,35 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			throw new InvalidOperationException("MP4 recording writer is not open.");
 	}
 
-	private void ReleaseSinkAndMediaFoundation()
-	{
-		var sink = _sinkWriter;
-		_sinkWriter = null;
-		_sinkStarted = false;
-		if (sink is not null)
-			MediaFoundation.ReleaseComObject(sink);
-
-		if (_mediaFoundationStarted)
-		{
-			_mediaFoundationStarted = false;
-			MediaFoundation.MFShutdown();
-		}
-	}
+    private void ReleaseSinkAndMediaFoundation()
+    {
+        var sink = _sinkWriter;
+        _sinkWriter = null;
+        _sinkStarted = false;
+        try
+        {
+            if (sink is not null) MediaFoundation.ReleaseComObject(sink);
+        }
+        finally
+        {
+            try
+            {
+                if (_mediaFoundationStarted)
+                {
+                    _mediaFoundationStarted = false;
+                    MediaFoundation.MFShutdown();
+                }
+            }
+            finally
+            {
+                var buffer = _nv12Buffer;
+                _nv12Buffer = null;
+                _nv12ByteLength = 0;
+                if (buffer is not null) _conversionBuffers.Return(buffer);
+                _pcm16Buffer = null;
+            }
+        }
+    }
 
 	private void ReleaseReservation(bool deleteReservation)
 	{

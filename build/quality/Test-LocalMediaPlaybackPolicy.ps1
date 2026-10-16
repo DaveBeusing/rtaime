@@ -70,8 +70,29 @@ Assert-Condition ($referenceRegressionTests -match 'Encoded_reference_preserves_
 Assert-Condition ($referenceDocumentation -match 'hd25' -and $referenceDocumentation -match 'hd50' -and $referenceDocumentation -match 'hd5994' -and $referenceDocumentation -match 'SHA-256') "Reference media documentation must describe profiles and integrity evidence."
 Assert-Condition ($referenceRegressionScript -match 'RTAIME_REFERENCE_MEDIA_REGRESSION' -and $referenceRegressionScript -match '20MB') "Reference media regression command must enable generated tests and bound CI artifact size."
 
+$workerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDecodeWorker.cs"
+$sessionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaRuntimeSession.cs"
+$callbackPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/LocalMediaSourceReaderCallback.cs"
+$asyncTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/AsynchronousLocalMediaDecodeTests.cs"
+foreach ($path in @($workerPath, $sessionPath, $callbackPath, $asyncTestsPath)) {
+    Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required asynchronous decode artifact is missing: '$path'."
+}
+$worker = Get-Content -LiteralPath $workerPath -Raw
+$session = Get-Content -LiteralPath $sessionPath -Raw
+$callback = Get-Content -LiteralPath $callbackPath -Raw
+$admission = $session.Substring($session.IndexOf("public LocalMediaRuntimeBoundaryResult ProcessNextBoundary("))
+$admission = $admission.Substring(0, $admission.IndexOf("public void Dispose()"))
+Assert-Condition ($admission -notmatch 'ReadNext\(|ReadSample\(|SeekToFrame\(|WaitForPreroll\(|WaitOne\(|Thread\.Join|File\.') "Program admission must only dequeue, never read, seek or wait for decode."
+Assert-Condition ($worker -match 'QueueCapacity = 8' -and $worker -match 'SlotCount = QueueCapacity \+ 2') "Decode payload ownership must retain explicit bounded queue/inflight limits."
+Assert-Condition ($worker -match 'frame.RgbaPixels.Span.CopyTo' -and $worker -match 'frame.AudioPayload.Span.CopyTo') "Queued media must own both payloads independently of decoder scratch."
+Assert-Condition ($worker -match 'generation != _generation' -and $worker -match 'previous.Cancel') "Seek/stop cancellation must fence stale generations."
+Assert-Condition ($callback -match 'ReadSample\(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero\)' -and $callback -match 'OnFlush') "MF asynchronous reads require null output pointers and acknowledged cancellation."
+Assert-Condition ($runtimeProcess -match 'using var boundary = admittedBoundary' -and $runtimeProcess -match 'V1InputSignalState.Lost') "Runtime must retain admission ownership and explicitly fall back on starvation."
+
 Write-Host "Sustained local-media playback policy verification PASS"
 Write-Host "Video decode: Media Foundation RGB32"
 Write-Host "Full-frame managed allocation churn: prohibited on steady-state handoff"
 Write-Host "Generated reference media: 1080p25 / 1080p50 / 1080p59.94 H.264+Aac"
 Write-Host "Offline/freeze regression boundary: playback remains healthy beyond five seconds"
+
+Assert-Condition ($callback -notmatch 'TaskCompletionSource|WaitAsync[(]' -and $callback -match 'AutoResetEvent' -and $callback -match '_readAvailable.Dispose[(]' -and $callback -match '_flushAvailable.Dispose[(]') "MF callback wait resources must be session-owned, reusable and explicitly disposed."

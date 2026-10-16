@@ -30,7 +30,7 @@ The additive contract remains compatible with Media contract version `1.0` becau
 
 ## State semantics
 
-A local file that has already passed Local Media File Source probing enters `Ready`; Local Media File Source performs synchronous open/probe, so `Unloaded` and `Loading` exist in the contract for observation/composition but are not emitted by the current loaded RuntimeHost session.
+A probed local file enters `Ready` only after worker preroll qualifies complete video/audio windows. Open/probe runs outside Program admission. The Runtime deck emits `Loading` while preparing or rebuffering; a loaded asset keeps its transport intent and marker identity during that state. Transport commands acknowledge intent/position, while the deck snapshot reports actual readiness.
 
 Allowed V1 transitions are intentionally narrow:
 
@@ -84,3 +84,18 @@ Media Timeline Seeker may rely on:
 - current position, duration and remaining time in `MediaTransportSnapshot`;
 - frame-based Seek commands;
 - confirmed RuntimeHost transport state rather than UI-owned playback state.
+
+## Preroll and transport acknowledgement
+
+Runtime now decodes on one bounded worker per session. Open reports Ready only after
+complete video/audio preroll and prepared execution admission. Seek/Stop/step/Loop
+invalidate the previous generation immediately and acknowledge a requested position;
+the existing Loading deck state lasts until new-generation preroll is qualified.
+Transport playback intent and marker identity remain intact during Loading. Pause
+retains bounded preread. An underrun freezes media time, exposes Loading and uses the
+existing Lost-input fallback with unavailable audio while Program cadence continues.
+An early queued PTS holds video without replaying audio. See
+[ownership and admission policy](LocalMediaFileSource.md#asynchronous-decode-ownership-and-preroll).
+
+Control/Client/Operator continue to send intent through the existing contracts.
+There is no second playback timer, production state, bulk-media IPC or format expansion.

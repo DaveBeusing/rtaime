@@ -15,6 +15,7 @@ namespace rtaime.RuntimeHost;
 public sealed class LocalMediaDeckRuntimeService : IDisposable
 {
 	private readonly object _gate = new();
+    private readonly object _openGate = new();
 	private readonly LocalMediaFileProvider _provider;
 	private LocalMediaRuntimeSession? _session;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
@@ -25,6 +26,8 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	private long? _outPointFrame;
 	private bool _isOnProgram;
 	private bool _disposed;
+    private bool _opening;
+    private long _openGeneration;
 
 	public LocalMediaDeckRuntimeService()
 		: this(VideoFormat.Hd1080p50Rgba8)
@@ -37,6 +40,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	}
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
+    public LocalMediaDecodeSnapshot? DecodeSnapshot { get { lock (_gate) return _session?.DecodeSnapshot; } }
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements { get { lock (_gate) return _session?.Measurements; } }
 
 	public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
@@ -77,44 +81,65 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		MediaDeckOpenRequest request,
 		PreparedExecutionContract preparedExecution)
 	{
-		ArgumentNullException.ThrowIfNull(request);
-		ArgumentNullException.ThrowIfNull(preparedExecution);
-		ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_openGate) return OpenCore(request, preparedExecution);
+    }
 
-		lock (_gate)
-		{
-			DisposeSession();
-			_latestBoundary = null;
-			_failure = null;
-			_inPointFrame = null;
-			_outPointFrame = null;
-			_isOnProgram = false;
+    private MediaDeckRuntimeSnapshot OpenCore(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(preparedExecution);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
-			var open = _provider.TryOpen(request.Path, request.SourceId, request.AssetId);
-			if (!open.Succeeded || open.Source is null)
-			{
-				_failure = open.Failure ?? new Failure(
-					"runtime.media_deck.open_failed",
-					"Local media deck could not open the requested file.");
-				return CreateSnapshot();
-			}
-
-			var session = new LocalMediaRuntimeSession(_provider, open.Source);
-			var applied = session.ApplyExecution(preparedExecution);
-			if (!applied.Committed)
-			{
-				var failure = applied.Commit?.Failure ??
-					applied.Prepare.Failure ??
-					new Failure("runtime.media_deck.commit_failed", "Local media deck execution was not committed.");
-				session.Dispose();
-				_failure = failure;
-				return CreateSnapshot();
-			}
-
-			_session = session;
-			return CreateSnapshot();
-		}
-	}
+        LocalMediaRuntimeSession? previous;
+        long generation;
+        lock (_gate)
+        {
+            generation = ++_openGeneration;
+            previous = _session;
+            _session = null;
+            _opening = true;
+            _latestBoundary?.Dispose();
+            _latestBoundary = null;
+            _failure = null;
+            _inPointFrame = null;
+            _outPointFrame = null;
+            _isOnProgram = false;
+        }
+        // Probing, allocation, preroll and worker join run outside the admission lock.
+        previous?.Dispose();
+        LocalMediaRuntimeSession? candidate = null;
+        Failure? failure = null;
+        try
+        {
+            var open = _provider.TryOpen(request.Path, request.SourceId, request.AssetId);
+            if (open.Source is null) failure = open.Failure;
+            else
+            {
+                candidate = new LocalMediaRuntimeSession(_provider, open.Source);
+                var applied = candidate.ApplyExecution(preparedExecution);
+                if (!applied.Committed) failure = applied.Commit?.Failure ?? applied.Prepare.Failure ??
+                    new Failure("runtime.media_deck.commit_failed", "Local media deck execution was not committed.");
+            }
+        }
+        catch (Exception exception)
+        {
+            failure = new Failure("runtime.media_deck.open_failed", $"Local media preparation failed: {exception.Message}");
+        }
+        var accepted = false;
+        MediaDeckRuntimeSnapshot snapshot;
+        lock (_gate)
+        {
+            if (generation == _openGeneration && !_disposed)
+            {
+                _opening = false;
+                _failure = failure;
+                if (failure is null) { _session = candidate; accepted = true; }
+            }
+            snapshot = CreateSnapshot();
+        }
+        if (!accepted) candidate?.Dispose();
+        return snapshot;
+    }
 
 	public MediaTransportCommandResult ApplyTransport(MediaTransportCommand command)
 	{
@@ -156,6 +181,12 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			}
 
 			var result = _session.ApplyTransport(command);
+            if (command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
+                MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
+            {
+                _latestBoundary?.Dispose();
+                _latestBoundary = null;
+            }
 			if (!result.Succeeded && result.Failure is { } failure)
 				_failure = failure;
 			else if (result.Succeeded)
@@ -187,19 +218,21 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		}
 	}
 
-	public MediaDeckRuntimeSnapshot ProcessBoundary()
+	public MediaDeckRuntimeSnapshot ProcessBoundary(ulong? programSlot = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		lock (_gate)
 		{
 			if (_session is null || _session.Transport.State != MediaTransportState.Playing)
 			{
-				_latestBoundary = null;
+				_latestBoundary?.Dispose();
+            _latestBoundary = null;
 				return CreateSnapshot();
 			}
 
-			var result = _session.ProcessNextBoundary();
-			_latestBoundary = result;
+			var result = _session.ProcessNextBoundary(programSlot);
+			_latestBoundary?.Dispose();
+            _latestBoundary = result.Retain();
 			if (result.Status == LocalMediaRuntimeBoundaryStatus.Failed)
 			{
 				_failure = result.Failure;
@@ -215,29 +248,53 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		}
 	}
 
-	public MediaDeckRuntimeSnapshot Close()
-	{
-		ObjectDisposedException.ThrowIf(_disposed, this);
-		lock (_gate)
-		{
-			DisposeSession();
-			_latestBoundary = null;
-			_failure = null;
-			_inPointFrame = null;
-			_outPointFrame = null;
-			_isOnProgram = false;
-			return MediaDeckRuntimeSnapshot.Unloaded;
-		}
-	}
+    // The caller receives its own lease while the deck/session retain their current admission.
+    public MediaDeckRuntimeSnapshot ProcessBoundary(out LocalMediaRuntimeBoundaryResult? boundary, ulong? programSlot = null)
+    {
+        lock (_gate)
+        {
+            var snapshot = ProcessBoundary(programSlot);
+            boundary = _latestBoundary?.Retain();
+            return snapshot;
+        }
+    }
 
-	public void Dispose()
-	{
-		if (_disposed)
-			return;
-		_disposed = true;
-		lock (_gate)
-			DisposeSession();
-	}
+    public MediaDeckRuntimeSnapshot Close()
+    {
+        LocalMediaRuntimeSession? previous;
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            ++_openGeneration;
+            previous = _session;
+            _session = null;
+            _opening = false;
+            _latestBoundary?.Dispose();
+            _latestBoundary = null;
+            _failure = null;
+            _inPointFrame = null;
+            _outPointFrame = null;
+            _isOnProgram = false;
+        }
+        previous?.Dispose();
+        return MediaDeckRuntimeSnapshot.Unloaded;
+    }
+
+    public void Dispose()
+    {
+        LocalMediaRuntimeSession? previous;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            ++_openGeneration;
+            previous = _session;
+            _session = null;
+            _latestBoundary?.Dispose();
+            _latestBoundary = null;
+        }
+        previous?.Dispose();
+    }
 
 	private void StartForProgramUnsafe()
 	{
@@ -384,9 +441,10 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 
 	private MediaDeckRuntimeSnapshot CreateSnapshot()
 	{
-		if (_session is null)
-		{
-			return _failure is null
+        if (_session is null)
+        {
+            if (_opening) return new MediaDeckRuntimeSnapshot(MediaContractVersion.Current, MediaDeckState.Loading);
+            return _failure is null
 				? MediaDeckRuntimeSnapshot.Unloaded
 				: new MediaDeckRuntimeSnapshot(
 					MediaContractVersion.Current,
@@ -397,7 +455,10 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		var transport = Decorate(_session.Transport);
 		var state = transport.State switch
 		{
-			MediaTransportState.Ready => MediaDeckState.Ready,
+			MediaTransportState.Ready when _session.IsBuffering => MediaDeckState.Loading,
+            MediaTransportState.Playing when _session.IsBuffering => MediaDeckState.Loading,
+            MediaTransportState.Paused when _session.IsBuffering => MediaDeckState.Loading,
+            MediaTransportState.Ready => MediaDeckState.Ready,
 			MediaTransportState.Playing => MediaDeckState.Playing,
 			MediaTransportState.Paused => MediaDeckState.Paused,
 			MediaTransportState.Ended => MediaDeckState.Ended,
@@ -414,13 +475,6 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			_session.Probe,
 			transport,
 			failure);
-	}
-
-	private void DisposeSession()
-	{
-		_session?.Dispose();
-		_session = null;
-		_latestBoundary = null;
 	}
 
 	private static MediaTransportSnapshot CreateEmptyTransport(MediaAssetId assetId) =>

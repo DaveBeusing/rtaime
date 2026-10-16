@@ -189,8 +189,9 @@ The baseline requires actual decoded frames through the last media timestamp and
 committed Program boundaries. Its completion limit is twice the media duration plus
 two minutes, so a source that advances below real time is measured rather than silently
 called 50-fps stable. Host startup is bounded to 30 seconds; both hosts must stop,
-join and release Runtime resources. Native synchronous ReadSample remains
-non-cancelable by this observer; workflow termination is the final hang boundary.
+join and release Runtime resources. The decoder worker uses asynchronous MF callbacks and generation cancellation with
+acknowledged flush. The observer does not call ReadSample or drive playback cadence;
+workflow termination remains an independent last-resort boundary for a native hang.
 
 ### Evidence schema and interpretation
 
@@ -229,17 +230,28 @@ disappearance during decoding. The existing short tests retain full-file loops a
 Stop/restart/reload; the long harness adds seeks around frame 60's GOP, pause/resume,
 Stop and reload after uninterrupted playback.
 
-### Confirmed boundaries and next dependency
+### Asynchronous admission qualification and next dependency
 
-Source inspection confirms synchronous decoder open/seek/read work on the Runtime
-admission path, including native read loops with no explicit cancellation contract.
-This is a measured-baseline prerequisite, not compliance with a no-blocking cadence
-target. No second scheduler, decoder backend or expanded codec/container support is
-introduced here. Imported/probed MP4 or the wider admitted codec policy is not a
-playback-qualified profile. Asynchronous bounded decode/admission, native-read
-cancellation and resource optimization are the next dependent work,
-guided by the retained measurements and failure evidence.
+Program admission now dequeues owned frames from the bounded worker. The Runtime
+thread never calls ReadNext/ReadSample, native seek, worker join or file access.
+The original synchronous call chain is the comparison baseline from PR272, not the
+current architecture. Native decoder work and copy/normalization still incur their
+measured cost on the worker; moving them does not make native decoding faster.
 
+AsynchronousLocalMediaDecodeTests instruments the actual Runtime session admission
+against a controlled decoder. It proves bounded queue/scratch ownership, cancellation
+while a read is blocked, generation-safe rapid seeks/Stop, worker-fault isolation
+and early VFR timestamp holds without replaying audio. These are controlled software
+faults, not poor-SSD or physical-removal acceptance. Existing real MF 25→50, 50→50,
+59.94→59.94, 250-frame cycles, full-file loops, GOP seeks and A/V event checks remain.
+Test-side waits synchronize on preroll; production dequeue never waits.
+
+The long JSON additionally records the final bounded decode snapshot (generation,
+queue depth/capacity/peak, discarded frames and starvation count), alongside the
+existing admission/scheduler timing probe. Compare exact-source admission timing
+with PR272; neither hosted run proves physical storage latency or scan-out.
+Resource/lifetime optimizations are the next dependency, followed by reference
+storage/hardware acceptance. No new codec/container or multi-deck claim is added.
 
 ### Audio packet cadence regression
 
@@ -254,10 +266,42 @@ remainder for the next frame. Signed native sample positions discard negative
 codec preroll rather than shifting it into time zero; timestamp rounding respects
 the audio sample grid. Seek clears packet/EOS state. Genuine gaps return missing
 audio, never synthetic silence. Packet scanning has a 1,024-iteration bound; the
-native synchronous ReadSample cancellation limitation remains.
+native reads use cancellable asynchronous callbacks on the worker.
 
 Real 50/59.94 regressions require contiguous sample positions, matching video/audio
 timestamps, no missing audio through the reference tail, fewer native packet reads
 than video frames, and valid audio after a GOP-adjacent seek. The repeated ten-minute
 host baseline must also pass its audio check. The earlier failing source-bound report
 is retained on the PR for comparison; it is not reused as corrected-source PASS.
+
+### Managed allocation diagnosis with continuous Replay enabled
+
+The first asynchronous ten-minute run on source
+`2df6447c810dc05a3c8a861fad20858947f84546` decoded all 30,000 frames and 28,800,000
+audio samples but FAILED the unchanged 512-MiB post-warmup private-memory guard
+(actual growth 545,296,384 bytes). Seven queue underruns and 94 discarded frames
+were recorded; decoded-audio continuity alone did not qualify Program output.
+
+Source-bound resource samples showed LOH growth until Gen2 collection. A separate
+60-second real-host allocation probe identified repeated approximately 3,110,400-byte
+byte arrays. Default continuous Replay creates a new MP4 writer every two seconds;
+each writer previously allocated one NV12 conversion array, about 93 MB/minute
+of LOH allocation. The writer now pools that scratch and passes only its exact
+logical extent to native samples, returning it on finalize, abort and initialization
+failure. Replay remains enabled, memory/handle ceilings stay unchanged and no forced
+GC conceals the result. Repeated writer regressions include oversized rentals,
+independent MP4 playback and storage-failure cleanup.
+
+The optional short allocation observer retains at most 33 sampled type/size buckets,
+runs in a separate diagnostic job and does not qualify ten-minute or physical
+playback. The normal long acceptance does not enable that observer.
+
+Playback evidence uses a compact summary and a separate complete timing-ring file,
+each limited to 256 KiB before writing. The summary binds the ring by literal file
+identity and SHA-256; the verifier checks source, SDK, capacity, counts and stage
+summaries. Raw timing samples remain available without inflating the primary report.
+A synthetic 60-minute-format regression retains all 2,048 timing samples and 61
+resource observations, and rejects tampering, missing files, incorrect provenance,
+invalid capacity and oversized evidence. It qualifies report handling only, not a
+60-minute playback run. The temporary historical-artifact inspection job was removed
+after resource diagnosis; current-source acceptance remains mandatory.

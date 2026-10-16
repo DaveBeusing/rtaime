@@ -40,10 +40,7 @@ jobs:
 
       - name: Install pinned FFprobe
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "FFprobe installation failed." }
-          ffprobe -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
 
       - name: Obtain and SHA256 verify pinned BMX release
         shell: pwsh

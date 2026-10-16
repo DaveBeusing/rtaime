@@ -34,6 +34,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  local-playback-allocation-diagnostic:
+    name: Local playback allocation diagnostic
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS: "1"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Build diagnostic integration graph
+        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release
+      - name: Collect short sampled allocation evidence
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReferenceMediaPlaybackAllocationDiagnosticsTests|FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests.Segment_writers_reuse_exact_NV12_extent" --logger "console;verbosity=detailed"
+
   reference-media:
     name: H264 AAC reference matrix
     runs-on: windows-latest
@@ -52,18 +70,16 @@ jobs:
 
       - name: Install pinned FFmpeg test encoder
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
-            throw "Pinned FFmpeg installation failed with exit code $LASTEXITCODE."
-          }
-          ffmpeg -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
 
       - name: Restore
         run: dotnet restore rtaime.slnx
 
       - name: Build integration graph
         run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
+
+      - name: Qualify worker ownership and admission isolation
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
 
       - name: Generate and run reference media regressions
         shell: pwsh
@@ -95,10 +111,7 @@ jobs:
 
       - name: Install pinned FFprobe
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "FFprobe installation failed." }
-          ffprobe -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
 
       - name: Obtain and SHA256 verify pinned BMX release
         shell: pwsh
@@ -152,10 +165,7 @@ jobs:
           global-json-file: global.json
       - name: Install pinned test encoder
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "Pinned test encoder installation failed." }
-          ffmpeg -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
       - name: Canonical Release build
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
