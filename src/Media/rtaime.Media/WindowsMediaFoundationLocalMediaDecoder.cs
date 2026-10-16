@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -41,6 +42,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	}
 
 	public LocalMediaProbe Probe { get; }
+    public LocalMediaReadMeasurements VideoReadMeasurements { get; private set; }
+    public LocalMediaReadMeasurements AudioReadMeasurements { get; private set; }
 
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
@@ -286,13 +289,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		while (true)
 		{
-			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
-				streamIndex,
-				0,
-				out _,
-				out var flags,
-				out timestamp,
-				out var sample));
+			var readStarted = Stopwatch.GetTimestamp();
+            uint flags;
+            IMFSample? sample;
+            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            finally
+            {
+                var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                if (streamIndex == MediaFoundation.FirstVideoStream) VideoReadMeasurements = VideoReadMeasurements.Observe(elapsed);
+                else AudioReadMeasurements = AudioReadMeasurements.Observe(elapsed);
+            }
 
 			if (sample is null)
 			{
@@ -332,13 +338,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		while (true)
 		{
-			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
-				streamIndex,
-				0,
-				out _,
-				out var flags,
-				out timestamp,
-				out var sample));
+			var readStarted = Stopwatch.GetTimestamp();
+            uint flags;
+            IMFSample? sample;
+            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            finally
+            {
+                var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                if (streamIndex == MediaFoundation.FirstVideoStream) VideoReadMeasurements = VideoReadMeasurements.Observe(elapsed);
+                else AudioReadMeasurements = AudioReadMeasurements.Observe(elapsed);
+            }
 
 			if (sample is null)
 			{
