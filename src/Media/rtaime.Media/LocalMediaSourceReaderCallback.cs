@@ -43,7 +43,10 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
             if (result.Status < 0)
             {
                 MediaFoundation.ReleaseComObject(result.Sample);
-                Marshal.ThrowExceptionForHR(result.Status);
+                var code = (unchecked((uint)result.Status) & 0xFFFF0000u) == 0x80070000u
+                    ? "media.file.storage_failure" : "media.file.decoder_lost";
+                throw new LocalMediaDecodeException(code,
+                    $"Media Foundation read failed (HRESULT 0x{unchecked((uint)result.Status):X8}).");
             }
             return result;
         }

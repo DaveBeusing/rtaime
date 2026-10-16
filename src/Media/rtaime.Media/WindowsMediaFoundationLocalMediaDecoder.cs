@@ -472,10 +472,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
 	{
-		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
+		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out var maximumLength, out var currentLength));
 		try
 		{
-			var payload = new byte[LocalMediaSampleProgress.ValidatePcmLength(currentLength)];
+			if (currentLength > maximumLength || address == IntPtr.Zero)
+                throw new LocalMediaDecodeException("media.file.audio_payload_invalid", "Native PCM buffer extent is invalid.");
+            var payload = new byte[LocalMediaSampleProgress.ValidatePcmLength(currentLength)];
 			if (payload.Length > 0)
 				Marshal.Copy(address, payload, 0, payload.Length);
 			return payload;
@@ -519,7 +521,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
 			try
 			{
-				if (currentLength < requiredLength)
+				if (currentLength > maximumLength || address == IntPtr.Zero || currentLength < requiredLength)
 					throw new InvalidDataException($"Decoded RGB32 frame has '{currentLength}' bytes; expected at least '{requiredLength}'.");
 				Marshal.Copy(address, destination, 0, requiredLength);
 			}
