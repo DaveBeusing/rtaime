@@ -197,6 +197,7 @@ jobs:
       RTAIME_REFERENCE_MEDIA_REGRESSION: "1"
       RTAIME_REFERENCE_MEDIA_OUTPUT: ${{ github.workspace }}/artifacts/testmedia/local-playback
       RTAIME_LOCAL_PLAYBACK_MINUTES: ${{ inputs.playback_minutes || '10' }}
+      RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS: '1'
       RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       RTAIME_BASELINE_SDK: "10.0.401"
     steps:

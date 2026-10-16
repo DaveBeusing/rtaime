@@ -33,6 +33,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint, DurabilityRoot = root });
         var runtimeRun = runtime.RunAsync(runtimeStop.Token);
         var controlRun = control.RunAsync(controlStop.Token);
+        using var allocationDiagnostics = Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") == "1"
+            ? new LocalPlaybackAllocationListener() : null;
         var resources = new object[128];
         var sampleCount = 0;
         object? playback = null;
@@ -96,6 +98,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                         allocatedBytes = GC.GetTotalAllocatedBytes(),
                         gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2),
                         io = ReadIo(process.Handle) };
+                    if (allocationDiagnostics is not null)
+                        Console.WriteLine("LOCAL LOH ALLOCATION DIAGNOSTIC: " + JsonSerializer.Serialize(allocationDiagnostics.Snapshot()));
                     nextSample += TimeSpan.FromSeconds(60);
                 }
                 if (snapshot.State == MediaDeckState.Ended) break;
