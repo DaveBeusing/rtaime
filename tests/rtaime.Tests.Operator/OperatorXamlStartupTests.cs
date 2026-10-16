@@ -69,6 +69,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			App? app = null;
 			MainWindow? window = null;
 			OperatorViewModel? owner = null;
+            var interactionPhases = new List<object>();
+            OperatorDrawingSurface[] observedSurfaces = [];
 			dispatcher.BeginInvoke(new Action(async () =>
 			{
 				try
@@ -175,20 +177,46 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
 						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
 					}
-					target = "Combined workspace visual qualification";
-					await OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher);
-					// Qualify secondary GPU windows while the productive primary window owns
-					// the application lifetime, as in the real Clean Program workflow.
-					target = "GPU surface lifetime";
-					await MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher);
-					await TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher);
-					await InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher);
-                    await InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher);
-					await OperatorDockingWindowTests.VerifyAsync(window, dispatcher);
-					await OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher);
-                    await OperatorLibraryTests.VerifyWindowAsync(window, dispatcher);
-					await ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher);
-					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
+                    observedSurfaces = VisualDescendants(window).OfType<OperatorDrawingSurface>().ToArray();
+                    var identity = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
+                    var monitoring = window.Monitoring;
+                    async Task Qualify(string name, Func<Task> execute)
+                    {
+                        target = name;
+                        var started = Stopwatch.GetTimestamp();
+                        var status = "FAILED";
+                        try
+                        {
+                            await execute();
+                            Assert.Equal(identity, (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
+                            Assert.Same(monitoring, window.Monitoring);
+                            Assert.All(observedSurfaces, surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
+                            var posted = Stopwatch.GetTimestamp();
+                            var queueMilliseconds = await dispatcher.InvokeAsync(
+                                () => Stopwatch.GetElapsedTime(posted).TotalMilliseconds, DispatcherPriority.Input)
+                                .Task.WaitAsync(TimeSpan.FromSeconds(5));
+                            Assert.InRange(queueMilliseconds, 0, 5000);
+                            status = "PASS";
+                            interactionPhases.Add(new { name, status, elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                                dispatcherMilliseconds = queueMilliseconds,
+                                renderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance) });
+                        }
+                        finally
+                        {
+                            if (status != "PASS") interactionPhases.Add(new { name, status,
+                                elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds });
+                        }
+                    }
+                    await Qualify("Combined layouts and QoL focus transitions", () => OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Library smart bins, menus and virtualization", () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Timeline draft ergonomics", () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Inspector precision", () => InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Inspector draft undo and transfer", () => InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Docking, focus, cinema and templates", () => OperatorDockingWindowTests.VerifyAsync(window, dispatcher));
+                    await Qualify("Palette and shortcut editing", () => OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Recent, favorites and help", () => OperatorLibraryTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Preflight, activity and notifications", () => ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("GPU surface lifetime", () => GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher));
 					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					EventHandler rendering = (_, _) => resumedRender.TrySetResult();
 					CompositionTarget.Rendering += rendering;
@@ -224,6 +252,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 							Assert.True(SessionClosedCleanly(Path.Combine(root, "session.json")),
 								"Closed fired before the real asynchronous service/session teardown completed.");
 							Assert.False(window.IsVisible);
+                            Assert.All(observedSurfaces, surface => Assert.Equal(0, surface.RenderingSubscriptionBalance));
 						}
 						else if (owner is not null)
 						{
@@ -232,7 +261,26 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						app?.Shutdown();
 					}
 					catch (Exception exception) { failures.Add(exception); }
-					dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
+	                try
+                {
+                    var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
+                    if (!string.IsNullOrWhiteSpace(evidenceRoot))
+                    {
+                        Directory.CreateDirectory(evidenceRoot);
+                        File.WriteAllText(Path.Combine(evidenceRoot, "interaction-ui.json"), JsonSerializer.Serialize(new
+                        {
+                            sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                            sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                            status = failures.Count == 0 ? "PASS" : "FAILED",
+                            scope = "Disconnected real WPF; Input queue delay and event subscription balance; physical touch, mixed-monitor DPI and connected production latency UNVERIFIED",
+                            phases = interactionPhases,
+                            finalRenderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance),
+                            failures = failures.Select(failure => failure.ToString()).ToArray()
+                        }, new JsonSerializerOptions { WriteIndented = true }));
+                    }
+                }
+                catch (Exception exception) { failures.Add(exception); }
+                    dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
 				}
 			}));
 			try { Dispatcher.Run(); }

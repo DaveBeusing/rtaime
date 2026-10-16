@@ -258,3 +258,71 @@ source; inspect text/contrast/clip behavior, then execute the physical procedure
 with connected/stale state, an explicitly initiated TAKE, missing assets and approved
 monitoring failure. Record monitor topology, Windows build, GPU/driver, actual DPI,
 focus/modal observations and outcomes. Cases without that evidence stay UNVERIFIED.
+
+
+## QoL interaction qualification
+
+The existing combined STA fixture also exercises command palette, workspace template
+editor, Recent/Favorites/Help and show preflight in each of the five viewport rows.
+Owned windows use bounded logical sizes and the runner's actual Windows DPI; only
+the main shell receives injected layout scaling. Twenty review images supplement
+the five shell images. They are not physical high-DPI or visual-review PASS evidence.
+
+The sequence closes each surface and immediately opens the next before yielding to
+the Dispatcher. Pending focus-return callbacks must leave the newer editor focused;
+Return must stay outside the owner production router, Escape must close the current
+surface, and final close must restore the original shell control. The template editor
+now participates in all preference-window focus guards and establishes its focus at
+Input priority after earlier close callbacks. Searches and these transitions retain
+Preview, Program and active-scene identities with CUT unavailable.
+
+The productive Library grid and list additionally open their real context menus
+with two selected assets. The shared opening preparation must cancel hover and
+disable single-asset actions while retaining Properties/Reveal; returning to one
+selection must restore those actions. This exercises the existing handler's shared
+preparation seam and actual popup, not native right-click, pen or touch delivery.
+The original 4,096-item far-scroll realization and 160-container/2-second limits remain.
+
+The shortcut suite adds 96 production-routing combinations: CUT, AUTO, recording and
+Show GO across three scopes, text-entry/non-text, repeat/non-repeat and allowed/denied
+authority. Local undo tests reject cross-editor fallthrough and leave text undo local.
+These are registry boundary checks; existing Inspector/timeline transaction tests and
+connected forbidden-transport media/batch tests remain the mutation authority evidence.
+Fractional pointer mapping covers all four presentation modes at 100/125/150/200%;
+it qualifies the common DIP-to-source arithmetic, not physical touch delivery.
+
+Each native surface records its actual CompositionTarget rendering attach/detach
+balance. All 40 layouts and all subsequent interaction phases require a balance of
+zero or one per retained surface; final MainWindow teardown requires zero. Existing
+floating-panel identity/no-unload and GPU resource create/release checks remain active.
+This is rendering-event subscription evidence, not an assertion that the disconnected
+fixture observed a live monitoring pipe or every production transport subscription.
+
+The same artifact now includes `interaction-ui.json`: exact source/SDK, ten named
+phase outcomes and elapsed times, Input queue observations, subscription balance,
+final teardown result and failures. Existing `combined-ui.json` contains the 20
+surface/focus observations as well as 40 geometry cases and settled resource metrics.
+A phase failure leaves FAILED evidence and fails the test; later cases are not implied
+to have run. The unchanged 45-second STA deadline and 5-second dispatcher ceiling
+remain gross regression bounds, not a low-latency target.
+
+### Exact-source acceptance and remaining manual matrix
+
+Inspect CI and Quality artifacts for the PR's exact head and run attempt; require all
+five mandatory gates and the packaged lifecycle path on that head. Never carry a PASS
+forward from the previous Smart Bin or workspace change. The PR records the final
+source, run, test counts and packaged result without making a self-referential commit
+claim in generated source documentation.
+
+| Manual case | Required observation | Automated boundary / release status |
+| --- | --- | --- |
+| Mouse, keyboard, touch and pen at 100/125/150/200% | Search, menu placement, numeric edits and timeline target agree; no accidental TAKE | Routed keyboard and coordinate arithmetic only; physical delivery UNVERIFIED |
+| Mixed-DPI monitors, negative desktop origins, unplug/reconnect | Float, move, focus/cinema restore and offscreen recovery remain reachable | Existing synthetic monitor-restore geometry; native monitor messages UNVERIFIED |
+| Connected/stale state during workspace, batch and undo actions | Only explicit authorized commands mutate; pending/rejected evidence retained | Existing connected command/transaction tests; combined live desktop scenario UNVERIFIED |
+| Sustained monitoring while resizing and selecting | No extra monitoring reader; bounded UI queue, target churn and input latency | Retained surfaces/event balance plus existing monitoring integration suites; physical loaded latency UNVERIFIED |
+| Five shell and twenty owned-window images | Typography, contrast, clipping, scroll access and keyboard focus visibly usable | Images require human review; D3DImage media pixels may be absent |
+
+Independent position scrubbing remains unsupported until a bounded cancelable
+preview-only backend contract exists. Physical/manual rows stay UNVERIFIED until
+Windows build, adapter/driver, monitor topology/DPI, media, exact source and observed
+outcomes are retained with release evidence.

@@ -80,6 +80,7 @@ public class OperatorDrawingSurface : Image
 	internal int TargetCreateCount { get; private set; }
 	internal int TargetReleaseCount { get; private set; }
 	internal int DeviceGeneration { get; private set; }
+	internal int RenderingSubscriptionBalance { get; private set; }
 
 	static OperatorDrawingSurface() =>
 		StretchProperty.OverrideMetadata(typeof(OperatorDrawingSurface), new FrameworkPropertyMetadata(Stretch.Fill));
@@ -347,6 +348,7 @@ public class OperatorDrawingSurface : Image
 	{
 		if (_rendering) return;
 		CompositionTarget.Rendering += OnRendering;
+		RenderingSubscriptionBalance++;
 		_rendering = true;
 	}
 
@@ -354,6 +356,7 @@ public class OperatorDrawingSurface : Image
 	{
 		if (!_rendering) return;
 		CompositionTarget.Rendering -= OnRendering;
+		RenderingSubscriptionBalance--;
 		_rendering = false;
 	}
 

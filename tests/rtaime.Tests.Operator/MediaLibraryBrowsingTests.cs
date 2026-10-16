@@ -418,6 +418,40 @@ public sealed class MediaLibraryBrowsingTests
 					Assert.True(browser.ItemContainerGenerator.ContainerFromIndex(index) is not null,
 						$"{browser.Name}: index={index}, items={browser.Items.Count}, realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}, generator={browser.ItemContainerGenerator.Status}, detail={wrap?.RealizationDetail}");
 					Assert.InRange(Descendants(browser).OfType<RtaimeListBoxItem>().Count(), 1, 160);
+                    if (index == 0)
+                    {
+                        browser.SelectedItems.Clear();
+                        browser.SelectedItems.Add(browser.Items[0]); browser.SelectedItems.Add(browser.Items[1]);
+                        owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
+                        Assert.True(owner.MediaPool.HasMultipleSelection);
+                        var container = Assert.IsType<RtaimeListBoxItem>(browser.ItemContainerGenerator.ContainerFromIndex(0));
+                        var target = Descendants(container).OfType<FrameworkElement>().First(element => element.ContextMenu is not null);
+                        var menu = target.ContextMenu!;
+                        var pendingHover = owner.MediaPool.BeginHoverAsync((MediaPoolItemViewModel)browser.Items[0]);
+                        owner.PrepareMediaLibraryContextMenu(target);
+                        menu.PlacementTarget = target; menu.IsOpen = true;
+                        try
+                        {
+                            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+                            Assert.True(menu.IsOpen);
+                            var entries = menu.Items.OfType<RtaimeMenuItem>().ToArray();
+                            Assert.Equal(7, entries.Length);
+                            foreach (var entry in entries)
+                                Assert.Equal(entry.Header?.ToString() is "Properties" or "Reveal in Explorer", entry.IsEnabled);
+                            Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
+                            Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
+                        }
+                        finally { menu.IsOpen = false; }
+                        await pendingHover;
+                        browser.SelectedItems.Clear(); browser.SelectedItems.Add(browser.Items[0]);
+                        owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
+                        owner.PrepareMediaLibraryContextMenu(target);
+                        Assert.All(menu.Items.OfType<RtaimeMenuItem>(), entry => Assert.True(entry.IsEnabled));
+                        browser.SelectedItems.Clear();
+                        owner.MediaPool.UpdateSelection([]);
+                        Assert.False(owner.MediaPool.HasMultipleSelection);
+                        Console.WriteLine("MEDIA CONTEXT PASS [" + browser.Name + "]: real menu; multi-selection guards; single-selection recovery; hover canceled; Program unchanged.");
+                    }
 				}
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));

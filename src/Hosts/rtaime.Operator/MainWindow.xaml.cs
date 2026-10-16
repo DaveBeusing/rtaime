@@ -352,6 +352,7 @@ public partial class MainWindow : Window
 				previous.Dispatcher.BeginInvoke(() =>
 				{
 					if (!_shutdownStarted && _showReadinessWindow is null && _commandPaletteWindow is null &&
+                        _workspaceTemplatesWindow is null && LibraryWindow is null &&
 						previous.IsVisible && previous.IsEnabled) previous.Focus();
 				}, DispatcherPriority.Input);
 		};
@@ -659,7 +660,13 @@ public partial class MainWindow : Window
         {
             _workspaceTemplatesWindow = null;
             if (!_shutdownStarted && reference is not null && reference.TryGetTarget(out var previous) && previous.IsVisible && previous.IsEnabled)
-                Dispatcher.BeginInvoke(() => { if (!_shutdownStarted && previous.IsVisible && previous.IsEnabled) { Window.GetWindow(previous)?.Activate(); previous.Focus(); } });
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var newer = Application.Current?.Windows.OfType<Window>().Any(window => window.IsVisible &&
+                        window is rtaime.Operator.WorkspaceTemplatesWindow or OperatorCommandPaletteWindow or OperatorLibraryWindow or rtaime.Operator.ShowReadinessWindow) == true;
+                    if (!_shutdownStarted && !newer && previous.IsVisible && previous.IsEnabled)
+                    { Window.GetWindow(previous)?.Activate(); previous.Focus(); }
+                }, DispatcherPriority.Input);
         };
         _workspaceTemplatesWindow.Show();
     }
@@ -698,9 +705,14 @@ public partial class MainWindow : Window
 	private void OnMediaLibraryItemLeave(object sender, MouseEventArgs e) => MediaPool.CancelHover();
 	private void OnMediaLibraryLostFocus(object sender, KeyboardFocusChangedEventArgs e) => MediaPool.CancelHover();
 	private void OnMediaLibraryContextOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement target) PrepareMediaLibraryContextMenu(target);
+    }
+
+    internal void PrepareMediaLibraryContextMenu(FrameworkElement target)
 	{
 		MediaPool.CancelHover();
-		if (sender is not FrameworkElement { ContextMenu: { } menu }) return;
+		if (target.ContextMenu is not { } menu) return;
 		foreach (var entry in menu.Items.OfType<Controls.RtaimeMenuItem>())
 		{
 			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer";

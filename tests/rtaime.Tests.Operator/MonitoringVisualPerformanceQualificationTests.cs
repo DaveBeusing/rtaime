@@ -201,6 +201,27 @@ public sealed class MonitoringVisualPerformanceQualificationTests
 		Assert.Equal(86_016, GpuMonitoringAnalysisPolicy.ScopeResultBytes);
 	}
 
+    [Theory]
+    [MemberData(nameof(QualifiedDpiScales))]
+    public void Fractional_pointer_mapping_preserves_source_pixel_across_dpi_and_presentation_modes(double dpi)
+    {
+        foreach (var mode in Enum.GetValues<MediaPresentationMode>())
+        {
+            var viewport = MediaPresentationGeometry.ToPhysicalPixels(960, 540, dpi, dpi);
+            var presentation = MediaPresentationGeometry.Calculate(1920, 1080,
+                viewport.Width, viewport.Height, mode, customZoom: 2);
+            // The same fractional physical pixel is expressed in DIPs by mouse/touch input.
+            var x = presentation.X + (960 + 0.25) * presentation.Scale;
+            var y = presentation.Y + (540 + 0.75) * presentation.Scale;
+            Assert.True(MediaPixelInspection.TryMapViewportToSource(x / dpi, y / dpi, dpi, dpi,
+                presentation, 1920, 1080, out var mapped));
+            Assert.Equal(new MediaPixelCoordinate(960, 540), mapped);
+            Assert.False(MediaPixelInspection.TryMapViewportToSource(
+                (presentation.X - 1) / dpi, (presentation.Y - 1) / dpi, dpi, dpi,
+                presentation, 1920, 1080, out _));
+        }
+    }
+
 	private static string FindRepositoryRoot()
 	{
 		DirectoryInfo? directory = new(AppContext.BaseDirectory);

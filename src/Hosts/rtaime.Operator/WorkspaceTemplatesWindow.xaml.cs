@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace rtaime.Operator;
 
@@ -15,7 +16,10 @@ public partial class WorkspaceTemplatesWindow : Window
             var placement = OperatorMonitorGeometry.Capture(owner);
             var scale = placement.Dpi / 96;
             OperatorMonitorGeometry.Restore(this, placement with { Width = Width * scale, Height = Height * scale });
-            TemplateNameBox.Focus();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (IsVisible) { Activate(); TemplateNameBox.Focus(); }
+            }, DispatcherPriority.Input);
         };
     }
     protected override void OnPreviewKeyDown(KeyEventArgs e)

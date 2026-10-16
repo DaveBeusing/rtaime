@@ -482,3 +482,14 @@ After the canonical pinned-SDK Release build, run `dotnet test tests/rtaime.Test
 Show checks regressions also cover independent Program/AUX evidence, Runtime-proven recording writes, AI sequence/provider gaps, pending-request provenance across reconnect, notification snooze expiry/change/fatal exclusion and bounded severity groups. The existing real MainWindow qualification verifies the shared support-export command binding; no new transport or exporter is introduced. Physical mixed-DPI/IME/screen-reader and GPU evidence remains separately UNVERIFIED.
 
 Smart Bin/hover regressions also verify free names and rename persistence, validation of existing version-1 definitions without rewriting, preview enable/disable cancellation storms and typed Runtime pressure arriving during dwell. The actual MainWindow fixture checks the name field and shared rename command alongside the existing 4096-item Grid/List recycling checks. Independent position scrubbing remains explicitly unavailable until a cancelable preview-only backend request exists; current tests never qualify Program seek as hover isolation.
+
+
+Operator QoL interaction qualification reuses the real `OperatorXamlStartupTests`
+STA fixture and existing visual artifacts. It adds 20 owned-window focus transitions,
+real Library multi-selection menus, per-surface rendering subscription balance and
+`interaction-ui.json` with phase timings and failed-phase retention. The focused
+shortcut filter includes the 96-case authority/text/repeat/scope matrix;
+`MonitoringVisualPerformanceQualificationTests` includes fractional high-DPI pointer
+mapping. See [Operator visual qualification](OperatorVisualQualification.md#qol-interaction-qualification)
+for exact automated boundaries and the still-UNVERIFIED physical/manual matrix.
+The canonical build, existing deadlines and all five Required Gates remain mandatory.

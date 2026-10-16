@@ -132,6 +132,56 @@ public sealed class OperatorShortcutProfileTests
 		}
 		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 	}
+    public static IEnumerable<object[]> AuthorityRoutingMatrix()
+    {
+        foreach (var id in new[] { "cut", "auto", "record", "show-control-go" })
+        foreach (var scope in Enum.GetValues<OperatorShortcutScope>())
+        foreach (var textEntry in new[] { false, true })
+        foreach (var repeat in new[] { false, true })
+        foreach (var allowed in new[] { false, true })
+            yield return [id, scope, textEntry, repeat, allowed];
+    }
+
+    [Theory]
+    [MemberData(nameof(AuthorityRoutingMatrix))]
+    public void Production_routing_matrix_preserves_text_repeat_and_authority_guards(
+        string id, OperatorShortcutScope scope, bool textEntry, bool repeat, bool allowed)
+    {
+        var command = new Probe { Allowed = allowed };
+        var (key, modifiers) = id switch
+        {
+            "cut" => (Key.Return, ModifierKeys.Control),
+            "auto" => (Key.Return, ModifierKeys.None),
+            "record" => (Key.R, ModifierKeys.None),
+            _ => (Key.F9, ModifierKeys.None)
+        };
+        var definition = new OperatorShortcutDefinition(id, id, key, modifiers, command);
+        var registry = new OperatorKeyboardCommandRegistry([definition]);
+        Assert.Equal(!textEntry, registry.TryHandle(key, modifiers, repeat, textEntry, scope));
+        Assert.Equal(!textEntry && !repeat && allowed ? 1 : 0, command.Calls);
+        Assert.Same(command, Assert.Single(registry.Definitions).Command);
+        Assert.False(Assert.Single(registry.Definitions).AllowInTextEntry);
+    }
+
+    [Theory]
+    [InlineData(OperatorShortcutScope.Timeline, OperatorShortcutScope.MediaLibrary)]
+    [InlineData(OperatorShortcutScope.MediaLibrary, OperatorShortcutScope.Timeline)]
+    public void Local_undo_scope_never_falls_through_to_another_editor(
+        OperatorShortcutScope active, OperatorShortcutScope other)
+    {
+        var local = new Probe(); var foreign = new Probe();
+        var registry = new OperatorKeyboardCommandRegistry([
+            new("local-draft", "Local draft", Key.Z, ModifierKeys.Control, local, Scope: active),
+            new("other-draft", "Other draft", Key.Z, ModifierKeys.Control, foreign, Scope: other)]);
+        Assert.False(registry.TryHandle(Key.Z, ModifierKeys.Control, false, true, active));
+        Assert.True(registry.TryHandle(Key.Z, ModifierKeys.Control, true, false, active));
+        Assert.Equal(0, local.Calls); Assert.Equal(0, foreign.Calls);
+        Assert.True(registry.TryHandle(Key.Z, ModifierKeys.Control, false, false, active));
+        Assert.Equal(1, local.Calls); Assert.Equal(0, foreign.Calls);
+        Assert.False(registry.TryHandle(Key.Z, ModifierKeys.Control, false, false));
+        Assert.Empty(OperatorKeyboardCommandRegistry.FindConflicts(registry.Definitions));
+    }
+
 	private sealed class Probe : ICommand
 	{
 		internal int Calls;
