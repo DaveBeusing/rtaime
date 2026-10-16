@@ -203,9 +203,10 @@ public sealed class LocalMediaRuntimeSession : IDisposable
         {
             // An explicitly queued future PTS permits a hold without replaying audio.
             // An empty/not-prerolled queue is an underrun: freeze media time, let Program advance.
-            if (_decode.IsPrepared && _decode.Snapshot.QueuedFrames > 0 && _current is { } previous)
+            if (_decode.IsPrepared && _decode.Snapshot.QueuedFrames > 0)
             {
                 _cadenceOrdinal = checked(_cadenceOrdinal + 1);
+                if (_current is not { } previous) return Empty(LocalMediaRuntimeBoundaryStatus.Buffering);
                 _current = previous with {
                     Status = LocalMediaRuntimeBoundaryStatus.Repeated, Audio = null,
                     AudioPayload = ReadOnlyMemory<byte>.Empty, Ownership = previous.Ownership?.Retain()

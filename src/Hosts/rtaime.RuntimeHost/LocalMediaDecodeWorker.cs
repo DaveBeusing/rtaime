@@ -101,6 +101,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             {
                 if (_state != LocalMediaDecodeState.Starved) _starvations++;
                 _state = LocalMediaDecodeState.Starved;
+                _prerolled = false;
             }
             if (_frames.Count <= LowWatermark) _wake.Set();
             return selected;
@@ -170,6 +171,9 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                     LocalMediaFrameLease? owned = null;
                     if (decoded.Succeeded)
                     {
+                        if (_source.Probe.AudioCodec != MediaAudioCodec.None &&
+                            (decoded.Frame!.Audio is null || decoded.Frame.AudioPayload.IsEmpty))
+                            throw new InvalidDataException("Decoded frame has no required audio window.");
                         slot.Copy(decoded.Frame!);
                         owned = slot.Lease(generation);
                         sequence = checked(sequence + 1);
@@ -218,12 +222,16 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
         finally
         {
             try { _source.Dispose(); }
+            catch (Exception exception)
+            {
+                lock (_gate) FailUnsafe(new Failure("runtime.media_decode.dispose_failed", exception.Message));
+            }
             finally
             {
                 lock (_gate)
                 {
                     ClearUnsafe();
-                    _state = LocalMediaDecodeState.Stopped;
+                    _state = _failure is null ? LocalMediaDecodeState.Stopped : LocalMediaDecodeState.Failed;
                     Monitor.PulseAll(_gate);
                 }
             }
