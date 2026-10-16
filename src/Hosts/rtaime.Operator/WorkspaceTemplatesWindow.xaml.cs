@@ -12,7 +12,9 @@ public partial class WorkspaceTemplatesWindow : Window
         SourceInitialized += (_, _) => MainWindow.ApplyDarkWindowCaption(this);
         Loaded += (_, _) =>
         {
-            OperatorMonitorGeometry.Restore(this, OperatorMonitorGeometry.Capture(owner) with { Width = 560, Height = 520 });
+            var placement = OperatorMonitorGeometry.Capture(owner);
+            var scale = placement.Dpi / 96;
+            OperatorMonitorGeometry.Restore(this, placement with { Width = Width * scale, Height = Height * scale });
             TemplateNameBox.Focus();
         };
     }
