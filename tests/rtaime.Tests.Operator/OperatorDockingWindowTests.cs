@@ -56,6 +56,14 @@ internal static class OperatorDockingWindowTests
             chrome.Children.Add(probe);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind).Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(owner.Shell.SelectedWorkspace, probe.Text);
+            var templateCommand = new RtaimeButton();
+            BindingOperations.SetBinding(templateCommand, System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding("OpenWorkspaceTemplatesCommand") { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(Window), 1) });
+            chrome.Children.Add(templateCommand);
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
+            Assert.Same(owner.OpenWorkspaceTemplatesCommand, templateCommand.Command);
+            Assert.Same(owner.Docking, floating.Docking);
+            chrome.Children.Remove(templateCommand);
             chrome.Children.Remove(probe);
             floating.Close();
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));

@@ -44,6 +44,8 @@ public sealed class OperatorPanelWindow : Window
     public ShowControlViewModel ShowControl => _owner.ShowControl;
     public ProductionMacroViewModel ProductionMacros => _owner.ProductionMacros;
     public OperatorKeyboardCommandRegistry Shortcuts => _owner.Shortcuts;
+    public OperatorDockController Docking => _controller;
+    public ICommand OpenWorkspaceTemplatesCommand => _owner.OpenWorkspaceTemplatesCommand;
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
