@@ -222,7 +222,7 @@ open, ReadSample submission, Flush, seek or COM release.
 
 Reader ERROR, unsupported layout/effect changes and unknown flags fail closed before
 payload access. Native/current type notifications, including valid initial negotiation,
-query the actual output type: RGB32 dimensions/rate/progressive stride or PCM16 stereo
+query the actual output type: RGB32 dimensions/rate/progressive scan or PCM16 stereo
 48-kHz/block alignment must match the existing configured representation. A matching
 type may continue; a mismatching layout is never silently reinterpreted. Stable implementation failure codes include:
 
@@ -268,3 +268,10 @@ opaque alpha. A full-frame profile records allocation and copy P99 without chang
 the conversion algorithm. Audio Float32 windows/native packets retain their existing
 ownership and allocation strategy: no audio-specific GC attribution yet justifies
 pooling or a longer consumer lifetime.
+
+MF_MT_DEFAULT_STRIDE is optional. A missing attribute derives the default RGB32
+stride from the configured width; an IMF2DBuffer always supplies its actual pitch.
+A present signed stride is retained for contiguous buffers, whose checked visible
+extent, padding and bottom-up orientation are validated before row copy. Both
+contiguous and 2D extraction share the same production row-copy/swizzle routines.
+See [Microsoft's stride attribute contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-default-stride-attribute).

@@ -32,6 +32,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
     private long _pendingAudioSamplePosition;
     private bool _audioEnded;
     private bool _videoEnded;
+    private int _videoStride;
 
 	private WindowsMediaFoundationLocalMediaDecoder(
 		IMFSourceReader reader,
@@ -48,6 +49,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		Probe = probe;
 		_hasAudio = hasAudio;
 		_rgbaFrameBuffer = new byte[checked((int)((ulong)probe.VideoFormat.Width * probe.VideoFormat.Height * 4UL))];
+        _videoStride = checked((int)probe.VideoFormat.Width * 4);
 	}
 
 	public LocalMediaProbe Probe { get; }
@@ -408,7 +410,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ThrowIfFailed(sample!.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
-					CopyRgb32ToRgba(buffer, Probe.VideoFormat, _rgbaFrameBuffer);
+					CopyRgb32ToRgba(buffer, Probe.VideoFormat, _rgbaFrameBuffer, _videoStride);
                     if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0) _videoEnded = true;
 					return true;
 				}
@@ -495,10 +497,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                     GetGuid(type, MediaFoundation.MfMtSubtype) == MediaFoundation.MfVideoFormatRgb32 &&
                     size == MediaFoundation.PackRatio(Probe.VideoFormat.Width, Probe.VideoFormat.Height) &&
                     rate == MediaFoundation.PackRatio(Probe.VideoFormat.FrameRate.Numerator, Probe.VideoFormat.FrameRate.Denominator) &&
-                    TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode) == MediaFoundation.MfVideoInterlaceProgressive &&
-                    TryGetUInt32(type, MediaFoundation.MfMtDefaultStride) == Probe.VideoFormat.Width * 4;
+                    TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode) == MediaFoundation.MfVideoInterlaceProgressive;
+                var stride = TryGetUInt32(type, MediaFoundation.MfMtDefaultStride);
+                var resolvedStride = stride is { } reported ? unchecked((int)reported) : checked((int)Probe.VideoFormat.Width * 4);
+                qualified &= Math.Abs((long)resolvedStride) >= Probe.VideoFormat.Width * 4L;
                 if (!qualified) throw new LocalMediaDecodeException("media.file.decoded_type_changed",
                     $"Video layout rejected: major={TryGetGuid(type, MediaFoundation.MfMtMajorType)}, subtype={TryGetGuid(type, MediaFoundation.MfMtSubtype)}, size=0x{size:X}, rate=0x{rate:X}, interlace={TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode)}, stride={TryGetUInt32(type, MediaFoundation.MfMtDefaultStride)}.");
+                _videoStride = resolvedStride;
                 return true;
             }
             var audioQualified = GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
@@ -541,7 +546,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private static void CopyRgb32ToRgba(
 		IMFMediaBuffer buffer,
 		VideoFormat format,
-		byte[] destination)
+		byte[] destination,
+        int defaultStride)
 	{
 		var width = checked((int)format.Width);
 		var height = checked((int)format.Height);
@@ -570,9 +576,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out var maximumLength, out var currentLength));
 			try
 			{
-				if (currentLength > maximumLength || address == IntPtr.Zero || currentLength < requiredLength)
-					throw new InvalidDataException($"Decoded RGB32 frame has '{currentLength}' bytes; expected at least '{requiredLength}'.");
-				Marshal.Copy(address, destination, 0, requiredLength);
+                CopyContiguousRgb32Rows(address, currentLength, maximumLength, width, height, defaultStride, destination);
 			}
 			finally
 			{
@@ -581,6 +585,18 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 
         SwizzleRgb32(destination);
+    }
+
+    internal static void CopyContiguousRgb32Rows(IntPtr address, uint length, uint capacity,
+        int width, int height, int stride, byte[] destination)
+    {
+        var rowBytes = checked(width * 4);
+        var extent = checked((height - 1L) * Math.Abs((long)stride) + rowBytes);
+        if (address == IntPtr.Zero || length > capacity || width <= 0 || height <= 0 ||
+            Math.Abs((long)stride) < rowBytes || extent > length)
+            throw new LocalMediaDecodeException("media.file.video_payload_invalid", "Contiguous RGB32 extent or stride is invalid.");
+        var firstRow = stride < 0 ? IntPtr.Add(address, checked((int)((height - 1L) * -(long)stride))) : address;
+        CopyRgb32Rows(firstRow, stride, width, height, destination);
     }
 
     internal static void CopyRgb32Rows(IntPtr scanline0, int pitch, int width, int height, byte[] destination)

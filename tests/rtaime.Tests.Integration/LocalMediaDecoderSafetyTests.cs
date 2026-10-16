@@ -125,6 +125,14 @@ public sealed class LocalMediaDecoderSafetyTests
             WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
                 IntPtr.Add(native, pitch > 0 ? 0 : 12), pitch, 2, 2, destination);
             WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(destination);
+            var contiguous = new byte[16];
+            WindowsMediaFoundationLocalMediaDecoder.CopyContiguousRgb32Rows(native, 24, 24, 2, 2, pitch, contiguous);
+            WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(contiguous);
+            Assert.Equal(destination, contiguous);
+            Assert.Throws<LocalMediaDecodeException>(() => {
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+                WindowsMediaFoundationLocalMediaDecoder.CopyContiguousRgb32Rows(native, 19, 24, 2, 2, pitch, contiguous);
+            });
             Assert.Equal(new byte[] { 3, 2, 1, 255, 7, 6, 5, 255, 11, 10, 9, 255, 15, 14, 13, 255 }, destination);
             Assert.Throws<InvalidDataException>(() => {
                 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
