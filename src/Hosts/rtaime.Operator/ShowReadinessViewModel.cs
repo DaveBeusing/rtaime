@@ -40,8 +40,8 @@ public sealed record OperatorActionHistoryRow(OperatorActionObservation Observat
 		: Observation.Outcome == OperatorActionOutcome.Confirmed
 			? "RESPONSE RECEIVED · acceptance and Runtime commitment are not exposed."
 			: "NO RESPONSE EVIDENCE · do not infer rejection or repeat the action.";
-	public string Provenance => $"Source: rtaime.Client / Control response · production {Observation.ObservedProductionId ?? "not observed"} · " +
-		$"local observation epoch {Observation.ClientObservationEpoch?.ToString("N") ?? "not exposed"} · snapshot {Observation.SnapshotObservedAtUtc?.ToString("O") ?? "not observed"} · server epoch not exposed";
+	public string Provenance => $"Source: rtaime.Client transport observation · production {Observation.ObservedProductionId ?? "not observed"} · " +
+		$"local observation epoch {Observation.ClientObservationEpoch ?? "not exposed"} · snapshot {Observation.SnapshotObservedAtUtc?.ToString("O") ?? "not observed"} · server epoch not exposed";
 	public string Times => $"Requested {Observation.PendingAtUtc.ToLocalTime():HH:mm:ss.fff} · " +
 		(Observation.CompletedAtUtc is { } completed ? $"response {completed.ToLocalTime():HH:mm:ss.fff}" : "awaiting response");
 	public string Correlation => $"Request {Observation.Id:N} · wire command {Observation.CommandId ?? "not exposed"} · " +

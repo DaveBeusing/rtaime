@@ -1291,7 +1291,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     private readonly IOperatorControlTransport _transport;
     private OperatorStatusSnapshot? _snapshot;
     // Local correlation only; this is not a ControlHost or Runtime epoch.
-    private Guid _observationEpoch = Guid.NewGuid();
+    private string _observationEpoch = Guid.NewGuid().ToString("N");
 
     public OperatorControlClient(IOperatorControlTransport transport)
     {
@@ -2069,7 +2069,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public void Disconnect()
     {
-        _observationEpoch = Guid.NewGuid();
+        _observationEpoch = Guid.NewGuid().ToString("N");
         _snapshot = null;
         SnapshotObservedAtUtc = null;
         NotifySnapshotChanged();

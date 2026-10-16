@@ -8,7 +8,7 @@ public sealed record OperatorActionObservation(
 	Guid Id, string Operation, DateTimeOffset PendingAtUtc, DateTimeOffset? CompletedAtUtc,
 	OperatorActionOutcome Outcome, ulong? ObservedProductionRevision,
 	ulong? ResponseProductionRevision = null, string? CommandId = null, ulong? ExpectedProductionRevision = null,
-	string? ObservedProductionId = null, Guid? ClientObservationEpoch = null, DateTimeOffset? SnapshotObservedAtUtc = null,
+	string? ObservedProductionId = null, string? ClientObservationEpoch = null, DateTimeOffset? SnapshotObservedAtUtc = null,
 	bool? ResponseAccepted = null);
 
 public sealed class OperatorActionHistory
@@ -22,7 +22,7 @@ public sealed class OperatorActionHistory
 	public IReadOnlyList<OperatorActionObservation> Current { get { lock (_gate) return _items.ToArray(); } }
 
 	internal Guid Begin(string operation, ulong? observedRevision, string? commandId, ulong? expectedRevision,
-		string? productionId, Guid epoch, DateTimeOffset? snapshotObservedAtUtc)
+		string? productionId, string epoch, DateTimeOffset? snapshotObservedAtUtc)
 	{
 		var item = new OperatorActionObservation(Guid.NewGuid(), operation, _clock(), null,
 			OperatorActionOutcome.Pending, observedRevision, CommandId: commandId, ExpectedProductionRevision: expectedRevision,
