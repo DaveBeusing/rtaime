@@ -22,4 +22,4 @@ if ($report.resources.Count -lt ($Minutes - 1) -or $report.resources.Count -gt 1
 if ($report.audioStatus -notin @("PASS", "FAIL") -or $report.physicalStatus -ne "UNVERIFIED") { throw "Qualification boundaries are absent." }
 Write-Host "Actual long-playback evidence collection PASS: $SourceCommit, $Minutes minutes"
 Write-Host "Audio continuity: $($report.audioStatus); physical SSD/GPU qualification: UNVERIFIED"
-if ($report.audioStatus -eq "FAIL") { Write-Warning "Audio continuity findings require resolution before production qualification." }
+if ($report.audioStatus -eq "FAIL") { throw "Audio continuity findings require resolution before baseline qualification." }

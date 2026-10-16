@@ -216,7 +216,8 @@ latency. No forced GC or cache flush establishes a false plateau/cold-cache resu
 
 `collectionStatus` PASS means the actual reproduction and cleanup assertions passed.
 `audioStatus` independently reports FAIL for missing audio, discontinuities or A/V
-distance above 40 ms. Such findings are never production readiness. Physical GPU,
+distance above 40 ms. Normal full-playback acceptance now requires this audio check to pass. Such findings
+are never production readiness, and failed reports remain retained. Physical GPU,
 installed MFT identity, SSD class, cold-cache/device latency and adverse-storage
 behavior remain UNVERIFIED. Run on the designated reference SSD with retained adapter,
 driver, decoder and storage inventory before making those claims.
@@ -236,5 +237,27 @@ This is a measured-baseline prerequisite, not compliance with a no-blocking cade
 target. No second scheduler, decoder backend or expanded codec/container support is
 introduced here. Imported/probed MP4 or the wider admitted codec policy is not a
 playback-qualified profile. Asynchronous bounded decode/admission, native-read
-cancellation and audio packet/cadence reconciliation are the next dependent work,
+cancellation and resource optimization are the next dependent work,
 guided by the retained measurements and failure evidence.
+
+
+### Audio packet cadence regression
+
+The first ten-minute baseline decoded all 30,000 video frames but observed 1,874
+audio-missing frames and a maximum 37,478.6666-ms A/V timestamp distance. Reading one
+native AAC packet for every video frame advanced audio at the packet's independent
+sample count instead of the video clock.
+
+The existing Media Foundation decoder now retains at most one native PCM packet,
+copies only the samples belonging to the current video time window and keeps the
+remainder for the next frame. Signed native sample positions discard negative
+codec preroll rather than shifting it into time zero; timestamp rounding respects
+the audio sample grid. Seek clears packet/EOS state. Genuine gaps return missing
+audio, never synthetic silence. Packet scanning has a 1,024-iteration bound; the
+native synchronous ReadSample cancellation limitation remains.
+
+Real 50/59.94 regressions require contiguous sample positions, matching video/audio
+timestamps, no missing audio through the reference tail, fewer native packet reads
+than video frames, and valid audio after a GOP-adjacent seek. The repeated ten-minute
+host baseline must also pass its audio check. The earlier failing source-bound report
+is retained on the PR for comparison; it is not reused as corrected-source PASS.

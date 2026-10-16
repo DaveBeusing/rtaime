@@ -112,6 +112,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             Assert.True(measurement.DecodedAudioSamples > 0);
             audioStatus = measurement.MissingAudioFrames == 0 && measurement.AudioTimestampDiscontinuities == 0 &&
                 measurement.MaximumAvTimestampDistanceMilliseconds <= 40 ? "PASS" : "FAIL";
+            Assert.Equal("PASS", audioStatus);
             privateGrowth = lastPrivate - firstPrivate; handleGrowth = lastHandles - firstHandles;
             Assert.NotNull(privateGrowth); Assert.NotNull(handleGrowth);
             Assert.InRange(privateGrowth!.Value, long.MinValue, 512L * 1024 * 1024);

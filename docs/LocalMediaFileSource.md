@@ -126,3 +126,11 @@ decoder and I/O waiting; actual source-file bytes, SSD latency and installed dec
 qualification are not inferred. See [long playback evidence](ReferenceMediaRegression.md#long-local-file-playback-baseline)
 for source-bound ten-minute / opt-in hour reproduction, actual host cadence and
 separate collection/audio/physical statuses.
+
+
+AAC packet duration is independent of video frame duration. Audio is now sliced onto
+the decoded video's sample-clock window with one pending native PCM packet retained;
+remainders survive the next frame, and seek clears the packet cache. Negative codec
+preroll is discarded by signed sample position. Actual gaps stay observable rather
+than being filled with manufactured silence. This fixes long-playback audio runahead
+and early audio exhaustion within the existing Media Foundation backend.

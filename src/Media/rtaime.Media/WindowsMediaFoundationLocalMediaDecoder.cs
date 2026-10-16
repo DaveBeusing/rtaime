@@ -454,14 +454,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	private static ulong TimestampToAudioSamplePosition(long timestamp, uint sampleRate)
-	{
-		if (timestamp <= 0)
-			return 0;
-
-		var position = decimal.Floor((decimal)timestamp * sampleRate / 10_000_000m);
-		return checked((ulong)position);
-	}
 
 	private static void CopyRgb32ToRgba(
 		IMFMediaBuffer buffer,
