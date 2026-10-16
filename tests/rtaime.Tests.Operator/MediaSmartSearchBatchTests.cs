@@ -67,12 +67,12 @@ public sealed class MediaSmartSearchBatchTests
         f.Pool.PrepareBatchRemoveCommand.Execute(null);
         Assert.Equal(0, f.Catalog.Mutations); Assert.Equal(2, f.Pool.BatchItems.Count(i => i.State == "READY"));
         Assert.Single(f.Pool.BatchItems, i => i.State == "SKIPPED");
-        f.Catalog.RejectSecond = true; f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => !f.Pool.BatchRunning);
+        f.Catalog.RejectSecond = true; await StartBatch(f); await Until(() => !f.Pool.BatchRunning);
         Assert.Equal(2, f.Catalog.Mutations); Assert.Single(f.Pool.BatchItems, i => i.State == "DONE");
         Assert.Single(f.Pool.BatchItems, i => i.State == "FAILED"); Assert.Equal(1, f.Catalog.MaximumActive);
         f.Catalog.RejectSecond = false; f.Pool.RetryBatchCommand.Execute(null);
         Assert.Single(f.Pool.BatchItems); Assert.Equal(2, f.Catalog.Mutations);
-        f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => !f.Pool.BatchRunning);
+        await StartBatch(f); await Until(() => !f.Pool.BatchRunning);
         Assert.Equal(3, f.Catalog.Mutations); Assert.Empty(f.Catalog.Snapshot.Assets);
         Assert.Equal(0, f.Transport.MutationCalls); Assert.Equal(f.Program, f.Owner.ProgramSourceId);
     }
@@ -82,14 +82,14 @@ public sealed class MediaSmartSearchBatchTests
         await using var f = await Fixture.Create(["one.mp4", "two.mp4", "three.mp4"]);
         f.Pool.ImportCommand.Execute(null); Assert.Equal(0, f.Catalog.Mutations);
         f.Catalog.Hold = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => f.Catalog.Mutations == 1);
+        await StartBatch(f); await Until(() => f.Catalog.Mutations == 1);
         f.Pool.CancelBatchCommand.Execute(null); Assert.True(f.Pool.BatchRunning);
         f.Catalog.Hold.SetResult(); await Until(() => !f.Pool.BatchRunning);
         Assert.Single(f.Pool.BatchItems, i => i.State == "DONE");
         Assert.Equal(2, f.Pool.BatchItems.Count(i => i.State == "CANCELLED"));
         Assert.Equal(1, f.Catalog.Mutations);
         f.Catalog.Hold = null; f.Pool.RetryBatchCommand.Execute(null); Assert.Equal(2, f.Pool.BatchItems.Count);
-        f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => !f.Pool.BatchRunning);
+        await StartBatch(f); await Until(() => !f.Pool.BatchRunning);
         Assert.Equal(3, f.Catalog.Mutations); Assert.All(f.Pool.BatchItems, i => Assert.Equal("DONE", i.State));
         Assert.Equal(1, f.Catalog.MaximumActive); Assert.Equal(0, f.Transport.MutationCalls);
     }
@@ -98,11 +98,11 @@ public sealed class MediaSmartSearchBatchTests
     {
         await using var f = await Fixture.Create(["one.mp4", "two.mp4"]);
         f.Pool.ImportCommand.Execute(null); f.Catalog.Revision++;
-        f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => !f.Pool.BatchRunning);
+        await StartBatch(f); await Until(() => !f.Pool.BatchRunning);
         Assert.Contains("STALE", f.Pool.BatchStatus); Assert.Equal(0, f.Catalog.Mutations);
         Assert.False(f.Pool.ExecuteBatchCommand.CanExecute(null));
         f.Pool.ImportCommand.Execute(null); f.Catalog.ThrowTimeout = true;
-        f.Pool.ExecuteBatchCommand.Execute(null); await Until(() => !f.Pool.BatchRunning);
+        await StartBatch(f); await Until(() => !f.Pool.BatchRunning);
         Assert.Single(f.Pool.BatchItems, i => i.State == "UNCONFIRMED");
         Assert.Single(f.Pool.BatchItems, i => i.State == "CANCELLED");
         f.Pool.RetryBatchCommand.Execute(null); Assert.Single(f.Pool.BatchItems);
@@ -123,13 +123,20 @@ public sealed class MediaSmartSearchBatchTests
     {
         await using var f = await Fixture.Create(["one.mp4", "two.mp4"]);
         f.Catalog.MissingConfirmation = true;
-        f.Pool.ImportCommand.Execute(null); f.Pool.ExecuteBatchCommand.Execute(null);
+        f.Pool.ImportCommand.Execute(null); await StartBatch(f);
         await Until(() => !f.Pool.BatchRunning);
         Assert.Equal(1, f.Catalog.Mutations);
         Assert.Single(f.Pool.BatchItems, i => i.State == "UNCONFIRMED");
         Assert.Single(f.Pool.BatchItems, i => i.State == "CANCELLED");
         f.Pool.RetryBatchCommand.Execute(null);
         Assert.Equal("two.mp4", Assert.Single(f.Pool.BatchItems).Path);
+    }
+    private static async Task StartBatch(Fixture fixture)
+    {
+        // The async ICommand wrapper can still be completing after BatchRunning clears.
+        // Admit a new request only once the same command availability used by the UI permits it.
+        await Until(() => fixture.Pool.ExecuteBatchCommand.CanExecute(null));
+        fixture.Pool.ExecuteBatchCommand.Execute(null);
     }
     private static async Task Until(Func<bool> predicate)
     {
