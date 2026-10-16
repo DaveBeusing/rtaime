@@ -290,7 +290,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             ++_openGeneration;
-            previous = _session;
+            previous = _session ?? _quarantinedSession;
             _session = null;
             _opening = false;
             _latestBoundary?.Dispose();
@@ -317,7 +317,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             if (_disposed && _quarantinedSession is null) return;
             _disposed = true;
             ++_openGeneration;
-            previous = _session;
+            previous = _session ?? _quarantinedSession;
             _session = null;
             _latestBoundary?.Dispose();
             _latestBoundary = null;

@@ -305,3 +305,25 @@ resource observations, and rejects tampering, missing files, incorrect provenanc
 invalid capacity and oversized evidence. It qualifies report handling only, not a
 60-minute playback run. The temporary historical-artifact inspection job was removed
 after resource diagnosis; current-source acceptance remains mandatory.
+
+## Decoder lifecycle safety regression
+
+LocalMediaDecoderSafetyTests runs in the required and generated-reference workflows.
+It exercises the production progress guard (gaps/EOS/flags, cancellation, deadline,
+bounded seek scanning), terminal source fencing, pre-allocation PCM limits and the
+actual RGB32 copy/swizzle for padded positive/negative pitch. A controlled clock
+qualifies deadlines without sleeping thirty seconds. Controlled malformed flags are
+not a claim that a physical damaged file or driver has been reproduced.
+
+The real Windows reader test performs 32 open/read/seek/close cycles, excludes eight
+warmup cycles, records allocations/read P99 and asserts the existing hosted ceilings
+of 512 MiB private growth and 64 handles. It forces no GC. The existing long-container
+test remains the actual ControlHost/RuntimeHost pressure qualification, with Replay
+enabled, fixed evidence bounds and unchanged limits. Short repeated lifetimes do not
+establish an hour-long or physical SSD/driver plateau.
+
+AsynchronousLocalMediaDecodeTests additionally covers concurrent Close, an injected
+noncooperative reader, repeat cleanup after late return and deck Error/reopen blocking.
+The test deadline is shortened through an internal constructor; production remains
+ten seconds. No physical device removal, installed MFT/driver recovery, adversarial
+storage latency or 60-minute reference result is inferred from these controlled tests.
