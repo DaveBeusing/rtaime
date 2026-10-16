@@ -1824,7 +1824,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		RaiseCommandState();
 	}
 
-	internal OperatorHealthDescriptor? CurrentLibraryHealthEvidence => _client.Snapshot?.Health;
+	internal OperatorHealthDescriptor? CurrentLibraryHealthEvidence => _client?.Snapshot?.Health;
 
 	private void ApplyHealth(OperatorHealthDescriptor health)
 	{
