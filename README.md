@@ -391,7 +391,10 @@ The navigation rail and Commands expose [Show checks and activity](docs/ShowPref
 
 The [Operator visual qualification](docs/OperatorVisualQualification.md#combined-workspace-regression-evidence)
 retains combined workspace geometry, review images and bounded Windows UI measurements.
-Injected DPI scaling does not establish physical mixed-monitor qualification.
+[QoL interaction qualification](docs/OperatorVisualQualification.md#qol-interaction-qualification)
+adds preference-window focus transitions, context-menu guards and rendering subscription
+balance through teardown. Injected DPI and pointer arithmetic do not establish physical
+mixed-monitor or touch qualification.
 
 Recent items, stable-ID favorites and contextual help are available through Commands or its context menu. History is opt-in and local; opening references only inspects existing items. See [Operator commands and shortcuts](docs/OperatorCommandsAndShortcuts.md#recent-items-favorites-and-inline-help) for privacy, limits, help search and unavailable-item recovery.
 
