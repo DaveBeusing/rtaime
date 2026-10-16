@@ -13,7 +13,7 @@ public static class OperatorCommandCatalog
 
 	public static IReadOnlyList<OperatorPaletteCommand> Create(OperatorKeyboardCommandRegistry registry,
 		OperatorViewModel owner, MediaDeckViewModel deck, OperatorShellViewModel shell, MediaPoolInspectorViewModel pool,
-		ICommand? openShowChecks = null, ICommand? openLibrary = null, ICommand? openHelp = null)
+		ICommand? openShowChecks = null, ICommand? openLibrary = null, ICommand? openHelp = null, ICommand? openWorkspaceTemplates = null)
 	{
 		string? ProductionReason()
 		{
@@ -62,6 +62,7 @@ public static class OperatorCommandCatalog
 		if (openShowChecks is not null) commands.Add(new("show-checks", "Show preflight, action history and notifications", "Navigation", openShowChecks));
 		if (openLibrary is not null) commands.Add(new("recent-favorites", "Recent items and favorites", "Navigation", openLibrary));
         if (openHelp is not null) commands.Add(new("inline-help", "Contextual help and searchable shortcut hints", "Help", openHelp));
+        if (openWorkspaceTemplates is not null) commands.Add(new("workspace-templates", "Named workspace layout templates and portable import/export", "Workspaces", openWorkspaceTemplates));
         return commands;
 	}
 }

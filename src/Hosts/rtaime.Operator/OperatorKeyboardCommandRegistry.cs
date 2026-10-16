@@ -152,6 +152,7 @@ public sealed class OperatorKeyboardCommandRegistry
             new("dock-toggle", "Built-in / docking layout", Key.D, ModifierKeys.Control | ModifierKeys.Shift, docking.ToggleCommand, true),
             new("dock-float", "Float focused panel", Key.W, ModifierKeys.Control | ModifierKeys.Shift, docking.FloatCommand, true),
             new("dock-focus", "Focus / restore panel layout", Key.F, ModifierKeys.Control | ModifierKeys.Shift, docking.FocusCommand, true),
+            new("dock-cinema", "Cinema / restore Program monitoring", Key.C, ModifierKeys.Control | ModifierKeys.Shift, docking.CinemaCommand, true),
             new("dock-next", "Next dock panel", Key.N, ModifierKeys.Control | ModifierKeys.Shift, docking.NextCommand, true),
             new("dock-left", "Dock focused panel left", Key.Left, ModifierKeys.Control | ModifierKeys.Alt, docking.LeftCommand, true),
             new("dock-center", "Dock focused panel center", Key.Up, ModifierKeys.Control | ModifierKeys.Alt, docking.CenterCommand, true),

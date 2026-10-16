@@ -130,7 +130,7 @@ public sealed class OperatorDockController : IDisposable
                 var reference = _presentationFocus; _presentationFocus = null;
                 _owner.Dispatcher.BeginInvoke(() =>
                 {
-                    if (!_disposed && generation == _focusGeneration && reference?.TryGetTarget(out var target) == true &&
+                    if (!_disposed && generation == _focusGeneration && reference is not null && reference.TryGetTarget(out var target) &&
                         target.IsVisible && target.IsEnabled)
                     { Window.GetWindow(target)?.Activate(); target.Focus(); }
                 });
@@ -226,7 +226,7 @@ public sealed class OperatorDockController : IDisposable
                 window.Closed += (_, _) =>
                 {
                     if (_disposed || _rebuilding) return;
-                    Dock(floating.Panel, floating.ReturnGroup);
+                    Dock(floating.Panel, _owner.Shell.Docking.Floating.FirstOrDefault(p => p.Panel == floating.Panel)?.ReturnGroup ?? floating.ReturnGroup);
                     FocusSelected();
                 };
                 window.Activated += (_, _) => _selected = floating.Panel;
@@ -377,8 +377,8 @@ public sealed class OperatorDockController : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _owner.Shell.RestorePresentation();
         Capture(); _disposed = true; _focusGeneration++; _presentationFocus = null;
+        _owner.Shell.RestorePresentation();
         SystemEvents.DisplaySettingsChanged -= DisplayChanged;
         _owner.Shell.PropertyChanged -= Changed; _owner.SizeChanged -= Sized; _owner.Loaded -= Loaded;
         foreach (var presenter in _presenters.Values) presenter.Content = null;
