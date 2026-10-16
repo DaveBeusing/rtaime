@@ -37,6 +37,11 @@ public sealed class ReferenceMediaPlaybackBaselineTests
         object? finalTiming = null;
         object? finalSchedule = null;
         object? transport = null;
+        string audioStatus = "UNVERIFIED";
+        long? firstPrivate = null, lastPrivate = null;
+        int? firstHandles = null, lastHandles = null;
+        long? privateGrowth = null;
+        int? handleGrowth = null;
         string? failure = null;
         var watch = Stopwatch.StartNew();
         var startedAt = DateTimeOffset.UtcNow;
@@ -67,6 +72,11 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                 {
                     process.Refresh();
                     var gc = GC.GetGCMemoryInfo();
+                    if (elapsed >= TimeSpan.FromMinutes(2))
+                    {
+                        firstPrivate ??= process.PrivateMemorySize64; firstHandles ??= process.HandleCount;
+                        lastPrivate = process.PrivateMemorySize64; lastHandles = process.HandleCount;
+                    }
                     Assert.True(sampleCount < resources.Length, "Constant resource evidence capacity exhausted.");
                     resources[sampleCount++] = new { seconds = elapsed.TotalSeconds,
                         decodedFrame = snapshot.Transport?.Position.CurrentFrame,
@@ -90,12 +100,18 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             var measurement = runtime.MediaDeck.PlaybackMeasurements!.Value;
             Assert.True(measurement.DecodedFrames >= (ulong)(minutes * 60 * 50 - 4));
             Assert.True(measurement.DecodedAudioSamples > 0);
+            audioStatus = measurement.MissingAudioFrames == 0 && measurement.AudioTimestampDiscontinuities == 0 &&
+                measurement.MaximumAvTimestampDistanceMilliseconds <= 40 ? "PASS" : "FAIL";
+            privateGrowth = lastPrivate - firstPrivate; handleGrowth = lastHandles - firstHandles;
+            Assert.NotNull(privateGrowth); Assert.NotNull(handleGrowth);
+            Assert.InRange(privateGrowth!.Value, long.MinValue, 512L * 1024 * 1024);
+            Assert.InRange(handleGrowth!.Value, int.MinValue, 64);
             Assert.Equal(0UL, measurement.ReadFailures);
             Assert.Equal(0UL, measurement.VideoTimestampRegressions);
             Assert.True(runtime.ScheduleStatistics.CommittedBoundaries > 0);
             Assert.True(sampleCount >= minutes - 1);
             // Transport/failure exercises are separate from the uninterrupted-playback metrics.
-            await deck.PauseAsync(); // Ended -> Pause may be rejected; no hidden retry is inferred.
+            await deck.StopAsync();
             await deck.Timeline.SeekToFrameAsync(59);
             await deck.PlayAsync();
             await Task.Delay(250);
@@ -125,7 +141,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             if (!string.IsNullOrWhiteSpace(evidence))
             {
                 Directory.CreateDirectory(evidence);
-                var diagnostics = runtime.MediaDeck?.PlaybackMeasurements;
+                var diagnostics = playback;
                 File.WriteAllText(Path.Combine(evidence, "local-playback-baseline.json"), JsonSerializer.Serialize(new {
                     schemaVersion = "1.0", sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
@@ -138,6 +154,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
                     playback, finalTiming, finalSchedule, transport, failure, cleanupFailure,
+                    collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
+                    audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
+                    productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",
                     audioQualification = "Inspect missing audio, timestamp discontinuities and A/V distance; nonzero findings are not waived as production-ready",
                     physicalStatus = "UNVERIFIED", failureStages = new[] { "probe", "decode", "transport", "scheduler", "GPU", "output" }
                 }, new JsonSerializerOptions { WriteIndented = true }));
