@@ -132,7 +132,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid duration.");
 
-				var nativeTransfer = TryGetUInt32(videoNative, new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EED93"));
+				var nativeSizeKey = MediaFoundation.MfMtFrameSize;
+                MediaFoundation.ThrowIfFailed(videoNative.GetUINT64(ref nativeSizeKey, out var nativeSize));
+                if ((uint)(nativeSize >> 32) != metadata.Width || (uint)nativeSize != metadata.Height)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_mismatch",
+                        "Container sample dimensions and native video dimensions disagree.");
+                var nativeTransfer = TryGetUInt32(videoNative, new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EED93"));
                 if (nativeTransfer is >= 9)
                     return LocalMediaDecoderOpenResult.Rejected("media.file.color_unsupported",
                         "Native logarithmic, HDR or wide-gamut transfer conversion is not qualified.");

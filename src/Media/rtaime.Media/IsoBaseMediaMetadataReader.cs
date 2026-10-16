@@ -110,11 +110,16 @@ internal static class IsoBaseMediaMetadataReader
                 var brands = new byte[(int)header.PayloadLength];
                 stream.ReadExactly(brands);
                 var quickTime = false;
+                var mp4 = false;
                 for (var offset = 0; offset < brands.Length; offset += 4)
                 {
                     if (offset == 4) continue; // minor version is not a compatible brand
-                    quickTime |= BinaryPrimitives.ReadUInt32BigEndian(brands.AsSpan(offset, 4)) == 0x71742020;
+                    var brand = BinaryPrimitives.ReadUInt32BigEndian(brands.AsSpan(offset, 4));
+                    quickTime |= brand == 0x71742020;
+                    mp4 |= brand is 0x69736F6D or >= 0x69736F32 and <= 0x69736F39 or
+                        0x6D703431 or 0x6D703432 or 0x61766331 or 0x4D345620 or 0x4D534E56;
                 }
+                if (!quickTime && !mp4) throw new LocalMediaProbeException("media.file.container_unqualified", "No admitted MP4/QuickTime brand was found.");
                 if (quickTime != (container == MediaContainerFormat.QuickTimeMov))
                     throw new LocalMediaProbeException("media.file.container_mismatch",
                         "The declared file extension and container brand do not agree.");
@@ -281,7 +286,12 @@ internal static class IsoBaseMediaMetadataReader
 		var entryCount = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(stsd.PayloadOffset + 4, 4));
 		if (entryCount != 1)
             throw new InvalidDataException("Exactly one sample description is required.");
-		return ReadBufferBox(buffer, stsd.PayloadOffset + 8, stsd.Offset + stsd.Length);
+        var entry = ReadBufferBox(buffer, stsd.PayloadOffset + 8, stsd.Offset + stsd.Length);
+        EnsurePayloadLength(entry, 8, "sample entry data reference");
+        if (BinaryPrimitives.ReadUInt16BigEndian(buffer.AsSpan(entry.PayloadOffset + 6, 2)) != 1)
+            throw new LocalMediaProbeException("media.file.external_reference_unsupported",
+                "A sample entry must reference the self-contained media data.");
+        return entry;
 	}
 
 	private static (uint Width, uint Height) ReadVisualSampleEntryDimensions(byte[] buffer, BufferBox entry)
