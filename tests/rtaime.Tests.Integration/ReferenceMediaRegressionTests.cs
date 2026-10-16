@@ -65,7 +65,10 @@ public sealed class ReferenceMediaRegressionTests
         Assert.True(measurements.LastVideoTimestamp > measurements.FirstVideoTimestamp);
         Assert.True(measurements.VideoSecondsPerTick > 0);
         Assert.True(measurements.NativeVideoRead.Calls >= 12);
-        Assert.True(measurements.NativeAudioRead.Calls >= 12);
+        // AAC-LC packets contain at most 1,024 sample frames in these generated profiles.
+        // A packet may now span several video windows instead of being consumed per frame.
+        var minimumAudioPackets = (measurements.DecodedAudioSamples + 1_023) / 1_024;
+        Assert.InRange(measurements.NativeAudioRead.Calls, minimumAudioPackets, minimumAudioPackets + 64);
         Assert.True(measurements.OpenMilliseconds >= 0);
         Assert.True(measurements.FirstFrameMilliseconds >= measurements.OpenMilliseconds);
         Assert.Equal(0UL, measurements.ReadFailures);
