@@ -296,7 +296,7 @@ Only one self-contained data reference is admitted. QuickTime PCM is restricted
 to version-0 `sowt`, signed PCM16, stereo 48 kHz; AAC uses version-0 `mp4a`.
 
 The reader caps `moov` at 32 MiB, sibling/top-level box traversal at 4,096,
-tracks at 16 and `stts` timing entries at 65,536. Lengths and checked timing
+tracks at 16 and each `stts`/`ctts` timing table at 65,536 runs. Composition and decode run tables are merged without per-frame expansion. Lengths and checked timing
 arithmetic are validated before allocation/traversal. Single nonnegative
 unit-rate edits are checked against movie/media timescales and durations;
 Windows performs demux and applies those edits. Generated playback tests check
@@ -347,3 +347,5 @@ is added here; the existing pinned test encoder remains CI-only.
 Native transfer-function values and source-reader normalization behavior follow
 the [Windows transfer-function enumeration](https://learn.microsoft.com/en-us/windows/win32/api/mfobjects/ne-mfobjects-mfvideotransferfunction)
 and [advanced source-reader processing contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-source-reader-enable-advanced-video-processing).
+
+B-frame edit validation uses presentation extent from bounded `stts`/`ctts` run merging, following [QuickTime composition offset semantics](https://developer.apple.com/documentation/quicktime-file-format/composition_offset_atom). Decode duration alone is not a presentation-end bound. Composition/decode sample counts must agree; unsupported composition-shift programs are rejected.

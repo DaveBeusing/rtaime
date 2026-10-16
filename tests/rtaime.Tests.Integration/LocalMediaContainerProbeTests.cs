@@ -70,10 +70,22 @@ public sealed class LocalMediaContainerProbeTests
     [InlineData("descriptions")]
     [InlineData("duplicate-video")]
     [InlineData("avc-length")]
+    [InlineData("composition-count")]
     public void Malformed_container_metadata_fails_without_native_open(string mutation)
     {
         WithFile(Movie(mutation: mutation), path =>
             Assert.Throws<InvalidDataException>(() => new Mp4LocalMediaProbe().Read(path)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void B_frame_composition_offsets_extend_presentation_without_widening_edit_limits(bool mov)
+    {
+        WithFile(Movie(mov: mov, mutation: "composition"), path => {
+            ILocalMediaProbe probe = mov ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+            Assert.Equal(TimeSpan.FromSeconds(6), probe.Read(path).Duration);
+        });
     }
 
     [Fact]
@@ -129,10 +141,12 @@ public sealed class LocalMediaContainerProbeTests
             ? Join(U32(0), U32(2), U32(100), U32(20), U32(100), U32(40))
             : Join(U32(0), U32(mutation == "timing-count" ? uint.MaxValue : 1), U32(300), U32(20)));
         var edit = Box("edts", Box("elst", Join(U32(0), U32(1), U32(6000),
-            U32(mutation == "edit" ? uint.MaxValue : 0u), U32(65536))));
+            U32(mutation == "edit" ? uint.MaxValue : mutation.StartsWith("composition", StringComparison.Ordinal) ? 40u : 0u), U32(65536))));
         var track = Box("trak", Join(Box("tkhd", tkhd), edit, Box("mdia", Join(Box("mdhd", mdhd),
             Box("hdlr", hdlr), Box("minf", Join(Box("dinf", Box("dref", Join(U32(0), U32(1),
-                Box("url ", U32(mutation == "external" ? 0u : 1u))))), Box("stbl", Join(stsd, stts))))))));
+                Box("url ", U32(mutation == "external" ? 0u : 1u))))), Box("stbl", Join(stsd, stts,
+                    mutation.StartsWith("composition", StringComparison.Ordinal)
+                        ? Box("ctts", Join(U32(0), U32(1), U32(mutation == "composition-count" ? 299u : 300u), U32(40))) : []))))))));
         var bytes = Join(Box("ftyp", Join(Encoding.ASCII.GetBytes(mov ? "qt  " : "isom"), U32(0))),
             Box("moov", Join(Box("mvhd", mvhd), track, mutation == "duplicate-video" ? track : [])));
         return mutation == "truncated" ? bytes[..^1] : bytes;

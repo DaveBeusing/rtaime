@@ -159,6 +159,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
                 Profile = profile, Container = mov ? "QuickTime MOV" : "MP4",
                 VideoCodec = hevc ? "HEVC" : "H.264/AVC", AudioCodec = pcm ? "PCM16" : "AAC",
                 RequestedDurationSeconds = 3, GeneratedVideoFrames = vfr ? 120 : 150,
+                NativeFrameRate = vfr ? "40/1" : seed.Manifest.NativeFrameRate,
                 GeneratedAudioSamples = 144000, VideoProfile = hevc ? (tenBit ? "main10" : "main") : mov ? "high" : "baseline",
                 EncodedPixelFormat = tenBit ? "yuv420p10le" : "yuv420p",
                 Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()

@@ -42,12 +42,12 @@ internal static class IsoBaseMediaMetadataReader
 			var handlerType = ReadHandlerType(moov, handler);
 			var mediaHeader = RequireChild(moov, media.PayloadOffset, media.PayloadLength, Mdhd, "mdhd");
 			var mediaTimescale = ReadTimescale(moov, mediaHeader, "mdhd");
-            ValidateEditList(moov, track, ReadTimescale(moov, movieHeader, "mvhd"), mediaTimescale,
-                duration, ReadDuration(moov, mediaHeader, "mdhd"));
 			var mediaInformation = RequireChild(moov, media.PayloadOffset, media.PayloadLength, Minf, "minf");
 			ValidateDataReference(moov, mediaInformation);
             var sampleTable = RequireChild(moov, mediaInformation.PayloadOffset, mediaInformation.PayloadLength, Stbl, "stbl");
-			var sampleDescription = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stsd, "stsd");
+			ValidateEditList(moov, track, ReadTimescale(moov, movieHeader, "mvhd"), mediaTimescale,
+                duration, ReadPresentationEnd(moov, sampleTable, mediaTimescale, ReadDuration(moov, mediaHeader, "mdhd")));
+            var sampleDescription = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stsd, "stsd");
 
 			if (handlerType == Vide)
 			{
@@ -383,8 +383,62 @@ internal static class IsoBaseMediaMetadataReader
         }
     }
 
+
+    private static decimal ReadPresentationEnd(byte[] buffer, BufferBox table, uint timescale, TimeSpan decodeDuration)
+    {
+        if (Children(buffer, table.PayloadOffset, table.PayloadLength).Any(box => box.Type == 0x63736C67))
+            throw new LocalMediaProbeException("media.file.edit_list_unsupported", "Composition shift programs are not qualified.");
+        var composition = Children(buffer, table.PayloadOffset, table.PayloadLength).FirstOrDefault(box => box.Type == 0x63747473);
+        if (composition.Length == 0) return (decimal)decodeDuration.Ticks / TimeSpan.TicksPerSecond;
+        var timing = RequireChild(buffer, table.PayloadOffset, table.PayloadLength, Stts, "stts");
+        var decodeCount = TimingEntryCount(buffer, timing);
+        var compositionCount = TimingEntryCount(buffer, composition);
+        var version = buffer[composition.PayloadOffset];
+        if (version > 1) throw new InvalidDataException("Unsupported composition offset version.");
+        uint decodeIndex = 0, compositionIndex = 0, decodeRemaining = 0, compositionRemaining = 0, delta = 0;
+        long compositionOffset = 0;
+        decimal decodeTime = 0, presentationEnd = decimal.MinValue;
+        // Merge the bounded run tables; never expand to per-frame storage or loops.
+        while (decodeIndex < decodeCount || decodeRemaining != 0)
+        {
+            if (decodeRemaining == 0)
+            {
+                var at = checked(timing.PayloadOffset + 8 + (int)decodeIndex++ * 8);
+                decodeRemaining = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(at, 4));
+                delta = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(at + 4, 4));
+                if (decodeRemaining == 0 || delta == 0) throw new InvalidDataException("Empty decode timing run.");
+            }
+            if (compositionRemaining == 0)
+            {
+                if (compositionIndex >= compositionCount) throw new InvalidDataException("Composition/decode sample counts disagree.");
+                var at = checked(composition.PayloadOffset + 8 + (int)compositionIndex++ * 8);
+                compositionRemaining = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(at, 4));
+                compositionOffset = version == 0
+                    ? BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(at + 4, 4))
+                    : BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(at + 4, 4));
+                if (compositionRemaining == 0) throw new InvalidDataException("Empty composition timing run.");
+            }
+            var count = Math.Min(decodeRemaining, compositionRemaining);
+            decodeTime += (decimal)count * delta;
+            presentationEnd = Math.Max(presentationEnd, decodeTime + compositionOffset);
+            decodeRemaining -= count; compositionRemaining -= count;
+        }
+        if (compositionRemaining != 0 || compositionIndex != compositionCount)
+            throw new InvalidDataException("Composition/decode sample counts disagree.");
+        return presentationEnd / timescale;
+    }
+
+    private static uint TimingEntryCount(byte[] buffer, BufferBox table)
+    {
+        EnsurePayloadLength(table, 16, "timing table");
+        var count = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(table.PayloadOffset + 4, 4));
+        if (count == 0 || count > 65536 || count > (uint)((table.PayloadLength - 8) / 8))
+            throw new InvalidDataException("Timing table exceeds its bounded extent.");
+        return count;
+    }
+
     private static void ValidateEditList(byte[] buffer, BufferBox track, uint movieTimescale, uint mediaTimescale,
-        TimeSpan movieDuration, TimeSpan mediaDuration)
+        TimeSpan movieDuration, decimal presentationEndSeconds)
     {
         var edits = Children(buffer, track.PayloadOffset, track.PayloadLength).FirstOrDefault(box => box.Type == 0x65647473);
         if (edits.Length == 0) return;
@@ -405,9 +459,9 @@ internal static class IsoBaseMediaMetadataReader
         if (duration == 0 || mediaTime < 0 || rate != 0x00010000 ||
             (decimal)duration / movieTimescale > (decimal)movieDuration.Ticks / TimeSpan.TicksPerSecond + 0.001m ||
             (decimal)mediaTime / mediaTimescale + (decimal)duration / movieTimescale >
-                (decimal)mediaDuration.Ticks / TimeSpan.TicksPerSecond + 0.001m)
+                presentationEndSeconds + 0.001m)
             throw new LocalMediaProbeException("media.file.edit_list_unsupported",
-                "Empty, reversed, repeated or non-unit-rate timeline edits are not admitted.");
+                $"Timeline edit is outside the unit-rate presentation extent (start={mediaTime}/{mediaTimescale}, duration={duration}/{movieTimescale}, presentationEnd={presentationEndSeconds}s).");
     }
 
     private static LocalMediaStreamMetadata ReadVideoDetails(byte[] buffer, BufferBox entry, LocalMediaStreamMetadata metadata)
