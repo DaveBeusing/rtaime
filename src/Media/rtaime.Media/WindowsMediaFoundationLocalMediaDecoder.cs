@@ -132,7 +132,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid duration.");
 
-				var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
+				var nativeTransfer = TryGetUInt32(videoNative, new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EED93"));
+                if (nativeTransfer is >= 9)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.color_unsupported",
+                        "Native logarithmic, HDR or wide-gamut transfer conversion is not qualified.");
+                var nativeRotation = TryGetUInt32(videoNative, new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1"));
+                if (nativeRotation is > 0)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.transform_unsupported", "Native video rotation is not qualified.");
+
+                var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
 				var inputProfile = new LocalMediaInputProfile(
 					videoCodec.Value,
 					metadata.Width,

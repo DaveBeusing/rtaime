@@ -37,14 +37,16 @@ internal static class IsoBaseMediaMetadataReader
 		foreach (var track in Children(moov, 0, moov.Length).Where(box => box.Type == Trak))
 		{
 			if (++trackCount > 16) throw new InvalidDataException("Too many media tracks.");
-            ValidateEditList(moov, track);
             var media = RequireChild(moov, track.PayloadOffset, track.PayloadLength, Mdia, "mdia");
 			var handler = RequireChild(moov, media.PayloadOffset, media.PayloadLength, Hdlr, "hdlr");
 			var handlerType = ReadHandlerType(moov, handler);
 			var mediaHeader = RequireChild(moov, media.PayloadOffset, media.PayloadLength, Mdhd, "mdhd");
 			var mediaTimescale = ReadTimescale(moov, mediaHeader, "mdhd");
+            ValidateEditList(moov, track, ReadTimescale(moov, movieHeader, "mvhd"), mediaTimescale,
+                duration, ReadDuration(moov, mediaHeader, "mdhd"));
 			var mediaInformation = RequireChild(moov, media.PayloadOffset, media.PayloadLength, Minf, "minf");
-			var sampleTable = RequireChild(moov, mediaInformation.PayloadOffset, mediaInformation.PayloadLength, Stbl, "stbl");
+			ValidateDataReference(moov, mediaInformation);
+            var sampleTable = RequireChild(moov, mediaInformation.PayloadOffset, mediaInformation.PayloadLength, Stbl, "stbl");
 			var sampleDescription = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stsd, "stsd");
 
 			if (handlerType == Vide)
@@ -326,6 +328,19 @@ internal static class IsoBaseMediaMetadataReader
 	}
 
 
+    private static void ValidateDataReference(byte[] buffer, BufferBox information)
+    {
+        var dinf = RequireChild(buffer, information.PayloadOffset, information.PayloadLength, 0x64696E66, "dinf");
+        var dref = RequireChild(buffer, dinf.PayloadOffset, dinf.PayloadLength, 0x64726566, "dref");
+        EnsurePayloadLength(dref, 20, "dref");
+        var count = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(dref.PayloadOffset + 4, 4));
+        var entries = Children(buffer, dref.PayloadOffset + 8, dref.PayloadLength - 8).ToArray();
+        if (count != 1 || entries.Length != 1 || entries[0].Type != 0x75726C20 || entries[0].PayloadLength != 4 ||
+            BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(entries[0].PayloadOffset, 4)) != 1)
+            throw new LocalMediaProbeException("media.file.external_reference_unsupported",
+                "Only a self-contained local media data reference is admitted.");
+    }
+
     private static void SkipAvcParameters(byte[] buffer, ref int offset, int end, int count)
     {
         for (var index = 0; index < count; index++)
@@ -358,7 +373,8 @@ internal static class IsoBaseMediaMetadataReader
         }
     }
 
-    private static void ValidateEditList(byte[] buffer, BufferBox track)
+    private static void ValidateEditList(byte[] buffer, BufferBox track, uint movieTimescale, uint mediaTimescale,
+        TimeSpan movieDuration, TimeSpan mediaDuration)
     {
         var edits = Children(buffer, track.PayloadOffset, track.PayloadLength).FirstOrDefault(box => box.Type == 0x65647473);
         if (edits.Length == 0) return;
@@ -376,7 +392,10 @@ internal static class IsoBaseMediaMetadataReader
         var mediaTime = version == 0 ? BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(offset + 4, 4)) :
             BinaryPrimitives.ReadInt64BigEndian(buffer.AsSpan(offset + 8, 8));
         var rate = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(offset + entryBytes - 4, 4));
-        if (duration == 0 || mediaTime < 0 || rate != 0x00010000)
+        if (duration == 0 || mediaTime < 0 || rate != 0x00010000 ||
+            (decimal)duration / movieTimescale > (decimal)movieDuration.Ticks / TimeSpan.TicksPerSecond + 0.001m ||
+            (decimal)mediaTime / mediaTimescale + (decimal)duration / movieTimescale >
+                (decimal)mediaDuration.Ticks / TimeSpan.TicksPerSecond + 0.001m)
             throw new LocalMediaProbeException("media.file.edit_list_unsupported",
                 "Empty, reversed, repeated or non-unit-rate timeline edits are not admitted.");
     }
