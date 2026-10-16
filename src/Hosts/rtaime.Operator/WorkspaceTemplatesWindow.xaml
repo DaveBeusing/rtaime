@@ -10,14 +10,14 @@
         <StackPanel Margin="16">
             <TextBlock Text="WORKSPACE LAYOUT TEMPLATES" Style="{StaticResource OperatorSectionTitle}" />
             <TextBlock Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8">
-                <Run Text="PROGRAM " /><Run Text="{Binding Owner.DataContext.ProgramSourceName, RelativeSource={RelativeSource AncestorType=Window}}" />
-                <Run Text=" · " /><Run Text="{Binding Owner.DataContext.ConnectionState, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <Run Text="PROGRAM " /><Run Text="{Binding Owner.DataContext.ProgramSourceName, Mode=OneWay, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <Run Text=" · " /><Run Text="{Binding Owner.DataContext.ConnectionState, Mode=OneWay, RelativeSource={RelativeSource AncestorType=Window}}" />
             </TextBlock>
-            <TextBlock Style="{StaticResource OperatorLabel}"><Run Text="Capture current " /><Run Text="{Binding SelectedWorkspace}" /><Run Text=" workspace" /></TextBlock>
+            <TextBlock Style="{StaticResource OperatorLabel}"><Run Text="Capture current " /><Run Text="{Binding SelectedWorkspace, Mode=OneWay}" /><Run Text=" workspace" /></TextBlock>
             <controls:RtaimeTextBox x:Name="TemplateNameBox" Text="{Binding TemplateName, UpdateSourceTrigger=PropertyChanged}" MaxLength="64" Margin="0,8" AutomationProperties.Name="New workspace template name" ToolTip="Unique name, at most 64 characters. Up to 16 layouts are retained." />
             <controls:RtaimeButton Content="Save new template" Command="{Binding SaveTemplateCommand}" IsCompact="True" AutomationProperties.Name="Save current workspace as a new template" />
             <controls:RtaimeComboBox x:Name="TemplateSelection" ItemsSource="{Binding WorkspaceTemplates}" SelectedItem="{Binding SelectedTemplate}" DisplayMemberPath="Name" Margin="0,12,0,8" AutomationProperties.Name="Saved workspace layout template" />
-            <TextBlock Style="{StaticResource OperatorLabel}" Margin="0,0,0,8"><Run Text="Apply destination: " /><Run Text="{Binding SelectedTemplate.Workspace}" /></TextBlock>
+            <TextBlock Style="{StaticResource OperatorLabel}" Margin="0,0,0,8"><Run Text="Apply destination: " /><Run Text="{Binding SelectedTemplate.Workspace, Mode=OneWay}" /></TextBlock>
             <WrapPanel>
                 <controls:RtaimeButton Content="Apply" Command="{Binding ApplyTemplateCommand}" IsCompact="True" Margin="0,0,6,6" AutomationProperties.Name="Apply selected layout template" ToolTip="Switch to the template workspace and restore its layout. Production is unchanged." />
                 <controls:RtaimeButton Content="Delete" Command="{Binding DeleteTemplateCommand}" IsCompact="True" Margin="0,0,6,6" AutomationProperties.Name="Delete selected local layout template" />

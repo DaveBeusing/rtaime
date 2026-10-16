@@ -86,7 +86,7 @@ internal static class OperatorDockingWindowTests
         owner.Docking.CinemaCommand.Execute(null);
         Assert.Equal("CINEMA", owner.Shell.PresentationMode); Assert.Equal("PROGRAM", owner.Shell.ViewerMode);
         await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
-        Assert.True(Descendants(owner).OfType<TextBlock>().Any(t => AutomationProperties.GetName(t) == "Current Program identity, connection and safety" && t.IsVisible));
+        Assert.Contains(Descendants(owner).OfType<TextBlock>(), t => AutomationProperties.GetName(t) == "Current Program identity, connection and safety" && t.IsVisible);
         owner.Docking.RestoreCommand.Execute(null);
         Assert.Equal(fullscreen, owner.Shell.IsFullscreen);
         Assert.Equal(beforeMode, JsonSerializer.Serialize(owner.Shell.CurrentWorkspaceLayout()));
@@ -100,6 +100,13 @@ internal static class OperatorDockingWindowTests
         await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
         var templates = Assert.IsType<WorkspaceTemplatesWindow>(owner.WorkspaceTemplatesWindow);
         Assert.Same(owner.Shell, templates.DataContext); Assert.Same(owner, templates.Owner);
+        var readOnlyBindings = Descendants(templates).OfType<TextBlock>()
+            .SelectMany(text => text.Inlines.OfType<System.Windows.Documents.Run>())
+            .Select(run => BindingOperations.GetBindingExpression(run, System.Windows.Documents.Run.TextProperty))
+            .Where(binding => binding is not null).ToArray();
+        Assert.NotEmpty(readOnlyBindings);
+        Assert.All(readOnlyBindings, binding => Assert.Equal(BindingMode.OneWay, binding!.ParentBinding.Mode));
+
         Assert.True(Assert.IsType<RtaimeTextBox>(templates.FindName("TemplateNameBox")).Focus());
         owner.OpenWorkspaceTemplatesCommand.Execute(null); Assert.Same(templates, owner.WorkspaceTemplatesWindow);
         Assert.Equal(workspace, owner.Shell.SelectedWorkspace);
