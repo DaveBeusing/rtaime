@@ -337,6 +337,37 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public void Deck_cleanup_failure_remains_ERROR_and_blocks_probe_and_replacement()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4, IgnoreCancellation = true };
+        var provider = new LocalMediaFileProvider();
+        var session = new LocalMediaRuntimeSession(provider, Source(decoder), TimeSpan.FromMilliseconds(25));
+        var deck = new LocalMediaDeckRuntimeService(provider, session);
+        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            var closed = deck.Close();
+            Assert.Equal(MediaDeckState.Error, closed.State);
+            Assert.Equal("runtime.media_deck.cleanup_failed", closed.Failure?.Code);
+            Assert.False(decoder.Disposed);
+            Assert.False(deck.Probe("unused.mp4", MediaAssetId.New()).Succeeded);
+            var replaced = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current,
+                decoder.Probe.SourceId, "unused.mp4"), Prepared(provider, decoder.Probe.SourceId));
+            Assert.Equal(MediaDeckState.Error, replaced.State);
+            Assert.Equal(4, decoder.Reads);
+        }
+        finally
+        {
+            decoder.ReleaseRead.Set();
+            Until(() => decoder.Disposed);
+            Assert.Throws<IOException>(deck.Dispose);
+        }
+        Assert.Throws<IOException>(deck.Dispose);
+        Assert.Equal(1, decoder.DisposeCalls);
+    }
+
+    [Fact]
     public void Decoder_release_failure_is_reported_by_lifecycle_cleanup_instead_of_a_successful_join()
     {
         var decoder = new ControlledDecoder { FailDispose = true };

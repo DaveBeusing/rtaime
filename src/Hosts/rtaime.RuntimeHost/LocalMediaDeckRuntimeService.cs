@@ -18,6 +18,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     private readonly object _openGate = new();
 	private readonly LocalMediaFileProvider _provider;
 	private LocalMediaRuntimeSession? _session;
+    private LocalMediaRuntimeSession? _quarantinedSession;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
 	private Failure? _failure;
 	private bool _autoPlayOnProgram = true;
@@ -39,12 +40,29 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		_provider = new LocalMediaFileProvider(outputFormat);
 	}
 
+    internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider, LocalMediaRuntimeSession session)
+    {
+        _provider = provider;
+        _session = session;
+    }
+
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
     public LocalMediaDecodeSnapshot? DecodeSnapshot { get { lock (_gate) return _session?.DecodeSnapshot; } }
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements { get { lock (_gate) return _session?.Measurements; } }
 
-	public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
-	{
+    public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
+    {
+        lock (_openGate)
+        {
+            lock (_gate)
+                if (_quarantinedSession is not null)
+                    return MediaAssetProbeResult.Rejected(_failure!.Value.Code, _failure.Value.Message);
+            return ProbeCore(path, assetId);
+        }
+    }
+
+    private MediaAssetProbeResult ProbeCore(string path, MediaAssetId assetId)
+    {
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var open = _provider.TryOpen(path, new MediaSourceId(Identity.New()), assetId);
 		if (!open.Succeeded || open.Source is null)
@@ -94,8 +112,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         long generation;
         lock (_gate)
         {
+            if (_quarantinedSession is not null) return CreateSnapshot();
             generation = ++_openGeneration;
-            previous = _session;
+            previous = _session ?? _quarantinedSession;
             _session = null;
             _opening = true;
             _latestBoundary?.Dispose();
@@ -106,7 +125,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             _isOnProgram = false;
         }
         // Probing, allocation, preroll and worker join run outside the admission lock.
-        previous?.Dispose();
+        if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
         LocalMediaRuntimeSession? candidate = null;
         Failure? failure = null;
         try
@@ -137,7 +156,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             }
             snapshot = CreateSnapshot();
         }
-        if (!accepted) candidate?.Dispose();
+        if (!accepted && !ReleaseSession(candidate)) { lock (_gate) return CreateSnapshot(); }
         return snapshot;
     }
 
@@ -261,6 +280,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 
     public MediaDeckRuntimeSnapshot Close()
     {
+        lock (_openGate) return CloseCore();
+    }
+
+    private MediaDeckRuntimeSnapshot CloseCore()
+    {
         LocalMediaRuntimeSession? previous;
         lock (_gate)
         {
@@ -276,16 +300,21 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             _outPointFrame = null;
             _isOnProgram = false;
         }
-        previous?.Dispose();
+        if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
         return MediaDeckRuntimeSnapshot.Unloaded;
     }
 
     public void Dispose()
     {
+        lock (_openGate) DisposeCore();
+    }
+
+    private void DisposeCore()
+    {
         LocalMediaRuntimeSession? previous;
         lock (_gate)
         {
-            if (_disposed) return;
+            if (_disposed && _quarantinedSession is null) return;
             _disposed = true;
             ++_openGeneration;
             previous = _session;
@@ -293,7 +322,24 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             _latestBoundary?.Dispose();
             _latestBoundary = null;
         }
-        previous?.Dispose();
+        if (!ReleaseSession(previous)) throw new IOException(_failure!.Value.Message);
+    }
+
+    private bool ReleaseSession(LocalMediaRuntimeSession? session)
+    {
+        if (session is null) return true;
+        try { session.Dispose(); return true; }
+        catch (Exception exception)
+        {
+            lock (_gate)
+            {
+                _quarantinedSession = session;
+                _opening = false;
+                _failure = new Failure("runtime.media_deck.cleanup_failed",
+                    $"Local media cleanup failed; reopen is blocked until a supported RuntimeHost restart: {exception.Message}");
+            }
+            return false;
+        }
     }
 
 	private void StartForProgramUnsafe()
