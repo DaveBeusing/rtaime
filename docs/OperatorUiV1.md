@@ -897,3 +897,5 @@ The shared Ctrl+K palette and its custom-control profile editor are described in
 The existing custom Inspector toolbar provides bounded, grouped local undo/redo and typed Copy/Paste for supported transforms, processing nodes, audio-gain drafts and cue-name drafts. Stable IDs separate contexts; confirmed revision/property rebases invalidate history. Audio gain and cue rename remain explicit existing Client commands. The toolbar is shared across the Inspector category tabs and exposes automation names and draft status; text editing retains its native shortcuts.
 
 See [Operator commands and shortcuts](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) for compatibility, limits, grouping and authority exclusions. These are reversible presentation drafts, not a backend live-undo capability.
+
+The [Media Library](MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.

@@ -43,7 +43,8 @@ public sealed record MediaPoolItemViewModel(
 	bool IsOnline,
 	bool IsReady,
 	string? LocalPath = null,
-	TimeSpan? KnownDuration = null) : INotifyPropertyChanged
+	TimeSpan? KnownDuration = null,
+	MediaSearchMetadata? SearchMetadata = null) : INotifyPropertyChanged
 {
 	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -250,7 +251,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		SetMotionTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Motion));
 		SetAvSyncTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.AvSync));
 		DisableTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Off));
-		ImportCommand = new AsyncRelayCommand(ImportMediaAssetsAsync);
+		ImportCommand = new AsyncRelayCommand(PrepareBatchImportAsync, () => CanPrepareBatch);
+		InitializeBatch();
 		RefreshCatalogCommand = new AsyncRelayCommand(RefreshCatalogAsync);
 
         InitializeInspectorDrafts();
@@ -718,22 +720,6 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		});
 	}
 
-	private async Task ImportMediaAssetsAsync()
-	{
-		if (_catalogClient is null || _importFilePicker is null)
-			return;
-		var paths = _importFilePicker();
-		if (paths.Count == 0)
-			return;
-
-		await RunCatalogOperationAsync(async () =>
-		{
-			var result = await _catalogClient.ImportMediaAssetsAsync(paths);
-			SetCatalogSnapshot(result.Snapshot);
-			_catalogError = FormatMutationFailures(result);
-		});
-	}
-
 	private async Task RefreshCatalogAsync()
 	{
 		if (_catalogClient is null)
@@ -789,6 +775,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(IsLoading));
 		OnPropertyChanged(nameof(HasError));
 		OnPropertyChanged(nameof(ErrorState));
+		NotifyBatch();
 	}
 
 	public bool CanDropToPreview(MediaPoolItemViewModel? item)
@@ -954,7 +941,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 				online,
 				online && !_catalogBusy,
 				asset.SourceLocation,
-				asset.Duration));
+				asset.Duration,
+				new MediaSearchMetadata(asset.VideoCodec, asset.AudioCodec, asset.VideoFormat)));
 		}
 
 		if (_mediaDeck.IsLoaded &&
@@ -1033,6 +1021,13 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		if (_allItems.Count > MaxProjectedItems)
 			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
 
+		_allItems.Sort((left, right) =>
+		{
+			var category = StringComparer.Ordinal.Compare(left.Category, right.Category);
+			if (category != 0) return category;
+			var name = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
+			return name != 0 ? name : StringComparer.Ordinal.Compare(left.Key, right.Key);
+		});
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
         RefreshInspectorDraftContext();
@@ -1068,11 +1063,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			RaiseBrowsingCommands();
 		}
 
+		var search = MediaLibrarySearch.Parse(bin.Search);
+		SearchStatus = search.Error ?? "AND terms · quotes for phrases · -term to exclude";
 		var filtered = _allItems
-			.Where(item => MediaSmartBinPolicy.Matches(item, bin))
-			.OrderBy(item => item.Category, StringComparer.Ordinal)
-			.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-			.ThenBy(item => item.Key, StringComparer.Ordinal)
+			.Where(item => MediaSmartBinPolicy.Matches(item, bin, search))
 			.Take(MaxProjectedItems)
 			.ToArray();
 
@@ -1548,6 +1542,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void RaiseSelectionState()
 	{
+		NotifyBatch();
         RefreshInspectorDraftContext();
 		OnPropertyChanged(nameof(HasSelection));
 		OnPropertyChanged(nameof(IsSourceSelection));

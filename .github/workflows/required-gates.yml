@@ -69,7 +69,7 @@ jobs:
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
 
       - name: Media Library metadata, preferences and hover isolation regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaLibraryBrowsingTests|FullyQualifiedName~ProductionMacroOperatorTests.Cancelled_status_refresh" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaLibraryBrowsingTests|FullyQualifiedName~MediaSmartSearchBatchTests|FullyQualifiedName~ProductionMacroOperatorTests.Cancelled_status_refresh" --logger "console;verbosity=detailed"
 
       - name: Timeline ergonomics and authoring history regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~TimelineErgonomicsTests --logger "console;verbosity=detailed"
@@ -455,6 +455,9 @@ jobs:
 
       - name: Shortcut editor and strict profile regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
+
+      - name: Media smart query and batch isolation regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaSmartSearchBatchTests|FullyQualifiedName~MediaLibraryBrowsingTests" --logger "console;verbosity=detailed"
 
       - name: Inspector typed transfer and local transaction regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests|FullyQualifiedName~TimelineErgonomicsTests" --logger "console;verbosity=detailed"

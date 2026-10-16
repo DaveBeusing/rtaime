@@ -27,6 +27,8 @@ public sealed partial class MediaPoolInspectorViewModel
 	private MediaSmartBin? _selectedSmartBin;
 	private MediaDurationFilter _durationFilter;
 	private MediaReadinessFilter _readinessFilter;
+	private string _searchStatus = "AND terms · quotes for phrases · -term to exclude";
+	public string SearchStatus { get => _searchStatus; private set => Set(ref _searchStatus, value); }
 	private string _binStatus = "Smart Bins save filters only.";
 	private string _hoverStatus = "Hover or focus an asset · scrub capability unavailable";
 	private ImageSource? _hoverThumbnail;

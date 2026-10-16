@@ -396,3 +396,5 @@ Injected DPI scaling does not establish physical mixed-monitor qualification.
 Recent items, stable-ID favorites and contextual help are available through Commands or its context menu. History is opt-in and local; opening references only inspects existing items. See [Operator commands and shortcuts](docs/OperatorCommandsAndShortcuts.md#recent-items-favorites-and-inline-help) for privacy, limits, help search and unavailable-item recovery.
 
 The Inspector supports grouped local draft undo/redo and compatible typed attribute transfer for graphics/processing, audio gain and cue names. APPLY/RENAME remain explicit; confirmed live operations are excluded. See [Inspector draft transactions](docs/OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer).
+
+The [Media Library](docs/MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.
