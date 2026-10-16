@@ -112,6 +112,8 @@ public sealed record OperatorLayoutSettings
 	public OperatorWindowPlacementSettings WindowPlacement { get; init; } = OperatorWindowPlacementSettings.Default;
 	public Dictionary<string, OperatorWorkspaceLayoutSettings> Workspaces { get; init; } = CreateCanonicalLayouts();
 
+	public OperatorWorkspaceTemplate[] Templates { get; init; } = [];
+
 	public static OperatorLayoutSettings Default => new();
 
 	public OperatorLayoutSettings Normalize()
@@ -153,7 +155,9 @@ public sealed record OperatorLayoutSettings
 			Version = CurrentVersion,
 			SelectedWorkspace = selected,
 			WindowPlacement = (WindowPlacement ?? OperatorWindowPlacementSettings.Default).Normalize(),
-			Workspaces = layouts
+			Workspaces = layouts,
+			Templates = (Templates ?? []).Where(t => t is not null && t.IsValid).DistinctBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+				.Take(OperatorWorkspaceTemplate.MaximumTemplates).Select(t => t with { Layout = t.Layout.Normalize() }).ToArray()
 		};
 	}
 
@@ -226,6 +230,7 @@ public sealed class OperatorLayoutStore
 	private readonly string _path;
 	private readonly object _saveSync = new();
 	private Task _saveTail = Task.CompletedTask;
+	public string? LastSaveError { get; private set; }
 
 	public OperatorLayoutStore(string? path = null)
 	{
@@ -273,6 +278,7 @@ public sealed class OperatorLayoutStore
 
 	private async Task WriteAsync(string json)
 	{
+		LastSaveError = null;
 		var temporaryPath = _path + ".tmp";
 		try
 		{
@@ -285,7 +291,8 @@ public sealed class OperatorLayoutStore
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
-			// Layout persistence is best-effort and must never affect production operation.
+			LastSaveError = exception.Message;
+			// Layout persistence must never affect production operation.
 		}
 		finally
 		{
@@ -302,7 +309,7 @@ public sealed class OperatorLayoutStore
 	}
 }
 
-public sealed class OperatorShellViewModel : INotifyPropertyChanged
+public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorLayoutStore _store;
 	private readonly Action<bool> _setFullscreen;
@@ -355,7 +362,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		ToggleFullscreenCommand = new OperatorShellCommand(ToggleFullscreen);
 		ExitFullscreenCommand = new OperatorShellCommand(
 			ExitFullscreen,
-			() => IsFullscreen);
+			() => IsFullscreen || PresentationActive);
 		FullscreenPreviewCommand = new OperatorShellCommand(() => EnterMonitorFullscreen("PREVIEW"));
 		FullscreenProgramCommand = new OperatorShellCommand(() => EnterMonitorFullscreen("PROGRAM"));
 		SaveLayoutCommand = new OperatorShellCommand(Save);
@@ -367,6 +374,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		RestoreViewersCommand = new OperatorShellCommand(
 			() => SetViewerMode("DUAL"),
 			() => !string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal));
+		InitializeWorkspaceTemplates(settings.Templates);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -722,6 +730,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
 			return;
 
+		RestorePresentation();
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
 		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
@@ -736,7 +745,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		return _store.SaveAsync(new OperatorLayoutSettings
 		{
 			Version = OperatorLayoutSettings.CurrentVersion,
-			IsFullscreen = IsFullscreen,
+			IsFullscreen = _presentation?.Fullscreen ?? IsFullscreen,
+			Templates = WorkspaceTemplates.ToArray(),
 			SelectedWorkspace = SelectedWorkspace,
 			WindowPlacement = _windowPlacement,
 			Workspaces = new Dictionary<string, OperatorWorkspaceLayoutSettings>(_workspaceLayouts, StringComparer.Ordinal)
@@ -790,6 +800,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void ExitFullscreen()
 	{
+		if (PresentationActive) { RestorePresentation(); return; }
 		if (!_monitorFullscreenActive)
 		{
 			_setFullscreen(false);
@@ -811,21 +822,18 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void ResetLayout()
 	{
+		RestorePresentation();
 		var defaults = OperatorLayoutSettings.CreateCanonicalLayouts()[SelectedWorkspace];
 		_workspaceLayouts[SelectedWorkspace] = defaults;
 		ApplyWorkspaceLayout(defaults);
 		Save();
 	}
 
-	private void CaptureCurrentWorkspace() =>
-		_workspaceLayouts[SelectedWorkspace] = new OperatorWorkspaceLayoutSettings(
-			LeftPanelWidth,
-			RightPanelWidth,
-			LowerPanelHeight,
-			IsLeftCollapsed,
-			IsRightCollapsed,
-			IsCenterMaximized,
-			ViewerMode) { Docking = _docking }.Normalize();
+	internal OperatorWorkspaceLayoutSettings CurrentWorkspaceLayout() => new OperatorWorkspaceLayoutSettings(
+            LeftPanelWidth, RightPanelWidth, LowerPanelHeight, IsLeftCollapsed, IsRightCollapsed, IsCenterMaximized,
+            ViewerMode) { Docking = _docking }.Normalize();
+    private void CaptureCurrentWorkspace() =>
+        _workspaceLayouts[SelectedWorkspace] = _presentation?.Layout ?? CurrentWorkspaceLayout();
 
 	private void ApplyWorkspaceLayout(OperatorWorkspaceLayoutSettings layout)
 	{
