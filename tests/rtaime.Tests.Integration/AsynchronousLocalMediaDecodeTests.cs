@@ -72,6 +72,29 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public void End_of_stream_after_a_starved_tail_is_observable_without_an_impossible_new_preroll()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4, Timestamps = [0, 200_000, 400_000] };
+        using var worker = new LocalMediaDecodeWorker(Source(decoder));
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        for (var index = 0; index < 3; index++)
+        {
+            using var frame = worker.TakeDue(index * 200_000L, out _, out _);
+            Assert.NotNull(frame);
+        }
+        Assert.Null(worker.TakeDue(600_000, out var prematureEnd, out _));
+        Assert.False(prematureEnd);
+        Assert.Equal(LocalMediaDecodeState.Starved, worker.Snapshot.State);
+        decoder.ReleaseRead.Set();
+        Until(() => worker.Measurements.Decode.Calls == 4);
+        Assert.Null(worker.TakeDue(600_000, out var ended, out var failure));
+        Assert.True(ended);
+        Assert.Null(failure);
+        Assert.Equal(LocalMediaDecodeState.Ended, worker.Snapshot.State);
+    }
+
+    [Fact]
     public void Close_cancels_a_pending_read_and_joins_before_disposing_the_decoder()
     {
         var decoder = new ControlledDecoder { BlockCall = 4 };

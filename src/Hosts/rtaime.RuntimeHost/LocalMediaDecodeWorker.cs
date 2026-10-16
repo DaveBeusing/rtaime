@@ -85,7 +85,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
         lock (_gate)
         {
             failure = _failure;
-            ended = false;
+            ended = _ended && _frames.Count == 0 && failure is null;
+            if (ended) { _state = LocalMediaDecodeState.Ended; return null; }
             if (!_prerolled || failure is not null) return null;
             LocalMediaFrameLease? selected = null;
             for (var index = 0; index < QueueCapacity && _frames.TryPeek(out var next); index++)
