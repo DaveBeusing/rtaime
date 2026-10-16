@@ -207,11 +207,13 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
         var path = System.IO.Path.Combine(root, $"rtaime-reference-{profile.Id}-h264-aac.mp4");
         var manifestPath = System.IO.Path.ChangeExtension(path, ".json");
         TryDelete(path);
-        // Remux the existing deterministic six-second signal without raw multi-gigabyte intermediates.
+        // Extend the existing deterministic signal with explicit CFR/audio normalization and no raw long intermediates.
         var result = RunFfmpeg($"-y -hide_banner -loglevel error -stream_loop -1 -i {Quote(seed.Path)} " +
-            $"-t {profile.Duration.TotalSeconds.ToString(CultureInfo.InvariantCulture)} -map 0:v:0 -map 0:a:0 -c copy " +
+            $"-t {profile.Duration.TotalSeconds.ToString(CultureInfo.InvariantCulture)} -map 0:v:0 -map 0:a:0 " +
+            "-vf fps=50 -af aresample=async=1:first_pts=0 -c:v libx264 -preset veryfast -crf 30 -profile:v high -pix_fmt yuv420p -g 60 " +
+            "-c:a aac -b:a 96k -ar 48000 -ac 2 -fs 2147483648 " +
             $"-map_metadata -1 -metadata creation_time=1970-01-01T00:00:00Z -movflags +faststart {Quote(path)}",
-            TimeSpan.FromMinutes(4));
+            TimeSpan.FromMinutes(profile.Duration.TotalMinutes / 2 + 5));
         if (result.ExitCode != 0 || !File.Exists(path))
             throw new Xunit.Sdk.XunitException("Long reference generation failed: " + result.Error);
         if (new FileInfo(path).Length > 2L * 1024 * 1024 * 1024)
@@ -221,7 +223,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
             GeneratedVideoFrames = CalculateFrameCount(profile.NativeFrameRate, profile.Duration),
             GeneratedAudioSamples = checked((ulong)profile.Duration.TotalSeconds * AudioSampleRate),
             VideoSignal = seed.Manifest.VideoSignal + "; encoded six-second seed repeats; container timestamps advance",
-            AudioSignal = seed.Manifest.AudioSignal + "; remuxed AAC packet continuity is measured, not assumed",
+            AudioSignal = seed.Manifest.AudioSignal + "; re-encoded with asynchronous sample normalization; decoder continuity is measured",
             Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()
         };
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));

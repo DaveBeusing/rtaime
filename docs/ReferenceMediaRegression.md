@@ -167,8 +167,8 @@ asset is ten minutes of 1080p50 H.264 High/yuv420p and stereo 48-kHz AAC. Manual
 workflow dispatch can select 60 minutes. The existing 25/50/59.94 six-second matrix
 continues independently.
 
-Long files remux repetitions of the existing deterministic six-second encoded signal
-with pinned test-only FFmpeg 7.1.1. Container timestamps advance; the visible six-second
+Long files encode repetitions of the existing deterministic six-second encoded signal
+with pinned test-only FFmpeg 7.1.1, explicit 50-fps CFR and audio sample normalization. Container timestamps advance; the visible six-second
 counter intentionally repeats. This is long-container/decode/host execution coverage,
 not ten minutes of unique source material or byte-identical encoding across builds.
 SHA-256 is streamed. Raw intermediates remain six seconds, final files are bounded
