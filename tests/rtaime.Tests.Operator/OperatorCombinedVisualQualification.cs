@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -45,6 +46,7 @@ public sealed class OperatorCombinedVisualQualification
         var preview = owner.PreviewSourceId;
         var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
         var observations = new List<object>();
+        var interactionCases = new List<object>();
         if (!string.IsNullOrWhiteSpace(evidenceRoot)) Directory.CreateDirectory(evidenceRoot);
         var watch = Stopwatch.StartNew();
         try
@@ -72,6 +74,8 @@ public sealed class OperatorCombinedVisualQualification
                     Assert.Equal(width, root.ActualWidth, 1);
                     Assert.Equal(height, root.ActualHeight, 1);
                     var first = Capture(window, root);
+                    Assert.All(Descendants(root).OfType<OperatorDrawingSurface>(),
+                        surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
                     await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
                     var second = Capture(window, root);
                     foreach (var region in Regions)
@@ -99,12 +103,14 @@ public sealed class OperatorCombinedVisualQualification
                         name, workspace, width, height, injectedScale = scale,
                         actualDpi = VisualTreeHelper.GetDpi(window).PixelsPerInchX,
                         startupOverlayVisible = overlay.IsVisible,
+                        renderingSubscriptions = Descendants(root).OfType<OperatorDrawingSurface>().Sum(surface => surface.RenderingSubscriptionBalance),
                         regions = first.ToDictionary(pair => pair.Key, pair => new
                         { x = pair.Value.X, y = pair.Value.Y, width = pair.Value.Width, height = pair.Value.Height })
                     });
                     if (workspace == "LIVE" && !string.IsNullOrWhiteSpace(evidenceRoot))
                         SaveImage(root, width, height, scale, Path.Combine(evidenceRoot, name + ".png"));
                 }
+                await VerifyPreferenceTransitionsAsync(window, dispatcher, name, width, height, evidenceRoot, interactionCases);
             }
 
             // Warm up all workspaces above before measuring a stable viewport. No forced GC:
@@ -126,7 +132,7 @@ public sealed class OperatorCombinedVisualQualification
                     sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
                     scope = "Windows WPF layout scale injection; screenshots exclude hardware D3DImage content; physical mixed-DPI UNVERIFIED",
-                    cases = observations, metrics, elapsedMilliseconds = watch.Elapsed.TotalMilliseconds
+                    cases = observations, interactionCases, metrics, elapsedMilliseconds = watch.Elapsed.TotalMilliseconds
                 }, new JsonSerializerOptions { WriteIndented = true }));
         }
         finally
@@ -137,6 +143,80 @@ public sealed class OperatorCombinedVisualQualification
             window.Shell.SelectWorkspace(original.Workspace);
             window.Shell.UpdateViewportSize(window.Width, window.Height);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        }
+    }
+
+    private static async Task VerifyPreferenceTransitionsAsync(MainWindow main, Dispatcher dispatcher,
+        string viewport, double width, double height, string? evidenceRoot, List<object> observations)
+    {
+        var owner = (OperatorViewModel)main.DataContext;
+        var identity = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
+        var monitoring = main.Monitoring;
+        var panels = main.Docking.Panels.ToDictionary(pair => pair.Key, pair => pair.Value);
+        var anchor = Assert.IsType<RtaimeButton>(main.FindName("SynchronizeButton"));
+        var ownerKeys = 0;
+        KeyEventHandler received = (_, _) => ownerKeys++;
+        main.AddHandler(Keyboard.PreviewKeyDownEvent, received, true);
+        var watch = Stopwatch.StartNew();
+        async Task Check(Window dialog, string surface, string focusName)
+        {
+            dialog.Width = Math.Max(dialog.MinWidth, Math.Min(dialog.Width, width - 40));
+            dialog.Height = Math.Max(dialog.MinHeight, Math.Min(dialog.Height, height - 80));
+            await dispatcher.InvokeAsync(dialog.UpdateLayout, DispatcherPriority.Input).Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var focus = Assert.IsAssignableFrom<FrameworkElement>(dialog.FindName(focusName));
+            Assert.True(focus.IsKeyboardFocusWithin, viewport + "/" + surface + ": focus escaped the current editor.");
+            Assert.True(focus.IsVisible && focus.ActualWidth > 0 && focus.ActualHeight > 0);
+            var content = Assert.IsAssignableFrom<FrameworkElement>(dialog.Content);
+            Assert.True(Fits(focus.TransformToAncestor(content).TransformBounds(new Rect(focus.RenderSize)), content.RenderSize),
+                viewport + "/" + surface + ": focused control clipped.");
+            var enter = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(focus)!, 0, Key.Return)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+            focus.RaiseEvent(enter);
+            Assert.Equal(0, ownerKeys);
+            Assert.Equal(identity, (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
+            Assert.False(owner.CutCommand.CanExecute(null));
+            Assert.Same(monitoring, main.Monitoring);
+            foreach (var panel in panels) Assert.Same(panel.Value, main.Docking.Panels[panel.Key]);
+            observations.Add(new { viewport, surface, width = dialog.ActualWidth, height = dialog.ActualHeight,
+                actualDpi = VisualTreeHelper.GetDpi(dialog).PixelsPerInchX, focusedControl = focusName,
+                ownerKeyEvents = ownerKeys, elapsedMilliseconds = watch.Elapsed.TotalMilliseconds });
+            if (!string.IsNullOrWhiteSpace(evidenceRoot))
+                SaveImage(content, content.ActualWidth, content.ActualHeight, 1,
+                    Path.Combine(evidenceRoot, viewport + "-" + surface + ".png"));
+        }
+        static void Escape(Window dialog)
+        {
+            var key = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(dialog)!, 0, Key.Escape)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+            dialog.RaiseEvent(key); Assert.True(key.Handled); Assert.False(dialog.IsVisible);
+        }
+        try
+        {
+            main.Activate(); Assert.True(anchor.Focus());
+            main.OpenCommandPalette();
+            main.CommandPalette.Query = "cut";
+            await Check(Assert.IsType<OperatorCommandPaletteWindow>(main.CommandPaletteWindow), "palette", "SearchBox");
+            Escape(main.CommandPaletteWindow!);
+            // No dispatcher yield: the older close callback is still queued when the next editor opens.
+            main.OpenWorkspaceTemplatesCommand.Execute(null);
+            await Check(Assert.IsType<WorkspaceTemplatesWindow>(main.WorkspaceTemplatesWindow), "templates", "TemplateNameBox");
+            Escape(main.WorkspaceTemplatesWindow!);
+            main.OpenLibrary("Help");
+            await Check(Assert.IsType<OperatorLibraryWindow>(main.LibraryWindow), "help", "SearchBox");
+            Escape(main.LibraryWindow!);
+            main.OpenShowChecksCommand.Execute(null);
+            await Check(Assert.IsType<ShowReadinessWindow>(main.ShowReadinessWindow), "preflight", "RefreshChecksButton");
+            Escape(main.ShowReadinessWindow!);
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+            Assert.True(anchor.IsKeyboardFocusWithin, viewport + ": original focus was not restored.");
+            Assert.Equal(identity, (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
+            Console.WriteLine("QOL TRANSITIONS PASS [" + viewport + "]: palette -> templates -> help -> preflight; protected Return, Escape and final focus restore.");
+        }
+        finally
+        {
+            main.RemoveHandler(Keyboard.PreviewKeyDownEvent, received);
+            main.CommandPaletteWindow?.Close(); main.WorkspaceTemplatesWindow?.Close();
+            main.LibraryWindow?.Close(); main.ShowReadinessWindow?.Close();
         }
     }
 
