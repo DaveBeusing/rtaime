@@ -22,7 +22,8 @@ public sealed record MediaSmartBin(
 
 public static class MediaSmartBinPolicy
 {
-	public static bool Matches(MediaPoolItemViewModel item, MediaSmartBin bin)
+	public static bool Matches(MediaPoolItemViewModel item, MediaSmartBin bin) => Matches(item, bin, MediaLibrarySearch.Parse(bin.Search));
+	public static bool Matches(MediaPoolItemViewModel item, MediaSmartBin bin, MediaLibrarySearch search)
 	{
 		if (!bin.IsValid) return false;
 		if (bin.Category != "All" && item.Category != bin.Category) return false;
@@ -46,11 +47,8 @@ public static class MediaSmartBinPolicy
 			MediaDurationFilter.Unknown => duration is null,
 			_ => true
 		})) return false;
-		var query = bin.Search.Trim();
-		return query.Length == 0 || Contains(item.Name, query) || Contains(item.Detail, query) ||
-			Contains(item.Format, query) || Contains(item.State, query) || Contains(item.ReferenceId, query) || Contains(item.LocalPath, query);
+		return search.Matches(item);
 	}
-	private static bool Contains(string? text, string query) => text?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 }
 
 // Local presentation preferences; never contains catalogue records or production state.
