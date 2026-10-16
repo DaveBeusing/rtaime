@@ -294,6 +294,14 @@ independent MP4 playback and storage-failure cleanup.
 
 The optional short allocation observer retains at most 33 sampled type/size buckets,
 runs in a separate diagnostic job and does not qualify ten-minute or physical
-playback. The normal long acceptance does not enable that observer. A bounded
-previous-artifact inspection job verifies source identity before exposing prior
-resource series; it never promotes an earlier run to current-source PASS.
+playback. The normal long acceptance does not enable that observer.
+
+Playback evidence uses a compact summary and a separate complete timing-ring file,
+each limited to 256 KiB before writing. The summary binds the ring by literal file
+identity and SHA-256; the verifier checks source, SDK, capacity, counts and stage
+summaries. Raw timing samples remain available without inflating the primary report.
+A synthetic 60-minute-format regression retains all 2,048 timing samples and 61
+resource observations, and rejects tampering, missing files, incorrect provenance,
+invalid capacity and oversized evidence. It qualifies report handling only, not a
+60-minute playback run. The temporary historical-artifact inspection job was removed
+after resource diagnosis; current-source acceptance remains mandatory.

@@ -7,6 +7,7 @@ using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.RuntimeHost;
+using rtaime.Runtime;
 
 namespace rtaime.Tests.Integration;
 
@@ -39,6 +40,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
         var sampleCount = 0;
         object? playback = null;
         object? finalTiming = null;
+        RuntimePipelineTimingSnapshot? rawTiming = null;
         object? finalSchedule = null;
         object? finalDecode = null;
         object? transport = null;
@@ -108,7 +110,8 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             var ended = runtime.MediaDeck!.Snapshot;
             transport = ended;
             playback = runtime.MediaDeck.PlaybackMeasurements;
-            finalTiming = runtime.PipelineTiming;
+            rawTiming = runtime.PipelineTiming;
+            finalTiming = LocalPlaybackEvidenceJson.Summarize(rawTiming);
             finalSchedule = runtime.ScheduleStatistics;
             finalDecode = runtime.MediaDeck!.DecodeSnapshot;
             runtimePerformance = runtime.Runtime!.Snapshot.Performance;
@@ -167,7 +170,13 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             {
                 Directory.CreateDirectory(evidence);
                 var diagnostics = playback;
-                File.WriteAllText(Path.Combine(evidence, "local-playback-baseline.json"), JsonSerializer.Serialize(new {
+                var timingPath = Path.Combine(evidence, "local-playback-timing.json");
+                var timingHash = rawTiming is null ? null : LocalPlaybackEvidenceJson.Write(timingPath, new {
+                    schemaVersion = "1.0", sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                    sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                    scope = "Bounded retained timing ring; percentiles do not represent the entire run", timing = rawTiming
+                });
+                LocalPlaybackEvidenceJson.Write(Path.Combine(evidence, "local-playback-baseline.json"), new {
                     schemaVersion = "1.0", sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
                     qualificationClass = "ACTUAL_WINDOWS_RUNTIME_PLAYBACK; HOSTED_STORAGE_NOT_PHYSICAL_SSD_QUALIFICATION",
@@ -178,13 +187,13 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     storage = "Hosted runner volume; SSD class, cold cache and device latency UNVERIFIED",
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
-                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, finalDecode, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
+                    playback, clientOpenMilliseconds, finalTiming, timingEvidence = timingHash is null ? null : new { path = "local-playback-timing.json", sha256 = timingHash }, finalSchedule, finalDecode, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
                     collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
                     audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
                     productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",
                     audioQualification = "Inspect missing audio, timestamp discontinuities and A/V distance; nonzero findings are not waived as production-ready",
                     physicalStatus = "UNVERIFIED", failureStages = new[] { "probe", "decode", "transport", "scheduler", "GPU", "output" }
-                }, new JsonSerializerOptions { WriteIndented = true }));
+                });
                 Console.WriteLine("LOCAL PLAYBACK EVIDENCE: " + Path.Combine(evidence, "local-playback-baseline.json"));
                 Console.WriteLine("LOCAL PLAYBACK OBSERVATIONS: " + JsonSerializer.Serialize(playback ?? diagnostics));
                 Console.WriteLine("LOCAL PLAYBACK RESOURCE SERIES: " + JsonSerializer.Serialize(resources.Take(sampleCount)));

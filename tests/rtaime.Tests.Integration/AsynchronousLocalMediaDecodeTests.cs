@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using System.Text.Json;
+using rtaime.Runtime;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
@@ -11,6 +13,92 @@ namespace rtaime.Tests.Integration;
 
 public sealed class AsynchronousLocalMediaDecodeTests
 {
+    [Fact]
+    public async Task Bounded_playback_reports_retain_the_full_timing_ring_and_reject_missing_tampered_or_oversized_evidence()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-format-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var source = new string('1', 40);
+        var timingPath = Path.Combine(root, "local-playback-timing.json");
+        var reportPath = Path.Combine(root, "local-playback-baseline.json");
+        var samples = Enumerable.Range(0, 2048).Select(index =>
+            new RuntimePipelineTimingSample(RuntimePipelineTimingStage.InputAdmission, (ulong)index, 19.123456)).ToArray();
+        var timing = new RuntimePipelineTimingSnapshot(2048, 1_000_000, 997_952, 0, samples,
+            new[] { new RuntimePipelineTimingSummary(RuntimePipelineTimingStage.InputAdmission, "CPU_WALL", 2048, 1, 2, 3, 4) });
+        var types = Enumerable.Range(0, 32).Select(index => new {
+            typeIndex = index, name = "DiagnosticObjectType" + index, count = int.MaxValue
+        }).ToArray();
+        var resources = Enumerable.Range(0, 61).Select(index => new {
+            seconds = index * 60, decodedFrame = index * 3000,
+            processHandles = 2000, privateBytes = long.MaxValue, managedBytes = long.MaxValue,
+            heapBytes = long.MaxValue, fragmentedBytes = long.MaxValue, lohBytesAfterLastGc = long.MaxValue,
+            allocatedBytes = long.MaxValue, gen0 = 100, gen1 = 20, gen2 = 5,
+            handleDiagnostics = new { processThreads = 128, managedPoolThreads = 128, finalizationPending = 0, handleTypes = types }
+        }).ToArray();
+        object TimingReport(RuntimePipelineTimingSnapshot snapshot, string commit) =>
+            new { schemaVersion = "1.0", sourceCommit = commit, sdk = "10.0.401", timing = snapshot };
+        object Report(string hash, RuntimePipelineTimingSnapshot snapshot) => new {
+            schemaVersion = "1.0", sourceCommit = source, sdk = "10.0.401",
+            scope = "SYNTHETIC FORMAT REGRESSION ONLY",
+            collectionStatus = "PASS", failure = (string?)null, cleanupFailure = (string?)null,
+            asset = new { RequestedDurationSeconds = 3600, Sha256 = new string('2', 64) },
+            playback = new { DecodedFrames = 180000, DecodedAudioSamples = 172800000, NativeVideoRead = new { Calls = 180001 } },
+            finalSchedule = new { CommittedBoundaries = 180000 }, resources, resourceCapacity = 128,
+            finalTiming = LocalPlaybackEvidenceJson.Summarize(snapshot),
+            timingEvidence = new { path = "local-playback-timing.json", sha256 = hash },
+            audioStatus = "PASS", physicalStatus = "UNVERIFIED"
+        };
+        var repository = new DirectoryInfo(AppContext.BaseDirectory);
+        while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "build", "testmedia", "Test-LocalPlaybackEvidence.ps1")))
+            repository = repository.Parent;
+        var verifier = Path.Combine((repository ?? throw new DirectoryNotFoundException("Evidence verifier repository root was not found.")).FullName,
+            "build", "testmedia", "Test-LocalPlaybackEvidence.ps1");
+        async Task<int> VerifyAsync()
+        {
+            var start = new ProcessStartInfo("pwsh") {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            foreach (var argument in new[] { "-NoProfile", "-File", verifier, "-Path", reportPath, "-SourceCommit", source, "-Minutes", "60" })
+                start.ArgumentList.Add(argument);
+            using var process = Process.Start(start) ?? throw new IOException("Evidence verifier did not start.");
+            var output = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
+            catch { process.Kill(entireProcessTree: true); throw; }
+            Assert.True((await output).Length + (await errors).Length < 16_384);
+            return process.ExitCode;
+        }
+        try
+        {
+            var hash = LocalPlaybackEvidenceJson.Write(timingPath, TimingReport(timing, source));
+            LocalPlaybackEvidenceJson.Write(reportPath, Report(hash, timing));
+            Assert.InRange(new FileInfo(reportPath).Length, 1, LocalPlaybackEvidenceJson.MaximumBytes);
+            Assert.InRange(new FileInfo(timingPath).Length, 1, LocalPlaybackEvidenceJson.MaximumBytes);
+            using (var raw = JsonDocument.Parse(File.ReadAllText(timingPath)))
+                Assert.Equal(2048, raw.RootElement.GetProperty("timing").GetProperty("Samples").GetArrayLength());
+            Assert.Equal(0, await VerifyAsync());
+            var original = File.ReadAllBytes(reportPath);
+            Assert.Throws<InvalidDataException>(() => LocalPlaybackEvidenceJson.Write(reportPath,
+                new { oversized = new string('x', LocalPlaybackEvidenceJson.MaximumBytes) }));
+            Assert.Equal(original, File.ReadAllBytes(reportPath));
+            File.AppendAllText(timingPath, " ");
+            Assert.NotEqual(0, await VerifyAsync());
+            File.Delete(timingPath);
+            Assert.NotEqual(0, await VerifyAsync());
+            hash = LocalPlaybackEvidenceJson.Write(timingPath, TimingReport(timing, new string('3', 40)));
+            LocalPlaybackEvidenceJson.Write(reportPath, Report(hash, timing));
+            Assert.NotEqual(0, await VerifyAsync());
+            var invalidCapacity = timing with { Capacity = 16 };
+            hash = LocalPlaybackEvidenceJson.Write(timingPath, TimingReport(invalidCapacity, source));
+            LocalPlaybackEvidenceJson.Write(reportPath, Report(hash, invalidCapacity));
+            Assert.NotEqual(0, await VerifyAsync());
+            File.WriteAllText(reportPath, new string('x', LocalPlaybackEvidenceJson.MaximumBytes + 1));
+            Assert.NotEqual(0, await VerifyAsync());
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void Native_callback_mailbox_reuses_wait_resources_across_one_thousand_blocked_deliveries()
     {
