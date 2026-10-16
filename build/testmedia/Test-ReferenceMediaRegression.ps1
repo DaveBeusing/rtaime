@@ -76,5 +76,15 @@ foreach ($file in $media) {
 	}
 }
 
+$outcomes = @(Get-ChildItem -LiteralPath $outputRoot -Filter "rtaime-format-*.outcome.json" -File)
+if ($outcomes.Count -ne 6) { throw "Expected six format-specific decoder outcomes." }
+foreach ($file in $outcomes) {
+    $result = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+    if ($result.DecoderAvailability -notin @("SOFTWARE_DECODED", "UNAVAILABLE")) { throw "Invalid format outcome." }
+    if ($result.DecoderAvailability -eq "UNAVAILABLE" -and $result.Manifest.Profile -notlike "hevc-*") {
+        throw "Mandatory local format did not decode."
+    }
+    if ($result.PhysicalQualification -ne "UNVERIFIED") { throw "CI cannot qualify physical playback." }
+}
 Write-Host "Reference media regression PASS"
 Write-Host "Generated profiles: hd25, hd50, hd5994"

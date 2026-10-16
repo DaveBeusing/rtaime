@@ -106,3 +106,10 @@ Assert-Condition ($decoder -match 'ValidatePcmLength' -and $progress -match '192
 Assert-Condition ($source -match '_terminalFailure' -and $source -match 'catch [(]LocalMediaDecodeException') "Terminal native progress faults must fence read and seek."
 Assert-Condition ($worker -match '_disposeGate' -and $worker -match '_resourcesDisposed' -and $deck -match '_quarantinedSession' -and $deck -match 'runtime.media_deck.cleanup_failed') "Failed cleanup must retain owner resources and block deck replacement."
 Assert-Condition ($safetyTests -match 'Repeated_native_open_seek_close' -and $safetyTests -match 'Production_RGB32_copy' -and $safetyTests -match 'operation_deadline') "Lifecycle, native pixel parity and deadline regression coverage is required."
+
+$probe = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Media/rtaime.Media/LocalMediaContainerProbe.cs") -Raw
+$metadata = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Media/rtaime.Media/IsoBaseMediaMetadataReader.cs") -Raw
+Assert-Condition ($probe -match 'interface ILocalMediaProbe' -and $probe -match 'CurrentVersion = 1' -and $probe -match 'QuickTimeLocalMediaProbe') "Container probes must remain versioned and distinct from the native decoder."
+Assert-Condition ($decoder -notmatch 'MetadataReader.Read' -and $decoder -match 'metadata.VideoCodec != videoCodec') "Native decoder must consume independently probed and codec-matched metadata."
+Assert-Condition ($metadata -match 'MaximumMoovSize' -and $metadata -match '4096' -and $metadata -match '65536' -and $metadata -match 'ValidateEditList' -and $metadata -match 'ValidateTrackMatrix') "Container metadata allocation, traversal, transforms and edits require explicit bounds."
+Assert-Condition ($referenceRegressionTests -match 'Generated_format_profiles_use_real_probe_decode_preroll_and_seek' -and $referenceRegressionTests -match 'UNAVAILABLE') "Real profile decode and unavailable-decoder evidence must remain separate."
