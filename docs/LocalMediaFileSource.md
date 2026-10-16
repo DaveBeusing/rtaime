@@ -293,7 +293,7 @@ the actual Windows native codec must agree. Legacy QuickTime without `ftyp`,
 multiple video/audio tracks or sample descriptions, external data references,
 non-unit/empty/repeated edit lists and unsupported track matrices fail closed.
 Only one self-contained data reference is admitted. QuickTime PCM is restricted
-to version-0 `sowt`, signed PCM16, stereo 48 kHz; AAC uses version-0 `mp4a`.
+to version-0 `sowt`, signed PCM16, stereo 48 kHz; AAC uses version-0 `mp4a` or version-1 `mp4a` with a validated 1,024-sample VBR packet description.
 
 The reader caps `moov` at 32 MiB, sibling/top-level box traversal at 4,096,
 tracks at 16 and each `stts`/`ctts` timing table at 65,536 runs. Composition and decode run tables are merged without per-frame expansion. Lengths and checked timing
@@ -349,3 +349,5 @@ the [Windows transfer-function enumeration](https://learn.microsoft.com/en-us/wi
 and [advanced source-reader processing contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-source-reader-enable-advanced-video-processing).
 
 B-frame edit validation uses presentation extent from bounded `stts`/`ctts` run merging, following [QuickTime composition offset semantics](https://developer.apple.com/documentation/quicktime-file-format/composition_offset_atom). Decode duration alone is not a presentation-end bound. Composition/decode sample counts must agree; unsupported composition-shift programs are rejected.
+
+QuickTime AAC version-1 packet fields follow the [sound sample description](https://developer.apple.com/documentation/quicktime-file-format/sound_sample_description_version_1). Native coded padding is admitted only with an exact, zero-origin [minimum display aperture](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-minimum-display-aperture-attribute) matching the probed visible size; arbitrary cropping remains excluded.

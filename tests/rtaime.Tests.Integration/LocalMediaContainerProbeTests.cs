@@ -89,6 +89,20 @@ public sealed class LocalMediaContainerProbeTests
     }
 
     [Fact]
+    public void Native_coded_padding_requires_an_exact_zero_origin_display_aperture()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Assert.False(WindowsMediaFoundationLocalMediaDecoder.NativeGeometryMatches(1920, 1080, 1920, 1088, []));
+        var aperture = new byte[16];
+        BinaryPrimitives.WriteUInt32LittleEndian(aperture.AsSpan(8), 1920);
+        BinaryPrimitives.WriteUInt32LittleEndian(aperture.AsSpan(12), 1080);
+        Assert.True(WindowsMediaFoundationLocalMediaDecoder.NativeGeometryMatches(1920, 1080, 1920, 1088, aperture));
+        aperture[0] = 1;
+        Assert.False(WindowsMediaFoundationLocalMediaDecoder.NativeGeometryMatches(1920, 1080, 1920, 1088, aperture));
+        Assert.False(WindowsMediaFoundationLocalMediaDecoder.NativeGeometryMatches(1920, 1080, 1900, 1088, []));
+    }
+
+    [Fact]
     public void Moov_allocation_and_top_level_scan_have_explicit_bounds()
     {
         var huge = new byte[8];

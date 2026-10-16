@@ -343,7 +343,8 @@ public sealed class ReferenceMediaRegressionTests
             // Host-specific negative evidence is retained, never reported as decoded or physically qualified.
             Assert.Equal(MediaDeckState.Error, opened.State);
             Assert.Null(opened.Probe);
-            Assert.Contains(unavailable.Code, new[] { "media.file.decoder_unavailable", "media.file.normalization_failed" });
+            Assert.True(unavailable.Code is "media.file.decoder_unavailable" or "media.file.normalization_failed",
+                $"{unavailable.Code}: {unavailable.Message}");
             WriteFormatOutcome(asset, metadata, "UNAVAILABLE", unavailable.Code, unavailable.Message);
             return;
         }

@@ -79,8 +79,18 @@ internal static class IsoBaseMediaMetadataReader
                          BinaryPrimitives.ReadUInt16BigEndian(moov.AsSpan(entry.PayloadOffset + 18, 2)) != 16 ||
                          BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 24, 4)) != 48000u << 16))
                         throw new LocalMediaProbeException("media.file.audio_layout_unsupported", "QuickTime PCM requires 16-bit stereo 48 kHz.");
-                    if (version != 0) throw new LocalMediaProbeException("media.file.audio_layout_unsupported",
-                        "Only QuickTime version-0 AAC/PCM audio sample entries are admitted.");
+                    if (version == 1 && audioEntry == "mp4a")
+                    {
+                        EnsurePayloadLength(entry, 44, "QuickTime AAC packet description");
+                        var samplesPerPacket = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 28, 4));
+                        var bytesPerPacket = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 32, 4));
+                        var bytesPerFrame = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 36, 4));
+                        var bytesPerSample = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 40, 4));
+                        if (samplesPerPacket != 1024 || bytesPerPacket != 0 || bytesPerFrame != 0 || bytesPerSample != 2)
+                            throw new LocalMediaProbeException("media.file.audio_layout_unsupported", "QuickTime AAC requires the qualified 1024-sample VBR packet description.");
+                    }
+                    else if (version != 0) throw new LocalMediaProbeException("media.file.audio_layout_unsupported",
+                        "QuickTime supports version-0 PCM/AAC or version-1 AAC with qualified packet metadata.");
                 }
 			}
 		}

@@ -134,9 +134,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 				var nativeSizeKey = MediaFoundation.MfMtFrameSize;
                 MediaFoundation.ThrowIfFailed(videoNative.GetUINT64(ref nativeSizeKey, out var nativeSize));
-                if ((uint)(nativeSize >> 32) != metadata.Width || (uint)nativeSize != metadata.Height)
+                var nativeWidth = (uint)(nativeSize >> 32);
+                var nativeHeight = (uint)nativeSize;
+                if (!NativeGeometryMatches(metadata.Width, metadata.Height, nativeWidth, nativeHeight,
+                    ReadMinimumDisplayAperture(videoNative)))
                     return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_mismatch",
-                        "Container sample dimensions and native video dimensions disagree.");
+                        $"Container visible dimensions {metadata.Width}x{metadata.Height} and native coded dimensions {nativeWidth}x{nativeHeight} have no matching zero-origin display aperture.");
                 var nativeTransfer = TryGetUInt32(videoNative, new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EED93"));
                 if (nativeTransfer is >= 9)
                     return LocalMediaDecoderOpenResult.Rejected("media.file.color_unsupported",
@@ -695,6 +698,34 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		var result = attributes.GetGUID(ref key, out var value);
 		return result >= 0 ? value : null;
 	}
+
+    private static byte[] ReadMinimumDisplayAperture(IMFMediaType type)
+    {
+        var key = new Guid("D7388766-18FE-48C6-A177-EE894867C8C4");
+        if (type.GetBlobSize(ref key, out var size) < 0) return [];
+        if (size != 16) throw new InvalidDataException("Native display aperture has an invalid size.");
+        var address = Marshal.AllocHGlobal(16);
+        try
+        {
+            MediaFoundation.ThrowIfFailed(type.GetBlob(ref key, address, 16, out var actual));
+            if (actual != 16) throw new InvalidDataException("Native display aperture is truncated.");
+            var bytes = new byte[16]; Marshal.Copy(address, bytes, 0, 16); return bytes;
+        }
+        finally { Marshal.FreeHGlobal(address); }
+    }
+
+    internal static bool NativeGeometryMatches(uint visibleWidth, uint visibleHeight,
+        uint codedWidth, uint codedHeight, ReadOnlySpan<byte> aperture)
+    {
+        if (codedWidth < visibleWidth || codedHeight < visibleHeight ||
+            codedWidth > LocalMediaInputPolicy.MaximumWidth || codedHeight > LocalMediaInputPolicy.MaximumHeight)
+            return false;
+        if (aperture.IsEmpty) return visibleWidth == codedWidth && visibleHeight == codedHeight;
+        return aperture.Length == 16 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(aperture) == 0 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(aperture[8..]) == visibleWidth &&
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(aperture[12..]) == visibleHeight;
+    }
 
 	private static MediaVideoCodec? ResolveVideoCodec(Guid subtype)
 	{
