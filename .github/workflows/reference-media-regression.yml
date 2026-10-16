@@ -11,6 +11,7 @@ on:
       - "src/Providers/rtaime.Provider.VirtualMedia/**"
       - "src/Hosts/rtaime.RuntimeHost/**"
       - "tests/rtaime.Tests.Integration/ReferenceMedia*"
+      - "tests/rtaime.Tests.Integration/LocalMediaContainerProbeTests.cs"
       - "build/testmedia/**"
       - "docs/ReferenceMediaRegression.md"
       - ".github/workflows/reference-media-regression.yml"

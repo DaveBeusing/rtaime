@@ -85,6 +85,7 @@ foreach ($file in $outcomes) {
         throw "Mandatory local format did not decode."
     }
     if ($result.PhysicalQualification -ne "UNVERIFIED") { throw "CI cannot qualify physical playback." }
+    Write-Host ("LOCAL FORMAT OUTCOME: " + ($result | ConvertTo-Json -Depth 16 -Compress))
 }
 Write-Host "Reference media regression PASS"
 Write-Host "Generated profiles: hd25, hd50, hd5994"
