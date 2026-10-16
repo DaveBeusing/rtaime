@@ -186,7 +186,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                     lock (_gate)
                     {
                         _measurements = _source.Measurements;
-                        if (generation != _generation || _stopped) { owned?.Dispose(); }
+                        if (generation != _generation || _stopped) { if (owned is not null) _discarded++; owned?.Dispose(); }
                         else if (decoded.Status == LocalMediaFrameReadStatus.Ended) _ended = true;
                         else if (!decoded.Succeeded) FailUnsafe(decoded.Failure ??
                             new Failure("runtime.media_decode.failed", "Decoder returned no frame or failure."));
@@ -263,7 +263,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
 
     private void ClearUnsafe()
     {
-        while (_frames.TryDequeue(out var frame)) frame.Dispose();
+        while (_frames.TryDequeue(out var frame)) { frame.Dispose(); _discarded++; }
     }
 
     private void Release(LocalMediaFrameSlot slot)

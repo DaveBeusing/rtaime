@@ -114,15 +114,6 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			return new RuntimeHostApplyResult(rejection, null, null);
 		}
 
-        if (_runtime.ActiveExecution is not null)
-        {
-            var frame = _transport.Snapshot.Position.CurrentFrame;
-            _current?.Dispose();
-            _current = null;
-            _originFrame = frame;
-            _cadenceOrdinal = 0;
-            _decode.Reposition(frame);
-        }
         if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
         {
             var rejection = new RuntimePrepareResult(RuntimeContractVersion.Current,
@@ -135,6 +126,25 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		var prepare = _runtime.Prepare(preparedExecution);
 		if (prepare.Status != RuntimePrepareStatus.Prepared)
 			return new RuntimeHostApplyResult(prepare, null, null);
+
+        if (_runtime.ActiveExecution is not null)
+        {
+            var frame = _transport.Snapshot.Position.CurrentFrame;
+            _current?.Dispose();
+            _current = null;
+            _originFrame = frame;
+            _cadenceOrdinal = 0;
+            _decode.Reposition(frame);
+            if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
+            {
+                _runtime.Abort(preparedExecution.PreparedExecutionId, prepare.ReservationId!.Value);
+                var rejection = new RuntimePrepareResult(RuntimeContractVersion.Current,
+                    preparedExecution.PreparedExecutionId, RuntimePrepareStatus.Rejected, null,
+                    _decode.Snapshot.Failure ?? new Failure("runtime.local_media.preroll_timeout",
+                        "Rebound local media did not produce qualified preroll."));
+                return new RuntimeHostApplyResult(rejection, null, null);
+            }
+        }
 
 		var commit = _runtime.Commit(new RuntimeCommitRequest(
 			RuntimeContractVersion.Current,
