@@ -135,6 +135,41 @@ public sealed class LocalMediaContainerProbeTests
         }
     }
 
+    [Theory]
+    [InlineData("short")]
+    [InlineData("long-golomb")]
+    [InlineData("wrong-nal")]
+    [InlineData("invalid-escape")]
+    [InlineData("oversize")]
+    public void Malformed_AVC_sequence_metadata_is_bounded_before_decoder_creation(string kind)
+    {
+        byte[] sequence = kind switch {
+            "short" => [103, 100, 0, 40],
+            "long-golomb" => [103, 100, 0, 40, 0, 0, 0, 0, 0],
+            "wrong-nal" => [104, 100, 0, 40, 255],
+            "invalid-escape" => [103, 100, 0, 40, 0, 0, 3],
+            "oversize" => new byte[65536],
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+        Assert.Throws<InvalidDataException>(() => H264LocalMediaSequenceMetadata.Validate(sequence, 1920, 1080));
+    }
+
+    [Fact]
+    public void AVC_sequence_geometry_cannot_disagree_with_container_metadata()
+    {
+        var sequence = SequenceParameters(1);
+        Assert.Equal("media.file.metadata_mismatch", Assert.Throws<LocalMediaProbeException>(() =>
+            H264LocalMediaSequenceMetadata.Validate(sequence, 1280, 720)).Code);
+    }
+
+    [Fact]
+    public void Stream_only_HDR_color_is_rejected_without_a_container_color_atom()
+    {
+        var sequence = SequenceParameters(1, hdr: true);
+        Assert.Equal("media.file.color_unsupported", Assert.Throws<LocalMediaProbeException>(() =>
+            H264LocalMediaSequenceMetadata.Validate(sequence, 1920, 1080)).Code);
+    }
+
     private static byte[] Movie(bool mov = false, string mutation = "")
     {
         var mvhd = new byte[100]; U32(1000).CopyTo(mvhd, 12); U32(6000).CopyTo(mvhd, 16);
@@ -169,7 +204,7 @@ public sealed class LocalMediaContainerProbeTests
         return mutation == "truncated" ? bytes[..^1] : bytes;
     }
 
-    private static byte[] SequenceParameters(uint aspect)
+    private static byte[] SequenceParameters(uint aspect, bool hdr = false)
     {
         var bits = new StringBuilder();
         void Write(uint value, int count) { for (var index = count - 1; index >= 0; index--) bits.Append((value >> index) & 1); }
@@ -179,7 +214,10 @@ public sealed class LocalMediaContainerProbeTests
         Ue(0); Ue(0); Ue(0); Ue(1); Write(0, 1);
         Ue(119); Ue(67); Write(1, 1); Write(1, 1);
         Write(1, 1); Ue(0); Ue(0); Ue(0); Ue(4);
-        Write(1, 1); Write(1, 1); Write(aspect, 8); Write(0, 1); Write(0, 1); Write(1, 1);
+        Write(1, 1); Write(1, 1); Write(aspect, 8); Write(0, 1);
+        Write(hdr ? 1u : 0u, 1);
+        if (hdr) { Write(5, 3); Write(0, 1); Write(1, 1); Write(9, 8); Write(16, 8); Write(9, 8); }
+        Write(1, 1);
         while (bits.Length % 8 != 0) bits.Append('0');
         var bytes = new byte[1 + bits.Length / 8]; bytes[0] = 103;
         for (var index = 0; index < bits.Length / 8; index++)
