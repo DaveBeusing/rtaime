@@ -125,12 +125,7 @@ jobs:
 
       - name: Install pinned FFmpeg test encoder
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
-            throw "Pinned FFmpeg installation failed with exit code $LASTEXITCODE."
-          }
-          ffmpeg -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
 
       - name: Restore
         run: dotnet restore rtaime.slnx
@@ -171,10 +166,7 @@ jobs:
 
       - name: Install pinned FFprobe
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "FFprobe installation failed." }
-          ffprobe -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
 
       - name: Obtain and SHA256 verify pinned BMX release
         shell: pwsh
@@ -228,10 +220,7 @@ jobs:
           global-json-file: global.json
       - name: Install pinned test encoder
         shell: pwsh
-        run: |
-          choco install ffmpeg --version=7.1.1 --yes --no-progress
-          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "Pinned test encoder installation failed." }
-          ffmpeg -version | Select-Object -First 1
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
       - name: Canonical Release build
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
