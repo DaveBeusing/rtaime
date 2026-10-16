@@ -218,7 +218,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		}
 	}
 
-	public MediaDeckRuntimeSnapshot ProcessBoundary()
+	public MediaDeckRuntimeSnapshot ProcessBoundary(ulong? programSlot = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		lock (_gate)
@@ -230,7 +230,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 				return CreateSnapshot();
 			}
 
-			var result = _session.ProcessNextBoundary();
+			var result = _session.ProcessNextBoundary(programSlot);
 			_latestBoundary?.Dispose();
             _latestBoundary = result.Retain();
 			if (result.Status == LocalMediaRuntimeBoundaryStatus.Failed)
@@ -249,11 +249,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	}
 
     // The caller receives its own lease while the deck/session retain their current admission.
-    public MediaDeckRuntimeSnapshot ProcessBoundary(out LocalMediaRuntimeBoundaryResult? boundary)
+    public MediaDeckRuntimeSnapshot ProcessBoundary(out LocalMediaRuntimeBoundaryResult? boundary, ulong? programSlot = null)
     {
         lock (_gate)
         {
-            var snapshot = ProcessBoundary();
+            var snapshot = ProcessBoundary(programSlot);
             boundary = _latestBoundary?.Retain();
             return snapshot;
         }

@@ -157,6 +157,28 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public void Existing_Program_slots_select_current_PTS_after_a_missed_opportunity_without_resequencing_bursts()
+    {
+        var decoder = new ControlledDecoder();
+        var provider = new LocalMediaFileProvider();
+        using var session = new LocalMediaRuntimeSession(provider, Source(decoder));
+        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        Until(() => session.DecodeSnapshot.QueuedFrames == 6);
+        session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Play));
+        Assert.Equal(0, session.ProcessNextBoundary(100).Transport.Position.CurrentFrame);
+        var current = session.ProcessNextBoundary(103);
+        Assert.True(current.Succeeded);
+        Assert.Equal(3, current.Transport.Position.CurrentFrame);
+        Assert.Equal(1UL, current.Video!.Timing.SequenceNumber);
+        Assert.Equal(2UL, session.NextSequenceNumber);
+        Assert.Equal(2UL, session.DecodeSnapshot.DiscardedFrames);
+        Assert.Equal(2_880UL, current.Audio!.Timing.SamplePosition);
+        session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Pause));
+        session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Play));
+        Assert.Equal(4, LocalMediaTestPlayback.Next(session).Transport.Position.CurrentFrame);
+    }
+
+    [Fact]
     public void Future_VFR_timestamp_is_held_until_due_without_replaying_audio()
     {
         var decoder = new ControlledDecoder { Timestamps = [0, 200_000, 800_000, 1_000_000, 1_200_000] };

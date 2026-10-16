@@ -46,6 +46,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
     private LocalMediaRuntimeBoundaryResult? _current;
     private long _originFrame;
     private long _cadenceOrdinal;
+    private ulong? _lastProgramSlot;
+    private bool _wasBuffering;
 	private readonly TransactionalRuntime _runtime;
 	private readonly MediaFramePipeline _pipeline;
 	private readonly LocalMediaTransportController _transport;
@@ -65,6 +67,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
             _current = null;
             _originFrame = frame;
             _cadenceOrdinal = 0;
+            _lastProgramSlot = null;
+            _wasBuffering = false;
             return _decode.Reposition(frame);
         });
 	}
@@ -134,6 +138,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
             _current = null;
             _originFrame = frame;
             _cadenceOrdinal = 0;
+            _lastProgramSlot = null;
+            _wasBuffering = false;
             _decode.Reposition(frame);
             if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
             {
@@ -175,10 +181,13 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 				"Media transport requires a committed execution.");
 		}
 
-		return _transport.Apply(command);
+		var result = _transport.Apply(command);
+        if (result.Succeeded && command.Kind is MediaTransportCommandKind.Play or MediaTransportCommandKind.Pause)
+            _lastProgramSlot = null;
+        return result;
 	}
 
-	public LocalMediaRuntimeBoundaryResult ProcessNextBoundary()
+	public LocalMediaRuntimeBoundaryResult ProcessNextBoundary(ulong? programSlot = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var execution = _runtime.ActiveExecution;
@@ -210,6 +219,12 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 				null);
 		}
 
+        if (programSlot is { } slot)
+        {
+            if (_lastProgramSlot is { } previous && slot > previous && !_wasBuffering)
+                _cadenceOrdinal = checked(_cadenceOrdinal + (long)(slot - previous - 1));
+            _lastProgramSlot = slot;
+        }
         var rate = Probe.VideoFormat.FrameRate;
         var target = checked((long)decimal.Round(
             (decimal)checked(_originFrame + _cadenceOrdinal) * TimeSpan.TicksPerSecond *
@@ -240,8 +255,10 @@ public sealed class LocalMediaRuntimeSession : IDisposable
             }
             _current?.Dispose();
             _current = null;
+             _wasBuffering = true;
             return Empty(LocalMediaRuntimeBoundaryStatus.Buffering);
         }
+        _wasBuffering = false;
         var media = owned.Frame;
         _current?.Dispose();
         var timing = new FrameTiming(_nextSequenceNumber, media.Video.Timing.PresentationTimestamp, media.Video.Timing.Timebase);

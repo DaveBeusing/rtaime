@@ -150,7 +150,11 @@ changes or new production authority are introduced.
 
 ### Timestamp admission and underrun policy
 
-The existing rational Program opportunities advance an integer media-frame ordinal.
+The existing rational Program slot index advances an integer media-frame ordinal.
+Missed scheduler opportunities advance the PTS target without catch-up rendering;
+late queued video/audio is released and counted, and the admitted media sequence
+advances once. Play/resume/seek reanchor the existing slot index; decoder starvation
+freezes media progression instead of silently treating missing data as a late frame.
 Its target is derived with rational arithmetic from the seek origin and declared
 normalized output rate. Admission selects the newest queued PTS at or before that
 target, examining at most six frames. Older due frames are released and counted;

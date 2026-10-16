@@ -470,7 +470,7 @@ public sealed class RuntimeHostProcess
 				continue;
 			var admissionStartedAt = _timingClock.Elapsed;
 			mediaIo?.PumpInputs();
-			AdmitMediaDeckBoundary(runtime, mediaDeck);
+			AdmitMediaDeckBoundary(runtime, mediaDeck, opportunity.Slot);
 			if (!runtime.HasCommittedExecution)
 			{
 				hasCommittedObservation = false;
@@ -526,10 +526,11 @@ public sealed class RuntimeHostProcess
 
 	private void AdmitMediaDeckBoundary(
 		V1RuntimeHostService runtime,
-		LocalMediaDeckRuntimeService mediaDeck)
+		LocalMediaDeckRuntimeService mediaDeck,
+        ulong programSlot)
 	{
 		mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-		var snapshot = mediaDeck.ProcessBoundary(out var admittedBoundary);
+		var snapshot = mediaDeck.ProcessBoundary(out var admittedBoundary, programSlot);
         using var boundary = admittedBoundary;
 		if (snapshot.SourceId is not { } sourceId)
 		{
