@@ -293,7 +293,19 @@ public sealed class LocalMediaFileProvider
 
 		var resolvedAssetId = assetId ?? new MediaAssetId(LocalMediaIdentity.Create("asset", fullPath));
 		var openStarted = Stopwatch.GetTimestamp();
-		var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat);
+		LocalMediaStreamMetadata metadata;
+        try
+        {
+            ILocalMediaProbe probe = new Mp4LocalMediaProbe();
+            if (probe.Version != LocalMediaStreamMetadata.CurrentVersion)
+                return LocalMediaOpenResult.Rejected("media.file.probe_version_unsupported", "The container probe version is not supported.");
+            metadata = probe.Read(fullPath);
+        }
+        catch (LocalMediaProbeException exception)
+        { return LocalMediaOpenResult.Rejected(exception.Code, exception.Message); }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or OverflowException or UnauthorizedAccessException)
+        { return LocalMediaOpenResult.Rejected("media.file.probe_failed", $"The container metadata could not be read: {exception.Message}"); }
+        var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat, metadata);
 		if (!open.Succeeded)
 			return LocalMediaOpenResult.Rejected(open.Failure!.Value.Code, open.Failure.Value.Message);
 

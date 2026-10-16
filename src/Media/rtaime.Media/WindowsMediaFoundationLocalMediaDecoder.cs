@@ -60,7 +60,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		string path,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
-		VideoFormat outputFormat)
+		VideoFormat outputFormat,
+        LocalMediaStreamMetadata metadata)
 	{
 		if (!OperatingSystem.IsWindows())
 			return LocalMediaDecoderOpenResult.Rejected("media.file.platform_unsupported", "Windows Media Foundation is not available on this platform.");
@@ -117,7 +118,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 						: MediaAudioCodec.None;
 				var hasAudio = audioCodec != MediaAudioCodec.None;
 
-				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid frame rate.");
 				if (metadata.Duration <= TimeSpan.Zero)
