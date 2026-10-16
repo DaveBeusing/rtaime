@@ -174,7 +174,7 @@ public sealed class ReferenceMediaRegressionTests
             Assert.Equal(nextAudioSample, frame.Audio!.Timing.SamplePosition);
             nextAudioSample += frame.Audio.Timing.SampleCount;
             Assert.Equal(frame.Video.Timing.PresentationTimestamp, frame.Audio.Timing.PresentationTimestamp);
-            Assert.InRange(deck.DecodeSnapshot!.Value.QueuedFrames, 0, 6);
+            Assert.InRange(deck.DecodeSnapshot!.Value.QueuedFrames, 0, LocalMediaDecodeWorker.QueueCapacity);
         }
         foreach (var target in new long[] { 59, 61 })
         {

@@ -33,20 +33,16 @@ public sealed class AsynchronousLocalMediaDecodeTests
         var decoder = new ControlledDecoder();
         using var worker = new LocalMediaDecodeWorker(Source(decoder));
         Until(() => worker.Snapshot.QueuedFrames == LocalMediaDecodeWorker.QueueCapacity);
-        Assert.Equal(6, decoder.Reads);
+        Assert.Equal(LocalMediaDecodeWorker.QueueCapacity, decoder.Reads);
         using var first = worker.TakeDue(0, out _, out _);
         Assert.NotNull(first);
         Assert.Equal((byte)0, first!.Frame.RgbaPixels.Span[0]);
-        for (var index = 1; index <= 3; index++)
-        {
-            using var consumed = worker.TakeDue(index * 200_000L, out _, out _);
-            Assert.NotNull(consumed);
-        }
-        Until(() => decoder.Reads == 10 && worker.Snapshot.QueuedFrames == 6);
+        Until(() => decoder.Reads == LocalMediaDecodeWorker.QueueCapacity + 1 &&
+            worker.Snapshot.QueuedFrames == LocalMediaDecodeWorker.QueueCapacity);
         Assert.Equal((byte)0, first.Frame.RgbaPixels.Span[0]);
         Assert.Equal((byte)0, first.Frame.AudioPayload.Span[0]);
-        Assert.Equal(6, worker.Snapshot.QueuedFrames);
-        Assert.Equal(6, worker.Snapshot.PeakQueuedFrames);
+        Assert.Equal(LocalMediaDecodeWorker.QueueCapacity, worker.Snapshot.QueuedFrames);
+        Assert.Equal(LocalMediaDecodeWorker.QueueCapacity, worker.Snapshot.PeakQueuedFrames);
 
         Assert.Null(worker.Reposition(12));
         Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
@@ -215,7 +211,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         var provider = new LocalMediaFileProvider();
         using var session = new LocalMediaRuntimeSession(provider, Source(decoder));
         Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
-        Until(() => session.DecodeSnapshot.QueuedFrames == 6);
+        Until(() => session.DecodeSnapshot.QueuedFrames == LocalMediaDecodeWorker.QueueCapacity);
         session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Play));
         Assert.Equal(0, session.ProcessNextBoundary(100).Transport.Position.CurrentFrame);
         var current = session.ProcessNextBoundary(103);

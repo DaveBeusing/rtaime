@@ -83,7 +83,7 @@ $callback = Get-Content -LiteralPath $callbackPath -Raw
 $admission = $session.Substring($session.IndexOf("public LocalMediaRuntimeBoundaryResult ProcessNextBoundary("))
 $admission = $admission.Substring(0, $admission.IndexOf("public void Dispose()"))
 Assert-Condition ($admission -notmatch 'ReadNext\(|ReadSample\(|SeekToFrame\(|WaitForPreroll\(|WaitOne\(|Thread\.Join|File\.') "Program admission must only dequeue, never read, seek or wait for decode."
-Assert-Condition ($worker -match 'QueueCapacity = 6' -and $worker -match 'SlotCount = QueueCapacity \+ 2') "Decode payload ownership must retain explicit bounded queue/inflight limits."
+Assert-Condition ($worker -match 'QueueCapacity = 8' -and $worker -match 'SlotCount = QueueCapacity \+ 2') "Decode payload ownership must retain explicit bounded queue/inflight limits."
 Assert-Condition ($worker -match 'frame.RgbaPixels.Span.CopyTo' -and $worker -match 'frame.AudioPayload.Span.CopyTo') "Queued media must own both payloads independently of decoder scratch."
 Assert-Condition ($worker -match 'generation != _generation' -and $worker -match 'previous.Cancel') "Seek/stop cancellation must fence stale generations."
 Assert-Condition ($callback -match 'ReadSample\(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero\)' -and $callback -match 'OnFlush') "MF asynchronous reads require null output pointers and acknowledged cancellation."

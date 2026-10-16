@@ -15,12 +15,12 @@ public readonly record struct LocalMediaDecodeSnapshot(
     LocalMediaDecodeState State, long Generation, int QueuedFrames, int Capacity,
     int PeakQueuedFrames, ulong DiscardedFrames, ulong Starvations, Failure? Failure);
 
-/// <summary>One reader owner, eight fixed slots: six queued, one reading and one admitted.</summary>
+/// <summary>One reader owner, ten fixed slots: eight queued, one reading and one admitted.</summary>
 internal sealed class LocalMediaDecodeWorker : IDisposable
 {
-    internal const int QueueCapacity = 6;
+    internal const int QueueCapacity = 8;
     private const int SlotCount = QueueCapacity + 2;
-    private const int LowWatermark = 2;
+    private const int LowWatermark = QueueCapacity - 1;
     private readonly object _gate = new();
     private readonly LocalMediaFileSource _source;
     private readonly AutoResetEvent _wake = new(false);

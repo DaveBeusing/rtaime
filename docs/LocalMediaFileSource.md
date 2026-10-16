@@ -125,14 +125,14 @@ typed lifecycle failure, not a claim that a blocked driver has been terminated.
 An unacknowledged flush permanently fences that reader and fails cleanup; it is
 never retried against a new generation or reported as a successful shutdown.
 
-Eight exact-size RGBA slots and eight 32-KiB audio slots are allocated during session
-creation, outside the Program admission lock. Six frames may wait in the queue; one
-slot may be decoding and one admitted. At 1080p this reserves 66,355,200 video bytes
-and 262,144 audio bytes per session, excluding decoder scratch/native allocations.
-The initial capacity is a conservative 120-ms queue at 50 fps (100.1 ms at 59.94);
+Ten exact-size RGBA slots and ten 32-KiB audio slots are allocated during session
+creation, outside the Program admission lock. Eight frames may wait in the queue; one
+slot may be decoding and one admitted. At 1080p this reserves 82,944,000 video bytes
+and 327,680 audio bytes per session, excluding decoder scratch/native allocations.
+The initial capacity is a conservative 160-ms queue at 50 fps (133.47 ms at 59.94);
 it is not a measured optimal latency or a hardware guarantee. Three complete frames
-qualify initial/recovery preroll; refill wakes at two queued frames and backpressures
-at six. Queue, worker and admitted-frame leases return every slot on replacement,
+qualify initial/recovery preroll; refill wakes at seven queued frames and backpressures
+at eight. Queue, worker and admitted-frame leases return every slot on replacement,
 failure, seek or close. An explicitly retained consumer lease keeps its slot alive
 until release; lack of free slots backpressures decode rather than allocating more.
 
@@ -157,7 +157,7 @@ advances once. Play/resume/seek reanchor the existing slot index; decoder starva
 freezes media progression instead of silently treating missing data as a late frame.
 Its target is derived with rational arithmetic from the seek origin and declared
 normalized output rate. Admission selects the newest queued PTS at or before that
-target, examining at most six frames. Older due frames are released and counted;
+target, examining at most eight frames. Older due frames are released and counted;
 future PTS remains queued. Video PTS must be nonnegative and strictly increasing
 within a generation; extent and timestamp validation runs on the worker.
 
@@ -196,3 +196,9 @@ remainders survive the next frame, and seek clears the packet cache. Negative co
 preroll is discarded by signed sample position. Actual gaps stay observable rather
 than being filled with manufactured silence. This fixes long-playback audio runahead
 and early audio exhaustion within the existing Media Foundation backend.
+
+The initial six-frame/two-frame-watermark long run observed seven underruns with
+a 118.8308-ms maximum decode call. Refill now starts after the first consumed frame,
+with eight queued slots as the bounded initial reserve. This changes preread depth,
+not playback authority or a promised physical I/O deadline. Qualification must repeat
+the long run; raising the existing memory/handle ceilings is not permitted.
