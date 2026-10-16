@@ -141,6 +141,54 @@ public sealed class ReferenceMediaRegressionTests
 		Assert.Equal(MediaTransportState.Playing, deck.Snapshot.Transport!.State);
 	}
 
+    [Theory]
+    [InlineData("hd25", 50, 1)]
+    [InlineData("hd50", 50, 1)]
+    [InlineData("hd5994", 60_000, 1_001)]
+    public void Real_profiles_preroll_admit_contiguous_audio_and_fence_GOP_seeks(
+        string profileId, long numerator, long denominator)
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.Generate(Profile(profileId));
+        using var deck = new LocalMediaDeckRuntimeService(new VideoFormat(1920, 1080,
+            new FrameRate(numerator, denominator), PixelFormat.Rgba8, ScanMode.Progressive));
+        var source = MediaSourceId.New();
+        var opened = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current, source, asset.Path),
+            Prepared(deck, source));
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        Assert.True(deck.DecodeSnapshot!.Value.QueuedFrames >= 3);
+        var assetId = opened.Probe!.AssetId;
+        Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, assetId,
+            MediaTransportCommandKind.Play)).Succeeded);
+        ulong nextAudioSample = 0;
+        long previousPts = -1;
+        for (var index = 0; index < 180; index++)
+        {
+            var observed = LocalMediaTestPlayback.Next(deck);
+            Assert.NotEqual(MediaDeckState.Error, observed.State);
+            var frame = deck.LatestBoundary!;
+            Assert.Equal(LocalMediaRuntimeBoundaryStatus.Frame, frame.Status);
+            Assert.True(frame.Video!.Timing.PresentationTimestamp > previousPts);
+            previousPts = frame.Video.Timing.PresentationTimestamp;
+            Assert.NotNull(frame.Audio);
+            Assert.Equal(nextAudioSample, frame.Audio!.Timing.SamplePosition);
+            nextAudioSample += frame.Audio.Timing.SampleCount;
+            Assert.Equal(frame.Video.Timing.PresentationTimestamp, frame.Audio.Timing.PresentationTimestamp);
+            Assert.InRange(deck.DecodeSnapshot!.Value.QueuedFrames, 0, 6);
+        }
+        foreach (var target in new long[] { 59, 61 })
+        {
+            Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, assetId,
+                MediaTransportCommandKind.Seek, target)).Succeeded);
+            Assert.Null(deck.LatestBoundary);
+            var fresh = LocalMediaTestPlayback.Next(deck);
+            Assert.Equal(target, fresh.Transport!.Position.CurrentFrame);
+            Assert.NotNull(deck.LatestBoundary!.Audio);
+        }
+        Assert.Equal(0UL, deck.PlaybackMeasurements!.Value.ReadFailures);
+        Assert.Equal(0UL, deck.PlaybackMeasurements!.Value.MissingAudioFrames);
+    }
+
 	[Fact]
 	public void Encoded_reference_preserves_visual_sync_flash_and_audio_pulse_near_the_same_event()
 	{

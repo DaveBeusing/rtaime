@@ -543,7 +543,10 @@ public sealed class RuntimeHostProcess
 		}
 
 		if (_activeDeckSource is { } previousSource && previousSource != sourceId)
-			runtime.ClearExternalAudioMeter(previousSource);
+        {
+            runtime.ClearExternalAudioMeter(previousSource);
+            runtime.SetInputSignalState(previousSource, V1InputSignalState.Lost);
+        }
 		_activeDeckSource = sourceId;
 
 		if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
