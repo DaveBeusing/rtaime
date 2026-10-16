@@ -180,6 +180,42 @@ public sealed class LocalMediaDecoderSafetyTests
         Assert.InRange(privateGrowth, 0, 512L * 1024 * 1024);
     }
 
+    [Fact]
+    public void Production_full_frame_copy_profile_reuses_storage_without_per_frame_allocations()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const int width = 1920, height = 1080;
+        var pixels = new byte[width * height * 4];
+        var elapsed = new double[64];
+        var native = Marshal.AllocHGlobal(pixels.Length);
+        try
+        {
+            Array.Fill(pixels, (byte)17);
+            Marshal.Copy(pixels, 0, native, pixels.Length);
+            for (var index = 0; index < 4; index++)
+            {
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(native, width * 4, width, height, pixels);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(pixels);
+            }
+            var allocated = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < elapsed.Length; index++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(native, width * 4, width, height, pixels);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(pixels);
+                elapsed[index] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            }
+            allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+            Array.Sort(elapsed);
+            Console.WriteLine("Production RGB32 copy/swizzle: samples=64 size=1920x1080; allocatedBytes=" +
+                allocated + "; P99Milliseconds=" + elapsed[^1]);
+            Assert.Equal(17, pixels[0]);
+            Assert.Equal(255, pixels[3]);
+            Assert.InRange(allocated, 0, 4096);
+        }
+        finally { Marshal.FreeHGlobal(native); }
+    }
+
     private sealed class ControlledClock : TimeProvider
     {
         public long Seconds { get; set; }
