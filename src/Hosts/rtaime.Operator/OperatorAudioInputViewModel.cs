@@ -48,6 +48,7 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 	public string StreamId => _descriptor.StreamId;
 	public string SourceName { get => _sourceName; private set => Set(ref _sourceName, value); }
 	public string SourceType { get => _sourceType; private set => Set(ref _sourceType, value); }
+    public double ConfirmedGain => _descriptor.Gain;
 	public double Gain
 	{
 		get => _gain;

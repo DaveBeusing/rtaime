@@ -11,6 +11,8 @@ public partial class RundownControl : UserControl
 	public RundownControl()
 	{
 		InitializeComponent();
+        AddHandler(Keyboard.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, _) =>
+        { if (DataContext is RundownViewModel model) model.EndDraftNameEdit(); }));
 	}
 	private void Rundown_PreviewKeyDown(object sender, KeyEventArgs e)
 	{

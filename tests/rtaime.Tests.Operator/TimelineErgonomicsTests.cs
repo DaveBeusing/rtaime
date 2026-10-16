@@ -170,6 +170,27 @@ public sealed class TimelineErgonomicsTests
 		Assert.Equal(1, transport.Calls);
 	}
 
+
+    [Fact]
+    public async Task New_draft_edits_drop_redo_and_rundown_name_focus_boundaries_form_separate_groups()
+    {
+        await using var timeline = new MediaTimelineViewModel(new MediaTimelineController());
+        Apply(timeline, Snapshot(10)); timeline.SetEditCursor(20); timeline.UndoDraftCommand.Execute(null);
+        Assert.True(timeline.RedoDraftCommand.CanExecute(null)); timeline.SetEditCursor(30);
+        Assert.False(timeline.RedoDraftCommand.CanExecute(null)); Assert.Equal(10, timeline.ConfirmedFrame);
+        var transport = new RundownTransport(); var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var model = new RundownViewModel(client, owner, pool);
+        model.Name = "First"; model.Name = "First group";
+        model.EndDraftNameEdit(); model.Name = "Second"; model.Name = "Second group";
+        model.UndoDraftCommand.Execute(null); Assert.Equal("First group", model.Name);
+        Assert.True(model.RedoDraftCommand.CanExecute(null));
+        model.Name = "Replacement"; Assert.False(model.RedoDraftCommand.CanExecute(null));
+        Assert.False(timeline.RedoDraftCommand.CanExecute(null)); Assert.Equal(0, transport.Calls);
+    }
+
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("EDIT");

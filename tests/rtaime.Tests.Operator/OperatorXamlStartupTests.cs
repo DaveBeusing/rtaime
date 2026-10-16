@@ -183,6 +183,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					await MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher);
 					await TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher);
 					await InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher);
+                    await InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher);
 					await OperatorDockingWindowTests.VerifyAsync(window, dispatcher);
 					await OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher);
                     await OperatorLibraryTests.VerifyWindowAsync(window, dispatcher);

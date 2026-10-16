@@ -74,7 +74,7 @@ jobs:
       - name: Timeline ergonomics and authoring history regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~TimelineErgonomicsTests --logger "console;verbosity=detailed"
       - name: Precision Inspector and draft authority regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~InspectorPrecisionTests --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests" --logger "console;verbosity=detailed"
       - name: Dock workspace model and restore regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests" --logger "console;verbosity=detailed"
 
@@ -456,6 +456,8 @@ jobs:
       - name: Shortcut editor and strict profile regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
 
+      - name: Inspector typed transfer and local transaction regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests|FullyQualifiedName~TimelineErgonomicsTests" --logger "console;verbosity=detailed"
       - name: Operator real XAML startup qualification
         shell: pwsh
         env:

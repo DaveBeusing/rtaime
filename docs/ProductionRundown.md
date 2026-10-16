@@ -146,3 +146,5 @@ Undo restores authoring data with DRAFT state. It never restores execution state
 Adding items respects the existing 256-item contract bound before changing the local draft. Item identity and typed contracts remain unchanged. Existing follow/repeat scheduling and completion evidence are not reimplemented.
 
 The timeline has a separate local history scope; see [Layered Timeline](LayeredTimeline.md). Neither scope offers undo of a confirmed live operation.
+
+Rundown name groups end on keyboard-focus or selected-item change. A later name edit creates a fresh history entry; editing after Undo invalidates Redo. Inspector attribute history is an independent bounded context and never includes rundown execution or SAVE.

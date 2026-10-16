@@ -41,6 +41,15 @@ public partial class OperatorInspectorControl : UserControl
 		InitializeComponent();
 		AddHandler(RtaimeNumericField.InputValidityChangedEvent, new RoutedEventHandler((_, _) => UpdateNumericValidity()));
 		Loaded += (_, _) => { SubscribeInspector(); UpdateNumericValidity(); };
+        AddHandler(Keyboard.GotKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, e) =>
+        { if (FindEditor(e.NewFocus as DependencyObject) is not null) Inspector?.BeginDraftTransaction(); }));
+        AddHandler(Keyboard.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, e) =>
+        { if (FindEditor(e.OldFocus as DependencyObject) is not null && !ReferenceEquals(FindEditor(e.OldFocus as DependencyObject), FindEditor(e.NewFocus as DependencyObject))) Inspector?.EndDraftTransaction(); }));
+        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler((_, e) =>
+        { if (FindEditor(e.OriginalSource as DependencyObject) is not null) Inspector?.BeginDraftTransaction(); }), true);
+        AddHandler(Mouse.PreviewMouseUpEvent, new MouseButtonEventHandler((_, e) =>
+        { if (FindEditor(e.OriginalSource as DependencyObject) is not null) Inspector?.EndDraftTransaction(); }), true);
+        PreviewKeyDown += OnDraftKeyDown;
 		Unloaded += (_, _) => UnsubscribeInspector();
 	}
 
@@ -95,6 +104,7 @@ public partial class OperatorInspectorControl : UserControl
 	}
 	private void UnsubscribeInspector()
 	{
+        _subscribedInspector?.EndDraftTransaction();
 		if (_subscribedInspector is not null) _subscribedInspector.PropertyChanged -= InspectorChanged;
 		_subscribedInspector = null;
 	}
@@ -112,6 +122,28 @@ public partial class OperatorInspectorControl : UserControl
 		SetValue(NumericInputsValidKey, valid);
 		if (Inspector is not null) Inspector.InspectorInputsValid = valid;
 	}
+    private DependencyObject? FindEditor(DependencyObject? element)
+    {
+        for (var current = element; current is not null && !ReferenceEquals(current, this);)
+        {
+            if (current is RtaimeNumericField or RtaimeSlider or RtaimeToggleButton or RtaimeTextBox) return current;
+            current = current is Visual ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+    private void OnDraftKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Inspector is not { } model) return;
+        var editor = FindEditor(Keyboard.FocusedElement as DependencyObject);
+        if (e.Key == Key.Escape && editor is not null) model.CancelDraftTransaction();
+        if (editor is not null) model.BeginDraftTransaction();
+        if (OperatorKeyboardCommandRegistry.IsTextEntryContext(Keyboard.FocusedElement as DependencyObject) ||
+            Keyboard.Modifiers != ModifierKeys.Control) return;
+        var command = e.Key == Key.Z ? model.UndoInspectorDraftCommand : e.Key == Key.Y ? model.RedoInspectorDraftCommand : null;
+        if (command is null) return;
+        if (!e.IsRepeat && command.CanExecute(null)) command.Execute(null);
+        e.Handled = true;
+    }
 	private static IEnumerable<RtaimeNumericField> NumericFields(DependencyObject root)
 	{
 		for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)

@@ -186,8 +186,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		});
 		ResetAudioGainCommand = new AsyncRelayCommand(() =>
 		{
-			if (_operator.SelectedAudioInput is { } input)
-				input.Gain = 1.0;
+			AudioGainDraft = 1.0;
 			return Task.CompletedTask;
 		});
 		ResetGraphicsPositionXCommand = new AsyncRelayCommand(() =>
@@ -205,16 +204,16 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			_operator.GraphicsScale = 1.0;
 			return Task.CompletedTask;
 		});
-		CopyAttributesCommand = new AsyncRelayCommand(CopyAttributesAsync, () => HasAuthoritativeCompositingSelection && InspectorInputsValid);
+		CopyAttributesCommand = new AsyncRelayCommand(CopyAttributesAsync, CanCopyAttributes);
 		PasteAttributesCommand = new AsyncRelayCommand(PasteAttributesAsync, CanPasteAttributes);
 		ApplyCompositingTransformCommand = new AsyncRelayCommand(
 			ApplySelectedCompositingTransformAsync,
-			CanEditAuthoritativeCompositingSelection);
+			CanApplyCompositingTransformDraft);
 		ResetCompositingTransformCommand = new AsyncRelayCommand(() =>
 		{
 			ResetSelectedCompositingTransformDraft();
 			return Task.CompletedTask;
-		}, () => HasAuthoritativeCompositingSelection);
+		}, () => IsTransformDraftContext && CanEditInspectorDraft);
 		ApplyColorGradeCommand = new AsyncRelayCommand(
 			ApplySelectedColorGradeAsync,
 			() => CanEditAuthoritativeCompositingSelection() && IsSelectedColorGradeProcessingNode);
@@ -254,6 +253,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		ImportCommand = new AsyncRelayCommand(ImportMediaAssetsAsync);
 		RefreshCatalogCommand = new AsyncRelayCommand(RefreshCatalogAsync);
 
+        InitializeInspectorDrafts();
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged += OnMediaDeckPropertyChanged;
 		_operator.Sources.CollectionChanged += OnSourcesChanged;
@@ -1035,11 +1035,13 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
+        RefreshInspectorDraftContext();
 		RaiseTestSignalState();
 	}
 
 	public void Dispose()
 	{
+        PropertyChanged -= OnInspectorDraftValueChanged;
 		DisposeBrowsing();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;
@@ -1481,7 +1483,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName is nameof(OperatorViewModel.GraphicsAssetName) or
+		if (e.PropertyName is nameof(OperatorViewModel.SelectedAudioInput) or
+            nameof(OperatorViewModel.RevisionLabel) or
+            nameof(OperatorViewModel.LastError) or
+            nameof(OperatorViewModel.GraphicsAssetName) or
 			nameof(OperatorViewModel.GraphicsDimensions) or
 			nameof(OperatorViewModel.GraphicsState) or
 			nameof(OperatorViewModel.GraphicsVisible) or
@@ -1543,6 +1548,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void RaiseSelectionState()
 	{
+        RefreshInspectorDraftContext();
 		OnPropertyChanged(nameof(HasSelection));
 		OnPropertyChanged(nameof(IsSourceSelection));
 		RaiseTestSignalState();
@@ -1672,6 +1678,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void ResetSelectedCompositingTransformDraft()
 	{
+        EndDraftTransaction(); BeginDraftTransaction();
 		SelectedLayerPositionX = 0;
 		SelectedLayerPositionY = 0;
 		SelectedLayerScale = 1;
@@ -1682,6 +1689,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		SelectedLayerCropTop = 0;
 		SelectedLayerCropRight = 0;
 		SelectedLayerCropBottom = 0;
+        EndDraftTransaction();
 	}
 
 	private async Task ApplySelectedColorGradeAsync()
@@ -1883,6 +1891,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			_confirmedProcessingSignature = signature;
 		}
 
+        RefreshInspectorDraftContext();
 		foreach (var propertyName in new[]
 		{
 			nameof(SelectedLayerPositionX),
