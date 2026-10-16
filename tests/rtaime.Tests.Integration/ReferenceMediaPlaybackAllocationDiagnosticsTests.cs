@@ -5,14 +5,45 @@ using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Media;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
 public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
 {
+
     [Fact]
-    public async Task Short_allocation_probe_collects_sampled_types_without_qualifying_long_playback()
+    public void Isolated_native_reader_probe_separates_callback_resources_from_Runtime_and_Replay()
+    {
+        if (Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") != "1") return;
+        Assert.True(OperatingSystem.IsWindows());
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var opened = new LocalMediaFileProvider(VideoFormat.Hd1080p50Rgba8).TryOpen(asset.Path, MediaSourceId.New());
+        Assert.True(opened.Succeeded, opened.Failure?.ToString());
+        using var source = opened.Source!;
+        for (var index = 0; index <= 3000; index++)
+        {
+            if (index % 300 == 0)
+                Console.WriteLine("ISOLATED NATIVE READER HANDLE DIAGNOSTIC: " + JsonSerializer.Serialize(new {
+                    reads = index, resources = LocalPlaybackHandleDiagnostics.Capture()
+                }));
+            if (index == 3000) break;
+            var frame = source.ReadNext((ulong)index);
+            if (frame.Status == LocalMediaFrameReadStatus.Ended)
+            {
+                Assert.True(source.SeekToFrame(0).Succeeded);
+                frame = source.ReadNext((ulong)index);
+            }
+            Assert.True(frame.Succeeded, frame.Failure?.ToString());
+        }
+        Console.WriteLine("DIAGNOSTIC ONLY: isolated native reads do not qualify Program playback.");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Short_allocation_probe_collects_sampled_types_without_qualifying_long_playback(bool replayEnabled)
     {
         if (Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") != "1") return;
         Assert.True(OperatingSystem.IsWindows());
@@ -23,7 +54,9 @@ public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
         using var runtimeStop = new CancellationTokenSource();
         using var controlStop = new CancellationTokenSource();
         using var allocations = new LocalPlaybackAllocationListener();
-        var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+        var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint },
+            runtimeFactory: replayEnabled ? null : ((options, writer) => new V1RuntimeHostService(
+                options.SourceAId, options.SourceBId, options.Format, writer, networkOutputs: options.NetworkOutputs)));
         var control = new ControlHostProcess(ControlHostProcessOptions.Default with {
             ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint, DurabilityRoot = root });
         var runtimeRun = runtime.RunAsync(runtimeStop.Token);
@@ -44,12 +77,12 @@ public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
             Assert.True((await deck.OpenAsync(asset.Path, source)).IsLoaded);
             await deck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.Loop);
             if (deck.Snapshot.Transport?.State != MediaTransportState.Playing) await deck.PlayAsync();
-            for (var sample = 0; sample <= 12; sample++)
+            for (var sample = 0; sample <= 6; sample++)
             {
                 Console.WriteLine("LOCAL HANDLE TYPE DIAGNOSTIC: " + JsonSerializer.Serialize(new {
-                    seconds = sample * 15, resources = LocalPlaybackHandleDiagnostics.Capture()
+                    replayEnabled, seconds = sample * 15, resources = LocalPlaybackHandleDiagnostics.Capture()
                 }));
-                if (sample < 12) await Task.Delay(TimeSpan.FromSeconds(15));
+                if (sample < 6) await Task.Delay(TimeSpan.FromSeconds(15));
             }
             Assert.False(runtimeRun.IsCompleted);
             Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
