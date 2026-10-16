@@ -60,7 +60,14 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		_decode = new LocalMediaDecodeWorker(source);
+		try { _decode = new LocalMediaDecodeWorker(source); }
+        catch
+        {
+            // Ownership transfers only after the worker and fixed payload slots exist.
+            _pipeline.Dispose();
+            source.Dispose();
+            throw;
+        }
         _transport = new LocalMediaTransportController(source.Probe, frame =>
         {
             _current?.Dispose();

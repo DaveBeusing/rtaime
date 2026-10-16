@@ -12,6 +12,22 @@ namespace rtaime.Tests.Integration;
 public sealed class AsynchronousLocalMediaDecodeTests
 {
     [Fact]
+    public void Failed_fixed_slot_preparation_releases_the_untransferred_decoder_without_starting_reads()
+    {
+        var decoder = new ControlledDecoder
+        {
+            Probe = new LocalMediaProbe(MediaContractVersion.Current, MediaAssetId.New(), MediaSourceId.New(),
+                "invalid-extents.mp4", MediaContainerFormat.Mp4, MediaVideoCodec.H264, MediaAudioCodec.Pcm,
+                new VideoFormat(uint.MaxValue, uint.MaxValue, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive),
+                AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(2))
+        };
+        Assert.Throws<OverflowException>(() => new LocalMediaRuntimeSession(new LocalMediaFileProvider(), Source(decoder)));
+        Assert.True(decoder.Disposed);
+        Assert.Equal(0, decoder.Reads);
+        Assert.Equal(1, decoder.MaximumConcurrentOperations);
+    }
+
+    [Fact]
     public void Queue_and_inflight_payloads_are_bounded_and_independent_of_decoder_scratch()
     {
         var decoder = new ControlledDecoder();
@@ -290,7 +306,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         public long[]? Timestamps { get; init; }
         public ManualResetEventSlim ReadBlocked { get; } = new();
         public ManualResetEventSlim ReleaseRead { get; } = new();
-        public LocalMediaProbe Probe { get; } = new(MediaContractVersion.Current, MediaAssetId.New(),
+        public LocalMediaProbe Probe { get; init; } = new(MediaContractVersion.Current, MediaAssetId.New(),
             MediaSourceId.New(), "controlled.mp4", MediaContainerFormat.Mp4, MediaVideoCodec.H264,
             MediaAudioCodec.Pcm, new VideoFormat(4, 4, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive),
             AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(2));
