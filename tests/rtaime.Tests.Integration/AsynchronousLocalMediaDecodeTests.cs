@@ -19,7 +19,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         if (!OperatingSystem.IsWindows()) return;
         var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-format-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        var source = new string('1', 40);
+        var source = new string('a', 40);
         var timingPath = Path.Combine(root, "local-playback-timing.json");
         var reportPath = Path.Combine(root, "local-playback-baseline.json");
         var samples = Enumerable.Range(0, 2048).Select(index =>
@@ -54,6 +54,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
             repository = repository.Parent;
         var verifier = Path.Combine((repository ?? throw new DirectoryNotFoundException("Evidence verifier repository root was not found.")).FullName,
             "build", "testmedia", "Test-LocalPlaybackEvidence.ps1");
+        string verifierOutput = string.Empty;
         async Task<int> VerifyAsync()
         {
             var start = new ProcessStartInfo("pwsh") {
@@ -66,7 +67,8 @@ public sealed class AsynchronousLocalMediaDecodeTests
             var errors = process.StandardError.ReadToEndAsync();
             try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
             catch { process.Kill(entireProcessTree: true); throw; }
-            Assert.True((await output).Length + (await errors).Length < 16_384);
+            verifierOutput = (await output) + (await errors);
+            Assert.True(verifierOutput.Length < 16_384);
             return process.ExitCode;
         }
         try
@@ -77,7 +79,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
             Assert.InRange(new FileInfo(timingPath).Length, 1, LocalPlaybackEvidenceJson.MaximumBytes);
             using (var raw = JsonDocument.Parse(File.ReadAllText(timingPath)))
                 Assert.Equal(2048, raw.RootElement.GetProperty("timing").GetProperty("Samples").GetArrayLength());
-            Assert.Equal(0, await VerifyAsync());
+            Assert.True(await VerifyAsync() == 0, verifierOutput);
             var original = File.ReadAllBytes(reportPath);
             Assert.Throws<InvalidDataException>(() => LocalPlaybackEvidenceJson.Write(reportPath,
                 new { oversized = new string('x', LocalPlaybackEvidenceJson.MaximumBytes) }));
