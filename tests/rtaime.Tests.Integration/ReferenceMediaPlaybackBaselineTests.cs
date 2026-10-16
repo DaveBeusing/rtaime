@@ -37,6 +37,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
         object? finalTiming = null;
         object? finalSchedule = null;
         object? transport = null;
+        object? transportAfterSeeks = null;
         string audioStatus = "UNVERIFIED";
         long? firstPrivate = null, lastPrivate = null;
         int? firstHandles = null, lastHandles = null;
@@ -120,13 +121,19 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             // Transport/failure exercises are separate from the uninterrupted-playback metrics.
             await deck.StopAsync();
             await deck.Timeline.SeekToFrameAsync(59);
+            Assert.Equal(59, deck.Timeline.State.ConfirmedFrame);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.PauseAsync();
+            Assert.Equal(MediaDeckState.Paused, deck.Snapshot.State);
             await deck.Timeline.SeekToFrameAsync(61);
+            Assert.Equal(61, deck.Timeline.State.ConfirmedFrame);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.StopAsync();
+            Assert.Equal(MediaDeckState.Ready, deck.Snapshot.State);
+            Assert.Equal(0, deck.Snapshot.Transport!.Position.CurrentFrame);
+            transportAfterSeeks = new { stop = deck.Snapshot, observations = runtime.MediaDeck!.PlaybackMeasurements };
             await deck.CloseAsync();
             Assert.True((await deck.OpenAsync(asset.Path, source)).IsLoaded);
             await deck.CloseAsync();
@@ -160,7 +167,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     storage = "Hosted runner volume; SSD class, cold cache and device latency UNVERIFIED",
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
-                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, runtimePerformance, transport, failure, cleanupFailure,
+                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
                     collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
                     audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
                     productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",

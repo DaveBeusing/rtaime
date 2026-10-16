@@ -22,6 +22,10 @@ on:
         options: ["10", "60"]
         default: "10"
 
+env:
+  RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  RTAIME_BASELINE_SDK: "10.0.401"
+
 permissions:
   contents: read
 

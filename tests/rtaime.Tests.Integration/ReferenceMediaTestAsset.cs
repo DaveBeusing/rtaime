@@ -48,7 +48,13 @@ internal sealed record ReferenceMediaManifest(
 	ulong GeneratedAudioSamples,
 	string VideoSignal,
 	string AudioSignal,
-	string Sha256);
+	string Sha256)
+{
+    public string VideoProfile { get; init; } = "high";
+    public string EncodedPixelFormat { get; init; } = "yuv420p";
+    public string EncoderBuild { get; init; } = "UNVERIFIED";
+    public string? SourceCommit { get; init; } = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
+}
 
 internal sealed class ReferenceMediaTestAsset : IDisposable
 {
@@ -111,8 +117,8 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 					deleteOnDispose: false);
 			}
 
-			EnsureFfmpegAvailable();
-			var generated = GenerateUnsafe(profile, root);
+			var encoderBuild = EnsureFfmpegAvailable();
+			var generated = GenerateUnsafe(profile, root, encoderBuild);
 			Cache[cacheKey] = generated;
 			return new ReferenceMediaTestAsset(
 				generated.Path,
@@ -135,7 +141,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 		TryDelete(ManifestPath);
 	}
 
-	private static CachedAsset GenerateUnsafe(ReferenceMediaProfile profile, string outputRoot)
+	private static CachedAsset GenerateUnsafe(ReferenceMediaProfile profile, string outputRoot, string encoderBuild)
     {
         if (profile.Duration > TimeSpan.FromSeconds(6))
             return GenerateLong(profile, outputRoot);
@@ -172,7 +178,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 				sampleCount,
 				"BroadcastTestPatternGenerator + MotionTimingTestSignalGenerator",
 				"GeneratedAudioTestSignalGenerator(Pulse, 1000 Hz, peak 0.25)",
-				hash);
+				hash) { EncoderBuild = encoderBuild };
 			File.WriteAllText(
 				manifestPath,
 				JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
@@ -352,7 +358,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 		return checked((long)Math.Ceiling(numerator / denominator));
 	}
 
-	private static void EnsureFfmpegAvailable()
+	private static string EnsureFfmpegAvailable()
 	{
 		var result = RunFfmpeg("-version", TimeSpan.FromSeconds(15));
 		if (result.ExitCode != 0)
@@ -361,6 +367,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 				"FFmpeg is required for reference-media regression generation. " +
 				"Set RTAIME_FFMPEG_PATH when ffmpeg is not on PATH.");
 		}
+        return result.Output.Split('\n')[0];
 	}
 
 	private static ProcessResult RunFfmpeg(string arguments, TimeSpan timeout)
