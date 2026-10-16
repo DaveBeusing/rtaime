@@ -1477,6 +1477,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
+		if (e.PropertyName is nameof(OperatorViewModel.HealthObserved) or nameof(OperatorViewModel.FrameTime) or nameof(OperatorViewModel.RuntimeHealth))
+			ReconcileHoverPressure();
 		if (e.PropertyName is nameof(OperatorViewModel.SelectedAudioInput) or
             nameof(OperatorViewModel.RevisionLabel) or
             nameof(OperatorViewModel.LastError) or
