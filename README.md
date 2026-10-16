@@ -400,3 +400,5 @@ The Inspector supports grouped local draft undo/redo and compatible typed attrib
 The [Media Library](docs/MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.
 
 [Workspace layout templates](docs/OperatorWorkspaces.md#named-workspace-layout-templates) add named portable presentation presets, deterministic Focus/Cinema restore and retained detached views. They reuse the original Operator models and monitoring and do not change production state.
+
+Show checks now separates Program/AUX availability and recording target evidence, shows submission provenance and explicit response limits, groups notifications by severity, and offers bounded reminder pauses plus the existing support exporter. See [Show checks and activity](docs/ShowPreflightAndActivity.md).
