@@ -474,3 +474,7 @@ A complete final-head build/test and all five Required Gates remain required. Ex
 ## Media smart search and reviewed batches
 
 After the canonical pinned-SDK Release build, run `dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaSmartSearchBatchTests|FullyQualifiedName~MediaLibraryBrowsingTests"`. CI and Quality run these before broader qualification. Retain exact-head CI, Quality, Security, Provider Smoke and Packaged E2E results, including the managed lifecycle/legacy recovery prerequisites. Physical DPI/IME/screen-reader and hardware latency remain UNVERIFIED.
+
+## Workspace presentation and portable templates
+
+After the canonical pinned-SDK Release build, run `dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests|FullyQualifiedName~WorkspacePresentationTemplateTests"`. CI and Quality execute this before real-window/broad suites. Existing `OperatorXamlStartupTests` checks retained floating window/content, focus/cinema restoration, visible Program status and the single owned template editor on the actual primary-window lifecycle. Check CI, Quality, Security, Provider Smoke and Packaged E2E at the final source. Synthetic DPI geometry does not qualify physical hotplug or native GPU lease cleanup; retain those as UNVERIFIED until reference-platform evidence exists.

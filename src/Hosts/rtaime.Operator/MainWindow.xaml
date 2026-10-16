@@ -1285,6 +1285,12 @@
                                 IsCompact="True" Margin="0,0,0,8"
                                 ToolTip="Ctrl+Shift+D toggles docking. Drag panel tabs to group them; FLOAT detaches an existing panel."
                                 AutomationProperties.Name="Toggle optional dock workspace" />
+                            <WrapPanel Margin="0,0,0,8">
+                                <controls:RtaimeButton Content="FOCUS" Command="{Binding Docking.FocusCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Focus or restore current panel" ToolTip="Ctrl+Shift+F. Escape restores layout and focus." />
+                                <controls:RtaimeButton Content="CINEMA" Command="{Binding Docking.CinemaCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Cinema Program monitoring or restore" ToolTip="Ctrl+Shift+C. Existing Program monitoring, with identity and status retained." />
+                                <controls:RtaimeButton Content="RESTORE" Command="{Binding Docking.RestoreCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Restore presentation layout" />
+                                <controls:RtaimeButton Content="LAYOUT TEMPLATES…" Command="{Binding OpenWorkspaceTemplatesCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Open named workspace layout templates" />
+                            </WrapPanel>
                             <DockPanel Margin="0,0,0,6"><TextBlock Text="Global Readiness" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GlobalReadinessLabel}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Performance Verification" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding PerformanceVerificationState}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<TextBlock Text="{Binding GlobalReadinessSummary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />

@@ -31,6 +31,8 @@ public partial class MainWindow : Window
 	private const int DarkBorderColor = 0x003F3425;
 	private const int LightCaptionTextColor = 0x00F6F3EE;
 
+	private WorkspaceTemplatesWindow? _workspaceTemplatesWindow;
+    internal WorkspaceTemplatesWindow? WorkspaceTemplatesWindow => _workspaceTemplatesWindow;
 	private ShowReadinessWindow? _showReadinessWindow;
 	internal ShowReadinessWindow? ShowReadinessWindow => _showReadinessWindow;
 	private OperatorCommandPaletteWindow? _commandPaletteWindow;
@@ -139,13 +141,15 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
+        Shell.ConfigureTemplateFiles(PickWorkspaceTemplateImport, PickWorkspaceTemplateExport, Docking.Capture);
+        OpenWorkspaceTemplatesCommand = new OperatorShellCommand(OpenWorkspaceTemplates, () => !_shutdownStarted);
 		OpenLibraryCommand = new OperatorShellCommand(() => OpenLibrary(), () => !_shutdownStarted);
         OpenInlineHelpCommand = new OperatorShellCommand(() => OpenLibrary("Help"), () => !_shutdownStarted);
         OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel);
 		Monitoring.Start();
@@ -244,13 +248,15 @@ public partial class MainWindow : Window
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
                 ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
             });
+        Shell.ConfigureTemplateFiles(PickWorkspaceTemplateImport, PickWorkspaceTemplateExport, Docking.Capture);
+        OpenWorkspaceTemplatesCommand = new OperatorShellCommand(OpenWorkspaceTemplates, () => !_shutdownStarted);
 		OpenLibraryCommand = new OperatorShellCommand(() => OpenLibrary(), () => !_shutdownStarted);
         OpenInlineHelpCommand = new OperatorShellCommand(() => OpenLibrary("Help"), () => !_shutdownStarted);
         OpenCommandPaletteCommand = new AsyncRelayCommand(() => { OpenCommandPalette(); return Task.CompletedTask; }, () => !_shutdownStarted);
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel, libraryPreferenceStore);
 		viewModel.StartAudioMetering();
@@ -261,6 +267,7 @@ public partial class MainWindow : Window
 	public StartupLifecycleViewModel Startup { get; }
 	public ShowReadinessViewModel ShowReadiness { get; }
 	public ICommand OpenShowChecksCommand { get; }
+    public ICommand OpenWorkspaceTemplatesCommand { get; }
 	public OperatorNotificationCenterViewModel Notifications { get; }
 	public OperatorWorkspaceStateViewModel WorkspaceStates { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
@@ -579,6 +586,8 @@ public partial class MainWindow : Window
 		{
 			if (!_fullscreenApplied)
 				CaptureWindowPlacement();
+			await Shell.StopTemplateFilesAsync();
+			_workspaceTemplatesWindow?.Close();
 			_commandPaletteWindow?.Close();
             CloseLibrary();
             await Library.FlushAsync();
@@ -640,6 +649,30 @@ public partial class MainWindow : Window
 			Close();
 		}
 	}
+
+    private void OpenWorkspaceTemplates()
+    {
+        if (_workspaceTemplatesWindow is { } existing) { existing.Activate(); return; }
+        var reference = Keyboard.FocusedElement is UIElement focused ? new WeakReference<UIElement>(focused) : null;
+        _workspaceTemplatesWindow = new WorkspaceTemplatesWindow(this);
+        _workspaceTemplatesWindow.Closed += (_, _) =>
+        {
+            _workspaceTemplatesWindow = null;
+            if (!_shutdownStarted && reference is not null && reference.TryGetTarget(out var previous) && previous.IsVisible && previous.IsEnabled)
+                Dispatcher.BeginInvoke(() => { if (!_shutdownStarted && previous.IsVisible && previous.IsEnabled) { Window.GetWindow(previous)?.Activate(); previous.Focus(); } });
+        };
+        _workspaceTemplatesWindow.Show();
+    }
+    private string? PickWorkspaceTemplateImport()
+    {
+        var dialog = new OpenFileDialog { Title = "Import workspace layout", Filter = "Layout template (*.json)|*.json", CheckFileExists = true };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+    private string? PickWorkspaceTemplateExport()
+    {
+        var dialog = new SaveFileDialog { Title = "Export workspace layout", Filter = "Layout template (*.json)|*.json", DefaultExt = ".json", AddExtension = true };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
 
 	private void OnMediaPoolClearSelectionClick(object sender, RoutedEventArgs e)
 	{

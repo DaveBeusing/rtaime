@@ -21,7 +21,11 @@ public sealed class OperatorDockController : IDisposable
     private readonly Dictionary<string, FrameworkElement> _panels;
     private readonly Dictionary<string, (Panel Parent, int Index, BindingBase? Visibility, Visibility Value)> _homes;
     private readonly Dictionary<string, OperatorPanelWindow> _floating = new(StringComparer.Ordinal);
-    private readonly List<ContentControl> _presenters = [];
+    private readonly Dictionary<string, ContentControl> _presenters = new(StringComparer.Ordinal);
+    private WeakReference<UIElement>? _presentationFocus;
+    private string _presentationSelected = "MONITORS";
+    private long _focusGeneration;
+    private bool _hasPresentationRestore;
     private bool _rebuilding, _disposed;
     private bool _compact;
     private string _selected = "MONITORS";
@@ -38,12 +42,9 @@ public sealed class OperatorDockController : IDisposable
         }, StringComparer.Ordinal);
         ToggleCommand = new OperatorShellCommand(Toggle);
         FloatCommand = new OperatorShellCommand(() => Float(_selected));
-        FocusCommand = new OperatorShellCommand(() =>
-        {
-            if (_floating.TryGetValue(_selected, out var floating)) { floating.Activate(); FocusSelected(); return; }
-            if (!_owner.Shell.Docking.Enabled) _owner.Shell.SetDocking(_owner.Shell.Docking with { Enabled = true });
-            _focus = _focus is null ? _selected : null; Rebuild();
-        });
+        FocusCommand = new OperatorShellCommand(() => TogglePresentation("FOCUS"));
+        CinemaCommand = new OperatorShellCommand(() => TogglePresentation("CINEMA"));
+        RestoreCommand = new OperatorShellCommand(() => _owner.Shell.RestorePresentation(), () => _owner.Shell.PresentationActive);
         NextCommand = new OperatorShellCommand(Next);
         LeftCommand = new OperatorShellCommand(() => Dock(_selected, "LEFT"));
         CenterCommand = new OperatorShellCommand(() => Dock(_selected, "CENTER"));
@@ -57,6 +58,8 @@ public sealed class OperatorDockController : IDisposable
     public ICommand ToggleCommand { get; }
     public ICommand FloatCommand { get; }
     public ICommand FocusCommand { get; }
+    public ICommand CinemaCommand { get; }
+    public ICommand RestoreCommand { get; }
     public ICommand NextCommand { get; }
     public ICommand LeftCommand { get; }
     public ICommand CenterCommand { get; }
@@ -65,16 +68,37 @@ public sealed class OperatorDockController : IDisposable
     public IReadOnlyDictionary<string, OperatorPanelWindow> FloatingWindows => _floating;
     public IReadOnlyDictionary<string, FrameworkElement> Panels => _panels;
     public string SelectedPanel => _selected;
-    public void Toggle() => _owner.Shell.SetDocking(_owner.Shell.Docking with { Enabled = !_owner.Shell.Docking.Enabled });
+    public void Toggle()
+    {
+        _owner.Shell.RestorePresentation();
+        _owner.Shell.SetDocking(_owner.Shell.Docking with { Enabled = !_owner.Shell.Docking.Enabled });
+    }
+    private void TogglePresentation(string mode)
+    {
+        if (_owner.Shell.PresentationMode == mode) { _owner.Shell.RestorePresentation(); return; }
+        _owner.Shell.RestorePresentation();
+        Capture();
+        _presentationSelected = _selected;
+        _presentationFocus = Keyboard.FocusedElement is UIElement focused ? new(focused) : null;
+        _focusGeneration++; _hasPresentationRestore = true;
+        _owner.Shell.BeginPresentation(mode);
+        _focus = mode == "CINEMA" ? "MONITORS" : _selected;
+        _selected = _focus;
+        _owner.Shell.SetDocking(_owner.Shell.Docking.Dock(_focus, "CENTER"));
+        if (mode == "CINEMA") _owner.Shell.FullscreenProgramCommand.Execute(null);
+        FocusSelected();
+    }
     public void Dock(string panel, string group)
     {
         if (!_panels.ContainsKey(panel) || !OperatorDockLayout.GroupIds.Contains(group)) return;
+        _owner.Shell.RestorePresentation();
         _selected = panel; _focus = null;
         _owner.Shell.SetDocking(_owner.Shell.Docking.Dock(panel, group));
     }
     public void Float(string panel)
     {
         if (!_panels.ContainsKey(panel)) return;
+        _owner.Shell.RestorePresentation();
         _selected = panel; _focus = null;
         if (_floating.TryGetValue(panel, out var existing)) { existing.Activate(); return; }
         var placement = OperatorMonitorGeometry.Capture(_owner) with { Width = 800, Height = 600 };
@@ -93,8 +117,32 @@ public sealed class OperatorDockController : IDisposable
     private void Loaded(object sender, RoutedEventArgs e) => Rebuild();
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace)) _focus = null;
-        if (e.PropertyName == nameof(OperatorShellViewModel.Docking)) Rebuild();
+        if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace))
+        {
+            _focus = null;
+            if (!_owner.Shell.PresentationActive && _hasPresentationRestore) _selected = _presentationSelected;
+        }
+        if (e.PropertyName == nameof(OperatorShellViewModel.Docking))
+        {
+            if (!_owner.Shell.PresentationActive && _hasPresentationRestore) { _focus = null; _selected = _presentationSelected; }
+            Rebuild();
+        }
+        if (e.PropertyName == nameof(OperatorShellViewModel.PresentationActive))
+        {
+            (RestoreCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
+            if (!_owner.Shell.PresentationActive)
+            {
+                _hasPresentationRestore = false; _focus = null; _selected = _presentationSelected;
+                var generation = ++_focusGeneration;
+                var reference = _presentationFocus; _presentationFocus = null;
+                _owner.Dispatcher.BeginInvoke(() =>
+                {
+                    if (!_disposed && generation == _focusGeneration && reference is not null && reference.TryGetTarget(out var target) &&
+                        target.IsVisible && target.IsEnabled)
+                    { Window.GetWindow(target)?.Activate(); target.Focus(); }
+                });
+            }
+        }
     }
     private void Sized(object sender, SizeChangedEventArgs e)
     {
@@ -104,6 +152,7 @@ public sealed class OperatorDockController : IDisposable
     }
     private void Next()
     {
+        _owner.Shell.RestorePresentation();
         if (!_owner.Shell.Docking.Enabled) _owner.Shell.SetDocking(_owner.Shell.Docking with { Enabled = true });
         var docked = _owner.Shell.Docking.Groups.SelectMany(g => g.Panels).ToArray();
         if (docked.Length == 0) { _floating.Values.FirstOrDefault()?.Activate(); return; }
@@ -119,12 +168,15 @@ public sealed class OperatorDockController : IDisposable
         var focused = Keyboard.FocusedElement as UIElement;
         try
         {
-            foreach (var presenter in _presenters) presenter.Content = null;
-            _presenters.Clear();
-            foreach (var window in _floating.Values) { window.Content = null; window.Close(); }
-            _floating.Clear();
-            foreach (var panel in _panels.Values)
+            var desired = _owner.Shell.Docking.Normalize();
+            var preserved = desired.Enabled ? desired.Floating.Select(p => p.Panel).Where(_floating.ContainsKey).ToHashSet(StringComparer.Ordinal) : [];
+            foreach (var pair in _presenters.Where(p => !preserved.Contains(p.Key)).ToArray())
+            { pair.Value.Content = null; _presenters.Remove(pair.Key); }
+            foreach (var pair in _floating.Where(p => !preserved.Contains(p.Key)).ToArray())
+            { pair.Value.Content = null; pair.Value.Close(); _floating.Remove(pair.Key); }
+            foreach (var entry in _panels.Where(p => !preserved.Contains(p.Key)))
             {
+                var panel = entry.Value;
                 if (panel.Parent is Panel parent) parent.Children.Remove(panel);
                 else if (panel.Parent is Decorator decorator) decorator.Child = null;
                 else if (panel.Parent is ContentControl control) control.Content = null;
@@ -167,6 +219,11 @@ public sealed class OperatorDockController : IDisposable
             }
             foreach (var floating in layout.Floating)
             {
+                if (_floating.TryGetValue(floating.Panel, out var retained))
+                {
+                    OperatorMonitorGeometry.Restore(retained, floating.Placement);
+                    continue;
+                }
                 var window = new OperatorPanelWindow(_owner, this, floating.Panel, floating.Placement)
                 {
                     Owner = _owner, DataContext = _owner.DataContext,
@@ -176,7 +233,7 @@ public sealed class OperatorDockController : IDisposable
                 window.Closed += (_, _) =>
                 {
                     if (_disposed || _rebuilding) return;
-                    Dock(floating.Panel, floating.ReturnGroup);
+                    Dock(floating.Panel, _owner.Shell.Docking.Floating.FirstOrDefault(p => p.Panel == floating.Panel)?.ReturnGroup ?? floating.ReturnGroup);
                     FocusSelected();
                 };
                 window.Activated += (_, _) => _selected = floating.Panel;
@@ -241,12 +298,22 @@ public sealed class OperatorDockController : IDisposable
         var grid = new Grid();
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         var header = new WrapPanel { Background = Brush("OperatorTopBarBrush", "OperatorBackgroundBrush") };
+        var tally = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4), Style = _owner.TryFindResource("OperatorLabel") as Style };
+        var status = new MultiBinding { StringFormat = "PROGRAM {0} · {1} · {2}" };
+        status.Bindings.Add(new Binding("ProgramSourceName") { Source = _owner.DataContext });
+        status.Bindings.Add(new Binding("ConnectionState") { Source = _owner.DataContext });
+        status.Bindings.Add(new Binding("ProgramSafety") { Source = _owner.DataContext });
+        BindingOperations.SetBinding(tally, TextBlock.TextProperty, status);
+        AutomationProperties.SetName(tally, "Current Program identity, connection and safety");
+        AutomationProperties.SetLiveSetting(tally, AutomationLiveSetting.Polite);
+        header.Children.Add(tally);
+        header.Children.Add(Button("RESTORE", "Restore presentation arrangement (Escape).", () => _owner.Shell.RestorePresentation()));
         header.Children.Add(Button(panel, "Focus panel. Ctrl+Shift+F restores the previous arrangement.", () => { _selected = panel; FocusCommand.Execute(null); }));
         header.Children.Add(Button("FLOAT", "Detach panel to a secondary window. Ctrl+Shift+W.", () => Float(panel)));
         foreach (var group in OperatorDockLayout.GroupIds) header.Children.Add(Button(group, $"Dock {panel} to {group}; existing panels become tabs.", () => Dock(panel, group)));
         var presenter = new ContentControl { Content = view, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
         presenter.PreviewGotKeyboardFocus += (_, _) => _selected = panel;
-        _presenters.Add(presenter);
+        _presenters[panel] = presenter;
         Grid.SetRow(presenter, 1); grid.Children.Add(header); grid.Children.Add(presenter);
         return grid;
     }
@@ -317,10 +384,11 @@ public sealed class OperatorDockController : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        Capture(); _disposed = true;
+        Capture(); _disposed = true; _focusGeneration++; _presentationFocus = null;
+        _owner.Shell.RestorePresentation();
         SystemEvents.DisplaySettingsChanged -= DisplayChanged;
         _owner.Shell.PropertyChanged -= Changed; _owner.SizeChanged -= Sized; _owner.Loaded -= Loaded;
-        foreach (var presenter in _presenters) presenter.Content = null;
+        foreach (var presenter in _presenters.Values) presenter.Content = null;
         _presenters.Clear();
         foreach (var window in _floating.Values) { window.Content = null; window.Close(); }
         _floating.Clear(); _host.Children.Clear();
