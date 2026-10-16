@@ -162,7 +162,7 @@ public sealed class LocalMediaRuntimeIntegrationTests
 		Assert.False(missing.Succeeded);
 		Assert.Equal("media.file.not_found", missing.Failure?.Code);
 
-		var path = Path.Combine(Path.GetTempPath(), $"rtaime-{Guid.NewGuid():N}.mov");
+		var path = Path.Combine(Path.GetTempPath(), $"rtaime-{Guid.NewGuid():N}.mxf");
 		try
 		{
 			File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });

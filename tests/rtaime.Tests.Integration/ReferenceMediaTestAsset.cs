@@ -128,6 +128,48 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 		}
 	}
 
+    public static ReferenceMediaTestAsset GenerateFormat(string profile)
+    {
+        using var seed = Generate(ReferenceMediaProfile.Hd50);
+        var root = System.IO.Path.GetDirectoryName(seed.Path)!;
+        lock (GenerationGate)
+        {
+            var key = $"{root}|format:{profile}";
+            if (Cache.TryGetValue(key, out var cached) && File.Exists(cached.Path))
+                return new(cached.Path, cached.ManifestPath, cached.Manifest, false);
+            var mov = profile.StartsWith("mov-", StringComparison.Ordinal);
+            var hevc = profile.StartsWith("hevc-", StringComparison.Ordinal);
+            var tenBit = profile == "hevc-main10";
+            var pcm = profile == "mov-pcm";
+            var vfr = profile == "vfr";
+            var path = System.IO.Path.Combine(root, $"rtaime-format-{profile}.{(mov ? "mov" : "mp4")}");
+            var videoOptions = hevc
+                ? $"-c:v libx265 -preset ultrafast -x265-params pools=2:frame-threads=2 -profile:v {(tenBit ? "main10" : "main")} -pix_fmt {(tenBit ? "yuv420p10le" : "yuv420p")} -tag:v hvc1"
+                : mov ? "-c:v copy"
+                : $"-c:v libx264 -preset veryfast -profile:v baseline -pix_fmt yuv420p {(vfr ? "-vf select='not(eq(mod(n,5),2))' -fps_mode vfr" : "")}";
+            var audioOptions = pcm ? "-c:a pcm_s16le -ar 48000 -ac 2" : "-c:a copy";
+            var result = RunFfmpeg($"-y -hide_banner -loglevel error -i {Quote(seed.Path)} -t 3 " +
+                $"-map 0:v:0 -map 0:a:0 {videoOptions} {audioOptions} -map_metadata -1 -movflags +faststart {Quote(path)}",
+                TimeSpan.FromMinutes(4));
+            if (result.ExitCode != 0 || !File.Exists(path))
+                throw new Xunit.Sdk.XunitException($"Format reference generation failed: {profile}: {result.Error}");
+            if (new FileInfo(path).Length > 20L * 1024 * 1024)
+                throw new InvalidDataException("Format reference exceeds the 20 MiB asset limit.");
+            var manifest = seed.Manifest with {
+                Profile = profile, Container = mov ? "QuickTime MOV" : "MP4",
+                VideoCodec = hevc ? "HEVC" : "H.264/AVC", AudioCodec = pcm ? "PCM16" : "AAC",
+                RequestedDurationSeconds = 3, GeneratedVideoFrames = vfr ? 120 : 150,
+                GeneratedAudioSamples = 144000, VideoProfile = hevc ? (tenBit ? "main10" : "main") : mov ? "high" : "baseline",
+                EncodedPixelFormat = tenBit ? "yuv420p10le" : "yuv420p",
+                Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()
+            };
+            var manifestPath = System.IO.Path.ChangeExtension(path, ".json");
+            File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+            cached = new(path, manifestPath, manifest); Cache[key] = cached;
+            return new(path, manifestPath, manifest, false);
+        }
+    }
+
 	public void Dispose()
 	{
 		if (_disposed)

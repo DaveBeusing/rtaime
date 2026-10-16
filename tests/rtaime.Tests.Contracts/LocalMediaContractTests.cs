@@ -99,6 +99,17 @@ public sealed class LocalMediaContractTests
 		Assert.Equal(codec, probe.AudioCodec);
 	}
 
+    [Fact]
+    public void QuickTime_is_additive_and_existing_container_identity_is_unchanged()
+    {
+        Assert.Equal(1, (int)MediaContainerFormat.Mp4);
+        Assert.Equal(2, (int)MediaContainerFormat.QuickTimeMov);
+        var probe = new LocalMediaProbe(MediaContractVersion.Current, MediaAssetId.New(), MediaSourceId.New(),
+            "clip.mov", MediaContainerFormat.QuickTimeMov, MediaVideoCodec.H264, MediaAudioCodec.Pcm,
+            VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(6));
+        Assert.Equal(MediaContainerFormat.QuickTimeMov, probe.Container);
+    }
+
 	[Fact]
 	public void Probe_rejects_zero_duration()
 	{
