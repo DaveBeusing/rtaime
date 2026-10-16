@@ -516,7 +516,15 @@ internal static class IsoBaseMediaMetadataReader
                 var configEnd = config.Offset + config.Length;
                 var spsCount = buffer[config.PayloadOffset + 5] & 31;
                 if (spsCount == 0) throw new InvalidDataException("AVC sequence parameters are missing.");
-                SkipAvcParameters(buffer, ref offset, configEnd, spsCount);
+                for (var sequence = 0; sequence < spsCount; sequence++)
+                {
+                    if (configEnd - offset < 2) throw new InvalidDataException("AVC sequence length is truncated.");
+                    var length = BinaryPrimitives.ReadUInt16BigEndian(buffer.AsSpan(offset, 2));
+                    offset += 2;
+                    if (length == 0 || length > configEnd - offset) throw new InvalidDataException("AVC sequence is truncated.");
+                    H264LocalMediaSequenceMetadata.Validate(buffer.AsSpan(offset, length), metadata.Width, metadata.Height);
+                    offset += length;
+                }
                 if (offset >= configEnd) throw new InvalidDataException("AVC picture parameters are missing.");
                 var ppsCount = buffer[offset++];
                 if (ppsCount == 0) throw new InvalidDataException("AVC picture parameters are missing.");

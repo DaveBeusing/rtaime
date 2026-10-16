@@ -39,6 +39,7 @@ public sealed class LocalMediaContainerProbeTests
     }
 
     [Theory]
+    [InlineData("stream-aspect", "media.file.pixel_aspect_unsupported")]
     [InlineData("external", "media.file.external_reference_unsupported")]
     [InlineData("rotation", "media.file.transform_unsupported")]
     [InlineData("pasp", "media.file.pixel_aspect_unsupported")]
@@ -144,8 +145,10 @@ public sealed class LocalMediaContainerProbeTests
         U32(6000).CopyTo(mdhd, 16);
         var hdlr = new byte[12]; Encoding.ASCII.GetBytes("vide").CopyTo(hdlr, 8);
         var visual = new byte[78]; visual[7] = 1; visual[24] = 7; visual[25] = 128; visual[26] = 4; visual[27] = 56;
-        byte[] avcc = [1, mutation == "high10" ? (byte)110 : (byte)100, 0, 40, 255, 225, 0,
-            mutation == "avc-length" ? (byte)255 : (byte)1, 103, 1, 0, 1, 104];
+        var sequence = SequenceParameters(mutation == "stream-aspect" ? 2u : 1u);
+        byte[] avcc = [1, mutation == "high10" ? (byte)110 : (byte)100, 0, 40, 255, 225,
+            mutation == "avc-length" ? (byte)255 : (byte)(sequence.Length >> 8), (byte)sequence.Length,
+            .. sequence, 1, 0, 1, 104];
         var pasp = Box("pasp", Join(U32(mutation == "pasp" ? 2u : 1u), U32(1)));
         byte[] color = [.. Encoding.ASCII.GetBytes("nclx"), 0, 1, 0,
             mutation == "hdr" ? (byte)16 : (byte)1, 0, 1, 0];
@@ -164,6 +167,24 @@ public sealed class LocalMediaContainerProbeTests
         var bytes = Join(Box("ftyp", Join(Encoding.ASCII.GetBytes(mov ? "qt  " : "isom"), U32(0))),
             Box("moov", Join(Box("mvhd", mvhd), track, mutation == "duplicate-video" ? track : [])));
         return mutation == "truncated" ? bytes[..^1] : bytes;
+    }
+
+    private static byte[] SequenceParameters(uint aspect)
+    {
+        var bits = new StringBuilder();
+        void Write(uint value, int count) { for (var index = count - 1; index >= 0; index--) bits.Append((value >> index) & 1); }
+        void Ue(uint value) { var encoded = value + 1; var width = 32 - System.Numerics.BitOperations.LeadingZeroCount(encoded); bits.Append('0', width - 1); Write(encoded, width); }
+        Write(100, 8); Write(0, 8); Write(40, 8); Ue(0);
+        Ue(1); Ue(0); Ue(0); Write(0, 1); Write(0, 1);
+        Ue(0); Ue(0); Ue(0); Ue(1); Write(0, 1);
+        Ue(119); Ue(67); Write(1, 1); Write(1, 1);
+        Write(1, 1); Ue(0); Ue(0); Ue(0); Ue(4);
+        Write(1, 1); Write(1, 1); Write(aspect, 8); Write(0, 1); Write(0, 1); Write(1, 1);
+        while (bits.Length % 8 != 0) bits.Append('0');
+        var bytes = new byte[1 + bits.Length / 8]; bytes[0] = 103;
+        for (var index = 0; index < bits.Length / 8; index++)
+            bytes[index + 1] = Convert.ToByte(bits.ToString(index * 8, 8), 2);
+        return bytes;
     }
 
     private static byte[] Box(string name, byte[] payload) => Join(U32(checked((uint)payload.Length + 8)),

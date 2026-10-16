@@ -351,3 +351,9 @@ and [advanced source-reader processing contract](https://learn.microsoft.com/en-
 B-frame edit validation uses presentation extent from bounded `stts`/`ctts` run merging, following [QuickTime composition offset semantics](https://developer.apple.com/documentation/quicktime-file-format/composition_offset_atom). Decode duration alone is not a presentation-end bound. Composition/decode sample counts must agree; unsupported composition-shift programs are rejected.
 
 QuickTime AAC version-1 packet fields follow the [sound sample description](https://developer.apple.com/documentation/quicktime-file-format/sound_sample_description_version_1). Native coded padding is admitted only with an exact, zero-origin [minimum display aperture](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-minimum-display-aperture-attribute) matching the probed visible size; arbitrary cropping remains excluded.
+
+H.264 SPS inspection also checks sequence geometry and early VUI aspect/color
+metadata independently of container atoms and Windows attributes. Native stream
+attributes alone can omit stream-only aspect signaling. SPS NALs are capped at
+65,535 bytes; exponential codes, scaling lists and picture-order cycles have
+finite bit/iteration limits. No decoded sample processing or Program work is added.

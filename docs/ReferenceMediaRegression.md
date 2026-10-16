@@ -365,5 +365,4 @@ The prior intermittent ControlHost durability/shutdown findings remain separate
 release blockers until resolved and qualified through the packaged lifecycle.
 
 A separate generated negative fixture removes the redundant container `pasp`
-atom while retaining non-square pixel signaling in H.264 stream VUI. The actual
-Windows native metadata must reject it before decoder normalization or READY.
+atom while retaining non-square pixel signaling in H.264 stream VUI. The bounded SPS probe must reject it before decoder normalization or READY; Windows native metadata alone was observed to omit this signaling.

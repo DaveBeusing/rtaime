@@ -391,7 +391,8 @@ public sealed class ReferenceMediaRegressionTests
         if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
         using var asset = ReferenceMediaTestAsset.GenerateFormat("non-square");
         // Container aspect is intentionally absent; actual stream metadata must still fence conversion.
-        Assert.Equal(MediaVideoCodec.H264, new Mp4LocalMediaProbe().Read(asset.Path).VideoCodec);
+        Assert.Equal("media.file.pixel_aspect_unsupported", Assert.Throws<LocalMediaProbeException>(() =>
+            new Mp4LocalMediaProbe().Read(asset.Path)).Code);
         var open = new LocalMediaFileProvider().TryOpen(asset.Path, MediaSourceId.New());
         Assert.False(open.Succeeded);
         Assert.Null(open.Source);
