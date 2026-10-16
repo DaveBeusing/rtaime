@@ -79,7 +79,12 @@ public sealed class LocalMediaRuntimeSession : IDisposable
     {
         get
         {
-            if (_decode.Snapshot.Failure is { } failure) _transport.MarkError(failure);
+            if (_decode.Snapshot.Failure is { } failure)
+            {
+                _current?.Dispose();
+                _current = null;
+                _transport.MarkError(failure);
+            }
             return _transport.Snapshot;
         }
     }
@@ -293,7 +298,9 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	private LocalMediaRuntimeBoundaryResult Failed(string code, string message)
 	{
 		var failure = new Failure(code, message);
-		_transport.MarkError(failure);
+		_current?.Dispose();
+        _current = null;
+        _transport.MarkError(failure);
 		return new LocalMediaRuntimeBoundaryResult(
 			LocalMediaRuntimeBoundaryStatus.Failed,
 			null,

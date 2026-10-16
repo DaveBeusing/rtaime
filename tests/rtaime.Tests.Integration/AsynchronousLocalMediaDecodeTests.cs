@@ -158,6 +158,41 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal(800_000, session.ProcessNextBoundary().Video!.Timing.PresentationTimestamp);
     }
 
+    [Fact]
+    public void Real_clip_replacement_and_close_keep_inflight_payloads_alive_without_old_source_admission()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        using var deck = new LocalMediaDeckRuntimeService();
+        var sourceA = MediaSourceId.New();
+        var first = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current, sourceA, asset.Path),
+            Prepared(new LocalMediaFileProvider(), sourceA));
+        Assert.Equal(MediaDeckState.Ready, first.State);
+        Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, first.Probe!.AssetId,
+            MediaTransportCommandKind.Play)).Succeeded);
+        deck.ProcessBoundary(out var captured);
+        using var retained = captured;
+        Assert.NotNull(retained);
+        Assert.True(retained!.Succeeded);
+        var original = retained.RgbaPixels.Span[..64].ToArray();
+        var sourceB = MediaSourceId.New();
+        var second = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current, sourceB, asset.Path, MediaAssetId.New()),
+            Prepared(new LocalMediaFileProvider(), sourceB));
+        Assert.Equal(MediaDeckState.Ready, second.State);
+        Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, second.Probe!.AssetId,
+            MediaTransportCommandKind.Play)).Succeeded);
+        for (var index = 0; index < 12; index++)
+        {
+            LocalMediaTestPlayback.Next(deck);
+            Assert.Equal(sourceB, deck.LatestBoundary!.Video!.SourceId);
+        }
+        Assert.Equal(sourceA, retained.Video!.SourceId);
+        Assert.Equal(original, retained.RgbaPixels.Span[..64].ToArray());
+        Assert.Equal(MediaDeckState.Unloaded, deck.Close().State);
+        Assert.Null(deck.LatestBoundary);
+        Assert.Equal(original, retained.RgbaPixels.Span[..64].ToArray());
+    }
+
     private static LocalMediaFileSource Source(ControlledDecoder decoder) => new("controlled.mp4", decoder.Probe, decoder);
     private static MediaTransportCommand Command(ControlledDecoder decoder, MediaTransportCommandKind kind) =>
         new(MediaContractVersion.Current, decoder.Probe.AssetId, kind);

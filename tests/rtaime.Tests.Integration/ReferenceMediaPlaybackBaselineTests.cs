@@ -183,6 +183,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                 }, new JsonSerializerOptions { WriteIndented = true }));
                 Console.WriteLine("LOCAL PLAYBACK EVIDENCE: " + Path.Combine(evidence, "local-playback-baseline.json"));
                 Console.WriteLine("LOCAL PLAYBACK OBSERVATIONS: " + JsonSerializer.Serialize(playback ?? diagnostics));
+                Console.WriteLine("LOCAL DECODE OBSERVATIONS: " + JsonSerializer.Serialize(finalDecode));
+                Console.WriteLine("LOCAL ADMISSION TIMING: " + JsonSerializer.Serialize(finalTiming));
+                Console.WriteLine("LOCAL PROGRAM SCHEDULE: " + JsonSerializer.Serialize(finalSchedule));
             }
             if (Directory.Exists(root)) Directory.Delete(root, true);
             Assert.Null(cleanupFailure);
