@@ -65,6 +65,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		IMFSourceReader? reader = null;
 		var mediaFoundationStarted = false;
         var callback = new LocalMediaSourceReaderCallback();
+        var callbackTransferred = false;
 		try
 		{
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFStartup(MediaFoundation.MfVersion, MediaFoundation.MfStartupFull));
@@ -148,13 +149,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
 
-				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(
+				var decoder = new WindowsMediaFoundationLocalMediaDecoder(
 					reader,
                     callback,
 					assetId,
 					sourceId,
 					probe,
-					hasAudio));
+					hasAudio);
+                callbackTransferred = true;
+                return LocalMediaDecoderOpenResult.Ready(decoder);
 			}
 			finally
 			{
@@ -170,6 +173,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.MFShutdown();
 			return LocalMediaDecoderOpenResult.Rejected("media.file.probe_failed", $"The local media file could not be probed: {exception.Message}");
 		}
+        finally { if (!callbackTransferred) callback.Dispose(); }
 	}
 
 	public LocalMediaSeekResult SeekToFrame(long frameNumber)
@@ -346,8 +350,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			return;
 
 		_disposed = true;
-		MediaFoundation.ReleaseComObject(_reader);
-		MediaFoundation.MFShutdown();
+		try { MediaFoundation.ReleaseComObject(_reader); }
+        finally
+        {
+            try { _callback.Dispose(); }
+            finally { MediaFoundation.MFShutdown(); }
+        }
 	}
 
 	private bool TryReadVideoSample(

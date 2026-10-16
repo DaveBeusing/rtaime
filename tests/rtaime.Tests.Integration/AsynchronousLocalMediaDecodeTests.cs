@@ -12,6 +12,82 @@ namespace rtaime.Tests.Integration;
 public sealed class AsynchronousLocalMediaDecodeTests
 {
     [Fact]
+    public void Native_callback_mailbox_reuses_wait_resources_across_one_thousand_blocked_deliveries()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var callback = new LocalMediaSourceReaderCallback();
+        using var request = new AutoResetEvent(false);
+        using var process = Process.GetCurrentProcess();
+        var stop = 0;
+        var producer = new Thread(() =>
+        {
+            long timestamp = 0;
+            while (true)
+            {
+                request.WaitOne();
+                if (Volatile.Read(ref stop) != 0) return;
+                Thread.Sleep(1); // Ensure the owning reader actually blocks on its reusable event.
+                callback.OnReadSample(0, 0, 0, timestamp++, IntPtr.Zero);
+            }
+        }) { IsBackground = true };
+        producer.Start();
+        var baseline = 0;
+        var maximum = 0;
+        try
+        {
+            for (var index = 0; index < 1056; index++)
+            {
+                callback.BeginRead();
+                try
+                {
+                    request.Set();
+                    Assert.Equal(index, callback.WaitForRead(CancellationToken.None).Timestamp);
+                }
+                finally { callback.FinishRead(); }
+                if (index >= 31 && index % 32 == 31)
+                {
+                    process.Refresh();
+                    var handles = process.HandleCount;
+                    if (index == 31) baseline = handles;
+                    maximum = Math.Max(maximum, handles);
+                }
+            }
+            Assert.InRange(maximum - baseline, 0, 16);
+        }
+        finally
+        {
+            Volatile.Write(ref stop, 1);
+            request.Set();
+            Assert.True(producer.Join(TimeSpan.FromSeconds(5)));
+        }
+    }
+
+    [Fact]
+    public async Task Native_callback_mailbox_cancellation_wakes_the_owner_and_discards_abandoned_delivery()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var callback = new LocalMediaSourceReaderCallback();
+        using var cancellation = new CancellationTokenSource();
+        using var entered = new ManualResetEventSlim();
+        callback.BeginRead();
+        var pending = Task.Run(() => { entered.Set(); return callback.WaitForRead(cancellation.Token); });
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(1)));
+        await Task.Delay(25);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(1)));
+        callback.FinishRead();
+        callback.OnReadSample(0, 0, 0, 99, IntPtr.Zero);
+        callback.BeginRead();
+        callback.OnReadSample(0, 0, 0, 100, IntPtr.Zero);
+        Assert.Equal(100, callback.WaitForRead(CancellationToken.None).Timestamp);
+        callback.FinishRead();
+        callback.Dispose();
+        Assert.Equal(0, callback.OnReadSample(0, 0, 0, 101, IntPtr.Zero));
+        Assert.Equal(0, callback.OnFlush(0));
+        Assert.Throws<ObjectDisposedException>(() => callback.BeginRead());
+    }
+
+    [Fact]
     public void Failed_fixed_slot_preparation_releases_the_untransferred_decoder_without_starting_reads()
     {
         var decoder = new ControlledDecoder

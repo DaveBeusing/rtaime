@@ -20,27 +20,26 @@ public interface ILocalMediaSourceReaderCallback
 [SupportedOSPlatform("windows")]
 [ComVisible(true)]
 [ClassInterface(ClassInterfaceType.None)]
-public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCallback
+public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCallback, IDisposable
 {
     private readonly object _gate = new();
-    private TaskCompletionSource<LocalMediaNativeRead>? _read;
-    private TaskCompletionSource? _flush;
+    private readonly AutoResetEvent _readAvailable = new(false);
+    private readonly AutoResetEvent _flushAvailable = new(false);
+    private LocalMediaNativeRead? _result;
+    private Exception? _readFailure;
     private Exception? _terminalFailure;
+    private bool _readPending;
+    private bool _flushPending;
+    private bool _disposed;
 
     internal LocalMediaNativeRead Read(IMFSourceReader reader, uint stream, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var completion = new TaskCompletionSource<LocalMediaNativeRead>(TaskCreationOptions.RunContinuationsAsynchronously);
-        lock (_gate)
-        {
-            ThrowIfFaulted();
-            if (_read is not null) throw new InvalidOperationException("Only one MF read may be pending per session.");
-            _read = completion;
-        }
+        BeginRead();
         try
         {
             MediaFoundation.ThrowIfFailed(reader.ReadSample(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero));
-            var result = completion.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken).GetAwaiter().GetResult();
+            var result = WaitForRead(cancellationToken);
             if (result.Status < 0)
             {
                 MediaFoundation.ReleaseComObject(result.Sample);
@@ -58,40 +57,84 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
             Flush(reader);
             throw new IOException("Media Foundation read deadline expired.", exception);
         }
-        finally
+        finally { FinishRead(); }
+    }
+
+    // One owner and one callback mailbox. Reusing these two native events avoids
+    // per-read blocking Task/monitor resources whose reclamation depends on GC.
+    internal void BeginRead()
+    {
+        lock (_gate)
         {
-            lock (_gate) { if (ReferenceEquals(_read, completion)) _read = null; }
+            ThrowIfFaulted();
+            if (_readPending) throw new InvalidOperationException("Only one MF read may be pending per session.");
+            _readAvailable.Reset();
+            _readFailure = null;
+            _readPending = true;
+        }
+    }
+
+    internal LocalMediaNativeRead WaitForRead(CancellationToken cancellationToken)
+    {
+        using var registration = cancellationToken.UnsafeRegister(static state =>
+            ((LocalMediaSourceReaderCallback)state!).WakeRead(), this);
+        var deadline = Environment.TickCount64 + 30_000;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                ThrowIfFaulted();
+                if (_readFailure is { } failure) throw failure;
+                if (_result is { } result) { _result = null; return result; }
+            }
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0 || !_readAvailable.WaitOne(TimeSpan.FromMilliseconds(remaining)))
+                throw new TimeoutException("Media Foundation read deadline expired.");
+        }
+    }
+
+    private void WakeRead()
+    {
+        lock (_gate) { if (!_disposed) _readAvailable.Set(); }
+    }
+
+    internal void FinishRead()
+    {
+        lock (_gate)
+        {
+            _readPending = false;
+            if (_result is { } abandoned) MediaFoundation.ReleaseComObject(abandoned.Sample);
+            _result = null;
         }
     }
 
     internal void Flush(IMFSourceReader reader)
     {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
             ThrowIfFaulted();
-            // A cancelled wait may race with delivery. Release either the delivered
-            // sample here or any later delivery in OnReadSample, exactly once.
-            if (_read?.Task is { IsCompletedSuccessfully: true } delivered)
-                MediaFoundation.ReleaseComObject(delivered.Result.Sample);
-            _read = null;
-            _flush = completion;
+            FinishRead();
+            _flushAvailable.Reset();
+            _flushPending = true;
         }
         try
         {
             MediaFoundation.ThrowIfFailed(reader.Flush(MediaFoundation.AllStreams));
-            completion.Task.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            if (!_flushAvailable.WaitOne(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Media Foundation flush acknowledgement deadline expired.");
         }
         catch (Exception exception)
         {
             lock (_gate) _terminalFailure = exception;
             throw new LocalMediaReadCancellationException("Media Foundation did not acknowledge the cancelled read/flush.", exception);
         }
-        finally { lock (_gate) { if (ReferenceEquals(_flush, completion)) _flush = null; } }
+        finally { lock (_gate) _flushPending = false; }
     }
 
     private void ThrowIfFaulted()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_terminalFailure is not null)
             throw new LocalMediaReadCancellationException("Media Foundation reader is fenced after an unacknowledged flush.", _terminalFailure);
     }
@@ -104,13 +147,25 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
             if (sample != IntPtr.Zero) managed = (IMFSample)Marshal.GetObjectForIUnknown(sample);
             lock (_gate)
             {
-                if (_read is not null && _read.TrySetResult(new(status, flags, timestamp, managed))) managed = null;
+                if (!_disposed && _readPending && _result is null)
+                {
+                    _result = new(status, flags, timestamp, managed);
+                    managed = null;
+                    _readAvailable.Set();
+                }
             }
             return 0;
         }
         catch (Exception exception)
         {
-            lock (_gate) _read?.TrySetException(new IOException("Media Foundation callback failed.", exception));
+            lock (_gate)
+            {
+                if (!_disposed && _readPending)
+                {
+                    _readFailure = new IOException("Media Foundation callback failed.", exception);
+                    _readAvailable.Set();
+                }
+            }
             return Marshal.GetHRForException(exception);
         }
         finally { MediaFoundation.ReleaseComObject(managed); }
@@ -118,11 +173,23 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
 
     public int OnFlush(uint stream)
     {
-        lock (_gate) _flush?.TrySetResult();
+        lock (_gate) { if (!_disposed && _flushPending) _flushAvailable.Set(); }
         return 0;
     }
 
     public int OnEvent(uint stream, IntPtr mediaEvent) => 0;
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            FinishRead();
+            _disposed = true;
+            _readAvailable.Dispose();
+            _flushAvailable.Dispose();
+        }
+    }
 }
 
 internal readonly record struct LocalMediaNativeRead(int Status, uint Flags, long Timestamp, IMFSample? Sample);

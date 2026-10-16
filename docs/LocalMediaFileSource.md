@@ -202,3 +202,10 @@ a 118.8308-ms maximum decode call. Refill now starts after the first consumed fr
 with eight queued slots as the bounded initial reserve. This changes preread depth,
 not playback authority or a promised physical I/O deadline. Qualification must repeat
 the long run; raising the existing memory/handle ceilings is not permitted.
+
+The native callback mailbox owns two reusable AutoResetEvents (read and flush),
+released after reader disposal and on unsuccessful open. It does not allocate a
+blocking Task/monitor chain for each sample. A direct cross-thread mailbox regression
+performs 1,024 blocked deliveries after warmup with a bounded handle delta; cancellation
+and abandoned/late delivery are checked separately. The isolated native-reader probe
+records handle types without Runtime or Replay, and never substitutes for Program acceptance.
