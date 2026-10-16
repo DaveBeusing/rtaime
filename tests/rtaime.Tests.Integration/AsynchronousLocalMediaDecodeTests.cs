@@ -87,6 +87,20 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public void Unacknowledged_native_cancellation_is_a_cleanup_failure_and_never_reuses_the_reader()
+    {
+        var decoder = new ControlledDecoder { BlockCall = 4, FailCancellation = true };
+        var worker = new LocalMediaDecodeWorker(Source(decoder));
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        Assert.Throws<IOException>(() => worker.Dispose());
+        Assert.True(decoder.Disposed);
+        Assert.Equal(4, decoder.Reads);
+        Assert.Equal("runtime.media_decode.cancellation_failed", worker.Snapshot.Failure?.Code);
+        Assert.Equal(LocalMediaDecodeState.Failed, worker.Snapshot.State);
+    }
+
+    [Fact]
     public void Asynchronous_decoder_failure_becomes_local_media_error_without_escaping_admission()
     {
         var decoder = new ControlledDecoder { BlockCall = 4 };
@@ -222,6 +236,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         public int MaximumConcurrentOperations { get; private set; }
         public int BlockCall { get; init; }
         public bool FailReads { get; set; }
+        public bool FailCancellation { get; init; }
         public bool Disposed { get; private set; }
         public long[]? Timestamps { get; init; }
         public ManualResetEventSlim ReadBlocked { get; } = new();
@@ -245,7 +260,12 @@ public sealed class AsynchronousLocalMediaDecodeTests
                 {
                     ReadBlocked.Set();
                     try { ReleaseRead.Wait(cancellationToken); }
-                    catch (OperationCanceledException) { CancelledReads++; throw; }
+                    catch (OperationCanceledException)
+                    {
+                        CancelledReads++;
+                        if (FailCancellation) throw new LocalMediaReadCancellationException("Injected unacknowledged native flush.");
+                        throw;
+                    }
                 }
                 if (FailReads) throw new InvalidDataException("Injected local decoder failure.");
                 if (_position >= (Timestamps?.Length ?? 100)) { frame = null; return false; }

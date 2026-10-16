@@ -205,6 +205,11 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                     if (owned is not null) slot = null;
                 }
                 catch (OperationCanceledException) when (epoch.IsCancellationRequested) { }
+                catch (LocalMediaReadCancellationException exception)
+                {
+                    lock (_gate) FailUnsafe(new Failure("runtime.media_decode.cancellation_failed", exception.Message));
+                    return;
+                }
                 catch (Exception exception)
                 {
                     lock (_gate)
@@ -292,6 +297,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             throw new TimeoutException("Local media decoder did not acknowledge cancellation within ten seconds.");
         _epoch.Dispose();
         _wake.Dispose();
+        if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" } cancellationFailure)
+            throw new IOException(cancellationFailure.Message);
     }
 }
 

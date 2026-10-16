@@ -141,7 +141,8 @@ public sealed class LocalMediaFileSource : IDisposable
                 if (audioSeconds is { } at) _expectedAudioSeconds = at + audioSamples / (double)Probe.AudioFormat.SampleRate;
                 return LocalMediaFrameReadResult.Decoded(media);
 			}
-			catch (Exception exception) when (exception is InvalidDataException or IOException or ExternalException)
+			catch (Exception exception) when (exception is not LocalMediaReadCancellationException &&
+                exception is InvalidDataException or IOException or ExternalException)
 			{
 				lastFailure = exception;
                 _measurements = _measurements with { ReadRetries = _measurements.ReadRetries + (attempt == 0 ? 1UL : 0) };

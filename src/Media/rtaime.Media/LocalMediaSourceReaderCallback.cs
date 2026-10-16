@@ -25,6 +25,7 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
     private readonly object _gate = new();
     private TaskCompletionSource<LocalMediaNativeRead>? _read;
     private TaskCompletionSource? _flush;
+    private Exception? _terminalFailure;
 
     internal LocalMediaNativeRead Read(IMFSourceReader reader, uint stream, CancellationToken cancellationToken)
     {
@@ -32,6 +33,7 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
         var completion = new TaskCompletionSource<LocalMediaNativeRead>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
+            ThrowIfFaulted();
             if (_read is not null) throw new InvalidOperationException("Only one MF read may be pending per session.");
             _read = completion;
         }
@@ -67,6 +69,7 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
+            ThrowIfFaulted();
             // A cancelled wait may race with delivery. Release either the delivered
             // sample here or any later delivery in OnReadSample, exactly once.
             if (_read?.Task is { IsCompletedSuccessfully: true } delivered)
@@ -79,11 +82,18 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
             MediaFoundation.ThrowIfFailed(reader.Flush(MediaFoundation.AllStreams));
             completion.Task.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         }
-        catch (TimeoutException exception)
+        catch (Exception exception)
         {
-            throw new IOException("Media Foundation did not acknowledge the cancelled read/flush.", exception);
+            lock (_gate) _terminalFailure = exception;
+            throw new LocalMediaReadCancellationException("Media Foundation did not acknowledge the cancelled read/flush.", exception);
         }
         finally { lock (_gate) { if (ReferenceEquals(_flush, completion)) _flush = null; } }
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (_terminalFailure is not null)
+            throw new LocalMediaReadCancellationException("Media Foundation reader is fenced after an unacknowledged flush.", _terminalFailure);
     }
 
     public int OnReadSample(int status, uint stream, uint flags, long timestamp, IntPtr sample)
@@ -116,3 +126,9 @@ public sealed class LocalMediaSourceReaderCallback : ILocalMediaSourceReaderCall
 }
 
 internal readonly record struct LocalMediaNativeRead(int Status, uint Flags, long Timestamp, IMFSample? Sample);
+
+public sealed class LocalMediaReadCancellationException : IOException
+{
+    public LocalMediaReadCancellationException(string message, Exception? innerException = null)
+        : base(message, innerException) { }
+}
