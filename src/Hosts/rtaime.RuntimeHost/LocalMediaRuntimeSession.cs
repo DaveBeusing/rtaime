@@ -109,6 +109,15 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			return new RuntimeHostApplyResult(rejection, null, null);
 		}
 
+        if (_runtime.ActiveExecution is not null)
+        {
+            var frame = _transport.Snapshot.Position.CurrentFrame;
+            _current?.Dispose();
+            _current = null;
+            _originFrame = frame;
+            _cadenceOrdinal = 0;
+            _decode.Reposition(frame);
+        }
         if (!_decode.WaitForPreroll(TimeSpan.FromSeconds(10)))
         {
             var rejection = new RuntimePrepareResult(RuntimeContractVersion.Current,

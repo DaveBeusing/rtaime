@@ -316,9 +316,15 @@ internal sealed class LocalMediaFrameSlot
             throw new InvalidDataException("Decoded payload exceeds its fixed session slot.");
         frame.RgbaPixels.Span.CopyTo(_video);
         frame.AudioPayload.Span.CopyTo(_audio);
-        if (frame.Audio is { } audio &&
-            frame.AudioPayload.Length != checked((int)(audio.Timing.SampleCount * audio.Format.ChannelCount * sizeof(float))))
-            throw new InvalidDataException("Decoded audio extent does not match its timing.");
+        if (frame.Audio is { } audio)
+        {
+            if (frame.AudioPayload.Length != checked((int)(audio.Timing.SampleCount * audio.Format.ChannelCount * sizeof(float))) ||
+                audio.Timing.Timebase != frame.Video.Timing.Timebase ||
+                audio.Timing.PresentationTimestamp != frame.Video.Timing.PresentationTimestamp)
+                throw new InvalidDataException("Decoded audio extent/timebase does not match its video window.");
+        }
+        else if (!frame.AudioPayload.IsEmpty)
+            throw new InvalidDataException("Decoded audio payload has no timing descriptor.");
         if (frame.Video.Timing.PresentationTimestamp < 0)
             throw new InvalidDataException("Decoded video PTS must be nonnegative.");
         PresentationTicks = checked((long)decimal.Round(

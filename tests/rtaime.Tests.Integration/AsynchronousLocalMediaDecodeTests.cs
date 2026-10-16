@@ -129,7 +129,11 @@ public sealed class AsynchronousLocalMediaDecodeTests
         session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Play));
         Assert.Equal((byte)0, session.ProcessNextBoundary().RgbaPixels.Span[0]);
         Assert.Equal((byte)0, admitted.RgbaPixels.Span[0]);
-        Assert.True(session.DecodeSnapshot.Generation >= 50);
+        var beforeRebind = session.DecodeSnapshot.Generation;
+        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        Assert.True(session.DecodeSnapshot.Generation > beforeRebind);
+        Assert.Equal((byte)0, session.ProcessNextBoundary().RgbaPixels.Span[0]);
+        Assert.True(session.DecodeSnapshot.Generation >= 51);
         Assert.Equal(1, decoder.MaximumConcurrentOperations);
     }
 
@@ -219,7 +223,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
                     new FrameTiming(sequenceNumber, timestamp, new Timebase(1, 10_000_000)));
                 var audio = new AudioBufferDescriptor(MediaContractVersion.Current, new AudioStreamId(Identity.New()),
                     Probe.AudioFormat, Identity.New(),
-                    new AudioBufferTiming((ulong)(_position * 960), 960, timestamp, new Timebase(1, 10_000_000)),
+                    new AudioBufferTiming((ulong)(timestamp * 48_000 / 10_000_000), 960, timestamp, new Timebase(1, 10_000_000)),
                     new OpaqueAudioHandle("test", "owned"));
                 frame = new(video, _video, audio, _audio);
                 _position++;

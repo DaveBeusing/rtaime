@@ -15,6 +15,7 @@ namespace rtaime.RuntimeHost;
 public sealed class LocalMediaDeckRuntimeService : IDisposable
 {
 	private readonly object _gate = new();
+    private readonly object _openGate = new();
 	private readonly LocalMediaFileProvider _provider;
 	private LocalMediaRuntimeSession? _session;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
@@ -80,9 +81,14 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		MediaDeckOpenRequest request,
 		PreparedExecutionContract preparedExecution)
 	{
-		ArgumentNullException.ThrowIfNull(request);
-		ArgumentNullException.ThrowIfNull(preparedExecution);
-		ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_openGate) return OpenCore(request, preparedExecution);
+    }
+
+    private MediaDeckRuntimeSnapshot OpenCore(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(preparedExecution);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         LocalMediaRuntimeSession? previous;
         long generation;
