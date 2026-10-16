@@ -225,6 +225,10 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                 }
             }
         }
+        catch (LocalMediaReadCancellationException exception)
+        {
+            lock (_gate) FailUnsafe(new Failure("runtime.media_decode.cancellation_failed", exception.Message));
+        }
         catch (Exception exception)
         {
             lock (_gate) FailUnsafe(new Failure("runtime.media_decode.failed", $"Decode worker stopped: {exception.Message}"));

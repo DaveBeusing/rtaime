@@ -144,6 +144,10 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal((byte)0, session.ProcessNextBoundary().RgbaPixels.Span[0]);
         Assert.Equal((byte)0, admitted.RgbaPixels.Span[0]);
         var beforeRebind = session.DecodeSnapshot.Generation;
+        var rejected = session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId));
+        Assert.False(rejected.Committed);
+        Assert.Equal("runtime.prepare.stale_authority_revision", rejected.Prepare.Failure?.Code);
+        Assert.Equal(beforeRebind, session.DecodeSnapshot.Generation);
         var rebind = session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId, 2));
         Assert.True(rebind.Committed, rebind.Prepare.Failure?.Message ?? rebind.Commit?.Failure?.Message);
         Assert.True(session.DecodeSnapshot.Generation > beforeRebind);

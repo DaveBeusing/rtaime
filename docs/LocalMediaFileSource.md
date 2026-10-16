@@ -122,6 +122,8 @@ deadline. Decoder exceptions become local-media failures; they do not escape Pro
 admission. Close cancels, joins the worker within ten seconds and releases its reader
 on the worker, never concurrently with a read. Unresponsive native cancellation is a
 typed lifecycle failure, not a claim that a blocked driver has been terminated.
+An unacknowledged flush permanently fences that reader and fails cleanup; it is
+never retried against a new generation or reported as a successful shutdown.
 
 Eight exact-size RGBA slots and eight 32-KiB audio slots are allocated during session
 creation, outside the Program admission lock. Six frames may wait in the queue; one
