@@ -211,6 +211,13 @@ public sealed class MediaLibraryBrowsingTests
 		owner.Shell.SelectWorkspace("MEDIA");
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var combo = Assert.IsType<RtaimeComboBox>(owner.FindName("MediaSmartBins"));
+        var search = Assert.IsType<RtaimeSearchBox>(owner.FindName("MediaSearchBox"));
+        Assert.Equal(180, System.Windows.Data.BindingOperations.GetBindingExpression(search, TextBox.TextProperty)!.ParentBinding.Delay);
+        var results = Assert.IsType<RtaimeListBox>(owner.FindName("MediaBatchResults"));
+        Assert.Equal("Media batch preflight and results", AutomationProperties.GetName(results));
+        Assert.True(VirtualizingPanel.GetIsVirtualizing(results));
+        Assert.Contains(Descendants(owner).OfType<RtaimeButton>(), button => AutomationProperties.GetName(button) == "Confirm media batch");
+
 		var grid = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetGrid"));
 		var list = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetList"));
 		// Hosted displays can constrain the main window to compact mode, where the shell
