@@ -84,3 +84,18 @@ Media Timeline Seeker may rely on:
 - current position, duration and remaining time in `MediaTransportSnapshot`;
 - frame-based Seek commands;
 - confirmed RuntimeHost transport state rather than UI-owned playback state.
+
+## Preroll and transport acknowledgement
+
+Runtime now decodes on one bounded worker per session. Open reports Ready only after
+complete video/audio preroll and prepared execution admission. Seek/Stop/step/Loop
+invalidate the previous generation immediately and acknowledge a requested position;
+the existing Loading deck state lasts until new-generation preroll is qualified.
+Transport playback intent and marker identity remain intact during Loading. Pause
+retains bounded preread. An underrun freezes media time, exposes Loading and uses the
+existing Lost-input fallback with unavailable audio while Program cadence continues.
+An early queued PTS holds video without replaying audio. See
+[ownership and admission policy](LocalMediaFileSource.md#asynchronous-decode-ownership-and-preroll).
+
+Control/Client/Operator continue to send intent through the existing contracts.
+There is no second playback timer, production state, bulk-media IPC or format expansion.

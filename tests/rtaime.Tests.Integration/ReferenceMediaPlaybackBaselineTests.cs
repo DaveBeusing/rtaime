@@ -38,6 +38,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
         object? playback = null;
         object? finalTiming = null;
         object? finalSchedule = null;
+        object? finalDecode = null;
         object? transport = null;
         object? transportAfterSeeks = null;
         string audioStatus = "UNVERIFIED";
@@ -105,6 +106,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             playback = runtime.MediaDeck.PlaybackMeasurements;
             finalTiming = runtime.PipelineTiming;
             finalSchedule = runtime.ScheduleStatistics;
+            finalDecode = runtime.MediaDeck!.DecodeSnapshot;
             runtimePerformance = runtime.Runtime!.Snapshot.Performance;
             Assert.Equal(MediaDeckState.Ended, ended.State);
             var measurement = runtime.MediaDeck.PlaybackMeasurements!.Value;
@@ -172,7 +174,7 @@ public sealed class ReferenceMediaPlaybackBaselineTests
                     storage = "Hosted runner volume; SSD class, cold cache and device latency UNVERIFIED",
                     inputReadLatency = "Native ReadSample CPU wall; file-only bytes and actual disk read latency UNVERIFIED",
                     resources = resources.Take(sampleCount).ToArray(), resourceCapacity = resources.Length,
-                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
+                    playback, clientOpenMilliseconds, finalTiming, finalSchedule, finalDecode, runtimePerformance, transport, transportAfterSeeks, failure, cleanupFailure,
                     collectionStatus = failure is null && cleanupFailure is null ? "PASS" : "FAIL",
                     audioStatus, privateGrowthAfterTwoMinuteWarmup = privateGrowth, handleGrowthAfterTwoMinuteWarmup = handleGrowth,
                     productionReadiness = "UNVERIFIED; collection success does not waive audio FAIL or physical qualification",

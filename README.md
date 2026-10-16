@@ -411,3 +411,8 @@ The Media Library adds freely named/renamed local Smart Bins with validated save
 Local MP4 playback aligns native AAC packets with video sample windows to prevent
 long-playback audio runahead and early exhaustion. The [local playback baseline](docs/ReferenceMediaRegression.md#long-local-file-playback-baseline)
 retains actual-host timing/resource evidence; physical storage/GPU qualification remains separate.
+
+Local MP4 playback now uses one bounded decode worker per Runtime session, qualified
+preroll and generation-fenced PTS admission. Program cadence performs no local-file
+decode/seek work. See [local media ownership and underrun policy](docs/LocalMediaFileSource.md#asynchronous-decode-ownership-and-preroll);
+hosted software regression does not establish physical SSD/GPU qualification.

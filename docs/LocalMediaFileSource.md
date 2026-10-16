@@ -77,7 +77,7 @@ The provider is unavailable on non-Windows hosts. That is deliberate for the V1 
 
 A file is opened with the production `MediaSourceId` that already corresponds to `ProductionSourceId`. Planning can therefore use the normal source-agnostic production graph and `media.route` admission. The prepared execution retains that `MediaSourceId` and the selected local-media provider resource.
 
-`LocalMediaRuntimeSession` accepts only a matching `PreparedExecutionContract`, commits it through `TransactionalRuntime`, decodes the next file frame, creates the normal `FrameDescriptor`, and submits/consumes it through `MediaFramePipeline`. The UI does not own or synthesize playback state and there is no side-channel WPF playback path.
+`LocalMediaRuntimeSession` accepts only a matching `PreparedExecutionContract`, qualifies preroll, commits it through `TransactionalRuntime`, and admits already decoded frames through `MediaFramePipeline` without performing file I/O or native decoding on the Program boundary. The UI does not own or synthesize playback state and there is no side-channel WPF playback path.
 
 Video and decoded audio use the Media Foundation 100-nanosecond timebase (`1/10000000`) so A/V timestamps remain directly comparable. Frame sequencing is the existing media-pipeline sequence, not decoder-private state.
 
@@ -111,10 +111,66 @@ The generated suite specifically covers the sustained-playback failure boundary 
 
 See `ReferenceMediaRegression.md` for generation, CI use and interpretation.
 
-## Known limitations / handoff to Local Media Transport
+## Asynchronous decode, ownership and preroll
 
-Local Media File Source is sequential-read only. End-of-media is reported explicitly. There is intentionally no Play/Pause/Stop/Seek/Frame-Step state machine yet; those semantics belong to Local Media Transport. Decoder seeking, resume behavior and frame-accurate positioning must build on the existing `MediaAssetId`, `LocalMediaProbe`, `MediaSourceId` and Runtime session rather than creating a second playback authority.
+One session-owned background thread serializes decoder reads, conversion and seek.
+Media Foundation uses its asynchronous Source Reader callback: all native ReadSample
+output pointers are null; read/flush completion arrives through a single-slot mailbox.
+A cancelled generation wakes the reader wait, flushes on the decode thread and waits
+up to five seconds for OnFlush before any subsequent read/seek. A read has a 30-second
+deadline. Decoder exceptions become local-media failures; they do not escape Program
+admission. Close cancels, joins the worker within ten seconds and releases its reader
+on the worker, never concurrently with a read. Unresponsive native cancellation is a
+typed lifecycle failure, not a claim that a blocked driver has been terminated.
 
+Eight exact-size RGBA slots and eight 32-KiB audio slots are allocated during session
+creation, outside the Program admission lock. Six frames may wait in the queue; one
+slot may be decoding and one admitted. At 1080p this reserves 66,355,200 video bytes
+and 262,144 audio bytes per session, excluding decoder scratch/native allocations.
+The initial capacity is a conservative 120-ms queue at 50 fps (100.1 ms at 59.94);
+it is not a measured optimal latency or a hardware guarantee. Three complete frames
+qualify initial/recovery preroll; refill wakes at two queued frames and backpressures
+at six. Queue, worker and admitted-frame leases return every slot on replacement,
+failure, seek or close. An explicitly retained consumer lease keeps its slot alive
+until release; lack of free slots backpressures decode rather than allocating more.
+
+The decoder retains its reusable RGB32-to-RGBA scratch buffer. Only the worker copies
+it and the audio slice into independent session slots before reading again.
+Runtime's handoff retains its own lease across concurrent transport/close operations,
+then copies into the existing Runtime input buffer. No large managed allocation,
+file access, native read, seek or worker join occurs in Program admission.
+
+Decode diagnostics distinguish Prerolling, Ready, Seeking, Starved, Ended, Failed
+and Stopped. Existing transport state remains Runtime-owned playback intent.
+Deck Loading projects unqualified preroll/rebuffering while retaining asset/marker
+identity; Error carries the actual asynchronous failure. No wire/schema version
+changes or new production authority are introduced.
+
+### Timestamp admission and underrun policy
+
+The existing rational Program opportunities advance an integer media-frame ordinal.
+Its target is derived with rational arithmetic from the seek origin and declared
+normalized output rate. Admission selects the newest queued PTS at or before that
+target, examining at most six frames. Older due frames are released and counted;
+future PTS remains queued. Video PTS must be nonnegative and strictly increasing
+within a generation; extent and timestamp validation runs on the worker.
+
+An explicitly queued future PTS may repeat the last admitted video without replaying
+its audio. No initial image is invented before the first due PTS. Empty/unqualified
+queues freeze media progression and project Loading while Program continues its
+own cadence. Runtime marks that input Lost and uses the existing input-fallback
+policy with zero/unavailable audio; stale pixels are not advertised as valid.
+On recovery, fresh queued timestamps resume the frozen media timeline. This policy
+preserves media continuity at the cost of wall-clock delay; it is not catch-up or
+an audio concealment policy. Program's output sequence stays authoritative.
+
+Seek, Stop, step, restart and Loop invalidate the old generation synchronously and
+enqueue repositioning; they perform no native work on the calling boundary. The
+command acknowledges the requested transport position; Loading persists until the
+new generation has preroll. Pause retains bounded preread and stops admission.
+Open/replacement probes, allocates and prepares off the admission lock. Close and
+shutdown detach under the lock and join outside it. An in-flight admission retains
+its own payload until the existing boundary completes.
 
 ## Playback measurement boundary
 

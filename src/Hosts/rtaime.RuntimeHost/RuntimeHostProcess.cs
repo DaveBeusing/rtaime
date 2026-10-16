@@ -534,7 +534,10 @@ public sealed class RuntimeHostProcess
 		if (snapshot.SourceId is not { } sourceId)
 		{
 			if (_activeDeckSource is { } previous)
-				runtime.ClearExternalAudioMeter(previous);
+            {
+                runtime.ClearExternalAudioMeter(previous);
+                runtime.SetInputSignalState(previous, V1InputSignalState.Lost);
+            }
 			_activeDeckSource = null;
 			return;
 		}
