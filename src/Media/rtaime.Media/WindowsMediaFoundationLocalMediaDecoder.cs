@@ -91,6 +91,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 
+            WindowsMediaFoundationLocalMediaDecoder decoder;
 			IMFMediaType? videoNative = null;
             IMFMediaType? audioNative = null;
 			try
@@ -152,21 +153,21 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
 
-				var decoder = new WindowsMediaFoundationLocalMediaDecoder(
+				decoder = new WindowsMediaFoundationLocalMediaDecoder(
 					reader,
                     callback,
 					assetId,
 					sourceId,
 					probe,
 					hasAudio);
-                callbackTransferred = true;
-                return LocalMediaDecoderOpenResult.Ready(decoder);
 			}
 			finally
 			{
-				MediaFoundation.ReleaseComObject(videoNative);
-				MediaFoundation.ReleaseComObject(audioNative);
+                try { MediaFoundation.ReleaseComObject(videoNative); }
+                finally { MediaFoundation.ReleaseComObject(audioNative); }
 			}
+            callbackTransferred = true;
+            return LocalMediaDecoderOpenResult.Ready(decoder);
 		}
 		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or IOException or OverflowException)
 		{
