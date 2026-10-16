@@ -399,7 +399,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
             try
             {
                 _ = progress.Remaining;
-                var disposition = progress.Observe(flags, timestamp, sample is not null, minimumTimestamp);
+                var typeQualified = (flags & 0x30) != 0 && (flags & (0x1 | 0x4 | 0x200)) == 0
+                    && ValidateDecodedLayout(streamIndex);
+                var disposition = progress.Observe(flags, timestamp, sample is not null, minimumTimestamp, typeQualified);
                 if (disposition == LocalMediaSampleDisposition.Ended) return false;
                 if (disposition == LocalMediaSampleDisposition.Gap) continue;
 
@@ -452,7 +454,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
             try
             {
                 _ = progress.Remaining;
-                var disposition = progress.Observe(flags, timestamp, sample is not null, minimumTimestamp);
+                var typeQualified = (flags & 0x30) != 0 && (flags & (0x1 | 0x4 | 0x200)) == 0
+                    && ValidateDecodedLayout(streamIndex);
+                var disposition = progress.Observe(flags, timestamp, sample is not null, minimumTimestamp, typeQualified);
                 if (disposition == LocalMediaSampleDisposition.Ended) { payload = Array.Empty<byte>(); return false; }
                 if (disposition == LocalMediaSampleDisposition.Gap) continue;
 
@@ -474,6 +478,40 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			}
 		}
 	}
+
+    private bool ValidateDecodedLayout(uint stream)
+    {
+        IMFMediaType? type = null;
+        try
+        {
+            MediaFoundation.ThrowIfFailed(_reader.GetCurrentMediaType(stream, out type));
+            if (stream == MediaFoundation.FirstVideoStream)
+            {
+                var sizeKey = MediaFoundation.MfMtFrameSize;
+                var rateKey = MediaFoundation.MfMtFrameRate;
+                MediaFoundation.ThrowIfFailed(type.GetUINT64(ref sizeKey, out var size));
+                MediaFoundation.ThrowIfFailed(type.GetUINT64(ref rateKey, out var rate));
+                return GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeVideo &&
+                    GetGuid(type, MediaFoundation.MfMtSubtype) == MediaFoundation.MfVideoFormatRgb32 &&
+                    size == MediaFoundation.PackRatio(Probe.VideoFormat.Width, Probe.VideoFormat.Height) &&
+                    rate == MediaFoundation.PackRatio(Probe.VideoFormat.FrameRate.Numerator, Probe.VideoFormat.FrameRate.Denominator) &&
+                    TryGetUInt32(type, MediaFoundation.MfMtInterlaceMode) == MediaFoundation.MfVideoInterlaceProgressive &&
+                    TryGetUInt32(type, MediaFoundation.MfMtDefaultStride) == Probe.VideoFormat.Width * 4;
+            }
+            return GetGuid(type, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
+                GetGuid(type, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatPcm &&
+                TryGetUInt32(type, MediaFoundation.MfMtAudioNumChannels) == 2 &&
+                TryGetUInt32(type, MediaFoundation.MfMtAudioSamplesPerSecond) == 48_000 &&
+                TryGetUInt32(type, MediaFoundation.MfMtAudioBitsPerSample) == 16 &&
+                TryGetUInt32(type, MediaFoundation.MfMtAudioBlockAlignment) == 4;
+        }
+        catch (ExternalException exception)
+        {
+            throw new LocalMediaDecodeException("media.file.decoded_type_changed",
+                "Could not qualify changed decoded layout.", exception);
+        }
+        finally { MediaFoundation.ReleaseComObject(type); }
+    }
 
 	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
 	{

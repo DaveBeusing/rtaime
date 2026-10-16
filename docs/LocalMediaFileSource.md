@@ -220,16 +220,18 @@ sample. Seek scanning requires advancing timestamps. An asynchronous read waits 
 for the remaining operation budget. These limits cannot interrupt synchronous native
 open, ReadSample submission, Flush, seek or COM release.
 
-Reader ERROR, dynamic layout/effect changes and unknown flags fail closed before
-payload access. The existing normalized layout is never silently reinterpreted after
-a change. Stable implementation failure codes include:
+Reader ERROR, unsupported layout/effect changes and unknown flags fail closed before
+payload access. Native/current type notifications, including valid initial negotiation,
+query the actual output type: RGB32 dimensions/rate/progressive stride or PCM16 stereo
+48-kHz/block alignment must match the existing configured representation. A matching
+type may continue; a mismatching layout is never silently reinterpreted. Stable implementation failure codes include:
 
 | Code | Meaning and recovery |
 | --- | --- |
 | media.file.no_progress | Empty callbacks or sample scan exhausted; close/reopen after reviewing the asset |
 | media.file.read_timeout | Managed operation/read deadline expired |
 | media.file.timestamp_discontinuity | Seek scan stopped advancing |
-| media.file.decoded_type_changed | Stream/layout/effect changed; explicit reopen required |
+| media.file.decoded_type_changed | Changed layout failed qualification; explicit reopen required |
 | media.file.stream_flags_invalid | Unknown native status flags |
 | media.file.decoder_lost | Native reader error/failing non-Win32 callback status |
 | media.file.storage_failure | Known Win32 storage/access callback failure; inspect recorded HRESULT |

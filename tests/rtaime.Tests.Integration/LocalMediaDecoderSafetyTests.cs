@@ -155,7 +155,8 @@ public sealed class LocalMediaDecoderSafetyTests
                 for (var frame = 0; frame < 3; frame++)
                 {
                     var started = Stopwatch.GetTimestamp();
-                    Assert.True(source.ReadNext((ulong)frame).Succeeded);
+                    var read = source.ReadNext((ulong)frame);
+                    Assert.True(read.Succeeded, read.Failure?.Code + ": " + read.Failure?.Message);
                     if (cycle >= 8) timings.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                 }
                 Assert.True(source.SeekToFrame(20).Succeeded);
@@ -227,6 +228,19 @@ public sealed class LocalMediaDecoderSafetyTests
     public void Native_error_codes_distinguish_known_storage_faults_from_decoder_faults(uint status, string code)
     {
         Assert.Equal(code, LocalMediaSampleProgress.NativeFailureCode(unchecked((int)status)));
+    }
+
+    [Fact]
+    public void A_type_notification_requires_explicit_layout_qualification_before_sample_or_gap_admission()
+    {
+        Assert.Equal(LocalMediaSampleDisposition.Frame,
+            new LocalMediaSampleProgress().Observe(0x30, 0, true, null, normalizedTypeQualified: true));
+        Assert.Equal(LocalMediaSampleDisposition.Gap,
+            new LocalMediaSampleProgress().Observe(0x20, 0, false, null, normalizedTypeQualified: true));
+        Assert.Equal("media.file.decoded_type_changed", Assert.Throws<LocalMediaDecodeException>(() =>
+            new LocalMediaSampleProgress().Observe(0x20, 0, true, null, normalizedTypeQualified: false)).Code);
+        Assert.Equal("media.file.decoder_lost", Assert.Throws<LocalMediaDecodeException>(() =>
+            new LocalMediaSampleProgress().Observe(0x21, 0, true, null, normalizedTypeQualified: true)).Code);
     }
 
     private sealed class ControlledClock : TimeProvider
