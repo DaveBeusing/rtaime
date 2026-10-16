@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows.Media;
+using rtaime.Client;
 
 namespace rtaime.Operator;
 
@@ -13,6 +14,11 @@ public sealed class MediaLibraryHoverPreview : IDisposable
 	private CancellationTokenSource? _pending;
 	private long _generation;
 	private bool _disposed;
+	// This is admission for optional presentation work, not a production readiness decision.
+	public static bool IsUnderPressure(OperatorHealthDescriptor? health, DateTimeOffset now) =>
+		health is not null && health.ObservedAtUtc != default && now >= health.ObservedAtUtc &&
+		now - health.ObservedAtUtc <= TimeSpan.FromSeconds(10) &&
+		(health.Runtime.State == "FAIL" || health.FrameBudget > TimeSpan.Zero && health.FrameTime >= health.FrameBudget);
 	public static MediaHoverCapability Capability(MediaPoolItemViewModel item) =>
 		!item.IsOnline ? MediaHoverCapability.Offline :
 		item.Thumbnail is null ? MediaHoverCapability.Unavailable : MediaHoverCapability.ExistingThumbnail;

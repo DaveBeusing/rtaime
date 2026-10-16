@@ -13,7 +13,7 @@ public sealed record MediaSmartBin(
 {
 	public const int MaximumBins = 16;
 	public bool IsValid =>
-		!string.IsNullOrWhiteSpace(Name) && Name.Length <= 128 &&
+		!string.IsNullOrWhiteSpace(Name) && Name.Length <= 128 && Name == Name.Trim() && !Name.Any(char.IsControl) &&
 		Search is { Length: <= 256 } &&
 		Category is "All" or "Sources" or "Clips" or "Audio" or "Graphics" or "Compositions" &&
 		Filter is "All" or "Video" or "Audio" or "Graphics" or "Online" or "Offline" &&
@@ -57,6 +57,7 @@ public sealed class MediaSmartBinStore(string? path = null)
 	private const int MaximumBytes = 64 * 1024;
 	private readonly string _path = path ?? Path.Combine(
 		Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "operator-media-bins.json");
+	public string? LastLoadIssue { get; private set; }
 	private readonly SemaphoreSlim _gate = new(1, 1);
 	private sealed record Settings(int Version, MediaSmartBin[] Bins);
 
@@ -65,10 +66,11 @@ public sealed class MediaSmartBinStore(string? path = null)
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			LastLoadIssue = null;
 			if (!File.Exists(_path)) return [];
 			await using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read,
 				4096, FileOptions.Asynchronous);
-			if (stream.Length > MaximumBytes) return [];
+			if (stream.Length > MaximumBytes) { LastLoadIssue = "Smart Bin preferences exceed 64 KiB."; return []; }
 			// Bounded read also covers a file that grows after the initial length observation.
 			var bytes = new byte[MaximumBytes + 1];
 			var count = 0;
@@ -78,19 +80,21 @@ public sealed class MediaSmartBinStore(string? path = null)
 				if (read == 0) break;
 				count += read;
 			}
-			if (count > MaximumBytes) return [];
+			if (count > MaximumBytes) { LastLoadIssue = "Smart Bin preferences exceed 64 KiB."; return []; }
 			var settings = JsonSerializer.Deserialize<Settings>(bytes.AsSpan(0, count));
-			if (settings?.Version != 1 || settings.Bins is null) return [];
-			return settings.Bins.Where(bin => bin is not null && bin.IsValid)
+			if (settings?.Version != 1 || settings.Bins is null) { LastLoadIssue = "Unsupported or incomplete Smart Bin preference document."; return []; }
+			var valid = settings.Bins.Where(bin => bin is not null && bin.IsValid && MediaLibrarySearch.Parse(bin.Search).Error is null)
 				.DistinctBy(bin => bin.Name, StringComparer.OrdinalIgnoreCase).Take(MediaSmartBin.MaximumBins).ToArray();
+			if (valid.Length != settings.Bins.Length) LastLoadIssue = "Some invalid, duplicate or excess Smart Bins were ignored. Existing valid definitions remain available.";
+			return valid;
 		}
-		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return []; }
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { LastLoadIssue = "Smart Bin preferences could not be read. The file was not replaced."; return []; }
 		finally { _gate.Release(); }
 	}
 
 	public async Task SaveAsync(IEnumerable<MediaSmartBin> bins, CancellationToken cancellationToken = default)
 	{
-		var snapshot = bins.Where(bin => bin.IsValid).DistinctBy(bin => bin.Name, StringComparer.OrdinalIgnoreCase)
+		var snapshot = bins.Where(bin => bin is not null && bin.IsValid && MediaLibrarySearch.Parse(bin.Search).Error is null).DistinctBy(bin => bin.Name, StringComparer.OrdinalIgnoreCase)
 			.Take(MediaSmartBin.MaximumBins).ToArray();
 		var bytes = JsonSerializer.SerializeToUtf8Bytes(new Settings(1, snapshot));
 		if (bytes.Length > MaximumBytes) throw new InvalidDataException("Smart Bin preferences exceed their size limit.");
@@ -101,6 +105,7 @@ public sealed class MediaSmartBinStore(string? path = null)
 			var directory = Path.GetDirectoryName(_path);
 			if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 			await File.WriteAllBytesAsync(temporary, bytes, cancellationToken).ConfigureAwait(false);
+			cancellationToken.ThrowIfCancellationRequested();
 			File.Move(temporary, _path, overwrite: true);
 		}
 		finally
