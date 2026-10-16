@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -24,6 +25,10 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly byte[] _rgbaFrameBuffer;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
+    private byte[]? _pendingAudioPacket;
+    private int _pendingAudioFrameOffset;
+    private long _pendingAudioSamplePosition;
+    private bool _audioEnded;
 
 	private WindowsMediaFoundationLocalMediaDecoder(
 		IMFSourceReader reader,
@@ -41,6 +46,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	}
 
 	public LocalMediaProbe Probe { get; }
+    public LocalMediaReadMeasurements VideoReadMeasurements { get; private set; }
+    public LocalMediaReadMeasurements AudioReadMeasurements { get; private set; }
 
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
@@ -181,6 +188,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			};
 			MediaFoundation.ThrowIfFailed(_reader.SetCurrentPosition(ref timeFormat, ref position));
 			_pendingSeekTimestamp = target;
+            _pendingAudioPacket = null;
+            _pendingAudioFrameOffset = 0;
+            _audioEnded = false;
 			return LocalMediaSeekResult.Positioned(frameNumber);
 		}
 		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or OverflowException)
@@ -224,50 +234,98 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		if (_hasAudio)
-		{
-			long audioTimestamp;
-			byte[] decodedAudio;
-			bool audioAvailable;
-			try
-			{
-				audioAvailable = TryReadSample(
-					MediaFoundation.FirstAudioStream,
-					minimumTimestamp,
-					out audioTimestamp,
-					out decodedAudio);
-			}
-			catch (ExternalException exception)
-			{
-				throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
-			}
-
-			if (audioAvailable && decodedAudio.Length > 0)
-			{
-				var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
-				if (decodedAudio.Length % bytesPerPcmFrame != 0)
-					throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
-				var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
-				if (sampleCount > 0)
-				{
-					var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
-					var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
-					audio = new AudioBufferDescriptor(
-						MediaContractVersion.Current,
-						new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
-						Probe.AudioFormat,
-						LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
-						new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
-						new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
-					audioPayload = floatAudio;
-				}
-			}
-		}
+        if (_hasAudio)
+        {
+            try
+            {
+                if (TryReadAlignedAudio(videoTimestamp, out var audioSamplePosition, out var floatAudio))
+                {
+                    var sampleCount = checked((uint)(floatAudio.Length / (Probe.AudioFormat.ChannelCount * sizeof(float))));
+                    audio = new AudioBufferDescriptor(
+                        MediaContractVersion.Current,
+                        new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
+                        Probe.AudioFormat,
+                        LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
+                        new AudioBufferTiming(audioSamplePosition, sampleCount, videoTimestamp, MediaFoundationTimebase),
+                        new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
+                    audioPayload = floatAudio;
+                }
+            }
+            catch (ExternalException exception)
+            {
+                throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
+            }
+        }
 
 		_pendingSeekTimestamp = null;
 		frame = new LocalMediaDecodedFrame(video, _rgbaFrameBuffer, audio, audioPayload);
 		return true;
 	}
+
+    private bool TryReadAlignedAudio(long videoTimestamp, out ulong samplePosition, out byte[] output)
+    {
+        var rate = Probe.AudioFormat.SampleRate;
+        var start = Math.Max(0L, AudioSamplePosition(videoTimestamp, rate));
+        var end = checked((long)decimal.Round(
+            (decimal)videoTimestamp * rate / 10_000_000m +
+            (decimal)rate * Probe.VideoFormat.FrameRate.Denominator / Probe.VideoFormat.FrameRate.Numerator,
+            0, MidpointRounding.AwayFromZero));
+        var frameCount = checked((int)(end - start));
+        if (frameCount is <= 0 or > 2_048)
+            throw new InvalidDataException("Decoded audio window does not fit the bounded output cadence.");
+        var channels = checked((int)Probe.AudioFormat.ChannelCount);
+        var pcmFrameBytes = checked(channels * sizeof(short));
+        output = new byte[checked(frameCount * channels * sizeof(float))];
+        samplePosition = checked((ulong)start);
+        var cursor = start;
+        // A single native packet is retained, including its original sample position.
+        // Packet sizes are independent of video cadence. Seek scanning is bounded;
+        // native ReadSample itself still has the existing synchronous cancellation limit.
+        for (var packet = 0; packet < 1_024 && cursor < end; packet++)
+        {
+            if (_pendingAudioPacket is null || _pendingAudioFrameOffset >= _pendingAudioPacket.Length / pcmFrameBytes)
+            {
+                _pendingAudioPacket = null;
+                _pendingAudioFrameOffset = 0;
+                if (_audioEnded || !TryReadSample(MediaFoundation.FirstAudioStream, null,
+                    out var timestamp, out var decoded))
+                {
+                    _audioEnded = true;
+                    output = Array.Empty<byte>();
+                    return false;
+                }
+                if (decoded.Length == 0 || decoded.Length % pcmFrameBytes != 0)
+                    throw new InvalidDataException("Decoded PCM packet is not aligned to complete audio frames.");
+                _pendingAudioPacket = decoded;
+                _pendingAudioSamplePosition = AudioSamplePosition(timestamp, rate);
+            }
+            var available = _pendingAudioPacket.Length / pcmFrameBytes - _pendingAudioFrameOffset;
+            var position = _pendingAudioSamplePosition + _pendingAudioFrameOffset;
+            if (position < cursor)
+            {
+                var skip = checked((int)Math.Min(available, cursor - position));
+                _pendingAudioFrameOffset += skip;
+                continue;
+            }
+            if (position > cursor)
+            {
+                // Preserve the future packet, but never manufacture silence to hide a gap.
+                output = Array.Empty<byte>();
+                return false;
+            }
+            var copy = checked((int)Math.Min(available, end - cursor));
+            CopyPcm16ToFloat32(
+                _pendingAudioPacket.AsSpan(_pendingAudioFrameOffset * pcmFrameBytes, copy * pcmFrameBytes),
+                output.AsSpan(checked((int)(cursor - start) * channels * sizeof(float)), copy * channels * sizeof(float)));
+            _pendingAudioFrameOffset += copy;
+            cursor += copy;
+        }
+        if (cursor != end) throw new InvalidDataException("Local audio packet/seek scan exceeded its bounded read budget.");
+        return true;
+    }
+
+    private static long AudioSamplePosition(long timestamp, uint sampleRate) =>
+        checked((long)decimal.Round((decimal)timestamp * sampleRate / 10_000_000m, 0, MidpointRounding.AwayFromZero));
 
 	public void Dispose()
 	{
@@ -286,13 +344,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		while (true)
 		{
-			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
-				streamIndex,
-				0,
-				out _,
-				out var flags,
-				out timestamp,
-				out var sample));
+			var readStarted = Stopwatch.GetTimestamp();
+            uint flags;
+            IMFSample? sample;
+            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            finally
+            {
+                var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                if (streamIndex == MediaFoundation.FirstVideoStream) VideoReadMeasurements = VideoReadMeasurements.Observe(elapsed);
+                else AudioReadMeasurements = AudioReadMeasurements.Observe(elapsed);
+            }
 
 			if (sample is null)
 			{
@@ -332,13 +393,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		while (true)
 		{
-			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
-				streamIndex,
-				0,
-				out _,
-				out var flags,
-				out timestamp,
-				out var sample));
+			var readStarted = Stopwatch.GetTimestamp();
+            uint flags;
+            IMFSample? sample;
+            try { MediaFoundation.ThrowIfFailed(_reader.ReadSample(streamIndex, 0, out _, out flags, out timestamp, out sample)); }
+            finally
+            {
+                var elapsed = Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
+                if (streamIndex == MediaFoundation.FirstVideoStream) VideoReadMeasurements = VideoReadMeasurements.Observe(elapsed);
+                else AudioReadMeasurements = AudioReadMeasurements.Observe(elapsed);
+            }
 
 			if (sample is null)
 			{
@@ -390,14 +454,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	private static ulong TimestampToAudioSamplePosition(long timestamp, uint sampleRate)
-	{
-		if (timestamp <= 0)
-			return 0;
-
-		var position = decimal.Floor((decimal)timestamp * sampleRate / 10_000_000m);
-		return checked((ulong)position);
-	}
 
 	private static void CopyRgb32ToRgba(
 		IMFMediaBuffer buffer,
@@ -452,25 +508,21 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	private static byte[] ConvertPcm16ToFloat32(byte[] source)
-	{
-		if ((source.Length & 1) != 0)
-			throw new InvalidDataException("Decoded PCM16 audio payload has an odd byte count.");
-
-		var output = new byte[checked(source.Length * 2)];
-		for (var sourceOffset = 0; sourceOffset < source.Length; sourceOffset += 2)
-		{
-			var sample = (short)(source[sourceOffset] | (source[sourceOffset + 1] << 8));
-			var value = sample / 32768f;
-			var bits = BitConverter.SingleToInt32Bits(value);
-			var target = sourceOffset * 2;
-			output[target] = (byte)bits;
-			output[target + 1] = (byte)(bits >> 8);
-			output[target + 2] = (byte)(bits >> 16);
-			output[target + 3] = (byte)(bits >> 24);
-		}
-		return output;
-	}
+    private static void CopyPcm16ToFloat32(ReadOnlySpan<byte> source, Span<byte> output)
+    {
+        if ((source.Length & 1) != 0 || output.Length != source.Length * 2)
+            throw new InvalidDataException("Decoded PCM conversion extents do not match.");
+        for (var sourceOffset = 0; sourceOffset < source.Length; sourceOffset += 2)
+        {
+            var sample = (short)(source[sourceOffset] | (source[sourceOffset + 1] << 8));
+            var bits = BitConverter.SingleToInt32Bits(sample / 32768f);
+            var target = sourceOffset * 2;
+            output[target] = (byte)bits;
+            output[target + 1] = (byte)(bits >> 8);
+            output[target + 2] = (byte)(bits >> 16);
+            output[target + 3] = (byte)(bits >> 24);
+        }
+    }
 
 
 	private static IMFMediaType GetNativeMediaType(IMFSourceReader reader, uint streamIndex)

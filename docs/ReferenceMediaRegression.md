@@ -156,3 +156,108 @@ The regression script rejects generated files larger than 20 MiB to prevent acci
 Add UHD50 only after 2160p50 becomes an explicitly supported Runtime output profile.
 
 Promote HEVC to the required matrix only after the Windows reference environment has a deterministic, qualified HEVC decoder. Until then, HEVC policy/contract coverage remains separate from the required H.264 playback reference matrix.
+
+
+## Long local-file playback baseline
+
+The exact-source reference workflow also runs an actual ControlHost/RuntimeHost/Client
+local-file baseline. The existing RuntimeHost Program loop is the only cadence owner;
+the observer samples every 250 ms and does not drive media boundaries. The default
+asset is ten minutes of 1080p50 H.264 High/yuv420p and stereo 48-kHz AAC. Manual
+workflow dispatch can select 60 minutes. The existing 25/50/59.94 six-second matrix
+continues independently.
+
+Long files encode repetitions of the existing deterministic six-second encoded signal
+with pinned test-only FFmpeg 7.1.1, explicit 50-fps CFR and audio sample normalization. Container timestamps advance; the visible six-second
+counter intentionally repeats. This is long-container/decode/host execution coverage,
+not ten minutes of unique source material or byte-identical encoding across builds.
+SHA-256 is streamed. Raw intermediates remain six seconds, final files are bounded
+to 2 GiB, and only JSON reports/manifests are uploaded. MP4 files are transient.
+
+To reproduce after the pinned canonical Release build:
+
+```powershell
+$env:RTAIME_REFERENCE_MEDIA_REGRESSION = "1"
+$env:RTAIME_REFERENCE_MEDIA_OUTPUT = "$PWD/artifacts/testmedia/local-playback"
+$env:RTAIME_LOCAL_PLAYBACK_MINUTES = "10" # explicit opt-in: "60"
+$env:RTAIME_SOURCE_COMMIT = "<exact tested source SHA>"
+$env:RTAIME_BASELINE_SDK = "10.0.401"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReferenceMediaPlaybackBaselineTests" --logger "console;verbosity=detailed"
+```
+
+The baseline requires actual decoded frames through the last media timestamp and
+committed Program boundaries. Its completion limit is twice the media duration plus
+two minutes, so a source that advances below real time is measured rather than silently
+called 50-fps stable. Host startup is bounded to 30 seconds; both hosts must stop,
+join and release Runtime resources. Native synchronous ReadSample remains
+non-cancelable by this observer; workflow termination is the final hang boundary.
+
+### Evidence schema and interpretation
+
+`local-playback-baseline.json` schema 1.0 records exact source/SDK, generated asset
+manifest/hash/size, requested duration, elapsed wall time, OS/architecture, actual
+transport outcome, decoded video/audio counts, native video/audio ReadSample CPU wall
+totals/maxima, decode/seek/open/first-frame observations, retries/failures, timestamp
+regressions, first/last video timestamp and timebase, maximum interval, forward gaps
+against the declared normalized frame interval, audio gaps and maximum A/V distance. Seek resets the continuity
+comparison without clearing cumulative findings.
+
+The existing bounded Runtime pipeline probe supplies admission, scheduler start and
+presentation lateness, render/output stages and its retained/dropped sample accounting.
+These percentiles describe its retained ring, not an unlimited whole-run history.
+Lifetime local-read totals/maxima use value types with no per-frame logging/history.
+
+At most 128 minute samples retain process private/managed/heap/fragmented bytes,
+generation collection counts, cumulative allocations, handles and process I/O counters.
+Post-two-minute private growth is bounded to 512 MiB and handles to 64; these hosted
+regression ceilings are not a physical production memory SLA. Process I/O is aggregate
+and includes journals and IPC; it is not source-file byte attribution or SSD device
+latency. No forced GC or cache flush establishes a false plateau/cold-cache result.
+
+`collectionStatus` PASS means the actual reproduction and cleanup assertions passed.
+`audioStatus` independently reports FAIL for missing audio, discontinuities or A/V
+distance above 40 ms. Normal full-playback acceptance now requires this audio check to pass. Such findings
+are never production readiness, and failed reports remain retained. Physical GPU,
+installed MFT identity, SSD class, cold-cache/device latency and adverse-storage
+behavior remain UNVERIFIED. Run on the designated reference SSD with retained adapter,
+driver, decoder and storage inventory before making those claims.
+
+`local-playback-faults.json` distinguishes missing/corrupt/truncated-header,
+exclusive sharing denial, and removal before reload at the probe stage. An exclusive
+lock is not slow-SSD emulation, and deleting a closed file does not qualify device
+disappearance during decoding. The existing short tests retain full-file loops and
+Stop/restart/reload; the long harness adds seeks around frame 60's GOP, pause/resume,
+Stop and reload after uninterrupted playback.
+
+### Confirmed boundaries and next dependency
+
+Source inspection confirms synchronous decoder open/seek/read work on the Runtime
+admission path, including native read loops with no explicit cancellation contract.
+This is a measured-baseline prerequisite, not compliance with a no-blocking cadence
+target. No second scheduler, decoder backend or expanded codec/container support is
+introduced here. Imported/probed MP4 or the wider admitted codec policy is not a
+playback-qualified profile. Asynchronous bounded decode/admission, native-read
+cancellation and resource optimization are the next dependent work,
+guided by the retained measurements and failure evidence.
+
+
+### Audio packet cadence regression
+
+The first ten-minute baseline decoded all 30,000 video frames but observed 1,874
+audio-missing frames and a maximum 37,478.6666-ms A/V timestamp distance. Reading one
+native AAC packet for every video frame advanced audio at the packet's independent
+sample count instead of the video clock.
+
+The existing Media Foundation decoder now retains at most one native PCM packet,
+copies only the samples belonging to the current video time window and keeps the
+remainder for the next frame. Signed native sample positions discard negative
+codec preroll rather than shifting it into time zero; timestamp rounding respects
+the audio sample grid. Seek clears packet/EOS state. Genuine gaps return missing
+audio, never synthetic silence. Packet scanning has a 1,024-iteration bound; the
+native synchronous ReadSample cancellation limitation remains.
+
+Real 50/59.94 regressions require contiguous sample positions, matching video/audio
+timestamps, no missing audio through the reference tail, fewer native packet reads
+than video frames, and valid audio after a GOP-adjacent seek. The repeated ten-minute
+host baseline must also pass its audio check. The earlier failing source-bound report
+is retained on the PR for comparison; it is not reused as corrected-source PASS.

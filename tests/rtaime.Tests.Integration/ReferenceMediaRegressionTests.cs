@@ -59,6 +59,20 @@ public sealed class ReferenceMediaRegressionTests
 			Assert.NotNull(decoded.Frame.Audio);
 			Assert.False(decoded.Frame.AudioPayload.IsEmpty);
 		}
+        var measurements = source.Measurements;
+        Assert.Equal(12UL, measurements.DecodedFrames);
+        Assert.True(measurements.DecodedAudioSamples > 0);
+        Assert.True(measurements.LastVideoTimestamp > measurements.FirstVideoTimestamp);
+        Assert.True(measurements.VideoSecondsPerTick > 0);
+        Assert.True(measurements.NativeVideoRead.Calls >= 12);
+        // AAC-LC packets contain at most 1,024 sample frames in these generated profiles.
+        // A packet may now span several video windows instead of being consumed per frame.
+        var minimumAudioPackets = (measurements.DecodedAudioSamples + 1_023) / 1_024;
+        Assert.InRange(measurements.NativeAudioRead.Calls, minimumAudioPackets, minimumAudioPackets + 64);
+        Assert.True(measurements.OpenMilliseconds >= 0);
+        Assert.True(measurements.FirstFrameMilliseconds >= measurements.OpenMilliseconds);
+        Assert.Equal(0UL, measurements.ReadFailures);
+        Assert.Equal(0UL, measurements.VideoTimestampRegressions);
 	}
 
 	[Fact]
@@ -220,6 +234,41 @@ public sealed class ReferenceMediaRegressionTests
 		Assert.Equal(MediaDeckState.Ready, reopened.State);
 		Assert.Null(reopened.Failure);
 	}
+
+    [Theory]
+    [InlineData("hd50", 300, 50, 1)]
+    [InlineData("hd5994", 350, 60000, 1001)]
+    public void Audio_packets_are_sliced_on_video_time_without_running_ahead_or_disappearing(
+        string profileId, int frames, long rateNumerator, long rateDenominator)
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.Generate(Profile(profileId));
+        var format = new VideoFormat(1920, 1080, new FrameRate(rateNumerator, rateDenominator),
+            PixelFormat.Rgba8, ScanMode.Progressive);
+        var open = new LocalMediaFileProvider(format).TryOpen(asset.Path, MediaSourceId.New());
+        Assert.True(open.Succeeded, open.Failure?.Message);
+        using var source = open.Source!;
+        ulong? expectedSample = null;
+        for (var frame = 0; frame < frames; frame++)
+        {
+            var decoded = source.ReadNext((ulong)frame);
+            Assert.True(decoded.Succeeded, decoded.Failure?.Message);
+            var audio = decoded.Frame!.Audio;
+            Assert.NotNull(audio);
+            Assert.False(decoded.Frame.AudioPayload.IsEmpty);
+            Assert.Equal(decoded.Frame.Video.Timing.PresentationTimestamp, audio.Timing.PresentationTimestamp);
+            if (expectedSample is { } expected) Assert.Equal(expected, audio.Timing.SamplePosition);
+            expectedSample = audio.Timing.SamplePosition + audio.Timing.SampleCount;
+        }
+        Assert.Equal(0UL, source.Measurements.MissingAudioFrames);
+        Assert.Equal(0UL, source.Measurements.AudioTimestampDiscontinuities);
+        Assert.Equal(0d, source.Measurements.MaximumAvTimestampDistanceMilliseconds);
+        Assert.True(source.Measurements.NativeAudioRead.Calls < (ulong)frames);
+        Assert.True(source.SeekToFrame(61).Succeeded);
+        var afterSeek = source.ReadNext((ulong)frames);
+        Assert.True(afterSeek.Succeeded); Assert.NotNull(afterSeek.Frame!.Audio);
+        Assert.Equal(afterSeek.Frame.Video.Timing.PresentationTimestamp, afterSeek.Frame.Audio.Timing.PresentationTimestamp);
+    }
 
 	private static ReferenceMediaProfile Profile(string id) =>
 		ReferenceMediaProfile.Required.Single(profile =>

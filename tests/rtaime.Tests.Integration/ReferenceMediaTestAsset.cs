@@ -20,7 +20,11 @@ internal sealed record ReferenceMediaProfile(
 	public static ReferenceMediaProfile Hd50 { get; } = new("hd50", FrameRate.Fps50, TimeSpan.FromSeconds(6));
 	public static ReferenceMediaProfile Hd5994 { get; } = new("hd5994", FrameRate.Fps59_94, TimeSpan.FromSeconds(6));
 
-	public static IReadOnlyList<ReferenceMediaProfile> Required { get; } =
+	public static ReferenceMediaProfile Long(int minutes) => minutes is 10 or 60
+        ? Hd50 with { Id = "hd50-" + minutes + "min", Duration = TimeSpan.FromMinutes(minutes) }
+        : throw new ArgumentOutOfRangeException(nameof(minutes));
+
+    public static IReadOnlyList<ReferenceMediaProfile> Required { get; } =
 	[
 		Hd25,
 		Hd50,
@@ -44,7 +48,13 @@ internal sealed record ReferenceMediaManifest(
 	ulong GeneratedAudioSamples,
 	string VideoSignal,
 	string AudioSignal,
-	string Sha256);
+	string Sha256)
+{
+    public string VideoProfile { get; init; } = "high";
+    public string EncodedPixelFormat { get; init; } = "yuv420p";
+    public string EncoderBuild { get; init; } = "UNVERIFIED";
+    public string? SourceCommit { get; init; } = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
+}
 
 internal sealed class ReferenceMediaTestAsset : IDisposable
 {
@@ -107,8 +117,8 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 					deleteOnDispose: false);
 			}
 
-			EnsureFfmpegAvailable();
-			var generated = GenerateUnsafe(profile, root);
+			var encoderBuild = EnsureFfmpegAvailable();
+			var generated = GenerateUnsafe(profile, root, encoderBuild);
 			Cache[cacheKey] = generated;
 			return new ReferenceMediaTestAsset(
 				generated.Path,
@@ -131,8 +141,10 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 		TryDelete(ManifestPath);
 	}
 
-	private static CachedAsset GenerateUnsafe(ReferenceMediaProfile profile, string outputRoot)
-	{
+	private static CachedAsset GenerateUnsafe(ReferenceMediaProfile profile, string outputRoot, string encoderBuild)
+    {
+        if (profile.Duration > TimeSpan.FromSeconds(6))
+            return GenerateLong(profile, outputRoot);
 		var workRoot = System.IO.Path.Combine(
 			System.IO.Path.GetTempPath(),
 			$"rtaime-reference-media-build-{profile.Id}-{Guid.NewGuid():N}");
@@ -149,7 +161,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 			var sampleCount = GenerateRawAudio(profile, rawAudioPath);
 			Encode(profile, rawVideoPath, rawAudioPath, outputPath);
 
-			var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(outputPath))).ToLowerInvariant();
+			var hash = Convert.ToHexString(HashFile(outputPath)).ToLowerInvariant();
 			var manifest = new ReferenceMediaManifest(
 				SchemaVersion,
 				profile.Id,
@@ -166,7 +178,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 				sampleCount,
 				"BroadcastTestPatternGenerator + MotionTimingTestSignalGenerator",
 				"GeneratedAudioTestSignalGenerator(Pulse, 1000 Hz, peak 0.25)",
-				hash);
+				hash) { EncoderBuild = encoderBuild };
 			File.WriteAllText(
 				manifestPath,
 				JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
@@ -186,6 +198,43 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 			}
 		}
 	}
+
+    private static byte[] HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return SHA256.HashData(stream);
+    }
+
+    private static CachedAsset GenerateLong(ReferenceMediaProfile profile, string root)
+    {
+        if (profile != ReferenceMediaProfile.Long(10) && profile != ReferenceMediaProfile.Long(60))
+            throw new ArgumentException("Only the bounded 10/60-minute long profiles are supported.", nameof(profile));
+        using var seed = Generate(ReferenceMediaProfile.Hd50);
+        var path = System.IO.Path.Combine(root, $"rtaime-reference-{profile.Id}-h264-aac.mp4");
+        var manifestPath = System.IO.Path.ChangeExtension(path, ".json");
+        TryDelete(path);
+        // Extend the existing deterministic signal with explicit CFR/audio normalization and no raw long intermediates.
+        var result = RunFfmpeg($"-y -hide_banner -loglevel error -stream_loop -1 -i {Quote(seed.Path)} " +
+            $"-t {profile.Duration.TotalSeconds.ToString(CultureInfo.InvariantCulture)} -map 0:v:0 -map 0:a:0 " +
+            "-vf fps=50 -af aresample=async=1:first_pts=0 -c:v libx264 -preset veryfast -crf 30 -profile:v high -pix_fmt yuv420p -g 60 " +
+            "-c:a aac -b:a 96k -ar 48000 -ac 2 -fs 2147483648 " +
+            $"-map_metadata -1 -metadata creation_time=1970-01-01T00:00:00Z -movflags +faststart {Quote(path)}",
+            TimeSpan.FromMinutes(profile.Duration.TotalMinutes / 2 + 5));
+        if (result.ExitCode != 0 || !File.Exists(path))
+            throw new Xunit.Sdk.XunitException("Long reference generation failed: " + result.Error);
+        if (new FileInfo(path).Length > 2L * 1024 * 1024 * 1024)
+        { TryDelete(path); throw new InvalidDataException("Long reference exceeds the 2 GiB transient-file bound."); }
+        var manifest = seed.Manifest with {
+            Profile = profile.Id, RequestedDurationSeconds = profile.Duration.TotalSeconds,
+            GeneratedVideoFrames = CalculateFrameCount(profile.NativeFrameRate, profile.Duration),
+            GeneratedAudioSamples = checked((ulong)profile.Duration.TotalSeconds * AudioSampleRate),
+            VideoSignal = seed.Manifest.VideoSignal + "; encoded six-second seed repeats; container timestamps advance",
+            AudioSignal = seed.Manifest.AudioSignal + "; re-encoded with asynchronous sample normalization; decoder continuity is measured",
+            Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()
+        };
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+        return new(path, manifestPath, manifest);
+    }
 
 	private static long GenerateRawVideo(ReferenceMediaProfile profile, string path)
 	{
@@ -309,7 +358,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 		return checked((long)Math.Ceiling(numerator / denominator));
 	}
 
-	private static void EnsureFfmpegAvailable()
+	private static string EnsureFfmpegAvailable()
 	{
 		var result = RunFfmpeg("-version", TimeSpan.FromSeconds(15));
 		if (result.ExitCode != 0)
@@ -318,6 +367,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
 				"FFmpeg is required for reference-media regression generation. " +
 				"Set RTAIME_FFMPEG_PATH when ffmpeg is not on PATH.");
 		}
+        return result.Output.Split('\n')[0];
 	}
 
 	private static ProcessResult RunFfmpeg(string arguments, TimeSpan timeout)

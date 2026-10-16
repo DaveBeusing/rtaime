@@ -55,6 +55,7 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	}
 
 	public LocalMediaProbe Probe => _source.Probe;
+    public LocalMediaPlaybackMeasurements Measurements => _source.Measurements;
 	public RuntimeExecutionState RuntimeState => _runtime.State;
 	public MediaTransportSnapshot Transport => _transport.Snapshot;
 	public ulong NextSequenceNumber => _nextSequenceNumber;

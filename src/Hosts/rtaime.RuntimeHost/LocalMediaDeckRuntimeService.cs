@@ -37,6 +37,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	}
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
+    public LocalMediaPlaybackMeasurements? PlaybackMeasurements { get { lock (_gate) return _session?.Measurements; } }
 
 	public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
 	{

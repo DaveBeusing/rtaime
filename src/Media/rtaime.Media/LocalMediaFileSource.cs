@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -73,13 +74,21 @@ public sealed class LocalMediaFileSource : IDisposable
 {
 	private readonly ILocalMediaDecoder _decoder;
 	private bool _disposed;
+    private LocalMediaPlaybackMeasurements _measurements;
+    private readonly long _openedAt = Stopwatch.GetTimestamp();
+    private long? _previousVideoTimestamp;
+    private double? _expectedAudioSeconds;
 
-	internal LocalMediaFileSource(string path, LocalMediaProbe probe, ILocalMediaDecoder decoder)
+	internal LocalMediaFileSource(string path, LocalMediaProbe probe, ILocalMediaDecoder decoder, double openMilliseconds = 0)
 	{
 		Path = path ?? throw new ArgumentNullException(nameof(path));
 		Probe = probe ?? throw new ArgumentNullException(nameof(probe));
 		_decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
+        _measurements = new LocalMediaPlaybackMeasurements { OpenMilliseconds = openMilliseconds };
 	}
+
+	public LocalMediaPlaybackMeasurements Measurements => _measurements with {
+        NativeVideoRead = _decoder.VideoReadMeasurements, NativeAudioRead = _decoder.AudioReadMeasurements };
 
 	public string Path { get; }
 	public LocalMediaProbe Probe { get; }
@@ -94,16 +103,52 @@ public sealed class LocalMediaFileSource : IDisposable
 		{
 			try
 			{
-				return _decoder.TryReadNext(sequenceNumber, out var frame)
-					? LocalMediaFrameReadResult.Decoded(frame!)
-					: LocalMediaFrameReadResult.Ended();
+                var started = Stopwatch.GetTimestamp();
+                bool available;
+                LocalMediaDecodedFrame? frame;
+                try { available = _decoder.TryReadNext(sequenceNumber, out frame); }
+                finally { _measurements = _measurements with { Decode = _measurements.Decode.Observe(Stopwatch.GetElapsedTime(started).TotalMilliseconds) }; }
+                if (!available) return LocalMediaFrameReadResult.Ended();
+                var media = frame!;
+                var audioSamples = media.Audio?.Timing.SampleCount ?? 0;
+                var videoSeconds = media.Video.Timing.PresentationTimestamp * media.Video.Timing.Timebase.SecondsPerTick;
+                var audioSeconds = media.Audio is { } audio
+                    ? audio.Timing.PresentationTimestamp * audio.Timing.Timebase.SecondsPerTick : (double?)null;
+                _measurements = _measurements with {
+                    FirstFrameMilliseconds = _measurements.FirstFrameMilliseconds ??
+                        _measurements.OpenMilliseconds + Stopwatch.GetElapsedTime(_openedAt).TotalMilliseconds,
+                    DecodedFrames = _measurements.DecodedFrames + 1,
+                    FirstVideoTimestamp = _measurements.FirstVideoTimestamp ?? media.Video.Timing.PresentationTimestamp,
+                    LastVideoTimestamp = media.Video.Timing.PresentationTimestamp,
+                    VideoSecondsPerTick = media.Video.Timing.Timebase.SecondsPerTick,
+                    VideoForwardGapCount = _measurements.VideoForwardGapCount +
+                        (_previousVideoTimestamp is { } prior && videoSeconds -
+                            prior * media.Video.Timing.Timebase.SecondsPerTick >
+                            1.5 * Probe.VideoFormat.FrameRate.Denominator / (double)Probe.VideoFormat.FrameRate.Numerator ? 1UL : 0),
+                    MaximumVideoIntervalMilliseconds = Math.Max(_measurements.MaximumVideoIntervalMilliseconds,
+                        _previousVideoTimestamp is { } last ?
+                            Math.Max(0, videoSeconds - last * media.Video.Timing.Timebase.SecondsPerTick) * 1000 : 0),
+                    DecodedAudioSamples = _measurements.DecodedAudioSamples + audioSamples,
+                    MissingAudioFrames = _measurements.MissingAudioFrames + (Probe.AudioCodec != MediaAudioCodec.None && audioSeconds is null ? 1UL : 0),
+                    VideoTimestampRegressions = _measurements.VideoTimestampRegressions +
+                        (_previousVideoTimestamp is { } previous && media.Video.Timing.PresentationTimestamp <= previous ? 1UL : 0),
+                    AudioTimestampDiscontinuities = _measurements.AudioTimestampDiscontinuities +
+                        (audioSeconds is { } observed && _expectedAudioSeconds is { } expected && Math.Abs(observed - expected) > 0.002 ? 1UL : 0),
+                    MaximumAvTimestampDistanceMilliseconds = Math.Max(_measurements.MaximumAvTimestampDistanceMilliseconds,
+                        audioSeconds is { } seconds ? Math.Abs(videoSeconds - seconds) * 1000 : 0)
+                };
+                _previousVideoTimestamp = media.Video.Timing.PresentationTimestamp;
+                if (audioSeconds is { } at) _expectedAudioSeconds = at + audioSamples / (double)Probe.AudioFormat.SampleRate;
+                return LocalMediaFrameReadResult.Decoded(media);
 			}
 			catch (Exception exception) when (exception is InvalidDataException or IOException or ExternalException)
 			{
 				lastFailure = exception;
+                _measurements = _measurements with { ReadRetries = _measurements.ReadRetries + (attempt == 0 ? 1UL : 0) };
 			}
 		}
 
+        _measurements = _measurements with { ReadFailures = _measurements.ReadFailures + 1 };
 		return LocalMediaFrameReadResult.Failed(
 			"media.file.decode_failed",
 			$"Local media decoding failed after a bounded retry: {lastFailure?.Message ?? "unknown decoder failure"}");
@@ -112,7 +157,14 @@ public sealed class LocalMediaFileSource : IDisposable
 	public LocalMediaSeekResult SeekToFrame(long frameNumber)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
-		return _decoder.SeekToFrame(frameNumber);
+		var started = Stopwatch.GetTimestamp();
+        try
+        {
+            var result = _decoder.SeekToFrame(frameNumber);
+            if (result.Succeeded) { _previousVideoTimestamp = null; _expectedAudioSeconds = null; }
+            return result;
+        }
+        finally { _measurements = _measurements with { Seek = _measurements.Seek.Observe(Stopwatch.GetElapsedTime(started).TotalMilliseconds) }; }
 	}
 
 	public void Dispose()
@@ -230,18 +282,21 @@ public sealed class LocalMediaFileProvider
 		}
 
 		var resolvedAssetId = assetId ?? new MediaAssetId(LocalMediaIdentity.Create("asset", fullPath));
+		var openStarted = Stopwatch.GetTimestamp();
 		var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat);
 		if (!open.Succeeded)
 			return LocalMediaOpenResult.Rejected(open.Failure!.Value.Code, open.Failure.Value.Message);
 
 		var decoder = open.Decoder!;
-		return LocalMediaOpenResult.Ready(new LocalMediaFileSource(fullPath, decoder.Probe, decoder));
+		return LocalMediaOpenResult.Ready(new LocalMediaFileSource(fullPath, decoder.Probe, decoder, Stopwatch.GetElapsedTime(openStarted).TotalMilliseconds));
 	}
 }
 
 internal interface ILocalMediaDecoder : IDisposable
 {
 	LocalMediaProbe Probe { get; }
+    LocalMediaReadMeasurements VideoReadMeasurements => default;
+    LocalMediaReadMeasurements AudioReadMeasurements => default;
 	bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame);
 	LocalMediaSeekResult SeekToFrame(long frameNumber);
 }
