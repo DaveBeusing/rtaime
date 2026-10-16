@@ -174,6 +174,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			unique = requestedName;
 		}
 		var saved = current with { Name = unique };
+		if (!saved.IsValid) { BinStatus = "Enter a valid Smart Bin name before saving this query."; return; }
 		SmartBins.Add(saved); SelectedSmartBin = saved;
 		await PersistBinsAsync();
 	}
