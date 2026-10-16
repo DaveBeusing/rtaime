@@ -21,7 +21,8 @@ public static class ShowPreflightSummary
 		{
 			foreach (var (id, label, workspace) in new[] {
 				("assets", "Show assets", "MEDIA"), ("cues", "Cue references", "EDIT"),
-				("outputs", "Output roles", "OUTPUTS"), ("audio", "Program audio", "LIVE"),
+				("outputs", "Output roles", "OUTPUTS"), ("program-output", "Program output", "OUTPUTS"),
+                ("aux-output", "AUX outputs", "OUTPUTS"), ("recording", "Recording target", "OUTPUTS"), ("audio", "Program audio", "LIVE"),
 				("ai", "AI readiness", "SETTINGS"), ("durable", "Saved show", "HEALTH") })
 				Add(id, label, ShowPreflightState.Unknown, "Fresh authoritative state is unavailable. Synchronize before production.", workspace);
 			return checks;
@@ -67,6 +68,25 @@ public static class ShowPreflightSummary
 			outputs.Any(role => role.HealthState != "PASS" || !role.AuthoritativeActive) ? ShowPreflightState.Unknown : ShowPreflightState.Pass,
 			outputs.Count == 0 ? "No authoritative output role evidence is published." :
 			$"{outputs.Count} roles observed. An inactive or unqualified role is not proof of available physical output.", "OUTPUTS");
+		foreach (var (id, label, kind) in new[] { ("program-output", "Program output", "PROGRAM"), ("aux-output", "AUX outputs", "AUX") })
+		{
+			var roles = outputs.Where(role => role.RoleKind == kind).ToArray();
+			Add(id, label, roles.Length == 0 ? ShowPreflightState.Unknown :
+				roles.Any(role => role.HealthState == "FAIL" || role.Error is not null) ? ShowPreflightState.Fail :
+				roles.All(role => role.HealthState == "PASS" && role.AuthoritativeActive) ? ShowPreflightState.Pass : ShowPreflightState.Unknown,
+				roles.Length == 0 ? "No current role evidence is published; availability is UNVERIFIED." :
+				$"{roles.Length} {kind} roles checked against the authoritative snapshot. Physical transport qualification remains separate.", "OUTPUTS");
+		}
+		var recording = snapshot.Recording;
+		var recordingFailed = recording.Failure is not null || recording.WriterFailures > 0 || recording.State is "FAILED" or "ERROR";
+		var recordingActive = recording.State == "RECORDING";
+		Add("recording", "Recording target", recordingFailed ? ShowPreflightState.Fail :
+			recordingActive && recording.Written > 0 && recording.Destination is not null && recording.ActiveProfileId is not null &&
+			recording.ActiveProviderId is not null ? ShowPreflightState.Pass : ShowPreflightState.Unknown,
+			recordingFailed ? "Runtime reports a recording failure. Review the recording workflow; Program remains independent." :
+			recordingActive && recording.Written > 0 && recording.Destination is not null && recording.ActiveProfileId is not null && recording.ActiveProviderId is not null ?
+			"Runtime confirms samples written to its active target/profile/provider. Future capacity is not guaranteed." :
+			"Target writability and capacity are UNVERIFIED. An idle profile or a locally entered path is not a target probe; review existing Recording controls.", "OUTPUTS");
 		var audio = health.FirstOrDefault(item => item.Id == "audio");
 		var audioFresh = audio is not null && audio.LastObservedAt != default && now >= audio.LastObservedAt && now - audio.LastObservedAt <= TimeSpan.FromSeconds(10);
 		Add("audio", "Program audio", !audioFresh ? ShowPreflightState.Unknown : audio!.State switch {
@@ -77,7 +97,8 @@ public static class ShowPreflightSummary
 		Add("ai", "AI readiness", ai.Failure is not null ? ShowPreflightState.Fail :
 			ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? ShowPreflightState.Unknown : !ai.Enabled ? ShowPreflightState.NotApplicable :
 			ai.UpdatedAtUtc is not { } updated || now < updated || now - updated > TimeSpan.FromSeconds(10) ? ShowPreflightState.Unknown :
-			ai.EffectVisible && ai.SourceSequence.HasValue && ai.AppliedSequence.HasValue ? ShowPreflightState.Pass : ShowPreflightState.Unknown,
+			ai.EffectVisible && ai.SourceSequence.HasValue && ai.AppliedSequence.HasValue && ai.SourceSequence == ai.AppliedSequence &&
+            !string.IsNullOrWhiteSpace(ai.Provider) && ai.Provider is not ("UNVERIFIED" or "UNAVAILABLE" or "UNKNOWN") ? ShowPreflightState.Pass : ShowPreflightState.Unknown,
 			ai.Failure is not null ? "The effect reports a failure; inspect governed AI diagnostics." : ai.Status is "UNAVAILABLE" or "UNVERIFIED" or "UNKNOWN" ? "Current AI evidence is unavailable." : !ai.Enabled ? "AI is disabled; no effect is required for clean Program." :
 			"Enabled effect requires current synchronized application evidence. Production provider qualification is separate.", "SETTINGS");
 		Add("durable", "Saved show", snapshot.ShowProject.State is "SAVED" or "RESTORED" ? ShowPreflightState.Pass :

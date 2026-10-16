@@ -7,7 +7,9 @@ public enum OperatorActionOutcome { Pending, Confirmed, Rejected, Unconfirmed }
 public sealed record OperatorActionObservation(
 	Guid Id, string Operation, DateTimeOffset PendingAtUtc, DateTimeOffset? CompletedAtUtc,
 	OperatorActionOutcome Outcome, ulong? ObservedProductionRevision,
-	ulong? ResponseProductionRevision = null, string? CommandId = null, ulong? ExpectedProductionRevision = null);
+	ulong? ResponseProductionRevision = null, string? CommandId = null, ulong? ExpectedProductionRevision = null,
+	string? ObservedProductionId = null, string? ClientObservationEpoch = null, DateTimeOffset? SnapshotObservedAtUtc = null,
+	bool? ResponseAccepted = null);
 
 public sealed class OperatorActionHistory
 {
@@ -19,10 +21,12 @@ public sealed class OperatorActionHistory
 	public event EventHandler? Changed;
 	public IReadOnlyList<OperatorActionObservation> Current { get { lock (_gate) return _items.ToArray(); } }
 
-	internal Guid Begin(string operation, ulong? observedRevision, string? commandId, ulong? expectedRevision)
+	internal Guid Begin(string operation, ulong? observedRevision, string? commandId, ulong? expectedRevision,
+		string? productionId, string epoch, DateTimeOffset? snapshotObservedAtUtc)
 	{
 		var item = new OperatorActionObservation(Guid.NewGuid(), operation, _clock(), null,
-			OperatorActionOutcome.Pending, observedRevision, CommandId: commandId, ExpectedProductionRevision: expectedRevision);
+			OperatorActionOutcome.Pending, observedRevision, CommandId: commandId, ExpectedProductionRevision: expectedRevision,
+			ObservedProductionId: productionId, ClientObservationEpoch: epoch, SnapshotObservedAtUtc: snapshotObservedAtUtc);
 		lock (_gate)
 		{
 			if (_items.Count == Capacity) _items.RemoveAt(0);
@@ -32,13 +36,13 @@ public sealed class OperatorActionHistory
 		return item.Id;
 	}
 
-	internal void Complete(Guid id, OperatorActionOutcome outcome, ulong? revision = null)
+	internal void Complete(Guid id, OperatorActionOutcome outcome, ulong? revision = null, bool? accepted = null)
 	{
 		lock (_gate)
 		{
 			var index = _items.FindIndex(item => item.Id == id);
 			if (index < 0) return; // An old operation may have aged out of the bounded session.
-			_items[index] = _items[index] with { Outcome = outcome, CompletedAtUtc = _clock(), ResponseProductionRevision = revision };
+			_items[index] = _items[index] with { Outcome = outcome, CompletedAtUtc = _clock(), ResponseProductionRevision = revision, ResponseAccepted = accepted };
 		}
 		Notify();
 	}

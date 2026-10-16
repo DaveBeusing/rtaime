@@ -17,7 +17,7 @@ public sealed class ShowPreflightCheckViewModel : INotifyPropertyChanged
 	}
 	public string Id => _check.Id;
 	public string Label => _check.Label;
-	public string State => _check.State == ShowPreflightState.NotApplicable ? "NOT APPLICABLE" : _check.State.ToString().ToUpperInvariant();
+	public string State => _check.State switch { ShowPreflightState.NotApplicable => "NOT APPLICABLE", ShowPreflightState.Unknown => "UNVERIFIED", _ => _check.State.ToString().ToUpperInvariant() };
 	public string Detail => _check.Detail;
 	public ICommand NavigateCommand { get; }
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -34,6 +34,14 @@ public sealed record OperatorActionHistoryRow(OperatorActionObservation Observat
 	public string Operation => System.Text.RegularExpressions.Regex.Replace(
 		Observation.Operation.Replace("Async", "", StringComparison.Ordinal), "(?<!^)([A-Z])", " $1");
 	public string Outcome => Observation.Outcome.ToString().ToUpperInvariant();
+	public string ResponseEvidence => Observation.ResponseAccepted is { } accepted
+		? accepted ? "ACCEPTED / SUCCEEDED · Control response; Runtime completion is not exposed by this receipt."
+			: "REJECTED / FAILED · explicit negative Control response."
+		: Observation.Outcome == OperatorActionOutcome.Confirmed
+			? "RESPONSE RECEIVED · acceptance and Runtime commitment are not exposed."
+			: "NO RESPONSE EVIDENCE · do not infer rejection or repeat the action.";
+	public string Provenance => $"Source: rtaime.Client transport observation · production {Observation.ObservedProductionId ?? "not observed"} · " +
+		$"local observation epoch {Observation.ClientObservationEpoch ?? "not exposed"} · snapshot {Observation.SnapshotObservedAtUtc?.ToString("O") ?? "not observed"} · server epoch not exposed";
 	public string Times => $"Requested {Observation.PendingAtUtc.ToLocalTime():HH:mm:ss.fff} · " +
 		(Observation.CompletedAtUtc is { } completed ? $"response {completed.ToLocalTime():HH:mm:ss.fff}" : "awaiting response");
 	public string Correlation => $"Request {Observation.Id:N} · wire command {Observation.CommandId ?? "not exposed"} · " +
@@ -121,7 +129,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 			if (item is null) Checks.Add(new(check, _navigate)); else item.Apply(check);
 		}
 		Summary = $"Read-only checks · {current.Count(item => item.State == ShowPreflightState.Fail)} failed · " +
-			$"{current.Count(item => item.State == ShowPreflightState.Unknown)} unknown. ARM/GO remain validated by ControlHost.";
+			$"{current.Count(item => item.State == ShowPreflightState.Unknown)} unverified. ARM/GO remain validated by ControlHost.";
 		var history = _client.ActionHistory.Current;
 		if (!_previousHistory.SequenceEqual(history))
 		{

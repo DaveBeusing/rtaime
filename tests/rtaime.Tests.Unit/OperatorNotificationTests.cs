@@ -269,6 +269,57 @@ public sealed class OperatorNotificationTests
 		Assert.Null(item.AcknowledgedAtUtc);
 	}
 
+	[Fact]
+	public void Snooze_retains_fault_and_acknowledgement_expires_without_resolving_it_and_cannot_pause_fatal()
+	{
+		var now = DateTimeOffset.UtcNow;
+		var service = new NotificationService(() => now);
+		var fault = State(OperatorNotificationCategory.Error, OperatorNotificationCondition.Active, "Failure", true);
+		service.Publish(fault);
+		Assert.True(service.Snooze(fault.Key, TimeSpan.FromMinutes(5)));
+		Assert.True(service.Acknowledge(fault.Key));
+		var paused = Assert.Single(service.Current);
+		Assert.True(paused.IsSnoozed(now));
+		Assert.Equal(OperatorNotificationCondition.Active, paused.Condition);
+		service.Publish(fault);
+		Assert.Equal(paused.SnoozedUntilUtc, Assert.Single(service.Current).SnoozedUntilUtc);
+		Assert.Equal(paused.AcknowledgedAtUtc, Assert.Single(service.Current).AcknowledgedAtUtc);
+		now = now.AddMinutes(5);
+		Assert.Equal(0, service.RemoveExpired(now));
+		var resumed = Assert.Single(service.Current);
+		Assert.Null(resumed.SnoozedUntilUtc);
+		Assert.Equal(OperatorNotificationCondition.Active, resumed.Condition);
+		Assert.NotNull(resumed.AcknowledgedAtUtc);
+		Assert.False(service.Snooze(fault.Key, TimeSpan.FromMinutes(6)));
+		Assert.False(service.Snooze(fault.Key, TimeSpan.Zero));
+		service.Publish(fault with { Condition = OperatorNotificationCondition.Fatal });
+		Assert.False(service.Snooze(fault.Key, TimeSpan.FromMinutes(5)));
+		Assert.False(Assert.Single(service.Current).IsSnoozed(now));
+	}
+
+	[Fact]
+	public void Changed_condition_resumes_reminders_and_incoming_payload_cannot_inject_snooze()
+	{
+		var now = DateTimeOffset.UtcNow;
+		var service = new NotificationService(() => now);
+		var fault = State(OperatorNotificationCategory.Warning, OperatorNotificationCondition.Active, "Warning", true);
+		service.Publish(fault with { SnoozedUntilUtc = now.AddDays(1) });
+		Assert.Null(Assert.Single(service.Current).SnoozedUntilUtc);
+		Assert.True(service.Snooze(fault.Key, TimeSpan.FromMinutes(5)));
+		service.Publish(fault with { TechnicalDetail = "Changed cause" });
+		Assert.Null(Assert.Single(service.Current).SnoozedUntilUtc);
+		Assert.True(service.Snooze(fault.Key, TimeSpan.FromMinutes(5)));
+		Assert.True(service.Resume(fault.Key));
+		Assert.False(service.Resume(fault.Key));
+		Assert.Single(service.Current);
+		for (var i = 0; i < 5000; i++)
+		{
+			service.Publish(fault with { Key = "bounded-" + i });
+			service.Snooze("bounded-" + i, TimeSpan.FromMinutes(5));
+		}
+		Assert.Equal(NotificationService.Capacity, service.Current.Count);
+	}
+
 	private static OperatorNotification State(
 		OperatorNotificationCategory category,
 		OperatorNotificationCondition condition,

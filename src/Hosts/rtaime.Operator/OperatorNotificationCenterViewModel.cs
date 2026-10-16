@@ -18,6 +18,9 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 	{
 		_notification = notification ?? throw new ArgumentNullException(nameof(notification));
 		AcknowledgeCommand = new NotificationCommand(() => service?.Acknowledge(Key), () => service is not null && !IsAcknowledged);
+		SnoozeCommand = new NotificationCommand(() => service?.Snooze(Key, TimeSpan.FromMinutes(5)),
+			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal && !IsSnoozed);
+		ResumeCommand = new NotificationCommand(() => service?.Resume(Key), () => service is not null && IsSnoozed);
 		DismissCommand = new NotificationCommand(() => service?.Dismiss(Key), () => service is not null);
 		NavigateCommand = new NotificationCommand(() => navigate?.Invoke(_notification.TargetWorkspace), () => navigate is not null);
 		ToggleTechnicalDetailsCommand = new NotificationCommand(
@@ -28,6 +31,10 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public ICommand AcknowledgeCommand { get; }
+	public ICommand SnoozeCommand { get; }
+	public ICommand ResumeCommand { get; }
+	public bool IsSnoozed => _notification.SnoozedUntilUtc.HasValue;
+	public string ReminderStatus => IsSnoozed ? $"REMINDERS PAUSED UNTIL {_notification.SnoozedUntilUtc:HH:mm:ss} UTC · condition retained" : "REMINDERS ACTIVE";
 	public ICommand DismissCommand { get; }
 	public ICommand NavigateCommand { get; }
 	public bool IsAcknowledged => _notification.AcknowledgedAtUtc.HasValue;
@@ -36,6 +43,8 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 	{
 		_notification = notification; OnPropertyChanged(string.Empty);
 		(AcknowledgeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
+		(SnoozeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
+		(ResumeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
 	}
 	public string Key => _notification.Key;
 	public string Category => _notification.Category.ToString().ToUpperInvariant();
@@ -68,6 +77,13 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 
 	private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+
+public sealed class OperatorNotificationGroupViewModel(string label)
+{
+	public string Label { get; } = label;
+	internal bool Includes(OperatorNotificationItemViewModel item) => Label == "FATAL" ? item.Condition == "FATAL" : item.Condition != "FATAL" && item.Category == Label;
+	public ObservableCollection<OperatorNotificationItemViewModel> Items { get; } = [];
 }
 
 public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged, IDisposable
@@ -116,6 +132,10 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 	public ObservableCollection<OperatorNotificationItemViewModel> Items { get; }
 	public ObservableCollection<OperatorNotificationItemViewModel> Toasts { get; }
 	public ObservableCollection<OperatorNotificationItemViewModel> ActiveProblems { get; }
+	public ObservableCollection<OperatorNotificationGroupViewModel> Groups { get; } =
+	[
+		new("FATAL"), new("ERROR"), new("WARNING"), new("RECOVERY"), new("INFORMATION"), new("SUCCESS")
+	];
 	public int ActiveProblemCount => ActiveProblems.Count;
 	public bool HasActiveProblems => ActiveProblemCount > 0;
 
@@ -358,6 +378,8 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 		var previous = Items.ToDictionary(item => item.Key, StringComparer.Ordinal);
 		Items.Clear();
 		foreach (var notification in current.OrderByDescending(item => item.Condition == OperatorNotificationCondition.Fatal)
+			.ThenBy(item => item.Category switch { OperatorNotificationCategory.Error => 0, OperatorNotificationCategory.Warning => 1,
+				OperatorNotificationCategory.Recovery => 2, OperatorNotificationCategory.Information => 3, _ => 4 })
 			.ThenByDescending(item => item.Persistent).ThenByDescending(item => item.PublishedAtUtc))
 		{
 			if (!previous.TryGetValue(notification.Key, out var item))
@@ -365,8 +387,20 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			else item.Apply(notification);
 			Items.Add(item);
 		}
+		foreach (var group in Groups)
+		{
+			var desired = Items.Where(group.Includes).ToArray();
+			for (var index = group.Items.Count - 1; index >= 0; index--)
+				if (!desired.Contains(group.Items[index])) group.Items.RemoveAt(index);
+			for (var index = 0; index < desired.Length; index++)
+			{
+				var oldIndex = group.Items.IndexOf(desired[index]);
+				if (oldIndex < 0) group.Items.Insert(index, desired[index]);
+				else if (oldIndex != index) group.Items.Move(oldIndex, index);
+			}
+		}
 		Toasts.Clear();
-		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && !n.Persistent && n.AcknowledgedAtUtc is null)).Take(4))
+		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && !n.Persistent && n.AcknowledgedAtUtc is null && !n.IsSnoozed(DateTimeOffset.UtcNow))).Take(4))
 			Toasts.Add(item);
 		ActiveProblems.Clear();
 		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && n.Persistent &&

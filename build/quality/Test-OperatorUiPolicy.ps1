@@ -1199,3 +1199,9 @@ Assert-Condition ($shell -match '_workspaceLayouts\[restore.Workspace\] = restor
 Assert-Condition ($dockController -match 'preserved' -and $dockController -match 'Current Program identity, connection and safety' -and $dockController -match 'WeakReference<UIElement>') "Panel presentation must retain unchanged floating views and visible Program status with bounded focus restoration."
 Assert-Condition ($templateWindow -match 'RtaimeTextBox' -and $templateWindow -match 'ApplyTemplateCommand' -and $templateWindow -match 'ImportTemplateCommand' -and $templateWindow -match 'ExportTemplateCommand') "Named templates require a custom-control editor with explicit apply and portable file actions."
 Assert-Condition ($workspaceTemplates -notmatch 'OperatorControlClient|SelectPreviewAsync|CutPreviewAsync|NamedPipe' -and $presentationState -notmatch 'OperatorControlClient|NamedPipe') "Workspace templates and presentation cannot add production authority or transport."
+
+$showPreflightEvidence = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Client/rtaime.Client/ShowPreflightSummary.cs") -Raw
+$showChecksSurface = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ShowReadinessWindow.xaml") -Raw
+Assert-Condition ($showPreflightEvidence -match '"program-output"' -and $showPreflightEvidence -match '"aux-output"' -and $showPreflightEvidence -match '"recording"') "Show preflight must distinguish Program, AUX and recording evidence."
+Assert-Condition ($showPreflightEvidence -notmatch 'File\.|Directory\.|StartRecordingAsync|RouteOutputRoleAsync|GoShowControlAsync') "Advisory preflight must not probe local targets or mutate production."
+Assert-Condition ($showChecksSurface -match 'Notifications.Groups' -and $showChecksSurface -match 'SnoozeCommand' -and $showChecksSurface -match 'Owner.Startup.ExportSupportBundleCommand') "Show checks must reuse grouped notifications and the existing support exporter."

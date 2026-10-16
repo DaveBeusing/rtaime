@@ -13,10 +13,14 @@
    <TextBlock Text="SHOW CHECKS AND ACTIVITY" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,4"/>
    <controls:RtaimeButton x:Name="RefreshChecksButton" Content="Refresh checks" Command="{Binding RefreshChecksCommand}"
     IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Refresh local checks without sending a server request"/>
+   <controls:RtaimeButton x:Name="ExportChecksSupportButton" Content="Export support bundle" IsCompact="True" Margin="0,0,8,4"
+    Command="{Binding Owner.Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+    AutomationProperties.Name="Export diagnostics through the existing support bundle workflow"/>
   </WrapPanel>
   <controls:RtaimeScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
    <StackPanel>
     <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+    <TextBlock Text="{Binding Owner.Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
     <TextBlock Text="{Binding Revision}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
     <TextBlock Text="{Binding ReadStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8"/>
     <ItemsControl x:Name="PreflightChecks" ItemsSource="{Binding Checks}" AutomationProperties.Name="Read-only show preflight evidence">
@@ -50,11 +54,16 @@
       <TextBlock Text="{Binding Operation}" FontWeight="SemiBold" TextWrapping="Wrap"/>
       <TextBlock Text="{Binding Outcome}"/>
       <TextBlock Text="{Binding Times}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+      <TextBlock Text="{Binding ResponseEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+      <TextBlock Text="{Binding Provenance}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
       <TextBlock Text="{Binding Correlation}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
      </StackPanel></DataTemplate></controls:RtaimeListBox.ItemTemplate>
     </controls:RtaimeListBox>
     <TextBlock Text="NOTIFICATIONS · ACKNOWLEDGEMENT IS PRESENTATION ONLY" FontWeight="SemiBold" Margin="0,16,0,8" TextWrapping="Wrap"/>
-    <ItemsControl ItemsSource="{Binding Notifications.Items}" AutomationProperties.Name="Consolidated notifications">
+    <ItemsControl ItemsSource="{Binding Notifications.Groups}" AutomationProperties.Name="Notifications grouped by severity">
+     <ItemsControl.ItemTemplate><DataTemplate><StackPanel>
+      <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Margin="0,8,0,4"/>
+      <ItemsControl ItemsSource="{Binding Items}" AutomationProperties.Name="{Binding Label}">
      <ItemsControl.ItemTemplate><DataTemplate>
       <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,0,0,1" Padding="4,8">
        <StackPanel>
@@ -65,9 +74,12 @@
         <TextBlock Text="{Binding OperatorAction}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
         <TextBlock Text="{Binding ProductionImpact}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
         <TextBlock Text="{Binding Acknowledgement}" Style="{StaticResource OperatorLabel}"/>
+        <TextBlock Text="{Binding ReminderStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
         <WrapPanel Margin="0,6,0,0">
          <controls:RtaimeButton Content="Review" Command="{Binding NavigateCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review notification workspace"/>
          <controls:RtaimeButton Content="Acknowledge" Command="{Binding AcknowledgeCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Acknowledge notification without resolving its cause"/>
+         <controls:RtaimeButton Content="Pause reminders 5 min" Command="{Binding SnoozeCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Pause reminders for five minutes while retaining the condition"/>
+         <controls:RtaimeButton Content="Resume reminders" Command="{Binding ResumeCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Resume notification reminders"/>
          <controls:RtaimeButton Content="Dismiss" Command="{Binding DismissCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Dismiss notification presentation"/>
          <controls:RtaimeButton Content="{Binding TechnicalDetailsActionLabel}" Command="{Binding ToggleTechnicalDetailsCommand}" IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Toggle notification technical details"/>
         </WrapPanel>
@@ -79,6 +91,8 @@
        </StackPanel>
       </Border>
      </DataTemplate></ItemsControl.ItemTemplate>
+      </ItemsControl>
+     </StackPanel></DataTemplate></ItemsControl.ItemTemplate>
     </ItemsControl>
    </StackPanel>
   </controls:RtaimeScrollViewer>
