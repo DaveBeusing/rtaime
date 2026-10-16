@@ -299,6 +299,34 @@ public sealed class MediaLibraryBrowsingTests
 		pool.CancelHover(); Assert.Null(pool.HoverThumbnail); Assert.Equal(0, transport.Calls);
 	}
 
+	[Fact]
+	public async Task Runtime_pressure_arriving_during_dwell_cancels_publication_and_requires_deliberate_retry()
+	{
+		var transport = new PressureTransport(); var client = new OperatorControlClient(transport);
+		await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+		await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+		using var pool = new MediaPoolInspectorViewModel(owner, deck);
+		async Task Synchronize()
+		{
+			await Until(() => owner.SynchronizeCommand.CanExecute(null)); owner.SynchronizeCommand.Execute(null);
+			await Until(() => owner.IsConnected && !owner.IsBusy);
+		}
+		await Synchronize();
+		var program = owner.ProgramSourceId; var preview = owner.PreviewSourceId;
+		var image = new DrawingImage(); image.Freeze();
+		var item = Item() with { Thumbnail = image };
+		var pending = pool.BeginHoverAsync(item);
+		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(21), ObservedAtUtc = DateTimeOffset.UtcNow };
+		await Synchronize(); await pending;
+		Assert.Null(pool.HoverThumbnail); Assert.Contains("PAUSED", pool.HoverStatus);
+		await pool.BeginHoverAsync(item); Assert.Null(pool.HoverThumbnail);
+		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(2), ObservedAtUtc = DateTimeOffset.UtcNow };
+		await Synchronize(); Assert.Null(pool.HoverThumbnail); // Recovery does not auto-admit work.
+		await pool.BeginHoverAsync(item); Assert.Same(image, pool.HoverThumbnail);
+		Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
+		Assert.Equal(0, transport.Mutations); Assert.Equal(3, transport.Reads);
+	}
+
 	private static async Task Until(Func<bool> condition)
 	{
 		var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -428,6 +456,26 @@ public sealed class MediaLibraryBrowsingTests
 		public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 		public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId id, string path, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 		public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(MediaAssetId id, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
+	}
+	private sealed class PressureTransport : IOperatorControlTransport
+	{
+		private readonly ProductionId _production = ProductionId.New();
+		private readonly ProductionSourceId _source = ProductionSourceId.New();
+		public int Reads, Mutations;
+		public OperatorHealthDescriptor Health = OperatorHealthDescriptor.Unavailable with {
+			Runtime = new("PASS", "Observed Runtime"), ObservedAtUtc = DateTimeOffset.UtcNow,
+			FrameTime = TimeSpan.FromMilliseconds(2), FrameBudget = TimeSpan.FromMilliseconds(20) };
+		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+		{
+			Reads++;
+			return ValueTask.FromResult(new OperatorStatusSnapshot(
+				new(ControlContractVersion.Current, _production, new Revision(1), new(_source, _source)),
+				[new(_source.ToString(), "Camera")], "READY", "READY", "READY", "UNKNOWN", "IDLE", false, 0, health: Health));
+		}
+		private ValueTask<OperatorMutationResponse> Forbidden() { Mutations++; throw new InvalidOperationException("Hover must not mutate production."); }
+		public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) => Forbidden();
+		public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) => Forbidden();
+		public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) => Forbidden();
 	}
 	private sealed class ForbiddenTransport : IOperatorControlTransport
 	{
