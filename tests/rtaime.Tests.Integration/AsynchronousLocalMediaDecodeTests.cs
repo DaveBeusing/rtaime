@@ -126,6 +126,19 @@ public sealed class AsynchronousLocalMediaDecodeTests
     }
 
     [Fact]
+    public void Decoder_release_failure_is_reported_by_lifecycle_cleanup_instead_of_a_successful_join()
+    {
+        var decoder = new ControlledDecoder { FailDispose = true };
+        var worker = new LocalMediaDecodeWorker(Source(decoder));
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(3)));
+        Assert.Throws<IOException>(() => worker.Dispose());
+        Assert.True(decoder.Disposed);
+        Assert.Equal("runtime.media_decode.dispose_failed", worker.Snapshot.Failure?.Code);
+        Assert.Equal(LocalMediaDecodeState.Failed, worker.Snapshot.State);
+        Assert.Equal(0, worker.Snapshot.QueuedFrames);
+    }
+
+    [Fact]
     public void Unacknowledged_native_cancellation_is_a_cleanup_failure_and_never_reuses_the_reader()
     {
         var decoder = new ControlledDecoder { BlockCall = 4, FailCancellation = true };
@@ -302,6 +315,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         public int BlockCall { get; init; }
         public bool FailReads { get; set; }
         public bool FailCancellation { get; init; }
+        public bool FailDispose { get; init; }
         public bool Disposed { get; private set; }
         public long[]? Timestamps { get; init; }
         public ManualResetEventSlim ReadBlocked { get; } = new();
@@ -363,7 +377,13 @@ public sealed class AsynchronousLocalMediaDecodeTests
         public void Dispose()
         {
             Enter();
-            try { Disposed = true; ReadBlocked.Dispose(); ReleaseRead.Dispose(); }
+            try
+            {
+                Disposed = true;
+                ReadBlocked.Dispose();
+                ReleaseRead.Dispose();
+                if (FailDispose) throw new IOException("Injected native decoder release failure.");
+            }
             finally { Interlocked.Decrement(ref _operations); }
         }
 

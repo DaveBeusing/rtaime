@@ -302,8 +302,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             throw new TimeoutException("Local media decoder did not acknowledge cancellation within ten seconds.");
         _epoch.Dispose();
         _wake.Dispose();
-        if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" } cancellationFailure)
-            throw new IOException(cancellationFailure.Message);
+        if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" or "runtime.media_decode.dispose_failed" } cleanupFailure)
+            throw new IOException(cleanupFailure.Message);
     }
 }
 
