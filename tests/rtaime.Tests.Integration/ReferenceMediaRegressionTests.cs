@@ -390,7 +390,7 @@ public sealed class ReferenceMediaRegressionTests
         var report = new {
             SchemaVersion = "1.0", SourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
             asset.Manifest, ProbeVersion = LocalMediaStreamMetadata.CurrentVersion, Metadata = metadata,
-            Provider = "Windows Media Foundation", Host = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            Provider = "Windows Media Foundation", DecoderBinaryIdentity = "UNVERIFIED", PinnedDecoder = false, Host = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             DecoderAvailability = outcome, FailureCode = failureCode, Detail = detail, PhysicalQualification = "UNVERIFIED"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });

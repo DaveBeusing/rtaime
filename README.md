@@ -416,3 +416,9 @@ Local MP4 playback now uses one bounded decode worker per Runtime session, quali
 preroll and generation-fenced PTS admission. Program cadence performs no local-file
 decode/seek work. See [local media ownership and underrun policy](docs/LocalMediaFileSource.md#asynchronous-decode-ownership-and-preroll);
 hosted software regression does not establish physical SSD/GPU qualification.
+
+Local input uses independent bounded MP4/QuickTime probes before Windows decoding.
+Restricted MOV/H.264 with AAC or PCM16 and per-host HEVC Main/Main10 outcomes are
+covered by the [format qualification matrix](docs/LocalMediaFileSource.md#container-probes-and-format-qualification).
+Decoder availability, real software decoding and physical qualification remain
+separate; ProRes/DNx/MXF input and HDR conversion are unsupported.

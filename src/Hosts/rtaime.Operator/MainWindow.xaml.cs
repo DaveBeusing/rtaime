@@ -523,7 +523,7 @@ public partial class MainWindow : Window
 		var dialog = new OpenFileDialog
 		{
 			Title = "Open local media",
-			Filter = "MP4 Video (*.mp4)|*.mp4",
+			Filter = "Local video (*.mp4;*.mov)|*.mp4;*.mov",
 			CheckFileExists = true,
 			Multiselect = false
 		};
@@ -535,7 +535,7 @@ public partial class MainWindow : Window
 		var dialog = new OpenFileDialog
 		{
 			Title = "Import media into library",
-			Filter = "MP4 Video (*.mp4)|*.mp4",
+			Filter = "Local video (*.mp4;*.mov)|*.mp4;*.mov",
 			CheckFileExists = true,
 			Multiselect = true
 		};
@@ -547,7 +547,7 @@ public partial class MainWindow : Window
 		var dialog = new OpenFileDialog
 		{
 			Title = "Relink media asset",
-			Filter = "MP4 Video (*.mp4)|*.mp4",
+			Filter = "Local video (*.mp4;*.mov)|*.mp4;*.mov",
 			CheckFileExists = true,
 			Multiselect = false
 		};

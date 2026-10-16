@@ -12,7 +12,7 @@ Media Deck Operator composes the local-media capabilities delivered by Local Med
 
 The deck exposes:
 
-- Windows file selection for a local MP4;
+- Windows file selection for local MP4 or restricted QuickTime MOV/H.264;
 - production source-slot selection through the existing Operator source bank;
 - confirmed clip name and source identity;
 - resolution, frame rate, video codec, audio codec/channels/sample rate and duration;
@@ -179,3 +179,12 @@ A decoder cleanup failure remains confirmed Error with
 runtime.media_deck.cleanup_failed. Replacement and probe are blocked until the
 supported RuntimeHost lifecycle restart; the Operator displays the returned failure
 and does not invent an automatic retry or successful close.
+
+## Container admission feedback
+
+Open/import/relink offer MP4 and MOV; selecting an extension does not qualify it.
+Runtime checks the actual brand, sample entries, metadata and installed decoder,
+then preroll. Restricted MOV is H.264 with AAC or PCM16 stereo 48 kHz.
+Unsupported rotation/aspect/color/edit/audio layouts and unavailable decoders
+remain visible as normal open errors. ProRes/DNx/MXF input is unsupported.
+See the [format matrix](LocalMediaFileSource.md#container-probes-and-format-qualification).

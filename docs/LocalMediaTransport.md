@@ -109,3 +109,12 @@ Unloaded success or admit a replacement reader. Use the supported host lifecycle
 restart after reviewing diagnostics. Close, open and probe are serialized on the
 lifecycle path; Program admission retains its independent bounded lock and never
 waits for their native operations.
+
+## Container-aware metadata
+
+Transport consumes the existing normalized probe after independent MP4 or
+QuickTime admission. Native sample times and single qualified timeline edits
+are interpreted by the Windows demux; the Runtime still uses decoded PTS and its
+existing rational Program cadence. Unsupported edit lists fail before decoder
+creation. Seek/preroll and generation fencing are shared across admitted formats;
+no alternate timeline or production clock is introduced.
