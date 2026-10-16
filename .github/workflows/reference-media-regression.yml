@@ -161,6 +161,9 @@ jobs:
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
       - name: Real playback and local fault baseline
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReferenceMediaPlaybackBaselineTests" --logger "console;verbosity=detailed"
+      - name: Require actual source-bound playback evidence
+        shell: pwsh
+        run: ./build/testmedia/Test-LocalPlaybackEvidence.ps1 -Path "$env:RTAIME_REFERENCE_MEDIA_OUTPUT/local-playback-baseline.json" -SourceCommit $env:RTAIME_SOURCE_COMMIT -Minutes $env:RTAIME_LOCAL_PLAYBACK_MINUTES
       - name: Preserve bounded reports, never decoded media
         if: always()
         uses: actions/upload-artifact@v6

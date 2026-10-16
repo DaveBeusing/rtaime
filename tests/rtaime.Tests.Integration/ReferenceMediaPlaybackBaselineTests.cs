@@ -15,7 +15,9 @@ public sealed class ReferenceMediaPlaybackBaselineTests
     [Fact]
     public async Task Long_reference_plays_through_the_existing_RuntimeHost_cadence_and_retains_bounded_evidence()
     {
-        if (Environment.GetEnvironmentVariable("RTAIME_LOCAL_PLAYBACK_MINUTES") is not ("10" or "60")) return;
+        var requestedMinutes = Environment.GetEnvironmentVariable("RTAIME_LOCAL_PLAYBACK_MINUTES");
+        if (string.IsNullOrEmpty(requestedMinutes)) return;
+        Assert.Contains(requestedMinutes, new[] { "10", "60" });
         Assert.True(OperatingSystem.IsWindows(), "Actual Windows Media Foundation playback is required.");
         Assert.True(ReferenceMediaTestAsset.IsRegressionEnabled, "Long playback requires real reference generation.");
         var minutes = int.Parse(Environment.GetEnvironmentVariable("RTAIME_LOCAL_PLAYBACK_MINUTES")!);
