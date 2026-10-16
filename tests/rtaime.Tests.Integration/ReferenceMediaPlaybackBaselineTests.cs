@@ -134,12 +134,18 @@ public sealed class ReferenceMediaPlaybackBaselineTests
             await deck.StopAsync();
             await deck.Timeline.SeekToFrameAsync(59);
             Assert.Equal(59, deck.Timeline.State.ConfirmedFrame);
+            await Until(() => runtime.MediaDeck!.Snapshot.State != MediaDeckState.Loading, TimeSpan.FromSeconds(8));
+            Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.PauseAsync();
+            await Until(() => runtime.MediaDeck!.Snapshot.State == MediaDeckState.Paused, TimeSpan.FromSeconds(8));
+            await deck.RefreshAsync();
             Assert.Equal(MediaDeckState.Paused, deck.Snapshot.State);
             await deck.Timeline.SeekToFrameAsync(61);
             Assert.Equal(61, deck.Timeline.State.ConfirmedFrame);
+            await Until(() => runtime.MediaDeck!.Snapshot.State != MediaDeckState.Loading, TimeSpan.FromSeconds(8));
+            Assert.NotEqual(MediaDeckState.Error, runtime.MediaDeck!.Snapshot.State);
             await deck.PlayAsync();
             await Task.Delay(250);
             await deck.StopAsync();
