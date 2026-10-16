@@ -21,6 +21,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         var stop = 0;
         var producer = new Thread(() =>
         {
+            if (!OperatingSystem.IsWindows()) return;
             long timestamp = 0;
             while (true)
             {
@@ -70,7 +71,11 @@ public sealed class AsynchronousLocalMediaDecodeTests
         using var cancellation = new CancellationTokenSource();
         using var entered = new ManualResetEventSlim();
         callback.BeginRead();
-        var pending = Task.Run(() => { entered.Set(); return callback.WaitForRead(cancellation.Token); });
+        var pending = Task.Run(() => {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+            entered.Set();
+            return callback.WaitForRead(cancellation.Token);
+        });
         Assert.True(entered.Wait(TimeSpan.FromSeconds(1)));
         await Task.Delay(25);
         cancellation.Cancel();
@@ -84,7 +89,10 @@ public sealed class AsynchronousLocalMediaDecodeTests
         callback.Dispose();
         Assert.Equal(0, callback.OnReadSample(0, 0, 0, 101, IntPtr.Zero));
         Assert.Equal(0, callback.OnFlush(0));
-        Assert.Throws<ObjectDisposedException>(() => callback.BeginRead());
+        Assert.Throws<ObjectDisposedException>(() => {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+            callback.BeginRead();
+        });
     }
 
     [Fact]
