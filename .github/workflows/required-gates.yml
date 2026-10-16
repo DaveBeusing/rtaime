@@ -456,6 +456,9 @@ jobs:
       - name: Shortcut editor and strict profile regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorShortcutProfileTests|FullyQualifiedName~OperatorCommandPaletteTests|FullyQualifiedName~OperatorLibraryTests" --logger "console;verbosity=detailed"
 
+      - name: Media smart query and batch isolation regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaSmartSearchBatchTests|FullyQualifiedName~MediaLibraryBrowsingTests" --logger "console;verbosity=detailed"
+
       - name: Inspector typed transfer and local transaction regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests|FullyQualifiedName~TimelineErgonomicsTests" --logger "console;verbosity=detailed"
       - name: Operator real XAML startup qualification

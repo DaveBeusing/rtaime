@@ -720,22 +720,6 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		});
 	}
 
-	private async Task ImportMediaAssetsAsync()
-	{
-		if (_catalogClient is null || _importFilePicker is null)
-			return;
-		var paths = _importFilePicker();
-		if (paths.Count == 0)
-			return;
-
-		await RunCatalogOperationAsync(async () =>
-		{
-			var result = await _catalogClient.ImportMediaAssetsAsync(paths);
-			SetCatalogSnapshot(result.Snapshot);
-			_catalogError = FormatMutationFailures(result);
-		});
-	}
-
 	private async Task RefreshCatalogAsync()
 	{
 		if (_catalogClient is null)
