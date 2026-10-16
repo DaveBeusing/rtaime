@@ -407,6 +407,13 @@ public sealed class MediaLibraryBrowsingTests
 						await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 					}
 					var wrap = Descendants(browser).OfType<VirtualizingWrapPanel>().FirstOrDefault();
+					Assert.NotNull(wrap);
+					Assert.Equal(browser == list, wrap.SingleColumn);
+					if (browser == list)
+					{
+						Assert.Equal(48d, wrap.ItemHeight);
+						Assert.InRange(wrap.ExtentHeight, 4096d * 48, 4096d * 48);
+					}
 					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}; generator={browser.ItemContainerGenerator.Status}; detail={wrap?.RealizationDetail}.");
 					Assert.True(browser.ItemContainerGenerator.ContainerFromIndex(index) is not null,
 						$"{browser.Name}: index={index}, items={browser.Items.Count}, realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}, generator={browser.ItemContainerGenerator.Status}, detail={wrap?.RealizationDetail}");

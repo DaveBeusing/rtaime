@@ -34,6 +34,11 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		typeof(VirtualizingWrapPanel),
 		new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange));
 
+	public static readonly DependencyProperty SingleColumnProperty = DependencyProperty.Register(
+		nameof(SingleColumn), typeof(bool), typeof(VirtualizingWrapPanel),
+		new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange));
+	public bool SingleColumn { get => (bool)GetValue(SingleColumnProperty); set => SetValue(SingleColumnProperty, value); }
+
 	private Size _extent;
 	private Size _viewport;
 	private double _verticalOffset;
@@ -91,7 +96,8 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		var viewportWidth = NormalizeViewport(availableSize.Width, (itemWidth * 3.0) + (horizontalSpacing * 2.0));
 		var viewportHeight = NormalizeViewport(availableSize.Height, (itemHeight * 4.0) + (verticalSpacing * 3.0));
 
-		_itemsPerRow = Math.Max(1, (int)Math.Floor((viewportWidth + horizontalSpacing) / columnStride));
+		if (SingleColumn) itemWidth = viewportWidth;
+		_itemsPerRow = SingleColumn ? 1 : Math.Max(1, (int)Math.Floor((viewportWidth + horizontalSpacing) / columnStride));
 		var rowCount = itemCount == 0 ? 0 : (int)Math.Ceiling(itemCount / (double)_itemsPerRow);
 		var extentHeight = rowCount == 0 ? 0 : (rowCount * itemHeight) + ((rowCount - 1) * verticalSpacing);
 		_extent = new Size(viewportWidth, extentHeight);
@@ -129,7 +135,7 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 	protected override Size ArrangeOverride(Size finalSize)
 	{
-		var itemWidth = NormalizeLength(ItemWidth, 168.0);
+		var itemWidth = SingleColumn ? _viewport.Width : NormalizeLength(ItemWidth, 168.0);
 		var itemHeight = NormalizeLength(ItemHeight, 126.0);
 		var horizontalSpacing = NormalizeSpacing(HorizontalSpacing);
 		var verticalSpacing = NormalizeSpacing(VerticalSpacing);

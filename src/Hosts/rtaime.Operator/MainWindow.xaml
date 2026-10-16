@@ -522,7 +522,7 @@
 								</controls:RtaimeListBox.Style>
 								<controls:RtaimeListBox.ItemsPanel>
 									<ItemsPanelTemplate>
-										<VirtualizingStackPanel IsItemsHost="True" />
+										<local:VirtualizingWrapPanel IsItemsHost="True" SingleColumn="True" ItemHeight="48" />
 									</ItemsPanelTemplate>
 								</controls:RtaimeListBox.ItemsPanel>
 								<controls:RtaimeListBox.ItemTemplate>
