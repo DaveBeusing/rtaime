@@ -76,7 +76,7 @@ jobs:
       - name: Precision Inspector and draft authority regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests" --logger "console;verbosity=detailed"
       - name: Dock workspace model and restore regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests|FullyQualifiedName~WorkspacePresentationTemplateTests" --logger "console;verbosity=detailed"
 
       - name: Release readiness correlation regressions
         shell: pwsh

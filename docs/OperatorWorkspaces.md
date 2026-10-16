@@ -333,3 +333,29 @@ Ctrl+K and the Commands navigation item open the shared palette from the main or
 ## Show checks and activity
 
 Open **Show checks** in the navigation rail or search **Show preflight** in Commands (Ctrl+K). The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state observations with recent correlated requests and the existing notifications. Review links lead to existing workspaces. Health incidents, recovery and support bundles remain in their established services; acknowledgement does not change production health or permit show launch.
+
+## Focus, Cinema and deterministic restore
+
+SETTINGS and the Commands palette expose **FOCUS**, **CINEMA** and **RESTORE**. Existing Ctrl+Shift+F focuses the selected panel; Ctrl+Shift+C toggles Cinema over the existing Program monitoring presentation. Escape restores either mode, including when the original Operator was windowed. Numeric-field Escape keeps its existing first chance to cancel an edit. F11 and monitor FULL commands retain their established meanings.
+
+Mode entry captures the current workspace layout, viewer mode, center state, fullscreen state and monitor-fullscreen restore context. The selected existing panel is presented centrally; Cinema selects MONITORS and the established Program fullscreen command. Restore returns to the exact prior built-in/docked/tabbed/floating arrangement, including whether docking was originally enabled, and returns keyboard focus when the prior control remains reachable. Workspace switching, reset, explicit dock/float actions and template Apply leave the transient mode first. Mode projections never replace the normal saved layout or fullscreen preference, including explicit Save and shutdown.
+
+The main navigation/status/transport regions remain outside docking. Panel chrome also displays current Program identity, connection and safety, bound to the original Operator view model. Restore remains visible in focused/detached chrome. Cinema is monitoring presentation and cannot TAKE, route, seek or introduce a second renderer.
+
+## Named workspace layout templates
+
+Open **LAYOUT TEMPLATES…** in SETTINGS, or search **Named workspace layout templates** in Commands from any workspace or detached panel. The single owned preference editor preserves the current workspace; its name field captures that actual workspace, not a forced SETTINGS destination. It does not forward production shortcuts. Escape closes the editor and returns focus where the previous control remains available.
+
+Use a unique name of up to 64 characters, then **Save new template**. Up to 16 templates are retained. Selecting one is inspection only; its destination workspace is shown. **Apply** separately switches to that workspace and restores its layout, leaving the other seven independent layouts unchanged. **Delete** removes only the local template definition.
+
+Templates are an additive presentation component in the existing schema-6 `operator-layout.json`, alongside workspace layouts; no second preference database is introduced. Missing template data defaults to an empty list. Invalid/duplicate names and entries are normalized out within the same bounded load/save path. Failed preference writes are reported in the editor.
+
+**Export** writes one portable JSON document with format `rtaime.operator-workspace-template`, document version 1 and the source layout schema version. It contains only a name, canonical workspace and normalized presentation/docking preferences, including floating placements. It contains no production sources, media paths, credentials or command state. Writes use a temporary sibling and atomic replacement. **Import** reads asynchronously with a strict 1 MiB bound, validates format/version/content and adds a uniquely named template; it never applies automatically or overwrites an existing name.
+
+Portable documents using supported older layout versions and existing version-2 through version-6 layout files reuse the established migration policy: pre-v4 geometry resets to canonical dimensions, v4–v6 layout values remain normalized, legacy workspace names map to their accepted destinations, and unknown future versions are rejected. Importing a complete legacy layout captures only its selected workspace, not its other preferences or production values. Floating windows use the existing real-work-area/DPI restore path, with missing monitors falling back to an available display.
+
+## Detached-view retention and qualification
+
+An unrelated tab or dock change retains the same native floating window, content, view model and monitoring projection for each unchanged floating panel. It does not unload/reparent that monitor subtree. Closing a detached panel resolves its current return group, and primary shutdown closes all owned windows and unregisters display notifications before normal monitoring teardown.
+
+`WorkspacePresentationTemplateTests` covers transient-save exclusion, fullscreen/windowed restore, workspace independence, explicit template application, bounded collections, v2–v6 migration, portable roundtrip, malformed/future/oversized documents, duplicate rejection, cancelled export and visible write failures. The real-window docking qualification checks retained native window/content identity and zero monitor unloads on unrelated moves, visible Program status in Cinema, Focus/Cinema restoration, the shared template editor and unchanged Preview/Program identities. Existing synthetic 100/125/150/200% DPI and off-screen/hotplug recovery checks remain required. Physical mixed-monitor hotplug, screen-reader/IME interaction and GPU/monitoring lease behavior on reference hardware remain UNVERIFIED until measured there.

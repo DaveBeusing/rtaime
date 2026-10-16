@@ -899,3 +899,5 @@ The existing custom Inspector toolbar provides bounded, grouped local undo/redo 
 See [Operator commands and shortcuts](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) for compatibility, limits, grouping and authority exclusions. These are reversible presentation drafts, not a backend live-undo capability.
 
 The [Media Library](MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.
+
+[Workspace layout templates](OperatorWorkspaces.md#named-workspace-layout-templates) add named portable presentation presets, deterministic Focus/Cinema restore and retained detached views. They reuse the original Operator models and monitoring and do not change production state.

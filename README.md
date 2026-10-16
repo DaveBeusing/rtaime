@@ -398,3 +398,5 @@ Recent items, stable-ID favorites and contextual help are available through Comm
 The Inspector supports grouped local draft undo/redo and compatible typed attribute transfer for graphics/processing, audio gain and cue names. APPLY/RENAME remain explicit; confirmed live operations are excluded. See [Inspector draft transactions](docs/OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer).
 
 The [Media Library](docs/MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.
+
+[Workspace layout templates](docs/OperatorWorkspaces.md#named-workspace-layout-templates) add named portable presentation presets, deterministic Focus/Cinema restore and retained detached views. They reuse the original Operator models and monitoring and do not change production state.
