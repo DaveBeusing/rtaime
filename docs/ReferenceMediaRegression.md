@@ -273,3 +273,27 @@ timestamps, no missing audio through the reference tail, fewer native packet rea
 than video frames, and valid audio after a GOP-adjacent seek. The repeated ten-minute
 host baseline must also pass its audio check. The earlier failing source-bound report
 is retained on the PR for comparison; it is not reused as corrected-source PASS.
+
+### Managed allocation diagnosis with continuous Replay enabled
+
+The first asynchronous ten-minute run on source
+`2df6447c810dc05a3c8a861fad20858947f84546` decoded all 30,000 frames and 28,800,000
+audio samples but FAILED the unchanged 512-MiB post-warmup private-memory guard
+(actual growth 545,296,384 bytes). Seven queue underruns and 94 discarded frames
+were recorded; decoded-audio continuity alone did not qualify Program output.
+
+Source-bound resource samples showed LOH growth until Gen2 collection. A separate
+60-second real-host allocation probe identified repeated approximately 3,110,400-byte
+byte arrays. Default continuous Replay creates a new MP4 writer every two seconds;
+each writer previously allocated one NV12 conversion array, about 93 MB/minute
+of LOH allocation. The writer now pools that scratch and passes only its exact
+logical extent to native samples, returning it on finalize, abort and initialization
+failure. Replay remains enabled, memory/handle ceilings stay unchanged and no forced
+GC conceals the result. Repeated writer regressions include oversized rentals,
+independent MP4 playback and storage-failure cleanup.
+
+The optional short allocation observer retains at most 33 sampled type/size buckets,
+runs in a separate diagnostic job and does not qualify ten-minute or physical
+playback. The normal long acceptance does not enable that observer. A bounded
+previous-artifact inspection job verifies source identity before exposing prior
+resource series; it never promotes an earlier run to current-source PASS.
