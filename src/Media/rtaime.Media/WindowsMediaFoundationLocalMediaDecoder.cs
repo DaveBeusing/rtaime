@@ -31,6 +31,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
     private int _pendingAudioFrameOffset;
     private long _pendingAudioSamplePosition;
     private bool _audioEnded;
+    private bool _videoEnded;
 
 	private WindowsMediaFoundationLocalMediaDecoder(
 		IMFSourceReader reader,
@@ -210,6 +211,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
             _pendingAudioPacket = null;
             _pendingAudioFrameOffset = 0;
             _audioEnded = false;
+            _videoEnded = false;
 			return LocalMediaSeekResult.Positioned(frameNumber);
 		}
 		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or OverflowException)
@@ -229,6 +231,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         _readCancellation = cancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
 		ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_videoEnded) { frame = null; return false; }
 		var minimumTimestamp = _pendingSeekTimestamp;
         var progress = new LocalMediaSampleProgress();
 		long videoTimestamp;
@@ -404,6 +407,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				try
 				{
 					CopyRgb32ToRgba(buffer, Probe.VideoFormat, _rgbaFrameBuffer);
+                    if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0) _videoEnded = true;
 					return true;
 				}
 				finally
@@ -456,6 +460,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				try
 				{
 					payload = CopyMediaBuffer(buffer);
+                    if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0) _audioEnded = true;
 					return true;
 				}
 				finally
