@@ -363,3 +363,7 @@ See the [input matrix](LocalMediaFileSource.md#container-probes-and-format-quali
 for approved scope, unsupported professional formats and separate physical evidence.
 The prior intermittent ControlHost durability/shutdown findings remain separate
 release blockers until resolved and qualified through the packaged lifecycle.
+
+A separate generated negative fixture removes the redundant container `pasp`
+atom while retaining non-square pixel signaling in H.264 stream VUI. The actual
+Windows native metadata must reject it before decoder normalization or READY.

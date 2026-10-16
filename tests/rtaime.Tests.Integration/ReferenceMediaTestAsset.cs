@@ -146,7 +146,7 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
             var videoOptions = hevc
                 ? $"-c:v libx265 -preset ultrafast -x265-params pools=2:frame-threads=2 -profile:v {(tenBit ? "main10" : "main")} -pix_fmt {(tenBit ? "yuv420p10le" : "yuv420p")} -tag:v hvc1"
                 : mov ? "-c:v copy"
-                : $"-c:v libx264 -preset veryfast -profile:v baseline -pix_fmt yuv420p {(vfr ? "-vf select='not(eq(mod(n,5),2))' -fps_mode vfr" : "")}";
+                : $"-c:v libx264 -preset veryfast -profile:v baseline -pix_fmt yuv420p {(vfr ? "-vf select='not(eq(mod(n,5),2))' -fps_mode vfr" : profile == "non-square" ? "-vf setsar=2/1" : "")}";
             var audioOptions = pcm ? "-c:a pcm_s16le -ar 48000 -ac 2" : "-c:a copy";
             var result = RunFfmpeg($"-y -hide_banner -loglevel error -i {Quote(seed.Path)} -t 3 " +
                 $"-map 0:v:0 -map 0:a:0 {videoOptions} {audioOptions} -map_metadata -1 -movflags +faststart {Quote(path)}",
@@ -155,6 +155,20 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
                 throw new Xunit.Sdk.XunitException($"Format reference generation failed: {profile}: {result.Error}");
             if (new FileInfo(path).Length > 20L * 1024 * 1024)
                 throw new InvalidDataException("Format reference exceeds the 20 MiB asset limit.");
+            if (profile == "non-square")
+            {
+                // Keep stream VUI aspect signaling, remove only the redundant container pasp atom.
+                var bytes = File.ReadAllBytes(path);
+                var matches = 0;
+                for (var index = 4; index + 12 <= bytes.Length; index++)
+                {
+                    if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(index - 4, 4)) == 16 &&
+                        bytes.AsSpan(index, 4).SequenceEqual("pasp"u8))
+                    { "free"u8.CopyTo(bytes.AsSpan(index, 4)); matches++; }
+                }
+                if (matches != 1) throw new InvalidDataException("Expected exactly one generated pixel-aspect atom.");
+                File.WriteAllBytes(path, bytes);
+            }
             var manifest = seed.Manifest with {
                 Profile = profile, Container = mov ? "QuickTime MOV" : "MP4",
                 VideoCodec = hevc ? "HEVC" : "H.264/AVC", AudioCodec = pcm ? "PCM16" : "AAC",

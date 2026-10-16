@@ -385,6 +385,19 @@ public sealed class ReferenceMediaRegressionTests
         WriteFormatOutcome(asset, metadata, "SOFTWARE_DECODED", null, null);
     }
 
+    [Fact]
+    public void Stream_only_non_square_aspect_is_rejected_before_decode_or_ready()
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.GenerateFormat("non-square");
+        // Container aspect is intentionally absent; actual stream metadata must still fence conversion.
+        Assert.Equal(MediaVideoCodec.H264, new Mp4LocalMediaProbe().Read(asset.Path).VideoCodec);
+        var open = new LocalMediaFileProvider().TryOpen(asset.Path, MediaSourceId.New());
+        Assert.False(open.Succeeded);
+        Assert.Null(open.Source);
+        Assert.Equal("media.file.pixel_aspect_unsupported", open.Failure?.Code);
+    }
+
     private static void WriteFormatOutcome(ReferenceMediaTestAsset asset, LocalMediaStreamMetadata metadata,
         string outcome, string? failureCode, string? detail)
     {

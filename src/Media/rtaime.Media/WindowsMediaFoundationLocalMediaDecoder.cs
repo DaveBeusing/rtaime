@@ -144,6 +144,11 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                 if (nativeTransfer is >= 9)
                     return LocalMediaDecoderOpenResult.Rejected("media.file.color_unsupported",
                         "Native logarithmic, HDR or wide-gamut transfer conversion is not qualified.");
+                var nativeAspectKey = MediaFoundation.MfMtPixelAspectRatio;
+                if (videoNative.GetUINT64(ref nativeAspectKey, out var nativeAspect) >= 0 &&
+                    ((uint)(nativeAspect >> 32) == 0 || (uint)(nativeAspect >> 32) != (uint)nativeAspect))
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.pixel_aspect_unsupported",
+                        "The native video stream reports non-square or invalid pixels.");
                 var nativeRotation = TryGetUInt32(videoNative, new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1"));
                 if (nativeRotation is > 0)
                     return LocalMediaDecoderOpenResult.Rejected("media.file.transform_unsupported", "Native video rotation is not qualified.");
