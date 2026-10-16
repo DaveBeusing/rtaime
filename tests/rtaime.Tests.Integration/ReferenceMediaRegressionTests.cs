@@ -59,6 +59,15 @@ public sealed class ReferenceMediaRegressionTests
 			Assert.NotNull(decoded.Frame.Audio);
 			Assert.False(decoded.Frame.AudioPayload.IsEmpty);
 		}
+        var measurements = source.Measurements;
+        Assert.Equal(12UL, measurements.DecodedFrames);
+        Assert.True(measurements.DecodedAudioSamples > 0);
+        Assert.True(measurements.NativeVideoRead.Calls >= 12);
+        Assert.True(measurements.NativeAudioRead.Calls >= 12);
+        Assert.True(measurements.OpenMilliseconds >= 0);
+        Assert.True(measurements.FirstFrameMilliseconds >= measurements.OpenMilliseconds);
+        Assert.Equal(0UL, measurements.ReadFailures);
+        Assert.Equal(0UL, measurements.VideoTimestampRegressions);
 	}
 
 	[Fact]
