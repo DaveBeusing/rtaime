@@ -130,7 +130,8 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal((byte)0, session.ProcessNextBoundary().RgbaPixels.Span[0]);
         Assert.Equal((byte)0, admitted.RgbaPixels.Span[0]);
         var beforeRebind = session.DecodeSnapshot.Generation;
-        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        var rebind = session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId, 2));
+        Assert.True(rebind.Committed, rebind.Prepare.Failure?.Message ?? rebind.Commit?.Failure?.Message);
         Assert.True(session.DecodeSnapshot.Generation > beforeRebind);
         Assert.Equal((byte)0, session.ProcessNextBoundary().RgbaPixels.Span[0]);
         Assert.True(session.DecodeSnapshot.Generation >= 51);
@@ -199,12 +200,12 @@ public sealed class AsynchronousLocalMediaDecodeTests
     private static void Until(Func<bool> condition) =>
         Assert.True(SpinWait.SpinUntil(condition, TimeSpan.FromSeconds(3)));
 
-    private static PreparedExecutionContract Prepared(LocalMediaFileProvider provider, MediaSourceId source)
+    private static PreparedExecutionContract Prepared(LocalMediaFileProvider provider, MediaSourceId source, ulong revision = 1)
     {
         var capability = provider.Descriptor.Capabilities.Single(c => c.Kind == LocalMediaCapabilityKinds.MediaRoute);
         var resource = provider.Descriptor.Resources.First(r => r.Kind == LocalMediaCapabilityKinds.MediaRoute);
         return new(RuntimeContractVersion.Current, PreparedExecutionId.New(),
-            new AuthoritySnapshotReference(Identity.New(), new Revision(1)), new Generation(1),
+            new AuthoritySnapshotReference(source.Value, new Revision(revision)), new Generation(revision),
             [new PreparedExecutionBinding(source.Value, capability.CapabilityId, resource, source, null)]);
     }
 
