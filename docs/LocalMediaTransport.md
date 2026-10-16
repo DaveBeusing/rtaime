@@ -30,7 +30,7 @@ The additive contract remains compatible with Media contract version `1.0` becau
 
 ## State semantics
 
-A local file that has already passed Local Media File Source probing enters `Ready`; Local Media File Source performs synchronous open/probe, so `Unloaded` and `Loading` exist in the contract for observation/composition but are not emitted by the current loaded RuntimeHost session.
+A probed local file enters `Ready` only after worker preroll qualifies complete video/audio windows. Open/probe runs outside Program admission. The Runtime deck emits `Loading` while preparing or rebuffering; a loaded asset keeps its transport intent and marker identity during that state. Transport commands acknowledge intent/position, while the deck snapshot reports actual readiness.
 
 Allowed V1 transitions are intentionally narrow:
 
