@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -163,7 +164,8 @@ public sealed class OperatorCombinedVisualQualification
         var identity = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
         var monitoring = main.Monitoring;
         var panels = main.Docking.Panels.ToDictionary(pair => pair.Key, pair => pair.Value);
-        var anchor = Assert.IsType<RtaimeButton>(main.FindName("SynchronizeButton"));
+        var anchor = Descendants(main).OfType<RtaimeNavigationItem>().Single(item =>
+            AutomationProperties.GetName(item) == "Open commands and shortcut profiles");
         var ownerKeys = 0;
         KeyEventHandler received = (_, _) => ownerKeys++;
         main.AddHandler(Keyboard.PreviewKeyDownEvent, received, true);
@@ -202,7 +204,8 @@ public sealed class OperatorCombinedVisualQualification
         }
         try
         {
-            main.Activate(); Assert.True(anchor.Focus());
+            main.Activate();
+            Assert.True(anchor.IsVisible && anchor.IsEnabled && anchor.Focus(), viewport + ": enabled Commands navigation must accept focus.");
             main.OpenCommandPalette();
             main.CommandPalette.Query = "cut";
             await Check(Assert.IsType<OperatorCommandPaletteWindow>(main.CommandPaletteWindow), "palette", "SearchBox");
