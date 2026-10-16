@@ -349,7 +349,7 @@
 						</controls:RtaimeListBox>
 
 						<Grid Grid.Row="3" Margin="0,2,0,0">
-							<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+							<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /><ColumnDefinition Width="36" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
 								<controls:RtaimeComboBox x:Name="MediaSmartBins" ItemsSource="{Binding MediaPool.SmartBins, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedItem="{Binding MediaPool.SelectedSmartBin, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -358,7 +358,16 @@
 								<controls:RtaimeButton Grid.Column="2" Content="Del" Command="{Binding MediaPool.DeleteSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Delete selected Smart Bin; media stays in the library." AutomationProperties.Name="Delete Smart Bin" />
 								<controls:RtaimeButton Grid.Column="3" Content="Filters" Command="{Binding MediaPool.ToggleMetadataFiltersCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Show or hide duration and readiness filters." AutomationProperties.Name="Show media metadata filters" />
 							</Grid>
-							<Grid Grid.Row="1" Height="30" Visibility="{Binding MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+							<Grid Grid.Row="3" Margin="0,2,0,0" Visibility="{Binding MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+                                <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="30"/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
+                                <controls:RtaimeTextBox x:Name="MediaSmartBinName" MaxLength="128" Text="{Binding MediaPool.SmartBinName, RelativeSource={RelativeSource AncestorType={x:Type Window}}, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="Name for a new Smart Bin; Rename changes only the selected saved definition's name." AutomationProperties.Name="Smart Bin name"/>
+                                <controls:RtaimeButton Grid.Column="1" Content="Rename" Command="{Binding MediaPool.RenameSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Rename selected Smart Bin"/>
+                                <controls:RtaimeCheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Hover thumbnails" IsChecked="{Binding MediaPool.HoverPreviewsEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+                                    ToolTip="Hover or keyboard focus shares existing images only. Scrubbing is unavailable; Runtime pressure pauses admission." AutomationProperties.Name="Enable hover and keyboard focus thumbnails"/>
+                            </Grid>
+                            <Grid Grid.Row="1" Height="30" Visibility="{Binding MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 								<controls:RtaimeComboBox ItemsSource="{Binding MediaPool.DurationChoices, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValue="{Binding MediaPool.DurationFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
 									ToolTip="Known catalogue duration; unknown durations stay explicit." AutomationProperties.Name="Media duration filter" />
@@ -513,7 +522,7 @@
 								</controls:RtaimeListBox.Style>
 								<controls:RtaimeListBox.ItemsPanel>
 									<ItemsPanelTemplate>
-										<VirtualizingStackPanel IsItemsHost="True" />
+										<local:VirtualizingWrapPanel IsItemsHost="True" SingleColumn="True" ItemHeight="{StaticResource OperatorMediaListRowHeight}" />
 									</ItemsPanelTemplate>
 								</controls:RtaimeListBox.ItemsPanel>
 								<controls:RtaimeListBox.ItemTemplate>

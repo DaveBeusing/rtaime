@@ -30,6 +30,7 @@
 	<sys:Double x:Key="OperatorTopBarHeight">60</sys:Double>
 	<sys:Double x:Key="OperatorNavigationWidth">92</sys:Double>
 	<sys:Double x:Key="OperatorMediaPanelWidth">400</sys:Double>
+	<sys:Double x:Key="OperatorMediaListRowHeight">48</sys:Double>
 	<sys:Double x:Key="OperatorCenterWidth">1070</sys:Double>
 	<sys:Double x:Key="OperatorInspectorWidth">340</sys:Double>
 	<sys:Double x:Key="OperatorUpperWorkspaceHeight">700</sys:Double>

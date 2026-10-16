@@ -402,3 +402,5 @@ The [Media Library](docs/MediaLibraryAssetBrowser.md) supports composable typed 
 [Workspace layout templates](docs/OperatorWorkspaces.md#named-workspace-layout-templates) add named portable presentation presets, deterministic Focus/Cinema restore and retained detached views. They reuse the original Operator models and monitoring and do not change production state.
 
 Show checks now separates Program/AUX availability and recording target evidence, shows submission provenance and explicit response limits, groups notifications by severity, and offers bounded reminder pauses plus the existing support exporter. See [Show checks and activity](docs/ShowPreflightAndActivity.md).
+
+The Media Library adds freely named/renamed local Smart Bins with validated saved expressions and session hover controls that pause under current Runtime pressure. Hover and keyboard focus share existing thumbnails; independent position scrubbing remains unavailable. See [Media Library](docs/MediaLibraryAssetBrowser.md).

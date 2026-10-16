@@ -25,6 +25,8 @@ public sealed partial class MediaPoolInspectorViewModel
     private readonly MediaLibraryHoverPreview _hoverPreview = new();
 	private MediaSmartBinStore? _binStore;
 	private MediaSmartBin? _selectedSmartBin;
+	private string _smartBinName = "";
+	private bool _hoverPreviewsEnabled = true;
 	private MediaDurationFilter _durationFilter;
 	private MediaReadinessFilter _readinessFilter;
 	private string _searchStatus = "AND terms · quotes for phrases · -term to exclude";
@@ -50,6 +52,17 @@ public sealed partial class MediaPoolInspectorViewModel
 		[new(MediaReadinessFilter.Any, "Any readiness"), new(MediaReadinessFilter.Ready, "Ready"),
 		 new(MediaReadinessFilter.NotReady, "Not ready")];
 	public ICommand SaveSmartBinCommand { get; private set; } = null!;
+	public string SmartBinName
+	{
+		get => _smartBinName;
+		set { if (Set(ref _smartBinName, value ?? "")) RaiseBrowsingCommands(); }
+	}
+	public bool HoverPreviewsEnabled
+	{
+		get => _hoverPreviewsEnabled;
+		set { if (Set(ref _hoverPreviewsEnabled, value)) CancelHover(); }
+	}
+	public ICommand RenameSmartBinCommand { get; private set; } = null!;
 	public ICommand DeleteSmartBinCommand { get; private set; } = null!;
 	public ICommand ClearLibrarySelectionCommand { get; private set; } = null!;
 	public ICommand ToggleMetadataFiltersCommand { get; private set; } = null!;
@@ -69,6 +82,8 @@ public sealed partial class MediaPoolInspectorViewModel
 
 	private void InitializeBrowsing()
 	{
+		RenameSmartBinCommand = new AsyncRelayCommand(RenameSmartBinAsync,
+			() => SelectedSmartBin is not null && !_loadingBins && !_browsingDisposed);
 		SaveSmartBinCommand = new AsyncRelayCommand(SaveSmartBinAsync, () => !_loadingBins && !_browsingDisposed);
 		DeleteSmartBinCommand = new AsyncRelayCommand(DeleteSmartBinAsync, () => SelectedSmartBin is not null && !_loadingBins && !_browsingDisposed);
 		ToggleMetadataFiltersCommand = new AsyncRelayCommand(() =>
@@ -98,6 +113,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			if (!Set(ref _selectedSmartBin, value)) return;
 			RaiseBrowsingCommands();
 			if (value is null || !value.IsValid) return;
+			SmartBinName = value.Name;
 			_restoringBin = true;
 			try
 			{
@@ -129,6 +145,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			SmartBins.Clear();
 			foreach (var bin in bins) SmartBins.Add(bin);
 			_binsLoaded = true;
+			if (_binStore.LastLoadIssue is { } issue) BinStatus = issue;
 		}
 		finally { _loadingBins = false; RaiseBrowsingCommands(); }
 	}
@@ -137,6 +154,11 @@ public sealed partial class MediaPoolInspectorViewModel
 	{
 		if (!_binsLoaded || _binStore is null) { BinStatus = "Smart Bin preferences are not loaded."; return; }
 		var current = CurrentBin();
+		if (MediaLibrarySearch.Parse(current.Search).Error is { } queryError)
+		{ BinStatus = "Cannot save query: " + queryError; return; }
+		var requestedName = SmartBinName.Trim();
+		if (requestedName.Length > 128 || requestedName.Any(char.IsControl))
+		{ BinStatus = "Use a name of at most 128 characters without control characters."; return; }
 		var existing = SmartBins.FirstOrDefault(bin => bin with { Name = current.Name } == current);
 		if (existing is not null) { SelectedSmartBin = existing; BinStatus = "This filter is already saved."; return; }
 		if (SmartBins.Count >= MediaSmartBin.MaximumBins) { BinStatus = "16 Smart Bins maximum; remove one first."; return; }
@@ -144,9 +166,27 @@ public sealed partial class MediaPoolInspectorViewModel
 			(string.IsNullOrWhiteSpace(SearchText) ? "" : " / " + SearchText.Trim());
 		if (name.Length > 112) name = name[..112];
 		var unique = name;
-		for (var index = 2; SmartBins.Any(bin => bin.Name == unique); index++) unique = name + " (" + index + ")";
+		for (var index = 2; SmartBins.Any(bin => string.Equals(bin.Name, unique, StringComparison.OrdinalIgnoreCase)); index++) unique = name + " (" + index + ")";
+		if (requestedName.Length > 0)
+		{
+			if (SmartBins.Any(bin => string.Equals(bin.Name, requestedName, StringComparison.OrdinalIgnoreCase)))
+			{ BinStatus = "That name already exists. Choose a new name or select the bin and Rename."; return; }
+			unique = requestedName;
+		}
 		var saved = current with { Name = unique };
+		if (!saved.IsValid) { BinStatus = "Enter a valid Smart Bin name before saving this query."; return; }
 		SmartBins.Add(saved); SelectedSmartBin = saved;
+		await PersistBinsAsync();
+	}
+	private async Task RenameSmartBinAsync()
+	{
+		if (SelectedSmartBin is not { } selected || !SmartBins.Contains(selected)) return;
+		var renamed = selected with { Name = SmartBinName.Trim() };
+		if (!renamed.IsValid || SmartBins.Any(bin => !ReferenceEquals(bin, selected) &&
+			string.Equals(bin.Name, renamed.Name, StringComparison.OrdinalIgnoreCase)))
+		{ BinStatus = "Use a unique name of at most 128 characters without control characters."; return; }
+		SmartBins[SmartBins.IndexOf(selected)] = renamed;
+		SelectedSmartBin = renamed;
 		await PersistBinsAsync();
 	}
 	private async Task DeleteSmartBinAsync()
@@ -177,13 +217,18 @@ public sealed partial class MediaPoolInspectorViewModel
 	public Task FlushSmartBinsAsync() => _binSave;
 	public async Task BeginHoverAsync(MediaPoolItemViewModel item)
 	{
-		if (_browsingDisposed || _hoverKey == item.Key) return;
+		if (_browsingDisposed) return;
+		if (!HoverPreviewsEnabled || MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
+		{ CancelHover(); HoverStatus = HoverPreviewsEnabled ? "PAUSED · Runtime pressure; no preview work admitted" : "OFF · hover thumbnails disabled"; SetFeedbackVisible(true); return; }
+		if (_hoverKey == item.Key) return;
 		CancelHover();
 		_hoverKey = item.Key;
 		_hoverItem = item;
 		SetFeedbackVisible(true);
 		var preview = await _hoverPreview.RequestAsync(item);
 		if (_browsingDisposed || _hoverKey != item.Key || preview is null) return;
+		if (!HoverPreviewsEnabled || MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
+		{ CancelHover(); HoverStatus = "PAUSED · Runtime pressure or previews disabled"; SetFeedbackVisible(true); return; }
 		HoverThumbnail = preview.Thumbnail; HoverStatus = preview.Status;
 	}
 	public void CancelHover()
@@ -191,6 +236,11 @@ public sealed partial class MediaPoolInspectorViewModel
 		_hoverPreview.Cancel(); _hoverKey = null; _hoverItem = null; HoverThumbnail = null;
 		SetFeedbackVisible(false);
 		HoverStatus = "Hover or focus an asset · scrub capability unavailable";
+	}
+	private void ReconcileHoverPressure()
+	{
+		if (_hoverKey is not null && MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
+		{ CancelHover(); HoverStatus = "PAUSED · Runtime pressure; focus an asset to retry after recovery"; SetFeedbackVisible(true); }
 	}
 	private void SetFeedbackVisible(bool value)
 	{
@@ -201,6 +251,7 @@ public sealed partial class MediaPoolInspectorViewModel
 	{
 		(SaveSmartBinCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DeleteSmartBinCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(RenameSmartBinCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 	private void ReconcileHoverContext()
 	{

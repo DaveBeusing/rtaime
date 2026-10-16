@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -206,6 +207,133 @@ public sealed class MediaLibraryBrowsingTests
 		Assert.Equal(0, transport.Calls);
 	}
 
+	[Fact]
+	public async Task Named_queries_rename_roundtrip_and_reject_duplicates_or_invalid_search_without_authority_calls()
+	{
+		var path = Path.Combine(Path.GetTempPath(), "rtaime-named-bins-" + Guid.NewGuid().ToString("N") + ".json");
+		var transport = new ForbiddenTransport(); var client = new OperatorControlClient(transport);
+		await using var owner = new OperatorViewModel();
+		await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+		using var pool = new MediaPoolInspectorViewModel(owner, deck);
+		try
+		{
+			await pool.LoadSmartBinsAsync(new MediaSmartBinStore(path));
+			pool.SmartBinName = "Evening clips"; pool.SearchText = "type:clip -codec:hevc";
+			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
+			var saved = Assert.Single(pool.SmartBins); Assert.Equal("Evening clips", saved.Name);
+			pool.SmartBinName = "News clips"; pool.RenameSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
+			var renamed = Assert.Single(pool.SmartBins);
+			Assert.Equal(saved with { Name = "News clips" }, renamed);
+			Assert.Equal(renamed, Assert.Single(await new MediaSmartBinStore(path).LoadAsync()));
+			pool.SearchText = "type:audio"; pool.SmartBinName = "NEWS CLIPS";
+			await Until(() => pool.SaveSmartBinCommand.CanExecute(null));
+			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
+			Assert.Single(pool.SmartBins); Assert.Contains("already exists", pool.BinStatus);
+			pool.SearchText = "tag:unsupported"; pool.SmartBinName = "Invalid";
+			await Until(() => pool.SaveSmartBinCommand.CanExecute(null));
+			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
+			Assert.Contains("Cannot save query", pool.BinStatus); Assert.Single(pool.SmartBins);
+			Assert.Equal(renamed, Assert.Single(await new MediaSmartBinStore(path).LoadAsync()));
+			Assert.Equal(0, transport.Calls);
+		}
+		finally { if (File.Exists(path)) File.Delete(path); }
+	}
+
+	[Fact]
+	public async Task Existing_v1_preferences_preserve_valid_queries_and_report_invalid_metadata_without_rewriting()
+	{
+		var path = Path.Combine(Path.GetTempPath(), "rtaime-bin-migration-" + Guid.NewGuid().ToString("N") + ".json");
+		try
+		{
+			var valid = Bin() with { Name = "Legacy", Search = "codec:h264" };
+			var json = JsonSerializer.Serialize(new { Version = 1, Bins = new[] {
+				valid, valid with { Name = "legacy" }, valid with { Name = "Unsupported", Search = "tag:news" },
+				valid with { Name = "Invalid\nname" } } });
+			await File.WriteAllTextAsync(path, json);
+			var store = new MediaSmartBinStore(path);
+			Assert.Equal(valid, Assert.Single(await store.LoadAsync())); Assert.NotNull(store.LastLoadIssue);
+			Assert.Equal(json, await File.ReadAllTextAsync(path));
+			Assert.False(MediaSmartBinPolicy.Matches(Item() with { SearchMetadata = null }, valid));
+			Assert.False(MediaSmartBinPolicy.Matches(Item() with { SearchMetadata = null }, valid with { Search = "-codec:hevc" }));
+			await store.SaveAsync([valid]); Assert.Equal(valid, Assert.Single(await store.LoadAsync())); Assert.Null(store.LastLoadIssue);
+			await File.WriteAllTextAsync(path, "{\"Version\":99,\"Bins\":[]}");
+			Assert.Empty(await store.LoadAsync()); Assert.Contains("Unsupported", store.LastLoadIssue);
+		}
+		finally { if (File.Exists(path)) File.Delete(path); }
+	}
+
+	[Fact]
+	public void Hover_pressure_uses_current_Runtime_evidence_without_inventing_fresh_capacity()
+	{
+		var now = DateTimeOffset.UtcNow;
+		var healthy = OperatorHealthDescriptor.Unavailable with { Runtime = new("PASS", "Observed"), ObservedAtUtc = now,
+			FrameTime = TimeSpan.FromMilliseconds(4), FrameBudget = TimeSpan.FromMilliseconds(20) };
+		Assert.False(MediaLibraryHoverPreview.IsUnderPressure(healthy, now));
+		Assert.True(MediaLibraryHoverPreview.IsUnderPressure(healthy with { FrameTime = healthy.FrameBudget }, now));
+		Assert.True(MediaLibraryHoverPreview.IsUnderPressure(healthy with { Runtime = new("FAIL", "Runtime failure") }, now));
+		Assert.False(MediaLibraryHoverPreview.IsUnderPressure(healthy with { FrameTime = TimeSpan.FromMilliseconds(21), ObservedAtUtc = now.AddSeconds(-11) }, now));
+		Assert.False(MediaLibraryHoverPreview.IsUnderPressure(healthy with { ObservedAtUtc = now.AddSeconds(1) }, now));
+		Assert.False(MediaLibraryHoverPreview.IsUnderPressure(null, now));
+		// Unknown pressure still cannot enable an independent decoder: Capability has no scrub mode.
+		Assert.Equal(MediaHoverCapability.Unavailable, MediaLibraryHoverPreview.Capability(Item()));
+	}
+
+	[Fact]
+	public async Task Disabling_preview_cancels_pending_work_and_retains_no_image_or_production_requests()
+	{
+		var transport = new ForbiddenTransport(); var client = new OperatorControlClient(transport);
+		await using var owner = new OperatorViewModel();
+		await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+		using var pool = new MediaPoolInspectorViewModel(owner, deck);
+		var image = new DrawingImage(); image.Freeze();
+		var item = Item() with { Thumbnail = image };
+		for (var index = 0; index < 100; index++)
+		{
+			pool.HoverPreviewsEnabled = true; var pending = pool.BeginHoverAsync(item);
+			pool.HoverPreviewsEnabled = false; await pending;
+			Assert.Null(pool.HoverThumbnail);
+		}
+		await pool.BeginHoverAsync(item); Assert.Contains("OFF", pool.HoverStatus);
+		pool.HoverPreviewsEnabled = true; await pool.BeginHoverAsync(item);
+		Assert.Same(image, pool.HoverThumbnail);
+		pool.CancelHover(); Assert.Null(pool.HoverThumbnail); Assert.Equal(0, transport.Calls);
+	}
+
+	[Fact]
+	public async Task Runtime_pressure_arriving_during_dwell_cancels_publication_and_requires_deliberate_retry()
+	{
+		var transport = new PressureTransport(); var client = new OperatorControlClient(transport);
+		await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+		await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+		using var pool = new MediaPoolInspectorViewModel(owner, deck);
+		async Task Synchronize()
+		{
+			await Until(() => owner.SynchronizeCommand.CanExecute(null)); owner.SynchronizeCommand.Execute(null);
+			await Until(() => owner.IsConnected && !owner.IsBusy);
+		}
+		await Synchronize();
+		var program = owner.ProgramSourceId; var preview = owner.PreviewSourceId;
+		var image = new DrawingImage(); image.Freeze();
+		var item = Item() with { Thumbnail = image };
+		var pending = pool.BeginHoverAsync(item);
+		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(21), ObservedAtUtc = DateTimeOffset.UtcNow };
+		await client.SynchronizeAsync(); await pending;
+		Assert.Null(pool.HoverThumbnail); Assert.Contains("PAUSED", pool.HoverStatus);
+		await pool.BeginHoverAsync(item); Assert.Null(pool.HoverThumbnail);
+		transport.Health = transport.Health with { FrameTime = TimeSpan.FromMilliseconds(2), ObservedAtUtc = DateTimeOffset.UtcNow };
+		await client.SynchronizeAsync(); Assert.Null(pool.HoverThumbnail); // Recovery does not auto-admit work.
+		await pool.BeginHoverAsync(item); Assert.Same(image, pool.HoverThumbnail);
+		Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
+		Assert.Equal(0, transport.Mutations); Assert.Equal(3, transport.Reads);
+	}
+
+	private static async Task Until(Func<bool> condition)
+	{
+		var deadline = DateTime.UtcNow.AddSeconds(5);
+		while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(10);
+		Assert.True(condition());
+	}
+
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
@@ -249,6 +377,16 @@ public sealed class MediaLibraryBrowsingTests
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 			Assert.Equal(Visibility.Visible, owner.MediaPool.MetadataFiltersVisibility);
+			var name = Assert.IsType<RtaimeTextBox>(owner.FindName("MediaSmartBinName"));
+			Assert.True(name.IsVisible); Assert.True(name.Focus()); Assert.Equal("Smart Bin name", AutomationProperties.GetName(name));
+			var previousName = owner.MediaPool.SmartBinName;
+			name.Text = "Inspection bin"; name.GetBindingExpression(TextBox.TextProperty)!.UpdateSource();
+			Assert.Equal("Inspection bin", owner.MediaPool.SmartBinName); owner.MediaPool.SmartBinName = previousName;
+			Assert.Contains(Descendants(owner).OfType<RtaimeButton>(), button =>
+				AutomationProperties.GetName(button) == "Rename selected Smart Bin" && ReferenceEquals(button.Command, owner.MediaPool.RenameSmartBinCommand));
+			// Leave keyboard focus on a stable visible control before collapsing the editor.
+			// Focus recovery from a hidden text field can otherwise compete with later ScrollIntoView.
+			Assert.True(combo.Focus());
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
 			var items = owner.MediaPool.FilteredItems.ToArray();
 			foreach (var browser in new[] { grid, list })
@@ -269,6 +407,13 @@ public sealed class MediaLibraryBrowsingTests
 						await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 					}
 					var wrap = Descendants(browser).OfType<VirtualizingWrapPanel>().FirstOrDefault();
+					Assert.NotNull(wrap);
+					Assert.Equal(browser == list, wrap.SingleColumn);
+					if (browser == list)
+					{
+						Assert.Equal(48d, wrap.ItemHeight);
+						Assert.Equal(4096d * 48, wrap.ExtentHeight);
+					}
 					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}; generator={browser.ItemContainerGenerator.Status}; detail={wrap?.RealizationDetail}.");
 					Assert.True(browser.ItemContainerGenerator.ContainerFromIndex(index) is not null,
 						$"{browser.Name}: index={index}, items={browser.Items.Count}, realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}, generator={browser.ItemContainerGenerator.Status}, detail={wrap?.RealizationDetail}");
@@ -321,6 +466,26 @@ public sealed class MediaLibraryBrowsingTests
 		public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 		public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId id, string path, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
 		public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(MediaAssetId id, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
+	}
+	private sealed class PressureTransport : IOperatorControlTransport
+	{
+		private readonly ProductionId _production = ProductionId.New();
+		private readonly ProductionSourceId _source = ProductionSourceId.New();
+		public int Reads, Mutations;
+		public OperatorHealthDescriptor Health = OperatorHealthDescriptor.Unavailable with {
+			Runtime = new("PASS", "Observed Runtime"), ObservedAtUtc = DateTimeOffset.UtcNow,
+			FrameTime = TimeSpan.FromMilliseconds(2), FrameBudget = TimeSpan.FromMilliseconds(20) };
+		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+		{
+			Reads++;
+			return ValueTask.FromResult(new OperatorStatusSnapshot(
+				new(ControlContractVersion.Current, _production, new Revision(1), new(_source, _source)),
+				[new(_source.ToString(), "Camera")], "READY", "READY", "READY", "UNKNOWN", "IDLE", false, 0, health: Health));
+		}
+		private ValueTask<OperatorMutationResponse> Forbidden() { Mutations++; throw new InvalidOperationException("Hover must not mutate production."); }
+		public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) => Forbidden();
+		public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) => Forbidden();
+		public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) => Forbidden();
 	}
 	private sealed class ForbiddenTransport : IOperatorControlTransport
 	{
