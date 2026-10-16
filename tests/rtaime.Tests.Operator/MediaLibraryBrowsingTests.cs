@@ -384,6 +384,9 @@ public sealed class MediaLibraryBrowsingTests
 			Assert.Equal("Inspection bin", owner.MediaPool.SmartBinName); owner.MediaPool.SmartBinName = previousName;
 			Assert.Contains(Descendants(owner).OfType<RtaimeButton>(), button =>
 				AutomationProperties.GetName(button) == "Rename selected Smart Bin" && ReferenceEquals(button.Command, owner.MediaPool.RenameSmartBinCommand));
+			// Leave keyboard focus on a stable visible control before collapsing the editor.
+			// Focus recovery from a hidden text field can otherwise compete with later ScrollIntoView.
+			Assert.True(combo.Focus());
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
 			var items = owner.MediaPool.FilteredItems.ToArray();
 			foreach (var browser in new[] { grid, list })
