@@ -19,7 +19,7 @@ public sealed class AsynchronousLocalMediaDecodeTests
         if (!OperatingSystem.IsWindows()) return;
         var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-format-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        var source = new string('a', 40);
+        var source = new string('1', 40);
         var timingPath = Path.Combine(root, "local-playback-timing.json");
         var reportPath = Path.Combine(root, "local-playback-baseline.json");
         var samples = Enumerable.Range(0, 2048).Select(index =>
