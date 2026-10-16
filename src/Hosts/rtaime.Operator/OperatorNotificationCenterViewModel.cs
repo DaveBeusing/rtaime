@@ -389,8 +389,15 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 		}
 		foreach (var group in Groups)
 		{
-			group.Items.Clear();
-			foreach (var item in Items.Where(group.Includes)) group.Items.Add(item);
+			var desired = Items.Where(group.Includes).ToArray();
+			for (var index = group.Items.Count - 1; index >= 0; index--)
+				if (!desired.Contains(group.Items[index])) group.Items.RemoveAt(index);
+			for (var index = 0; index < desired.Length; index++)
+			{
+				var oldIndex = group.Items.IndexOf(desired[index]);
+				if (oldIndex < 0) group.Items.Insert(index, desired[index]);
+				else if (oldIndex != index) group.Items.Move(oldIndex, index);
+			}
 		}
 		Toasts.Clear();
 		foreach (var item in Items.Where(item => current.Any(n => n.Key == item.Key && !n.Persistent && n.AcknowledgedAtUtc is null && !n.IsSnoozed(DateTimeOffset.UtcNow))).Take(4))
