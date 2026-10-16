@@ -412,7 +412,7 @@ public sealed class MediaLibraryBrowsingTests
 					if (browser == list)
 					{
 						Assert.Equal(48d, wrap.ItemHeight);
-						Assert.InRange(wrap.ExtentHeight, 4096d * 48, 4096d * 48);
+						Assert.Equal(4096d * 48, wrap.ExtentHeight);
 					}
 					Console.WriteLine($"MEDIA SCROLL [{browser.Name}] index={index}; size={browser.ActualWidth}x{browser.ActualHeight}; offset={wrap?.VerticalOffset}; extent={wrap?.ExtentHeight}; realized={Descendants(browser).OfType<RtaimeListBoxItem>().Count()}; generator={browser.ItemContainerGenerator.Status}; detail={wrap?.RealizationDetail}.");
 					Assert.True(browser.ItemContainerGenerator.ContainerFromIndex(index) is not null,

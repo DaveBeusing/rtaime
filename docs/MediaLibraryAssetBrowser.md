@@ -72,7 +72,7 @@ The Media Library projects authoritative production Sources, persistent catalogu
 
 A currently loaded non-catalogued clip, such as an existing demo path, remains visible as a compatibility fallback. Persistent catalogue clips use `AssetId` as their reference identity.
 
-The presentation projection remains bounded to 4096 entries. Grid and List retain recycling/virtualization, deterministic search/filter ordering and local extended multi-selection. `Ctrl+F` focuses Media Library search. Search matches projected name, detail, format, state, stable reference and known local path.
+The presentation projection remains bounded to 4096 entries. Grid and List reuse the same bounded virtualizing panel and recycling generator, deterministic search/filter ordering and local extended multi-selection. List uses one full-width column with the shared 48-DIP row token; direct index geometry avoids estimated-height jumps for distant rows. Both views retain the same target-container and resource-bound qualification. `Ctrl+F` focuses Media Library search. Search matches projected name, detail, format, state, stable reference and known local path.
 
 ## Preview and existing workflows
 
