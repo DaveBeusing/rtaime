@@ -84,7 +84,7 @@ public sealed class MediaAssetPreparationOperatorTests
                 return new MediaAssetDescriptor(MediaAssetId.New(), MediaAssetOriginKind.LocalFile,
                     @"C:\media\clip" + index + ".mp4", "Clip " + index, MediaContainerFormat.Mp4,
                     MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8,
-                    AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(1), 1024, new string('A', 64), time, time, MediaAssetAvailability.Online);
+                    AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(1), 1024, new string((char)('A' + index), 64), time, time, MediaAssetAvailability.Online);
             }).ToArray());
         public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
         public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
