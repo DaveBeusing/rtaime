@@ -151,8 +151,8 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 }
                 if (profile is not null && elapsed >= nextCheckpoint)
                 {
-                    var output = Environment.GetEnvironmentVariable("RTAIME_REFERENCE_MEDIA_OUTPUT")!;
-                    var checkpoint = Path.Combine(output, "ssd-playback.checkpoint.json");
+                    var checkpointOutput = Environment.GetEnvironmentVariable("RTAIME_REFERENCE_MEDIA_OUTPUT")!;
+                    var checkpoint = Path.Combine(checkpointOutput, "ssd-playback.checkpoint.json");
                     LocalPlaybackEvidenceJson.Write(checkpoint + ".tmp", new
                     {
                         schemaVersion = "1.0", sourceCommit, buildCommit, profile, status = "RUNNING",
