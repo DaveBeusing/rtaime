@@ -26,6 +26,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     private readonly LocalMediaFileProvider _provider;
     private readonly MediaSourceId[]? _allowedSources;
     private readonly HashSet<MediaSourceId> _knownSources = [];
+    private readonly HashSet<MediaSourceId> _pendingInputClears = [];
     private MediaSourceId? _selected;
     private MediaSourceId? _program;
     private long _order, _rejected, _evicted;
@@ -162,7 +163,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
                 var closed = previous.Deck.Close();
                 if (closed.State == MediaDeckState.Error) { lock (_gate) previous.Retiring = false; return closed; }
                 previous.Deck.Dispose();
-                if (previous.Source != request.SourceId) Interlocked.Increment(ref _evicted);
+                if (previous.Source != request.SourceId)
+                {
+                    lock (_gate) _pendingInputClears.Add(previous.Source);
+                    Interlocked.Increment(ref _evicted);
+                }
             }
             var candidate = new Entry(request.SourceId, new LocalMediaDeckSlot(_format), ++_order);
             lock (_gate) { _entries[index] = candidate; _selected = request.SourceId; _knownSources.Add(request.SourceId); }
@@ -232,7 +237,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             var entry = Find(source);
             if (entry is null || entry.Retiring)
             {
-                if (_knownSources.Contains(source) || entry is not null)
+                if (entry is not null || _pendingInputClears.Remove(source))
                 {
                     runtime.ClearExternalAudioMeter(source);
                     runtime.SetInputSignalState(source, V1InputSignalState.Lost);
@@ -282,7 +287,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             entry.Deck.Dispose();
             lock (_gate)
                 for (var i = 0; i < _entries.Length; i++)
-                    if (ReferenceEquals(_entries[i], entry)) _entries[i] = null;
+                    if (ReferenceEquals(_entries[i], entry))
+                    {
+                        _entries[i] = null;
+                        _pendingInputClears.Add(entry.Source);
+                    }
             return snapshot;
         }
     }

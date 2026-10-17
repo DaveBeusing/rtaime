@@ -129,6 +129,13 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
         await deck.CloseAsync();
         Assert.Equal(1, runtime.MediaDeck.Resources.Reserved);
         await WaitUntilAsync(() => runtime.Runtime!.Snapshot.InputSignals[mediaSourceId] == V1InputSignalState.Lost);
+        // The closed deck clears its stale input once; a subsequent live-provider frame must survive.
+        var resumedAt = runtime.Runtime.Snapshot.NextSequenceNumber;
+        runtime.Runtime.SetExternalInputContent(mediaSourceId,
+            new byte[checked((int)(runtime.Runtime.Format.Width * runtime.Runtime.Format.Height * 4))],
+            V1InputSignalState.Valid);
+        await WaitUntilAsync(() => runtime.Runtime.Snapshot.NextSequenceNumber >= resumedAt + 3);
+        Assert.Equal(V1InputSignalState.Valid, runtime.Runtime.Snapshot.InputSignals[mediaSourceId]);
         var reopened = await deck.OpenAsync(referenceAsset.Path, mediaSourceId);
         Assert.True(reopened.IsLoaded, reopened.Failure?.Message);
         await WaitUntilAsync(() => runtime.Runtime!.Snapshot.InputSignals[mediaSourceId] == V1InputSignalState.Lost);
