@@ -9,12 +9,53 @@ using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
 public sealed class ExternalControlIntegrationTests
 {
+    [Fact]
+    public async Task Explicit_grpc_deck_target_preserves_two_same_asset_sessions_and_independent_close()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var grpc = fixture.CreateClient();
+        var initial = await grpc.GetSnapshotAsync();
+        var a = new MediaSourceId(Identity.Parse(initial.Sources[0].Id));
+        var b = new MediaSourceId(Identity.Parse(initial.Sources[1].Id));
+        var first = await grpc.OpenMediaDeckAsync(new(MediaContractVersion.Current, a, asset.Path));
+        var second = await grpc.OpenMediaDeckAsync(new(MediaContractVersion.Current, b, asset.Path));
+        Assert.True(first.IsLoaded, first.Failure?.Message);
+        Assert.True(second.IsLoaded, second.Failure?.Message);
+        Assert.Equal(first.Probe!.AssetId, second.Probe!.AssetId);
+        var readA = await grpc.GetMediaDeckSnapshotAsync(a);
+        Assert.Equal(a, readA.SourceId);
+        var played = await grpc.ApplyMediaDeckTransportAsync(
+            new(MediaContractVersion.Current, first.Probe.AssetId, MediaTransportCommandKind.Play) { SourceId = a });
+        Assert.Equal(a, played.SourceId);
+        var marked = await grpc.ApplyMediaDeckMarkerAsync(
+            new(MediaContractVersion.Current, first.Probe.AssetId, MediaMarkerCommandKind.SetInPoint, 0) { SourceId = a });
+        Assert.Equal(a, marked.SourceId);
+        Assert.Equal(0, marked.Markers!.InPointFrame);
+        Assert.Equal(MediaDeckState.Unloaded, (await grpc.CloseMediaDeckAsync(a)).State);
+        Assert.Equal(b, (await grpc.GetMediaDeckSnapshotAsync(b)).SourceId);
+        Assert.Equal(1, fixture.Runtime.MediaDeck!.Resources.Reserved);
+    }
+
+    [Fact]
+    public async Task Observer_can_read_scoped_deck_but_cannot_close_it()
+    {
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+        await using var grpc = fixture.CreateClient();
+        var source = new MediaSourceId(Identity.Parse((await grpc.GetSnapshotAsync()).Sources[0].Id));
+        Assert.Equal(MediaDeckState.Unloaded, (await grpc.GetMediaDeckSnapshotAsync(source)).State);
+        var denied = await Assert.ThrowsAsync<RpcException>(async () => await grpc.CloseMediaDeckAsync(source));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
+    }
+
 	[Fact]
 	public void Optional_external_control_does_not_invalidate_local_ControlHost_configuration()
 	{
