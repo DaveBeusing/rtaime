@@ -54,6 +54,10 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: File deck capacity ownership and Program isolation regressions
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~MediaAssetPreflightIntegrationTests" --logger "console;verbosity=detailed"
+
       - name: Local input capability and rejection regressions
         shell: pwsh
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaContainerProbeTests" --logger "console;verbosity=detailed"

@@ -66,23 +66,45 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 1, [a, b]);
         Assert.NotNull(decks.Open(new(MediaContractVersion.Current, a, asset.Path), Prepared(decks, a, 0)).Probe);
         decks.ObserveProgramSource(a);
-        var rejected = decks.Open(new(MediaContractVersion.Current, b, asset.Path), Prepared(decks, b, 1));
-        Assert.Equal("runtime.media_deck.capacity", rejected.Failure?.Code);
-        Assert.Equal(new LocalMediaDeckResources(1, 1, 1, 0), decks.Resources);
+        using (var before = Next(decks, a))
+            Assert.Equal(a, before.Video!.SourceId);
+        var programProbe = decks.GetSnapshot(a).Probe;
+        // Capacity denial wins before trying to open an unrelated missing path.
+        var missing = Path.Combine(Path.GetTempPath(), $"rtaime-capacity-{Guid.NewGuid():N}.mp4");
+        for (var attempt = 1; attempt <= 8; attempt++)
+        {
+            var rejected = decks.Open(new(MediaContractVersion.Current, b, missing), Prepared(decks, b, 1));
+            Assert.Equal("runtime.media_deck.capacity", rejected.Failure?.Code);
+            Assert.Equal(new LocalMediaDeckResources(1, 1, attempt, 0), decks.Resources);
+            Assert.Equal(programProbe, decks.GetSnapshot(a).Probe);
+            Assert.True(decks.GetSnapshot(a).Transport!.IsOnProgram);
+            Assert.Equal(MediaDeckState.Unloaded, decks.GetSnapshot(b).State);
+        }
+        using (var after = Next(decks, a))
+        {
+            Assert.Equal(a, after.Video!.SourceId);
+            Assert.True(after.Transport.Position.CurrentFrame > 0);
+            Assert.False(after.AudioPayload.IsEmpty);
+        }
         decks.ObserveProgramSource(null);
         Command(decks, a, MediaTransportCommandKind.Pause);
         var accepted = decks.Open(new(MediaContractVersion.Current, b, asset.Path), Prepared(decks, b, 1));
         Assert.NotNull(accepted.Probe);
         Assert.Equal(MediaDeckState.Unloaded, decks.GetSnapshot(a).State);
-        Assert.Equal(new LocalMediaDeckResources(1, 1, 1, 1), decks.Resources);
+        Assert.Equal(new LocalMediaDeckResources(1, 1, 8, 1), decks.Resources);
         var probe = decks.Probe(asset.Path, MediaAssetId.New());
         Assert.False(probe.Succeeded);
-        Assert.Equal(2, decks.Resources.Rejected);
+        Assert.Equal(9, decks.Resources.Rejected);
     }
 
     [Theory]
+    [InlineData(-1)]
     [InlineData(0)]
     [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(int.MaxValue)]
     public void Decoder_capacity_is_bounded_to_approved_range(int capacity) =>
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, capacity));
@@ -187,6 +209,78 @@ public sealed class MultiDeckLocalMediaIntegrationTests
             Assert.Equal(originalHash, System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(asset.Path)));
         }
         finally { if (File.Exists(copy)) File.Delete(copy); }
+    }
+
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Production_source_allowlist_cannot_expand_or_shrink_the_AB_identity_contract(int count)
+    {
+        var sources = Enumerable.Range(0, count).Select(_ => MediaSourceId.New()).ToArray();
+        Assert.Throws<ArgumentException>(() =>
+            new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, sources));
+    }
+
+    [Fact]
+    public void Production_source_allowlist_requires_distinct_identities()
+    {
+        var source = MediaSourceId.New();
+        Assert.Throws<ArgumentException>(() =>
+            new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [source, source]));
+    }
+
+    [Fact]
+    public void Caller_mutation_cannot_replace_an_authorized_source_after_construction()
+    {
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        var unauthorized = MediaSourceId.New();
+        var sources = new[] { a, b };
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, sources);
+        sources[0] = unauthorized;
+        var missing = Path.Combine(Path.GetTempPath(), $"rtaime-source-{Guid.NewGuid():N}.mp4");
+        var denied = decks.Open(new(MediaContractVersion.Current, unauthorized, missing), Prepared(decks, unauthorized, 0));
+        Assert.Equal("runtime.media_deck.source_invalid", denied.Failure?.Code);
+        Assert.Equal(0, decks.Resources.Reserved);
+        var authorized = decks.Open(new(MediaContractVersion.Current, a, missing), Prepared(decks, a, 0));
+        Assert.Equal("media.file.not_found", authorized.Failure?.Code);
+        Assert.Equal(1, decks.Resources.Reserved);
+        Assert.Equal(MediaDeckState.Unloaded, decks.Close(a).State);
+        Assert.Equal(0, decks.Resources.Reserved);
+    }
+
+    [Fact]
+    public void Closing_failed_entries_releases_capacity_without_authorizing_a_third_source()
+    {
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        var third = MediaSourceId.New();
+        using var decks = new LocalMediaDeckRuntimeService();
+        var missing = Path.Combine(Path.GetTempPath(), $"rtaime-reservation-{Guid.NewGuid():N}.mp4");
+        foreach (var source in new[] { a, b })
+        {
+            var opened = decks.Open(new(MediaContractVersion.Current, source, missing), Prepared(decks, source, 0));
+            Assert.Equal("media.file.not_found", opened.Failure?.Code);
+        }
+        Assert.Equal(2, decks.Resources.Reserved);
+        var first = decks.GetSnapshot(a);
+        var second = decks.GetSnapshot(b);
+        var denied = decks.Open(new(MediaContractVersion.Current, third, missing), Prepared(decks, third, 0));
+        Assert.Equal("runtime.media_deck.source_invalid", denied.Failure?.Code);
+        Assert.Equal(first, decks.GetSnapshot(a));
+        Assert.Equal(second, decks.GetSnapshot(b));
+        Assert.Equal(2, decks.Resources.Reserved);
+        Assert.Equal(MediaDeckState.Unloaded, decks.Close(a).State);
+        Assert.Equal(1, decks.Resources.Reserved);
+        denied = decks.Open(new(MediaContractVersion.Current, third, missing), Prepared(decks, third, 0));
+        Assert.Equal("runtime.media_deck.source_invalid", denied.Failure?.Code);
+        Assert.Equal(1, decks.Resources.Reserved);
+        Assert.Equal(second, decks.GetSnapshot(b));
+        Assert.Equal(MediaDeckState.Unloaded, decks.Close(b).State);
+        Assert.Equal(0, decks.Resources.Reserved);
     }
 
     private static void Command(LocalMediaDeckRuntimeService decks, MediaSourceId source,
