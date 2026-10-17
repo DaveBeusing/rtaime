@@ -187,7 +187,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.ai_effects.catalog.get" => ReadAIEffectsAsync(request, false, cancellationToken),
 				"runtime.ai_effects.test" => ReadAIEffectsAsync(request, true, cancellationToken),
 				"runtime.ai_showcase.set" => ValueTask.FromResult(SetAIShowcase(request)),
-				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
+				"runtime.execution.apply" or "runtime.execution.prepared_media.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
 				"runtime.graphics.cg.apply" => ValueTask.FromResult(ApplyProductionCgText(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
@@ -211,7 +211,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.media_asset.preflight.begin" or "runtime.media_asset.preflight.get" or "runtime.media_asset.preflight.cancel" => ValueTask.FromResult(PreflightMediaAsset(request)),
                 "runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
-				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
+				"runtime.media_deck.open" or "runtime.media_deck.preload.open" => ValueTask.FromResult(OpenMediaDeck(request)),
+                "runtime.media_deck.preload.prepare" => ValueTask.FromResult(PrepareLoadedNext(request)),
+                "runtime.media_deck.preload.cancel" => ValueTask.FromResult(CancelPreparation(request)),
 				"runtime.media_deck.transport" or "runtime.media_deck.scoped.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
 				"runtime.media_deck.close" or "runtime.media_deck.scoped.close" => ValueTask.FromResult(CloseMediaDeck(request)),
 				_ => ValueTask.FromResult(Error(request, "ipc.message.unknown", $"Unknown RuntimeHost message type '{request.MessageType}'."))
@@ -695,7 +697,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
         // ControlHost serializes runtime exchanges; read committed authority before admission,
         // including a TAKE acknowledged before the next Program cadence observation.
         deck.ObserveProgramSource(_runtimeAccessor()?.CommittedProgramSourceId);
-		var snapshot = deck.Open(open, prepared);
+		var snapshot = request.MessageType == "runtime.media_deck.preload.open"
+            ? deck.Preload(open, prepared, wire.Fingerprint ?? throw new InvalidDataException("Preload fingerprint is required."))
+            : deck.Open(open, prepared);
 		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.open.response", ToWire(snapshot));
 	}
@@ -738,6 +742,22 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.media_deck.close.response", ToWire(snapshot));
 	}
 
+    private WireEnvelope PrepareLoadedNext(WireEnvelope request)
+    {
+        var wire = request.Payload.Deserialize<WirePreloadTarget>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Preload target is required.");
+        var deck = _mediaDeckAccessor() ?? throw new InvalidOperationException("Deck service unavailable.");
+        deck.ObserveProgramSource(_runtimeAccessor()?.CommittedProgramSourceId);
+        var evidence = deck.PrepareLoadedNext(new MediaSourceId(Identity.Parse(wire.SourceId)), new MediaAssetId(Identity.Parse(wire.AssetId)));
+        return Success(request, "runtime.media_deck.preload.prepare.response", evidence);
+    }
+    private WireEnvelope CancelPreparation(WireEnvelope request)
+    {
+        var ticket = request.Payload.GetProperty("ticketId").GetString() ?? throw new InvalidDataException("Ticket is required.");
+        _mediaDeckAccessor()?.CancelPreparation(ticket);
+        return Success(request, "runtime.media_deck.preload.cancel.response", new { Cancelled = true });
+    }
+
 	private WireEnvelope ApplyExecution(WireEnvelope request, V1RuntimeHostService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireApplyRequest>(Wire.JsonOptions)
@@ -755,7 +775,31 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				new MediaSourceId(Identity.Parse(wire.Transition.ToSourceId)),
 				wire.Transition.DurationFrames);
 
-		var result = runtime.ApplyExecution(prepared, sink, transition);
+        RuntimeHostApplyResult result;
+        if (request.MessageType == "runtime.execution.prepared_media.apply")
+        {
+            try
+            {
+                var evidence = wire.Preparation ?? throw new InvalidOperationException("Prepared-media fence is required.");
+                var deck = _mediaDeckAccessor() ?? throw new InvalidOperationException("Deck service unavailable.");
+                deck.ObserveProgramSource(runtime.CommittedProgramSourceId);
+                if (wire.ConsumePreparation && prepared.Bindings.SingleOrDefault(b => b.MediaSinkId == sink)?.MediaSourceId?.ToString() != evidence.SourceId)
+                    throw new InvalidOperationException("Prepared media does not match the Program target.");
+                result = deck.WithPreparedNext(evidence, wire.ConsumePreparation,
+                    () => runtime.ApplyExecution(prepared, sink, transition), value => value.Committed);
+            }
+            catch (InvalidOperationException exception)
+            {
+                result = new RuntimeHostApplyResult(new RuntimePrepareResult(RuntimeContractVersion.Current,
+                    prepared.PreparedExecutionId, RuntimePrepareStatus.Rejected, null,
+                    new Failure("runtime.media_preload.stale", exception.Message)), null, null);
+            }
+        }
+        else
+        {
+            if (wire.Preparation is not null) throw new InvalidDataException("Prepared media requires the guarded operation.");
+            result = runtime.ApplyExecution(prepared, sink, transition);
+        }
 		if (result.Committed)
 		{
 			_committedAuthorityStateId = prepared.AuthoritySnapshot.StateId;
@@ -1420,7 +1464,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
-	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition);
+	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition, MediaDeckPreparation? Preparation = null, bool ConsumePreparation = false);
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
@@ -1503,7 +1547,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution, string? Fingerprint = null);
+    private sealed record WirePreloadTarget(string SourceId, string AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);

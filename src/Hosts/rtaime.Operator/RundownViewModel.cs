@@ -387,7 +387,9 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 				: "NONE";
 		Detail = execution.State switch
 		{
-			RundownExecutionState.Prepared => "Selected item is prepared through authoritative Show Control.",
+			RundownExecutionState.Prepared => execution.PreparedMediaState == "NEXT_READY"
+                ? $"Next clip is resident and ready until {execution.PreparedMediaExpiresAtUtc:T}. GO uses the prepared A/B deck."
+                : "Selected item is prepared through authoritative Show Control.",
 			RundownExecutionState.Executing => execution.AutoAdvanceArmed
 				? $"Executing · {execution.FollowActionKind} armed from confirmed completion evidence."
 				: "Executing through authoritative Show Control.",
@@ -529,7 +531,7 @@ public sealed class RundownOperatorItemViewModel : INotifyPropertyChanged
 			execution.State == RundownExecutionState.Failed && execution.CurrentItemId == Item.ItemId ? "FAILED" :
 			execution.State == RundownExecutionState.RecoveryRequired && execution.CurrentItemId == Item.ItemId ? "RECOVERY" :
 			execution.CurrentItemId == Item.ItemId ? "CURRENT" :
-			execution.PreparedItemId == Item.ItemId ? "PREPARED" :
+			execution.PreparedItemId == Item.ItemId ? execution.PreparedMediaState == "NEXT_READY" ? "NEXT READY" : "PREPARED" :
 			execution.NextItemId == Item.ItemId ? "NEXT" :
 			execution.SelectedItemId == Item.ItemId ? "SELECTED" :
 			"READY";

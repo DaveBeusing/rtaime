@@ -51,10 +51,15 @@ public sealed class MediaDeckControlService
 		}
 	}
 
-	public async ValueTask<MediaDeckSnapshot> OpenAsync(
-		MediaDeckOpenRequest request,
-		CancellationToken cancellationToken = default)
-	{
+    public ValueTask<MediaDeckSnapshot> OpenAsync(MediaDeckOpenRequest request, CancellationToken cancellationToken = default) =>
+        OpenCoreAsync(request, null, cancellationToken);
+    public ValueTask<MediaDeckSnapshot> PreloadAsync(MediaDeckOpenRequest request, string fingerprint, CancellationToken cancellationToken = default) =>
+        OpenCoreAsync(request, fingerprint, cancellationToken);
+
+    private async ValueTask<MediaDeckSnapshot> OpenCoreAsync(
+        MediaDeckOpenRequest request, string? preloadFingerprint,
+        CancellationToken cancellationToken)
+    {
 		ArgumentNullException.ThrowIfNull(request);
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
@@ -107,12 +112,14 @@ public sealed class MediaDeckControlService
                     new PreparedExecutionBinding(Identity.New(), decodeCapability.CapabilityId, decodeResource, request.SourceId, null)
 				});
 
-			var runtime = await _runtime
-				.OpenMediaDeckAsync(request, prepared, cancellationToken)
-				.ConfigureAwait(false);
+            var runtime = preloadFingerprint is null
+                ? await _runtime.OpenMediaDeckAsync(request, prepared, cancellationToken).ConfigureAwait(false)
+                : await _runtime.PreloadMediaDeckAsync(request, prepared, preloadFingerprint, cancellationToken).ConfigureAwait(false);
 			_markers = null;
 			_markerStorageVersion = 0;
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
+            if (preloadFingerprint is not null)
+                runtime = await SynchronizePlaybackRangeAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
 		}
 		catch (TimeoutException exception)

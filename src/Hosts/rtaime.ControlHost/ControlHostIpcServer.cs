@@ -22,7 +22,7 @@ internal sealed record ExternalControlDispatchResult(
 	string? ErrorCode,
 	string? ErrorMessage);
 
-public sealed class ControlHostIpcServer : IAsyncDisposable
+public sealed partial class ControlHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
@@ -128,7 +128,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_showControl,
 				_mediaAssetCatalog,
 				_mediaDeck,
-				NotifyObservableStateChanged)
+				NotifyObservableStateChanged,
+                PrepareRundownMediaAsync, GoPreparedRundownMediaAsync, CancelPreparedRundownMediaAsync)
 			: null;
 		_productionMacros = _showProjectStore is null
 			? null
@@ -710,7 +711,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Execution.FollowTargetFrameSequence,
 		snapshot.Execution.RemainingFollowFrames,
 		snapshot.Execution.RemainingItemRepeats,
-		snapshot.Execution.RemainingRundownRepeats);
+		snapshot.Execution.RemainingRundownRepeats,
+        snapshot.Execution.PreparedMediaState, snapshot.Execution.PreparedMediaSourceId, snapshot.Execution.PreparedMediaExpiresAtUtc);
 
 	private async ValueTask<WireEnvelope> GetProductionMacroSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
@@ -2620,7 +2622,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
 			return new Failure("control.not_ready", "ControlHost has no committed authoritative state yet.");
-		var state = control.State;
+        var state = control.State;
+        var mediaTake = _preparedMediaTake.Value;
+        if (mediaTake is not null && (state.Revision.Value != mediaTake.ExpectedRevision ||
+            kind is not (MutationKind.SelectPreview or MutationKind.Cut or MutationKind.Dissolve) ||
+            sourceId != mediaTake.Candidate.Preparation.SourceId))
+            return new Failure("control.media_preload.authority_changed", "Prepared-next source or authority revision changed; prepare again.");
 		var command = new WireControlCommand(
 			ControlContractVersion.Current.ToString(),
 			CommandId.New().ToString(),
@@ -2629,12 +2636,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			sourceId,
 			durationFrames,
 			sceneId,
-			outputRoleId);
+			outputRoleId,
+            Preparation: mediaTake?.Candidate.Preparation,
+            ConsumePreparation: kind is MutationKind.Cut or MutationKind.Dissolve);
 		var response = await MutateAsync(
 			InternalRequest("control.show_control.production_action", command),
 			kind,
 			cancellationToken).ConfigureAwait(false);
-		return ReadMutationFailure(response);
+        var failure = ReadMutationFailure(response);
+        if (failure is null && mediaTake is not null) mediaTake.ExpectedRevision = checked(mediaTake.ExpectedRevision + 1);
+        return failure;
 	}
 
 	private async ValueTask<Failure?> ExecuteShowControlMediaOpenAsync(
@@ -2648,6 +2659,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
 		var sourceId = new MediaSourceId(Identity.Parse(action.SourceId!));
+        if (_preparedMediaTake.Value is { } mediaTake)
+        {
+            var candidate = mediaTake.Candidate;
+            if (candidate.Preparation.AssetId != assetId.ToString() || candidate.Preparation.SourceId != sourceId.ToString())
+                return new Failure("control.media_preload.identity_changed", "Prepared-next action does not match its source/asset.");
+            await ValidatePreparedRundownMediaAsync(candidate, cancellationToken).ConfigureAwait(false);
+            return null;
+        }
 		var catalog = await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false);
 		var asset = catalog.Assets.FirstOrDefault(candidate => candidate.AssetId == assetId);
 		if (asset is null)
@@ -2732,7 +2751,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
 		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
 		var result = await _mediaDeck.ApplyTransportAsync(
-			new MediaTransportCommand(MediaContractVersion.Current, assetId, kind),
+			new MediaTransportCommand(MediaContractVersion.Current, assetId, kind)
+            { SourceId = _preparedMediaTake.Value is { } mediaTake ? new MediaSourceId(Identity.Parse(mediaTake.Candidate.Preparation.SourceId)) : null },
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return MediaDeckFailure(result);
@@ -3158,11 +3178,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			RuntimeRemoteApplyResult remote;
 			try
 			{
-				remote = await _runtimeTransport.ApplyExecutionAsync(
-					staged.Execution.PreparedExecution,
-					staged.Execution.ProgramSinkId,
-					staged.Execution.ProgramTransition,
-					cancellationToken).ConfigureAwait(false);
+				remote = command.Preparation is null
+                    ? await _runtimeTransport.ApplyExecutionAsync(staged.Execution.PreparedExecution,
+                        staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken).ConfigureAwait(false)
+                    : await _runtimeTransport.ApplyPreparedMediaExecutionAsync(staged.Execution.PreparedExecution,
+                        staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, command.Preparation,
+                        command.ConsumePreparation, cancellationToken).ConfigureAwait(false);
 			}
 			catch (Exception exception)
 			{
@@ -3975,7 +3996,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		ulong? FollowTargetFrameSequence = null,
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
-		ushort RemainingRundownRepeats = 0);
+		ushort RemainingRundownRepeats = 0,
+        string? PreparedMediaState = null, string? PreparedMediaSourceId = null, DateTimeOffset? PreparedMediaExpiresAtUtc = null);
 	private sealed record WireProductionMacroDefinition(string MacroJson);
 	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);
@@ -4196,7 +4218,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
-	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null);
+	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null, MediaDeckPreparation? Preparation = null, bool ConsumePreparation = false);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 	private sealed record RetainedGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 

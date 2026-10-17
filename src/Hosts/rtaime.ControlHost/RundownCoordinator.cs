@@ -26,7 +26,11 @@ public sealed class RundownCoordinator : IAsyncDisposable
 	private bool _loaded;
 	private readonly Dictionary<RundownItemId, ushort> _itemRepeatProgress = new();
 	private ushort _rundownRepeatProgress;
-	private bool _rundownRecoveryAmbiguous;
+    private bool _rundownRecoveryAmbiguous;
+    private PreparedRundownMedia? _preparedMedia;
+    private readonly Func<RundownMediaItem, CancellationToken, ValueTask<PreparedRundownMedia>>? _prepareMedia;
+    private readonly Func<PreparedRundownMedia, CancellationToken, ValueTask<ShowControlWorkspaceSnapshot>>? _takePreparedMedia;
+    private readonly Func<PreparedRundownMedia, CancellationToken, ValueTask>? _cancelPreparedMedia;
 
 	public RundownCoordinator(
 		Func<ControlHostService?> controlAccessor,
@@ -34,14 +38,20 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		ShowControlCoordinator showControl,
 		MediaAssetCatalogService? mediaCatalog,
 		MediaDeckControlService? mediaDeck,
-		Action stateChanged)
-	{
+        Action stateChanged,
+        Func<RundownMediaItem, CancellationToken, ValueTask<PreparedRundownMedia>>? prepareMedia = null,
+        Func<PreparedRundownMedia, CancellationToken, ValueTask<ShowControlWorkspaceSnapshot>>? takePreparedMedia = null,
+        Func<PreparedRundownMedia, CancellationToken, ValueTask>? cancelPreparedMedia = null)
+    {
 		_controlAccessor = controlAccessor ?? throw new ArgumentNullException(nameof(controlAccessor));
 		_persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
 		_showControl = showControl ?? throw new ArgumentNullException(nameof(showControl));
 		_mediaCatalog = mediaCatalog;
 		_mediaDeck = mediaDeck;
-		_stateChanged = stateChanged ?? throw new ArgumentNullException(nameof(stateChanged));
+        _stateChanged = stateChanged ?? throw new ArgumentNullException(nameof(stateChanged));
+        _prepareMedia = prepareMedia;
+        _takePreparedMedia = takePreparedMedia;
+        _cancelPreparedMedia = cancelPreparedMedia;
 	}
 
 	public async ValueTask<RundownWorkspaceSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
@@ -50,6 +60,12 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+            if (_preparedMedia is { } candidate && DateTimeOffset.UtcNow >= candidate.Preparation.ExpiresAtUtc)
+            {
+                var item = _execution.PreparedItemId ?? _execution.SelectedItemId;
+                await CancelPreparedMediaLockedAsync(cancellationToken).ConfigureAwait(false);
+                if (item is { } expired) _execution = Failed(expired, "rundown.media.preparation_expired", "Prepared-next expired. Prepare again.");
+            }
 			await RefreshFrameCountdownLockedAsync(cancellationToken).ConfigureAwait(false);
 			return Snapshot();
 		}
@@ -81,6 +97,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			if (!write.Written || write.Snapshot is null)
 				throw new InvalidOperationException(write.Failure?.Message ?? "Rundown persistence failed.");
 
+            await CancelPreparedMediaLockedAsync(cancellationToken).ConfigureAwait(false);
 			_rundown = rundown;
 			_storageVersion = write.Snapshot.Version;
 			_itemRepeatProgress.Clear();
@@ -211,7 +228,8 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			if (_execution.State == RundownExecutionState.RecoveryRequired)
 				throw new InvalidOperationException("Rundown recovery must be acknowledged before hold/cancel.");
 
-			CancelAutoAdvanceWorker();
+            CancelAutoAdvanceWorker();
+            await CancelPreparedMediaLockedAsync(cancellationToken).ConfigureAwait(false);
 			var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 			if (show.Execution.State is ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting)
 				await _showControl.CancelAsync(cancellationToken).ConfigureAwait(false);
@@ -289,6 +307,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
+        await CancelPreparedMediaLockedAsync(CancellationToken.None).ConfigureAwait(false);
 		_dispose.Cancel();
 		CancelAutoAdvanceWorker();
 		if (_autoAdvanceWorker is not null)
@@ -431,6 +450,21 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		if (cancelAutomationWorker)
 			CancelAutoAdvanceWorker();
 		var priorCurrent = preserveCurrentItem ? _execution.CurrentItemId : null;
+        await CancelPreparedMediaLockedAsync(cancellationToken).ConfigureAwait(false);
+        if (item is RundownMediaItem media)
+        {
+            try
+            {
+                if (_prepareMedia is null) throw new InvalidOperationException("Resident media preparation is unavailable.");
+                _preparedMedia = await _prepareMedia(media, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or NotSupportedException)
+            {
+                _execution = Failed(itemId, "rundown.media.preparation_failed", exception.Message) with { CurrentItemId = priorCurrent };
+                _stateChanged();
+                return;
+            }
+        }
 		var singleItem = new RundownDefinition(
 			rundown.Version,
 			rundown.RundownId,
@@ -453,7 +487,10 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			FollowActionKind = item.FollowAction.Kind,
 			RequiresAcknowledgement = false,
 			Failure = null,
-			Revision = NextRevision()
+            Revision = NextRevision(),
+            PreparedMediaState = _preparedMedia is null ? null : "NEXT_READY",
+            PreparedMediaSourceId = _preparedMedia?.Preparation.SourceId,
+            PreparedMediaExpiresAtUtc = _preparedMedia?.Preparation.ExpiresAtUtc
 		}, itemId);
 		_stateChanged();
 	}
@@ -468,10 +505,18 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		ShowControlWorkspaceSnapshot show;
 		try
 		{
-			show = await _showControl.GoAsync(cancellationToken).ConfigureAwait(false);
+            if (item is RundownMediaItem)
+            {
+                if (_preparedMedia is null || _takePreparedMedia is null)
+                    throw new InvalidOperationException("Resident preparation was lost or belongs to a previous Control lifetime. Prepare again.");
+                show = await _takePreparedMedia(_preparedMedia, cancellationToken).ConfigureAwait(false);
+                _preparedMedia = null;
+            }
+            else show = await _showControl.GoAsync(cancellationToken).ConfigureAwait(false);
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException)
 		{
+            await CancelPreparedMediaLockedAsync(cancellationToken).ConfigureAwait(false);
 			_execution = Failed(itemId, "rundown.execution.failed", exception.Message);
 			_stateChanged();
 			return;
@@ -574,7 +619,13 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			var observedPlaying = false;
 			while (!token.IsCancellationRequested)
 			{
-				var deck = await _mediaDeck.GetSnapshotAsync(token).ConfigureAwait(false);
+				var deck = await _mediaDeck.GetSnapshotAsync(token, new MediaSourceId(item.SourceId.Value)).ConfigureAwait(false);
+                if (deck.State == MediaDeckState.Error || deck.Probe?.AssetId != new MediaAssetId(item.AssetId))
+                {
+                    await FailObservedMediaAsync(item.ItemId, revision,
+                        deck.Failure ?? new Failure("rundown.media.identity_changed", "The observed source/asset is no longer the armed media."), token).ConfigureAwait(false);
+                    return;
+                }
 				if (deck.Probe?.AssetId == new MediaAssetId(item.AssetId))
 				{
 					observedPlaying |= deck.State == MediaDeckState.Playing;
@@ -753,7 +804,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			Revision = NextRevision()
 		};
 		await PrepareLockedAsync(next.Value, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
-		if (!prepareOnly)
+		if (!prepareOnly && _execution.State == RundownExecutionState.Prepared)
 			await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
 	}
 
@@ -857,7 +908,8 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			Revision = NextRevision()
 		};
 		await PrepareLockedAsync(next, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
-		await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
+		if (_execution.State == RundownExecutionState.Prepared)
+            await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	private async Task FailObservedMediaAsync(
@@ -1085,6 +1137,15 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		}
 	}
 
+    private async ValueTask CancelPreparedMediaLockedAsync(CancellationToken token)
+    {
+        var previous = _preparedMedia;
+        _preparedMedia = null;
+        _execution = _execution with { PreparedMediaState = null, PreparedMediaSourceId = null, PreparedMediaExpiresAtUtc = null };
+        if (previous is not null && _cancelPreparedMedia is not null)
+            await _cancelPreparedMedia(previous, token).ConfigureAwait(false);
+    }
+
 	private static bool IsAutomatedFollow(RundownFollowActionKind kind) =>
 		kind is RundownFollowActionKind.PrepareNext or
 			RundownFollowActionKind.AutoGoNext or
@@ -1128,7 +1189,10 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			RuntimeHostInstanceId = null,
 			FollowStartFrameSequence = null,
 			FollowTargetFrameSequence = null,
-			RemainingFollowFrames = null
+            RemainingFollowFrames = null,
+            PreparedMediaState = null,
+            PreparedMediaSourceId = null,
+            PreparedMediaExpiresAtUtc = null
 		};
 
 	private void SetCompleted(RundownItemId itemId)

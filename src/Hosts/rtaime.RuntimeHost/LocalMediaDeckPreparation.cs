@@ -30,7 +30,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 if (_program == request.SourceId)
                     return Reject("runtime.media_preload.source_on_program", "Preload requires an off-Program source.");
-                if (_allowedSources is not null && !_allowedSources.Contains(request.SourceId))
+                if ((_allowedSources is not null && !_allowedSources.Contains(request.SourceId)) ||
+                    (_knownSources.Count == 2 && !_knownSources.Contains(request.SourceId)))
                     return Reject("runtime.media_deck.source_invalid", "Source is outside production A/B.");
                 if (_probeReservations != 0 || _preflight is { Running: true } ||
                     _preflightQuarantine is not null || _preflightIdentityQuarantine is not null ||
@@ -49,12 +50,20 @@ public sealed partial class LocalMediaDeckRuntimeService
                 if (closed.State == MediaDeckState.Error) return closed;
             }
             lock (_gate) _probeReservations++;
+            var reservationHeld = true;
             FileStream? identity = null;
             try
             {
                 // Keep the exact selected file read-locked until handoff/cancel/close.
                 // The initial slice deliberately rejects large files rather than increasing IPC deadlines.
-                identity = new FileStream(request.Path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536);
+                var full = Path.GetFullPath(request.Path);
+                if (!OperatingSystem.IsWindows() || Path.GetPathRoot(full)?.Length != 3)
+                    return Reject("runtime.media_preload.path_unsupported", "Use a directly addressed local Windows file.");
+                for (FileSystemInfo? item = new FileInfo(full); item is not null;
+                    item = item is FileInfo file ? file.Directory : ((DirectoryInfo)item).Parent)
+                    if ((item.Attributes & FileAttributes.ReparsePoint) != 0)
+                        return Reject("runtime.media_preload.path_unsupported", "Preload does not follow reparse paths.");
+                identity = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 65536);
                 if (identity.Length is < 1 or > 32L * 1024 * 1024)
                     return Reject("runtime.media_preload.file_budget", "Resident preload verification is limited to 32 MiB; use ordinary deck open for larger files.");
                 using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -71,6 +80,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                 if (!Convert.ToHexString(hash.GetHashAndReset()).Equals(fingerprint, StringComparison.OrdinalIgnoreCase))
                     return Reject("runtime.media_preload.identity_changed", "File no longer matches the selected catalogue asset.");
                 ClearPreparation(null);
+                lock (_gate) _probeReservations--;
+                reservationHeld = false;
                 var opened = Open(request, execution);
                 if (opened.State != MediaDeckState.Ready) return opened;
                 _preparationFile = identity;
@@ -87,7 +98,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             finally
             {
                 identity?.Dispose();
-                lock (_gate) _probeReservations--;
+                if (reservationHeld) lock (_gate) _probeReservations--;
             }
         }
     }

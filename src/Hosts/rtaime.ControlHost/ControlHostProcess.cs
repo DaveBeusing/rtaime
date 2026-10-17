@@ -247,6 +247,15 @@ public interface IControlRuntimeTransportSeam
 			new NotSupportedException("Runtime transport does not expose AI showcase control."));
 
 
+    ValueTask<MediaDeckRuntimeSnapshot> PreloadMediaDeckAsync(MediaDeckOpenRequest request, PreparedExecutionContract execution, string fingerprint, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckRuntimeSnapshot>(new NotSupportedException("Runtime does not expose resident preload."));
+    ValueTask<MediaDeckPreparation> PrepareLoadedNextAsync(MediaSourceId source, MediaAssetId asset, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckPreparation>(new NotSupportedException("Runtime does not expose prepared-next evidence."));
+    ValueTask CancelMediaPreparationAsync(string ticket, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("Runtime does not expose prepared-next cancellation."));
+    ValueTask<RuntimeRemoteApplyResult> ApplyPreparedMediaExecutionAsync(PreparedExecutionContract execution, MediaSinkId sink, RuntimeProgramTransitionIntent? transition, MediaDeckPreparation preparation, bool consume, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeRemoteApplyResult>(new NotSupportedException("Runtime does not expose guarded prepared-media commit."));
+
     ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId, string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Runtime preflight is unavailable."));
     ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
