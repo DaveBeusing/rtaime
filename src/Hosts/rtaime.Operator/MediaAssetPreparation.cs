@@ -60,9 +60,10 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void InvalidatePreparationEvidence(string reason)
     {
-        if (!_preflightEvidence.Any(value => value.RepresentativeVerificationPassed)) return;
-        SetPreparationEvidence(_preflightEvidence.Select(value => value with {
-            State = MediaAssetReadinessState.Unverified, Detail = reason }).ToArray());
+        if (!_preflightEvidence.Any(value => value.RepresentativeVerificationPassed || value.Running)) return;
+        SetPreparationEvidence(_preflightEvidence.Select(value => value.RepresentativeVerificationPassed || value.Running
+            ? value with { State = MediaAssetReadinessState.Unverified, Running = false,
+                Cancelled = value.Cancelled || value.Running, Detail = reason } : value).ToArray());
     }
     private void ExpirePreparationEvidence()
     {
@@ -165,12 +166,14 @@ public sealed partial class MediaPoolInspectorViewModel
         {
             _preparationJob = null; _preparing = false;
             OnPropertyChanged(nameof(IsPreparing)); RaisePreparationCommands();
+            if (_preparationDisposed) _preparationStop?.Dispose();
         }
     }
     private void DisposePreparation()
     {
         _preparationDisposed = true;
         _preparationStop?.Cancel();
+        if (!_preparing) _preparationStop?.Dispose();
         _preparationTimer?.Stop(); _preparationTimer = null;
         PropertyChanged -= PreparationContextChanged;
         _operator.PropertyChanged -= PreparationOperatorChanged;
