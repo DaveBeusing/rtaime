@@ -54,7 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
-      - name: Attribute rapid TAKE shutdown before broad suites
+      - name: Attribute fifty fixed rapid TAKE shutdown cases before broad suites
+        env:
+          RTAIME_RAPID_TAKE_REPETITIONS: "50"
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionIpcIntegrationTests.Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions" --logger "console;verbosity=detailed"
 
       - name: Qualify asynchronous local media admission before broad suites

@@ -508,10 +508,19 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
+    public static IEnumerable<object[]> RapidTakeRepetitions
+    {
+        get
+        {
+            var configured = Environment.GetEnvironmentVariable("RTAIME_RAPID_TAKE_REPETITIONS");
+            var count = string.IsNullOrWhiteSpace(configured) ? 3 : int.Parse(configured);
+            if (count is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(configured));
+            for (var repetition = 0; repetition < count; repetition++) yield return [repetition];
+        }
+    }
+
 	[Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
+    [MemberData(nameof(RapidTakeRepetitions))]
 	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions(int repetition)
 	{
 		var runtimeEndpoint = Endpoint("runtime-rapid-takes");
