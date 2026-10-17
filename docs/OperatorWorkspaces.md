@@ -10,28 +10,32 @@
 
 The Operator provides eight task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
 
-The canonical workspaces are:
+The canonical workspaces remain MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS, HEALTH and SETTINGS. Switching workspaces never creates a second production snapshot or forks product state.
 
-- MEDIA
-- EDIT
-- LIVE
-- SCENES
-- COMPOSITING
-- OUTPUTS
-- HEALTH
-- SETTINGS
+## Accepted experience direction
 
-Switching workspaces never creates a second production snapshot or forks product state.
+The [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, defines the cross-workspace target: a professional media-first Live Operator, dark graphite surfaces, restrained cyan interaction accents, contextual editing and compact operational evidence. A generic infrastructure dashboard is not the primary production surface. This document describes the existing workspace model; the [experience roadmap](OperatorExperienceRoadmap.md) separates present capabilities from proposed refinements and qualification work.
+
+The four experience groups map onto existing identifiers without replacing or migrating them:
+
+| Experience group | Existing destinations |
+| --- | --- |
+| Live Operator | LIVE, with SCENES for preparation and governed scene/cue operation |
+| Media & Timeline | MEDIA, EDIT, COMPOSITING |
+| Outputs | OUTPUTS |
+| System & Health | HEALTH, SETTINGS |
+
+The conceptual Outputs & Mapping label does not authorize a new stage/warping/edge-blending subsystem. Existing AI controls remain in their established contexts; a separate AI Processing workspace is not introduced. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
 ## Shared visual contract
 
-All workspaces consume the shared Operator design system for typography, media and thumbnail canvases, diagnostic surfaces, monitor overlays, scrims, guides, badges and repeated panel chrome. The 1920×1080 dimensions documented below are qualification/reference geometry; actual presentation follows the current view container and responsive shell rules rather than forcing a fixed render size.
+All workspaces consume the shared Operator design system for typography, media/thumbnail canvases, diagnostic surfaces, monitor overlays, scrims, guides, badges and repeated panel chrome. Shared values belong in `Themes/OperatorTokens.xaml` or common theme resources; feature XAML must not create a competing palette. One-off functional geometry may remain local. Preview and Program share presentation mechanics, never command or state authority.
 
-Preview and Program remain visually and semantically distinct even when they share monitor chrome. Workspace-local geometry may remain local when it expresses a one-off functional layout, but repeated visual values belong in `OperatorTokens.xaml` or shared theme styles. Workspace styling never changes routing, playback, monitoring, health or output authority.
+The 1920×1080 composition is qualification/reference geometry, not a fixed render size. The reference top bar is 60 DIP, navigation 92 DIP, panel defaults 400 / 340 / 320 and region gap 6 DIP. Existing 30/26-DIP standard/compact controls and 48-DIP media-list rows retain usable interaction geometry rather than scaling all text and targets down with the image.
 
 ### Responsive render geometry
 
-Persisted workspace geometry remains in the 1920×1080 reference coordinate system. Rendering derives from the current view container and does not write scaled values back to the layout store. Layout schema version 6 therefore remains unchanged.
+Persisted workspace geometry remains in reference coordinates. Rendering derives from the live view container; temporary scaled values are not written to the layout store. Layout schema version 6 is unchanged.
 
 | Logical viewport | Presentation scale | EDIT render height | Mode |
 | --- | ---: | ---: | --- |
@@ -41,193 +45,131 @@ Persisted workspace geometry remains in the 1920×1080 reference coordinate syst
 | 1280×720 | 0.67 | ~467 px | Scaled |
 | 960×540 | 0.60 floor | 260 px | Compact |
 
-The shell owns responsive feature geometry that must track the container rather than force reference pixels. This includes the Media Deck preview, LIVE lower output region, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width. Feature-local control density such as button heights, status rows and aspect-ratio thumbnails may remain fixed where it expresses an interaction or content requirement. Compact mode removes optional side/auxiliary presentation, optional timeline context badges and the reserved empty V2/A2/A3 reference lanes before core production identity or commands are sacrificed. The governed V3 Graphics, V1 Video and A1 Music roles remain visible.
+The shell derives Media Deck preview height, LIVE lower output height, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width from the current container or bounded compact minimum. EDIT retains its reference proportions. Repeated output rows, monitor chrome, metric tracks and bounded aspect-ratio thumbnails may retain interaction/content dimensions.
 
-### Fixed-geometry audit classification
+The former Media Deck 430-px root minimum, 610-px center-column minimum, Inspector/LIVE/Output feature-root minimum widths and Multiview minimum height must not override their host allocation. Scrolling belongs to actual overflow such as Inspector properties, LIVE controls, output lists and stacked preparation content, not to hiding oversized viewer roots.
 
-The productive Operator XAML audit distinguishes four geometry classes:
+Compact mode temporarily removes side/auxiliary regions, reduces lower-region allocation and suppresses optional top-bar/timeline telemetry and empty V2/A2/A3 reference lanes before core production identity or commands. Governed V3 Graphics, V1 Video and A1 Music roles remain visible. Restoring a larger viewport restores the saved reference presentation, not a rewritten compact layout.
 
-- **reference geometry** — 1920×1080 shell values such as 60 px top bar, 92 px navigation, 400 / 340 / 320 persisted panel defaults and EDIT 390:304 plus 320:462:276 proportions remain the qualification composition and are not treated as mandatory render pixels;
-- **interaction/content geometry** — compact buttons, toolbar rows, 54 px output rows, monitor chrome, metric tracks and bounded aspect-ratio thumbnails remain fixed where changing them would reduce legibility or alter the content contract;
-- **container-derived geometry** — Media Deck preview, central workspace minimum, LIVE lower output, Compositing preview, Health sidebar/cards, Source Bin thumbnail, Quick Control cards and Timeline track-header width derive from the current viewport;
-- **removed container constraints** — the former Media Deck 430 px root minimum, 610 px center-column minimum, feature-root Inspector/LIVE/Output minimum widths and Multiview minimum height are no longer allowed to override their host allocation.
-
-Scrolling remains local to surfaces with real overflow semantics such as Inspector properties, LIVE controls, output lists and the central stacked preparation workspace. It is not used merely to conceal a feature-root minimum-size requirement.
+PerMonitorV2 awareness, layout rounding, pixel snapping, compact allocation and local vertical scrolling support the documented logical-size matrix. The normal reference window minimum is 960×500 DIP; real small work areas can require lower window minima to keep chrome reachable. Physical mixed-monitor behavior remains a separate qualification obligation. See [Operator Visual Qualification](OperatorVisualQualification.md).
 
 ## LIVE
 
-LIVE is the primary fast production workspace. It is arranged as a three-zone operator surface: source/cue selection on the left, adaptive multiview plus Quick Controls in the center, and explicit Live Controls on the right.
+LIVE is the primary fast production workspace: source/cue selection on the left, adaptive multiview and Quick Controls in the center, and explicit Live Controls on the right. The accepted refinement direction gives media and confirmed production identity priority over optional diagnostic detail without introducing another shell.
 
-The multiview consumes only existing Operator monitoring and Runtime audio projections:
+The multiview reuses confirmed Preview/Program monitoring, existing source thumbnails/state/PGM-PVW tallies and source audio peaks. Its source bank adapts from two to three to four columns, bounded to sixteen displayed tiles. Failed sources remain visible. Enlarging a source/monitor tile changes presentation only; it never routes or takes.
 
-- confirmed Preview monitoring image and state;
-- confirmed Program monitoring image and state;
-- already available source thumbnails, source state and PGM/PVW tally;
-- existing source audio peak observations.
+Selection changes only local intent. Set Preview, CUT and AUTO remain explicit existing commands; media cue selection is separate from Jump Selected Cue. Scene selection is presentation-only. TAKE SCENE invokes `ActivateSceneCommand` through Client/ControlHost/Runtime and waits for synchronized active-Scene/failure evidence.
 
-The source bank adapts from 2 to 3 to 4 columns and is bounded to 16 displayed source tiles. Failed sources remain visible with their failure state. Double-clicking a source or monitor tile opens a larger presentation of the same image and does not route or take the source.
+Live Controls reuse existing transition, graphics/layer, recording and Clean Program commands and compact health/error evidence. Program/Aux SRT or NDI transmission requires the existing authoritative Runtime/provider observations. LIVE requires CONNECTED plus a successful send no older than five seconds; missing, stale or faulted evidence cannot indicate confirmed transmission.
 
-Selection is deliberately separate from production mutation. Selecting a source changes only SelectedSource; Set Preview, CUT and AUTO remain explicit existing commands. Media cue selection is likewise separate from Jump Selected Cue. Scene selection is presentation-only; TAKE SCENE invokes the governed `ActivateSceneCommand` through the existing Client/ControlHost/Runtime path, and confirmed active-Scene or failure evidence is projected back to the Operator. The LIVE workspace does not create local Scene authority.
-
-The right Live Controls surface reuses existing transition, graphics/layer, recording and Clean Program commands and projects compact existing health/error evidence. Program/Aux SRT or NDI network transmission uses the existing authoritative Runtime/provider output-role observations. Its LIVE indication requires CONNECTED plus a successful send no older than five seconds; missing, stale or faulted evidence never indicates confirmed LIVE.
-
-The multiview does not subscribe to another monitoring transport, decode media or render a second Program path.
+The workspace does not create another monitoring subscription, decoder, Program renderer or production authority.
 
 ## EDIT
 
-EDIT is the reference Preview / Program production workspace. At 1920×1080 the center region resolves to the 1070×700 reference composition. At smaller logical viewports its rendered height follows the shared viewport scale instead of forcing the reference pixels:
+EDIT is the reference Preview/Program production workspace. At 1920×1080 its center resolves to the 1070×700 reference composition; smaller viewports derive the rendered size from the shared scale:
 
-- upper monitor row preserves the 390 reference weight with equal Preview and Program viewers separated by 6 px;
-- shared monitor chrome: 40 px header, aspect-safe image region and 42 px custom transport;
-- lower row preserves the 320:462:276 Scene Stack / Output Routing / System Status proportions with 6 px gaps;
-- Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; governed Scene activation remains a separate explicit command path and is never triggered implicitly by EDIT selection;
-- Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; governed Aux projects authoritative source plus Runtime/provider evidence and remains `UNVERIFIED` when that evidence is unavailable;
-- System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
-- the timeline retains a 320 px reference height and scales with the same view-container presentation model outside compact mode.
+- The upper row retains the 390 reference weight, equal Preview/Program viewers and a 6-px separator; the reference viewer split is 532 / 6 / 532.
+- Shared monitor chrome retains a 40-px header, aspect-safe image and 42-px custom transport region.
+- The lower row retains the 320:462:276 Scene Stack / Output Routing / System Status proportions and 6-px gaps, within the 390:304 upper/lower reference allocation.
+- The compact Scene Stack reuses source projection and explicit Set Preview/CUT/AUTO; governed Scene activation remains a separate action.
+- Output Routing projects confirmed Program/Preview, governed Aux and existing Clean Feed monitoring. Missing backend evidence remains UNVERIFIED.
+- System Status uses Engine/Control/Runtime/Media/GPU evidence. Disk/Network/Temperature remain unavailable where their owning contract publishes no measurement; the Operator does not probe locally.
+- The timeline keeps its 320-px reference height and container-derived presentation outside compact mode.
 
-Viewer maximize/restore and fullscreen remain presentation-only. All seeking, IN/OUT changes, cue operations and take commands continue through the existing Media Deck, Timeline and authoritative Control paths.
+Seeking, IN/OUT, cue operations and take commands retain the existing Media Deck, Timeline and authoritative Control paths. Viewer maximize/fullscreen changes no production state.
 
 ## MEDIA
 
-MEDIA emphasizes preparation:
+MEDIA emphasizes preparation: expanded Media Pool, governed NDI discovery/adoption, Preview-focused viewing, Media Deck, metadata/Context Inspector, import/open and IN/OUT/playback-policy preparation. It introduces no second ingest or media-management subsystem.
 
-- expanded Media Pool;
-- governed NDI source discovery and explicit source adoption;
-- Preview-focused viewer presentation;
-- Media Deck;
-- metadata and Context Inspector;
-- existing import/open workflow;
-- existing IN/OUT and playback-policy preparation.
+The Media Library already provides virtualized grid/list browsing, typed search, named Smart Bins, selection-aware context menus, bounded batches and pressure-aware thumbnail reuse. Independent position scrubbing is unavailable; hover must not open or seek a production deck. See [Media Library](MediaLibraryAssetBrowser.md).
 
-It does not introduce another ingest or media-management subsystem.
+Explicit asset preparation uses the integrated bounded non-Program verification path. File availability, a current representative conditional observation and actual resident deck readiness remain distinct. Prepare/Retry/Cancel reflect real capability and failure state; an expired observation or catalogue entry must not be presented as resident READY. Preparation does not route Program or change saved production.
 
-The MEDIA NDI SOURCES panel projects bounded Runtime/provider discovery through Client and ControlHost. REFRESH is observational. ADOPT is an explicit ControlHost mutation that adds a stable source identity to the durable production source catalog without changing Preview or Program. Source selection never routes or takes. Input lifecycle states are confirmed Runtime/provider evidence; the Operator does not host an NDI finder, receiver, decoder or audio path.
+NDI SOURCES projects bounded Runtime/provider discovery through Client and ControlHost. REFRESH is observational. ADOPT explicitly adds stable source identity to the durable production source catalog without changing Preview/Program. Selection never routes or takes. The Operator hosts no NDI finder, receiver, decoder or audio path; input lifecycle is confirmed Runtime/provider evidence.
 
 ## SCENES
 
-SCENES is a shell destination for scene/layer operation. It reuses the existing graphics projection and Inspector surfaces; it does not create a second Scene authority or renderer. LIVE exposes the governed Scene catalog, presentation-only selection, declared routing plus optional Scene compositing-state inspection, confirmed active-Scene evidence and explicit TAKE SCENE activation through `ActivateSceneCommand`. The declared Scene layer stack is desired content, while COMPOSITING continues to project Runtime-confirmed layer state. The two must not be conflated in the UI.
+SCENES is the preparation and scene/layer destination; LIVE also exposes the governed Scene catalog and explicit TAKE SCENE. Selection, declared routing and optional Scene compositing-state inspection are local presentation of desired content, not Runtime confirmation. COMPOSITING separately projects Runtime-confirmed layers.
 
-TAKE SCENE submits the selected Scene only through the existing Client/ControlHost/Runtime transaction. A Scene with a declared layer stack recalls that stack together with Preview/Program routing; a legacy Scene without one remains routing-only. Direct confirmed layer mutations may invalidate `ActiveSceneId` when they make current production state differ from the activated Scene. Selection itself never activates or rewrites a Scene.
+TAKE SCENE submits through the existing Client/ControlHost/Runtime transaction. A declared layer stack recalls that stack with Preview/Program routing; a legacy Scene without one remains routing-only. Confirmed direct layer changes can invalidate `ActiveSceneId` when production diverges from the active Scene. Selection itself never activates or rewrites a Scene.
 
 ## COMPOSITING
 
-COMPOSITING emphasizes composition using the existing Runtime-owned graphics path:
+COMPOSITING uses the existing Runtime-owned graphics path: Preview/Program, Media Pool graphics, confirmed ordered layers, stable bitmap/Production CG/visual-layer identities, bounded reorder/visibility/opacity, selected-node Inspector and independently supported AI composition controls.
 
-- Preview and Program;
-- graphics resources in the Media Pool;
-- the confirmed ordered Runtime layer stack;
-- stable bitmap, Production CG and existing visual-layer identities;
-- bounded selected-layer reorder, visibility and opacity controls;
-- one authoritative Transform node per supported bitmap graphics or Production CG layer;
-- Rotation, Anchor/Pivot and Crop in addition to Position and Scale;
-- an ordered bounded processing stack of 0..4 typed Color Grade or Chroma Key nodes per supported layer;
-- selection-driven Inspector that edits the selected Layer, Transform or Processing node through the same authority path;
-- current AI composition control where independently supported.
+Each supported bitmap graphics or Production CG layer has one authoritative Transform node with Position, Scale, Rotation, Anchor/Pivot and Crop, followed by zero to four ordered typed Color Grade or Chroma Key nodes. The graph is Layer → Transform → processing stack → Composite. Stable node identity preserves selection across ordinary refreshes.
 
-Source/routing topology remains read-only. Local selection, pan, zoom, editable Inspector drafts and layout are presentation state only. Layer reorder/visibility/opacity, transform, and processing-stack add/update/enable/reorder/remove mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed state returns. The Operator disables these mutations when state is stale, disconnected, busy or Runtime is not ready and never treats draft values as production truth.
+The Inspector exposes Color Grade Brightness/Contrast/Saturation and Chroma Key RGB/Tolerance/Softness/Spill Suppression with bounded add/move/remove operations. Mutations submit a complete validated next stack through Client → ControlHost → RuntimeHost and remain pending until confirmed. Drafts, local selection, pan and zoom never become production truth. Commands remain unavailable when stale, disconnected, busy or Runtime is not ready.
 
-The graph projects the actual chain as Layer → Transform → [0..4 ordered typed processing nodes] → Composite. Processing-node selection is stable by node identity across ordinary status refreshes. The shared Inspector exposes Color Grade Brightness/Contrast/Saturation and Chroma Key RGB/Tolerance/Softness/Spill Suppression, plus bounded add, move and remove controls. Each action submits a complete validated next stack rather than creating a second mutation authority. Program-pixel color picking, unbounded/plugin-defined processing graphs, arbitrary shaders and free topology rewiring remain unsupported. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
+Source/routing topology is read-only. Program-pixel color picking, arbitrary shaders, plugin-defined/unbounded graphs and free rewiring are unsupported. No second compositor, renderer or production store is introduced. See [Compositing Node Graph](CompositingNodeGraph.md).
 
 ## OUTPUTS
 
-OUTPUTS is the production-facing routing, output-health and performance workspace. It projects governed Program/Aux output roles, authoritative Preview routing and the existing clean Program monitoring presentation without creating a second output or routing authority.
+OUTPUTS presents governed Program/Aux roles, authoritative Preview routing, Clean Program monitoring, recording and output-health evidence. CUT/DISSOLVE uses the existing Preview path and becomes SAFE READ-ONLY when the shared mutation gate is unavailable. Aux changes use the governed output-role command, not a UI-local route.
 
-Preview-to-Program routing reuses the existing CUT/DISSOLVE path and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Aux source changes use the governed output-role command and never bypass ControlHost planning/commit. Output detail exposes only confirmed format, target, recording and health evidence. CPU utilization, system-memory utilization/capacity, available NVIDIA GPU/VRAM measurements and measured Program output FPS are projected from the Runtime performance snapshot. Missing color-space, streaming, disk, network and temperature telemetry remains explicitly UNAVAILABLE.
+Display only confirmed format, target and provider evidence. Runtime CPU/memory, available NVIDIA GPU/VRAM and measured Program FPS use the shared performance projection. Missing telemetry remains UNAVAILABLE. Bounded frame-time/cadence/drop/hardware mini histories and the permanent shell status bar reuse the same observations without another poller or new thresholds.
 
-The same OUTPUTS destination now contains the bounded professional Audio Mixer surface. It projects up to eight confirmed source strips and four confirmed bus strips, a compact source×bus routing matrix, typed three-band source EQ, typed bus compressor/sample-peak limiter drafts, Runtime-owned L/R peak/reduction/clipping evidence and the confirmed Program/Aux audio-bus assignment summary. Audio edits remain presentation drafts or pending requests until ControlHost/RuntimeHost reconfirms them. Compact/Detailed session-only presentation presets, named fine-step draft faders and strip-local Apply/Discard keep local edits distinct from confirmed routing and processing. Missing or stale meter observations remain explicit and pending management presentation is coalesced without resetting strip selection. The mixer reuses the existing 200 ms synchronized management update path and does not add a second polling loop, local WPF audio analysis, generic DSP/plugin graph, LUFS meter or true-peak claim.
+The existing Audio Mixer supports up to eight confirmed source strips, four bus strips, a compact source×bus matrix, typed three-band source EQ and bus compressor/sample-peak limiter drafts, L/R peak/reduction/clipping evidence, and Program/Aux audio-bus assignments. Compact/Detailed session presets, named fine-step draft faders and strip-local Apply/Discard preserve the distinction between drafts and confirmed state. Pending presentation coalesces without resetting selection; stale meters stay explicit. The existing 200-ms management path remains; no local WPF audio analysis, generic DSP graph, LUFS or true-peak claim is added.
 
-Available Runtime frame-time, measured output cadence, dropped-frame and hardware evidence is presented with bounded presentation-only mini histories. The permanent Production Shell status bar reuses the same projection and adds no independent telemetry polling loop or thresholds. See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md).
+See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md). Local Program, Clean Program monitoring and external-send evidence must remain distinct in every compact layout.
 
 ## HEALTH
 
-HEALTH is the dedicated diagnostic workspace. It consumes the central event-driven health snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and the monitoring plane.
-
-Subsystem health remains distinct from global Runtime Readiness. The workspace shows state duration, last successful check, measurements, recovery status and optional technical detail without creating another health authority. Recovery controls appear only when an existing safe command is available. See [Health Center](HealthCenter.md).
+HEALTH consumes the central event-driven snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and monitoring. Subsystem health is not global Runtime Readiness. Show duration, last successful check, measurements, recovery and optional detail without creating another authority. Offer recovery only through an existing safe command. See [Health Center](HealthCenter.md).
 
 ## SETTINGS
 
-SETTINGS retains shell configuration plus compact legacy lifecycle/system-status surfaces. It does not own Runtime configuration or create a parallel settings or diagnostics state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
+SETTINGS retains shell configuration and compact lifecycle/system surfaces. It owns neither Runtime configuration nor a parallel diagnostics state. PASS/FAIL/UNVERIFIED semantics remain unchanged. Layout, template and shortcut preferences are presentation data, not production settings.
 
 ## Quick Controls
 
-Quick Controls are a bounded pinboard for Inspector-capable editable properties. A pin stores only a stable Inspector property identifier in local UI preferences. It never stores an authoritative value.
+Quick Controls pin stable Inspector property identifiers, never authoritative values. The bounded initial set covers transition duration, clip playback policy, selected audio gain/mute, graphics visibility/position/scale and AI enable state, with at most eight pins. Every mutation reuses the existing Apply/Toggle command and remains desired until normal authoritative confirmation.
 
-The initial supported set includes transition duration, clip playback policy, selected audio gain/mute, graphics visibility/position/scale and AI enable state. A maximum of eight values may be pinned.
-
-Every mutation reuses an existing command path such as Apply Playback Policy, Apply Audio Gain, Toggle Audio Mute, Apply Graphics, Toggle Graphics or the existing AI enable/disable commands. Desired values remain desired until the normal authoritative observation confirms them.
-
-Pins are stored below the current user's local application data in rtaime/operator-quick-controls.json. Unknown or incompatible data is ignored safely.
+Pins are stored in `rtaime/operator-quick-controls.json` below the user's local application data. Unknown/incompatible data is ignored safely.
 
 ## Keyboard-first operation
 
-Window-level shortcuts are defined centrally by OperatorKeyboardCommandRegistry. The registry rejects duplicate key/modifier pairs before routing preview key-down events and generates the Help reference from the same definitions. This path supports the unmodified production keys used by the Operator without relying on WPF KeyGesture validation.
+`OperatorKeyboardCommandRegistry` centrally resolves window-level shortcuts, checks collisions and supplies discoverable help. The following table describes the base production/view bindings, not every supported shortcut; active validated profiles and the central registry determine the effective gesture.
 
-Default bindings are:
-
-| Shortcut | Operation |
+| Shortcut | Base operation |
 | --- | --- |
-| Space | Preview media Play / Pause when the loaded Media Deck source is confirmed Preview |
-| K | Preview media Pause |
-| S | Preview media Stop |
-| I | Set Preview media IN |
-| O | Set Preview media OUT |
+| Space | Preview media Play/Pause when the loaded source is confirmed Preview |
+| K / S | Preview media Pause / Stop |
+| I / O | Set Preview media IN / OUT |
 | M | Add named Preview media cue |
-| Delete | Delete the selected Preview media cue when that command is available |
-| Up | Previous Preview media cue |
-| Down | Next Preview media cue |
-| Enter | AUTO Preview to Program |
-| Ctrl+Enter | CUT Preview to Program |
-| R | Start/stop Program recording when the matching command is available |
+| Delete | Delete selected Preview cue when available |
+| Up / Down | Previous / next Preview cue |
+| Enter | AUTO confirmed Preview to Program |
+| Ctrl+Enter | CUT confirmed Preview to Program |
+| R | Start/stop Program recording when available |
 | Ctrl+F | Focus Media Library search |
 | Ctrl+P | Set selected source to Preview |
 | F5 | Synchronize authoritative state |
 | F11 | Operator fullscreen/windowed |
-| Esc | Exit Operator fullscreen |
-| Ctrl+1 | Maximize Preview |
-| Ctrl+2 | Maximize Program |
-| Ctrl+0 | Restore dual viewers |
+| Esc | Contextual cancel/restore, then exit fullscreen |
+| Ctrl+1 / Ctrl+2 / Ctrl+0 | Maximize Preview / Program / restore dual viewers |
+| Ctrl+K | Commands palette |
+| F9 | Explicit Show Control GO when armed and eligible |
 
-Timeline-local Page Up/Page Down navigation remains inside the timeline control. J and L are intentionally not bound in V1 because deterministic reverse/forward shuttle semantics are not currently exposed by the Media Deck. The UI does not invent those semantics.
-
-Production shortcuts are suppressed while the operator is typing in a text-entry control. Non-destructive application/view commands such as F5 and fullscreen remain available. Repeated key-down events are consumed without repeatedly executing production commands.
+Timeline-local Page Up/Page Down remains in the timeline. J/L reverse/forward shuttle is not invented where the deck contract does not expose it. Text-entry controls suppress production shortcuts; non-destructive synchronization/view commands retain their allowed scope. Repeat key-down events must not repeat production actions. Buttons and keyboard paths share command availability and authoritative validation.
 
 ## Shortcut discoverability
 
-Button labels and tooltips show the primary production shortcuts. The Help surface renders the central registry, so displayed window-level shortcuts cannot drift from the applied definitions.
-
-The registry exposes conflict detection as the extension point for future customization. A full keyboard editor is not part of V1.
+Button labels/tooltips and Help use the active registry/profile. The existing profile editor supports validated customization, import/export, collision handling and reset; the earlier no-keyboard-editor limitation is superseded by [Commands and Shortcut Profiles](OperatorCommandsAndShortcuts.md). Do not add a second shortcut editor or hard-coded help registry.
 
 ## Clean Program monitoring
 
-Clean Program presents only the existing Runtime-derived Program monitoring image in a dedicated display/window. The current Program Output controller shares the same OperatorMonitoringViewModel.ProgramImage object used by the in-application Program monitor.
-
-Clean Program:
-
-- contains no production controls over the image;
-- can be started/stopped and restored safely;
-- can target supported Windows displays;
-- can be toggled between fullscreen and windowed monitoring;
-- does not route, switch or otherwise change physical Program output.
+Clean Program presents the existing Runtime-derived Program image in a dedicated window/display, using the same `OperatorMonitoringViewModel.ProgramImage` as the in-application monitor. It has no production controls over the image, can start/stop and restore safely, supports established Windows display targeting and windowed/fullscreen monitoring, and does not route or change physical Program output.
 
 It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Operator layout storage uses schema version 6. Each canonical workspace persists only presentation fields:
+Schema 6 stores each workspace's left/right widths, lower height, collapsed state, center-maximized state and viewer mode. Selected workspace, fullscreen preference and normalized window placement remain top-level UI preferences. Legacy names migrate to accepted destinations without production state. Pre-v4 geometry resets to canonical 400/340/320 defaults; v4/v5 reference sizes, modes and placement are retained on migration to v6, with container-dependent scaling applied only when rendering.
 
-- left and right panel width;
-- timeline/lower region height;
-- panel collapsed state;
-- center-maximized state;
-- viewer presentation mode.
-
-Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained. Version-4 and version-5 layouts migrate in place; their stored reference widths, heights, viewer modes and window placement are retained while schema version 6 adds viewport-dependent presentation scaling only at render time.
-
-SAVE LAYOUT persists the active workspace presentation. Switching destinations captures the outgoing workspace and restores the target workspace's own saved widths, collapsed state, center state and viewer mode without copying geometry from the previous workspace. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
-
-The layout file remains rtaime/operator-layout.json below the current user's local application data. Persistence writes first use a temporary sibling file and then replace the target path so an interrupted write cannot leave partially serialized layout JSON as the preferred state.
-
-Canonical workspace defaults use the same mockup macro geometry and differ only in viewer presentation mode:
+SAVE LAYOUT persists the active presentation. Switching captures the outgoing workspace and restores the destination's own preferences. LAYOUT RESET affects only the selected workspace. Missing, corrupt, non-finite, out-of-range or incompatible data recovers to safe defaults. The store remains `rtaime/operator-layout.json` below local application data, with serialized temporary-sibling/atomic replacement writes.
 
 | Workspace | Left | Right | Lower | Collapsed by default | Viewer |
 | --- | ---: | ---: | ---: | --- | --- |
@@ -240,122 +182,97 @@ Canonical workspace defaults use the same mockup macro geometry and differ only 
 | HEALTH | 400 | 340 | 320 | none | PROGRAM |
 | SETTINGS | 400 | 340 | 320 | none | PROGRAM |
 
-At constrained logical width or height the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar and timeline context telemetry without modifying the persisted per-workspace dimensions. Between compact and reference size, panel, feature and EDIT production-workspace geometry is derived from the current view container while persistence remains in reference coordinates. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
-
 ## Docking, focus and visual polish
 
-The three production-shell splitters share the same focus-visible theme and remain keyboard-focusable. Their tooltips advertise arrow-key resizing. Standard ComboBox, CheckBox and TabItem controls inherit the shared focus visual, while the window retains cyclic tab navigation so core controls remain reachable without a mouse.
+The three production-shell splitters share focus-visible styling, keyboard access and arrow-key tooltips. Product controls use the shared custom presentation while retaining underlying WPF focus/input mechanics as appropriate. Loading/error/empty states use shared styles, not local palettes.
 
-Loading, error and empty presentation reuse shared Operator styles instead of workspace-specific colors. Production Operator XAML intentionally avoids decorative Storyboard/animation transitions so focus, tally and command-state changes remain immediate.
-
-The reference window can shrink to 960 x 500 device-independent units. Combined with PerMonitorV2 awareness, vertical scrolling and the compact workspace presentation this keeps the shell within a 1920 x 1080 display at 100%, 125%, 150% and 200% Windows scaling. Per-monitor movement remains presentation-only and does not restart Runtime or media processing.
+Production XAML retains the no-decorative-Storyboard policy: tally, focus and eligibility change immediately. Proposed eased transitions in the experience contract require a separate shared-motion/reduced-motion and policy qualification change; this documentation does not enable them.
 
 ## Authority and performance boundaries
 
-The implementation preserves the existing product boundaries:
-
-- UI state is not production authority.
-- Multiview and Clean Program use the existing monitoring projection.
-- No second frame transport or media renderer is introduced.
-- Quick Controls store property identities, not production values.
-- Workspace switching performs no Client/Control/Runtime mutation.
-- Existing command availability remains the source of shortcut enablement.
-- Monitoring and management refresh cadences are unchanged.
+Workspace changes, selection, maximize/restore and docking do not mutate production. Multiview/Clean Program reuse monitoring. Quick Controls store identifiers, not truth. Existing command availability gates shortcut execution. Management/monitoring cadences, resource bounds and authoritative snapshots are unchanged. No second transport, renderer, decoder or polling loop is introduced for visual polish.
 
 ## Operator workflow
 
-A typical live workflow is:
-
-1. Prepare media and IN/OUT in MEDIA.
+1. Prepare media and IN/OUT in MEDIA; review actual availability/preparation evidence.
 2. Refine cues and timing in EDIT.
-3. Prepare scene/layer state in SCENES or COMPOSITING.
-4. Pin frequently adjusted values from the Inspector.
-5. Switch to LIVE for multiview, production controls and Quick Controls.
-6. Open Clean Program when a dedicated monitoring display is required.
-7. Use OUTPUTS for recording/output evidence, HEALTH for subsystem diagnostics and SETTINGS for shell configuration.
+3. Prepare scenes/layers in SCENES or COMPOSITING.
+4. Pin frequently edited properties through the existing Inspector.
+5. Use LIVE for confirmed Preview/Program, explicit actions and Quick Controls.
+6. Open Clean Program for dedicated monitoring when needed.
+7. Use OUTPUTS for provider/recording/audio evidence, HEALTH for diagnosis and SETTINGS for shell preferences.
 
-The same underlying production state remains active across every workspace.
-
+One underlying production state remains active throughout.
 
 ## Production monitor operation
 
-EDIT composes the separate Preview and Program role controls in the fixed 532 / 6 / 532 reference split. Both role controls delegate their common monitor structure to `RtaimeMonitorPresentation`, which owns the shared header, frame canvas, guides, timecode, unavailable-frame chrome and overlay controls. Preview- and Program-specific header/status/footer content remains outside that shared structure, so presentation reuse does not merge command or state authority. MEDIA and the other standard-viewer workspaces reuse the same role controls where applicable. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
+Preview and Program role controls delegate common header/frame/guides/timecode/unavailable/overlay presentation to `RtaimeMonitorPresentation`. Role-specific header/status/footer and command ownership stay separate. MEDIA and standard-viewer workspaces reuse those roles rather than another playback path.
 
-Preview is the only monitor that exposes Media Deck transport controls. The control row and the corresponding Space/K/S/I/O/M/Up/Down shortcuts are active only when the loaded Media Deck source is the confirmed Preview source. Program intentionally exposes no Preview transport commands.
+Preview alone exposes Media Deck transport, gated to a loaded source confirmed as Preview. Program has no Preview transport authority. Local Fit/Fill/pixel-inspection/zoom/pan/ROI/channel controls follow [Operator UI V1](OperatorUiV1.md); guide overlays remain presentation-only. FULL captures the previous viewer/center/fullscreen context and restores it on Escape or the established toggle without restarting decoding, monitoring or Runtime.
 
-Both monitors support Fit, 50 percent and 100 percent presentation plus Safe Area, Center Mark and Grid overlays. These are local presentation controls over the independent monitoring bitmap. The header uses the authoritative Runtime video-format projection for resolution/frame-rate/pixel-format evidence. Color space remains `N/A` until a governed contract exposes it.
+The experience contract requires honest [image-detail semantics](OperatorExperienceDesign.md#honest-image-detail-contract): source/Program format, delivered monitoring dimensions and physical target are different. Pixel-perfect inspection of a downscaled monitoring image is not original-source detail. Show only supplied metadata and the actual GPU/fallback path; unavailable color space/bit depth remains unavailable.
 
-The Program monitor's `ON AIR` indication refers to the local Program monitor only. Clean Program Output is separate. External transmission is independently derived from provider send evidence and is not inferred from either local presentation state.
+Program ON AIR describes the local confirmed Program bus/monitor, not external transmission. Clean Program is separate monitoring; external transmission needs its own provider evidence.
 
-The monitor-specific FULL action uses transient Shell state: it selects the requested viewer, maximizes the center region and enters the existing fullscreen window presentation. Escape or the fullscreen toggle restores the previous viewer mode and center-layout state without restarting media decoding, monitoring or Runtime execution.
 ## Show Control workflow
 
-SCENES is the primary authoring and preparation location for Show Control, while the same SCENES & CUES region is available in the production workflow for execution.
+SCENES is the primary Show Control authoring/preparation destination; the same SCENES & CUES region supports production execution. Prepare a cue list in Show Control EDIT, save and explicitly select it in ControlHost, ARM it, inspect the displayed cue/action, then execute one cue with GO/F9. Progress requires explicit GO; CANCEL unexpected state or acknowledge backend `RecoveryRequired` through the supported path.
 
-A bounded workflow is:
-
-1. Prepare or select a cue list in Show Control EDIT.
-2. Save and explicitly select the list in ControlHost.
-3. ARM the selected list.
-4. Confirm the displayed current cue/action.
-5. Execute one cue with GO or `F9`.
-6. Continue with explicit GO progression until completion.
-7. CANCEL on unexpected state or acknowledge recovery when ControlHost reports `RecoveryRequired`.
-
-Cue selection alone never changes Program state. The Operator does not own cue timing or infer completion locally; it presents synchronized Control state.
-
-See `docs/ShowControlCueSequencing.md`.
+Cue selection never changes Program. The Operator neither times cues nor infers completion. Asset cue markers and Show Control actions remain separate domains. See [Show Control Cue Sequencing](ShowControlCueSequencing.md).
 
 ## Optional docking and detached panels
 
-The built-in layouts remain the default. SETTINGS offers **BUILT-IN / DOCKING LAYOUT**; Ctrl+Shift+D toggles the same presentation. Docking moves the existing TOOLS, MONITORS, INSPECTOR and TIMELINE view instances into bounded LEFT/CENTER/RIGHT/BOTTOM split groups. Drag a panel tab to another group to combine panels as tabs, or use the named group buttons. Splitters support mouse dragging and arrow keys. No arbitrary plug-in panels, replacement renderers or additional control/monitoring sessions are created.
+Built-in layouts remain the default. SETTINGS exposes BUILT-IN / DOCKING LAYOUT; Ctrl+Shift+D toggles the same presentation. Existing TOOLS, MONITORS, INSPECTOR and TIMELINE view instances occupy bounded LEFT/CENTER/RIGHT/BOTTOM split groups. Drag tabs or use named group buttons to combine them; splitters support mouse and arrows. No arbitrary plugin panels or extra control/monitoring sessions are created.
 
-FLOAT (Ctrl+Shift+W) detaches the focused panel into an owned secondary window. Closing that window returns the panel to its remembered group; it does not shut down the engine. The window presents the same source identities, view models and shortcut commands as the primary Operator. Text-entry suppression and confirmed-state mutation gating continue through the central shortcut registry. Moving or selecting a panel never performs a TAKE.
+FLOAT/Ctrl+Shift+W detaches the focused panel into an owned secondary window. Closing it returns the panel to its remembered group, not engine shutdown. Main and detached windows share models, source identities, command instances, input suppression and mutation guards. Moving/selecting a panel never takes it.
 
-Ctrl+Shift+N cycles panels, Ctrl+Shift+F focuses/restores the current docked panel, and Ctrl+Alt+Left/Up/Right/Down moves it to LEFT/CENTER/RIGHT/BOTTOM. Ctrl+Shift+R resets only the selected workspace to its built-in reference layout. Focus is transient. The existing Ctrl+1/Ctrl+2/Ctrl+0 viewer commands, Enter AUTO and Ctrl+Enter CUT retain their meanings in both main and detached windows.
+| Shortcut | Docking operation |
+| --- | --- |
+| Ctrl+Shift+N | Cycle panels |
+| Ctrl+Shift+F | Focus/restore selected panel |
+| Ctrl+Alt+Left/Up/Right/Down | Move to LEFT/CENTER/RIGHT/BOTTOM |
+| Ctrl+Shift+R | Reset selected workspace to built-in layout |
 
-Each workspace stores its own optional docking preferences within the existing schema-6 layout envelope. The additive docking component has version 1, four known panel identities, at most four groups/windows, selected tabs and bounded split ratios. Older layouts with no component retain their widths, viewer modes and window placement and start in built-in mode. Unknown component versions, duplicate/unknown panels, invalid ratios and non-finite geometry recover safely without carrying production values. Layout loading is capped at 1 MiB and uses the existing serialized atomic replacement path.
+Each workspace keeps an additive version-1 docking component inside schema 6: four known panel identities, at most four groups/windows, bounded split ratios and selected tabs. Missing components retain existing geometry and use built-in mode. Duplicate/unknown panels, future component versions or invalid geometry recover safely. Layout reads are capped at 1 MiB.
 
-At compact viewport size, docked groups are temporarily presented as one tab group; their persisted split arrangement is preserved. Floating windows retain independent physical monitor/work-area coordinates and DPI. On restore or display topology change, missing displays fall back to the primary available work area, offsets/sizes are rescaled for the selected monitor and the entire window is clamped to a real work area. Gaps in the virtual desktop are not treated as displays. The same native work-area check recovers the primary window. Small work areas may reduce the window's minimum size so its chrome remains reachable.
+Compact mode temporarily presents docked groups as one tab group without overwriting stored splits. Floating placement uses actual monitor/work-area coordinates and DPI. Missing displays fall back to an available primary work area, sizes/offsets are rescaled and the complete window is clamped to a real work area; virtual-desktop gaps are not displays. The primary window uses the same recovery. Small work areas can reduce window minimums so chrome remains accessible.
 
-If a panel is missing, use Ctrl+Shift+N to select it, Ctrl+Alt+Up to dock it centrally, or Ctrl+Shift+R for a workspace reset. The primary navigation/status and transport regions remain outside docking. Closing the Operator closes all owned panel windows and removes display-event subscriptions before normal monitoring/control teardown.
-
-Automated qualification covers migration, independent workspace persistence/reset, monitor removal and 100/125/150/200% synthetic DPI geometry, invalid/off-screen placement, bounded identities, real STA dock/float/close cycles, shared bindings/shortcut identity and unchanged Preview/Program source identity. Hosted single-display results do not certify physical mixed-DPI hot-unplug behavior; that remains UNVERIFIED until exercised on the retained Windows reference configuration.
+To recover a missing panel, cycle with Ctrl+Shift+N, dock centrally with Ctrl+Alt+Up, or reset with Ctrl+Shift+R. Primary navigation/status/transport stay outside docking. Operator shutdown closes owned windows and removes display subscriptions before normal monitoring/control teardown.
 
 ## Context Inspector editing
 
-See [Context Inspector and precision editing](ContextInspector.md) for shared numeric ranges/units, Alt-drag scrubbing, fine/coarse keys, reset and compatible attribute drafts. Existing selection, pinned metadata, mixed summaries and Apply confirmation remain in place. Multi-selection property transactions remain deferred.
+[Context Inspector](ContextInspector.md) owns numeric ranges/units, Alt-drag precision, fine/coarse keys, reset, pinned metadata, mixed summaries, compatible attribute drafts and explicit Apply. [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) add grouped local draft undo and typed transfer. They do not undo confirmed live operations. Multi-selection live property transactions remain deferred.
 
 ## Commands and shortcut profiles
 
-Ctrl+K and the Commands navigation item open the shared palette from the main or detached Operator. Search workspace, library, viewer, draft and production commands; disabled results explain their context. Production actions require the Execute button. See [Commands and shortcut profiles](OperatorCommandsAndShortcuts.md) for safe overrides, import/export, reserved keys and reset.
+Ctrl+K or Commands opens the shared palette in main/detached windows. It searches workspace/library/viewer/draft/production actions and explains unavailable results. Production activation requires the explicit Execute button. Profiles, recent references, stable-ID favorites and contextual help reuse [Commands and Shortcut Profiles](OperatorCommandsAndShortcuts.md); reference opening only inspects and does not execute.
 
 ## Show checks and activity
 
-Open **Show checks** in the navigation rail or search **Show preflight** in Commands (Ctrl+K). The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state observations with recent correlated requests and the existing notifications. Review links lead to existing workspaces. Health incidents, recovery and support bundles remain in their established services; acknowledgement does not change production health or permit show launch.
+Open Show checks from navigation or search Show preflight in Commands. The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state evidence, bounded correlated requests and existing notifications. Program/Aux, recording-target and asset preparation evidence remain separate. Review links lead to existing workspaces. Acknowledgement or a reminder pause does not resolve an incident, change health or authorize launch. Recovery and support export stay in their established services.
 
 ## Focus, Cinema and deterministic restore
 
-SETTINGS and the Commands palette expose **FOCUS**, **CINEMA** and **RESTORE**. Existing Ctrl+Shift+F focuses the selected panel; Ctrl+Shift+C toggles Cinema over the existing Program monitoring presentation. Escape restores either mode, including when the original Operator was windowed. Numeric-field Escape keeps its existing first chance to cancel an edit. F11 leaves a transient mode and toggles the currently displayed fullscreen state; explicit Ctrl+1/Ctrl+2/Ctrl+0 viewer choices also leave the mode before applying the requested view. Monitor FULL retains its established presentation path.
+SETTINGS and Commands expose FOCUS, CINEMA and RESTORE. Ctrl+Shift+F focuses a panel; Ctrl+Shift+C toggles Cinema using existing Program monitoring. Escape restores the prior mode even from a windowed start; numeric-field Escape retains first chance to cancel an edit. F11 exits a transient mode and toggles displayed fullscreen; Ctrl+1/2/0 exits it before applying the requested viewer. Monitor FULL retains its established path.
 
-Mode entry captures the current workspace layout, viewer mode, center state, fullscreen state and monitor-fullscreen restore context. The selected existing panel is presented centrally; Cinema temporarily presents the existing MEDIA viewer with MONITORS and the established Program fullscreen command, so it works from SETTINGS and the other specialized workspaces too. The original workspace is restored and remains the saved/template destination. Restore returns to the exact prior built-in/docked/tabbed/floating arrangement, including whether docking was originally enabled, and returns keyboard focus when the prior control remains reachable. Workspace switching, reset, explicit dock/float actions and template Apply leave the transient mode first. Mode projections never replace the normal saved layout or fullscreen preference, including explicit Save and shutdown.
+Entry captures workspace, built-in/docked/tabbed/floating arrangement, viewer, center and fullscreen/monitor-fullscreen context. Focus presents the existing panel centrally. Cinema temporarily uses the existing MEDIA/MONITORS Program presentation, including from specialized workspaces; the original workspace remains the saved/template destination. Restore returns its arrangement and reachable focus. Workspace switch/reset, explicit dock/float and template Apply leave transient mode first. Temporary projections never overwrite ordinary saved layout/fullscreen preferences, including Save and shutdown.
 
-The main navigation/status/transport regions remain outside docking. Panel chrome also displays current Program identity, connection and safety, bound to the original Operator view model. Restore remains visible in focused/detached chrome. Cinema is monitoring presentation and cannot TAKE, route, seek or introduce a second renderer.
+Shared panel chrome shows Program identity, connection, safety and Restore. Cinema cannot TAKE, route, seek or create another renderer.
 
 ## Named workspace layout templates
 
-Open **LAYOUT TEMPLATES…** in SETTINGS, or search **Named workspace layout templates** in Commands from any workspace or detached panel. The single owned preference editor preserves the current workspace; its name field captures that actual workspace, not a forced SETTINGS destination. It does not forward production shortcuts. Escape closes the editor and returns focus where the previous control remains available.
+Open LAYOUT TEMPLATES in SETTINGS or the named Commands entry from any workspace/detached panel. One owned preference editor captures the actual current workspace rather than forcing SETTINGS; it suppresses production shortcuts and restores reachable focus on Escape/close.
 
-Use a unique name of up to 64 characters, then **Save new template**. Up to 16 templates are retained. Selecting one is inspection only; its destination workspace is shown. **Apply** separately switches to that workspace and restores its layout, leaving the other seven independent layouts unchanged. **Delete** removes only the local template definition.
+Save a unique name of up to 64 characters; at most sixteen templates are retained. Selection inspects the destination; Apply explicitly switches and restores only that workspace, leaving the other seven layouts intact. Delete removes only the local definition. Templates remain an additive component in schema-6 `operator-layout.json`, not another database. Missing data means an empty list; invalid/duplicate entries normalize out and failed writes remain visible.
 
-Templates are an additive presentation component in the existing schema-6 `operator-layout.json`, alongside workspace layouts; no second preference database is introduced. Missing template data defaults to an empty list. Invalid/duplicate names and entries are normalized out within the same bounded load/save path. Failed preference writes are reported in the editor.
+Export uses `rtaime.operator-workspace-template`, document version 1 and source layout-schema version, with name, canonical workspace and normalized presentation/docking/floating preferences only. It contains no production sources, media paths, credentials or command state. Writes use temporary-sibling atomic replacement. Import validates asynchronously within a strict 1-MiB bound, adds a unique name and never applies or overwrites automatically.
 
-**Export** writes one portable JSON document with format `rtaime.operator-workspace-template`, document version 1 and the source layout schema version. It contains only a name, canonical workspace and normalized presentation/docking preferences, including floating placements. It contains no production sources, media paths, credentials or command state. Writes use a temporary sibling and atomic replacement. **Import** reads asynchronously with a strict 1 MiB bound, validates format/version/content and adds a uniquely named template; it never applies automatically or overwrites an existing name.
-
-Portable documents using supported older layout versions and existing version-2 through version-6 layout files reuse the established migration policy: pre-v4 geometry resets to canonical dimensions, v4–v6 layout values remain normalized, legacy workspace names map to their accepted destinations, and unknown future versions are rejected. Importing a complete legacy layout captures only its selected workspace, not its other preferences or production values. File open/read/parse/export work runs away from the UI thread; primary shutdown cancels and drains the two bounded file-operation slots before saving layouts and normal service teardown. Floating windows use the existing real-work-area/DPI restore path, with missing monitors falling back to an available display.
+Supported v2–v6 migration reuses the established policy: pre-v4 geometry resets, v4–v6 values normalize, legacy names map and future versions reject. Importing a full legacy layout captures only its selected workspace. File open/read/parse/export stays off the UI thread in two bounded slots; shutdown cancels/drains them before final persistence/teardown. Floating windows reuse real-work-area/DPI recovery.
 
 ## Detached-view retention and qualification
 
-An unrelated tab or dock change retains the same native floating window, content, view model and monitoring projection for each unchanged floating panel. It does not unload/reparent that monitor subtree. Closing a detached panel resolves its current return group, and primary shutdown closes all owned windows and unregisters display notifications before normal monitoring teardown.
+Unrelated tab/dock changes retain each unchanged floating native window, content, ViewModel and monitoring subtree; they must not unload/reparent it. Closing resolves the current return group. Shutdown closes all owned windows and unregisters display events before monitoring teardown.
 
-`WorkspacePresentationTemplateTests` covers transient-save exclusion, fullscreen/windowed restore, workspace independence, explicit template application, bounded collections, v2–v6 migration, portable roundtrip, malformed/future/oversized documents, duplicate rejection, cancelled export and visible write failures. The real-window docking qualification checks retained native window/content identity and zero monitor unloads on unrelated moves, visible Program status in Cinema, Focus/Cinema restoration, the shared template editor and unchanged Preview/Program identities. Existing synthetic 100/125/150/200% DPI and off-screen/hotplug recovery checks remain required. Physical mixed-monitor hotplug, screen-reader/IME interaction and GPU/monitoring lease behavior on reference hardware remain UNVERIFIED until measured there.
+Existing `WorkspacePresentationTemplateTests` and real-window qualification cover transient-save exclusion, independent layouts/reset, explicit template Apply, migration/roundtrip, bounds and malformed/future/oversized data, duplicate rejection, cancelled export/write failure, retained window/content identity, zero monitor unloads on unrelated changes, visible Program status, focus restore and unchanged Preview/Program identities. Synthetic 100/125/150/200% DPI/off-screen/topology tests remain required.
+
+Hosted geometry and window tests are not physical mixed-monitor hotplug, screen-reader/IME, touch or GPU scan-out qualification. Retain those as UNVERIFIED until actual reference evidence is recorded. The [experience roadmap](OperatorExperienceRoadmap.md#validation-contract) extends these existing checks with connected visual review, state honesty and combined operator journeys; it introduces no parallel qualification framework.
