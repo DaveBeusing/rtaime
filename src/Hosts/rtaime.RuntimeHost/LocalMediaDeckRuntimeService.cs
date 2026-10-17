@@ -297,7 +297,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
                 }
                 catch (Exception exception) { lock (_gate) _entries[i] = entry; (failures ??= []).Add(exception); }
             }
-            if (failures is not null) throw new AggregateException("Local deck shutdown retained failed owners.", failures);
+            if (failures is not null) throw new IOException("Local deck shutdown retained failed owners.", new AggregateException(failures));
         }
     }
 }
