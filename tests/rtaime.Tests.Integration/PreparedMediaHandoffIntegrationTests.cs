@@ -309,6 +309,31 @@ public sealed class PreparedMediaHandoffIntegrationTests
         finally { deck.Dispose(); File.Delete(path); }
     }
 
+    [Fact]
+    public void Playback_policy_change_at_publish_cannot_qualify_a_non_autoplay_candidate()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var a = MediaSourceId.New(); var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        deck.ObserveProgramSource(a);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        var generation = -1L;
+        deck.BeforePreparationPublish = () =>
+        {
+            generation = deck.GetDecodeSnapshot(b)!.Value.Generation;
+            Assert.True(deck.ApplyTransport(new(MediaContractVersion.Current, opened.Probe!.AssetId,
+                MediaTransportCommandKind.ConfigurePlayback, autoPlayOnProgram: false,
+                endBehavior: MediaDeckEndBehavior.HoldLastFrame) { SourceId = b }).Succeeded);
+        };
+        Assert.Throws<InvalidOperationException>(() => deck.PrepareLoadedNext(b, opened.Probe!.AssetId));
+        Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
+        Assert.False(deck.GetSnapshot(b).Transport!.AutoPlayOnProgram);
+        Assert.Equal(1, deck.Resources.Reserved);
+    }
+
     private static PreparedExecutionContract Prepared(LocalMediaDeckRuntimeService deck, MediaSourceId source)
     {
         var capability = deck.ProviderDescriptor.Capabilities.Single(c => c.Kind == "media.route");

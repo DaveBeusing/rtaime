@@ -48,11 +48,12 @@ internal sealed class LocalMediaDeckSlot : IDisposable
     }
 
     internal bool HasPreparedAudio { get { lock (_gate) return _session?.HasPreparedAudio == true; } }
-    internal void PrepareNext()
+    internal long PrepareNext()
     {
         lock (_openGate)
         {
             LocalMediaRuntimeSession session;
+            long generation;
             lock (_gate)
             {
                 if (_isOnProgram || _session is null || _opening || _quarantinedSession is not null ||
@@ -65,9 +66,11 @@ internal sealed class LocalMediaDeckSlot : IDisposable
                     MediaTransportCommandKind.Seek, EffectiveStartFrameUnsafe()));
                 if (!result.Succeeded) throw new InvalidOperationException(result.Failure?.Message);
                 _preparedNextPlayback = true;
+                generation = session.DecodeSnapshot.Generation;
             }
             if (!session.WaitForPreroll(TimeSpan.FromSeconds(10)))
                 throw new InvalidOperationException("Prepared-next preroll failed or timed out.");
+            return generation;
         }
     }
 

@@ -17,6 +17,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private MediaDeckPreparation? _preparation;
     private long _preparationStarted;
     internal TimeProvider PreparationClock { get; set; } = TimeProvider.System;
+    internal Action? BeforePreparationPublish { get; set; }
 
     // Explicit, bounded two-deck preparation. Hash/open/wait never hold the Program registry gate.
     public MediaDeckRuntimeSnapshot Preload(MediaDeckOpenRequest request, PreparedExecutionContract execution, string fingerprint)
@@ -117,17 +118,28 @@ public sealed partial class LocalMediaDeckRuntimeService
                 if (_program == source || entry.Retiring || entry.Deck.Snapshot.Probe?.AssetId != asset)
                     throw new InvalidOperationException("Preload source changed or is on Program.");
             }
-            entry.Deck.PrepareNext();
-            var snapshot = entry.Deck.Snapshot;
-            var decode = entry.Deck.DecodeSnapshot ?? throw new InvalidOperationException("Decode evidence is absent.");
-            if (snapshot.Probe?.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
-                throw new InvalidOperationException("Prepared-next requires actual decoded audio; video-only remains an ordinary manual deck workflow.");
-            _preparationStarted = PreparationClock.GetTimestamp();
-            return _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
-                asset.ToString(), _preparationExecution.PreparedExecutionId.ToString(),
-                _preparationExecution.AuthoritySnapshot.Revision.Value, decode.Generation,
-                snapshot.Transport!.Position.CurrentFrame, snapshot.Transport.EffectiveEndFrame,
-                _preparationFingerprint!, PreparationClock.GetUtcNow().AddSeconds(30));
+            var expectedGeneration = entry.Deck.PrepareNext();
+            BeforePreparationPublish?.Invoke();
+            lock (_gate)
+            {
+                var snapshot = entry.Deck.Snapshot;
+                var decode = entry.Deck.DecodeSnapshot ?? throw new InvalidOperationException("Decode evidence is absent.");
+                if (!ReferenceEquals(entry, Find(source)) || entry.Retiring || _program == source ||
+                    snapshot.Probe?.AssetId != asset || snapshot.Transport is null ||
+                    snapshot.Transport.State is not (MediaTransportState.Ready or MediaTransportState.Paused) ||
+                    !snapshot.Transport.AutoPlayOnProgram || snapshot.Transport.EndBehavior != MediaDeckEndBehavior.HoldLastFrame ||
+                    snapshot.Transport.Position.CurrentFrame != snapshot.Transport.EffectiveStartFrame ||
+                    decode.Generation != expectedGeneration || decode.QueuedFrames < 3 || decode.Failure is not null)
+                    throw new InvalidOperationException("Deck changed during next preparation; no readiness ticket was published.");
+                if (snapshot.Probe.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
+                    throw new InvalidOperationException("Prepared-next requires actual decoded audio; video-only remains an ordinary manual deck workflow.");
+                _preparationStarted = PreparationClock.GetTimestamp();
+                return _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
+                    asset.ToString(), _preparationExecution.PreparedExecutionId.ToString(),
+                    _preparationExecution.AuthoritySnapshot.Revision.Value, decode.Generation,
+                    snapshot.Transport.Position.CurrentFrame, snapshot.Transport.EffectiveEndFrame,
+                    _preparationFingerprint!, PreparationClock.GetUtcNow().AddSeconds(30));
+            }
         }
     }
 
@@ -152,6 +164,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 PreparationClock.GetUtcNow() >= expected.ExpiresAtUtc || PreparationClock.GetElapsedTime(_preparationStarted) >= TimeSpan.FromSeconds(30) || _program == source ||
                 entry is null || entry.Retiring || snapshot?.Probe?.AssetId.ToString() != expected.AssetId ||
                 snapshot.Transport?.State is not (MediaTransportState.Ready or MediaTransportState.Paused) ||
+                !snapshot.Transport.AutoPlayOnProgram || snapshot.Transport.EndBehavior != MediaDeckEndBehavior.HoldLastFrame ||
                 snapshot.Transport.Position.CurrentFrame != expected.PositionFrame ||
                 snapshot.Transport.EffectiveEndFrame != expected.EndFrame ||
                 decode?.Generation != expected.DecodeGeneration || decode.Value.QueuedFrames < 3 ||
