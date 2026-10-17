@@ -57,22 +57,25 @@ public sealed class HostIpcSessionTrackerTests
 	{
 		var tracker = new HostIpcSessionTracker();
 		var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-		var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		// Manual release belongs to this fixture; it must not depend on thread-pool scheduling.
+		var release = new TaskCompletionSource<bool>();
 
 		Assert.True(tracker.TryStart(async _ =>
 		{
 			started.TrySetResult(true);
-			await release.Task;
+			await release.Task.ConfigureAwait(false);
 		}, out var completion));
 
 		await started.Task.WaitAsync(TimeSpan.FromSeconds(1));
-		var drain = await tracker.StopAndDrainAsync(TimeSpan.FromMilliseconds(50));
+		try
+		{
+			var drain = await tracker.StopAndDrainAsync(TimeSpan.FromMilliseconds(50));
 
-		Assert.Equal(HostIpcSessionDrainStatus.TimedOut, drain.Status);
-		Assert.Equal(1, drain.Snapshot.ActiveSessions);
-		Assert.True(drain.Snapshot.DrainTimedOut);
-
-		release.TrySetResult(true);
+			Assert.Equal(HostIpcSessionDrainStatus.TimedOut, drain.Status);
+			Assert.Equal(1, drain.Snapshot.ActiveSessions);
+			Assert.True(drain.Snapshot.DrainTimedOut);
+		}
+		finally { release.TrySetResult(true); }
 		await completion.WaitAsync(TimeSpan.FromSeconds(1));
 
 		Assert.Equal(0, tracker.Snapshot.ActiveSessions);
