@@ -14,6 +14,9 @@ public sealed class MediaAssetCatalogService
 	private readonly MediaAssetCatalogPersistenceStore _persistence;
 	private readonly SemaphoreSlim _gate = new(1, 1);
 	private PersistedMediaAssetCatalog? _persisted;
+    private readonly object _preflightEvidenceGate = new();
+    private sealed record PreflightCatalogueBinding(string JobId, ulong Revision);
+    private PreflightCatalogueBinding? _preflightCatalogueBinding;
 
 	public MediaAssetCatalogService(
 		IControlRuntimeTransportSeam runtime,
@@ -28,18 +31,23 @@ public sealed class MediaAssetCatalogService
         options.Validate();
         var snapshot = await GetSnapshotAsync(false, cancellationToken).ConfigureAwait(false);
         var asset = snapshot.Assets.SingleOrDefault(a => a.AssetId == assetId) ?? throw new InvalidOperationException("Catalogue asset is missing.");
-        return await _runtime.BeginMediaAssetPreflightAsync(asset.SourceLocation, asset.AssetId, asset.FingerprintSha256, options, cancellationToken).ConfigureAwait(false);
+        var value = await _runtime.BeginMediaAssetPreflightAsync(asset.SourceLocation, asset.AssetId, asset.FingerprintSha256, options, cancellationToken).ConfigureAwait(false);
+        value.Validate();
+        if (value.Running) lock (_preflightEvidenceGate) _preflightCatalogueBinding = new(value.JobId, snapshot.Revision);
+        return value;
     }
     public async ValueTask<MediaAssetPreflightObservation> GetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
     {
         var value = await _runtime.GetMediaAssetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
         var snapshot = await GetSnapshotAsync(false, cancellationToken).ConfigureAwait(false);
+        PreflightCatalogueBinding? binding;
+        lock (_preflightEvidenceGate) binding = _preflightCatalogueBinding;
         var asset = snapshot.Assets.SingleOrDefault(a => a.AssetId.ToString() == value.AssetId);
-        if (asset is null || !StringComparer.OrdinalIgnoreCase.Equals(asset.SourceLocation, value.SourceLocation) ||
+        if (binding is null || binding.JobId != jobId || binding.Revision != snapshot.Revision || asset is null || !StringComparer.OrdinalIgnoreCase.Equals(asset.SourceLocation, value.SourceLocation) ||
             !StringComparer.OrdinalIgnoreCase.Equals(asset.FingerprintSha256, value.FingerprintSha256))
         {
             if (value.Running) await _runtime.CancelMediaAssetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
-            return value with { State = MediaAssetReadinessState.Unverified, Detail = "Catalogue removed/relinked or identity changed. Prepare again." };
+            return value with { State = MediaAssetReadinessState.Unverified, Detail = "Catalogue revision/Control lifetime changed or asset removed/relinked. Prepare again." };
         }
         return value;
     }
