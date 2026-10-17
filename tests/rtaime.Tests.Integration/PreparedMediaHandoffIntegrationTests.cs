@@ -76,6 +76,38 @@ public sealed class PreparedMediaHandoffIntegrationTests
     }
 
     [Fact]
+    public void Monotonic_expiry_blocks_take_even_if_the_UTC_clock_moves_backwards()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var a = MediaSourceId.New(); var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        var clock = new DeadlineClock();
+        deck.PreparationClock = clock;
+        deck.ObserveProgramSource(a);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        var candidate = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
+        clock.AdvanceMonotonic(TimeSpan.FromSeconds(31));
+        Assert.True(clock.GetUtcNow() < candidate.ExpiresAtUtc);
+        var committed = false;
+        Assert.Throws<InvalidOperationException>(() => deck.WithPreparedNext(candidate, true,
+            () => committed = true, value => value));
+        Assert.False(committed);
+        Assert.Equal(1, deck.Resources.Reserved);
+    }
+
+    private sealed class DeadlineClock : TimeProvider
+    {
+        private long _timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _timestamp;
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch;
+        public void AdvanceMonotonic(TimeSpan elapsed) => _timestamp += elapsed.Ticks;
+    }
+
+    [Fact]
     public void Wrong_hash_and_Program_target_are_rejected_without_a_decoder_reservation()
     {
         if (!OperatingSystem.IsWindows()) return;

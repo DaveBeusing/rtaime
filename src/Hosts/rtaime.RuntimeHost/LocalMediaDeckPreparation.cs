@@ -16,6 +16,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private PreparedExecutionContract? _preparationExecution;
     private MediaDeckPreparation? _preparation;
     private long _preparationStarted;
+    internal TimeProvider PreparationClock { get; set; } = TimeProvider.System;
 
     // Explicit, bounded two-deck preparation. Hash/open/wait never hold the Program registry gate.
     public MediaDeckRuntimeSnapshot Preload(MediaDeckOpenRequest request, PreparedExecutionContract execution, string fingerprint)
@@ -121,12 +122,12 @@ public sealed partial class LocalMediaDeckRuntimeService
             var decode = entry.Deck.DecodeSnapshot ?? throw new InvalidOperationException("Decode evidence is absent.");
             if (snapshot.Probe?.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
                 throw new InvalidOperationException("Prepared-next requires actual decoded audio; video-only remains an ordinary manual deck workflow.");
-            _preparationStarted = Stopwatch.GetTimestamp();
+            _preparationStarted = PreparationClock.GetTimestamp();
             return _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
                 asset.ToString(), _preparationExecution.PreparedExecutionId.ToString(),
                 _preparationExecution.AuthoritySnapshot.Revision.Value, decode.Generation,
                 snapshot.Transport!.Position.CurrentFrame, snapshot.Transport.EffectiveEndFrame,
-                _preparationFingerprint!, DateTimeOffset.UtcNow.AddSeconds(30));
+                _preparationFingerprint!, PreparationClock.GetUtcNow().AddSeconds(30));
         }
     }
 
@@ -148,7 +149,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             var snapshot = entry?.Deck.Snapshot;
             var decode = entry?.Deck.DecodeSnapshot;
             if (_preparation != expected || expected.RuntimeEpoch != _preparationEpoch ||
-                DateTimeOffset.UtcNow >= expected.ExpiresAtUtc || Stopwatch.GetElapsedTime(_preparationStarted) >= TimeSpan.FromSeconds(30) || _program == source ||
+                PreparationClock.GetUtcNow() >= expected.ExpiresAtUtc || PreparationClock.GetElapsedTime(_preparationStarted) >= TimeSpan.FromSeconds(30) || _program == source ||
                 entry is null || entry.Retiring || snapshot?.Probe?.AssetId.ToString() != expected.AssetId ||
                 snapshot.Transport?.State is not (MediaTransportState.Ready or MediaTransportState.Paused) ||
                 snapshot.Transport.Position.CurrentFrame != expected.PositionFrame ||

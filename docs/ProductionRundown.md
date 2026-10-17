@@ -148,3 +148,12 @@ Adding items respects the existing 256-item contract bound before changing the l
 The timeline has a separate local history scope; see [Layered Timeline](LayeredTimeline.md). Neither scope offers undo of a confirmed live operation.
 
 Rundown name groups end on keyboard-focus or selected-item change. A later name edit creates a fresh history entry; editing after Undo invalidates Redo. Inspector attribute history is an independent bounded context and never includes rundown execution or SAVE.
+
+## Resident next-clip preparation
+
+Rundown PREPARE can now preroll the explicitly selected off-Program A/B clip before
+GO, with verified file identity and an expiring source/generation/revision fence.
+GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
+invalidates next evidence. See [prepared-next playout](PreparedNextPlayout.md)
+for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
+qualification limits. Physical/no-gap acceptance remains UNVERIFIED.

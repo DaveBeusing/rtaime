@@ -375,10 +375,10 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			{
 				_execution = DecorateRepeatState(RundownExecutionSnapshot.Idle with
 				{
-					State = RundownExecutionState.Prepared,
+					State = currentItem is RundownMediaItem ? RundownExecutionState.Held : RundownExecutionState.Prepared,
 					RundownId = _rundown.RundownId,
 					SelectedItemId = currentItem.ItemId,
-					PreparedItemId = currentItem.ItemId,
+					PreparedItemId = currentItem is RundownMediaItem ? null : currentItem.ItemId,
 					NextItemId = PreviewResolvedNext(currentItem.ItemId),
 					CausalActionId = show.Execution.ExecutionId?.Value,
 					FollowActionKind = currentItem.FollowAction.Kind,
