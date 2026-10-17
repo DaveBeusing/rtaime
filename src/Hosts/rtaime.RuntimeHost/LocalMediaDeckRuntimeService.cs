@@ -48,6 +48,18 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         _selected = session.Probe.SourceId;
         _entries[0] = new Entry(session.Probe.SourceId, new LocalMediaDeckSlot(provider, session), ++_order);
     }
+    internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider,
+        LocalMediaRuntimeSession first, LocalMediaRuntimeSession second) : this(first.Probe.VideoFormat)
+    {
+        if (first.Probe.SourceId == second.Probe.SourceId) throw new ArgumentException("Deck sources must differ.");
+        _provider = provider;
+        _selected = first.Probe.SourceId;
+        _entries[0] = new Entry(first.Probe.SourceId, new LocalMediaDeckSlot(provider, first), ++_order);
+        _entries[1] = new Entry(second.Probe.SourceId, new LocalMediaDeckSlot(provider, second), ++_order);
+        _knownSources.Add(first.Probe.SourceId);
+        _knownSources.Add(second.Probe.SourceId);
+    }
+    public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
     public LocalMediaDeckResources Resources
     {
