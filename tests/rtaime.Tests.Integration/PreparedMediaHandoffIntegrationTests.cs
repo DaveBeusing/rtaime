@@ -230,6 +230,44 @@ public sealed class PreparedMediaHandoffIntegrationTests
         }
     }
 
+    [Fact]
+    public void Generated_video_only_input_keeps_ordinary_decode_but_cannot_publish_NEXT_READY()
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.GenerateFormat("video-only");
+        var a = MediaSourceId.New(); var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        deck.ObserveProgramSource(a);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        Assert.Equal(MediaAudioCodec.None, opened.Probe!.AudioCodec);
+        var failure = Assert.Throws<InvalidOperationException>(() => deck.PrepareLoadedNext(b, opened.Probe.AssetId));
+        Assert.Contains("audio", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, deck.Resources.Reserved);
+        deck.Close(b);
+        Assert.Equal(0, deck.Resources.Reserved);
+    }
+
+    [Fact]
+    public void Identity_file_budget_rejects_before_native_open_and_returns_its_probe_reservation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var path = Path.Combine(Path.GetTempPath(), "rtaime-preload-large-" + Guid.NewGuid().ToString("N") + ".mp4");
+        var a = MediaSourceId.New(); var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        try
+        {
+            using (var file = File.Create(path)) file.SetLength(32L * 1024 * 1024 + 1);
+            deck.ObserveProgramSource(a);
+            var rejected = deck.Preload(new(MediaContractVersion.Current, b, path), Prepared(deck, b), new string('0', 64));
+            Assert.Equal("runtime.media_preload.file_budget", rejected.Failure?.Code);
+            Assert.Equal(0, deck.Resources.Reserved);
+            Assert.Equal(MediaDeckState.Unloaded, deck.GetSnapshot(b).State);
+        }
+        finally { File.Delete(path); }
+    }
+
     private static PreparedExecutionContract Prepared(LocalMediaDeckRuntimeService deck, MediaSourceId source)
     {
         var capability = deck.ProviderDescriptor.Capabilities.Single(c => c.Kind == "media.route");

@@ -316,8 +316,8 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
         lock (_management)
         {
             _disposed = true;
-            StopPreflight();
             ClearPreparation(null);
+            StopPreflight();
             List<Exception>? failures = null;
             for (var i = 0; i < _entries.Length; i++)
             {

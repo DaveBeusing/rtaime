@@ -141,15 +141,16 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
             var hevc = profile.StartsWith("hevc-", StringComparison.Ordinal);
             var tenBit = profile == "hevc-main10";
             var pcm = profile == "mov-pcm";
+            var videoOnly = profile == "video-only";
             var vfr = profile == "vfr";
             var path = System.IO.Path.Combine(root, $"rtaime-format-{profile}.{(mov ? "mov" : "mp4")}");
             var videoOptions = hevc
                 ? $"-c:v libx265 -preset ultrafast -x265-params pools=2:frame-threads=2 -profile:v {(tenBit ? "main10" : "main")} -pix_fmt {(tenBit ? "yuv420p10le" : "yuv420p")} -tag:v hvc1"
                 : mov ? "-c:v copy"
                 : $"-c:v libx264 -preset veryfast -profile:v baseline -pix_fmt yuv420p {(vfr ? "-vf select='not(eq(mod(n,5),2))' -fps_mode vfr" : profile == "non-square" ? "-vf setsar=2/1" : "")}";
-            var audioOptions = pcm ? "-c:a pcm_s16le -ar 48000 -ac 2" : "-c:a copy";
+            var audioOptions = videoOnly ? "-an" : pcm ? "-c:a pcm_s16le -ar 48000 -ac 2" : "-c:a copy";
             var result = RunFfmpeg($"-y -hide_banner -loglevel error -i {Quote(seed.Path)} -t 3 " +
-                $"-map 0:v:0 -map 0:a:0 {videoOptions} {audioOptions} -map_metadata -1 -movflags +faststart {Quote(path)}",
+                $"-map 0:v:0 {(videoOnly ? "" : "-map 0:a:0")} {videoOptions} {audioOptions} -map_metadata -1 -movflags +faststart {Quote(path)}",
                 TimeSpan.FromMinutes(4));
             if (result.ExitCode != 0 || !File.Exists(path))
                 throw new Xunit.Sdk.XunitException($"Format reference generation failed: {profile}: {result.Error}");
@@ -171,10 +172,11 @@ internal sealed class ReferenceMediaTestAsset : IDisposable
             }
             var manifest = seed.Manifest with {
                 Profile = profile, Container = mov ? "QuickTime MOV" : "MP4",
-                VideoCodec = hevc ? "HEVC" : "H.264/AVC", AudioCodec = pcm ? "PCM16" : "AAC",
+                VideoCodec = hevc ? "HEVC" : "H.264/AVC", AudioCodec = videoOnly ? "None" : pcm ? "PCM16" : "AAC",
                 RequestedDurationSeconds = 3, GeneratedVideoFrames = vfr ? 120 : 150,
                 NativeFrameRate = vfr ? "40/1" : seed.Manifest.NativeFrameRate,
-                GeneratedAudioSamples = 144000, VideoProfile = hevc ? (tenBit ? "main10" : "main") : mov ? "high" : "baseline",
+                GeneratedAudioSamples = videoOnly ? 0UL : 144000UL, AudioSampleRate = videoOnly ? 0u : AudioSampleRate,
+                AudioChannels = videoOnly ? 0u : AudioChannels, AudioSignal = videoOnly ? "None" : seed.Manifest.AudioSignal, VideoProfile = hevc ? (tenBit ? "main10" : "main") : mov ? "high" : "baseline",
                 EncodedPixelFormat = tenBit ? "yuv420p10le" : "yuv420p",
                 Sha256 = Convert.ToHexString(HashFile(path)).ToLowerInvariant()
             };

@@ -783,8 +783,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
                 var evidence = wire.Preparation ?? throw new InvalidOperationException("Prepared-media fence is required.");
                 var deck = _mediaDeckAccessor() ?? throw new InvalidOperationException("Deck service unavailable.");
                 deck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-                if (wire.ConsumePreparation && prepared.Bindings.SingleOrDefault(b => b.MediaSinkId == sink)?.MediaSourceId?.ToString() != evidence.SourceId)
-                    throw new InvalidOperationException("Prepared media does not match the Program target.");
+                var target = prepared.Bindings.SingleOrDefault(b => b.MediaSinkId == sink)?.MediaSourceId;
+                if (wire.ConsumePreparation ? target?.ToString() != evidence.SourceId : target != runtime.CommittedProgramSourceId)
+                    throw new InvalidOperationException("Prepared media does not match the authorized Program target or non-consuming validation changed Program.");
                 result = deck.WithPreparedNext(evidence, wire.ConsumePreparation,
                     () => runtime.ApplyExecution(prepared, sink, transition), value => value.Committed);
             }
