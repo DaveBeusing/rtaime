@@ -12,7 +12,7 @@ namespace rtaime.Persistence;
 /// Purpose-built SQLite-backed append-only production journal. It maintains an event checksum, a chained entry
 /// hash and a separately persisted head so corruption, reordering and tail truncation are detectable.
 /// </summary>
-public sealed class SqliteProductionJournalStore : IProductionJournalStore
+public sealed class SqliteProductionJournalStore : IProductionJournalBatchStore
 {
 	private const int SchemaVersion = 1;
 	private const string GenesisHash = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -29,16 +29,36 @@ public sealed class SqliteProductionJournalStore : IProductionJournalStore
 
 	public string Path => _path;
 
-	public async ValueTask<ProductionJournalEntry> AppendAsync(
-		ProductionJournalEvent journalEvent,
-		CancellationToken cancellationToken = default)
-	{
-		ArgumentNullException.ThrowIfNull(journalEvent);
-		await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-		await using var connection = CreateConnection();
-		await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-		await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
-		using var transaction = connection.BeginTransaction();
+    public async ValueTask<ProductionJournalEntry> AppendAsync(
+        ProductionJournalEvent journalEvent, CancellationToken cancellationToken = default)
+    {
+        var entries = await AppendBatchAsync([journalEvent], cancellationToken).ConfigureAwait(false);
+        return entries[0];
+    }
+
+    public async ValueTask<IReadOnlyList<ProductionJournalEntry>> AppendBatchAsync(
+        IReadOnlyList<ProductionJournalEvent> journalEvents, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(journalEvents);
+        if (journalEvents.Count is < 1 or > IProductionJournalBatchStore.MaximumBatchSize) throw new ArgumentOutOfRangeException(nameof(journalEvents));
+        if (journalEvents.Any(item => item is null)) throw new ArgumentException("Journal events must not be null.", nameof(journalEvents));
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
+        var entries = new ProductionJournalEntry[journalEvents.Count];
+        for (var index = 0; index < journalEvents.Count; index++)
+            entries[index] = await AppendInTransactionAsync(connection, transaction, journalEvents[index], cancellationToken).ConfigureAwait(false);
+        // Keep WAL + synchronous=FULL. One durable commit covers every row and chain-head update.
+        transaction.Commit();
+        return Array.AsReadOnly(entries);
+    }
+
+    private static async ValueTask<ProductionJournalEntry> AppendInTransactionAsync(
+        SqliteConnection connection, SqliteTransaction transaction, ProductionJournalEvent journalEvent,
+        CancellationToken cancellationToken)
+    {
 
 		var eventChecksum = ComputeEventChecksum(journalEvent);
 		await using (var existing = connection.CreateCommand())
@@ -52,7 +72,6 @@ public sealed class SqliteProductionJournalStore : IProductionJournalStore
 				if (!string.Equals(reader.GetString(1), eventChecksum, StringComparison.Ordinal))
 					throw new InvalidDataException("Production journal EventId was reused with different event content.");
 				var existingOrdinal = checked((ulong)reader.GetInt64(0));
-				transaction.Rollback();
 				return new ProductionJournalEntry(existingOrdinal, journalEvent);
 			}
 		}
@@ -116,9 +135,8 @@ public sealed class SqliteProductionJournalStore : IProductionJournalStore
 				throw new InvalidDataException("Production journal head update failed.");
 		}
 
-		transaction.Commit();
 		return new ProductionJournalEntry(checked((ulong)ordinal), journalEvent);
-	}
+    }
 
 	public async ValueTask<IReadOnlyList<ProductionJournalEntry>> ReadAsync(
 		ulong afterOrdinal,
