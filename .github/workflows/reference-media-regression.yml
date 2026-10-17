@@ -85,6 +85,9 @@ jobs:
         run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
 
       - name: Qualify worker ownership and admission isolation
+        env:
+          RTAIME_REFERENCE_MEDIA_REGRESSION: "1"
+          RTAIME_REFERENCE_MEDIA_OUTPUT: artifacts/testmedia/reference-regression
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PreparedMediaHandoffIntegrationTests|FullyQualifiedName~MediaAssetPreflightIntegrationTests|FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
 
       - name: Generate and run reference media regressions
