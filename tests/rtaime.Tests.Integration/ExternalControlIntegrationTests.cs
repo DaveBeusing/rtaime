@@ -49,7 +49,10 @@ public sealed class ExternalControlIntegrationTests
         Assert.Equal(before.Production, after.Production);
         Assert.Equal(MediaDeckState.Unloaded, (await grpc.GetMediaDeckSnapshotAsync()).State);
         Assert.Equal(0, fixture.Runtime.MediaDeck!.Resources.Reserved);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipe.GetMediaAssetPreflightAsync(Guid.NewGuid().ToString("N")));
+        var rejected = await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipe.GetMediaAssetPreflightAsync(Guid.NewGuid().ToString("N")));
+        Assert.Contains("control.media_asset_catalog.preflight.rejected", rejected.Message);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipe.BeginMediaAssetPreflightAsync(MediaAssetId.New(), new()));
+        Assert.Equal(before.Production, (await pipe.SynchronizeAsync()).Production);
     }
 
     [Fact]

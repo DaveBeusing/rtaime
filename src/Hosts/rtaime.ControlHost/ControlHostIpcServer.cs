@@ -2153,6 +2153,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
     private async ValueTask<WireEnvelope> PreflightMediaAssetAsync(WireEnvelope request, CancellationToken cancellationToken)
     {
+        try
+        {
         if (_mediaAssetCatalog is null) throw new InvalidOperationException("Media catalogue is unavailable.");
         MediaAssetPreflightObservation value;
         if (request.MessageType.EndsWith(".begin", StringComparison.Ordinal))
@@ -2168,6 +2170,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
                 : await _mediaAssetCatalog.GetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
         }
         return Success(request, request.MessageType + ".response", value);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or FormatException or NotSupportedException or JsonException or KeyNotFoundException)
+        {
+            return Error(request, "control.media_asset_catalog.preflight.rejected", exception.Message);
+        }
     }
     private sealed record WireMediaAssetPreflight(string AssetId, MediaAssetPreflightOptions Options);
 
