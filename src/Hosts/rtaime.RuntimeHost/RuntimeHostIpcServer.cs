@@ -673,6 +673,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				? null
 				: new MediaAssetId(Identity.Parse(wire.AssetId)));
 		var prepared = FromWire(wire.PreparedExecution);
+        // ControlHost serializes runtime exchanges; read committed authority before admission,
+        // including a TAKE acknowledged before the next Program cadence observation.
+        deck.ObserveProgramSource(_runtimeAccessor()?.CommittedProgramSourceId);
 		var snapshot = deck.Open(open, prepared);
 		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.open.response", ToWire(snapshot));
