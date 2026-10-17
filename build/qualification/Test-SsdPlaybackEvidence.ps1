@@ -19,7 +19,7 @@ foreach ($item in @($e,$r)) {
         $item.profile -cne $ExpectedProfile) { throw "SSD playback source/build/profile mismatch." }
 }
 if ($e.status -cne "PASS" -or $e.cleanup -cne "PASS" -or $null -ne $e.failure -or $null -ne $e.cleanupFailure -or
-    $r.softwareStatus -cne "PASS") { throw "Playback or cleanup did not complete." }
+    $r.softwareStatus -cne "COLLECTED") { throw "Playback or cleanup did not complete." }
 $elapsed = [double]$r.elapsedSeconds
 if (-not [double]::IsFinite($elapsed) -or $elapsed -lt $required -or $r.requestedSeconds -ne $required) {
     throw "Named duration was not exercised."

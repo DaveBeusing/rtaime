@@ -60,6 +60,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
         ulong startMissed = 0;
         string? failure = null, cleanupFailure = null;
         object? finalReport = null;
+        var handleDiagnostics = new List<object>(4);
         var runtimeEndpoint = $"rtaime.test.dual.runtime.{Guid.NewGuid():N}";
         var controlEndpoint = $"rtaime.test.dual.control.{Guid.NewGuid():N}";
         using var runtimeStop = new CancellationTokenSource();
@@ -99,6 +100,17 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             startMissed = runtime.ScheduleStatistics.MissedSlots;
             clock.Start();
             startedAt = DateTimeOffset.UtcNow;
+            void CaptureHandles()
+            {
+                process.Refresh();
+                var observation = new { seconds = clock.Elapsed.TotalSeconds,
+                    handles = process.HandleCount, privateBytes = process.PrivateMemorySize64,
+                    details = LocalPlaybackHandleDiagnostics.Capture() };
+                handleDiagnostics.Add(observation);
+                if (profile is not null) Console.WriteLine("SSD HANDLE DIAGNOSTIC: " + JsonSerializer.Serialize(observation));
+            }
+            CaptureHandles();
+            var nextHandleDiagnostic = 120;
             var previousElapsed = TimeSpan.Zero;
             var previousCpu = process.TotalProcessorTime;
             var nextRetained = TimeSpan.Zero;
@@ -121,6 +133,11 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 Assert.False(controlRun.IsCompleted, control.Lifecycle.Detail);
                 process.Refresh();
                 var elapsed = clock.Elapsed;
+                if (seconds >= 600 && elapsed.TotalSeconds >= nextHandleDiagnostic && handleDiagnostics.Count < 3)
+                {
+                    CaptureHandles();
+                    nextHandleDiagnostic = 300;
+                }
                 var cpu = process.TotalProcessorTime;
                 if (elapsed > previousElapsed)
                 {
@@ -168,26 +185,12 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 }
                 await Task.Delay(250);
             }
-            Assert.InRange(observations.Count, 1, 128);
+            CaptureHandles();
             var finalSequence = runtime.Runtime.Snapshot.NextSequenceNumber;
-            Assert.True(finalSequence > startSequence + 200);
-            Assert.Null(runtime.MediaDeck!.GetSnapshot(sourceA).Failure);
-            Assert.Null(runtime.MediaDeck.GetSnapshot(sourceB).Failure);
             process.Refresh();
-            Assert.InRange(process.PrivateMemorySize64 - memoryBefore, long.MinValue, 512L * 1024 * 1024);
-            Assert.InRange(process.HandleCount - handlesBefore, int.MinValue, 64);
             var source = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
-            Assert.Matches("^[0-9a-f]{40}$", source!);
             var firstPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceA)!.Value;
             var secondPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceB)!.Value;
-            Assert.True(firstPlayback.DecodedFrames > 200);
-            Assert.True(secondPlayback.DecodedFrames > 200);
-            Assert.Equal(0UL, firstPlayback.ReadFailures);
-            Assert.Equal(0UL, secondPlayback.ReadFailures);
-            Assert.Equal(0UL, firstPlayback.VideoTimestampRegressions);
-            Assert.Equal(0UL, secondPlayback.VideoTimestampRegressions);
-            Assert.Equal(0UL, firstPlayback.AudioTimestampDiscontinuities);
-            Assert.Equal(0UL, secondPlayback.AudioTimestampDiscontinuities);
             var report = new
             {
                 SourceCommit = source, Class = "HOSTED_SOFTWARE_OBSERVATION", PhysicalQualification = "UNVERIFIED",
@@ -218,6 +221,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 decodeA = runtime.MediaDeck.GetDecodeSnapshot(sourceA),
                 decodeB = runtime.MediaDeck.GetDecodeSnapshot(sourceB),
                 resourceCapacity = 128, samples = observations,
+                handleDiagnostics,
                 resourceWindows = trend.Snapshot(),
                 resourcePlateau = trend.Assess(512L * 1024 * 1024, 64),
                 cpu = cpuHistogram.Summary(), observerInterval = observerInterval.Summary(),
@@ -233,8 +237,23 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 fileOnlyReadLatency = "UNVERIFIED", decoderAcceleration = "UNVERIFIED",
                 cacheState = "UNVERIFIED", pressure = "UNVERIFIED",
                 timingStatus = missedDelta > 0 ? "FAIL" : "UNVERIFIED",
-                softwareStatus = "PASS", physicalStatus = "UNVERIFIED"
+                softwareStatus = "COLLECTED", physicalStatus = "UNVERIFIED"
             };
+            Assert.InRange(observations.Count, 1, 128);
+            Assert.True(finalSequence > startSequence + 200);
+            Assert.Null(runtime.MediaDeck!.GetSnapshot(sourceA).Failure);
+            Assert.Null(runtime.MediaDeck.GetSnapshot(sourceB).Failure);
+            Assert.InRange(process.PrivateMemorySize64 - memoryBefore, long.MinValue, 512L * 1024 * 1024);
+            Assert.InRange(process.HandleCount - handlesBefore, int.MinValue, 64);
+            Assert.Matches("^[0-9a-f]{40}$", source!);
+            Assert.True(firstPlayback.DecodedFrames > 200);
+            Assert.True(secondPlayback.DecodedFrames > 200);
+            Assert.Equal(0UL, firstPlayback.ReadFailures);
+            Assert.Equal(0UL, secondPlayback.ReadFailures);
+            Assert.Equal(0UL, firstPlayback.VideoTimestampRegressions);
+            Assert.Equal(0UL, secondPlayback.VideoTimestampRegressions);
+            Assert.Equal(0UL, firstPlayback.AudioTimestampDiscontinuities);
+            Assert.Equal(0UL, secondPlayback.AudioTimestampDiscontinuities);
             if (seconds >= 28800) Assert.Equal("PASS", trend.Assess(512L * 1024 * 1024, 64));
         }
         catch (Exception exception) { failure = exception.ToString(); throw; }
@@ -262,7 +281,8 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                     status = failure is null && cleanup ? "PASS" : "FAIL",
                     failure = failure is null ? null : failure[..Math.Min(failure.Length, 2048)],
                     cleanupFailure = cleanupFailure is null ? null : cleanupFailure[..Math.Min(cleanupFailure.Length, 2048)],
-                    cleanup = cleanup ? "PASS" : "FAIL", result = finalReport
+                    cleanup = cleanup ? "PASS" : "FAIL", result = finalReport,
+                    lastSamples = finalReport is null ? observations : null, handleDiagnostics
                 };
                 var evidencePath = Path.Combine(output, "ssd-playback.outcome.json");
                 LocalPlaybackEvidenceJson.Write(evidencePath + ".tmp", evidence);

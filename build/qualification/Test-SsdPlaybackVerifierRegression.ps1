@@ -28,7 +28,7 @@ $base = @{
         resourceWindows = @(1..7 | ForEach-Object { @{ Index = $_; Samples = 100; MeanPrivateBytes = 1000000; MeanHandles = 20 } })
         firstPlayback = $playback; secondPlayback = $playback; privateGrowth = 100; handleGrowth = 1
         resourcePlateau = "PASS"; startMissed = 2; missedDelta = 1; finalStats = @{ MissedSlots = 3 }
-        softwareStatus = "PASS"; timingStatus = "FAIL"
+        softwareStatus = "COLLECTED"; timingStatus = "FAIL"
         physicalStatus = "UNVERIFIED"; physicalOutputLoss = "UNVERIFIED"; gpuUtilization = "UNVERIFIED"
         vram = "UNVERIFIED"; physicalAvDrift = "UNVERIFIED"; fileOnlyReadLatency = "UNVERIFIED"
         decoderAcceleration = "UNVERIFIED"; cacheState = "UNVERIFIED"; pressure = "UNVERIFIED"
