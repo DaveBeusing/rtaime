@@ -86,6 +86,11 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (_preflight is null || _preflight.JobId != jobId)
                 throw new InvalidOperationException("Preflight belongs to another job or Runtime lifetime; retry explicitly.");
             value = _preflight;
+            if (value.RepresentativeVerificationPassed && _entries.Any(entry => entry is not null))
+            {
+                _preflight = value = value with { State = MediaAssetReadinessState.Unverified,
+                    Detail = "File deck admission invalidated optional evidence. Use current resident deck readiness." };
+            }
         }
         if (!value.RepresentativeVerificationPassed) return value;
         try

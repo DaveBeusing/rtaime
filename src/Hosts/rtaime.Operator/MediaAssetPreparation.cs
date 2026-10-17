@@ -123,7 +123,7 @@ public sealed partial class MediaPoolInspectorViewModel
                 PreparationStatus = $"Verifying {asset.DisplayName} ({results.Count + 1}/{selected.Length})…";
                 // Never abandon a successful admission response: cancellation is sent by job id afterwards.
                 var value = await _catalogClient!.BeginMediaAssetPreflightAsync(asset.AssetId, options);
-                _preparationJob = value.JobId;
+                _preparationJob = value.Running ? value.JobId : null;
                 while (value.Running)
                 {
                     if (stop.IsCancellationRequested || _preparationDisposed)

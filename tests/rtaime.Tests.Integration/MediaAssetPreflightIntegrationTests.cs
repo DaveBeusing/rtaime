@@ -59,7 +59,10 @@ public sealed class MediaAssetPreflightIntegrationTests
         try
         {
             Assert.Equal(1, decks.Resources.Reserved);
-            var cancelled = decks.CancelPreflight(job.JobId);
+            var source = MediaSourceId.New();
+            var admission = decks.Open(new(MediaContractVersion.Current, source, asset.Path), Prepared(new LocalMediaFileProvider(), source));
+            Assert.Equal("runtime.media_deck.preflight_cancelling", admission.Failure?.Code);
+            var cancelled = decks.GetPreflight(job.JobId);
             Assert.True(cancelled.Running);
             Assert.True(cancelled.Cancelled);
             Assert.False(decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new()).Running);
