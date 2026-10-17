@@ -572,6 +572,36 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal(0, decks.Resources.Reserved);
     }
 
+    [Fact]
+    public void Failed_deck_shutdown_still_releases_other_owner_and_retains_quarantine_reservation()
+    {
+        var provider = new LocalMediaFileProvider();
+        var blocked = new ControlledDecoder { BlockCall = 4, IgnoreCancellation = true };
+        var healthy = new ControlledDecoder();
+        var first = new LocalMediaRuntimeSession(provider, Source(blocked), TimeSpan.FromMilliseconds(25));
+        var second = new LocalMediaRuntimeSession(provider, Source(healthy));
+        Assert.True(first.ApplyExecution(Prepared(provider, blocked.Probe.SourceId)).Committed);
+        Assert.True(second.ApplyExecution(Prepared(provider, healthy.Probe.SourceId)).Committed);
+        var decks = new LocalMediaDeckRuntimeService(provider, first, second);
+        Assert.True(blocked.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            Assert.Throws<IOException>(decks.Dispose);
+            Assert.False(blocked.Disposed);
+            Assert.True(healthy.Disposed);
+            Assert.Equal(1, healthy.DisposeCalls);
+            Assert.Equal(1, decks.Resources.Reserved);
+        }
+        finally
+        {
+            blocked.ReleaseRead.Set();
+            Until(() => blocked.Disposed);
+            Assert.Throws<IOException>(decks.Dispose);
+        }
+        Assert.Equal(1, blocked.DisposeCalls);
+        Assert.Equal(1, decks.Resources.Reserved);
+    }
+
     private static LocalMediaFileSource Source(ControlledDecoder decoder) => new("controlled.mp4", decoder.Probe, decoder);
     private static MediaTransportCommand Command(ControlledDecoder decoder, MediaTransportCommandKind kind) =>
         new(MediaContractVersion.Current, decoder.Probe.AssetId, kind);
