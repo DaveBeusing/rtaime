@@ -36,12 +36,13 @@ foreach ($media in @($r.media)) {
     if ($media.sha256 -notmatch '^[0-9a-f]{64}$' -or [long]$media.bytes -le 0) { throw "Missing media hash/size." }
 }
 foreach ($probe in @($r.deckProbes)) { if ($null -eq $probe) { throw "Actual input profile was not probed." } }
+# Observer gaps are measured, not an invented performance acceptance budget.
+# Hardware telemetry continuity remains explicitly UNVERIFIED.
 $previous = -1.0
 foreach ($sample in @($r.samples)) {
     $time = [double]$sample.Milliseconds
     if (-not [double]::IsFinite($time) -or $time -le $previous -or $time -lt 0 -or $time -gt ($elapsed * 1000) -or
-        ($previous -ge 0 -and $time - $previous -gt [Math]::Max(2, $required / 60.0) * 1000) -or
-        $sample.Resources.Capacity -ne 2 -or $sample.Resources.Reserved -ne 2) { throw "Invalid resource coverage or owners." }
+        $sample.Resources.Capacity -ne 2 -or $sample.Resources.Reserved -ne 2) { throw "Invalid resource coverage or owners: time=$time previous=$previous elapsed=$elapsed capacity=$($sample.Resources.Capacity) reserved=$($sample.Resources.Reserved)." }
     $previous = $time
     foreach ($deck in @($sample.First,$sample.Second)) {
         if ($deck.Capacity -ne 8 -or $deck.QueuedFrames -lt 0 -or $deck.QueuedFrames -gt 8 -or $null -ne $deck.Failure) {

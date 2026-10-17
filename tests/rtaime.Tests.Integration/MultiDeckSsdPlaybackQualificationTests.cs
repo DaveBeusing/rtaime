@@ -291,7 +291,8 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 Console.WriteLine("SSD PLAYBACK OUTCOME: " + JsonSerializer.Serialize(new
                 { sourceCommit, profile, evidence.status, evidence.cleanup,
                     seconds = clock.Elapsed.TotalSeconds, resources = observations.Count,
-                    missedDelta = runtime.ScheduleStatistics.MissedSlots - startMissed }));
+                    missedDelta = runtime.ScheduleStatistics.MissedSlots - startMissed,
+                    observerInterval = observerInterval.Summary() }));
             }
             Assert.True(cleanup, cleanupFailure ?? "Host cleanup or resource ownership did not complete.");
         }

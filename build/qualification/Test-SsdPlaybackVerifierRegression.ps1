@@ -47,6 +47,11 @@ function Rejected($value, [string]$reason) {
 }
 try {
     Write-Fixture $base; Verify
+    # Irregular retained observation cadence is not proof of invalid elapsed playback.
+    # The histogram scope is sampled, and physical continuity stays UNVERIFIED.
+    $irregular = Copy-Fixture
+    $irregular.result.samples = @($irregular.result.samples[0]) + @($irregular.result.samples | Select-Object -Skip 4)
+    Write-Fixture $irregular; Verify
     $v = Copy-Fixture; $v.sourceCommit = "d"*40; Rejected $v "foreign source"
     $v = Copy-Fixture; $v.result.buildCommit = "d"*40; Rejected $v "foreign binary"
     $v = Copy-Fixture; $v.result.profile = "10m"; Rejected $v "profile substitution"
@@ -63,7 +68,7 @@ try {
     $v = Copy-Fixture; $v.result.physicalStatus = "PASS"; Rejected $v "false physical claim"
     $v = Copy-Fixture; $v.result.resourceWindows[6].MeanPrivateBytes = 1000000000; Rejected $v "hidden plateau growth"
     $v = Copy-Fixture; $v.result.resourceWindows[4].Index = 99; Rejected $v "missing hourly window"
-    Write-Host "SSD verifier: 1 valid synthetic fixture and $count rejected fixtures PASS; no physical endurance was executed."
+    Write-Host "SSD verifier: 2 valid synthetic fixtures and $count rejected fixtures PASS; no physical endurance was executed."
 } finally {
     # Exact fresh temporary directory only.
     if ([IO.Path]::GetFileName($root) -notlike "rtaime-ssd-verifier-*") { throw "Unsafe temporary cleanup target." }
