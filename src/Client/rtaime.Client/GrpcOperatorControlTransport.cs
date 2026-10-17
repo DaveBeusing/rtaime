@@ -399,7 +399,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
         var request = Request();
         request.GetMediaAssetPreflight = new MediaAssetPreflightJobRequest { JobId = jobId };
         var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
-        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
         value.Validate();
         return value;
     }
@@ -409,7 +409,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
         var request = Request();
         request.CancelMediaAssetPreflight = new MediaAssetPreflightJobRequest { JobId = jobId };
         var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
-        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
         value.Validate();
         return value;
     }

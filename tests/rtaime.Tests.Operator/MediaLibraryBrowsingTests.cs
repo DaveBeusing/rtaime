@@ -140,7 +140,8 @@ public sealed class MediaLibraryBrowsingTests
 			var revision = catalog.Snapshot.Revision;
 			await pool.LoadSmartBinsAsync(new MediaSmartBinStore(path));
 			pool.SelectedCategory = "Clips"; pool.DurationFilter = MediaDurationFilter.UnderOneMinute;
-			pool.ReadinessFilter = MediaReadinessFilter.Ready; pool.SearchText = "clip00012";
+			pool.ReadinessFilter = MediaReadinessFilter.Ready; Assert.Empty(pool.FilteredItems);
+            pool.ReadinessFilter = MediaReadinessFilter.NotReady; pool.SearchText = "clip00012";
 			Assert.Single(pool.FilteredItems);
 			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
 			Assert.Single(pool.SmartBins);

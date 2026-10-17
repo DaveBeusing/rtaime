@@ -33,6 +33,7 @@ public sealed partial class MediaPoolInspectorViewModel
         CancelPreparationCommand = new AsyncRelayCommand(() => { _preparationStop?.Cancel(); return Task.CompletedTask; }, () => _preparing);
         ClosePreparationCommand = new AsyncRelayCommand(() => { _preparationVisible = false; OnPropertyChanged(nameof(PreparationVisibility)); return Task.CompletedTask; }, () => !_preparing);
         PropertyChanged += PreparationContextChanged;
+        _operator.PropertyChanged += PreparationOperatorChanged;
         _preparationTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
             (_, _) => ExpirePreparationEvidence(), Dispatcher.CurrentDispatcher);
     }
@@ -80,6 +81,15 @@ public sealed partial class MediaPoolInspectorViewModel
             _preparationStop?.Cancel();
         }
         if (args.PropertyName is nameof(SelectionCount) or nameof(IsLoading)) RaisePreparationCommands();
+    }
+    private void PreparationOperatorChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) &&
+            (!_operator.IsConnected || _operator.IsStale))
+        {
+            _preparationStop?.Cancel();
+            InvalidatePreparationEvidence("Control connection changed. Prepare again after synchronization.");
+        }
     }
     private string AssetPreparationState(string assetId)
     {
@@ -158,6 +168,7 @@ public sealed partial class MediaPoolInspectorViewModel
         _preparationStop?.Cancel();
         _preparationTimer?.Stop(); _preparationTimer = null;
         PropertyChanged -= PreparationContextChanged;
+        _operator.PropertyChanged -= PreparationOperatorChanged;
         // The in-flight method sends cancellation after any admitted response and owns cleanup.
     }
 }

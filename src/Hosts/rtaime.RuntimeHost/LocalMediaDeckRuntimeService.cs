@@ -130,7 +130,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_preflightQuarantine is not null || _preflightIdentityQuarantine is not null)
                 return Reject("runtime.media_deck.cleanup_failed", "Preflight retained a failed native owner; restart RuntimeHost.");
-            if (_preflightTask is { IsCompleted: false })
+            if (_preflight is { Running: true })
             {
                 if (_preflight is { } observation) CancelPreflight(observation.JobId);
                 return Reject("runtime.media_deck.preflight_cancelling",

@@ -55,7 +55,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             ObjectDisposedException.ThrowIf(_disposed, this);
             lock (_gate)
             {
-                if (_preflightTask is { IsCompleted: false } || _probeReservations != 0 ||
+                if (_preflight is { Running: true } || _probeReservations != 0 ||
                     _preflightQuarantine is not null || _preflightIdentityQuarantine is not null || _entries.Any(e => e is not null))
                     return initial with { Detail = "Preflight unavailable: close file decks deliberately first. Live decks are never evicted." };
                 _preflightStop?.Dispose();
