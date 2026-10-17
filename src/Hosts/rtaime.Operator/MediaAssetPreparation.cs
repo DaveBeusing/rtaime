@@ -43,10 +43,24 @@ public sealed partial class MediaPoolInspectorViewModel
         OnPropertyChanged(nameof(PreparationVisibility));
         RaisePreparationCommands();
     }
-    private bool CanPrepareAssets() => !_preparationDisposed && !_preparing && !_catalogBusy && !_batchRunning && _catalogClient is not null &&
-        _operator.IsConnected && !_operator.IsStale && !_operator.IsBusy &&
-        SelectedItems.Count is > 0 and <= 16 && SelectedItems.All(item => item.Kind == MediaPoolItemKind.Clip &&
-            item.IsOnline && _catalogSnapshot.Assets.Any(asset => asset.AssetId.ToString() == item.ReferenceId));
+    private HashSet<MediaAssetId>? SelectedPreparationIds()
+    {
+        if (SelectedItems.Count is < 1 or > 16) return null;
+        var ids = new HashSet<MediaAssetId>();
+        foreach (var item in SelectedItems)
+        {
+            if (item.Kind != MediaPoolItemKind.Clip || !item.IsOnline || !Guid.TryParse(item.ReferenceId, out var id) ||
+                !ids.Add(new MediaAssetId(new Identity(id)))) return null;
+        }
+        return ids;
+    }
+    private bool CanPrepareAssets()
+    {
+        if (_preparationDisposed || _preparing || _catalogBusy || _batchRunning || _catalogClient is null ||
+            !_operator.IsConnected || _operator.IsStale || _operator.IsBusy) return false;
+        var ids = SelectedPreparationIds();
+        return ids is not null && _catalogSnapshot.Assets.Count(asset => ids.Contains(asset.AssetId)) == ids.Count;
+    }
     private void RaisePreparationCommands()
     {
         (PrepareAssetsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -85,7 +99,8 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void PreparationOperatorChanged(object? sender, PropertyChangedEventArgs args)
     {
-        RaisePreparationCommands();
+        if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or nameof(OperatorViewModel.IsBusy))
+            RaisePreparationCommands();
         if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) &&
             (!_operator.IsConnected || _operator.IsStale))
         {
@@ -105,7 +120,8 @@ public sealed partial class MediaPoolInspectorViewModel
     public async Task PrepareSelectedAssetsAsync()
     {
         if (!CanPrepareAssets()) return;
-        var selected = SelectedItems.Select(item => _catalogSnapshot.Assets.Single(asset => asset.AssetId.ToString() == item.ReferenceId)).ToArray();
+        var selectedIds = SelectedPreparationIds()!;
+        var selected = _catalogSnapshot.Assets.Where(asset => selectedIds.Contains(asset.AssetId)).ToArray();
         var options = new MediaAssetPreflightOptions(RequirePreparationAudio, PreparationSeekPoints, PreparationFramesPerPoint);
         try { options.Validate(); }
         catch (ArgumentException error) { PreparationStatus = error.Message; return; }

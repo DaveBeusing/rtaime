@@ -68,23 +68,47 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.DoesNotContain(pool.PreflightEvidence, value => value.RepresentativeVerificationPassed);
         Assert.Equal(0, catalog.Mutations);
     }
+    [Fact]
+    public async Task Preparation_eligibility_does_not_allocate_per_catalogue_row()
+    {
+        var client = new OperatorControlClient(new ForbiddenTransport());
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        var catalog = new Catalog(30000);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
+        await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
+        pool.UpdateSelection(pool.FilteredItems.Take(16));
+        Assert.True(pool.PrepareAssetsCommand.CanExecute(null));
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        Assert.True(pool.PrepareAssetsCommand.CanExecute(null));
+        var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.InRange(bytes, 0, 128 * 1024);
+        Assert.Equal(0, catalog.Begins);
+        Assert.Equal(0, catalog.Mutations);
+        pool.UpdateSelection(pool.FilteredItems.Take(17));
+        Assert.False(pool.PrepareAssetsCommand.CanExecute(null));
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         while (!condition()) await Task.Delay(10, deadline.Token);
     }
-    private sealed class Catalog : IMediaAssetCatalogClient
+    private sealed class Catalog(int count = 2) : IMediaAssetCatalogClient
     {
         public int Begins, Cancels, Mutations;
         public bool FailSecond, BlockBegin;
         public TaskCompletionSource BeginRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public MediaAssetCatalogSnapshot Snapshot { get; } = new(MediaContractVersion.Current, 1,
-            Enumerable.Range(0, 2).Select(index => {
+            Enumerable.Range(0, count).Select(index => {
                 var time = new UtcTimestamp(DateTimeOffset.UtcNow);
                 return new MediaAssetDescriptor(MediaAssetId.New(), MediaAssetOriginKind.LocalFile,
                     @"C:\media\clip" + index + ".mp4", "Clip " + index, MediaContainerFormat.Mp4,
                     MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8,
-                    AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(1), 1024, new string((char)('A' + index), 64), time, time, MediaAssetAvailability.Online);
+                    AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(1), 1024, index.ToString("X64"), time, time, MediaAssetAvailability.Online);
             }).ToArray());
         public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
         public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Snapshot);
