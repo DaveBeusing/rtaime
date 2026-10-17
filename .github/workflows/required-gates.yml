@@ -54,6 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Qualify atomic journal batching before lifecycle load
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionJournalBatchIntegrationTests|FullyQualifiedName~DurablePersistenceIntegrationTests" --logger "console;verbosity=detailed"
+
       - name: Attribute fifty fixed rapid TAKE shutdown cases before broad suites
         env:
           RTAIME_RAPID_TAKE_REPETITIONS: "50"
