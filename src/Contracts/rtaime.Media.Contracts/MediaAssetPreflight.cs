@@ -32,12 +32,12 @@ public sealed record MediaAssetPreflightObservation(
     {
         if (!Guid.TryParse(JobId, out _) || !Guid.TryParse(AssetId, out _) ||
             !Guid.TryParse(RuntimeEpoch, out _) || !Enum.IsDefined(State) ||
-            FingerprintSha256.Length != 64 || FingerprintSha256.Any(c => !Uri.IsHexDigit(c)) ||
-            SourceLocation.Length is < 1 or > 4096 || TargetFormat is not ("1080p50" or "1080p59.94") ||
+            string.IsNullOrEmpty(FingerprintSha256) || FingerprintSha256.Length != 64 || FingerprintSha256.Any(c => !Uri.IsHexDigit(c)) ||
+            string.IsNullOrEmpty(SourceLocation) || SourceLocation.Length > 4096 || TargetFormat is not ("1080p50" or "1080p59.94") ||
             LengthBytes < 0 || LastWriteUtcTicks < 0 || VerifiedFrames is < 0 or > 12 ||
-            VerifiedSeeks is < 0 or > 3 || Detail.Length > 4096 ||
+            VerifiedSeeks is < 0 or > 3 || Detail is null || Detail.Length > 4096 ||
             State == MediaAssetReadinessState.Prepared ||
-            RepresentativeVerificationPassed && (LengthBytes == 0 || VerifiedFrames == 0 || VerifiedSeeks == 0 || EnvironmentIdentity.Length != 64))
+            RepresentativeVerificationPassed && (LengthBytes == 0 || VerifiedFrames == 0 || VerifiedSeeks == 0 || EnvironmentIdentity is null || EnvironmentIdentity.Length != 64 || EnvironmentIdentity.Any(c => !Uri.IsHexDigit(c))))
             throw new ArgumentException("Invalid media preflight observation; no readiness may be inferred.");
     }
     public string PhysicalQualification => "UNVERIFIED";
