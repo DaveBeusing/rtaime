@@ -32,6 +32,7 @@ public sealed class SqliteProductionJournalStore : IProductionJournalBatchStore
     public async ValueTask<ProductionJournalEntry> AppendAsync(
         ProductionJournalEvent journalEvent, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(journalEvent);
         var entries = await AppendBatchAsync([journalEvent], cancellationToken).ConfigureAwait(false);
         return entries[0];
     }
