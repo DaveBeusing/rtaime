@@ -99,13 +99,19 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
         Assert.Contains(both.MediaDecks, item => item.SourceId == mediaSourceId && item.IsLoaded);
         Assert.Contains(both.MediaDecks, item => item.SourceId == standbyId && item.IsLoaded);
         await secondDeck.Timeline.SeekToFrameAsync(20);
-        await secondDeck.ConfigurePlaybackAsync(true, MediaDeckEndBehavior.HoldLastFrame);
+        await secondDeck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.HoldLastFrame);
         await deck.RefreshAsync();
         Assert.Equal(mediaSourceId, deck.Snapshot.SourceId);
         Assert.Equal(standbyId, secondDeck.Snapshot.SourceId);
         var sequenceBefore = runtime.Runtime!.Snapshot.NextSequenceNumber;
         Assert.True((await client.SelectPreviewAsync(standbySource.Id)).Accepted);
         Assert.True((await client.CutPreviewAsync()).Accepted);
+        // The newly committed Program source is protected even before the next cadence observation
+        // and even when its transport is still Ready because autoplay was explicitly disabled.
+        var deniedReplacement = await secondDeck.OpenAsync(referenceAsset.Path, standbyId);
+        Assert.Equal("runtime.media_deck.source_active", deniedReplacement.Failure?.Code);
+        Assert.True((await secondDeck.RefreshAsync()).IsLoaded);
+        await secondDeck.PlayAsync();
         await WaitUntilAsync(async () =>
         {
             await secondDeck.RefreshAsync();
