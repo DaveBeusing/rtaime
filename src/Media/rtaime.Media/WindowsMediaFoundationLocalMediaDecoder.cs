@@ -249,7 +249,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				Int64Value = target
 			};
 			MediaFoundation.ThrowIfFailed(_reader.SetCurrentPosition(ref timeFormat, ref position));
-			_pendingSeekTimestamp = target;
+			_pendingSeekTimestamp = LocalMediaFrameMath.FrameSeekMinimumTimestamp(frameNumber, Probe.VideoFormat.FrameRate);
             _pendingAudioPacket = null;
             _pendingAudioFrameOffset = 0;
             _audioEnded = false;

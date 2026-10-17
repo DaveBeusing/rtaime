@@ -508,11 +508,23 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
-	[Fact]
-	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions()
+    public static IEnumerable<object[]> RapidTakeRepetitions
+    {
+        get
+        {
+            var configured = Environment.GetEnvironmentVariable("RTAIME_RAPID_TAKE_REPETITIONS");
+            var count = string.IsNullOrWhiteSpace(configured) ? 3 : int.Parse(configured);
+            if (count is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(configured));
+            for (var repetition = 0; repetition < count; repetition++) yield return [repetition];
+        }
+    }
+
+	[Theory]
+    [MemberData(nameof(RapidTakeRepetitions))]
+	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions(int repetition)
 	{
 		var runtimeEndpoint = Endpoint("runtime-rapid-takes");
-		var controlEndpoint = Endpoint("control-rapid-takes");
+		var controlEndpoint = Endpoint($"control-rapid-takes-{repetition}");
 		using var runtimeStop = new CancellationTokenSource();
 		using var controlStop = new CancellationTokenSource();
 		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
@@ -554,10 +566,14 @@ public sealed class ProductionIpcIntegrationTests
 
 		controlStop.Cancel();
 		var controlExit = await controlRun;
-		Assert.True(controlExit == ControlHostExitCode.Success,
-			$"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
-		runtimeStop.Cancel();
-		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+        Console.WriteLine("RAPID TAKE SHUTDOWN PHASES: " + JsonSerializer.Serialize(control.ShutdownPhases));
+        // Preserve the observed ControlHost result, then release the independent runtime
+        // even when that result is a failure so later qualification cases remain isolated.
+        runtimeStop.Cancel();
+        var runtimeExit = await runtimeRun;
+        Assert.True(controlExit == ControlHostExitCode.Success,
+            $"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
+        Assert.Equal(RuntimeHostExitCode.Success, runtimeExit);
 	}
 
 	[Fact]

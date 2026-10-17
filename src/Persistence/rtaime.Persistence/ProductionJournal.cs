@@ -76,6 +76,14 @@ public interface IProductionJournalStore : IAsyncDisposable
 	ValueTask<ProductionJournalIntegrityReport> VerifyIntegrityAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>Optional atomic batch capability; every accepted event remains represented in order.</summary>
+public interface IProductionJournalBatchStore : IProductionJournalStore
+{
+    const int MaximumBatchSize = 64;
+    ValueTask<IReadOnlyList<ProductionJournalEntry>> AppendBatchAsync(
+        IReadOnlyList<ProductionJournalEvent> journalEvents, CancellationToken cancellationToken = default);
+}
+
 public sealed record ProductionJournalIntegrityReport(bool Healthy, ulong Entries, string Detail);
 
 /// <summary>
@@ -210,52 +218,80 @@ public sealed class BoundedProductionJournal : IAsyncDisposable
 			await _store.DisposeAsync().ConfigureAwait(false);
 	}
 
-	private async Task WorkerAsync()
-	{
-		await foreach (var item in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
-		{
-			if (item.Barrier is not null)
-			{
-				Failure? failure;
-				lock (_gate)
-					failure = _lastFailure;
-				if (failure is { } value)
-					item.Barrier.TrySetException(new IOException($"Production journal durability is degraded: {value.Code}: {value.Message}"));
-				else
-					item.Barrier.TrySetResult();
-				continue;
-			}
+    private void CompleteBarrier(TaskCompletionSource barrier)
+    {
+        Failure? failure;
+        lock (_gate) failure = _lastFailure;
+        if (failure is { } value)
+            barrier.TrySetException(new IOException($"Production journal durability is degraded: {value.Code}: {value.Message}"));
+        else
+            barrier.TrySetResult();
+    }
 
-			if (item.Event is null)
-				continue;
+    private void RetainPersisted(ProductionJournalEntry entry)
+    {
+        _entries.Add(entry);
+        while (_entries.Count > _retainedCapacity) _entries.RemoveAt(0);
+        _persisted++;
+        _pending--;
+        _healthUpdatedAt = DateTimeOffset.UtcNow;
+    }
 
-			try
-			{
-				var entry = _store is null
-					? new ProductionJournalEntry(_nextOrdinal++, item.Event)
-					: await _store.AppendAsync(item.Event).ConfigureAwait(false);
-				lock (_gate)
-				{
-					_entries.Add(entry);
-					while (_entries.Count > _retainedCapacity)
-						_entries.RemoveAt(0);
-					_persisted++;
-					_pending--;
-					_healthUpdatedAt = DateTimeOffset.UtcNow;
-				}
-			}
-			catch (Exception exception)
-			{
-				lock (_gate)
-				{
-					_failed++;
-					_pending--;
-					_lastFailure = new Failure("journal.persistence.failed", exception.Message);
-					_healthUpdatedAt = DateTimeOffset.UtcNow;
-				}
-			}
-		}
-	}
+    private void ObserveWriteFailure(Exception exception, int count)
+    {
+        lock (_gate)
+        {
+            _failed += (ulong)count;
+            _pending -= count;
+            _lastFailure = new Failure("journal.persistence.failed", exception.Message);
+            _healthUpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+
+    private async Task WorkerAsync()
+    {
+        var batch = new List<ProductionJournalEvent>(Math.Min(_capacity, IProductionJournalBatchStore.MaximumBatchSize));
+        while (await _channel.Reader.WaitToReadAsync().ConfigureAwait(false))
+        {
+            if (!_channel.Reader.TryRead(out var item)) continue;
+            if (item.Barrier is not null) { CompleteBarrier(item.Barrier); continue; }
+            if (item.Event is null) continue;
+
+            if (_store is not IProductionJournalBatchStore batchStore)
+            {
+                try
+                {
+                    var entry = _store is null
+                        ? new ProductionJournalEntry(_nextOrdinal++, item.Event)
+                        : await _store.AppendAsync(item.Event).ConfigureAwait(false);
+                    lock (_gate) RetainPersisted(entry);
+                }
+                catch (Exception exception) { ObserveWriteFailure(exception, 1); }
+                continue;
+            }
+
+            batch.Clear();
+            batch.Add(item.Event);
+            TaskCompletionSource? barrier = null;
+            while (batch.Count < IProductionJournalBatchStore.MaximumBatchSize && _channel.Reader.TryRead(out var next))
+            {
+                // A flush fence belongs after all preceding events and before all following events.
+                if (next.Barrier is not null) { barrier = next.Barrier; break; }
+                if (next.Event is not null) batch.Add(next.Event);
+            }
+            try
+            {
+                var entries = await batchStore.AppendBatchAsync(batch).ConfigureAwait(false);
+                if (entries.Count != batch.Count ||
+                    entries.Where((entry, index) => entry.Event.EventId != batch[index].EventId).Any())
+                    throw new InvalidDataException("Journal batch result does not match the accepted event sequence.");
+                lock (_gate)
+                    foreach (var entry in entries) RetainPersisted(entry);
+            }
+            catch (Exception exception) { ObserveWriteFailure(exception, batch.Count); }
+            if (barrier is not null) CompleteBarrier(barrier);
+        }
+    }
 
 	private sealed record JournalWorkItem(ProductionJournalEvent? Event, TaskCompletionSource? Barrier);
 }

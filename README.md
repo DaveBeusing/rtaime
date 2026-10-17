@@ -77,7 +77,7 @@ The current V1 development repository implements production-shaped software path
 | --- | --- |
 | Application lifecycle | unified rtaime.exe AppHost, managed ControlHost/RuntimeHost/AIHost lifecycle |
 | Operator | full-screen production shell, workspaces, progressive readiness and recovery states |
-| Media | local media files, Media Pool, governed NDI source discovery/adoption and input, transport, timeline, IN/OUT, markers and Cue points |
+| Media | bounded A/B local-file decks (one or two decoder owners; physical SSD concurrency unverified), Media Pool, governed NDI source discovery/adoption and input, transport, timeline, IN/OUT, markers and Cue points |
 | Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source/bus mixing, evidence-aware mixer routing and draft gain controls, deterministic crossfade/ducking, Runtime metering and generated test signals |

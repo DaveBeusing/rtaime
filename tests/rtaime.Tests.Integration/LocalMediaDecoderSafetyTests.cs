@@ -10,6 +10,27 @@ namespace rtaime.Tests.Integration;
 
 public sealed class LocalMediaDecoderSafetyTests
 {
+    [Theory]
+    [InlineData(50, 1, 0)]
+    [InlineData(50, 1, 20)]
+    [InlineData(60_000, 1_001, 20)]
+    [InlineData(60_000, 1_001, 30)]
+    public void Seek_scan_uses_the_same_exact_frame_window_as_transport_position(long numerator, long denominator, long frame)
+    {
+        var rate = new FrameRate(numerator, denominator);
+        var minimum = LocalMediaFrameMath.FrameSeekMinimumTimestamp(frame, rate);
+        var timebase = new Timebase(1, TimeSpan.TicksPerSecond);
+        Assert.Equal(frame, LocalMediaFrameMath.TimestampToFrame(minimum, timebase, rate));
+        if (minimum > 0)
+        {
+            Assert.Equal(frame - 1, LocalMediaFrameMath.TimestampToFrame(minimum - 1, timebase, rate));
+            var quantizedCentre = LocalMediaFrameMath.FrameToTimeSpan(frame, rate).Ticks - 1;
+            Assert.Equal(frame, LocalMediaFrameMath.TimestampToFrame(quantizedCentre, timebase, rate));
+            Assert.Equal(LocalMediaSampleDisposition.Frame,
+                new LocalMediaSampleProgress().Observe(0, quantizedCentre, true, minimum));
+        }
+    }
+
     [Fact]
     public void Empty_callbacks_and_stream_ticks_are_not_EOF_but_have_a_finite_progress_budget()
     {

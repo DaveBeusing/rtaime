@@ -253,6 +253,19 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<MediaAssetProbeResult>(
 			new NotSupportedException("Runtime transport does not expose media-asset probing."));
 
+    async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        if (snapshot.SourceId is not null && snapshot.SourceId != sourceId)
+            throw new NotSupportedException("Transport does not support explicit deck selection.");
+        return snapshot;
+    }
+    async ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        await GetMediaDeckSnapshotAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        return await CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+    }
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));
@@ -442,6 +455,11 @@ public sealed record ControlHostProcessOptions(
 /// Executable ControlHost composition root. Production authority remains in <see cref="ControlHostService"/>;
 /// this class owns process startup, durable recovery, production IPC, runtime reconciliation and orderly shutdown.
 /// </summary>
+public sealed record ControlHostShutdownPhaseObservation(
+    string Phase, double StartedMilliseconds, double DurationMilliseconds, string? FailureType,
+    ProductionCheckpointWriterStatistics? CheckpointsBefore, ProductionCheckpointWriterStatistics? CheckpointsAfter,
+    ProductionJournalStatistics? JournalBefore, ProductionJournalStatistics? JournalAfter);
+
 public sealed class ControlHostProcess
 {
 	private readonly object _gate = new();
@@ -450,6 +468,11 @@ public sealed class ControlHostProcess
 	private ControlHostLifecycleSnapshot _lifecycle = new(ControlHostProcessState.Created, ControlHostHealthState.Unknown, "Process has not started.", DateTimeOffset.UtcNow);
 	private ControlHostRecoverySnapshot _recovery = new(ControlHostRecoveryState.Fresh, null, "Durable recovery has not been evaluated yet.");
 	private int _runStarted;
+    private readonly List<ControlHostShutdownPhaseObservation> _shutdownPhases = new(9);
+    public IReadOnlyList<ControlHostShutdownPhaseObservation> ShutdownPhases
+    {
+        get { lock (_gate) return _shutdownPhases.ToArray(); }
+    }
 	private BoundedProductionJournal? _journal;
 	private SqliteManagementStore? _managementStore;
 	private BoundedProductionCheckpointWriter? _checkpointWriter;
@@ -1128,62 +1151,89 @@ public sealed class ControlHostProcess
 		}
 	}
 
-	private async Task<ControlHostExitCode> StopAsync()
-	{
-		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and durability resources.");
-		_ipcServer?.NotifyObservableStateChanged();
-		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
-		var phase = "external-control-server";
-		try
-		{
-			if (_externalControlServer is not null) await _externalControlServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			// Binding owns the IPC mutation gate as well as Runtime requests. Join it
-			// after lifetime cancellation before disposing either dependency.
-			phase = "runtime-binding-worker";
-			if (_runtimeBindingTask is not null)
-			{
-				try { await _runtimeBindingTask.WaitAsync(timeout.Token).ConfigureAwait(false); }
-				catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
-				catch (OperationCanceledException) { }
-			}
-			phase = "operator-ipc-server";
-			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			phase = "runtime-transport";
-			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			phase = "durability";
+    private async Task<ControlHostExitCode> StopAsync()
+    {
+        Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and durability resources.");
+        _ipcServer?.NotifyObservableStateChanged();
+        using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
+        var started = Stopwatch.GetTimestamp();
+        var phase = "external-control-server";
+        async Task Observe(string name, Func<Task> operation)
+        {
+            phase = name;
+            var phaseStarted = Stopwatch.GetTimestamp();
+            var checkpointsBefore = _checkpointWriter?.Statistics;
+            var journalBefore = _journal?.Statistics;
+            string? failure = null;
+            try { await operation().ConfigureAwait(false); }
+            catch (Exception exception) { failure = exception.GetBaseException().GetType().Name; throw; }
+            finally
+            {
+                var observation = new ControlHostShutdownPhaseObservation(name,
+                    Stopwatch.GetElapsedTime(started, phaseStarted).TotalMilliseconds,
+                    Stopwatch.GetElapsedTime(phaseStarted).TotalMilliseconds, failure,
+                    checkpointsBefore, _checkpointWriter?.Statistics, journalBefore, _journal?.Statistics);
+                lock (_gate) _shutdownPhases.Add(observation);
+            }
+        }
+        string Evidence() => System.Text.Json.JsonSerializer.Serialize(ShutdownPhases);
+        try
+        {
+            if (_externalControlServer is not null)
+                await Observe("external-control-server", () => _externalControlServer.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+            if (_runtimeBindingTask is not null)
+                await Observe("runtime-binding-worker", async () =>
+                {
+                    try { await _runtimeBindingTask.WaitAsync(timeout.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
+                    catch (OperationCanceledException) { }
+                }).ConfigureAwait(false);
+            if (_ipcServer is not null)
+                await Observe("operator-ipc-server", () => _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+            if (_runtimeTransport is not null)
+                await Observe("runtime-transport", () => _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
 
-			Exception? durabilityFailure = null;
-			if (_checkpointWriter is not null)
-			{
-				try { await _checkpointWriter.FlushAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
-				try { await _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
-			}
-			if (_managementStore is not null)
-			{
-				try { await _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
-			}
-			if (_journal is not null)
-			{
-				try { await _journal.FlushAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
-				try { await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
-			}
-			if (durabilityFailure is not null)
-				throw new IOException($"ControlHost durability drain failed: {durabilityFailure.GetBaseException().GetType().Name}: {durabilityFailure.GetBaseException().Message}", durabilityFailure);
+            Exception? durabilityFailure = null;
+            string? durabilityFailurePhase = null;
+            async Task Drain(string name, Func<Task> operation)
+            {
+                try { await Observe(name, operation).ConfigureAwait(false); }
+                catch (Exception exception)
+                {
+                    if (durabilityFailure is null) { durabilityFailure = exception; durabilityFailurePhase = name; }
+                }
+            }
+            if (_checkpointWriter is not null)
+            {
+                await Drain("checkpoint-flush", () => _checkpointWriter.FlushAsync(timeout.Token).AsTask()).ConfigureAwait(false);
+                await Drain("checkpoint-dispose", () => _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+            }
+            if (_managementStore is not null)
+                await Drain("management-dispose", () => _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+            if (_journal is not null)
+            {
+                await Drain("journal-flush", () => _journal.FlushAsync(timeout.Token).AsTask()).ConfigureAwait(false);
+                await Drain("journal-dispose", () => _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+            }
+            if (durabilityFailure is not null)
+                throw new IOException($"ControlHost durability drain failed at {durabilityFailurePhase}: {durabilityFailure.GetBaseException().GetType().Name}: {durabilityFailure.GetBaseException().Message}", durabilityFailure);
 
-			Update(ControlHostProcessState.Stopped, ControlHostHealthState.Stopped, "ControlHost stopped cleanly.");
-			return ControlHostExitCode.Success;
-		}
-		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
-		{
-			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"ControlHost shutdown exceeded the configured timeout during {phase}.");
-			return ControlHostExitCode.ShutdownFailure;
-		}
-		catch (Exception exception)
-		{
-			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"ControlHost shutdown failed during {phase}: {exception.Message}");
-			return ControlHostExitCode.ShutdownFailure;
-		}
-	}
+            Update(ControlHostProcessState.Stopped, ControlHostHealthState.Stopped, "ControlHost stopped cleanly.");
+            return ControlHostExitCode.Success;
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
+        {
+            Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy,
+                $"ControlHost shutdown exceeded the configured timeout during {phase}. Phase evidence: {Evidence()}");
+            return ControlHostExitCode.ShutdownFailure;
+        }
+        catch (Exception exception)
+        {
+            Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy,
+                $"ControlHost shutdown failed during {phase}: {exception.Message}. Phase evidence: {Evidence()}");
+            return ControlHostExitCode.ShutdownFailure;
+        }
+    }
 
 	private async Task CleanupStartupFailureAsync()
 	{

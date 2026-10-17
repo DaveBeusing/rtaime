@@ -60,6 +60,7 @@ public sealed record RuntimeHostProcessOptions(
 	RuntimeMediaIoMode MediaIoMode = RuntimeMediaIoMode.Virtual,
 	bool RequireExternalReference = false)
 {
+	public int MaximumLocalMediaDecoders { get; init; } = 2;
 	public string AIEndpoint { get; init; } = "rtaime.v1.ai.default";
 	public IReadOnlyList<RuntimeNetworkOutputTarget> NetworkOutputs { get; init; } = Array.Empty<RuntimeNetworkOutputTarget>();
 
@@ -88,6 +89,7 @@ public sealed record RuntimeHostProcessOptions(
 			ParseMediaIoMode(Get(args, environment, "media-io", "RTAIME_RUNTIME_MEDIA_IO", "virtual")),
 			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"))
 		{
+			MaximumLocalMediaDecoders = ParsePositiveInt(Get(args, environment, "local-media-decoders", "RTAIME_LOCAL_MEDIA_DECODERS", "2"), "local-media-decoders"),
 			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint),
 			NetworkOutputs = RuntimeNetworkOutputConfigurationLoader.Load(args, environment, format)
 		};
@@ -95,6 +97,8 @@ public sealed record RuntimeHostProcessOptions(
 
 	public void Validate()
 	{
+		if (MaximumLocalMediaDecoders is < 1 or > 2)
+			throw new ArgumentOutOfRangeException(nameof(MaximumLocalMediaDecoders));
 		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
 			throw new ArgumentException("Runtime source identities must not be empty.");
 		if (SourceAId == SourceBId)
@@ -210,7 +214,6 @@ public sealed class RuntimeHostProcess
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
 	private Task? _mediaLoop;
-	private MediaSourceId? _activeDeckSource;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
@@ -322,7 +325,7 @@ public sealed class RuntimeHostProcess
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
 			_runtime.EnablePipelineTiming(_timingProbe);
-			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format);
+			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format, _options.MaximumLocalMediaDecoders, [_options.SourceAId, _options.SourceBId]);
 			_aiShowcase = _aiShowcaseFactory(_runtime, _options)
 				?? throw new InvalidOperationException("AI showcase factory returned null.");
 
@@ -524,61 +527,12 @@ public sealed class RuntimeHostProcess
 	private static ulong SaturatingAdd(ulong left, ulong right) =>
 		ulong.MaxValue - left < right ? ulong.MaxValue : left + right;
 
-	private void AdmitMediaDeckBoundary(
-		V1RuntimeHostService runtime,
-		LocalMediaDeckRuntimeService mediaDeck,
-        ulong programSlot)
-	{
-		mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-		var snapshot = mediaDeck.ProcessBoundary(out var admittedBoundary, programSlot);
-        using var boundary = admittedBoundary;
-		if (snapshot.SourceId is not { } sourceId)
-		{
-			if (_activeDeckSource is { } previous)
-            {
-                runtime.ClearExternalAudioMeter(previous);
-                runtime.SetInputSignalState(previous, V1InputSignalState.Lost);
-            }
-			_activeDeckSource = null;
-			return;
-		}
-
-		if (_activeDeckSource is { } previousSource && previousSource != sourceId)
-        {
-            runtime.ClearExternalAudioMeter(previousSource);
-            runtime.SetInputSignalState(previousSource, V1InputSignalState.Lost);
-        }
-		_activeDeckSource = sourceId;
-
-		if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
-		{
-			if (boundary.Video.Surface.Format == runtime.Format)
-			{
-				runtime.SetExternalInputContent(
-					sourceId,
-					boundary.RgbaPixels.Span,
-					V1InputSignalState.Valid);
-			}
-			else
-			{
-				runtime.SetInputSignalState(sourceId, V1InputSignalState.Unstable);
-			}
-		}
-
-        if (snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
-            boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
-            runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
-
-        if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
-		{
-			runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);
-		}
-		else
-		{
-			var available = snapshot.State is not (MediaDeckState.Error or MediaDeckState.Loading);
-			runtime.SetExternalAudioMeter(sourceId, 0, 0, available);
-		}
-	}
+	private void AdmitMediaDeckBoundary(V1RuntimeHostService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
+    {
+        mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
+        mediaDeck.AdmitBoundary(runtime, _options.SourceAId, programSlot);
+        mediaDeck.AdmitBoundary(runtime, _options.SourceBId, programSlot);
+    }
 
 	private async Task<RuntimeHostExitCode> StopAsync(
 		RuntimeHostExitCode preservedExitCode = RuntimeHostExitCode.Success,

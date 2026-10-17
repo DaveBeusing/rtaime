@@ -109,6 +109,8 @@ public enum MediaMarkerCommandKind
 
 public sealed record MediaMarkerCommand
 {
+	public MediaSourceId? SourceId { get; init; }
+
 	public MediaMarkerCommand(
 		CompatibilityVersion version,
 		MediaAssetId assetId,

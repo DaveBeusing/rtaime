@@ -39,7 +39,7 @@
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
 					<controls:RtaimeButton Content="OPEN MEDIA" Command="{Binding OpenCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" Margin="0,0,8,0" />
-					<controls:RtaimeButton Content="REFRESH" Command="{Binding RefreshCommand}"  Margin="0,0,8,0" />
+					<controls:RtaimeButton Content="SELECT SOURCE DECK" Command="{Binding RefreshCommand}"  Margin="0,0,8,0" />
 					<controls:RtaimeButton Content="CLOSE" Command="{Binding CloseCommand}"  />
 				</StackPanel>
 			</Grid>

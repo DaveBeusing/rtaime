@@ -532,7 +532,8 @@ internal static class ExternalControlOperationCatalog
 		"control.compositing.layer.set", "control.compositing.layer.transform", "control.compositing.layer.processing", "control.compositing.layers.reorder",
 		"control.recording.start", "control.recording.stop", "control.ai_showcase.set",
 		"control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
-		"control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
+		"control.media_deck.scoped.snapshot.get", "control.media_deck.scoped.close", "control.media_deck.scoped.transport", "control.media_deck.scoped.marker",
+        "control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
 		"control.show_control.snapshot.get", "control.show_control.cue_list.save", "control.show_control.cue_list.select", "control.show_control.arm", "control.show_control.go", "control.show_control.cancel", "control.show_control.recovery.acknowledge",
 		"control.rundown.snapshot.get", "control.rundown.save", "control.rundown.prepare", "control.rundown.go", "control.rundown.next", "control.rundown.previous", "control.rundown.hold", "control.rundown.recovery.acknowledge",
 		"control.production_macro.snapshot.get", "control.production_macro.get", "control.production_macro.save", "control.production_macro.delete", "control.production_macro.validate", "control.production_macro.execute", "control.production_macro.cancel", "control.production_macro.recovery.acknowledge"
@@ -542,7 +543,7 @@ internal static class ExternalControlOperationCatalog
 
 	public static ExternalControlRole RequiredRole(string operation) =>
 		operation is "control.ping" or "control.snapshot.get" or
-			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or
+			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" or
 			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
 			"control.production_macro.snapshot.get" or "control.production_macro.get" or "control.production_macro.validate"
 			? ExternalControlRole.Observer
@@ -797,32 +798,42 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			case ExternalControlRequest.OperationOneofCase.RelinkMediaAsset: operation = "control.media_asset_catalog.relink"; payload = new { request.RelinkMediaAsset.AssetId, request.RelinkMediaAsset.SourceLocation }; break;
 			case ExternalControlRequest.OperationOneofCase.RemoveMediaAsset: operation = "control.media_asset_catalog.remove"; payload = new { request.RemoveMediaAsset.AssetId }; break;
 			case ExternalControlRequest.OperationOneofCase.RefreshMediaAssets: operation = "control.media_asset_catalog.availability.refresh"; payload = new { }; break;
-			case ExternalControlRequest.OperationOneofCase.GetMediaDeck: operation = "control.media_deck.snapshot.get"; payload = new { }; break;
+			case ExternalControlRequest.OperationOneofCase.GetScopedMediaDeck: operation = "control.media_deck.scoped.snapshot.get"; payload = new { request.GetScopedMediaDeck.SourceId }; break;
+            case ExternalControlRequest.OperationOneofCase.CloseScopedMediaDeck: operation = "control.media_deck.scoped.close"; payload = new { request.CloseScopedMediaDeck.SourceId }; break;
+            case ExternalControlRequest.OperationOneofCase.GetMediaDeck: operation = "control.media_deck.snapshot.get"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.OpenMediaDeck: operation = "control.media_deck.open"; payload = new { Version = request.OpenMediaDeck.ContractVersion, request.OpenMediaDeck.SourceId, request.OpenMediaDeck.Path, AssetId = NullIfEmpty(request.OpenMediaDeck.AssetId) }; break;
-			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckTransport:
-				operation = "control.media_deck.transport";
+			case ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport:
+            case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckTransport:
+                var deckTransport = request.OperationCase == ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport
+                    ? request.ApplyScopedMediaDeckTransport : request.ApplyMediaDeckTransport;
+				operation = request.OperationCase != ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport && string.IsNullOrEmpty(deckTransport.SourceId) ? "control.media_deck.transport" : "control.media_deck.scoped.transport";
 				payload = new
 				{
-					Version = request.ApplyMediaDeckTransport.ContractVersion,
-					request.ApplyMediaDeckTransport.AssetId,
-					request.ApplyMediaDeckTransport.Kind,
-					TargetFrame = request.ApplyMediaDeckTransport.HasTargetFrame ? request.ApplyMediaDeckTransport.TargetFrame : (long?)null,
-					AutoPlayOnProgram = request.ApplyMediaDeckTransport.HasAutoPlayOnProgram ? request.ApplyMediaDeckTransport.AutoPlayOnProgram : (bool?)null,
-					EndBehavior = request.ApplyMediaDeckTransport.HasEndBehavior ? request.ApplyMediaDeckTransport.EndBehavior : (int?)null,
-					InPointFrame = request.ApplyMediaDeckTransport.HasInPointFrame ? request.ApplyMediaDeckTransport.InPointFrame : (long?)null,
-					OutPointFrame = request.ApplyMediaDeckTransport.HasOutPointFrame ? request.ApplyMediaDeckTransport.OutPointFrame : (long?)null
+					Version = deckTransport.ContractVersion,
+                    deckTransport.SourceId,
+					deckTransport.AssetId,
+					deckTransport.Kind,
+					TargetFrame = deckTransport.HasTargetFrame ? deckTransport.TargetFrame : (long?)null,
+					AutoPlayOnProgram = deckTransport.HasAutoPlayOnProgram ? deckTransport.AutoPlayOnProgram : (bool?)null,
+					EndBehavior = deckTransport.HasEndBehavior ? deckTransport.EndBehavior : (int?)null,
+					InPointFrame = deckTransport.HasInPointFrame ? deckTransport.InPointFrame : (long?)null,
+					OutPointFrame = deckTransport.HasOutPointFrame ? deckTransport.OutPointFrame : (long?)null
 				};
 				break;
-			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckMarker:
-				operation = "control.media_deck.marker";
+			case ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker:
+            case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckMarker:
+                var deckMarker = request.OperationCase == ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker
+                    ? request.ApplyScopedMediaDeckMarker : request.ApplyMediaDeckMarker;
+				operation = request.OperationCase != ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker && string.IsNullOrEmpty(deckMarker.SourceId) ? "control.media_deck.marker" : "control.media_deck.scoped.marker";
 				payload = new
 				{
-					Version = request.ApplyMediaDeckMarker.ContractVersion,
-					request.ApplyMediaDeckMarker.AssetId,
-					request.ApplyMediaDeckMarker.Kind,
-					PositionFrame = request.ApplyMediaDeckMarker.HasPositionFrame ? request.ApplyMediaDeckMarker.PositionFrame : (long?)null,
-					CuePointId = NullIfEmpty(request.ApplyMediaDeckMarker.CuePointId),
-					Name = NullIfEmpty(request.ApplyMediaDeckMarker.Name)
+					Version = deckMarker.ContractVersion,
+                    deckMarker.SourceId,
+					deckMarker.AssetId,
+					deckMarker.Kind,
+					PositionFrame = deckMarker.HasPositionFrame ? deckMarker.PositionFrame : (long?)null,
+					CuePointId = NullIfEmpty(deckMarker.CuePointId),
+					Name = NullIfEmpty(deckMarker.Name)
 				};
 				break;
 			case ExternalControlRequest.OperationOneofCase.CloseMediaDeck: operation = "control.media_deck.close"; payload = new { }; break;

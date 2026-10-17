@@ -209,10 +209,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.replay.range.set" => ValueTask.FromResult(SetReplayRange(request, runtime)),
 				"runtime.replay.clip.create" => CreateReplayClipAsync(request, runtime, cancellationToken),
 				"runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
-				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
+				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
-				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
-				"runtime.media_deck.close" => ValueTask.FromResult(CloseMediaDeck(request)),
+				"runtime.media_deck.transport" or "runtime.media_deck.scoped.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
+				"runtime.media_deck.close" or "runtime.media_deck.scoped.close" => ValueTask.FromResult(CloseMediaDeck(request)),
 				_ => ValueTask.FromResult(Error(request, "ipc.message.unknown", $"Unknown RuntimeHost message type '{request.MessageType}'."))
 			};
 		}
@@ -644,12 +644,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 
+    private static MediaSourceId? DeckTarget(WireEnvelope request) =>
+        request.MessageType.Contains(".scoped.", StringComparison.Ordinal)
+            ? new MediaSourceId(Identity.Parse(request.Payload.GetProperty("sourceId").GetString()
+                ?? throw new InvalidDataException("Deck source identity is required."))) : null;
+
 	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
 	{
 		var deck = _mediaDeckAccessor();
 		if (deck is null)
 			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
-		return Success(request, "runtime.media_deck.snapshot.response", ToWire(deck.Snapshot));
+		return Success(request, "runtime.media_deck.snapshot.response", ToWire(deck.GetSnapshot(DeckTarget(request))));
 	}
 
 	private WireEnvelope OpenMediaDeck(WireEnvelope request)
@@ -668,6 +673,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				? null
 				: new MediaAssetId(Identity.Parse(wire.AssetId)));
 		var prepared = FromWire(wire.PreparedExecution);
+        // ControlHost serializes runtime exchanges; read committed authority before admission,
+        // including a TAKE acknowledged before the next Program cadence observation.
+        deck.ObserveProgramSource(_runtimeAccessor()?.CommittedProgramSourceId);
 		var snapshot = deck.Open(open, prepared);
 		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.open.response", ToWire(snapshot));
@@ -695,7 +703,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 					? (MediaDeckEndBehavior)wire.EndBehavior.Value
 					: throw new InvalidDataException("Media-deck end behavior is invalid."),
 			wire.InPointFrame,
-			wire.OutPointFrame);
+			wire.OutPointFrame) { SourceId = DeckTarget(request) };
 		var result = deck.ApplyTransport(command);
 		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.transport.response", ToWire(result));
@@ -706,7 +714,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var deck = _mediaDeckAccessor();
 		if (deck is null)
 			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
-		var snapshot = deck.Close();
+		var snapshot = deck.Close(DeckTarget(request));
 		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.close.response", ToWire(snapshot));
 	}
@@ -1477,7 +1485,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireMediaDeckRuntimeSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireFailure? Failure);

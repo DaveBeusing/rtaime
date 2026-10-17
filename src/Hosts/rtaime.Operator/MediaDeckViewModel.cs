@@ -33,6 +33,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
 	private bool _playbackPolicyDirty;
 	private string? _localPath;
+    private readonly Dictionary<MediaSourceId, string> _deckPaths = [];
 
 	public MediaDeckViewModel(
 		MediaDeckController controller,
@@ -324,6 +325,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				assetId,
 				_dispose.Token);
 			_localPath = opened.IsLoaded ? path : null;
+            if (opened.IsLoaded && opened.SourceId is { } source) _deckPaths[source] = path;
 			Post(() =>
 			{
 				RefreshState();
@@ -363,6 +365,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				new MediaSourceId(Identity.Parse(sourceIdText)),
 				_dispose.Token).ConfigureAwait(false);
 			_localPath = opened.IsLoaded ? path : null;
+            if (opened.IsLoaded && opened.SourceId is { } source) _deckPaths[source] = path;
 			Post(() =>
 			{
 				RefreshState();
@@ -384,7 +387,11 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		try
 		{
 			IsBusy = true;
-			await _controller.RefreshAsync(_dispose.Token).ConfigureAwait(false);
+			var source = _sourceIdSelector();
+            if (!string.IsNullOrWhiteSpace(source))
+                await _controller.SelectAsync(new MediaSourceId(Identity.Parse(source)), _dispose.Token).ConfigureAwait(false);
+            else
+                await _controller.RefreshAsync(_dispose.Token).ConfigureAwait(false);
 			Post(() => LastError = null);
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
@@ -534,6 +541,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private void RefreshState()
 	{
 		_snapshot = _controller.Snapshot;
+        if (_snapshot.SourceId is { } source && _deckPaths.TryGetValue(source, out var path)) _localPath = path;
 		Timeline.ApplyMediaDeckSnapshot(_snapshot);
 		if (!_snapshot.IsLoaded)
 			_localPath = null;

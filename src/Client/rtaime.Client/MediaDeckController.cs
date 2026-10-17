@@ -20,6 +20,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 	private readonly object _gate = new();
 	private readonly OperatorControlClient _client;
 	private bool _disposed;
+    private MediaSourceId? _selectedSource;
 	private MediaDeckSnapshot _snapshot = MediaDeckSnapshot.Unloaded;
 
 	public MediaDeckController(OperatorControlClient client)
@@ -46,10 +47,21 @@ public sealed class MediaDeckController : IAsyncDisposable
 	public async ValueTask<MediaDeckSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
-		var snapshot = await _client.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var snapshot = _selectedSource is { } source
+            ? await _client.GetMediaDeckSnapshotAsync(source, cancellationToken).ConfigureAwait(false)
+            : await _client.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(snapshot);
 		return snapshot;
 	}
+
+    public async ValueTask<MediaDeckSnapshot> SelectAsync(MediaSourceId source, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        var snapshot = await _client.GetMediaDeckSnapshotAsync(source, cancellationToken).ConfigureAwait(false);
+        _selectedSource = source;
+        ApplySnapshot(snapshot);
+        return snapshot;
+    }
 
 	public ValueTask<MediaDeckSnapshot> OpenAsync(
 		string path,
@@ -64,6 +76,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 		CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
+        _selectedSource = sourceId;
 		var snapshot = await _client.OpenMediaDeckAsync(path, sourceId, assetId, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(snapshot);
 		return snapshot;
@@ -91,8 +104,8 @@ public sealed class MediaDeckController : IAsyncDisposable
 			snapshot.Probe!.AssetId,
 			MediaTransportCommandKind.ConfigurePlayback,
 			autoPlayOnProgram: autoPlayOnProgram,
-			endBehavior: endBehavior);
-		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+			endBehavior: endBehavior) { SourceId = snapshot.SourceId };
+		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		return response;
 	}
@@ -100,7 +113,9 @@ public sealed class MediaDeckController : IAsyncDisposable
 	public async ValueTask<MediaDeckSnapshot> CloseAsync(CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
-		var snapshot = await _client.CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+		var snapshot = _selectedSource is { } source
+            ? await _client.CloseMediaDeckAsync(source, cancellationToken).ConfigureAwait(false)
+            : await _client.CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(snapshot);
 		return snapshot;
 	}
@@ -109,6 +124,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ThrowIfDisposed();
+        if (_selectedSource is { } source && snapshot.SourceId != source) return;
 		ApplySnapshot(snapshot);
 	}
 
@@ -129,8 +145,8 @@ public sealed class MediaDeckController : IAsyncDisposable
 		var command = new MediaTransportCommand(
 			MediaContractVersion.Current,
 			snapshot.Probe!.AssetId,
-			kind);
-		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+			kind) { SourceId = snapshot.SourceId };
+		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		return response;
 	}
@@ -143,7 +159,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 		lock (_gate)
 			previous = _snapshot.Transport ?? throw new MediaDeckTransportUnavailableException();
 
-		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		if (response.Transport is not null && response.State != MediaDeckState.Error)
 			return MediaTransportCommandResult.Accepted(response.Transport);
@@ -162,7 +178,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 		lock (_gate)
 			previous = _snapshot.Markers ?? throw new MediaDeckMarkersUnavailableException();
 
-		var response = await _client.ApplyMediaDeckMarkerAsync(command, cancellationToken).ConfigureAwait(false);
+		var response = await _client.ApplyMediaDeckMarkerAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		if (response.Markers is not null && response.State != MediaDeckState.Error)
 			return MediaMarkerCommandResult.Applied(response.Markers);

@@ -240,6 +240,17 @@ internal static class LocalMediaFrameMath
 		return TimeSpan.FromTicks(checked((long)ticks));
 	}
 
+    // TimestampToFrame uses nearest-frame rounding. Seek scanning must use the same
+    // frame window, rather than discard a fractional-rate sample one tick below its centre.
+    internal static long FrameSeekMinimumTimestamp(long frameNumber, FrameRate frameRate)
+    {
+        if (frameNumber < 0) throw new ArgumentOutOfRangeException(nameof(frameNumber));
+        if (frameNumber == 0) return 0;
+        return checked((long)decimal.Ceiling(
+            ((decimal)frameNumber - 0.5m) * TimeSpan.TicksPerSecond *
+            frameRate.Denominator / frameRate.Numerator));
+    }
+
 	public static long TimestampToFrame(long timestamp, Timebase timebase, FrameRate frameRate)
 	{
 		if (timestamp < 0)

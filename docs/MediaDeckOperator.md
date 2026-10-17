@@ -23,7 +23,7 @@ The deck exposes:
 - explicit unloaded, ready, playing, paused, ended and error presentation;
 - keyboard access without stealing the existing production CUT shortcut.
 
-Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside Media Deck Operator. Program-triggered playback and deterministic end behavior are added by Media Autoplay & End Behavior below.
+Playlist, clip-bank, waveform, thumbnails and final showcase styling remain outside Media Deck Operator. Program-triggered playback and deterministic end behavior are added by Media Autoplay & End Behavior below.
 
 ## Authority and process boundaries
 
@@ -188,3 +188,20 @@ then preroll. Restricted MOV is H.264 with AAC or PCM16 stereo 48 kHz.
 Unsupported rotation/aspect/color/edit/audio layouts and unavailable decoders
 remain visible as normal open errors. ProRes/DNx/MXF input is unsupported.
 See the [format matrix](LocalMediaFileSource.md#container-probes-and-format-qualification).
+
+## Selecting A/B decks
+
+Choose A or B in the existing production source bank, then use **SELECT SOURCE
+DECK** to load that source's confirmed deck state. **OPEN MEDIA** opens into the
+selected production source. Opening the other source retains the first session.
+The displayed source identity, readiness, transport, timeline, markers and faults
+belong to the selected deck; Play/Stop/Seek/Close remain bound to that source even
+when the other deck contains the same asset. Deck selection does not change
+Program routing. CUT and DISSOLVE keep their existing authoritative path.
+
+The existing Operator status snapshot carries at most two confirmed deck states
+alongside the legacy most-recently-opened projection. A source-scoped controller
+accepts its own state and ignores the other source, so progress and faults keep
+updating after deck selection. The source bank retains both deck presentations.
+No additional polling timer or independent preview renderer is created. After a Host restart, reopen each file through the normal supported path;
+this change does not add automatic replay or alter saved productions.

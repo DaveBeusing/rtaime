@@ -554,11 +554,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_asset_catalog.relink" => await RelinkMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.remove" => await RemoveMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.availability.refresh" => await RefreshMediaAssetAvailabilityAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.media_deck.snapshot.get" => await GetMediaDeckSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" => await GetMediaDeckSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.open" => await OpenMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.media_deck.marker" => await ApplyMediaDeckMarkerAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.media_deck.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_deck.transport" or "control.media_deck.scoped.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_deck.marker" or "control.media_deck.scoped.marker" => await ApplyMediaDeckMarkerAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_deck.close" or "control.media_deck.scoped.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.snapshot.get" => await GetShowControlSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_template.create" => await RunShowTemplateAsync(request, "create", cancellationToken).ConfigureAwait(false),
 			"control.show_template.preflight" => await RunShowTemplateAsync(request, "preflight", cancellationToken).ConfigureAwait(false),
@@ -2258,11 +2258,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 	}
 
+    private static MediaSourceId? DeckTarget(WireEnvelope request) =>
+        request.MessageType.Contains(".scoped.", StringComparison.Ordinal)
+            ? new MediaSourceId(Identity.Parse(request.Payload.GetProperty("sourceId").GetString()
+                ?? throw new InvalidDataException("Deck source identity is required."))) : null;
+
 	private async ValueTask<WireEnvelope> GetMediaDeckSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		if (_mediaDeck is null)
 			return Error(request, "control.media_deck.unavailable", "Media-deck control service is not configured.");
-		var snapshot = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var snapshot = await _mediaDeck.GetSnapshotAsync(cancellationToken, DeckTarget(request)).ConfigureAwait(false);
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
 	}
 
@@ -2306,7 +2311,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						? (MediaDeckEndBehavior)wire.EndBehavior.Value
 						: throw new InvalidDataException("Media-deck end behavior is invalid."),
 				wire.InPointFrame,
-				wire.OutPointFrame),
+				wire.OutPointFrame) { SourceId = DeckTarget(request) },
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
@@ -2329,7 +2334,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				string.IsNullOrWhiteSpace(wire.CuePointId)
 					? null
 					: new MediaCuePointId(Identity.Parse(wire.CuePointId)),
-				wire.Name),
+				wire.Name) { SourceId = DeckTarget(request) },
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
@@ -2339,7 +2344,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		if (_mediaDeck is null)
 			return Error(request, "control.media_deck.unavailable", "Media-deck control service is not configured.");
-		var snapshot = await _mediaDeck.CloseAsync(cancellationToken).ConfigureAwait(false);
+		var snapshot = await _mediaDeck.CloseAsync(cancellationToken, DeckTarget(request)).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
 	}
@@ -2806,15 +2811,29 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var runtimeObservedAtUtc = runtimeObservation.ObservedAtUtc;
 
 		MediaDeckSnapshot? mediaDeck = null;
+        var mediaDecks = new List<MediaDeckSnapshot>(2);
 		if (_mediaDeck is not null)
 		{
-			try { mediaDeck = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+			try
+            {
+                mediaDeck = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+                foreach (var source in control.Specification.Sources.Take(2))
+                {
+                    try
+                    {
+                        mediaDecks.Add(await _mediaDeck.GetSnapshotAsync(cancellationToken,
+                            new MediaSourceId(source.SourceId.Value)).ConfigureAwait(false));
+                    }
+                    catch (NotSupportedException) { }
+                }
+            }
 			catch { mediaDeck = null; }
 		}
 
 		var state = control.State;
 		var sources = control.Specification.Sources
-			.Select(source => ToWireSource(source, runtime, mediaDeck))
+			.Select(source => ToWireSource(source, runtime,
+                mediaDecks.FirstOrDefault(deck => deck.SourceId?.Value == source.SourceId.Value) ?? mediaDeck))
 			.ToArray();
 		var audioInputs = runtime is null
 			? Array.Empty<WireAudioInput>()
@@ -2892,7 +2911,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_showProjectState,
 				_showProjectDetail),
 			runtime?.AudioProduction is null ? null : ToWire(runtime.AudioProduction),
-			ToWire(replay ?? ReplayControlSnapshot.Unavailable));
+			ToWire(replay ?? ReplayControlSnapshot.Unavailable),
+            mediaDecks.Select(ToWire).ToArray());
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -4089,7 +4109,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null, WireMediaDeckSnapshot[]? MediaDecks = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
@@ -4141,8 +4161,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);
 	private sealed record WireMediaAssetCatalogRefresh(ulong Revision);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
-	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
+	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);

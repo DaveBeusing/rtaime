@@ -891,7 +891,8 @@ public sealed record OperatorStatusSnapshot
         ShowControlWorkspaceSnapshot? showControl = null,
         OperatorShowProjectDescriptor? showProject = null,
         OperatorAudioProductionDescriptor? audioProduction = null,
-        ReplayControlSnapshot? replay = null)
+        ReplayControlSnapshot? replay = null,
+        IReadOnlyList<MediaDeckSnapshot>? mediaDecks = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -926,6 +927,8 @@ public sealed record OperatorStatusSnapshot
         Health = health ?? OperatorHealthDescriptor.Unavailable;
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
+        if (mediaDecks?.Count > 2) throw new ArgumentOutOfRangeException(nameof(mediaDecks));
+        MediaDecks = Array.AsReadOnly((mediaDecks ?? Array.Empty<MediaDeckSnapshot>()).ToArray());
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
         ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
@@ -952,6 +955,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorHealthDescriptor Health { get; }
     public OperatorAIShowcaseDescriptor AIShowcase { get; }
     public MediaDeckSnapshot MediaDeck { get; }
+    public IReadOnlyList<MediaDeckSnapshot> MediaDecks { get; }
     public OperatorProductionCgTextDescriptor ProductionCgText { get; }
     public ShowControlWorkspaceSnapshot ShowControl { get; }
     public OperatorShowProjectDescriptor ShowProject { get; }
@@ -1156,6 +1160,19 @@ public interface IOperatorControlTransport
 
     ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException("Operator transport does not expose media asset availability refresh."));
+
+    async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        if (snapshot.SourceId is not null && snapshot.SourceId != sourceId)
+            throw new NotSupportedException("Transport does not support explicit deck selection.");
+        return snapshot;
+    }
+    async ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        await GetMediaDeckSnapshotAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        return await CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
@@ -1792,6 +1809,11 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
         _transport.RefreshMediaAssetAvailabilityAsync(cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        _transport.GetMediaDeckSnapshotAsync(sourceId, cancellationToken);
+    public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        _transport.CloseMediaDeckAsync(sourceId, cancellationToken);
 
     public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         _transport.GetMediaDeckSnapshotAsync(cancellationToken);

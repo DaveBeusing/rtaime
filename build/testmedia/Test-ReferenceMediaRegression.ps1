@@ -47,7 +47,7 @@ try {
 			"--configuration",
 			"Release",
 			"--filter",
-			"FullyQualifiedName~ReferenceMediaRegressionTests|FullyQualifiedName~ReferenceMediaGenerationTests"
+			"FullyQualifiedName~ReferenceMediaRegressionTests|FullyQualifiedName~ReferenceMediaGenerationTests|FullyQualifiedName~MultiDeckSsdPlaybackQualificationTests"
 		)
 		& dotnet @arguments
 		if ($LASTEXITCODE -ne 0) {
@@ -89,3 +89,11 @@ foreach ($file in $outcomes) {
 }
 Write-Host "Reference media regression PASS"
 Write-Host "Generated profiles: hd25, hd50, hd5994"
+
+$dualPath = Join-Path $outputRoot "dual-deck-software.outcome.json"
+if (-not (Test-Path -LiteralPath $dualPath -PathType Leaf)) { throw "Dual-deck software evidence is missing." }
+$dual = Get-Content -LiteralPath $dualPath -Raw | ConvertFrom-Json
+if ($dual.SourceCommit -ne $env:RTAIME_SOURCE_COMMIT -or $dual.PhysicalQualification -ne "UNVERIFIED" -or $dual.Capacity -ne 2 -or $dual.Samples.Count -gt 128) {
+    throw "Invalid source-bound dual-deck software evidence."
+}
+Write-Host ("DUAL DECK SOFTWARE OUTCOME: " + ($dual | ConvertTo-Json -Depth 16 -Compress))

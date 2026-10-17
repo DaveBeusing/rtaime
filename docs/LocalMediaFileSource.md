@@ -357,3 +357,38 @@ metadata independently of container atoms and Windows attributes. Native stream
 attributes alone can omit stream-only aspect signaling. SPS NALs are capped at
 65,535 bytes; exponential codes, scaling lists and picture-order cycles have
 finite bit/iteration limits. No decoded sample processing or Program work is added.
+
+## Bounded A/B sessions
+
+The V1 two-deck scope was approved on 2026-10-17. RuntimeHost accepts local files
+only for its two configured production source identities. The source-keyed registry
+retains at most two session owners; `--local-media-decoders=1|2` /
+`RTAIME_LOCAL_MEDIA_DECODERS` defaults to two. Invalid values fail startup.
+Provider descriptors retain two route and four decode resource descriptors; these
+are planning inventory, not a claim of four simultaneous file sessions. Actual
+admission is the configured registry limit. ControlHost prepares distinct route
+and decode resources for each production source.
+
+Each session reuses the existing asynchronous decoder, ten leased payload slots,
+eight queued frames and generation fencing. Two 1080p RGBA sessions reserve
+165,888,000 video payload bytes plus 655,360 audio payload bytes, excluding native
+decoder memory, scratch and existing Runtime/GPU surfaces. Capacity telemetry
+counts opening, retiring, probing and quarantined reservations. Failure to join
+an owner does not free its reservation.
+
+File IO, probing, preroll and worker joins run under the management serializer,
+outside Program admission. Both decks admit from the same rational Program slot;
+there is one Program scheduler and renderer. A secondary underrun marks only that
+source unavailable. No bulk media is sent over management IPC.
+
+At capacity, the oldest admitted Ready/Paused/Ended off-Program deck may be
+evicted. Playing, Program and failed/quarantined owners are not eviction candidates.
+Replacing an existing playing or Program deck is rejected; stop it off Program
+first. With both reservations occupied, metadata probing is rejected rather than
+creating a hidden third decoder. Closing a deck leaves its input lost until a
+new generation publishes valid pixels. Decoder errors and close failures remain
+explicit. Shutdown attempts every owner even if one release fails.
+
+Hosted dual-file observations and injected stalls are software evidence.
+Same-SATA, same-NVMe, separate-drive, high-bitrate and physical latency-spike
+qualification remain UNVERIFIED until measured on an identified reference host.

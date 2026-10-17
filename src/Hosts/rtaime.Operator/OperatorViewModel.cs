@@ -687,7 +687,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						ApplyOutputRoles(snapshot.OutputRoles);
 						CompositingLayers = snapshot.CompositingLayers;
 						ApplyAI(snapshot.AIShowcase);
-						ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+						ApplyEmbeddedMediaDeckSnapshots(snapshot);
 						ConfirmedReplaySnapshot?.Invoke(snapshot.Replay);
 						ApplyLifecycle(snapshot);
 						UpdateViewerStates(snapshot);
@@ -1620,7 +1620,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		AudioMixer.Apply(snapshot, refreshDrafts: false);
-		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+		ApplyEmbeddedMediaDeckSnapshots(snapshot);
 		ConfirmedReplaySnapshot?.Invoke(snapshot.Replay);
 		ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
 		ShowProjectName = snapshot.ShowProject.Name;
@@ -1970,6 +1970,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		Apply(snapshot);
 	}
 
+    private bool _multipleMediaDecks;
+    private void ApplyEmbeddedMediaDeckSnapshots(OperatorStatusSnapshot snapshot)
+    {
+        _multipleMediaDecks = snapshot.MediaDecks.Count > 0;
+        foreach (var deck in snapshot.MediaDecks)
+            ApplyEmbeddedMediaDeckSnapshot(deck);
+        ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+    }
+
 	private void ApplyEmbeddedMediaDeckSnapshot(MediaDeckSnapshot snapshot)
 	{
 		ApplyMediaDeckSnapshot(snapshot);
@@ -1980,7 +1989,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		var sourceId = snapshot.SourceId?.ToString();
-		if (_mediaDeckSourceId is not null && !string.Equals(_mediaDeckSourceId, sourceId, StringComparison.Ordinal))
+		if (!_multipleMediaDecks && _mediaDeckSourceId is not null && !string.Equals(_mediaDeckSourceId, sourceId, StringComparison.Ordinal))
 		{
 			Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeckSourceId, StringComparison.Ordinal))
 				?.ClearMediaDeck();
@@ -1996,6 +2005,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		var source = Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, sourceId, StringComparison.Ordinal));
 		if (source is null)
 			return;
+        if (snapshot.State == MediaDeckState.Unloaded) { source.ClearMediaDeck(); return; }
 
 		var format = snapshot.Probe is null
 			? source.Format

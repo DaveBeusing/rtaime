@@ -87,6 +87,66 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		Assert.InRange(deck.Snapshot.Transport!.Position.CurrentFrame, 12, 45);
 		Assert.Equal(mediaSource.Id, runtime.Runtime!.CommittedProgramSourceId?.ToString());
 
+        // Keep the first native decoder loaded while independently preparing the other production slot.
+        var standbyId = new MediaSourceId(Identity.Parse(standbySource.Id));
+        await using var secondDeck = new MediaDeckController(client);
+        var secondOpen = await secondDeck.OpenAsync(referenceAsset.Path, standbyId);
+        Assert.True(secondOpen.IsLoaded, secondOpen.Failure?.Message);
+        Assert.Equal(opened.Probe!.AssetId, secondOpen.Probe!.AssetId);
+        Assert.Equal(2, runtime.MediaDeck!.Resources.Reserved);
+        var both = await client.SynchronizeAsync();
+        Assert.Equal(2, both.MediaDecks.Count);
+        Assert.Contains(both.MediaDecks, item => item.SourceId == mediaSourceId && item.IsLoaded);
+        Assert.Contains(both.MediaDecks, item => item.SourceId == standbyId && item.IsLoaded);
+        await secondDeck.Timeline.SeekToFrameAsync(20);
+        await secondDeck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.HoldLastFrame);
+        await deck.RefreshAsync();
+        Assert.Equal(mediaSourceId, deck.Snapshot.SourceId);
+        Assert.Equal(standbyId, secondDeck.Snapshot.SourceId);
+        var sequenceBefore = runtime.Runtime!.Snapshot.NextSequenceNumber;
+        Assert.True((await client.SelectPreviewAsync(standbySource.Id)).Accepted);
+        Assert.True((await client.CutPreviewAsync()).Accepted);
+        // The newly committed Program source is protected even before the next cadence observation
+        // and even when its transport is still Ready because autoplay was explicitly disabled.
+        var deniedReplacement = await secondDeck.OpenAsync(referenceAsset.Path, standbyId);
+        Assert.Equal("runtime.media_deck.source_active", deniedReplacement.Failure?.Code);
+        Assert.True((await secondDeck.RefreshAsync()).IsLoaded);
+        await secondDeck.PlayAsync();
+        await WaitUntilAsync(async () =>
+        {
+            await secondDeck.RefreshAsync();
+            await deck.RefreshAsync();
+            return secondDeck.Snapshot.Transport?.IsOnProgram == true &&
+                deck.Snapshot.Transport?.IsOnProgram == false;
+        });
+        Assert.Equal(standbyId, runtime.Runtime.CommittedProgramSourceId);
+        Assert.True(runtime.Runtime.Snapshot.NextSequenceNumber > sequenceBefore);
+        Assert.True(secondDeck.Snapshot.Transport!.Position.CurrentFrame >= 20);
+        await deck.StopAsync();
+        await secondDeck.RefreshAsync();
+        Assert.Equal(standbyId, secondDeck.Snapshot.SourceId);
+        Assert.True(secondDeck.Snapshot.Transport!.IsOnProgram);
+        await deck.CloseAsync();
+        Assert.Equal(1, runtime.MediaDeck.Resources.Reserved);
+        await WaitUntilAsync(() => runtime.Runtime!.Snapshot.InputSignals[mediaSourceId] == V1InputSignalState.Lost);
+        // The closed deck clears its stale input once; a subsequent live-provider frame must survive.
+        var resumedAt = runtime.Runtime.Snapshot.NextSequenceNumber;
+        await WaitUntilAsync(() => runtime.Runtime.Snapshot.NextSequenceNumber > resumedAt);
+        resumedAt = runtime.Runtime.Snapshot.NextSequenceNumber;
+        runtime.Runtime.SetExternalInputContent(mediaSourceId,
+            new byte[checked((int)(runtime.Runtime.Format.Width * runtime.Runtime.Format.Height * 4))],
+            V1InputSignalState.Valid);
+        await WaitUntilAsync(() => runtime.Runtime.Snapshot.NextSequenceNumber >= resumedAt + 3);
+        Assert.Equal(V1InputSignalState.Valid, runtime.Runtime.Snapshot.InputSignals[mediaSourceId]);
+        var reopened = await deck.OpenAsync(referenceAsset.Path, mediaSourceId);
+        Assert.True(reopened.IsLoaded, reopened.Failure?.Message);
+        await WaitUntilAsync(() => runtime.Runtime!.Snapshot.InputSignals[mediaSourceId] == V1InputSignalState.Lost);
+        Assert.Equal(standbyId, runtime.Runtime.CommittedProgramSourceId);
+        Assert.True((await client.SelectPreviewAsync(mediaSource.Id)).Accepted);
+        Assert.True((await client.CutPreviewAsync()).Accepted);
+        await WaitUntilAsync(() => runtime.Runtime!.CommittedProgramSourceId == mediaSourceId &&
+            runtime.Runtime.Snapshot.InputSignals[mediaSourceId] == V1InputSignalState.Valid);
+
 		controlStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
 		runtimeStop.Cancel();

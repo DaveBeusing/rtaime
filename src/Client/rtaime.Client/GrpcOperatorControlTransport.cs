@@ -444,6 +444,19 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
 	}
 
+    public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var request = Request();
+        request.GetScopedMediaDeck = new MediaDeckTargetRequest { SourceId = sourceId.ToString() };
+        return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+    }
+    public async ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var request = Request();
+        request.CloseScopedMediaDeck = new MediaDeckTargetRequest { SourceId = sourceId.ToString() };
+        return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+    }
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var request = Request(); request.GetMediaDeck = new EmptyRequest();
@@ -459,21 +472,25 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 
 	public async ValueTask<MediaDeckSnapshot> ApplyMediaDeckTransportAsync(MediaTransportCommand command, CancellationToken cancellationToken = default)
 	{
-		var operation = new MediaDeckTransportRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind };
+		var operation = new MediaDeckTransportRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind, SourceId = command.SourceId?.ToString() ?? string.Empty };
 		if (command.TargetFrame is { } target) operation.TargetFrame = target;
 		if (command.AutoPlayOnProgram is { } autoPlay) operation.AutoPlayOnProgram = autoPlay;
 		if (command.EndBehavior is { } endBehavior) operation.EndBehavior = (int)endBehavior;
 		if (command.InPointFrame is { } inPoint) operation.InPointFrame = inPoint;
 		if (command.OutPointFrame is { } outPoint) operation.OutPointFrame = outPoint;
-		var request = Request(); request.ApplyMediaDeckTransport = operation;
+		var request = Request();
+        if (command.SourceId is null) request.ApplyMediaDeckTransport = operation;
+        else request.ApplyScopedMediaDeckTransport = operation;
 		return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
 	public async ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(MediaMarkerCommand command, CancellationToken cancellationToken = default)
 	{
-		var operation = new MediaDeckMarkerRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind, CuePointId = command.CuePointId?.ToString() ?? string.Empty, Name = command.Name ?? string.Empty };
+		var operation = new MediaDeckMarkerRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind, CuePointId = command.CuePointId?.ToString() ?? string.Empty, Name = command.Name ?? string.Empty, SourceId = command.SourceId?.ToString() ?? string.Empty };
 		if (command.PositionFrame is { } position) operation.PositionFrame = position;
-		var request = Request(); request.ApplyMediaDeckMarker = operation;
+		var request = Request();
+        if (command.SourceId is null) request.ApplyMediaDeckMarker = operation;
+        else request.ApplyScopedMediaDeckMarker = operation;
 		return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 

@@ -595,6 +595,17 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
 	}
 
+    public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("control.media_deck.scoped.snapshot.get", new { SourceId = sourceId.ToString() }, cancellationToken).ConfigureAwait(false);
+        return ReadMediaDeckSnapshot(response);
+    }
+    public async ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("control.media_deck.scoped.close", new { SourceId = sourceId.ToString() }, cancellationToken).ConfigureAwait(false);
+        return ReadMediaDeckSnapshot(response);
+    }
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -619,7 +630,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	{
 		ArgumentNullException.ThrowIfNull(command);
 		var response = await ExchangeAsync(
-			"control.media_deck.transport",
+			command.SourceId is null ? "control.media_deck.transport" : "control.media_deck.scoped.transport",
 			new WireMediaTransportCommand(
 				command.Version.ToString(),
 				command.AssetId.ToString(),
@@ -628,7 +639,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				command.AutoPlayOnProgram,
 				command.EndBehavior is null ? null : (int)command.EndBehavior.Value,
 				command.InPointFrame,
-				command.OutPointFrame),
+				command.OutPointFrame, command.SourceId?.ToString()),
 			cancellationToken).ConfigureAwait(false);
 		return ReadMediaDeckSnapshot(response);
 	}
@@ -639,14 +650,14 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	{
 		ArgumentNullException.ThrowIfNull(command);
 		var response = await ExchangeAsync(
-			"control.media_deck.marker",
+			command.SourceId is null ? "control.media_deck.marker" : "control.media_deck.scoped.marker",
 			new WireMediaMarkerCommand(
 				command.Version.ToString(),
 				command.AssetId.ToString(),
 				(int)command.Kind,
 				command.PositionFrame,
 				command.CuePointId?.ToString(),
-				command.Name),
+				command.Name, command.SourceId?.ToString()),
 			cancellationToken).ConfigureAwait(false);
 		return ReadMediaDeckSnapshot(response);
 	}
@@ -1613,7 +1624,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				wire.ShowProject.State,
 				wire.ShowProject.Detail),
 		wire.AudioProduction is null ? null : FromWire(wire.AudioProduction),
-		wire.Replay is null ? ReplayControlSnapshot.Unavailable : FromWire(wire.Replay));
+		wire.Replay is null ? ReplayControlSnapshot.Unavailable : FromWire(wire.Replay),
+        (wire.MediaDecks ?? Array.Empty<WireMediaDeckSnapshot>()).Select(FromWire).ToArray());
 
 
 
@@ -2394,7 +2406,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null, WireMediaDeckSnapshot[]? MediaDecks = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
@@ -2451,8 +2463,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);
 	private sealed record WireMediaAssetCatalogRefresh(ulong Revision);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
-	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
+	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);

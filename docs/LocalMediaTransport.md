@@ -50,7 +50,7 @@ Illegal transitions fail closed with `media.transport.transition_invalid` and do
 
 Transport positions are zero-based frame numbers. Seek requests outside the clip range are clamped to `[0, TotalFrames - 1]` before they reach the decoder.
 
-The Windows Media Foundation decoder converts a target frame to the exact clip frame-rate time and uses `IMFSourceReader.SetCurrentPosition`. Because compressed-media seeking may land on an earlier key frame, the decoder discards decoded video/audio samples whose presentation timestamp is earlier than the requested target. The first returned video sample therefore represents the requested frame within the decoder timestamp tolerance.
+The Windows Media Foundation decoder converts a target frame to the exact clip frame-rate time and uses `IMFSourceReader.SetCurrentPosition`. Because compressed-media seeking may land on an earlier key frame, the decoder discards decoded video samples outside the requested normalized frame's timestamp window. The lower edge uses the same nearest-frame rounding as transport position, so a fractional-rate sample one 100-ns tick below the frame centre is retained. Audio is aligned to the accepted video's actual timestamp. The first returned video sample therefore represents the requested frame within the decoder timestamp tolerance.
 
 Audio buffer sample position is derived from its post-seek presentation timestamp instead of a decoder-private running counter. This keeps the observable audio position consistent after forward and backward seeks.
 
@@ -118,3 +118,27 @@ are interpreted by the Windows demux; the Runtime still uses decoded PTS and its
 existing rational Program cadence. Unsupported edit lists fail before decoder
 creation. Seek/preroll and generation fencing are shared across admitted formats;
 no alternate timeline or production clock is introduced.
+
+## Source-scoped deck control
+
+Two independent A/B sessions share the existing Program boundary. Transport and
+marker commands can carry `SourceId` alongside `AssetId`; an asset may be loaded
+on both sources. Source identity selects the session and asset identity fences
+replacement. A legacy asset-only command is rejected when ambiguous.
+
+Client snapshot and close overloads accept a source identity. Matched local pipe
+peers use distinct `media_deck.scoped.*` operations, so older peers reject an
+unknown operation rather than silently ignoring its selector. External control
+adds protobuf transport field 9, marker field 7 and source-target operations
+65–68; existing field numbers are preserved. Scoped transport/marker requests use
+new operation IDs as well, so an older gRPC peer cannot discard a new selector
+and accidentally execute an asset-only command. Media contract 1.0 and stored
+production/checkpoint/marker document layouts remain unchanged. Deploy matched
+ControlHost, RuntimeHost, Operator and Client builds for multi-deck operation.
+
+Play, pause, stop, seek, IN/OUT policy, loop and readiness are session-local.
+Markers remain asset metadata in the existing persistence lane. A seek/stop or
+replacement invalidates the current payload; Program does not republish pixels
+from the previous clip generation. Empty/repeated boundaries do not replay audio.
+Logical Program tally follows the committed source; selecting a deck for editing
+does not perform a TAKE.

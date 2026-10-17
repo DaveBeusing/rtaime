@@ -54,8 +54,16 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Qualify atomic journal batching before lifecycle load
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionJournalBatchIntegrationTests|FullyQualifiedName~DurablePersistenceIntegrationTests" --logger "console;verbosity=detailed"
+
+      - name: Attribute fifty fixed rapid TAKE shutdown cases before broad suites
+        env:
+          RTAIME_RAPID_TAKE_REPETITIONS: "50"
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionIpcIntegrationTests.Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions" --logger "console;verbosity=detailed"
+
       - name: Qualify asynchronous local media admission before broad suites
-        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~LocalMediaRuntimeIntegrationTests|FullyQualifiedName~LocalMediaTransportIntegrationTests|FullyQualifiedName~MediaAutoplayEndBehaviorIntegrationTests|FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests.Segment_writers_reuse_exact_NV12_extent" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~LocalMediaRuntimeIntegrationTests|FullyQualifiedName~LocalMediaTransportIntegrationTests|FullyQualifiedName~MediaAutoplayEndBehaviorIntegrationTests|FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests.Segment_writers_reuse_exact_NV12_extent" --logger "console;verbosity=detailed"
 
 
       - name: Startup atomic evidence publication regressions

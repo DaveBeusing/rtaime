@@ -528,6 +528,80 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal(original, retained.RgbaPixels.Span[..64].ToArray());
     }
 
+    [Fact]
+    public void Two_decks_share_cadence_and_secondary_stall_does_not_block_healthy_payloads_or_cleanup()
+    {
+        var provider = new LocalMediaFileProvider();
+        var stalled = new ControlledDecoder { BlockCall = 9 };
+        var healthy = new ControlledDecoder();
+        var first = new LocalMediaRuntimeSession(provider, Source(stalled));
+        var second = new LocalMediaRuntimeSession(provider, Source(healthy));
+        Assert.True(first.ApplyExecution(Prepared(provider, stalled.Probe.SourceId)).Committed);
+        Assert.True(second.ApplyExecution(Prepared(provider, healthy.Probe.SourceId)).Committed);
+        using var decks = new LocalMediaDeckRuntimeService(provider, first, second);
+        Assert.Equal(2, decks.Resources.Reserved);
+        Assert.True(decks.ApplyTransport(Command(stalled, MediaTransportCommandKind.Play)).Succeeded);
+        Assert.True(decks.ApplyTransport(Command(healthy, MediaTransportCommandKind.Play)).Succeeded);
+        decks.ProcessBoundary(stalled.Probe.SourceId, out var initial, 0);
+        initial?.Dispose();
+        Assert.True(stalled.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        for (ulong slot = 0; slot < 20; slot++)
+        {
+            Until(() => second.DecodeSnapshot.QueuedFrames > 0);
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            decks.ProcessBoundary(healthy.Probe.SourceId, out var boundary, slot);
+            using (boundary)
+            {
+                Assert.NotNull(boundary);
+                Assert.True(boundary!.Succeeded, boundary.Failure?.Message);
+                Assert.Equal(healthy.Probe.SourceId, boundary.Video!.SourceId);
+                Assert.Equal(slot, boundary.Video.Timing.SequenceNumber);
+                Assert.False(boundary.AudioPayload.IsEmpty);
+                Assert.All(boundary.RgbaPixels.ToArray(), pixel => Assert.Equal((byte)slot, pixel));
+            }
+            // A bounded worker wait is three seconds; queue admission must never wait for that IO.
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds(1));
+        }
+        decks.Close(stalled.Probe.SourceId);
+        Assert.True(stalled.Disposed);
+        Assert.Equal(1, stalled.CancelledReads);
+        Assert.Equal(1, decks.Resources.Reserved);
+        decks.Dispose();
+        Assert.True(healthy.Disposed);
+        Assert.Equal(1, healthy.DisposeCalls);
+        Assert.Equal(0, decks.Resources.Reserved);
+    }
+
+    [Fact]
+    public void Failed_deck_shutdown_still_releases_other_owner_and_retains_quarantine_reservation()
+    {
+        var provider = new LocalMediaFileProvider();
+        var blocked = new ControlledDecoder { BlockCall = 4, IgnoreCancellation = true };
+        var healthy = new ControlledDecoder();
+        var first = new LocalMediaRuntimeSession(provider, Source(blocked), TimeSpan.FromMilliseconds(25));
+        var second = new LocalMediaRuntimeSession(provider, Source(healthy));
+        Assert.True(first.ApplyExecution(Prepared(provider, blocked.Probe.SourceId)).Committed);
+        Assert.True(second.ApplyExecution(Prepared(provider, healthy.Probe.SourceId)).Committed);
+        var decks = new LocalMediaDeckRuntimeService(provider, first, second);
+        Assert.True(blocked.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            Assert.Throws<IOException>(decks.Dispose);
+            Assert.False(blocked.Disposed);
+            Assert.True(healthy.Disposed);
+            Assert.Equal(1, healthy.DisposeCalls);
+            Assert.Equal(1, decks.Resources.Reserved);
+        }
+        finally
+        {
+            blocked.ReleaseRead.Set();
+            Until(() => blocked.Disposed);
+            Assert.Throws<IOException>(decks.Dispose);
+        }
+        Assert.Equal(1, blocked.DisposeCalls);
+        Assert.Equal(1, decks.Resources.Reserved);
+    }
+
     private static LocalMediaFileSource Source(ControlledDecoder decoder) => new("controlled.mp4", decoder.Probe, decoder);
     private static MediaTransportCommand Command(ControlledDecoder decoder, MediaTransportCommandKind kind) =>
         new(MediaContractVersion.Current, decoder.Probe.AssetId, kind);
