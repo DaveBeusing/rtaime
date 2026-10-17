@@ -19,6 +19,13 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
     public async Task Generated_dual_file_load_records_source_bound_single_Program_and_bounded_session_evidence()
     {
         var profile = Environment.GetEnvironmentVariable("RTAIME_SSD_PLAYBACK_PROFILE");
+        var programFormat = Environment.GetEnvironmentVariable("RTAIME_SSD_PROGRAM_FORMAT") ?? "1080p50";
+        var format = programFormat switch
+        {
+            "1080p50" => VideoFormat.Hd1080p50Rgba8,
+            "1080p59.94" => VideoFormat.Hd1080p59_94Rgba8,
+            _ => throw new InvalidOperationException("Unknown SSD Program format.")
+        };
         var externalA = Environment.GetEnvironmentVariable("RTAIME_SSD_MEDIA_A");
         var externalB = Environment.GetEnvironmentVariable("RTAIME_SSD_MEDIA_B");
         if (profile is null && (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled)) return;
@@ -65,7 +72,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
         var controlEndpoint = $"rtaime.test.dual.control.{Guid.NewGuid():N}";
         using var runtimeStop = new CancellationTokenSource();
         using var controlStop = new CancellationTokenSource();
-        var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+        var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint, Format = format });
         var control = new ControlHostProcess(ControlHostProcessOptions.Default with
         {
             ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint,
@@ -175,7 +182,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                     LocalPlaybackEvidenceJson.Write(checkpoint + ".tmp", new
                     {
                         schemaVersion = "1.0", sourceCommit, buildCommit, profile, status = "RUNNING",
-                        startedAt, elapsedSeconds = elapsed.TotalSeconds,
+                        startedAt, programFormat, elapsedSeconds = elapsed.TotalSeconds,
                         requestedSeconds = seconds, media, samples = observations,
                         first = runtime.MediaDeck.GetPlaybackMeasurements(sourceA),
                         second = runtime.MediaDeck.GetPlaybackMeasurements(sourceB),
@@ -227,7 +234,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             {
                 schemaVersion = "1.0", qualification = "rtaime-ssd-playback",
                 sourceCommit, buildCommit, sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
-                profile = profile ?? "smoke", startedAt, elapsedSeconds = clock.Elapsed.TotalSeconds,
+                profile = profile ?? "smoke", startedAt, programFormat, elapsedSeconds = clock.Elapsed.TotalSeconds,
                 requestedSeconds = seconds, media, capacity = 2, takes,
                 startSequence, finalSequence, startMissed, missedDelta, finalStats,
                 firstPlayback, secondPlayback,

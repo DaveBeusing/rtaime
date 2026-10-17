@@ -9,6 +9,12 @@ on:
         type: choice
         options: ["10m","60m","8h","24h","72h"]
         default: "60m"
+      format:
+        description: "Existing V1 Program format; source file profile is probed separately"
+        required: true
+        type: choice
+        options: ["1080p50","1080p59.94"]
+        default: "1080p50"
       media_a:
         description: "Existing local reference file on the selected runner, deck A"
         required: true
@@ -38,10 +44,11 @@ jobs:
         shell: pwsh
         env:
           RTAIME_SELECTED_PROFILE: ${{ inputs.profile }}
+          RTAIME_SELECTED_FORMAT: ${{ inputs.format }}
           RTAIME_SELECTED_MEDIA_A: ${{ inputs.media_a }}
           RTAIME_SELECTED_MEDIA_B: ${{ inputs.media_b }}
         run: |
-          ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile $env:RTAIME_SELECTED_PROFILE -MediaA $env:RTAIME_SELECTED_MEDIA_A -MediaB $env:RTAIME_SELECTED_MEDIA_B
+          ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile $env:RTAIME_SELECTED_PROFILE -Format $env:RTAIME_SELECTED_FORMAT -MediaA $env:RTAIME_SELECTED_MEDIA_A -MediaB $env:RTAIME_SELECTED_MEDIA_B
       - name: Preserve evidence even on failed playback
         if: always()
         uses: actions/upload-artifact@v6

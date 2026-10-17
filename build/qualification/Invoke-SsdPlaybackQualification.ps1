@@ -3,6 +3,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet("smoke","10m","60m","8h","24h","72h")][string]$Profile,
     [string]$MediaA, [string]$MediaB,
+    [ValidateSet("1080p50","1080p59.94")][string]$Format = "1080p50",
     [string]$OutputRoot = "artifacts/qualification/ssd-playback",
     [switch]$NoBuild,
     [switch]$RequirePhysicalPass
@@ -43,7 +44,7 @@ try {
 } catch { $inventory.gpu = @(@{ status = "UNVERIFIED"; reason = $_.Exception.Message }) }
 $inventory | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $run "environment.json") -Encoding utf8
 
-$names = @("RTAIME_SSD_PLAYBACK_PROFILE","RTAIME_SSD_MEDIA_A","RTAIME_SSD_MEDIA_B",
+$names = @("RTAIME_SSD_PLAYBACK_PROFILE","RTAIME_SSD_PROGRAM_FORMAT","RTAIME_SSD_MEDIA_A","RTAIME_SSD_MEDIA_B",
     "RTAIME_REFERENCE_MEDIA_REGRESSION","RTAIME_REFERENCE_MEDIA_OUTPUT","RTAIME_SOURCE_COMMIT",
     "RTAIME_BUILD_COMMIT","RTAIME_BASELINE_SDK")
 $previous = @{}
@@ -59,6 +60,7 @@ try {
     dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~MultiDeckLocalMediaIntegrationTests" --logger "trx;LogFileName=faults.trx" --results-directory $run
     if ($LASTEXITCODE -ne 0) { throw "Media lifetime/concurrency/fault prerequisites failed." }
     $env:RTAIME_SSD_PLAYBACK_PROFILE = $Profile
+    $env:RTAIME_SSD_PROGRAM_FORMAT = $Format
     $env:RTAIME_SSD_MEDIA_A = if ($MediaA) { [IO.Path]::GetFullPath($MediaA) } else { $null }
     $env:RTAIME_SSD_MEDIA_B = if ($MediaB) { [IO.Path]::GetFullPath($MediaB) } else { $null }
     $env:RTAIME_REFERENCE_MEDIA_REGRESSION = "1"
@@ -72,7 +74,7 @@ try {
     if ([int]$trx.TestRun.ResultSummary.Counters.executed -ne 1 -or
         [int]$trx.TestRun.ResultSummary.Counters.passed -ne 1) { throw "Actual playback test was not executed." }
     $report = Join-Path $run "ssd-playback.outcome.json"
-    ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile
+    ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile -ExpectedFormat $Format
     $outcome = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     $inventory.storageAfter = @((Get-SsdFileStorage $MediaA), (Get-SsdFileStorage $MediaB))
     $inventory.topology = Get-SsdStorageTopology $inventory.storage
@@ -84,7 +86,7 @@ try {
     $inventory | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $environmentPath -Encoding utf8
     ./build/qualification/Test-SsdPlaybackEnvironment.ps1 -EnvironmentPath $environmentPath -ExpectedSourceCommit $source -OutcomePath $report
     $support = [ordered]@{
-        schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile
+        schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile; programFormat = $Format
         evidenceSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
         environmentSha256 = (Get-FileHash -LiteralPath (Join-Path $run "environment.json") -Algorithm SHA256).Hash.ToLowerInvariant()
         media = @($outcome.result.media); probedProfiles = @($outcome.result.deckProbes)
@@ -107,7 +109,7 @@ try {
     $support | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $run "support-profile.json") -Encoding utf8
     $manifest = [ordered]@{
         schemaVersion = "1.0"; qualification = "rtaime-ssd-playback"; sourceCommit = $source
-        buildCommit = $source; profile = $Profile; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
+        buildCommit = $source; profile = $Profile; programFormat = $Format; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
         descriptorSha256 = (Get-FileHash -LiteralPath qualification/soak/ssd-playback.json -Algorithm SHA256).Hash.ToLowerInvariant()
         files = @("ssd-playback.outcome.json","environment.json","support-profile.json","playback.trx","faults.trx" | ForEach-Object {
             @{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $run $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
