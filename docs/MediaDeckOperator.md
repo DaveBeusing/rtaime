@@ -66,7 +66,7 @@ Marker writes use optimistic storage versions and remain outside the Runtime med
 
 `MediaDeckViewModel` does not run an independent state poll. The existing Operator synchronization snapshot already asks ControlHost for the confirmed media-deck state; that same snapshot now carries the complete `MediaDeckSnapshot` to the Client and drives the deck/timeline UI. This keeps Program-triggered autoplay visible without adding a second management polling loop or competing Runtime request stream.
 
-The WPF file dialog selects an MP4 path only. Opening the selected path still crosses the full Client -> ControlHost -> RuntimeHost path.
+The WPF file dialog offers MP4 and restricted MOV paths. Opening the selected path still crosses the full Client -> ControlHost -> RuntimeHost path.
 
 A downstream Runtime request timeout during media-deck open is returned as a failed `MediaDeckSnapshot` with `control.media_deck.open_timeout`; it does not tear down the Operator-to-ControlHost IPC session. Explicit host-lifecycle cancellation continues to propagate normally.
 
@@ -205,3 +205,12 @@ accepts its own state and ignores the other source, so progress and faults keep
 updating after deck selection. The source bank retains both deck presentations.
 No additional polling timer or independent preview renderer is created. After a Host restart, reopen each file through the normal supported path;
 this change does not add automatic replay or alter saved productions.
+
+## File-deck capacity boundary
+
+The [capacity admission audit and proposal](FileDeckCapacityAdmission.md)
+distinguishes the existing one/two-deck A/B limit from advertised provider resources,
+retained frame-pool bytes and measured hardware capacity. Four-deck admission and
+SSD-pressure weighting remain proposed, pending scope approval and a confirmed
+physical baseline. A free decoder slot does not authorize another production source.
+Existing Program routing, cleanup quarantine and saved production remain unchanged.
