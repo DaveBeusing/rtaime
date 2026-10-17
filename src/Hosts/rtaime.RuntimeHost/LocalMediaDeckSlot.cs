@@ -293,7 +293,11 @@ internal sealed class LocalMediaDeckSlot : IDisposable
             else if (result.Status == LocalMediaRuntimeBoundaryStatus.Ended)
             {
                 if (_preparedNextPlayback && previousPosition < EffectiveEndFrameUnsafe())
+                {
                     _failure = new Failure("runtime.media_preload.early_eof", "Prepared clip ended before its confirmed OUT. Automatic follow is blocked.");
+                    _latestBoundary?.Dispose();
+                    _latestBoundary = _session.MarkFailed(_failure.Value);
+                }
                 else ApplyEndBehaviorUnsafe();
             }
 

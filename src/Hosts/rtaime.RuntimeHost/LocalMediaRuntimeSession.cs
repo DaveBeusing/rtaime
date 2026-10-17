@@ -176,6 +176,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			commit.Status == RuntimeCommitStatus.Committed ? _nextSequenceNumber : null);
 	}
 
+	internal LocalMediaRuntimeBoundaryResult MarkFailed(Failure failure) => Failed(failure.Code, failure.Message);
+
 	public void MarkEnded(long? holdFrame = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);

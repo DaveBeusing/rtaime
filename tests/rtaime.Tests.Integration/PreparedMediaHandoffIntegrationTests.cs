@@ -306,11 +306,17 @@ public sealed class PreparedMediaHandoffIntegrationTests
             {
                 var observed = deck.ProcessBoundary(b, out var boundary);
                 using (boundary)
-                    if (observed.State == MediaDeckState.Error) break;
+                    if (observed.State == MediaDeckState.Error)
+                    {
+                        Assert.Equal(LocalMediaRuntimeBoundaryStatus.Failed, boundary!.Status);
+                        Assert.Equal("runtime.media_preload.early_eof", boundary.Failure?.Code);
+                        break;
+                    }
                 Thread.Sleep(1);
             }
             Assert.Equal(MediaDeckState.Error, deck.GetSnapshot(b).State);
             Assert.Equal("runtime.media_preload.early_eof", deck.GetSnapshot(b).Failure?.Code);
+            Assert.Equal(MediaTransportState.Error, deck.GetSnapshot(b).Transport!.State);
             deck.Close(b);
         }
         finally { deck.Dispose(); File.Delete(path); }
