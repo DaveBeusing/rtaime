@@ -87,6 +87,38 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		Assert.InRange(deck.Snapshot.Transport!.Position.CurrentFrame, 12, 45);
 		Assert.Equal(mediaSource.Id, runtime.Runtime!.CommittedProgramSourceId?.ToString());
 
+        // Keep the first native decoder loaded while independently preparing the other production slot.
+        var standbyId = new MediaSourceId(Identity.Parse(standbySource.Id));
+        await using var secondDeck = new MediaDeckController(client);
+        var secondOpen = await secondDeck.OpenAsync(referenceAsset.Path, standbyId);
+        Assert.True(secondOpen.IsLoaded, secondOpen.Failure?.Message);
+        Assert.Equal(opened.Probe!.AssetId, secondOpen.Probe!.AssetId);
+        Assert.Equal(2, runtime.MediaDeck!.Resources.Reserved);
+        await secondDeck.Timeline.SeekToFrameAsync(20);
+        await secondDeck.ConfigurePlaybackAsync(true, MediaDeckEndBehavior.HoldLastFrame);
+        await deck.RefreshAsync();
+        Assert.Equal(mediaSourceId, deck.Snapshot.SourceId);
+        Assert.Equal(standbyId, secondDeck.Snapshot.SourceId);
+        var sequenceBefore = runtime.Runtime!.Snapshot.NextSequenceNumber;
+        Assert.True((await client.SelectPreviewAsync(standbySource.Id)).Accepted);
+        Assert.True((await client.CutPreviewAsync()).Accepted);
+        await WaitUntilAsync(async () =>
+        {
+            await secondDeck.RefreshAsync();
+            await deck.RefreshAsync();
+            return secondDeck.Snapshot.Transport?.IsOnProgram == true &&
+                deck.Snapshot.Transport?.IsOnProgram == false;
+        });
+        Assert.Equal(standbyId, runtime.Runtime.CommittedProgramSourceId);
+        Assert.True(runtime.Runtime.Snapshot.NextSequenceNumber > sequenceBefore);
+        Assert.True(secondDeck.Snapshot.Transport!.Position.CurrentFrame >= 20);
+        await deck.StopAsync();
+        await secondDeck.RefreshAsync();
+        Assert.Equal(standbyId, secondDeck.Snapshot.SourceId);
+        Assert.True(secondDeck.Snapshot.Transport!.IsOnProgram);
+        await deck.CloseAsync();
+        Assert.Equal(1, runtime.MediaDeck.Resources.Reserved);
+
 		controlStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
 		runtimeStop.Cancel();

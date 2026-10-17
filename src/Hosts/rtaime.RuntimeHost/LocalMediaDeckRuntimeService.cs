@@ -27,6 +27,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     private MediaSourceId? _selected;
     private MediaSourceId? _program;
     private long _order, _rejected, _evicted;
+    private int _probeReservations;
     private bool _disposed;
 
     public LocalMediaDeckRuntimeService() : this(VideoFormat.Hd1080p50Rgba8) { }
@@ -63,7 +64,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
     public LocalMediaDeckResources Resources
     {
-        get { lock (_gate) return new(_entries.Length, _entries.Count(e => e is not null), _rejected, _evicted); }
+        get { lock (_gate) return new(_entries.Length, _entries.Count(e => e is not null) + _probeReservations, _rejected, _evicted); }
     }
     private Entry? Find(MediaSourceId? source)
     {
@@ -98,8 +99,13 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
                         "All local decoder reservations are occupied; close an inactive deck before probing.");
                 }
             }
-            using var probe = new LocalMediaDeckSlot(_format);
-            return probe.Probe(path, assetId);
+            lock (_gate) _probeReservations++;
+            try
+            {
+                using var probe = new LocalMediaDeckSlot(_format);
+                return probe.Probe(path, assetId);
+            }
+            finally { lock (_gate) _probeReservations--; }
         }
     }
 

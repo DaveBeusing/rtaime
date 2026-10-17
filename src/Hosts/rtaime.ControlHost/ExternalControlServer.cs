@@ -532,7 +532,8 @@ internal static class ExternalControlOperationCatalog
 		"control.compositing.layer.set", "control.compositing.layer.transform", "control.compositing.layer.processing", "control.compositing.layers.reorder",
 		"control.recording.start", "control.recording.stop", "control.ai_showcase.set",
 		"control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
-		"control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
+		"control.media_deck.scoped.snapshot.get", "control.media_deck.scoped.close", "control.media_deck.scoped.transport", "control.media_deck.scoped.marker",
+        "control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
 		"control.show_control.snapshot.get", "control.show_control.cue_list.save", "control.show_control.cue_list.select", "control.show_control.arm", "control.show_control.go", "control.show_control.cancel", "control.show_control.recovery.acknowledge",
 		"control.rundown.snapshot.get", "control.rundown.save", "control.rundown.prepare", "control.rundown.go", "control.rundown.next", "control.rundown.previous", "control.rundown.hold", "control.rundown.recovery.acknowledge",
 		"control.production_macro.snapshot.get", "control.production_macro.get", "control.production_macro.save", "control.production_macro.delete", "control.production_macro.validate", "control.production_macro.execute", "control.production_macro.cancel", "control.production_macro.recovery.acknowledge"
@@ -542,7 +543,7 @@ internal static class ExternalControlOperationCatalog
 
 	public static ExternalControlRole RequiredRole(string operation) =>
 		operation is "control.ping" or "control.snapshot.get" or
-			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or
+			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" or
 			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
 			"control.production_macro.snapshot.get" or "control.production_macro.get" or "control.production_macro.validate"
 			? ExternalControlRole.Observer
