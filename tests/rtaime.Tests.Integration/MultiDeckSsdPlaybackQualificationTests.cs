@@ -86,8 +86,10 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             await using var b = new MediaDeckController(client);
             var sourceA = new MediaSourceId(Identity.Parse(snapshot.Sources[0].Id));
             var sourceB = new MediaSourceId(Identity.Parse(snapshot.Sources[1].Id));
-            Assert.True((await a.OpenAsync(pathA, sourceA)).IsLoaded);
-            Assert.True((await b.OpenAsync(pathB, sourceB)).IsLoaded);
+            var openedA = await a.OpenAsync(pathA, sourceA);
+            Assert.True(openedA.IsLoaded, $"Deck A: {openedA.Failure?.Code}: {openedA.Failure?.Message}");
+            var openedB = await b.OpenAsync(pathB, sourceB);
+            Assert.True(openedB.IsLoaded, $"Deck B: {openedB.Failure?.Code}: {openedB.Failure?.Message}");
             await a.ConfigurePlaybackAsync(true, MediaDeckEndBehavior.Loop);
             await b.ConfigurePlaybackAsync(true, MediaDeckEndBehavior.Loop);
             await a.PlayAsync();
@@ -188,6 +190,18 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             CaptureHandles();
             var finalSequence = runtime.Runtime.Snapshot.NextSequenceNumber;
             process.Refresh();
+            // Always retain the actual end state, even if the outer observer was delayed.
+            // Replace the last slot at capacity; evidence size never grows with run duration.
+            var finalObservation = new
+            {
+                Milliseconds = clock.ElapsedMilliseconds, process.PrivateMemorySize64, process.HandleCount,
+                First = runtime.MediaDeck!.GetDecodeSnapshot(sourceA)!.Value,
+                Second = runtime.MediaDeck.GetDecodeSnapshot(sourceB)!.Value,
+                Resources = runtime.MediaDeck.Resources,
+                Sequence = finalSequence
+            };
+            if (observations.Count == 128) observations[^1] = finalObservation;
+            else observations.Add(finalObservation);
             var source = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
             var firstPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceA)!.Value;
             var secondPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceB)!.Value;
@@ -277,7 +291,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 var evidence = new
                 {
                     schemaVersion = "1.0", sourceCommit, buildCommit, profile,
-                    capturedAt = DateTimeOffset.UtcNow,
+                    capturedAt = DateTimeOffset.UtcNow, media,
                     status = failure is null && cleanup ? "PASS" : "FAIL",
                     failure = failure is null ? null : failure[..Math.Min(failure.Length, 2048)],
                     cleanupFailure = cleanupFailure is null ? null : cleanupFailure[..Math.Min(cleanupFailure.Length, 2048)],
