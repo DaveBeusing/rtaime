@@ -61,9 +61,12 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             {
                 if (observations.Count % 8 == 0)
                 {
-                    var target = takes++ % 2 == 0 ? sourceB : sourceA;
-                    Assert.True((await client.SelectPreviewAsync(target.ToString())).Accepted);
-                    Assert.True((await client.CutPreviewAsync()).Accepted);
+                    for (var take = 0; take < 2; take++)
+                    {
+                        var target = takes++ % 2 == 0 ? sourceB : sourceA;
+                        Assert.True((await client.SelectPreviewAsync(target.ToString())).Accepted);
+                        Assert.True((await client.CutPreviewAsync()).Accepted);
+                    }
                 }
                 process.Refresh();
                 var resources = runtime.MediaDeck!.Resources;
@@ -90,12 +93,17 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             Assert.InRange(process.HandleCount - handlesBefore, int.MinValue, 64);
             var source = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
             Assert.Matches("^[0-9a-f]{40}$", source!);
+            var firstPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceA)!.Value;
+            var secondPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceB)!.Value;
+            Assert.True(firstPlayback.DecodedFrames > 200);
+            Assert.True(secondPlayback.DecodedFrames > 200);
             var report = new
             {
                 SourceCommit = source, Class = "HOSTED_SOFTWARE_OBSERVATION", PhysicalQualification = "UNVERIFIED",
                 StorageBus = "UNVERIFIED", SeparateDriveTopology = "UNVERIFIED", HighBitrate = "UNVERIFIED",
                 DurationMilliseconds = clock.ElapsedMilliseconds, Capacity = 2, Takes = takes,
                 StartSequence = startSequence, FinalSequence = finalSequence, runtime.ScheduleStatistics,
+                FirstPlayback = firstPlayback, SecondPlayback = secondPlayback,
                 PrivateBytesGrowth = process.PrivateMemorySize64 - memoryBefore,
                 HandleGrowth = process.HandleCount - handlesBefore,
                 Samples = observations

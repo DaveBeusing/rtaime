@@ -89,6 +89,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     }
     public LocalMediaDecodeSnapshot? DecodeSnapshot => Find(null)?.Deck.DecodeSnapshot;
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements => Find(null)?.Deck.PlaybackMeasurements;
+    public LocalMediaPlaybackMeasurements? GetPlaybackMeasurements(MediaSourceId source) => Find(source)?.Deck.PlaybackMeasurements;
     public LocalMediaRuntimeBoundaryResult? LatestBoundary => Find(null)?.Deck.LatestBoundary;
 
     public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
