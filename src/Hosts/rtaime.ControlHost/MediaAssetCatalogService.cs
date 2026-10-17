@@ -23,6 +23,29 @@ public sealed class MediaAssetCatalogService
 		_persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
 	}
 
+    public async ValueTask<MediaAssetPreflightObservation> BeginPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
+    {
+        options.Validate();
+        var snapshot = await GetSnapshotAsync(false, cancellationToken).ConfigureAwait(false);
+        var asset = snapshot.Assets.SingleOrDefault(a => a.AssetId == assetId) ?? throw new InvalidOperationException("Catalogue asset is missing.");
+        return await _runtime.BeginMediaAssetPreflightAsync(asset.SourceLocation, asset.AssetId, asset.FingerprintSha256, options, cancellationToken).ConfigureAwait(false);
+    }
+    public async ValueTask<MediaAssetPreflightObservation> GetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        var value = await _runtime.GetMediaAssetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var snapshot = await GetSnapshotAsync(false, cancellationToken).ConfigureAwait(false);
+        var asset = snapshot.Assets.SingleOrDefault(a => a.AssetId.ToString() == value.AssetId);
+        if (asset is null || !StringComparer.OrdinalIgnoreCase.Equals(asset.SourceLocation, value.SourceLocation) ||
+            !StringComparer.OrdinalIgnoreCase.Equals(asset.FingerprintSha256, value.FingerprintSha256))
+        {
+            if (value.Running) await _runtime.CancelMediaAssetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
+            return value with { State = MediaAssetReadinessState.Unverified, Detail = "Catalogue removed/relinked or identity changed. Prepare again." };
+        }
+        return value;
+    }
+    public ValueTask<MediaAssetPreflightObservation> CancelPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        _runtime.CancelMediaAssetPreflightAsync(jobId, cancellationToken);
+
 	public async ValueTask<MediaAssetCatalogSnapshot> GetSnapshotAsync(
 		bool refreshAvailability = true,
 		CancellationToken cancellationToken = default)

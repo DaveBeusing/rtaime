@@ -549,7 +549,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_source.discovery.get" => await GetMediaSourceDiscoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_source.adopt" => await AdoptMediaSourceAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_input.health.get" => await GetMediaInputHealthAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.media_asset_catalog.snapshot.get" => await GetMediaAssetCatalogAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_asset_catalog.preflight.begin" or "control.media_asset_catalog.preflight.get" or "control.media_asset_catalog.preflight.cancel" => await PreflightMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
+            "control.media_asset_catalog.snapshot.get" => await GetMediaAssetCatalogAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.import" => await ImportMediaAssetsAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.relink" => await RelinkMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.remove" => await RemoveMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
@@ -2149,6 +2150,26 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			_mutationGate.Release();
 		}
 	}
+
+    private async ValueTask<WireEnvelope> PreflightMediaAssetAsync(WireEnvelope request, CancellationToken cancellationToken)
+    {
+        if (_mediaAssetCatalog is null) throw new InvalidOperationException("Media catalogue is unavailable.");
+        MediaAssetPreflightObservation value;
+        if (request.MessageType.EndsWith(".begin", StringComparison.Ordinal))
+        {
+            var wire = request.Payload.Deserialize<WireMediaAssetPreflight>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight request missing.");
+            value = await _mediaAssetCatalog.BeginPreflightAsync(new MediaAssetId(Identity.Parse(wire.AssetId)), wire.Options, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            var jobId = request.Payload.GetProperty("jobId").GetString() ?? throw new InvalidDataException("Preflight job identity missing.");
+            value = request.MessageType.EndsWith(".cancel", StringComparison.Ordinal)
+                ? await _mediaAssetCatalog.CancelPreflightAsync(jobId, cancellationToken).ConfigureAwait(false)
+                : await _mediaAssetCatalog.GetPreflightAsync(jobId, cancellationToken).ConfigureAwait(false);
+        }
+        return Success(request, request.MessageType + ".response", value);
+    }
+    private sealed record WireMediaAssetPreflight(string AssetId, MediaAssetPreflightOptions Options);
 
 	private async ValueTask<WireEnvelope> GetMediaAssetCatalogAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
