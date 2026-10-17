@@ -149,6 +149,9 @@ public sealed record MediaTransportSnapshot
 
 public sealed record MediaTransportCommand
 {
+	/// <summary>Explicit deck identity; omitted legacy commands require an unambiguous asset.</summary>
+	public MediaSourceId? SourceId { get; init; }
+
 	public MediaTransportCommand(
 		CompatibilityVersion version,
 		MediaAssetId assetId,
