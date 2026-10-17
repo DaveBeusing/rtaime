@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Security.Cryptography;
+using System.Reflection;
 using rtaime.Runtime;
 using rtaime.Client;
 using rtaime.ControlHost;
@@ -39,7 +40,15 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
         var media = new[] { MediaIdentity(pathA), MediaIdentity(pathB) };
         var sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT");
         var buildCommit = Environment.GetEnvironmentVariable("RTAIME_BUILD_COMMIT");
-        if (profile is not null) Assert.Equal(sourceCommit, buildCommit);
+        if (profile is not null)
+        {
+            foreach (var assembly in new[] { typeof(RuntimeHostProcess).Assembly,
+                typeof(ControlHostProcess).Assembly, typeof(OperatorControlClient).Assembly,
+                typeof(rtaime.Media.LocalMediaFileProvider).Assembly })
+                Assert.Equal(sourceCommit, assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+                    .Single(value => value.Key == "RtaimeSourceRevision").Value);
+            Assert.Equal(sourceCommit, buildCommit);
+        }
         var observations = new List<object>(128);
         var trend = new BoundedSoakResourceTrend();
         var cpuHistogram = new BoundedSoakHistogram(.1, 1000);
@@ -155,6 +164,12 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             var secondPlayback = runtime.MediaDeck.GetPlaybackMeasurements(sourceB)!.Value;
             Assert.True(firstPlayback.DecodedFrames > 200);
             Assert.True(secondPlayback.DecodedFrames > 200);
+            Assert.Equal(0UL, firstPlayback.ReadFailures);
+            Assert.Equal(0UL, secondPlayback.ReadFailures);
+            Assert.Equal(0UL, firstPlayback.VideoTimestampRegressions);
+            Assert.Equal(0UL, secondPlayback.VideoTimestampRegressions);
+            Assert.Equal(0UL, firstPlayback.AudioTimestampDiscontinuities);
+            Assert.Equal(0UL, secondPlayback.AudioTimestampDiscontinuities);
             var report = new
             {
                 SourceCommit = source, Class = "HOSTED_SOFTWARE_OBSERVATION", PhysicalQualification = "UNVERIFIED",
@@ -181,6 +196,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 requestedSeconds = seconds, media, capacity = 2, takes,
                 startSequence, finalSequence, startMissed, missedDelta, finalStats,
                 firstPlayback, secondPlayback,
+                deckProbes = new[] { a.Snapshot.Probe, b.Snapshot.Probe },
                 decodeA = runtime.MediaDeck.GetDecodeSnapshot(sourceA),
                 decodeB = runtime.MediaDeck.GetDecodeSnapshot(sourceB),
                 resourceCapacity = 128, samples = observations,
@@ -224,6 +240,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 var evidence = new
                 {
                     schemaVersion = "1.0", sourceCommit, buildCommit, profile,
+                    capturedAt = DateTimeOffset.UtcNow,
                     status = failure is null && cleanup ? "PASS" : "FAIL",
                     failure = failure is null ? null : failure[..Math.Min(failure.Length, 2048)],
                     cleanupFailure = cleanupFailure is null ? null : cleanupFailure[..Math.Min(cleanupFailure.Length, 2048)],
