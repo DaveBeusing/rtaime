@@ -389,7 +389,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
         var request = Request();
         request.BeginMediaAssetPreflight = new MediaAssetPreflightRequest { AssetId = assetId.ToString(), RequireAudio = options.RequireAudio, SeekPoints = options.SeekPoints, FramesPerPoint = options.FramesPerPoint, MaximumBytes = options.MaximumBytes };
         var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
-        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
         value.Validate();
         return value;
     }

@@ -14,6 +14,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private CancellationTokenSource? _preflightStop;
     private Task? _preflightTask;
     private MediaAssetPreflightObservation? _preflight;
+    private LocalMediaFileSource? _preflightQuarantine;
     // An injectable production-provider seam permits deterministic cancellation/open tests.
     internal Func<string, MediaSourceId, MediaAssetId?, LocalMediaOpenResult>? PreflightOpen { get; set; }
     internal Func<string>? PreflightEnvironment { get; set; }
@@ -22,7 +23,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     {
         if (PreflightEnvironment is not null) return _preflightEpoch + "|" + PreflightEnvironment();
         using var process = Process.GetCurrentProcess();
-        var modules = process.Modules.Cast<ProcessModule>().Take(513).ToArray();
+        var modules = process.Modules.Cast<ProcessModule>().Where(m => m.FileName.StartsWith(Environment.SystemDirectory, StringComparison.OrdinalIgnoreCase)).Take(513).ToArray();
         if (modules.Length > 512) throw new IOException("Loaded-module inventory exceeds the preflight bound.");
         var text = new StringBuilder(_preflightEpoch).Append('|').Append(Environment.OSVersion.VersionString);
         foreach (var module in modules.OrderBy(m => m.FileName, StringComparer.OrdinalIgnoreCase))
@@ -38,9 +39,11 @@ public sealed partial class LocalMediaDeckRuntimeService
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
+        ArgumentException.ThrowIfNullOrWhiteSpace(fingerprint);
         if (fingerprint.Length != 64 || fingerprint.Any(c => !Uri.IsHexDigit(c)))
             throw new ArgumentException("An exact catalogue SHA-256 is required.", nameof(fingerprint));
         var full = Path.GetFullPath(path);
+        if (full.Length > 4096) throw new ArgumentException("Preflight path exceeds the metadata bound.", nameof(path));
         var initial = new MediaAssetPreflightObservation(Guid.NewGuid().ToString("N"), assetId.ToString(),
             _preflightEpoch, full, fingerprint.ToUpperInvariant(), 0, 0,
             _format.FrameRate == FrameRate.Fps50 ? "1080p50" : "1080p59.94", "",
@@ -129,8 +132,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
             if (identity.Length < 1 || identity.Length > options.MaximumBytes)
                 throw new IOException("File exceeds the selected bounded fingerprint budget.");
-            value = value with { LengthBytes = identity.Length, LastWriteUtcTicks = file.LastWriteTimeUtc.Ticks,
-                EnvironmentIdentity = PreflightEnvironmentIdentity() };
+            value = value with { LengthBytes = identity.Length, LastWriteUtcTicks = file.LastWriteTimeUtc.Ticks };
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var buffer = new byte[65536];
             int read;
@@ -174,10 +176,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             token.ThrowIfCancellationRequested();
             file.Refresh();
-            if (file.Length != value.LengthBytes || file.LastWriteTimeUtc.Ticks != value.LastWriteUtcTicks ||
-                value.EnvironmentIdentity != PreflightEnvironmentIdentity())
+            if (file.Length != value.LengthBytes || file.LastWriteTimeUtc.Ticks != value.LastWriteUtcTicks)
                 throw new IOException("File or decoder environment changed during verification.");
-            value = value with { State = MediaAssetReadinessState.ConditionallyReady,
+            value = value with { EnvironmentIdentity = PreflightEnvironmentIdentity(), State = MediaAssetReadinessState.ConditionallyReady,
                 Detail = "Representative seek/decode passed. Whole-file, sustained hardware and future deck capacity remain UNVERIFIED; no route was changed." };
         }
         catch (OperationCanceledException)
@@ -190,13 +191,19 @@ public sealed partial class LocalMediaDeckRuntimeService
         }
         finally
         {
-            try { source?.Dispose(); identity?.Dispose(); }
-            catch (Exception exception) { value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Preflight cleanup failed: " + exception.Message }; }
+            try { source?.Dispose(); }
+            catch (Exception exception)
+            {
+                lock (_gate) _preflightQuarantine = source;
+                value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Preflight cleanup failed; Runtime restart required: " + exception.Message };
+            }
+            try { identity?.Dispose(); }
+            catch (Exception exception) { value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Identity handle cleanup failed: " + exception.Message }; }
             if (token.IsCancellationRequested) value = value with { Cancelled = true, State = MediaAssetReadinessState.Unverified };
             lock (_gate)
             {
-                _probeReservations--;
-                _preflight = value with { Running = false, ObservedAtUtc = DateTimeOffset.UtcNow };
+                if (_preflightQuarantine is null) _probeReservations--;
+                _preflight = value with { Running = false, Detail = value.Detail.Length > 1024 ? value.Detail[..1024] : value.Detail, ObservedAtUtc = DateTimeOffset.UtcNow };
             }
         }
     }
@@ -211,6 +218,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         _preflightStop?.Cancel();
         if (_preflightTask is { } task && !task.Wait(TimeSpan.FromSeconds(10)))
             throw new IOException("Preflight native owner did not terminate; reservation remains quarantined until supported Runtime restart.");
+        if (_preflightQuarantine is not null) throw new IOException("Preflight retained a failed native owner; supported Runtime restart is required.");
         _preflightStop?.Dispose();
         _preflightStop = null;
     }
