@@ -50,7 +50,7 @@ Illegal transitions fail closed with `media.transport.transition_invalid` and do
 
 Transport positions are zero-based frame numbers. Seek requests outside the clip range are clamped to `[0, TotalFrames - 1]` before they reach the decoder.
 
-The Windows Media Foundation decoder converts a target frame to the exact clip frame-rate time and uses `IMFSourceReader.SetCurrentPosition`. Because compressed-media seeking may land on an earlier key frame, the decoder discards decoded video/audio samples whose presentation timestamp is earlier than the requested target. The first returned video sample therefore represents the requested frame within the decoder timestamp tolerance.
+The Windows Media Foundation decoder converts a target frame to the exact clip frame-rate time and uses `IMFSourceReader.SetCurrentPosition`. Because compressed-media seeking may land on an earlier key frame, the decoder discards decoded video samples outside the requested normalized frame's timestamp window. The lower edge uses the same nearest-frame rounding as transport position, so a fractional-rate sample one 100-ns tick below the frame centre is retained. Audio is aligned to the accepted video's actual timestamp. The first returned video sample therefore represents the requested frame within the decoder timestamp tolerance.
 
 Audio buffer sample position is derived from its post-seek presentation timestamp instead of a decoder-private running counter. This keeps the observable audio position consistent after forward and backward seeks.
 
