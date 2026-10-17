@@ -103,6 +103,7 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
             var previousCpu = process.TotalProcessorTime;
             var nextRetained = TimeSpan.Zero;
             var nextTake = TimeSpan.Zero;
+            var nextCheckpoint = TimeSpan.FromSeconds(60);
             var takes = 0;
             while (clock.Elapsed < TimeSpan.FromSeconds(seconds))
             {
@@ -147,6 +148,23 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                     Sequence = runtime.Runtime.Snapshot.NextSequenceNumber
                 });
                 nextRetained = elapsed + TimeSpan.FromSeconds(Math.Max(.25, seconds / 120.0));
+                }
+                if (profile is not null && elapsed >= nextCheckpoint)
+                {
+                    var output = Environment.GetEnvironmentVariable("RTAIME_REFERENCE_MEDIA_OUTPUT")!;
+                    var checkpoint = Path.Combine(output, "ssd-playback.checkpoint.json");
+                    LocalPlaybackEvidenceJson.Write(checkpoint + ".tmp", new
+                    {
+                        schemaVersion = "1.0", sourceCommit, buildCommit, profile, status = "RUNNING",
+                        startedAt, elapsedSeconds = elapsed.TotalSeconds,
+                        requestedSeconds = seconds, media, samples = observations,
+                        first = runtime.MediaDeck.GetPlaybackMeasurements(sourceA),
+                        second = runtime.MediaDeck.GetPlaybackMeasurements(sourceB),
+                        schedule = runtime.ScheduleStatistics, resourceWindows = trend.Snapshot(),
+                        physicalStatus = "UNVERIFIED"
+                    });
+                    File.Move(checkpoint + ".tmp", checkpoint, overwrite: true);
+                    nextCheckpoint = elapsed + TimeSpan.FromSeconds(60);
                 }
                 await Task.Delay(250);
             }
