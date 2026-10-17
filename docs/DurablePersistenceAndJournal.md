@@ -184,3 +184,35 @@ Show Control persists cue-list definitions plus only the execution cursor requir
 Show Control uses the show project's management-document owner with optimistic logical subdocument versioning. Structured production-journal entries cover cue-list save/selection, arm, GO, action start/completion, waits, failures, cancellation and recovery acknowledgement. Stable list/cue/action identities provide bounded causation evidence without turning the Production Journal into an execution replay engine.
 
 See `docs/ShowControlCueSequencing.md` for the complete state and recovery semantics.
+
+## Bounded journal transactions and shutdown evidence
+
+The SQLite journal implements the optional `IProductionJournalBatchStore` capability.
+The existing single background ingress worker collects only already queued events,
+up to 64 per transaction. It does not delay an event to fill a batch. A flush barrier
+ends the batch: every preceding event is committed before that barrier completes,
+and later events are not included across the fence. Other journal stores retain
+the existing single-event fallback.
+
+Each event still has its own ordinal, content checksum, predecessor hash and entry
+hash. EventId replay remains idempotent. Any conflicting event rolls back the whole
+transaction and its head update; the worker reports each failed accepted event and
+latched flush failure. No events are coalesced or silently discarded. Queue and
+retention capacities, WAL, `synchronous=FULL`, SQLite schema version 1 and checkpoint
+payload/checksum formats remain unchanged.
+
+This bounds durable commit amplification after rapid production commands. The
+pre-change fixed 50-case diagnostic reproduced one ten-second shutdown failure:
+all 17 authoritative checkpoints were persisted, but the audit journal had only
+persisted 68 of 85 accepted events. IPC teardown completed in under one millisecond
+in that failed case; journal drain exhausted the remaining deadline. The former
+single-event path reopened/configured a connection and committed every entry.
+Batching amortizes that work without relaxing durability or the shutdown deadline.
+
+ControlHost retains at most nine shutdown phase observations with monotonic phase
+durations and checkpoint/journal counters before and after each phase. Failure
+details include those bounded observations. The Required Gates CI runs 50 fixed
+rapid TAKE lifecycle cases before broad suites; any failed case fails qualification.
+Normal test runs retain three cases. The test always releases its independent
+RuntimeHost after observing the ControlHost result, including failure, so later
+cases do not inherit an abandoned render loop.

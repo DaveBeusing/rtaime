@@ -131,7 +131,7 @@ public sealed class ProductionJournalBatchIntegrationTests
                 await ReleaseSecond.Task.WaitAsync(cancellationToken);
                 if (FailSecondBatch) throw new IOException("Injected atomic batch failure.");
             }
-            var result = snapshot.Select(item => new ProductionJournalEntry((ulong)(_entries.Count + 1), item)).ToArray();
+            var result = new ProductionJournalEntry[snapshot.Length];
             // Assign ordinals before publication, preserving causal order within the transaction.
             for (var index = 0; index < result.Length; index++)
                 result[index] = new ProductionJournalEntry((ulong)(_entries.Count + index + 1), snapshot[index]);
