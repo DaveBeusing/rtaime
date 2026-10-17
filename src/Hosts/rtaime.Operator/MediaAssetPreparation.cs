@@ -43,7 +43,8 @@ public sealed partial class MediaPoolInspectorViewModel
         OnPropertyChanged(nameof(PreparationVisibility));
         RaisePreparationCommands();
     }
-    private bool CanPrepareAssets() => !_preparationDisposed && !_preparing && !_catalogBusy && _catalogClient is not null &&
+    private bool CanPrepareAssets() => !_preparationDisposed && !_preparing && !_catalogBusy && !_batchRunning && _catalogClient is not null &&
+        _operator.IsConnected && !_operator.IsStale && !_operator.IsBusy &&
         SelectedItems.Count is > 0 and <= 16 && SelectedItems.All(item => item.Kind == MediaPoolItemKind.Clip &&
             item.IsOnline && _catalogSnapshot.Assets.Any(asset => asset.AssetId.ToString() == item.ReferenceId));
     private void RaisePreparationCommands()
@@ -55,8 +56,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private void SetPreparationEvidence(IReadOnlyList<MediaAssetPreflightObservation> values)
     {
         _preflightEvidence = values;
-        OnPropertyChanged(nameof(PreflightEvidence));
-        Refresh();
+        if (!_preparationDisposed) { OnPropertyChanged(nameof(PreflightEvidence)); Refresh(); }
     }
     private void InvalidatePreparationEvidence(string reason)
     {
@@ -84,6 +84,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void PreparationOperatorChanged(object? sender, PropertyChangedEventArgs args)
     {
+        RaisePreparationCommands();
         if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) &&
             (!_operator.IsConnected || _operator.IsStale))
         {
@@ -135,6 +136,9 @@ public sealed partial class MediaPoolInspectorViewModel
                     value = await _catalogClient.GetMediaAssetPreflightAsync(value.JobId);
                 }
                 value.Validate();
+                if (!StringComparer.OrdinalIgnoreCase.Equals(value.SourceLocation, asset.SourceLocation) ||
+                    !StringComparer.OrdinalIgnoreCase.Equals(value.FingerprintSha256, asset.FingerprintSha256))
+                    throw new InvalidOperationException("Catalogue identity changed. Refresh the library and prepare again.");
                 stop.ThrowIfCancellationRequested();
                 results.Add(value);
                 SetPreparationEvidence(results.ToArray());
@@ -146,15 +150,16 @@ public sealed partial class MediaPoolInspectorViewModel
         }
         catch (Exception error)
         {
+            string? cancelFailure = null;
             if (_preparationJob is { } job)
             {
                 try { await _catalogClient!.CancelMediaAssetPreflightAsync(job); }
-                catch (Exception cleanup) { PreparationStatus = "Cancellation could not be observed: " + cleanup.Message; }
+                catch (Exception cleanup) { cancelFailure = " Cancellation could not be observed: " + cleanup.Message; }
             }
             InvalidatePreparationEvidence("Batch incomplete; partial observations rolled back. Prepare again.");
-            PreparationStatus = error is OperationCanceledException
+            PreparationStatus = (error is OperationCanceledException
                 ? "Cancelled. Partial observations rolled back; native cleanup retains its reservation until complete."
-                : "Preparation failed: " + error.Message + " Partial observations rolled back; transport unchanged.";
+                : "Preparation failed: " + error.Message + " Partial observations rolled back; transport unchanged.") + cancelFailure;
         }
         finally
         {

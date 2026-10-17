@@ -13,11 +13,14 @@ public sealed class MediaAssetPreparationOperatorTests
     {
         var forbidden = new ForbiddenTransport();
         var client = new OperatorControlClient(forbidden);
-        await using var owner = new OperatorViewModel();
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
         await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
         var catalog = new Catalog { FailSecond = true };
         using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
         await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
         Assert.All(pool.FilteredItems, item => { Assert.False(item.IsReady); Assert.Contains("UNVERIFIED", item.ReadinessLabel); });
         pool.UpdateSelection(pool.FilteredItems.Take(2));
         pool.ShowPreparation();
@@ -36,7 +39,10 @@ public sealed class MediaAssetPreparationOperatorTests
         await pool.PrepareSelectedAssetsAsync();
         Assert.All(pool.PreflightEvidence, value => Assert.True(value.RepresentativeVerificationPassed));
         Assert.All(pool.FilteredItems, item => { Assert.False(item.IsReady); Assert.Contains("CONDITIONALLY_READY", item.ReadinessLabel); });
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
         await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
         Assert.DoesNotContain(pool.PreflightEvidence, value => value.RepresentativeVerificationPassed);
     }
     [Fact]
@@ -44,10 +50,13 @@ public sealed class MediaAssetPreparationOperatorTests
     {
         var catalog = new Catalog { BlockBegin = true };
         var client = new OperatorControlClient(new ForbiddenTransport());
-        await using var owner = new OperatorViewModel();
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
         await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
         using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
         await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
         pool.UpdateSelection(pool.FilteredItems.Take(1));
         var pending = pool.PrepareSelectedAssetsAsync();
         Assert.Equal(1, catalog.Begins);
@@ -58,6 +67,11 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.False(pool.IsPreparing);
         Assert.DoesNotContain(pool.PreflightEvidence, value => value.RepresentativeVerificationPassed);
         Assert.Equal(0, catalog.Mutations);
+    }
+    private static async Task Until(Func<bool> condition)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!condition()) await Task.Delay(10, deadline.Token);
     }
     private sealed class Catalog : IMediaAssetCatalogClient
     {
@@ -100,7 +114,11 @@ public sealed class MediaAssetPreparationOperatorTests
     {
         public int Calls;
         private ValueTask<T> Forbidden<T>() { Calls++; return ValueTask.FromException<T>(new InvalidOperationException("Preparation must not mutate production.")); }
-        public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) => Forbidden<OperatorStatusSnapshot>();
+        private readonly ProductionSourceId _source = ProductionSourceId.New();
+        private readonly ProductionId _production = ProductionId.New();
+        public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(
+            new OperatorStatusSnapshot(new(ControlContractVersion.Current, _production, new Revision(1), new(_source, _source)),
+                [new(_source.ToString(), "Camera")], "READY", "READY", "READY", "UNKNOWN", "IDLE", false, 0));
         public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();
         public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();
         public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) => Forbidden<OperatorMutationResponse>();

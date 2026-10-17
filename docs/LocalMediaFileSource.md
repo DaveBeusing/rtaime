@@ -392,3 +392,59 @@ explicit. Shutdown attempts every owner even if one release fails.
 Hosted dual-file observations and injected stalls are software evidence.
 Same-SATA, same-NVMe, separate-drive, high-bitrate and physical latency-spike
 qualification remain UNVERIFIED until measured on an identified reference host.
+
+## Non-Program asset preflight
+
+The source-keyed deck registry also owns one optional asset preflight. Admission
+occurs before file reads and requires no loaded file decks and no other probe
+reservation. The optional worker shares existing decoder accounting; it cannot
+create an extra decoder, steal an A/B source, or perform work at a Program boundary.
+A failed cleanup retains its native/file owner and reservation and blocks further
+admission until supported Runtime restart. Shutdown uses the existing ten-second
+join budget; a timeout reports failure, without freeing an unjoined owner.
+
+The worker holds a read-only Windows FileShare.Read handle while validating
+identity and decoding, preventing concurrent replacement/writes during verification.
+Only directly addressed local drive paths are accepted; UNC and reparse paths
+are rejected. It recomputes the catalogue SHA-256 in 64 KiB chunks with an
+eight-millisecond delay per chunk (at most about 8 MiB/s of requested hash reads).
+Default hash budget is 8 GiB, configurable up to 32 GiB; a job cancellation
+deadline is thirty minutes. These limits bound optional work, not playback
+performance, total native decoder read pressure or a guarantee to finish the
+largest allowed file before cancellation.
+
+After identity validation, the existing target-format LocalMediaFileProvider
+performs its normal container/profile/decoder qualification. Representative
+positions are start, approximately one-third and two-thirds for the default
+three points; at most twelve frames are decoded. Required audio checks both
+admitted track and nonempty decoded audio payload. Unsupported containers/profiles,
+absent installed decoder, corrupt/truncated files and failed seek/decode retain
+their explicit failure reason. No new codec/backend, transform or transcode exists.
+
+Successful observations contain asset/job/Runtime epoch, path, SHA-256, length,
+last-write timestamp, target format, sample counts and observation time. A SHA-256
+of the Runtime epoch, OS version and bounded inventory of loaded SystemDirectory
+native module paths/lengths/timestamps provides conservative context invalidation.
+It is not an independently certified selected MFT or physical GPU driver identity;
+such provenance and sustained/whole-file/device qualification remain UNVERIFIED.
+Consequently there is no persisted or reusable positive readiness cache.
+Get validates file metadata, context and the ten-second observation window;
+Prepare always reruns identity and verification. Metadata changes invalidate
+observations; hostile replacement preserving identical length/timestamp after the
+read lock is released is not detected by a metadata-only Get. A conditional
+observation never guarantees future playback or capacity. Actual resident
+PREPARED evidence continues to belong to the existing deck/preroll lifecycle.
+
+Management IPC carries only bounded observation metadata. Additive typed gRPC
+operations begin/get/cancel pass through ControlHost with existing authentication,
+Operator role, rate/concurrency limits and auditing. Older peers fail unsupported
+operations closed; deploy matched hosts/clients. Product target remains 0.5.39;
+persisted production/checkpoint/catalogue schemas are unchanged.
+
+Regression coverage includes real 1080p50 decoder/audio verification, file identity
+mutation, required-audio/decoder/budget rejection, live-deck exclusion, cancellation
+during open/read, late completion, repeated cleanup/context invalidation, retained
+failed owners, named-pipe/gRPC authority invariants and Operator batch rollback.
+Existing reference MP4/MOV, VFR, unsupported-profile and absent-decoder matrices
+remain the source/format acceptance mechanisms. Physical SATA/NVMe, latency,
+cold-cache pressure, full-file decode and long-soak qualification remain separate.

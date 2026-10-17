@@ -165,3 +165,45 @@ Search and selection can change while a batch is reviewed or running; frozen nam
 ## Smart search and batch qualification
 
 `MediaSmartSearchBatchTests` covers combined positive/negative/quoted terms, typed unknowns, malformed/unsupported fields, rational FPS, bounded large-list predicate work, mixed eligibility, partial rejection, cancellation with an active confirmation, retry excluding successes/uncertain results, stale preflight and oversized/disconnected admission. Existing real-window qualification checks debounced custom search, batch accessibility and bounded result virtualization in addition to the large Grid/List checks. Physical DPI/IME/screen-reader and hardware Program-latency evidence remains UNVERIFIED.
+
+## Explicit asset preparation
+
+File availability is independent of playback readiness. The Add menu and each
+asset context menu expose **Prepare selected assets…**. Select 1–16 online
+catalogue clips, choose required audio (default off), 1–3 seek points and 1–4
+frames per point, then choose **Prepare / Retry**. Requests run sequentially
+through ControlHost; Operator never opens files or decoders. Close loaded file
+decks deliberately first. Preparation never evicts, seeks or changes a live A/B
+deck, Preview, Program or confirmed transport state.
+
+| Status | Meaning |
+| --- | --- |
+| UNVERIFIED | No current source-bound verification, cancelled, expired or invalidated observation. |
+| PROBED | Container/track/profile metadata admitted by the existing probe; installed decoder and playback capacity are still unproven. |
+| DECODER_AVAILABLE | This job negotiated the existing installed decoder; representative reads are still running. |
+| CONDITIONALLY_READY | Selected representative seeks/frames and required audio passed against the hash-locked file; the optional decoder has been released. |
+| PREPARED | An existing resident deck is loaded and ready, playing or paused, with no observed deck error. This is not a preflight cache entry. |
+| UNAVAILABLE | This bounded attempt failed; inspect its reason before retrying. This does not prove permanent format unavailability. |
+
+Online catalogue entries no longer receive READY merely for existing on disk.
+The Ready filter refers to resident deck readiness; conditional observations
+remain separate. The new **Asset playback** Show Preflight check is UNVERIFIED
+without matching current observations, FAIL on observed failure, and WARNING for
+representative success. It never promotes availability or a sample into a full
+show-ready PASS.
+
+**Cancel** admits no next asset and explicitly cancels the current Runtime job.
+If native open has not returned, the reservation remains occupied until its
+owner cleans up. A later deck-open intent cancels optional work and returns an
+actionable retry result; it does not wait in Program admission. A failed batch
+invalidates its earlier partial positive observations. No catalogue mutations,
+save/restore, auto-route or background retries are performed. Unknown transport
+cancellation outcomes are displayed, and no uncertain job is silently re-admitted.
+
+Observations are session-only, at most 16 in Operator and one in Runtime. They
+expire after ten seconds and are never reused to skip verification. Catalogue
+refresh/relink, disconnect/stale control state, file length/timestamp change,
+Runtime epoch and loaded OS native-module identity changes invalidate positive
+evidence. Every new Prepare hashes again. The UI timer only expires metadata; it
+does not scan files or trigger probes. Open in Preview remains the separate
+existing route/preroll workflow for actually retaining a prepared deck.
