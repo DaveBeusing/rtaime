@@ -534,3 +534,12 @@ correlation are checked by `Test-SsdPlaybackEnvironment.ps1`. The release index 
 `-SsdPlaybackEnvironmentPaths` and cannot turn inventory into physical PASS.
 Selected MFT, source-only disk latency, physical output and real sustained reference
 hardware tests remain UNVERIFIED until actually measured and bound.
+
+## Decoder capability and dependency boundary
+
+See the [source-derived input compatibility inventory](LocalMediaDecoderCapabilities.md)
+for exact sample-entry/profile/audio checks and qualification gaps, and the
+[proposed professional decoder ADR](ProfessionalDecoderDecision.md)
+for backend alternatives and approval requirements. ProRes, DNxHD/DNxHR, MXF input
+and a production FFmpeg dependency remain outside approved scope. Existing test-only
+FFmpeg generation and MXF recording evidence do not authorize input support.
