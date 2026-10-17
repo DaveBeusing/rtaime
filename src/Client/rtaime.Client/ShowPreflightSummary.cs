@@ -12,7 +12,8 @@ public static class ShowPreflightSummary
 {
 	public static IReadOnlyList<ShowPreflightCheck> Build(OperatorStatusSnapshot? snapshot,
 		bool fresh, MediaAssetCatalogSnapshot? catalogue, DateTimeOffset? catalogueObservedAtUtc,
-		IReadOnlyList<SubsystemHealthSnapshot> health, DateTimeOffset now)
+		IReadOnlyList<SubsystemHealthSnapshot> health, DateTimeOffset now,
+        IReadOnlyList<MediaAssetPreflightObservation>? preparation = null)
 	{
 		var checks = new List<ShowPreflightCheck>();
 		void Add(string id, string label, ShowPreflightState state, string detail, string workspace) =>
@@ -20,7 +21,7 @@ public static class ShowPreflightSummary
 		if (!fresh || snapshot is null)
 		{
 			foreach (var (id, label, workspace) in new[] {
-				("assets", "Show assets", "MEDIA"), ("cues", "Cue references", "EDIT"),
+				("assets", "Show assets", "MEDIA"), ("asset-playback", "Asset playback", "MEDIA"), ("cues", "Cue references", "EDIT"),
 				("outputs", "Output roles", "OUTPUTS"), ("program-output", "Program output", "OUTPUTS"),
                 ("aux-output", "AUX outputs", "OUTPUTS"), ("recording", "Recording target", "OUTPUTS"), ("audio", "Program audio", "LIVE"),
 				("ai", "AI readiness", "SETTINGS"), ("durable", "Saved show", "HEALTH") })
@@ -39,6 +40,20 @@ public static class ShowPreflightSummary
 			selected is null ? "No authoritative cue list is selected." : assetIds.Length == 0 ? "Selected show has no media asset references." :
 			!catalogueFresh ? "Refresh availability in Media Library; evidence is missing or older than 10 seconds." :
 			$"{assetIds.Length} distinct media references checked against catalogue revision {catalogue!.Revision}. Availability is observed, not guaranteed at execution.", "MEDIA");
+
+        var fileEvidence = assetIds.Select(id => preparation?.LastOrDefault(value => string.Equals(value.AssetId, id, StringComparison.OrdinalIgnoreCase))).ToArray();
+        var playbackState = selected is null ? ShowPreflightState.Unknown : assetIds.Length == 0 ? ShowPreflightState.NotApplicable :
+            !catalogueFresh || fileEvidence.Any(value => value is null || value.Running || value.Cancelled ||
+                now < value.ObservedAtUtc || now - value.ObservedAtUtc > TimeSpan.FromSeconds(10) ||
+                !assets!.TryGetValue(value.AssetId, out var asset) ||
+                asset.SourceLocation != value.SourceLocation || asset.FingerprintSha256 != value.FingerprintSha256) ? ShowPreflightState.Unknown :
+            fileEvidence.Any(value => value!.State == MediaAssetReadinessState.Unavailable) ? ShowPreflightState.Fail :
+            fileEvidence.All(value => value!.RepresentativeVerificationPassed) ? ShowPreflightState.Warning : ShowPreflightState.Unknown;
+        Add("asset-playback", "Asset playback", playbackState,
+            playbackState == ShowPreflightState.NotApplicable ? "Selected show has no media asset references." :
+            playbackState == ShowPreflightState.Warning ? "Representative checks passed conditionally. Decoders were released; whole-file, sustained hardware and future deck capacity remain UNVERIFIED." :
+            playbackState == ShowPreflightState.Fail ? "A selected asset failed representative verification. Open Media Library for the observed reason and retry deliberately." :
+            "Playback evidence is missing, invalidated or expired. Use Prepare selected assets in Media Library. Availability alone is not decoder/preroll readiness.", "MEDIA");
 
 		var sourceIds = snapshot.Sources.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var sceneIds = snapshot.Scenes.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);

@@ -94,7 +94,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 
 	private void CatalogueChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName is nameof(MediaPoolInspectorViewModel.CatalogEvidence) or nameof(MediaPoolInspectorViewModel.IsLoading)) QueueRefresh();
+		if (e.PropertyName is nameof(MediaPoolInspectorViewModel.CatalogEvidence) or nameof(MediaPoolInspectorViewModel.IsLoading) or nameof(MediaPoolInspectorViewModel.PreflightEvidence)) QueueRefresh();
 	}
 	private void Changed(object? sender, EventArgs e) => QueueRefresh();
 	private void HealthChanged(object? sender, HealthSnapshotChangedEventArgs e) => QueueRefresh();
@@ -122,7 +122,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 		var catalogueCurrent = _mediaPool?.CatalogObservedAtUtc is { } catalogueAt && catalogueAt >= _catalogueEpochStartUtc;
 		var current = ShowPreflightSummary.Build(_client.Snapshot, fresh,
 			catalogueCurrent && _mediaPool?.IsLoading == false ? _mediaPool?.CatalogEvidence : null,
-			_mediaPool?.CatalogObservedAtUtc, _health.GetCurrent(), now);
+			_mediaPool?.CatalogObservedAtUtc, _health.GetCurrent(), now, fresh && catalogueCurrent ? _mediaPool?.PreflightEvidence : null);
 		foreach (var check in current)
 		{
 			var item = Checks.FirstOrDefault(candidate => candidate.Id == check.Id);

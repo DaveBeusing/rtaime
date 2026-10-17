@@ -271,7 +271,8 @@
 									<controls:RtaimeIconButton.ContextMenu>
 										<controls:RtaimeContextMenu>
 											<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
-											<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
+											<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
 											<controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
 											<controls:RtaimeMenuSeparator />
 											<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
@@ -377,7 +378,31 @@
 
                             <StackPanel Grid.Row="2">
                                 <TextBlock Text="{Binding MediaPool.SearchStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeCompact}" AutomationProperties.LiveSetting="Polite" />
-                                <controls:RtaimeButton Content="Batch · Remove selected…" Command="{Binding MediaPool.PrepareBatchRemoveCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Prepare selected catalogue records for removal" ToolTip="Review up to 128 selected records. Source files are retained." />
+                                <Border Visibility="{Binding MediaPool.PreparationVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource RtaimeBorderBrush}">
+    <StackPanel>
+        <TextBlock Text="Prepare selected assets · representative verification" TextWrapping="Wrap" />
+        <TextBlock Text="Close file decks deliberately before starting. No routing changes. Seek points 1–3; frames per point 1–4." TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal">
+            <CheckBox Content="Require audio" IsChecked="{Binding MediaPool.RequirePreparationAudio, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}" />
+            <TextBlock Text=" Seeks " VerticalAlignment="Center" />
+            <TextBox Width="32" Text="{Binding MediaPool.PreparationSeekPoints, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Representative seek points" />
+            <TextBlock Text=" Frames " VerticalAlignment="Center" />
+            <TextBox Width="32" Text="{Binding MediaPool.PreparationFramesPerPoint, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Frames per representative seek" />
+        </StackPanel>
+        <WrapPanel>
+            <controls:RtaimeButton Content="Prepare / Retry" Command="{Binding MediaPool.PrepareAssetsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
+            <controls:RtaimeButton Content="Cancel" Command="{Binding MediaPool.CancelPreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
+            <controls:RtaimeButton Content="Close" Command="{Binding MediaPool.ClosePreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
+        </WrapPanel>
+        <TextBlock Text="{Binding MediaPool.PreparationStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+        <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding MediaPool.PreflightEvidence, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+                <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Detail}" TextWrapping="Wrap" ToolTip="{Binding SourceLocation}" /></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </StackPanel>
+</Border>
+<controls:RtaimeButton Content="Batch · Remove selected…" Command="{Binding MediaPool.PrepareBatchRemoveCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Prepare selected catalogue records for removal" ToolTip="Review up to 128 selected records. Source files are retained." />
                                 <Border Visibility="{Binding MediaPool.BatchVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
                                     <StackPanel>
                                         <TextBlock Text="{Binding MediaPool.BatchStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
@@ -463,7 +488,8 @@
 											IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
 											<controls:RtaimeMediaTile.ContextMenu>
 												<controls:RtaimeContextMenu>
-													<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+													<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
 													<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
 													<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
 													<controls:RtaimeMenuSeparator />
@@ -530,7 +556,8 @@
 										<Grid MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
 											<Grid.ContextMenu>
 												<controls:RtaimeContextMenu>
-													<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+													<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
 													<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
 													<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
 													<controls:RtaimeMenuSeparator />

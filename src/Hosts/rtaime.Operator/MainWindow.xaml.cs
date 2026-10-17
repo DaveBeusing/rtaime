@@ -715,7 +715,7 @@ public partial class MainWindow : Window
 		if (target.ContextMenu is not { } menu) return;
 		foreach (var entry in menu.Items.OfType<Controls.RtaimeMenuItem>())
 		{
-			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer";
+			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer" or "Prepare selected assets…";
 			entry.IsEnabled = readOnly || !MediaPool.HasMultipleSelection;
 			entry.ToolTip = !readOnly && MediaPool.HasMultipleSelection
 				? "Select one asset for this action. No partial bulk mutation is performed." : null;
@@ -839,6 +839,8 @@ public partial class MainWindow : Window
 		e.Effects = DragDropEffects.Copy;
 		e.Handled = true;
 	}
+
+	private void OnMediaPoolPrepareClick(object sender, RoutedEventArgs e) => MediaPool.ShowPreparation();
 
 	private void OnMediaPoolAddClick(object sender, RoutedEventArgs e)
 	{
