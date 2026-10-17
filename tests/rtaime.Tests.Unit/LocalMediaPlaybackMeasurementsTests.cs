@@ -60,4 +60,17 @@ public sealed class LocalMediaPlaybackMeasurementsTests
         Assert.Equal(.2, stats.Latency.P95);
         Assert.Equal(0, new LocalMediaReadMeasurements().Observe(0).Latency.P99);
     }
+
+    [Fact]
+    public void Inline_histogram_retains_value_equality_and_hash_semantics()
+    {
+        var first = new LocalMediaReadMeasurements().Observe(1).Observe(2).Observe(3);
+        var same = new LocalMediaReadMeasurements().Observe(3).Observe(1).Observe(2);
+        var different = new LocalMediaReadMeasurements().Observe(.5).Observe(2.5).Observe(3);
+        Assert.Equal(first, same);
+        Assert.True(first == same);
+        Assert.Equal(first.GetHashCode(), same.GetHashCode());
+        Assert.NotEqual(first, different);
+        Assert.Equal(default(LocalMediaReadMeasurements), new LocalMediaReadMeasurements());
+    }
 }

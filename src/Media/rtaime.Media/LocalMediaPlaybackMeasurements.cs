@@ -54,6 +54,23 @@ public readonly record struct LocalMediaReadMeasurements(
         throw new InvalidOperationException("Read latency histogram does not reconcile.");
     }
 
+    public bool Equals(LocalMediaReadMeasurements other)
+    {
+        if (Calls != other.Calls || TotalMilliseconds != other.TotalMilliseconds ||
+            MaximumMilliseconds != other.MaximumMilliseconds || _observed != other._observed) return false;
+        for (var index = 0; index < 17; index++)
+            if (_bins[index] != other._bins[index]) return false;
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Calls); hash.Add(TotalMilliseconds); hash.Add(MaximumMilliseconds); hash.Add(_observed);
+        for (var index = 0; index < 17; index++) hash.Add(_bins[index]);
+        return hash.ToHashCode();
+    }
+
     public LocalMediaLatencySummary Latency => new(_observed,
         "WHOLE_RUN_NEAREST_RANK_EXPONENTIAL_UPPER_BOUND", 17,
         Quantile(.50), Quantile(.95), Quantile(.99));
