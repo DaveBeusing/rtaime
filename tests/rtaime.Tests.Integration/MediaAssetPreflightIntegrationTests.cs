@@ -81,6 +81,44 @@ public sealed class MediaAssetPreflightIntegrationTests
     }
 
     [Fact]
+    public async Task Shutdown_joins_an_admitted_open_before_releasing_its_decoder_and_file_reservation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var closingEntered = new ManualResetEventSlim();
+        var decoder = new ControlledDecoder();
+        var decks = new LocalMediaDeckRuntimeService {
+            PreflightOpen = (_, _, _) => { entered.Set(); release.Wait(); return LocalMediaOpenResult.Ready(Source(decoder)); }
+        };
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var job = decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new());
+        Assert.True(await Task.Run(() => entered.Wait(TimeSpan.FromSeconds(5))));
+        var closing = Task.Run(() => { closingEntered.Set(); decks.Dispose(); });
+        try
+        {
+            Assert.True(closingEntered.Wait(TimeSpan.FromSeconds(1)));
+            await Task.Delay(25);
+            Assert.False(closing.IsCompleted);
+            Assert.False(decoder.Disposed);
+            Assert.Equal(1, decks.Resources.Reserved);
+        }
+        finally { release.Set(); }
+        await closing.WaitAsync(TimeSpan.FromSeconds(15));
+        Assert.True(decoder.Disposed);
+        Assert.Equal(1, decoder.DisposeCalls);
+        Assert.Equal(0, decoder.Reads);
+        Assert.Equal(0, decks.Resources.Reserved);
+        var stopped = decks.GetPreflight(job.JobId);
+        Assert.False(stopped.Running);
+        Assert.True(stopped.Cancelled);
+        Assert.False(stopped.RepresentativeVerificationPassed);
+        decks.Dispose();
+        Assert.Equal(1, decoder.DisposeCalls);
+    }
+
+    [Fact]
     public async Task Decode_cancellation_mutation_lock_and_environment_invalidation_keep_bounded_ownership()
     {
         if (!OperatingSystem.IsWindows()) return;
