@@ -157,7 +157,7 @@ public sealed class MediaDeckControlService
 			}
 
 			await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
-			var runtime = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var runtime = await ReadDeckAsync(sourceId, cancellationToken).ConfigureAwait(false);
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
 		}
@@ -172,10 +172,11 @@ public sealed class MediaDeckControlService
 		CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(command);
+        var sourceId = command.SourceId;
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var runtime = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var runtime = await ReadDeckAsync(sourceId, cancellationToken).ConfigureAwait(false);
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
 			if (_markers is null || runtime.Probe is null)
 				return MediaDeckSnapshot.Failed("control.media_deck.unloaded", "Media deck has no loaded asset.");
