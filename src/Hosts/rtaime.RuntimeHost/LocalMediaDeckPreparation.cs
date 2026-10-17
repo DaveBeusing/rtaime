@@ -15,13 +15,14 @@ public sealed partial class LocalMediaDeckRuntimeService
     private string? _preparationFingerprint;
     private PreparedExecutionContract? _preparationExecution;
     private MediaDeckPreparation? _preparation;
+    private long _preparationStarted;
 
     // Explicit, bounded two-deck preparation. Hash/open/wait never hold the Program registry gate.
     public MediaDeckRuntimeSnapshot Preload(MediaDeckOpenRequest request, PreparedExecutionContract execution, string fingerprint)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(execution);
-        if (fingerprint.Length != 64 || fingerprint.Any(c => !Uri.IsHexDigit(c)))
+        if (fingerprint is null || fingerprint.Length != 64 || fingerprint.Any(c => !Uri.IsHexDigit(c)))
             return Reject("runtime.media_preload.identity_invalid", "An exact catalogue SHA-256 is required.");
         lock (_management)
         {
@@ -38,8 +39,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                     _entries.Any(e => e?.Deck.Snapshot.Failure?.Code == "runtime.media_deck.cleanup_failed"))
                     return Reject("runtime.media_preload.capacity", "Optional preparation or uncertain cleanup occupies capacity.");
                 if (Find(request.SourceId) is { } occupied &&
-                    (_preparationSource != request.SourceId || occupied.Deck.Snapshot.Transport?.State == MediaTransportState.Playing))
-                    return Reject("runtime.media_preload.deck_busy", "Close the inactive target deliberately before preload.");
+                    occupied.Deck.Snapshot.State is not (MediaDeckState.Ready or MediaDeckState.Paused or MediaDeckState.Ended))
+                    return Reject("runtime.media_preload.deck_busy", "The selected target is active or has an uncertain owner; stop/close it deliberately.");
                 if (Find(request.SourceId) is null && _entries.All(e => e is not null))
                     return Reject("runtime.media_preload.capacity", "No free A/B decoder slot; preload never evicts.");
             }
@@ -120,6 +121,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             var decode = entry.Deck.DecodeSnapshot ?? throw new InvalidOperationException("Decode evidence is absent.");
             if (snapshot.Probe?.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
                 throw new InvalidOperationException("Prepared-next requires actual decoded audio; video-only remains an ordinary manual deck workflow.");
+            _preparationStarted = Stopwatch.GetTimestamp();
             return _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
                 asset.ToString(), _preparationExecution.PreparedExecutionId.ToString(),
                 _preparationExecution.AuthoritySnapshot.Revision.Value, decode.Generation,
@@ -146,7 +148,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             var snapshot = entry?.Deck.Snapshot;
             var decode = entry?.Deck.DecodeSnapshot;
             if (_preparation != expected || expected.RuntimeEpoch != _preparationEpoch ||
-                DateTimeOffset.UtcNow >= expected.ExpiresAtUtc || _program == source ||
+                DateTimeOffset.UtcNow >= expected.ExpiresAtUtc || Stopwatch.GetElapsedTime(_preparationStarted) >= TimeSpan.FromSeconds(30) || _program == source ||
                 entry is null || entry.Retiring || snapshot?.Probe?.AssetId.ToString() != expected.AssetId ||
                 snapshot.Transport?.State is not (MediaTransportState.Ready or MediaTransportState.Paused) ||
                 snapshot.Transport.Position.CurrentFrame != expected.PositionFrame ||
@@ -158,6 +160,11 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (consume && committed(result)) _preparation = null;
             return result;
         }
+    }
+
+    private void InvalidatePreparation(MediaSourceId source)
+    {
+        if (_preparationSource == source) _preparation = null;
     }
 
     // Management callers only; retained native/session ownership is handled by the existing deck lifecycle.

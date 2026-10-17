@@ -14,6 +14,7 @@ on:
       - "tests/rtaime.Tests.Integration/LocalMediaContainerProbeTests.cs"
       - "tests/rtaime.Tests.Integration/MultiDeck*"
       - "tests/rtaime.Tests.Integration/MediaAssetPreflight*"
+      - "tests/rtaime.Tests.Integration/PreparedMediaHandoffIntegrationTests.cs"
       - "build/testmedia/**"
       - "build/qualification/*SsdPlayback*"
       - "qualification/soak/ssd-playback.json"
@@ -84,7 +85,7 @@ jobs:
         run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
 
       - name: Qualify worker ownership and admission isolation
-        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaAssetPreflightIntegrationTests|FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PreparedMediaHandoffIntegrationTests|FullyQualifiedName~MediaAssetPreflightIntegrationTests|FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
 
       - name: Generate and run reference media regressions
         shell: pwsh

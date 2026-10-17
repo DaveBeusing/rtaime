@@ -207,7 +207,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             }
 
             if (target is null) throw new InvalidOperationException("No loaded deck matches the command source and asset.");
-            ClearPreparation(target.Source);
+            InvalidatePreparation(target.Source);
             var result = target.Deck.ApplyTransport(command);
             if (result.Succeeded && command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
                 MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
