@@ -88,6 +88,7 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	public LocalMediaProbe Probe => _source.Probe;
     public LocalMediaPlaybackMeasurements Measurements => _decode.Measurements;
     public LocalMediaDecodeSnapshot DecodeSnapshot => _decode.Snapshot;
+    internal bool HasPreparedAudio => _decode.HasPreparedAudio;
     public bool IsBuffering => !_decode.IsPrepared || _decode.Snapshot.State == LocalMediaDecodeState.Starved;
     public bool WaitForPreroll(TimeSpan timeout) => _decode.WaitForPreroll(timeout);
 	public RuntimeExecutionState RuntimeState => _runtime.State;

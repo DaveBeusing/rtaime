@@ -46,6 +46,29 @@ internal sealed class LocalMediaDeckSlot : IDisposable
         _session = session;
     }
 
+    internal bool HasPreparedAudio { get { lock (_gate) return _session?.HasPreparedAudio == true; } }
+    internal void PrepareNext()
+    {
+        lock (_openGate)
+        {
+            LocalMediaRuntimeSession session;
+            lock (_gate)
+            {
+                if (_isOnProgram || _session is null || _opening || _quarantinedSession is not null ||
+                    _session.Transport.State == MediaTransportState.Playing)
+                    throw new InvalidOperationException("Preload requires an inactive qualified owner.");
+                session = _session;
+                _autoPlayOnProgram = true;
+                _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
+                var result = ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, session.Probe.AssetId,
+                    MediaTransportCommandKind.Seek, EffectiveStartFrameUnsafe()));
+                if (!result.Succeeded) throw new InvalidOperationException(result.Failure?.Message);
+            }
+            if (!session.WaitForPreroll(TimeSpan.FromSeconds(10)))
+                throw new InvalidOperationException("Prepared-next preroll failed or timed out.");
+        }
+    }
+
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
     public LocalMediaDecodeSnapshot? DecodeSnapshot { get { lock (_gate) return _session?.DecodeSnapshot; } }
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements { get { lock (_gate) return _session?.Measurements; } }
