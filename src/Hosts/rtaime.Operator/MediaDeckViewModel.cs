@@ -541,6 +541,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private void RefreshState()
 	{
 		_snapshot = _controller.Snapshot;
+        if (_snapshot.SourceId is { } source && _deckPaths.TryGetValue(source, out var path)) _localPath = path;
 		Timeline.ApplyMediaDeckSnapshot(_snapshot);
 		if (!_snapshot.IsLoaded)
 			_localPath = null;

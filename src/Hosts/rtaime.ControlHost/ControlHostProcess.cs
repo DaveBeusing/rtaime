@@ -260,8 +260,11 @@ public interface IControlRuntimeTransportSeam
             throw new NotSupportedException("Transport does not support explicit deck selection.");
         return snapshot;
     }
-    ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<MediaDeckRuntimeSnapshot>(new NotSupportedException("Transport does not support explicit deck close."));
+    async ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        await GetMediaDeckSnapshotAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        return await CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+    }
 
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(

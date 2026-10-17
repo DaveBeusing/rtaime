@@ -13,7 +13,10 @@ public readonly record struct LocalMediaDeckResources(int Capacity, int Reserved
 /// <summary>Bounded source-keyed sessions sharing the host's single Program cadence.</summary>
 public sealed class LocalMediaDeckRuntimeService : IDisposable
 {
-    private sealed record Entry(MediaSourceId Source, LocalMediaDeckSlot Deck, long Order);
+    private sealed record Entry(MediaSourceId Source, LocalMediaDeckSlot Deck, long Order)
+    {
+        public bool Retiring { get; set; }
+    }
     private readonly object _gate = new();
     private readonly object _management = new();
     private readonly Entry?[] _entries;
@@ -72,12 +75,17 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             lock (_gate)
+            {
+                foreach (var entry in _entries)
+                    if (entry?.Deck.Snapshot.Failure is { Code: "runtime.media_deck.cleanup_failed" } failure)
+                        return MediaAssetProbeResult.Rejected(failure.Code, failure.Message);
                 if (_entries.Count(e => e is not null) >= _entries.Length)
                 {
                     _rejected++;
                     return MediaAssetProbeResult.Rejected("runtime.media_deck.capacity",
                         "All local decoder reservations are occupied; close an inactive deck before probing.");
                 }
+            }
             using var probe = new LocalMediaDeckSlot(_format);
             return probe.Probe(path, assetId);
         }
@@ -94,7 +102,8 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             var index = -1;
             lock (_gate)
             {
-                if (_allowedSources is not null && !_allowedSources.Contains(request.SourceId))
+                if ((_allowedSources is not null && !_allowedSources.Contains(request.SourceId)) ||
+                    _knownSources.Count == 2 && !_knownSources.Contains(request.SourceId))
                     return Reject("runtime.media_deck.source_invalid", "Deck source is outside the production source slots.");
                 for (var i = 0; i < _entries.Length; i++)
                     if (_entries[i]?.Source == request.SourceId) { index = i; previous = _entries[i]; break; }
@@ -120,9 +129,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             // Worker join, file IO, allocations and preroll never hold the registry/admission gate.
             if (previous is not null)
             {
-                lock (_gate) _entries[index] = null;
+                lock (_gate) previous.Retiring = true;
                 var closed = previous.Deck.Close();
-                if (closed.State == MediaDeckState.Error) { lock (_gate) _entries[index] = previous; return closed; }
+                if (closed.State == MediaDeckState.Error) { lock (_gate) previous.Retiring = false; return closed; }
                 previous.Deck.Dispose();
                 if (previous.Source != request.SourceId) Interlocked.Increment(ref _evicted);
             }
@@ -161,7 +170,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         {
             Entry? entry;
             lock (_gate) entry = _entries[i];
-            try { entry?.Deck.ObserveProgramSource(source); } catch (ObjectDisposedException) { }
+            try { if (entry is { Retiring: false }) entry.Deck.ObserveProgramSource(source); } catch (ObjectDisposedException) { }
         }
         return Snapshot;
     }
@@ -177,7 +186,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         out LocalMediaRuntimeBoundaryResult? boundary, ulong? programSlot = null)
     {
         var entry = Find(source);
-        if (entry is null) { boundary = null; return MediaDeckRuntimeSnapshot.Unloaded; }
+        if (entry is null || entry.Retiring) { boundary = null; return MediaDeckRuntimeSnapshot.Unloaded; }
         try { return entry.Deck.ProcessBoundary(out boundary, programSlot); }
         catch (ObjectDisposedException) { boundary = null; return MediaDeckRuntimeSnapshot.Unloaded; }
     }
@@ -188,9 +197,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         lock (_gate)
         {
             var entry = Find(source);
-            if (entry is null)
+            if (entry is null || entry.Retiring)
             {
-                if (_knownSources.Contains(source))
+                if (_knownSources.Contains(source) || entry is not null)
                 {
                     runtime.ClearExternalAudioMeter(source);
                     runtime.SetInputSignalState(source, V1InputSignalState.Lost);
@@ -221,15 +230,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             var entry = Find(source);
             if (entry is null) return MediaDeckRuntimeSnapshot.Unloaded;
-            lock (_gate)
-                for (var i = 0; i < _entries.Length; i++)
-                    if (ReferenceEquals(_entries[i], entry)) _entries[i] = null;
+            lock (_gate) entry.Retiring = true;
             var snapshot = entry.Deck.Close();
             if (snapshot.State == MediaDeckState.Error)
             {
-                lock (_gate)
-                    for (var i = 0; i < _entries.Length; i++)
-                        if (_entries[i] is null) { _entries[i] = entry; break; }
+                lock (_gate) entry.Retiring = false;
                 return snapshot;
             }
             entry.Deck.Dispose();
@@ -249,7 +254,12 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             {
                 Entry? entry;
                 lock (_gate) entry = _entries[i];
-                try { lock (_gate) _entries[i] = null; entry?.Deck.Dispose(); }
+                try
+                {
+                    lock (_gate) { if (entry is not null) entry.Retiring = true; }
+                    entry?.Deck.Dispose();
+                    lock (_gate) _entries[i] = null;
+                }
                 catch (Exception exception) { lock (_gate) _entries[i] = entry; (failures ??= []).Add(exception); }
             }
             if (failures is not null) throw new AggregateException("Local deck shutdown retained failed owners.", failures);

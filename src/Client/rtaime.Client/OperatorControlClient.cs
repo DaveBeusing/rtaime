@@ -1164,8 +1164,11 @@ public interface IOperatorControlTransport
             throw new NotSupportedException("Transport does not support explicit deck selection.");
         return snapshot;
     }
-    ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Transport does not support explicit deck close."));
+    async ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        await GetMediaDeckSnapshotAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        return await CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));

@@ -87,7 +87,8 @@ Assert-Condition ($worker -match 'QueueCapacity = 8' -and $worker -match 'SlotCo
 Assert-Condition ($worker -match 'frame.RgbaPixels.Span.CopyTo' -and $worker -match 'frame.AudioPayload.Span.CopyTo') "Queued media must own both payloads independently of decoder scratch."
 Assert-Condition ($worker -match 'generation != _generation' -and $worker -match 'previous.Cancel') "Seek/stop cancellation must fence stale generations."
 Assert-Condition ($callback -match 'ReadSample\(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero\)' -and $callback -match 'OnFlush') "MF asynchronous reads require null output pointers and acknowledged cancellation."
-Assert-Condition ($runtimeProcess -match 'using var boundary = admittedBoundary' -and $runtimeProcess -match 'V1InputSignalState.Lost') "Runtime must retain admission ownership and explicitly fall back on starvation."
+$registry = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckRuntimeService.cs") -Raw
+Assert-Condition ($registry -match 'using var boundary = admitted' -and $registry -match 'V1InputSignalState.Lost' -and $runtimeProcess -match 'mediaDeck.AdmitBoundary') "Runtime must retain admission ownership and explicitly fall back on starvation."
 
 Write-Host "Sustained local-media playback policy verification PASS"
 Write-Host "Video decode: Media Foundation RGB32"
@@ -99,7 +100,7 @@ Assert-Condition ($callback -notmatch 'TaskCompletionSource|WaitAsync[(]' -and $
 
 $progressPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/LocalMediaSampleProgress.cs"
 $progress = Get-Content -LiteralPath $progressPath -Raw
-$deck = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckRuntimeService.cs") -Raw
+$deck = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckSlot.cs") -Raw
 $safetyTests = Get-Content -LiteralPath (Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/LocalMediaDecoderSafetyTests.cs") -Raw
 Assert-Condition ($decoder -match 'progress.BeforeRead' -and $decoder -match 'progress.Observe' -and $progress -match 'MaximumReads = 4096' -and $progress -match 'MaximumEmptyReads = 128') "Native sample loops must retain finite operation and empty-result budgets."
 Assert-Condition ($decoder -match 'ValidatePcmLength' -and $progress -match '192_000') "Decoded PCM lengths must be bounded before allocation."

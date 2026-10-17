@@ -146,7 +146,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 			MediaContractVersion.Current,
 			snapshot.Probe!.AssetId,
 			kind) { SourceId = snapshot.SourceId };
-		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		return response;
 	}
@@ -159,7 +159,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 		lock (_gate)
 			previous = _snapshot.Transport ?? throw new MediaDeckTransportUnavailableException();
 
-		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
 		if (response.Transport is not null && response.State != MediaDeckState.Error)
 			return MediaTransportCommandResult.Accepted(response.Transport);
