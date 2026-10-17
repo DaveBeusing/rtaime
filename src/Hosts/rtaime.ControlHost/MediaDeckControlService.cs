@@ -73,9 +73,14 @@ public sealed class MediaDeckControlService
 
 			var routeCapability = provider.Capabilities.FirstOrDefault(capability =>
 				string.Equals(capability.Kind, RouteCapabilityKind, StringComparison.Ordinal));
-			var routeResource = provider.Resources.FirstOrDefault(resource =>
-				string.Equals(resource.Kind, RouteCapabilityKind, StringComparison.Ordinal));
-			if (routeCapability is null || routeResource is null)
+			var sourceIndex = Array.FindIndex(control.Specification.Sources.ToArray(),
+                source => source.SourceId.Value == request.SourceId.Value);
+            var routeResource = provider.Resources.Where(resource =>
+                string.Equals(resource.Kind, RouteCapabilityKind, StringComparison.Ordinal)).ElementAtOrDefault(sourceIndex);
+            var decodeCapability = provider.Capabilities.FirstOrDefault(capability => capability.Kind == DecodeCapabilityKind);
+            var decodeResource = provider.Resources.Where(resource =>
+                resource.Kind == DecodeCapabilityKind).ElementAtOrDefault(sourceIndex);
+			if (routeCapability is null || routeResource is null || decodeCapability is null || decodeResource is null)
 			{
 				return MediaDeckSnapshot.Failed(
 					"control.media_deck.route_unavailable",
@@ -95,7 +100,8 @@ public sealed class MediaDeckControlService
 						routeCapability.CapabilityId,
 						routeResource,
 						request.SourceId,
-						null)
+						null),
+                    new PreparedExecutionBinding(Identity.New(), decodeCapability.CapabilityId, decodeResource, request.SourceId, null)
 				});
 
 			var runtime = await _runtime

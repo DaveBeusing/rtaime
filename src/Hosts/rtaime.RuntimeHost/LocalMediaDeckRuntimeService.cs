@@ -16,6 +16,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     private sealed record Entry(MediaSourceId Source, LocalMediaDeckSlot Deck, long Order)
     {
         public bool Retiring { get; set; }
+        public bool NeedsPublication { get; set; } = true;
     }
     private readonly object _gate = new();
     private readonly object _management = new();
@@ -77,7 +78,15 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         }
     }
     public MediaDeckRuntimeSnapshot Snapshot => GetSnapshot(null);
-    public MediaDeckRuntimeSnapshot GetSnapshot(MediaSourceId? source) => Find(source)?.Deck.Snapshot ?? MediaDeckRuntimeSnapshot.Unloaded;
+    public MediaDeckRuntimeSnapshot GetSnapshot(MediaSourceId? source)
+    {
+        lock (_gate)
+        {
+            var entry = Find(source);
+            return entry is null ? MediaDeckRuntimeSnapshot.Unloaded :
+                entry.Retiring ? new(MediaContractVersion.Current, MediaDeckState.Loading, sourceId: entry.Source) : entry.Deck.Snapshot;
+        }
+    }
     public LocalMediaDecodeSnapshot? DecodeSnapshot => Find(null)?.Deck.DecodeSnapshot;
     public LocalMediaPlaybackMeasurements? PlaybackMeasurements => Find(null)?.Deck.PlaybackMeasurements;
     public LocalMediaRuntimeBoundaryResult? LatestBoundary => Find(null)?.Deck.LatestBoundary;
@@ -170,15 +179,19 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             for (var i = 0; i < _entries.Length; i++)
             {
                 var entry = _entries[i];
-                if (entry is null || entry.Deck.Snapshot.Probe?.AssetId != command.AssetId ||
+                if (entry is null || entry.Retiring || entry.Deck.Snapshot.Probe?.AssetId != command.AssetId ||
                     command.SourceId is { } source && source != entry.Source) continue;
                 if (target is not null) throw new InvalidOperationException("Ambiguous asset; explicit deck source is required.");
                 target = entry;
             }
+
+            if (target is null) throw new InvalidOperationException("No loaded deck matches the command source and asset.");
+            var result = target.Deck.ApplyTransport(command);
+            if (result.Succeeded && command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
+                MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
+                target.NeedsPublication = true;
+            return result;
         }
-        // The slot validates the asset again, fencing concurrent replacement.
-        if (target is null) throw new InvalidOperationException("No loaded deck matches the command source and asset.");
-        return target.Deck.ApplyTransport(command);
     }
 
     public MediaDeckRuntimeSnapshot ObserveProgramSource(MediaSourceId? source)
@@ -226,10 +239,14 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             }
             var snapshot = entry.Deck.ProcessBoundary(out var admitted, programSlot);
             using var boundary = admitted;
+
             if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
+            {
                 runtime.SetExternalInputContent(source, boundary.RgbaPixels.Span,
                     boundary.Video.Surface.Format == runtime.Format ? V1InputSignalState.Valid : V1InputSignalState.Unstable);
-            if (snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
+                entry.NeedsPublication = false;
+            }
+            if (entry.NeedsPublication || snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
                 boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
                 runtime.SetInputSignalState(source, V1InputSignalState.Lost);
             if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
