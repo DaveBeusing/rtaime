@@ -97,6 +97,13 @@ jobs:
       - name: Bounded soak summary regressions
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~BoundedSoakEvidenceTests" --logger "console;verbosity=detailed"
 
+      - name: SSD read histogram and fail-closed evidence regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaPlaybackMeasurementsTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Read histogram regression failed." }
+          ./build/qualification/Test-SsdPlaybackVerifierRegression.ps1
+
       - name: Soak evidence verifier negative regressions
         shell: pwsh
         run: ./build/qualification/Test-SustainedMixedLoadVerifierRegression.ps1

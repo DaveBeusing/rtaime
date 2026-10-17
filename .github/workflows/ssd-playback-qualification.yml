@@ -1,0 +1,51 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+name: Opt-in SSD playback endurance
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Real elapsed duration; dedicated reference machine required"
+        required: true
+        type: choice
+        options: ["10m","60m","8h","24h","72h"]
+        default: "60m"
+      media_a:
+        description: "Existing local reference file on the selected runner, deck A"
+        required: true
+        type: string
+      media_b:
+        description: "Existing local reference file on the selected runner, deck B"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: ssd-physical-reference
+  cancel-in-progress: false
+jobs:
+  endurance:
+    name: Reference SSD sustained playback
+    runs-on: [self-hosted, Windows, X64, rtaime-ssd]
+    timeout-minutes: 4440
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Execute selected actual media duration
+        shell: pwsh
+        env:
+          RTAIME_SELECTED_PROFILE: ${{ inputs.profile }}
+          RTAIME_SELECTED_MEDIA_A: ${{ inputs.media_a }}
+          RTAIME_SELECTED_MEDIA_B: ${{ inputs.media_b }}
+        run: |
+          ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile $env:RTAIME_SELECTED_PROFILE -MediaA $env:RTAIME_SELECTED_MEDIA_A -MediaB $env:RTAIME_SELECTED_MEDIA_B
+      - name: Preserve evidence even on failed playback
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-ssd-endurance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/ssd-playback
+          if-no-files-found: error
