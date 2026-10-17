@@ -1157,6 +1157,16 @@ public interface IOperatorControlTransport
     ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException("Operator transport does not expose media asset availability refresh."));
 
+    async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        if (snapshot.SourceId is not null && snapshot.SourceId != sourceId)
+            throw new NotSupportedException("Transport does not support explicit deck selection.");
+        return snapshot;
+    }
+    ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Transport does not support explicit deck close."));
+
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 
@@ -1792,6 +1802,11 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
         _transport.RefreshMediaAssetAvailabilityAsync(cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        _transport.GetMediaDeckSnapshotAsync(sourceId, cancellationToken);
+    public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        _transport.CloseMediaDeckAsync(sourceId, cancellationToken);
 
     public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         _transport.GetMediaDeckSnapshotAsync(cancellationToken);

@@ -253,6 +253,16 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<MediaAssetProbeResult>(
 			new NotSupportedException("Runtime transport does not expose media-asset probing."));
 
+    async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        if (snapshot.SourceId is not null && snapshot.SourceId != sourceId)
+            throw new NotSupportedException("Transport does not support explicit deck selection.");
+        return snapshot;
+    }
+    ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckRuntimeSnapshot>(new NotSupportedException("Transport does not support explicit deck close."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));

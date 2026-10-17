@@ -907,6 +907,21 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			: MediaAssetProbeResult.Rejected(wire.Failure!.Code, wire.Failure.Message);
 	}
 
+    public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_deck.scoped.snapshot.get", new { SourceId = sourceId.ToString() }, cancellationToken).ConfigureAwait(false);
+        var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Deck response is required.");
+        return FromWire(wire);
+    }
+    public async ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(MediaSourceId sourceId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_deck.scoped.close", new { SourceId = sourceId.ToString() }, cancellationToken).ConfigureAwait(false);
+        var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Deck response is required.");
+        return FromWire(wire);
+    }
+
 	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("runtime.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -940,7 +955,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	{
 		ArgumentNullException.ThrowIfNull(command);
 		var response = await ExchangeAsync(
-			"runtime.media_deck.transport",
+			command.SourceId is null ? "runtime.media_deck.transport" : "runtime.media_deck.scoped.transport",
 			new WireMediaTransportCommand(
 				command.Version.ToString(),
 				command.AssetId.ToString(),
@@ -949,7 +964,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				command.AutoPlayOnProgram,
 				command.EndBehavior is null ? null : (int)command.EndBehavior.Value,
 				command.InPointFrame,
-				command.OutPointFrame),
+				command.OutPointFrame, command.SourceId?.ToString()),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireMediaTransportResult>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime media-deck transport response is required.");
@@ -2033,7 +2048,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireMediaDeckRuntimeSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireFailure? Failure);

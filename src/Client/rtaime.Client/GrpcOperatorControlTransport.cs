@@ -459,6 +459,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 
 	public async ValueTask<MediaDeckSnapshot> ApplyMediaDeckTransportAsync(MediaTransportCommand command, CancellationToken cancellationToken = default)
 	{
+        if (command.SourceId is not null) throw new NotSupportedException("Explicit multi-deck transport requires the matched local Operator pipe transport.");
 		var operation = new MediaDeckTransportRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind };
 		if (command.TargetFrame is { } target) operation.TargetFrame = target;
 		if (command.AutoPlayOnProgram is { } autoPlay) operation.AutoPlayOnProgram = autoPlay;
@@ -471,6 +472,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 
 	public async ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(MediaMarkerCommand command, CancellationToken cancellationToken = default)
 	{
+        if (command.SourceId is not null) throw new NotSupportedException("Explicit multi-deck markers require the matched local Operator pipe transport.");
 		var operation = new MediaDeckMarkerRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind, CuePointId = command.CuePointId?.ToString() ?? string.Empty, Name = command.Name ?? string.Empty };
 		if (command.PositionFrame is { } position) operation.PositionFrame = position;
 		var request = Request(); request.ApplyMediaDeckMarker = operation;

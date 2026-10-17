@@ -8,7 +8,7 @@ using rtaime.Runtime.Contracts;
 namespace rtaime.ControlHost;
 
 /// <summary>
-/// Authoritative ControlHost composition for the single V1 local media deck.
+/// Authoritative ControlHost composition for the bounded V1 local media decks.
 /// Runtime owns decode/transport; ControlHost owns source authorization and marker persistence.
 /// </summary>
 public sealed class MediaDeckControlService
@@ -32,12 +32,12 @@ public sealed class MediaDeckControlService
 		_persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
 	}
 
-	public async ValueTask<MediaDeckSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+	public async ValueTask<MediaDeckSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default, MediaSourceId? sourceId = null)
 	{
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var runtime = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var runtime = await ReadDeckAsync(sourceId, cancellationToken).ConfigureAwait(false);
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
 			runtime = await SynchronizePlaybackRangeAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
@@ -131,10 +131,11 @@ public sealed class MediaDeckControlService
 		CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(command);
+        var sourceId = command.SourceId;
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var current = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var current = await ReadDeckAsync(sourceId, cancellationToken).ConfigureAwait(false);
 			if (current.Probe is null || current.Transport is null)
 				return MediaDeckSnapshot.Failed("control.media_deck.unloaded", "Media deck has no loaded asset.");
 			if (command.AssetId != current.Probe.AssetId)
@@ -152,7 +153,7 @@ public sealed class MediaDeckControlService
 					autoPlayOnProgram: command.AutoPlayOnProgram,
 					endBehavior: command.EndBehavior,
 					inPointFrame: _markers.InPointFrame,
-					outPointFrame: _markers.OutPointFrame);
+					outPointFrame: _markers.OutPointFrame) { SourceId = current.SourceId };
 			}
 
 			await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
@@ -208,12 +209,14 @@ public sealed class MediaDeckControlService
 		}
 	}
 
-	public async ValueTask<MediaDeckSnapshot> CloseAsync(CancellationToken cancellationToken = default)
+	public async ValueTask<MediaDeckSnapshot> CloseAsync(CancellationToken cancellationToken = default, MediaSourceId? sourceId = null)
 	{
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var runtime = await _runtime.CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
+			var runtime = sourceId is { } source
+                ? await _runtime.CloseMediaDeckAsync(source, cancellationToken).ConfigureAwait(false)
+                : await _runtime.CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
 			_markers = null;
 			_markerStorageVersion = 0;
 			return Compose(runtime);
@@ -223,6 +226,9 @@ public sealed class MediaDeckControlService
 			_gate.Release();
 		}
 	}
+
+    private ValueTask<MediaDeckRuntimeSnapshot> ReadDeckAsync(MediaSourceId? source, CancellationToken token) =>
+        source is { } id ? _runtime.GetMediaDeckSnapshotAsync(id, token) : _runtime.GetMediaDeckSnapshotAsync(token);
 
 	private async ValueTask EnsureMarkersLoadedAsync(
 		MediaDeckRuntimeSnapshot runtime,
@@ -260,7 +266,7 @@ public sealed class MediaDeckControlService
 			inPointFrame: _markers.InPointFrame,
 			outPointFrame: _markers.OutPointFrame);
 		await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
-		return await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		return await ReadDeckAsync(runtime.SourceId, cancellationToken).ConfigureAwait(false);
 	}
 
 	private MediaDeckSnapshot Compose(MediaDeckRuntimeSnapshot runtime, Failure? controlFailure = null)
