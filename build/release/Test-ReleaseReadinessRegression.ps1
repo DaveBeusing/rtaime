@@ -89,6 +89,14 @@ try {
         Require (@($r.domains | Where-Object { $_.name -eq $domain -and $_.status -eq "UNVERIFIED" }).Count -eq 1) "Missing $domain must remain UNVERIFIED."
     }
     $indexHash = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash
+    foreach ($duration in @("smoke","10m","60m","8h","24h","72h")) {
+        Require (@($r.domains | Where-Object { $_.name -eq "ssdPlayback.$duration" -and $_.status -eq "UNVERIFIED" }).Count -eq 1) "Missing SSD duration cannot be inferred from other evidence."
+    }
+    $invalidSsd = Join-Path $temp "ssd-invalid.json"
+    Write-Json @{ schemaVersion = "1.0"; sourceCommit = $wrong; profile = "10m"; result = $null } $invalidSsd
+    $invalidSsdIndex = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -SsdPlaybackEvidencePaths @($invalidSsd) -OutputPath (Join-Path $temp "ssd-invalid-index.json")
+    Require ($invalidSsdIndex.overallStatus -eq "FAIL" -and
+        @($invalidSsdIndex.domains | Where-Object { $_.name -eq "ssdPlayback.invalidInput" -and $_.status -eq "FAIL" }).Count -eq 1) "Supplied invalid SSD evidence must fail release correlation."
     Expect-Rejected { & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -OutputPath $indexPath } "retained evidence overwrite"
     Require ((Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash -eq $indexHash) "Existing index bytes changed."
     $stale = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $wrong -OutputPath (Join-Path $temp "stale.json")
