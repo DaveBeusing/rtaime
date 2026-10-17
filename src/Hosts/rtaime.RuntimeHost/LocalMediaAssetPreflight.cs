@@ -16,21 +16,30 @@ public sealed partial class LocalMediaDeckRuntimeService
     private MediaAssetPreflightObservation? _preflight;
     private LocalMediaFileSource? _preflightQuarantine;
     private FileStream? _preflightIdentityQuarantine;
+    private string[]? _preflightModulePaths;
     // An injectable production-provider seam permits deterministic cancellation/open tests.
     internal Func<string, MediaSourceId, MediaAssetId?, LocalMediaOpenResult>? PreflightOpen { get; set; }
     internal Func<string>? PreflightEnvironment { get; set; }
 
-    private string PreflightEnvironmentIdentity()
+    private string PreflightEnvironmentIdentity(bool capture = false)
     {
         if (PreflightEnvironment is not null) return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(_preflightEpoch + "|" + PreflightEnvironment())));
-        using var process = Process.GetCurrentProcess();
-        var modules = process.Modules.Cast<ProcessModule>().Where(m => m.FileName.StartsWith(Environment.SystemDirectory, StringComparison.OrdinalIgnoreCase)).Take(513).ToArray();
-        if (modules.Length > 512) throw new IOException("Loaded-module inventory exceeds the preflight bound.");
-        var text = new StringBuilder(_preflightEpoch).Append('|').Append(Environment.OSVersion.VersionString);
-        foreach (var module in modules.OrderBy(m => m.FileName, StringComparer.OrdinalIgnoreCase))
+        if (capture)
         {
-            var file = new FileInfo(module.FileName);
-            text.Append('|').Append(file.FullName).Append(':').Append(file.Length).Append(':').Append(file.LastWriteTimeUtc.Ticks);
+            using var process = Process.GetCurrentProcess();
+            var paths = process.Modules.Cast<ProcessModule>().Select(module => module.FileName)
+                .Where(path => path.StartsWith(Environment.SystemDirectory, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => path, StringComparer.OrdinalIgnoreCase).Take(513).ToArray();
+            if (paths.Length > 512) throw new IOException("Loaded-module inventory exceeds the preflight bound.");
+            _preflightModulePaths = paths;
+        }
+        var observedPaths = _preflightModulePaths ?? throw new IOException("Decoder module inventory is unavailable.");
+        var text = new StringBuilder(_preflightEpoch).Append('|').Append(Environment.OSVersion.VersionString);
+        foreach (var path in observedPaths)
+        {
+            var file = new FileInfo(path);
+            text.Append('|').Append(file.FullName).Append(':').Append(file.Length).Append(':').Append(file.LastWriteTimeUtc.Ticks)
+                .Append(':').Append(FileVersionInfo.GetVersionInfo(path).FileVersion);
         }
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
     }
@@ -179,7 +188,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             file.Refresh();
             if (file.Length != value.LengthBytes || file.LastWriteTimeUtc.Ticks != value.LastWriteUtcTicks)
                 throw new IOException("File or decoder environment changed during verification.");
-            value = value with { EnvironmentIdentity = PreflightEnvironmentIdentity(), State = MediaAssetReadinessState.ConditionallyReady,
+            value = value with { EnvironmentIdentity = PreflightEnvironmentIdentity(capture: true), State = MediaAssetReadinessState.ConditionallyReady,
                 Detail = "Representative seek/decode passed. Whole-file, sustained hardware and future deck capacity remain UNVERIFIED; no route was changed." };
         }
         catch (OperationCanceledException)

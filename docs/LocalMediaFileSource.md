@@ -424,7 +424,9 @@ their explicit failure reason. No new codec/backend, transform or transcode exis
 Successful observations contain asset/job/Runtime epoch, path, SHA-256, length,
 last-write timestamp, target format, sample counts and observation time. A SHA-256
 of the Runtime epoch, OS version and bounded inventory of loaded SystemDirectory
-native module paths/lengths/timestamps provides conservative context invalidation.
+native module paths/lengths/timestamps/versions observed during decode provides
+conservative context invalidation. Get revalidates those same installed files;
+normal module unloading during decoder release does not invalidate them.
 It is not an independently certified selected MFT or physical GPU driver identity;
 such provenance and sustained/whole-file/device qualification remain UNVERIFIED.
 Consequently there is no persisted or reusable positive readiness cache.

@@ -11,18 +11,21 @@ namespace rtaime.Tests.Integration;
 
 public sealed class MediaAssetPreflightIntegrationTests
 {
-    [Fact]
-    public async Task Real_reference_verification_releases_decoder_and_rejects_mutated_identity_and_old_epoch()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Real_reference_verification_releases_decoder_and_rejects_mutated_identity_and_old_epoch(bool fractionalOutput)
     {
         if (!OperatingSystem.IsWindows()) return;
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
-        using var decks = new LocalMediaDeckRuntimeService();
+        using var decks = new LocalMediaDeckRuntimeService(fractionalOutput ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8);
         var id = MediaAssetId.New();
         var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
         var job = decks.BeginPreflight(asset.Path, id, hash, new(RequireAudio: true));
         Assert.True(job.Running);
         var result = await Completed(decks, job.JobId);
         result.Validate();
+        Assert.Equal(fractionalOutput ? "1080p59.94" : "1080p50", result.TargetFormat);
         Assert.True(result.RepresentativeVerificationPassed, result.Detail);
         Assert.Equal(6, result.VerifiedFrames);
         Assert.Equal(3, result.VerifiedSeeks);
