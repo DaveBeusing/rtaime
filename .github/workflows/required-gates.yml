@@ -56,7 +56,7 @@ jobs:
 
       - name: Resident next preparation and authoritative handoff regressions
         shell: pwsh
-        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PreparedMediaHandoffIntegrationTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PreparedMediaHandoffIntegrationTests|FullyQualifiedName~MediaAssetCatalogIntegrationTests.Prepared_execution_revision_lease" --logger "console;verbosity=detailed"
 
       - name: File deck capacity ownership and Program isolation regressions
         shell: pwsh

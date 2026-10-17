@@ -188,12 +188,22 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 		}
 	}
 
-	public async ValueTask<ShowControlWorkspaceSnapshot> GoAsync(CancellationToken cancellationToken = default)
-	{
+    public ValueTask<ShowControlWorkspaceSnapshot> GoAsync(CancellationToken cancellationToken = default) =>
+        GoCoreAsync(null, cancellationToken);
+
+    public ValueTask<ShowControlWorkspaceSnapshot> GoWithPreparationLeaseAsync(
+        Func<CancellationToken, ValueTask<IAsyncDisposable>> acquireLease, CancellationToken cancellationToken = default) =>
+        GoCoreAsync(acquireLease ?? throw new ArgumentNullException(nameof(acquireLease)), cancellationToken);
+
+    private async ValueTask<ShowControlWorkspaceSnapshot> GoCoreAsync(
+        Func<CancellationToken, ValueTask<IAsyncDisposable>>? acquireLease, CancellationToken cancellationToken)
+    {
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
 			await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false);
+            await using var preparationLease = acquireLease is null ? null :
+                await acquireLease(cancellationToken).ConfigureAwait(false);
 			_machine.BeginGo();
 			await PersistAsync(cancellationToken).ConfigureAwait(false);
 			Journal("show_control.go", CurrentCursorDetail("GO"), _machine.Snapshot.ExecutionId?.Value);

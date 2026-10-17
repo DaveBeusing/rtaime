@@ -67,7 +67,10 @@ prepared source; successful TAKE consumes the ticket exactly once.
 
 Control retains the expected authority revision across the existing serialized
 mutations. An interleaved manual production command cannot be silently adopted
-into that prepared action sequence. The final MediaPlay command is source-scoped,
+into that prepared action sequence. Show Control acquires its execution gate before
+a revision lease on the existing catalogue. That lease spans the prepared cue actions,
+so a remove/relink cannot race the final TAKE; cancellation/failure releases it exactly
+once. This is management serialization, not Program work. The final MediaPlay command is source-scoped,
 including when A and B share an asset. No raw video/audio crosses management IPC.
 
 The existing Program cadence observes the committed source and admits its already

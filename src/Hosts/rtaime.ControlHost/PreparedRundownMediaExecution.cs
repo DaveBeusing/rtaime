@@ -42,6 +42,7 @@ public sealed partial class ControlHostIpcServer
         if (DateTimeOffset.UtcNow >= evidence.ExpiresAtUtc || _runtimeTransport.HostInstanceId != candidate.RuntimeHostInstanceId ||
             control.State.Revision.Value != (_preparedMediaTake.Value?.ExpectedRevision ?? evidence.AuthorityRevision))
             throw new InvalidOperationException("Prepared-next authority, Runtime lifetime or deadline changed.");
+        if (_preparedMediaTake.Value is not null) return; // The active Show Control transaction holds the exact catalogue revision lease.
         var catalogue = await _mediaAssetCatalog!.GetSnapshotAsync(false, token).ConfigureAwait(false);
         var asset = catalogue.Assets.SingleOrDefault(a => a.AssetId.ToString() == evidence.AssetId);
         if (catalogue.Revision != candidate.CatalogueRevision || asset is null ||
@@ -55,7 +56,11 @@ public sealed partial class ControlHostIpcServer
         await ValidatePreparedRundownMediaAsync(candidate, token).ConfigureAwait(false);
         var previous = _preparedMediaTake.Value;
         _preparedMediaTake.Value = new PreparedMediaTake(candidate);
-        try { return await _showControl!.GoAsync(token).ConfigureAwait(false); }
+        try
+        {
+            return await _showControl!.GoWithPreparationLeaseAsync(
+                ct => _mediaAssetCatalog!.AcquireRevisionLeaseAsync(candidate.CatalogueRevision, ct), token).ConfigureAwait(false);
+        }
         finally { _preparedMediaTake.Value = previous; }
     }
 
