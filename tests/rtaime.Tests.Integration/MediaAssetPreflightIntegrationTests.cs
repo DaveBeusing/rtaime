@@ -203,7 +203,7 @@ public sealed class MediaAssetPreflightIntegrationTests
             {
                 if (index == 100) raceEntered.Set();
                 var result = decks.Open(request, prepared);
-                Assert.False(result.IsLoaded);
+                Assert.Equal(MediaDeckState.Error, result.State);
                 Assert.Contains(result.Failure?.Code, new[] { "runtime.media_deck.preflight_cancelling", "runtime.media_deck.cleanup_failed" });
             }
         });
