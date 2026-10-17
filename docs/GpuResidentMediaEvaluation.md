@@ -43,7 +43,7 @@ missing measurements described below.
 | Media Foundation output | WindowsMediaFoundationLocalMediaDecoder configures RGB32 at the normalized output size/rate; native read is outside Program | Native ReadSample CPU-wall histograms; selected MFT binary and acceleration are not identified |
 | RGB32 to RGBA | ConvertToContiguousBuffer; IMF2DBuffer.Lock2D or contiguous lock; visible rows copied into reusable RGBA scratch; R/B swizzle and opaque alpha | Copy/conversion CPU time is not separated from aggregate decode; contiguous conversion may itself copy |
 | Worker ownership | LocalMediaDecodeWorker copies scratch video/audio into LocalMediaFrameSlot; queue capacity 8, pool 10; leases retain slots and fence source generation | Queue/peak/discard/starvation/state and read/decode histograms exist; these are host-memory frames |
-| Runtime admission | RuntimeHostProcess admits a decoded lease through V1RuntimeHostService.UpdateExternalInputFrame; RgbaFrameBuffer.CopyPixelsFrom copies into the existing source buffer | InputAdmission timing includes admission work, not independent memory-bandwidth attribution |
+| Runtime admission | RuntimeHostProcess admits a decoded lease through V1RuntimeHostService.SetExternalInputContent; RgbaFrameBuffer.CopyPixelsFrom copies into the existing source buffer | InputAdmission timing includes admission work, not independent memory-bandwidth attribution |
 | GPU materialization | GpuProcessingProvider materializes required RGBA inputs; CUDA Allocate uses cuMemcpyHtoD_v2 | Provider counters distinguish logical copies from device-domain payload bytes; not a PCIe bus trace |
 | Program composite | Existing CUDA RGBA kernel; synchronous cuCtxSynchronize under the backend gate; CUT can alias an input | Optional CUDA-event kernel duration plus CPU launch/sync and lock timing; events are not enabled in normal Runtime construction |
 | Monitoring export | CudaD3D11MonitoringInterop copies CUDA memory to a shareable D3D11 texture, unmaps, synchronizes, unregisters and flushes before publication | Device copy and interop are not a GPU media-input path or zero-copy proof |
@@ -135,3 +135,7 @@ No implementation dependency is selected by this audit. NVIDIA video SDK/NVDEC,
 new FFmpeg builds, additional outputs, P010/HDR and runtime shader compilation
 remain outside approved scope. Existing CPU fallback and saved production remain
 the supported behavior until those gates close.
+
+Implementation alternatives, typed surface/fence semantics, fallback and exact-host
+benchmark procedure are specified as a proposal in
+[GPU media surface design](GpuMediaSurfaceDesign.md).

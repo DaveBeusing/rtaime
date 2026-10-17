@@ -552,3 +552,12 @@ retained frame-pool bytes and measured hardware capacity. Four-deck admission an
 SSD-pressure weighting remain proposed, pending scope approval and a confirmed
 physical baseline. A free decoder slot does not authorize another production source.
 Existing Program routing, cleanup quarantine and saved production remain unchanged.
+
+## GPU media decode evaluation
+
+The [GPU media transfer audit](GpuResidentMediaEvaluation.md) retains the
+current CPU/RGBA path: no exact-hardware performance win or GPU-input adoption
+approval is established. The [proposed surface/fence design](GpuMediaSurfaceDesign.md)
+defines the private ownership, capability/fallback and paired-measurement gates.
+Existing GPU monitoring and green software checks do not qualify GPU-resident decode,
+P010/HDR, physical no-gap output or removal of the current Program readback.
