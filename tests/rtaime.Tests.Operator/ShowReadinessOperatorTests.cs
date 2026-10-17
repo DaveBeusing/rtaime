@@ -141,7 +141,7 @@ public sealed class ShowReadinessOperatorTests
 			Assert.True(window.IsKeyboardFocusWithin);
 			var export = Assert.IsType<RtaimeButton>(window.FindName("ExportChecksSupportButton"));
 			Assert.Same(main.Startup.ExportSupportBundleCommand, export.Command);
-			Assert.Equal(9, main.ShowReadiness.Checks.Count);
+			Assert.Equal(10, main.ShowReadiness.Checks.Count);
 			main.MediaPool.SetCatalogSnapshot(MediaAssetCatalogSnapshot.Empty);
 			var catalogueObservedAt = main.MediaPool.CatalogObservedAtUtc;
 			main.ShowReadiness.RefreshChecksCommand.Execute(null);

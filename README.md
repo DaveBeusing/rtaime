@@ -422,3 +422,8 @@ Restricted MOV/H.264 with AAC or PCM16 and per-host HEVC Main/Main10 outcomes ar
 covered by the [format qualification matrix](docs/LocalMediaFileSource.md#container-probes-and-format-qualification).
 Decoder availability, real software decoding and physical qualification remain
 separate; ProRes/DNx/MXF input and HDR conversion are unsupported.
+
+Explicit [asset preparation](docs/MediaLibraryAssetBrowser.md#explicit-asset-preparation)
+verifies selected files on a bounded non-Program worker. Availability, representative
+conditional success and resident deck readiness remain distinct; preparation never
+routes Program or changes saved production.

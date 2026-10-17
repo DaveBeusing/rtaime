@@ -66,6 +66,15 @@ message RecordingStartRequest {
   string profile_id = 3;
 }
 
+message MediaAssetPreflightRequest {
+  string asset_id = 1;
+  bool require_audio = 2;
+  int32 seek_points = 3;
+  int32 frames_per_point = 4;
+  int64 maximum_bytes = 5;
+}
+message MediaAssetPreflightJobRequest { string job_id = 1; }
+
 message MediaAssetCatalogRequest {
   int32 offset = 1;
   int32 limit = 2;
@@ -189,6 +198,9 @@ message ExternalControlRequest {
     MediaAssetRelinkRequest relink_media_asset = 52;
     MediaAssetRemoveRequest remove_media_asset = 53;
     EmptyRequest refresh_media_assets = 54;
+    MediaAssetPreflightRequest begin_media_asset_preflight = 55;
+    MediaAssetPreflightJobRequest get_media_asset_preflight = 56;
+    MediaAssetPreflightJobRequest cancel_media_asset_preflight = 57;
 
     EmptyRequest get_media_deck = 60;
     MediaDeckOpenRequest open_media_deck = 61;

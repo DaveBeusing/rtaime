@@ -44,7 +44,8 @@ public sealed record MediaPoolItemViewModel(
 	bool IsReady,
 	string? LocalPath = null,
 	TimeSpan? KnownDuration = null,
-	MediaSearchMetadata? SearchMetadata = null) : INotifyPropertyChanged
+	MediaSearchMetadata? SearchMetadata = null,
+    string? PlaybackReadiness = null) : INotifyPropertyChanged
 {
 	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -76,7 +77,9 @@ public sealed record MediaPoolItemViewModel(
 	public string AvailabilityLabel => State.Contains("MISSING", StringComparison.OrdinalIgnoreCase)
 		? "MISSING"
 		: IsOnline ? "ONLINE" : "OFFLINE";
-	public string ReadinessLabel => !IsOnline ? AvailabilityLabel : IsReady ? "ONLINE · READY" : "ONLINE · NOT READY";
+	public string ReadinessLabel => !IsOnline ? AvailabilityLabel : Kind == MediaPoolItemKind.Clip
+        ? $"ONLINE · {PlaybackReadiness ?? (IsReady ? "PREPARED" : "UNVERIFIED · NOT READY")}"
+        : IsReady ? "ONLINE · READY" : "ONLINE · NOT READY";
 	public string PreviewCapabilityLabel => MediaLibraryHoverPreview.Capability(this) switch
 	{
 		MediaHoverCapability.Offline => "Offline: hover preview unavailable.",
@@ -172,6 +175,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		InitializeBrowsing();
 		FilteredItems = [];
 		SelectedItems = [];
+        InitializePreparation();
 		InspectorProperties = [];
 		InspectorMetadataProperties = [];
 		InspectorEffectProperties = [];
@@ -939,10 +943,12 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 					? _operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail
 					: null,
 				online,
-				online && !_catalogBusy,
+				online && active && _mediaDeck.IsLoaded && !_mediaDeck.HasError && _mediaDeck.State is "READY" or "PLAYING" or "PAUSED",
 				asset.SourceLocation,
 				asset.Duration,
-				new MediaSearchMetadata(asset.VideoCodec, asset.AudioCodec, asset.VideoFormat)));
+				new MediaSearchMetadata(asset.VideoCodec, asset.AudioCodec, asset.VideoFormat),
+                online && active && _mediaDeck.IsLoaded && !_mediaDeck.HasError && _mediaDeck.State is "READY" or "PLAYING" or "PAUSED"
+                    ? "PREPARED" : AssetPreparationState(asset.AssetId.ToString())));
 		}
 
 		if (_mediaDeck.IsLoaded &&
@@ -1037,6 +1043,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public void Dispose()
 	{
         PropertyChanged -= OnInspectorDraftValueChanged;
+        DisposePreparation();
 		DisposeBrowsing();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;

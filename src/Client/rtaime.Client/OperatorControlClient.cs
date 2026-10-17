@@ -1139,6 +1139,13 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("Operator transport does not expose AI showcase control."));
 
+    ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+    ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+    ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+
     ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException("Operator transport does not expose the media asset catalogue."));
 
@@ -1289,6 +1296,13 @@ public interface IOperatorControlTransport
 
 public interface IMediaAssetCatalogClient
 {
+    ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+    ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+    ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
+
     ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default);
     ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
         IReadOnlyList<string> sourceLocations,
@@ -1780,6 +1794,10 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         }
         return result;
     }
+
+    public ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) => _transport.BeginMediaAssetPreflightAsync(assetId, options, cancellationToken);
+    public ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) => _transport.GetMediaAssetPreflightAsync(jobId, cancellationToken);
+    public ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) => _transport.CancelMediaAssetPreflightAsync(jobId, cancellationToken);
 
     public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
         _transport.GetMediaAssetCatalogAsync(cancellationToken);

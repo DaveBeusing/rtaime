@@ -887,6 +887,29 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+    public async ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId, string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
+    {
+        options.Validate();
+        var response = await ExchangeAsync("runtime.media_asset.preflight.begin", new { Path = path, AssetId = assetId.ToString(), Fingerprint = fingerprint, Options = options }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_asset.preflight.get", new { JobId = jobId }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_asset.preflight.cancel", new { JobId = jobId }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+
 	public async ValueTask<MediaAssetProbeResult> ProbeMediaAssetAsync(
 		string path,
 		MediaAssetId assetId,

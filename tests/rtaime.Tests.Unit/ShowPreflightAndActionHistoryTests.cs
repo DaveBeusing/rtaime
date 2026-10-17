@@ -244,6 +244,31 @@ public sealed class ShowPreflightAndActionHistoryTests
 		Assert.Null(later.ResponseAccepted); // A string response does not expose acceptance or commitment.
 	}
 
+    [Fact]
+    public void Asset_availability_cannot_grant_playback_and_conditional_observations_expire_or_relink()
+    {
+        var id = MediaAssetId.New();
+        var show = Selected(new(ShowControlActionId.New(), ShowControlActionKind.MediaPlay, mediaAssetId: id.ToString()));
+        var timestamp = new UtcTimestamp(Now);
+        var asset = new MediaAssetDescriptor(id, MediaAssetOriginKind.LocalFile, @"C:\media\asset.mp4", "Asset",
+            MediaContainerFormat.Mp4, MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8,
+            AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(1), 1024, new string('A', 64), timestamp, timestamp, MediaAssetAvailability.Online);
+        var catalog = new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 1, [asset]);
+        var value = new MediaAssetPreflightObservation(Guid.NewGuid().ToString("N"), id.ToString(), Guid.NewGuid().ToString("N"),
+            asset.SourceLocation, asset.FingerprintSha256, 1024, 1, "1080p50", new string('B', 64),
+            MediaAssetReadinessState.ConditionallyReady, false, false, "Representative", 6, 3, true, Now);
+        ShowPreflightCheck Playback(MediaAssetPreflightObservation[]? evidence) =>
+            ShowPreflightSummary.Build(Snapshot(show), true, catalog, Now, [], Now, evidence).Single(check => check.Id == "asset-playback");
+        Assert.Equal(ShowPreflightState.Unknown, Playback(null).State);
+        Assert.Equal(ShowPreflightState.Warning, Playback([value]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value, value with { AssetId = MediaAssetId.New().ToString(), RuntimeEpoch = Guid.NewGuid().ToString("N") }]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value, value with { AssetId = MediaAssetId.New().ToString(), TargetFormat = "1080p59.94" }]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value with { ObservedAtUtc = Now.AddSeconds(-11) }]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value with { SourceLocation = @"C:\different.mp4" }]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value with { Cancelled = true }]).State);
+        Assert.Equal(ShowPreflightState.Fail, Playback([value with { State = MediaAssetReadinessState.Unavailable }]).State);
+    }
+
 	private static IReadOnlyList<ShowPreflightCheck> Checks(OperatorStatusSnapshot snapshot) =>
 		ShowPreflightSummary.Build(snapshot, true, null, null, [], Now);
 	private static ShowControlWorkspaceSnapshot Selected(ShowControlAction action)

@@ -17,6 +17,55 @@ namespace rtaime.Tests.Integration;
 public sealed class ExternalControlIntegrationTests
 {
     [Fact]
+    public async Task Catalogue_preflight_roundtrips_grpc_and_pipes_without_changing_production_or_deck_state()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var grpc = fixture.CreateClient();
+        var before = await grpc.GetSnapshotAsync();
+        var imported = await grpc.ImportMediaAssetsAsync([asset.Path]);
+        Assert.True(imported.Succeeded);
+        var id = Assert.Single(imported.Snapshot.Assets).AssetId;
+        var job = await grpc.BeginMediaAssetPreflightAsync(id, new(RequireAudio: true));
+        var pipe = new OperatorControlClient(new NamedPipeOperatorControlTransport(fixture.ControlEndpoint,
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10)));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        while (job.Running)
+        {
+            await Task.Delay(100, deadline.Token);
+            job = await pipe.GetMediaAssetPreflightAsync(job.JobId);
+        }
+        Assert.True(job.RepresentativeVerificationPassed, job.Detail);
+        Assert.Equal(6, job.VerifiedFrames);
+        var grpcRead = await grpc.GetMediaAssetPreflightAsync(job.JobId);
+        Assert.Equal(job.JobId, grpcRead.JobId);
+        Assert.Equal(job.RuntimeEpoch, grpcRead.RuntimeEpoch);
+        Assert.Equal(MediaAssetReadinessState.ConditionallyReady, grpcRead.State);
+        var cancelled = await grpc.CancelMediaAssetPreflightAsync(job.JobId);
+        Assert.True(cancelled.Cancelled);
+        Assert.Equal(MediaAssetReadinessState.Unverified, cancelled.State);
+        var after = await grpc.GetSnapshotAsync();
+        Assert.Equal(before.Production, after.Production);
+        Assert.Equal(MediaDeckState.Unloaded, (await grpc.GetMediaDeckSnapshotAsync()).State);
+        Assert.Equal(0, fixture.Runtime.MediaDeck!.Resources.Reserved);
+        var rejected = await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipe.GetMediaAssetPreflightAsync(Guid.NewGuid().ToString("N")));
+        Assert.Contains("control.media_asset_catalog.preflight.rejected", rejected.Message);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipe.BeginMediaAssetPreflightAsync(MediaAssetId.New(), new()));
+        Assert.Equal(before.Production, (await pipe.SynchronizeAsync()).Production);
+    }
+
+    [Fact]
+    public async Task Observer_cannot_admit_optional_preflight_work()
+    {
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+        await using var grpc = fixture.CreateClient();
+        var denied = await Assert.ThrowsAsync<RpcException>(async () =>
+            await grpc.BeginMediaAssetPreflightAsync(MediaAssetId.New(), new()));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
+    }
+
+    [Fact]
     public async Task Explicit_grpc_deck_target_preserves_two_same_asset_sessions_and_independent_close()
     {
         if (!OperatingSystem.IsWindows()) return;

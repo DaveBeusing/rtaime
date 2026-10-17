@@ -11,7 +11,7 @@ namespace rtaime.RuntimeHost;
 public readonly record struct LocalMediaDeckResources(int Capacity, int Reserved, long Rejected, long Evicted);
 
 /// <summary>Bounded source-keyed sessions sharing the host's single Program cadence.</summary>
-public sealed class LocalMediaDeckRuntimeService : IDisposable
+public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 {
     private sealed record Entry(MediaSourceId Source, LocalMediaDeckSlot Deck, long Order)
     {
@@ -104,7 +104,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
                 foreach (var entry in _entries)
                     if (entry?.Deck.Snapshot.Failure is { Code: "runtime.media_deck.cleanup_failed" } failure)
                         return MediaAssetProbeResult.Rejected(failure.Code, failure.Message);
-                if (_entries.Count(e => e is not null) >= _entries.Length)
+                if (_probeReservations != 0 || _entries.Count(e => e is not null) >= _entries.Length)
                 {
                     _rejected++;
                     return MediaAssetProbeResult.Rejected("runtime.media_deck.capacity",
@@ -128,6 +128,19 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         lock (_management)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            MediaAssetPreflightObservation? activePreflight;
+            lock (_gate)
+            {
+                if (_preflightQuarantine is not null || _preflightIdentityQuarantine is not null)
+                    return Reject("runtime.media_deck.cleanup_failed", "Preflight retained a failed native owner; restart RuntimeHost.");
+                activePreflight = _preflight is { Running: true } observation ? observation : null;
+            }
+            if (activePreflight is not null)
+            {
+                CancelPreflight(activePreflight.JobId);
+                return Reject("runtime.media_deck.preflight_cancelling",
+                    "Live deck admission cancelled optional preflight. Retry after its native owner releases capacity.");
+            }
             Entry? previous = null;
             var index = -1;
             lock (_gate)
@@ -300,6 +313,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
         lock (_management)
         {
             _disposed = true;
+            StopPreflight();
             List<Exception>? failures = null;
             for (var i = 0; i < _entries.Length; i++)
             {

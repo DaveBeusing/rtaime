@@ -157,3 +157,16 @@ dotnet test rtaime.slnx --configuration Release --no-build -m:1
 ```
 
 A successful managed build/test run is not evidence for physical real-time behavior, professional media I/O, GPU qualification, physical inference performance, hardware support or production qualification.
+
+## Asset preparation observation path
+
+Operator's explicit selected-asset preparation uses the existing catalogue client
+through ControlHost to RuntimeHost. ControlHost resolves durable catalogue identity;
+Runtime's existing deck registry admits one bounded optional worker only with no
+loaded file decks. It reuses LocalMediaFileProvider for identity/representative
+verification and publishes metadata-only observations. No new project, state store,
+clock, renderer, Program authority or raw media IPC is introduced. Cancel/cleanup
+retains reservations until the native owner has terminated; sample success never
+grants resident deck readiness or physical release acceptance. See
+[Local media preflight](LocalMediaFileSource.md#non-program-asset-preflight) and
+[Operator preparation](MediaLibraryAssetBrowser.md#explicit-asset-preparation).

@@ -19,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Rtaime.ExternalControl.V1;
 
+using rtaime.Media.Contracts;
+
 namespace rtaime.ControlHost;
 
 public enum ExternalControlRole
@@ -531,7 +533,8 @@ internal static class ExternalControlOperationCatalog
 		"control.graphics.overlay.load", "control.graphics.cg.apply", "control.graphics.overlay.set", "control.graphics.overlay.clear",
 		"control.compositing.layer.set", "control.compositing.layer.transform", "control.compositing.layer.processing", "control.compositing.layers.reorder",
 		"control.recording.start", "control.recording.stop", "control.ai_showcase.set",
-		"control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
+		"control.media_asset_catalog.preflight.begin", "control.media_asset_catalog.preflight.get", "control.media_asset_catalog.preflight.cancel",
+        "control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
 		"control.media_deck.scoped.snapshot.get", "control.media_deck.scoped.close", "control.media_deck.scoped.transport", "control.media_deck.scoped.marker",
         "control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
 		"control.show_control.snapshot.get", "control.show_control.cue_list.save", "control.show_control.cue_list.select", "control.show_control.arm", "control.show_control.go", "control.show_control.cancel", "control.show_control.recovery.acknowledge",
@@ -793,7 +796,16 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			case ExternalControlRequest.OperationOneofCase.StartRecording: operation = "control.recording.start"; payload = new { request.StartRecording.DestinationDirectory, request.StartRecording.FileName, ProfileId = NullIfEmpty(request.StartRecording.ProfileId) }; break;
 			case ExternalControlRequest.OperationOneofCase.StopRecording: operation = "control.recording.stop"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.SetAiShowcase: return Raw("control.ai_showcase.set", request.SetAiShowcase);
-			case ExternalControlRequest.OperationOneofCase.GetMediaAssetCatalog: operation = "control.media_asset_catalog.snapshot.get"; payload = new { request.GetMediaAssetCatalog.Offset, request.GetMediaAssetCatalog.Limit }; break;
+			case ExternalControlRequest.OperationOneofCase.BeginMediaAssetPreflight:
+                operation = "control.media_asset_catalog.preflight.begin";
+                payload = new { request.BeginMediaAssetPreflight.AssetId, Options = new MediaAssetPreflightOptions(
+                    request.BeginMediaAssetPreflight.RequireAudio, request.BeginMediaAssetPreflight.SeekPoints,
+                    request.BeginMediaAssetPreflight.FramesPerPoint, request.BeginMediaAssetPreflight.MaximumBytes) }; break;
+            case ExternalControlRequest.OperationOneofCase.GetMediaAssetPreflight:
+                operation = "control.media_asset_catalog.preflight.get"; payload = new { request.GetMediaAssetPreflight.JobId }; break;
+            case ExternalControlRequest.OperationOneofCase.CancelMediaAssetPreflight:
+                operation = "control.media_asset_catalog.preflight.cancel"; payload = new { request.CancelMediaAssetPreflight.JobId }; break;
+            case ExternalControlRequest.OperationOneofCase.GetMediaAssetCatalog: operation = "control.media_asset_catalog.snapshot.get"; payload = new { request.GetMediaAssetCatalog.Offset, request.GetMediaAssetCatalog.Limit }; break;
 			case ExternalControlRequest.OperationOneofCase.ImportMediaAssets: operation = "control.media_asset_catalog.import"; payload = new { SourceLocations = request.ImportMediaAssets.SourceLocations.ToArray() }; break;
 			case ExternalControlRequest.OperationOneofCase.RelinkMediaAsset: operation = "control.media_asset_catalog.relink"; payload = new { request.RelinkMediaAsset.AssetId, request.RelinkMediaAsset.SourceLocation }; break;
 			case ExternalControlRequest.OperationOneofCase.RemoveMediaAsset: operation = "control.media_asset_catalog.remove"; payload = new { request.RemoveMediaAsset.AssetId }; break;

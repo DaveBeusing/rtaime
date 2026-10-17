@@ -12,6 +12,36 @@ namespace rtaime.Tests.Integration;
 
 public sealed class MediaAssetCatalogIntegrationTests
 {
+    [Fact]
+    public async Task Same_path_relink_and_Control_restart_invalidate_preflight_even_with_identical_fingerprint()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-preflight-relink-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "asset.mp4");
+            await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);
+            await using var management = new SqliteManagementStore(Path.Combine(root, "management.db"));
+            var persistence = new MediaAssetCatalogPersistenceStore(management);
+            var runtime = new ProbeRuntimeTransport();
+            var service = new MediaAssetCatalogService(runtime, persistence);
+            var imported = await service.ImportAsync([path]);
+            var asset = Assert.Single(imported.Snapshot.Assets);
+            var job = await service.BeginPreflightAsync(asset.AssetId, new());
+            runtime.PreflightValue = job with { Running = false, State = MediaAssetReadinessState.ConditionallyReady,
+                LengthBytes = 4, LastWriteUtcTicks = 1, EnvironmentIdentity = new string('A', 64), VerifiedFrames = 1, VerifiedSeeks = 1 };
+            Assert.True((await service.GetPreflightAsync(job.JobId)).RepresentativeVerificationPassed);
+            var relinked = await service.RelinkAsync(asset.AssetId, path);
+            Assert.True(relinked.Succeeded);
+            Assert.Equal(asset.FingerprintSha256, relinked.Snapshot.Assets[0].FingerprintSha256);
+            Assert.Equal(asset.SourceLocation, relinked.Snapshot.Assets[0].SourceLocation);
+            Assert.Equal(MediaAssetReadinessState.Unverified, (await service.GetPreflightAsync(job.JobId)).State);
+            var restarted = new MediaAssetCatalogService(runtime, persistence);
+            Assert.Equal(MediaAssetReadinessState.Unverified, (await restarted.GetPreflightAsync(job.JobId)).State);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
 	[Fact]
 	public async Task Catalogue_survives_restart_preserves_identity_and_supports_missing_relink_and_remove()
 	{
@@ -316,6 +346,20 @@ public sealed class MediaAssetCatalogIntegrationTests
 	private sealed class ProbeRuntimeTransport : IControlRuntimeTransportSeam
 	{
 		public Action<string>? OnProbe { get; set; }
+        public MediaAssetPreflightObservation? PreflightValue { get; set; }
+        public ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId,
+            string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
+        {
+            PreflightValue = new(Guid.NewGuid().ToString("N"), assetId.ToString(), Guid.NewGuid().ToString("N"),
+                path, fingerprint, 0, 0, "1080p50", "", MediaAssetReadinessState.Unverified, true, false,
+                "Verifying", 0, 0, options.RequireAudio, DateTimeOffset.UtcNow);
+            return ValueTask.FromResult(PreflightValue);
+        }
+        public ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PreflightValue ?? throw new InvalidOperationException());
+        public ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PreflightValue = (PreflightValue ?? throw new InvalidOperationException()) with {
+                Cancelled = true, Running = false, State = MediaAssetReadinessState.Unverified });
 		public bool IsConnected => true;
 		public string? HostInstanceId => "catalog-test-runtime";
 		public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => Array.Empty<ProviderDescriptor>();

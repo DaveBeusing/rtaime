@@ -246,6 +246,14 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAIShowcaseRemoteSnapshot>(
 			new NotSupportedException("Runtime transport does not expose AI showcase control."));
 
+
+    ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId, string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Runtime preflight is unavailable."));
+    ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Runtime preflight is unavailable."));
+    ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Runtime preflight is unavailable."));
+
 	ValueTask<MediaAssetProbeResult> ProbeMediaAssetAsync(
 		string path,
 		MediaAssetId assetId,

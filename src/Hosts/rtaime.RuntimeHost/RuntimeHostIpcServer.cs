@@ -208,7 +208,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.replay.mark_out" => ValueTask.FromResult(MarkReplayOut(request, runtime)),
 				"runtime.replay.range.set" => ValueTask.FromResult(SetReplayRange(request, runtime)),
 				"runtime.replay.clip.create" => CreateReplayClipAsync(request, runtime, cancellationToken),
-				"runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
+				"runtime.media_asset.preflight.begin" or "runtime.media_asset.preflight.get" or "runtime.media_asset.preflight.cancel" => ValueTask.FromResult(PreflightMediaAsset(request)),
+                "runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
 				"runtime.media_deck.transport" or "runtime.media_deck.scoped.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
@@ -626,6 +627,24 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				string.IsNullOrWhiteSpace(result.Sha256) ? null : result.Sha256,
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
+
+    private WireEnvelope PreflightMediaAsset(WireEnvelope request)
+    {
+        var deck = _mediaDeckAccessor() ?? throw new InvalidOperationException("Local media service is unavailable.");
+        MediaAssetPreflightObservation result;
+        if (request.MessageType.EndsWith(".begin", StringComparison.Ordinal))
+        {
+            var wire = request.Payload.Deserialize<WireMediaAssetPreflight>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight request missing.");
+            result = deck.BeginPreflight(wire.Path, new MediaAssetId(Identity.Parse(wire.AssetId)), wire.Fingerprint, wire.Options);
+        }
+        else
+        {
+            var jobId = request.Payload.GetProperty("jobId").GetString() ?? throw new InvalidDataException("Job identity missing.");
+            result = request.MessageType.EndsWith(".cancel", StringComparison.Ordinal) ? deck.CancelPreflight(jobId) : deck.GetPreflight(jobId);
+        }
+        return Success(request, request.MessageType + ".response", result);
+    }
+    private sealed record WireMediaAssetPreflight(string Path, string AssetId, string Fingerprint, MediaAssetPreflightOptions Options);
 
 	private WireEnvelope ProbeMediaAsset(WireEnvelope request)
 	{

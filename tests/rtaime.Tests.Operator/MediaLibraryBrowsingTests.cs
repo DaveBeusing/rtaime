@@ -140,7 +140,8 @@ public sealed class MediaLibraryBrowsingTests
 			var revision = catalog.Snapshot.Revision;
 			await pool.LoadSmartBinsAsync(new MediaSmartBinStore(path));
 			pool.SelectedCategory = "Clips"; pool.DurationFilter = MediaDurationFilter.UnderOneMinute;
-			pool.ReadinessFilter = MediaReadinessFilter.Ready; pool.SearchText = "clip00012";
+			pool.ReadinessFilter = MediaReadinessFilter.Ready; Assert.Empty(pool.FilteredItems);
+            pool.ReadinessFilter = MediaReadinessFilter.NotReady; pool.SearchText = "clip00012";
 			Assert.Single(pool.FilteredItems);
 			pool.SaveSmartBinCommand.Execute(null); await pool.FlushSmartBinsAsync();
 			Assert.Single(pool.SmartBins);
@@ -435,9 +436,9 @@ public sealed class MediaLibraryBrowsingTests
                             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
                             Assert.True(menu.IsOpen);
                             var entries = menu.Items.OfType<RtaimeMenuItem>().ToArray();
-                            Assert.Equal(7, entries.Length);
+                            Assert.Equal(8, entries.Length);
                             foreach (var entry in entries)
-                                Assert.Equal(entry.Header?.ToString() is "Properties" or "Reveal in Explorer", entry.IsEnabled);
+                                Assert.Equal(entry.Header?.ToString() is "Properties" or "Reveal in Explorer" or "Prepare selected assets…", entry.IsEnabled);
                             Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
                             Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
                         }
