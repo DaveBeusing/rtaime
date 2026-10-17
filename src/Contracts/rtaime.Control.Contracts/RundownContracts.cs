@@ -455,7 +455,10 @@ public sealed record RundownExecutionSnapshot(
 	ulong? FollowTargetFrameSequence = null,
 	uint? RemainingFollowFrames = null,
 	ushort RemainingItemRepeats = 0,
-	ushort RemainingRundownRepeats = 0)
+	ushort RemainingRundownRepeats = 0,
+    string? PreparedMediaState = null,
+    string? PreparedMediaSourceId = null,
+    DateTimeOffset? PreparedMediaExpiresAtUtc = null)
 {
 	public static RundownExecutionSnapshot Idle { get; } = new(
 		RundownExecutionState.Idle,

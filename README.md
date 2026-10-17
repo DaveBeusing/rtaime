@@ -445,3 +445,12 @@ retained frame-pool bytes and measured hardware capacity. Four-deck admission an
 SSD-pressure weighting remain proposed, pending scope approval and a confirmed
 physical baseline. A free decoder slot does not authorize another production source.
 Existing Program routing, cleanup quarantine and saved production remain unchanged.
+
+## Resident next-clip preparation
+
+Rundown PREPARE can now preroll the explicitly selected off-Program A/B clip before
+GO, with verified file identity and an expiring source/generation/revision fence.
+GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
+invalidates next evidence. See [prepared-next playout](docs/PreparedNextPlayout.md)
+for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
+qualification limits. Physical/no-gap acceptance remains UNVERIFIED.

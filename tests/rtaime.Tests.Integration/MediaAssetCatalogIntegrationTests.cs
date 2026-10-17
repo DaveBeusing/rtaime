@@ -13,6 +13,45 @@ namespace rtaime.Tests.Integration;
 public sealed class MediaAssetCatalogIntegrationTests
 {
     [Fact]
+    public async Task Prepared_execution_revision_lease_blocks_catalogue_mutation_and_releases_exactly_once()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-prepared-catalogue-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "asset.mp4");
+            await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);
+            await using var management = new SqliteManagementStore(Path.Combine(root, "management.db"));
+            var service = CreateService(management);
+            var imported = await service.ImportAsync([path]);
+            Assert.True(imported.Succeeded);
+            var revision = imported.Snapshot.Revision;
+            var asset = Assert.Single(imported.Snapshot.Assets);
+            var lease = await service.AcquireRevisionLeaseAsync(revision);
+            Task<MediaAssetCatalogMutationResult>? removal = null;
+            try
+            {
+                using var cancelled = new CancellationTokenSource();
+                var waiting = service.AcquireRevisionLeaseAsync(revision, cancelled.Token).AsTask();
+                Assert.False(waiting.IsCompleted);
+                cancelled.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+                removal = service.RemoveAsync(asset.AssetId).AsTask();
+                Assert.False(removal.IsCompleted);
+            }
+            finally { await lease.DisposeAsync(); await lease.DisposeAsync(); }
+            var removed = await removal!.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.True(removed.Succeeded);
+            Assert.Empty(removed.Snapshot.Assets);
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await using var stale = await service.AcquireRevisionLeaseAsync(revision);
+            });
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public async Task Same_path_relink_and_Control_restart_invalidate_preflight_even_with_identical_fingerprint()
     {
         var root = Path.Combine(Path.GetTempPath(), "rtaime-preflight-relink-" + Guid.NewGuid().ToString("N"));

@@ -1054,7 +1054,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.FollowTargetFrameSequence,
 			wire.RemainingFollowFrames,
 			wire.RemainingItemRepeats,
-			wire.RemainingRundownRepeats);
+			wire.RemainingRundownRepeats, wire.PreparedMediaState, wire.PreparedMediaSourceId, wire.PreparedMediaExpiresAtUtc);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
 
@@ -1347,7 +1347,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.FollowTargetFrameSequence,
 			wire.RemainingFollowFrames,
 			wire.RemainingItemRepeats,
-			wire.RemainingRundownRepeats);
+			wire.RemainingRundownRepeats, wire.PreparedMediaState, wire.PreparedMediaSourceId, wire.PreparedMediaExpiresAtUtc);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
 
@@ -2284,7 +2284,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		ulong? FollowTargetFrameSequence = null,
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
-		ushort RemainingRundownRepeats = 0);
+		ushort RemainingRundownRepeats = 0,
+        string? PreparedMediaState = null, string? PreparedMediaSourceId = null, DateTimeOffset? PreparedMediaExpiresAtUtc = null);
 	private sealed record WireProductionMacroDefinition(string MacroJson);
 	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);

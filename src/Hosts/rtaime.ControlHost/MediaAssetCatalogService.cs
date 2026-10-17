@@ -55,6 +55,30 @@ public sealed class MediaAssetCatalogService
     public ValueTask<MediaAssetPreflightObservation> CancelPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
         _runtime.CancelMediaAssetPreflightAsync(jobId, cancellationToken);
 
+    // Management transaction lease: Show Control acquires its execution gate first.
+    // No catalogue mutation can relink/remove the candidate between validation and TAKE.
+    public async ValueTask<IAsyncDisposable> AcquireRevisionLeaseAsync(ulong revision, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+            if (_persisted!.Snapshot.Revision != revision)
+                throw new InvalidOperationException("Catalogue changed before prepared-media execution.");
+            return new RevisionLease(_gate);
+        }
+        catch { _gate.Release(); throw; }
+    }
+    private sealed class RevisionLease(SemaphoreSlim gate) : IAsyncDisposable
+    {
+        private SemaphoreSlim? _owned = gate;
+        public ValueTask DisposeAsync()
+        {
+            Interlocked.Exchange(ref _owned, null)?.Release();
+            return ValueTask.CompletedTask;
+        }
+    }
+
 	public async ValueTask<MediaAssetCatalogSnapshot> GetSnapshotAsync(
 		bool refreshAvailability = true,
 		CancellationToken cancellationToken = default)

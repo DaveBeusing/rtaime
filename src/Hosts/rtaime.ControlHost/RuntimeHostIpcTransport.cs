@@ -972,6 +972,40 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+    public async ValueTask<MediaDeckRuntimeSnapshot> PreloadMediaDeckAsync(MediaDeckOpenRequest request,
+        PreparedExecutionContract execution, string fingerprint, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_deck.preload.open",
+            new WireMediaDeckOpen(request.Version.ToString(), request.SourceId.ToString(), request.Path,
+                request.AssetId?.ToString(), ToWire(execution), fingerprint), cancellationToken).ConfigureAwait(false);
+        return FromWire(response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Preload response is absent."));
+    }
+    public async ValueTask<MediaDeckPreparation> PrepareLoadedNextAsync(MediaSourceId source, MediaAssetId asset, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync("runtime.media_deck.preload.prepare",
+            new { SourceId = source.ToString(), AssetId = asset.ToString() }, cancellationToken).ConfigureAwait(false);
+        return response.Payload.Deserialize<MediaDeckPreparation>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Prepared-next evidence is absent.");
+    }
+    public async ValueTask CancelMediaPreparationAsync(string ticket, CancellationToken cancellationToken = default) =>
+        _ = await ExchangeAsync("runtime.media_deck.preload.cancel", new { TicketId = ticket }, cancellationToken).ConfigureAwait(false);
+
+    public async ValueTask<RuntimeRemoteApplyResult> ApplyPreparedMediaExecutionAsync(PreparedExecutionContract execution,
+        MediaSinkId sink, RuntimeProgramTransitionIntent? transition, MediaDeckPreparation preparation, bool consume,
+        CancellationToken cancellationToken = default)
+    {
+        var payload = new WireApplyRequest(ToWire(execution), sink.ToString(),
+            transition is null ? null : new WireTransition((int)transition.Kind, transition.FromSourceId.ToString(),
+                transition.ToSourceId.ToString(), transition.DurationFrames), preparation, consume);
+        // Distinct operation: an older Runtime must reject, never ignore the fence.
+        var response = await ExchangeAsync("runtime.execution.prepared_media.apply", payload, cancellationToken).ConfigureAwait(false);
+        var apply = response.Payload.Deserialize<WireApplyResponse>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Guarded apply response is absent.");
+        return new RuntimeRemoteApplyResult(response.HostInstanceId, FromWire(apply.Prepare),
+            apply.Commit is null ? null : FromWire(apply.Commit), apply.ActivationSequence, response.StateVersion);
+    }
+
 	public async ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
 		MediaTransportCommand command,
 		CancellationToken cancellationToken = default)
@@ -1987,7 +2021,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
-	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition);
+	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition, MediaDeckPreparation? Preparation = null, bool ConsumePreparation = false);
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
@@ -2070,7 +2104,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution, string? Fingerprint = null);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame, string? SourceId = null);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);

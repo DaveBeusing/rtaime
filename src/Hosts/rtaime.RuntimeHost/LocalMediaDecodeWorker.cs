@@ -69,6 +69,9 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     {
         get { lock (_gate) return new(_state, _generation, _frames.Count, QueueCapacity, _peak, _discarded, _starvations, _failure); }
     }
+    internal bool HasPreparedAudio { get { lock (_gate) return _frames.Count >= 3 &&
+        _frames.Take(3).All(frame => frame.Frame.Audio is not null && !frame.Frame.AudioPayload.IsEmpty); } }
+
     internal bool IsPrepared { get { lock (_gate) return _prerolled && _failure is null && !_stopped; } }
 
     internal Failure? Reposition(long frame)

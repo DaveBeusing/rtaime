@@ -142,3 +142,12 @@ replacement invalidates the current payload; Program does not republish pixels
 from the previous clip generation. Empty/repeated boundaries do not replay audio.
 Logical Program tally follows the committed source; selecting a deck for editing
 does not perform a TAKE.
+
+## Resident next-clip preparation
+
+Rundown PREPARE can now preroll the explicitly selected off-Program A/B clip before
+GO, with verified file identity and an expiring source/generation/revision fence.
+GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
+invalidates next evidence. See [prepared-next playout](PreparedNextPlayout.md)
+for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
+qualification limits. Physical/no-gap acceptance remains UNVERIFIED.

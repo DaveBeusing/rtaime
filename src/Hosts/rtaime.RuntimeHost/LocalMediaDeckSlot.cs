@@ -22,6 +22,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
 	private Failure? _failure;
 	private bool _autoPlayOnProgram = true;
+    private bool _preparedNextPlayback;
 	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
 	private long? _inPointFrame;
 	private long? _outPointFrame;
@@ -44,6 +45,33 @@ internal sealed class LocalMediaDeckSlot : IDisposable
     {
         _provider = provider;
         _session = session;
+    }
+
+    internal bool HasPreparedAudio { get { lock (_gate) return _session?.HasPreparedAudio == true; } }
+    internal long PrepareNext()
+    {
+        lock (_openGate)
+        {
+            LocalMediaRuntimeSession session;
+            long generation;
+            lock (_gate)
+            {
+                if (_isOnProgram || _session is null || _opening || _quarantinedSession is not null ||
+                    _session.Transport.State == MediaTransportState.Playing)
+                    throw new InvalidOperationException("Preload requires an inactive qualified owner.");
+                session = _session;
+                _autoPlayOnProgram = true;
+                _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
+                var result = ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, session.Probe.AssetId,
+                    MediaTransportCommandKind.Seek, EffectiveStartFrameUnsafe()));
+                if (!result.Succeeded) throw new InvalidOperationException(result.Failure?.Message);
+                _preparedNextPlayback = true;
+                generation = session.DecodeSnapshot.Generation;
+            }
+            if (!session.WaitForPreroll(TimeSpan.FromSeconds(10)))
+                throw new InvalidOperationException("Prepared-next preroll failed or timed out.");
+            return generation;
+        }
     }
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
@@ -181,6 +209,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 					"Media-deck command targets a different media asset.");
 			}
 
+            if (command.Kind != MediaTransportCommandKind.Play) _preparedNextPlayback = false;
 			if (command.Kind == MediaTransportCommandKind.ConfigurePlayback)
 			{
 				var totalFrames = _session.Transport.Position.TotalFrames;
@@ -249,6 +278,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 				return CreateSnapshot();
 			}
 
+            var previousPosition = _session.Transport.Position.CurrentFrame;
 			var result = _session.ProcessNextBoundary(programSlot);
 			_latestBoundary?.Dispose();
             _latestBoundary = result.Retain();
@@ -260,8 +290,16 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 
 			if (result.Succeeded && result.Transport.Position.CurrentFrame >= EffectiveEndFrameUnsafe())
 				ApplyEndBehaviorUnsafe();
-			else if (result.Status == LocalMediaRuntimeBoundaryStatus.Ended)
-				ApplyEndBehaviorUnsafe();
+            else if (result.Status == LocalMediaRuntimeBoundaryStatus.Ended)
+            {
+                if (_preparedNextPlayback && previousPosition < EffectiveEndFrameUnsafe())
+                {
+                    _failure = new Failure("runtime.media_preload.early_eof", "Prepared clip ended before its confirmed OUT. Automatic follow is blocked.");
+                    _latestBoundary?.Dispose();
+                    _latestBoundary = _session.MarkFailed(_failure.Value);
+                }
+                else ApplyEndBehaviorUnsafe();
+            }
 
 			return CreateSnapshot();
 		}

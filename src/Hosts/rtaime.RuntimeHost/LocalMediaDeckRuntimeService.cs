@@ -141,6 +141,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                 return Reject("runtime.media_deck.preflight_cancelling",
                     "Live deck admission cancelled optional preflight. Retry after its native owner releases capacity.");
             }
+            ClearPreparation(request.SourceId);
             Entry? previous = null;
             var index = -1;
             lock (_gate)
@@ -206,6 +207,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             }
 
             if (target is null) throw new InvalidOperationException("No loaded deck matches the command source and asset.");
+            InvalidatePreparation(target.Source);
             var result = target.Deck.ApplyTransport(command);
             if (result.Succeeded && command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
                 MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
@@ -290,6 +292,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             var entry = Find(source);
             if (entry is null) return MediaDeckRuntimeSnapshot.Unloaded;
+            ClearPreparation(entry.Source);
             lock (_gate) entry.Retiring = true;
             var snapshot = entry.Deck.Close();
             if (snapshot.State == MediaDeckState.Error)
@@ -313,6 +316,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
         lock (_management)
         {
             _disposed = true;
+            ClearPreparation(null);
             StopPreflight();
             List<Exception>? failures = null;
             for (var i = 0; i < _entries.Length; i++)
