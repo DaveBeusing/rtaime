@@ -197,6 +197,8 @@ message ExternalControlRequest {
     EmptyRequest close_media_deck = 64;
     MediaDeckTargetRequest get_scoped_media_deck = 65;
     MediaDeckTargetRequest close_scoped_media_deck = 66;
+    MediaDeckTransportRequest apply_scoped_media_deck_transport = 67;
+    MediaDeckMarkerRequest apply_scoped_media_deck_marker = 68;
 
     EmptyRequest get_show_control = 70;
     ShowControlCueListRequest save_show_control_cue_list = 71;

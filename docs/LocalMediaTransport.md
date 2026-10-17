@@ -130,7 +130,9 @@ Client snapshot and close overloads accept a source identity. Matched local pipe
 peers use distinct `media_deck.scoped.*` operations, so older peers reject an
 unknown operation rather than silently ignoring its selector. External control
 adds protobuf transport field 9, marker field 7 and source-target operations
-65/66; existing field numbers are preserved. Media contract 1.0 and stored
+65–68; existing field numbers are preserved. Scoped transport/marker requests use
+new operation IDs as well, so an older gRPC peer cannot discard a new selector
+and accidentally execute an asset-only command. Media contract 1.0 and stored
 production/checkpoint/marker document layouts remain unchanged. Deploy matched
 ControlHost, RuntimeHost, Operator and Client builds for multi-deck operation.
 

@@ -802,32 +802,38 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
             case ExternalControlRequest.OperationOneofCase.CloseScopedMediaDeck: operation = "control.media_deck.scoped.close"; payload = new { request.CloseScopedMediaDeck.SourceId }; break;
             case ExternalControlRequest.OperationOneofCase.GetMediaDeck: operation = "control.media_deck.snapshot.get"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.OpenMediaDeck: operation = "control.media_deck.open"; payload = new { Version = request.OpenMediaDeck.ContractVersion, request.OpenMediaDeck.SourceId, request.OpenMediaDeck.Path, AssetId = NullIfEmpty(request.OpenMediaDeck.AssetId) }; break;
-			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckTransport:
-				operation = string.IsNullOrEmpty(request.ApplyMediaDeckTransport.SourceId) ? "control.media_deck.transport" : "control.media_deck.scoped.transport";
+			case ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport:
+            case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckTransport:
+                var deckTransport = request.OperationCase == ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport
+                    ? request.ApplyScopedMediaDeckTransport : request.ApplyMediaDeckTransport;
+				operation = request.OperationCase != ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckTransport && string.IsNullOrEmpty(deckTransport.SourceId) ? "control.media_deck.transport" : "control.media_deck.scoped.transport";
 				payload = new
 				{
-					Version = request.ApplyMediaDeckTransport.ContractVersion,
-                    request.ApplyMediaDeckTransport.SourceId,
-					request.ApplyMediaDeckTransport.AssetId,
-					request.ApplyMediaDeckTransport.Kind,
-					TargetFrame = request.ApplyMediaDeckTransport.HasTargetFrame ? request.ApplyMediaDeckTransport.TargetFrame : (long?)null,
-					AutoPlayOnProgram = request.ApplyMediaDeckTransport.HasAutoPlayOnProgram ? request.ApplyMediaDeckTransport.AutoPlayOnProgram : (bool?)null,
-					EndBehavior = request.ApplyMediaDeckTransport.HasEndBehavior ? request.ApplyMediaDeckTransport.EndBehavior : (int?)null,
-					InPointFrame = request.ApplyMediaDeckTransport.HasInPointFrame ? request.ApplyMediaDeckTransport.InPointFrame : (long?)null,
-					OutPointFrame = request.ApplyMediaDeckTransport.HasOutPointFrame ? request.ApplyMediaDeckTransport.OutPointFrame : (long?)null
+					Version = deckTransport.ContractVersion,
+                    deckTransport.SourceId,
+					deckTransport.AssetId,
+					deckTransport.Kind,
+					TargetFrame = deckTransport.HasTargetFrame ? deckTransport.TargetFrame : (long?)null,
+					AutoPlayOnProgram = deckTransport.HasAutoPlayOnProgram ? deckTransport.AutoPlayOnProgram : (bool?)null,
+					EndBehavior = deckTransport.HasEndBehavior ? deckTransport.EndBehavior : (int?)null,
+					InPointFrame = deckTransport.HasInPointFrame ? deckTransport.InPointFrame : (long?)null,
+					OutPointFrame = deckTransport.HasOutPointFrame ? deckTransport.OutPointFrame : (long?)null
 				};
 				break;
-			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckMarker:
-				operation = string.IsNullOrEmpty(request.ApplyMediaDeckMarker.SourceId) ? "control.media_deck.marker" : "control.media_deck.scoped.marker";
+			case ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker:
+            case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckMarker:
+                var deckMarker = request.OperationCase == ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker
+                    ? request.ApplyScopedMediaDeckMarker : request.ApplyMediaDeckMarker;
+				operation = request.OperationCase != ExternalControlRequest.OperationOneofCase.ApplyScopedMediaDeckMarker && string.IsNullOrEmpty(deckMarker.SourceId) ? "control.media_deck.marker" : "control.media_deck.scoped.marker";
 				payload = new
 				{
-					Version = request.ApplyMediaDeckMarker.ContractVersion,
-                    request.ApplyMediaDeckMarker.SourceId,
-					request.ApplyMediaDeckMarker.AssetId,
-					request.ApplyMediaDeckMarker.Kind,
-					PositionFrame = request.ApplyMediaDeckMarker.HasPositionFrame ? request.ApplyMediaDeckMarker.PositionFrame : (long?)null,
-					CuePointId = NullIfEmpty(request.ApplyMediaDeckMarker.CuePointId),
-					Name = NullIfEmpty(request.ApplyMediaDeckMarker.Name)
+					Version = deckMarker.ContractVersion,
+                    deckMarker.SourceId,
+					deckMarker.AssetId,
+					deckMarker.Kind,
+					PositionFrame = deckMarker.HasPositionFrame ? deckMarker.PositionFrame : (long?)null,
+					CuePointId = NullIfEmpty(deckMarker.CuePointId),
+					Name = NullIfEmpty(deckMarker.Name)
 				};
 				break;
 			case ExternalControlRequest.OperationOneofCase.CloseMediaDeck: operation = "control.media_deck.close"; payload = new { }; break;

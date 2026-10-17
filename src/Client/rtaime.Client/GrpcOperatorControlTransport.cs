@@ -478,7 +478,9 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		if (command.EndBehavior is { } endBehavior) operation.EndBehavior = (int)endBehavior;
 		if (command.InPointFrame is { } inPoint) operation.InPointFrame = inPoint;
 		if (command.OutPointFrame is { } outPoint) operation.OutPointFrame = outPoint;
-		var request = Request(); request.ApplyMediaDeckTransport = operation;
+		var request = Request();
+        if (command.SourceId is null) request.ApplyMediaDeckTransport = operation;
+        else request.ApplyScopedMediaDeckTransport = operation;
 		return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
@@ -486,7 +488,9 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	{
 		var operation = new MediaDeckMarkerRequest { ContractVersion = command.Version.ToString(), AssetId = command.AssetId.ToString(), Kind = (int)command.Kind, CuePointId = command.CuePointId?.ToString() ?? string.Empty, Name = command.Name ?? string.Empty, SourceId = command.SourceId?.ToString() ?? string.Empty };
 		if (command.PositionFrame is { } position) operation.PositionFrame = position;
-		var request = Request(); request.ApplyMediaDeckMarker = operation;
+		var request = Request();
+        if (command.SourceId is null) request.ApplyMediaDeckMarker = operation;
+        else request.ApplyScopedMediaDeckMarker = operation;
 		return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
