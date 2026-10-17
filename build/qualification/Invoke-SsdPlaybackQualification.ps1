@@ -93,12 +93,13 @@ try {
         hardwareTuple = @{ topology = $inventory.topology; storage = @($inventory.storage)
             gpu = @($inventory.gpu); selectedDecoder = "UNVERIFIED"; trust = "OBSERVATION_ONLY" }
         acceptance = @(
-            @{ requirement = "SOURCE_BUILD_MEDIA_IDENTITY"; status = "PASS" },
-            @{ requirement = "STORAGE_DEVICE_MAPPING"; status = if ($inventory.topology -eq "UNVERIFIED") { "UNVERIFIED" } else { "OBSERVED" } },
-            @{ requirement = "SUSTAINED_PROGRAM_CADENCE"; status = $outcome.result.timingStatus },
-            @{ requirement = "RESOURCE_PLATEAU"; status = $outcome.result.resourcePlateau },
-            (@("CACHE_AND_PRESSURE_MEASUREMENT","PINNED_DECODER_AND_ACCELERATION","GPU_VRAM_TELEMETRY",
-                "PHYSICAL_OUTPUT_LOSS_AND_AV","FAULT_RECOVERY") | ForEach-Object { @{ requirement = $_; status = "UNVERIFIED" } })
+            @{ requirement = "SOURCE_BUILD_MEDIA_IDENTITY"; status = "PASS" }
+            @{ requirement = "STORAGE_DEVICE_MAPPING"; status = if ($inventory.topology -eq "UNVERIFIED") { "UNVERIFIED" } else { "OBSERVED" } }
+            @{ requirement = "SUSTAINED_PROGRAM_CADENCE"; status = $outcome.result.timingStatus }
+            @{ requirement = "RESOURCE_PLATEAU"; status = $outcome.result.resourcePlateau }
+            foreach ($requirement in @("CACHE_AND_PRESSURE_MEASUREMENT","PINNED_DECODER_AND_ACCELERATION","GPU_VRAM_TELEMETRY","PHYSICAL_OUTPUT_LOSS_AND_AV","FAULT_RECOVERY")) {
+                @{ requirement = $requirement; status = "UNVERIFIED" }
+            }
         )
         softwareCollection = "PASS"; programTiming = $outcome.result.timingStatus
         supportStatus = if ($outcome.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }

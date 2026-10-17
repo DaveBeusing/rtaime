@@ -43,11 +43,11 @@ function Get-SsdFileStorage([string]$Path) {
         $drivers = @(Get-CimInstance Win32_PnPSignedDriver -ErrorAction Stop)
         $controllers = @(Get-CimAssociatedInstance -InputObject $native[0] -Association Win32_SCSIControllerDevice -ResultClassName Win32_SCSIController -ErrorAction Stop)
         if ($controllers.Count -gt 16) { throw "Controller inventory exceeds bounded capture." }
-        $controllerInventory = @($controllers | ForEach-Object {
+        $controllerInventory = @($controllers | Sort-Object PNPDeviceID | ForEach-Object {
             $controller = $_
             $matched = @($drivers | Where-Object { $_.DeviceID -eq $controller.PNPDeviceID })
             @{ name = [string]$controller.Name; pnpDeviceId = [string]$controller.PNPDeviceID
-                drivers = @($matched | Select-Object DriverVersion, DriverDate, InfName, DriverProviderName) }
+                drivers = @($matched | Sort-Object DriverVersion, InfName | Select-Object DriverVersion, DriverDate, InfName, DriverProviderName) }
         })
         $diskDrivers = @($drivers | Where-Object { $_.DeviceID -eq $native[0].PNPDeviceID } |
             Select-Object DriverVersion, DriverDate, InfName, DriverProviderName)

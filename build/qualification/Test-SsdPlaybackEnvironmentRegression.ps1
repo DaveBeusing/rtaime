@@ -18,7 +18,7 @@ $disk = @{ mapping = "OBSERVED"; deviceKey = "d"*64; diskNumber = 0; partitionNu
     fileSystem = "NTFS"; volumeSize = 100000; volumeFreeBytes = 10000; fileBytes = 1000
     lastWriteUtc = $now.AddDays(-1).ToString("O"); storageClass = "SSD"; physicalStatus = "UNVERIFIED"
     controllers = @(@{ pnpDeviceId = "synthetic"; drivers = @(@{ DriverVersion = "fixture" }) })
-    controllerStatus = "OBSERVED" }
+    controllerStatus = "OBSERVED"; diskDrivers = @() }
 $base = @{ schemaVersion = "1.1"; sourceCommit = $sha; capturedAt = $now.AddHours(-2).ToString("O")
     completedAt = $now.AddMinutes(1).ToString("O"); captureStatus = "FINAL"
     storage = @($disk,$disk); storageAfter = @($disk,$disk); topology = "SAME_DEVICE"
@@ -57,6 +57,7 @@ try {
     $v = Copy-Fixture; $v.storage[1].diskNumber = 1; Rejected $v "duplicate identity on different disks"
     $v = Copy-Fixture; $v.storage[1].deviceKey = "e"*64; Rejected $v "different identity on same disk"
     $v = Copy-Fixture; $v.storage[0].deviceKey = "fake-device"; Rejected $v "unhashed device identity"
+    $v = Copy-Fixture; $v.storageAfter[0].controllers[0].drivers[0].DriverVersion = "changed"; Rejected $v "controller driver changed"
     $v = Copy-Fixture; $v.storageAfter[0].firmware = "changed"; Rejected $v "firmware changed"
     $v = Copy-Fixture; $v.storageAfter[0].lastWriteUtc = $now.ToString("O"); Rejected $v "file changed"
     $v = Copy-Fixture; $v.media[1].sha256 = "f"*64; Rejected $v "media substitution"

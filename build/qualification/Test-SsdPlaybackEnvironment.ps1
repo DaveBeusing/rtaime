@@ -56,6 +56,10 @@ for ($i = 0; $i -lt 2; $i++) {
         foreach ($name in @("deviceKey","diskNumber","partitionNumber","partitionOffset","model","firmware","busType","fileSystem","volumeSize","fileBytes","lastWriteUtc")) {
             if ($before.$name -cne $after.$name) { throw "Storage/file identity changed during playback: $name" }
         }
+        foreach ($name in @("controllers","diskDrivers")) {
+            if (($before.$name | ConvertTo-Json -Depth 12 -Compress) -cne
+                ($after.$name | ConvertTo-Json -Depth 12 -Compress)) { throw "Storage driver identity changed: $name" }
+        }
         if ([long]$before.fileBytes -ne [long]$e.media[$i].bytes) { throw "File size differs from the decoded media." }
     }
 }
