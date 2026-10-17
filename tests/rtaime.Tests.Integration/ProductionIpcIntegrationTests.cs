@@ -508,11 +508,14 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
-	[Fact]
-	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions()
+	[Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions(int repetition)
 	{
 		var runtimeEndpoint = Endpoint("runtime-rapid-takes");
-		var controlEndpoint = Endpoint("control-rapid-takes");
+		var controlEndpoint = Endpoint($"control-rapid-takes-{repetition}");
 		using var runtimeStop = new CancellationTokenSource();
 		using var controlStop = new CancellationTokenSource();
 		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
@@ -554,6 +557,7 @@ public sealed class ProductionIpcIntegrationTests
 
 		controlStop.Cancel();
 		var controlExit = await controlRun;
+        Console.WriteLine("RAPID TAKE SHUTDOWN PHASES: " + JsonSerializer.Serialize(control.ShutdownPhases));
 		Assert.True(controlExit == ControlHostExitCode.Success,
 			$"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
 		runtimeStop.Cancel();

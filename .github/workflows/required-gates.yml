@@ -54,6 +54,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Attribute rapid TAKE shutdown before broad suites
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionIpcIntegrationTests.Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions" --logger "console;verbosity=detailed"
+
       - name: Qualify asynchronous local media admission before broad suites
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~MultiDeckLocalMediaIntegrationTests|FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~LocalMediaRuntimeIntegrationTests|FullyQualifiedName~LocalMediaTransportIntegrationTests|FullyQualifiedName~MediaAutoplayEndBehaviorIntegrationTests|FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests.Segment_writers_reuse_exact_NV12_extent" --logger "console;verbosity=detailed"
 
