@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Diagnostics;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using rtaime.Client;
 using rtaime.Control.Contracts;
@@ -266,6 +267,46 @@ public sealed class PreparedMediaHandoffIntegrationTests
             Assert.Equal(MediaDeckState.Unloaded, deck.GetSnapshot(b).State);
         }
         finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Early_native_EOF_cannot_be_concealed_by_the_transport_snapping_to_declared_OUT()
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var seed = ReferenceMediaTestAsset.GenerateFormat("h264-baseline");
+        var path = Path.Combine(Path.GetTempPath(), "rtaime-preload-eof-" + Guid.NewGuid().ToString("N") + ".mp4");
+        var bytes = File.ReadAllBytes(seed.Path);
+        var header = bytes.AsSpan().IndexOf("mvhd"u8);
+        Assert.True(header >= 4 && bytes[header + 4] == 0);
+        var timescale = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(header + 16, 4));
+        var duration = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(header + 20, 4));
+        Assert.True(timescale > 0 && duration > 0);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(header + 20, 4), checked(duration + timescale));
+        var a = MediaSourceId.New(); var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            deck.ObserveProgramSource(a);
+            var hash = Convert.ToHexString(SHA256.HashData(bytes));
+            var opened = deck.Preload(new(MediaContractVersion.Current, b, path), Prepared(deck, b), hash);
+            Assert.Equal(MediaDeckState.Ready, opened.State);
+            var candidate = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
+            Assert.True(deck.WithPreparedNext(candidate, true, () => true, value => value));
+            deck.ObserveProgramSource(b);
+            var deadline = Stopwatch.StartNew();
+            while (deck.GetSnapshot(b).State != MediaDeckState.Error && deadline.Elapsed < TimeSpan.FromSeconds(15))
+            {
+                var observed = deck.ProcessBoundary(b, out var boundary);
+                using (boundary)
+                    if (observed.State == MediaDeckState.Error) break;
+                Thread.Sleep(1);
+            }
+            Assert.Equal(MediaDeckState.Error, deck.GetSnapshot(b).State);
+            Assert.Equal("runtime.media_preload.early_eof", deck.GetSnapshot(b).Failure?.Code);
+            deck.Close(b);
+        }
+        finally { deck.Dispose(); File.Delete(path); }
     }
 
     private static PreparedExecutionContract Prepared(LocalMediaDeckRuntimeService deck, MediaSourceId source)

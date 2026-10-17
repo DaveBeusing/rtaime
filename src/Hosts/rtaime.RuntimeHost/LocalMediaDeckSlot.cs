@@ -275,6 +275,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 				return CreateSnapshot();
 			}
 
+            var previousPosition = _session.Transport.Position.CurrentFrame;
 			var result = _session.ProcessNextBoundary(programSlot);
 			_latestBoundary?.Dispose();
             _latestBoundary = result.Retain();
@@ -288,7 +289,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 				ApplyEndBehaviorUnsafe();
             else if (result.Status == LocalMediaRuntimeBoundaryStatus.Ended)
             {
-                if (_preparedNextPlayback && result.Transport.Position.CurrentFrame < EffectiveEndFrameUnsafe())
+                if (_preparedNextPlayback && previousPosition < EffectiveEndFrameUnsafe())
                     _failure = new Failure("runtime.media_preload.early_eof", "Prepared clip ended before its confirmed OUT. Automatic follow is blocked.");
                 else ApplyEndBehaviorUnsafe();
             }
