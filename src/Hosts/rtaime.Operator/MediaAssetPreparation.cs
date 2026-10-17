@@ -153,6 +153,8 @@ public sealed partial class MediaPoolInspectorViewModel
                     value = await _catalogClient.GetMediaAssetPreflightAsync(value.JobId);
                 }
                 value.Validate();
+                if (results.Any(previous => previous.RuntimeEpoch != value.RuntimeEpoch || previous.TargetFormat != value.TargetFormat))
+                    throw new InvalidOperationException("Runtime lifetime or target profile changed during preparation. Prepare the selection again.");
                 if (!StringComparer.OrdinalIgnoreCase.Equals(value.SourceLocation, asset.SourceLocation) ||
                     !StringComparer.OrdinalIgnoreCase.Equals(value.FingerprintSha256, asset.FingerprintSha256))
                     throw new InvalidOperationException("Catalogue identity changed. Refresh the library and prepare again.");

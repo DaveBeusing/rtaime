@@ -39,6 +39,10 @@ public sealed class MediaAssetPreparationOperatorTests
         await pool.PrepareSelectedAssetsAsync();
         Assert.All(pool.PreflightEvidence, value => Assert.True(value.RepresentativeVerificationPassed));
         Assert.All(pool.FilteredItems, item => { Assert.False(item.IsReady); Assert.Contains("CONDITIONALLY_READY", item.ReadinessLabel); });
+        catalog.ChangeEpochDuringBatch = true;
+        await pool.PrepareSelectedAssetsAsync();
+        Assert.DoesNotContain(pool.PreflightEvidence, value => value.RepresentativeVerificationPassed);
+        Assert.Contains("Runtime lifetime", pool.PreparationStatus);
         owner.SynchronizeCommand.Execute(null);
         await Until(() => owner.IsConnected && !owner.IsBusy);
         await pool.LoadCatalogAsync();
@@ -100,7 +104,8 @@ public sealed class MediaAssetPreparationOperatorTests
     private sealed class Catalog(int count = 2) : IMediaAssetCatalogClient
     {
         public int Begins, Cancels, Mutations;
-        public bool FailSecond, BlockBegin;
+        public bool FailSecond, BlockBegin, ChangeEpochDuringBatch;
+        private readonly string _runtimeEpoch = Guid.NewGuid().ToString("N");
         public TaskCompletionSource BeginRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public MediaAssetCatalogSnapshot Snapshot { get; } = new(MediaContractVersion.Current, 1,
             Enumerable.Range(0, count).Select(index => {
@@ -117,7 +122,7 @@ public sealed class MediaAssetPreparationOperatorTests
             Begins++;
             var asset = Snapshot.Assets.Single(item => item.AssetId == id);
             if (BlockBegin) await BeginRelease.Task;
-            return new(Guid.NewGuid().ToString("N"), id.ToString(), Guid.NewGuid().ToString("N"), asset.SourceLocation,
+            return new(Guid.NewGuid().ToString("N"), id.ToString(), ChangeEpochDuringBatch && Begins % 2 == 0 ? Guid.NewGuid().ToString("N") : _runtimeEpoch, asset.SourceLocation,
                 asset.FingerprintSha256, 1024, 1, "1080p50", new string('B', 64),
                 FailSecond && Begins == 2 ? MediaAssetReadinessState.Unavailable : MediaAssetReadinessState.ConditionallyReady,
                 BlockBegin, false, FailSecond && Begins == 2 ? "Decoder failed" : "Representative check passed",

@@ -43,7 +43,8 @@ public static class ShowPreflightSummary
 
         var fileEvidence = assetIds.Select(id => preparation?.LastOrDefault(value => string.Equals(value.AssetId, id, StringComparison.OrdinalIgnoreCase))).ToArray();
         var playbackState = selected is null ? ShowPreflightState.Unknown : assetIds.Length == 0 ? ShowPreflightState.NotApplicable :
-            !catalogueFresh || fileEvidence.Any(value => value is null || value.Running || value.Cancelled ||
+            !catalogueFresh || preparation?.Select(value => value.RuntimeEpoch).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1 ||
+            preparation?.Select(value => value.TargetFormat).Distinct(StringComparer.Ordinal).Count() > 1 || fileEvidence.Any(value => value is null || value.Running || value.Cancelled ||
                 now < value.ObservedAtUtc || now - value.ObservedAtUtc > TimeSpan.FromSeconds(10) ||
                 !assets!.TryGetValue(value.AssetId, out var asset) ||
                 asset.SourceLocation != value.SourceLocation || asset.FingerprintSha256 != value.FingerprintSha256) ? ShowPreflightState.Unknown :

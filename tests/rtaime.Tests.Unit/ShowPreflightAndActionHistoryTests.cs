@@ -261,6 +261,8 @@ public sealed class ShowPreflightAndActionHistoryTests
             ShowPreflightSummary.Build(Snapshot(show), true, catalog, Now, [], Now, evidence).Single(check => check.Id == "asset-playback");
         Assert.Equal(ShowPreflightState.Unknown, Playback(null).State);
         Assert.Equal(ShowPreflightState.Warning, Playback([value]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value, value with { AssetId = MediaAssetId.New().ToString(), RuntimeEpoch = Guid.NewGuid().ToString("N") }]).State);
+        Assert.Equal(ShowPreflightState.Unknown, Playback([value, value with { AssetId = MediaAssetId.New().ToString(), TargetFormat = "1080p59.94" }]).State);
         Assert.Equal(ShowPreflightState.Unknown, Playback([value with { ObservedAtUtc = Now.AddSeconds(-11) }]).State);
         Assert.Equal(ShowPreflightState.Unknown, Playback([value with { SourceLocation = @"C:\different.mp4" }]).State);
         Assert.Equal(ShowPreflightState.Unknown, Playback([value with { Cancelled = true }]).State);
