@@ -383,6 +383,37 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return NamedPipeOperatorControlTransport.DecodeExternalAIShowcase((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
+    public async ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
+    {
+        options.Validate();
+        var request = Request();
+        request.BeginMediaAssetPreflight = new MediaAssetPreflightRequest { AssetId = assetId.ToString(), RequireAudio = options.RequireAudio, SeekPoints = options.SeekPoints, FramesPerPoint = options.FramesPerPoint, MaximumBytes = options.MaximumBytes };
+        var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        
+        var request = Request();
+        request.GetMediaAssetPreflight = new MediaAssetPreflightJobRequest { JobId = jobId };
+        var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        
+        var request = Request();
+        request.CancelMediaAssetPreflight = new MediaAssetPreflightJobRequest { JobId = jobId };
+        var reply = await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
+        var value = JsonSerializer.Deserialize<MediaAssetPreflightObservation>(reply.PayloadJson.Span, Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+
 	public async ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default)
 	{
 		const int pageSize = 256;

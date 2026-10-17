@@ -508,6 +508,31 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+    public async ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
+    {
+        options.Validate();
+        var response = await ExchangeAsync("control.media_asset_catalog.preflight.begin", new { AssetId = assetId.ToString(), Options = options }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        
+        var response = await ExchangeAsync("control.media_asset_catalog.preflight.get", new { JobId = jobId }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+    public async ValueTask<MediaAssetPreflightObservation> CancelMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        
+        var response = await ExchangeAsync("control.media_asset_catalog.preflight.cancel", new { JobId = jobId }, cancellationToken).ConfigureAwait(false);
+        var value = response.Payload.Deserialize<MediaAssetPreflightObservation>(Wire.JsonOptions) ?? throw new InvalidDataException("Preflight response missing.");
+        value.Validate();
+        return value;
+    }
+
 	public async ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default)
 	{
 		const int pageSize = 256;
