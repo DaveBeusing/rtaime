@@ -16,6 +16,7 @@ public sealed class PreparedMediaHandoffIntegrationTests
 {
     [Theory]
     [InlineData("seek")]
+    [InlineData("seek-cancel")]
     [InlineData("close")]
     [InlineData("cancel")]
     [InlineData("replaced-ticket")]
@@ -36,7 +37,13 @@ public sealed class PreparedMediaHandoffIntegrationTests
         switch (change)
         {
             case "seek":
+            case "seek-cancel":
                 deck.ApplyTransport(new(MediaContractVersion.Current, opened.Probe.AssetId, MediaTransportCommandKind.Seek, 4) { SourceId = b });
+                if (change == "seek-cancel")
+                {
+                    deck.CancelPreparation(candidate.TicketId);
+                    Assert.Throws<InvalidOperationException>(() => deck.PrepareLoadedNext(b, opened.Probe.AssetId));
+                }
                 break;
             case "close": deck.Close(b); break;
             case "cancel": deck.CancelPreparation(candidate.TicketId); break;
@@ -44,7 +51,7 @@ public sealed class PreparedMediaHandoffIntegrationTests
             case "wrong-epoch": candidate = candidate with { RuntimeEpoch = "old-runtime" }; break;
         }
         var commits = 0;
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             deck.WithPreparedNext(candidate, true, () => ++commits, _ => true));
         Assert.Equal(0, commits);
     }
@@ -70,7 +77,7 @@ public sealed class PreparedMediaHandoffIntegrationTests
         Assert.Throws<IOException>(() => { using var write = new FileStream(asset.Path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite); });
         Assert.True(deck.WithPreparedNext(candidate, false, () => true, value => value));
         Assert.True(deck.WithPreparedNext(candidate, true, () => true, value => value));
-        Assert.Throws<InvalidOperationException>(() => deck.WithPreparedNext(candidate, true, () => true, value => value));
+        Assert.ThrowsAny<InvalidOperationException>(() => deck.WithPreparedNext(candidate, true, () => true, value => value));
         Assert.Equal(1, deck.Resources.Reserved);
         deck.Close(b);
         Assert.Equal(0, deck.Resources.Reserved);
@@ -93,7 +100,7 @@ public sealed class PreparedMediaHandoffIntegrationTests
         clock.AdvanceMonotonic(TimeSpan.FromSeconds(31));
         Assert.True(clock.GetUtcNow() < candidate.ExpiresAtUtc);
         var committed = false;
-        Assert.Throws<InvalidOperationException>(() => deck.WithPreparedNext(candidate, true,
+        Assert.ThrowsAny<InvalidOperationException>(() => deck.WithPreparedNext(candidate, true,
             () => committed = true, value => value));
         Assert.False(committed);
         Assert.Equal(1, deck.Resources.Reserved);

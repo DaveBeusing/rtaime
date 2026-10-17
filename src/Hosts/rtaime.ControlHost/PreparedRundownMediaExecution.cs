@@ -67,6 +67,8 @@ public sealed partial class ControlHostIpcServer
     private async ValueTask CancelPreparedRundownMediaAsync(PreparedRundownMedia candidate, CancellationToken token)
     {
         try { await _runtimeTransport.CancelMediaPreparationAsync(candidate.Preparation.TicketId, token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        { /* Request timeout does not restore local readiness or prove remote cleanup. */ }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or NotSupportedException or TimeoutException)
         { /* An unreachable Runtime retains bounded ownership until explicit cleanup/restart. */ }
     }

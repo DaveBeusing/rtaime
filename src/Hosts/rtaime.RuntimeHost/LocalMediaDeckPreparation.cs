@@ -7,6 +7,8 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
+public sealed class MediaDeckPreparationException(string message) : InvalidOperationException(message);
+
 public sealed partial class LocalMediaDeckRuntimeService
 {
     private readonly string _preparationEpoch = Guid.NewGuid().ToString("N");
@@ -15,6 +17,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private string? _preparationFingerprint;
     private PreparedExecutionContract? _preparationExecution;
     private MediaDeckPreparation? _preparation;
+    private string? _preparationOwnerTicketId;
     private long _preparationStarted;
     internal TimeProvider PreparationClock { get; set; } = TimeProvider.System;
     internal Action? BeforePreparationPublish { get; set; }
@@ -131,14 +134,16 @@ public sealed partial class LocalMediaDeckRuntimeService
                     snapshot.Transport.Position.CurrentFrame != snapshot.Transport.EffectiveStartFrame ||
                     decode.Generation != expectedGeneration || decode.QueuedFrames < 3 || decode.Failure is not null)
                     throw new InvalidOperationException("Deck changed during next preparation; no readiness ticket was published.");
-                if (snapshot.Probe.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
+                if (snapshot.Probe!.AudioCodec == MediaAudioCodec.None || !entry.Deck.HasPreparedAudio)
                     throw new InvalidOperationException("Prepared-next requires actual decoded audio; video-only remains an ordinary manual deck workflow.");
                 _preparationStarted = PreparationClock.GetTimestamp();
-                return _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
+                _preparation = new(Guid.NewGuid().ToString("N"), _preparationEpoch, source.ToString(),
                     asset.ToString(), _preparationExecution.PreparedExecutionId.ToString(),
                     _preparationExecution.AuthoritySnapshot.Revision.Value, decode.Generation,
                     snapshot.Transport.Position.CurrentFrame, snapshot.Transport.EffectiveEndFrame,
                     _preparationFingerprint!, PreparationClock.GetUtcNow().AddSeconds(30));
+                _preparationOwnerTicketId = _preparation.TicketId;
+                return _preparation;
             }
         }
     }
@@ -146,7 +151,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     public void CancelPreparation(string ticket)
     {
         lock (_management)
-            if (_preparation?.TicketId == ticket) ClearPreparation(_preparationSource);
+            if (_preparationOwnerTicketId == ticket) ClearPreparation(_preparationSource);
     }
 
     // Existing execution commit, protected atomically against deck mutation/replacement.
@@ -169,7 +174,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 snapshot.Transport.EffectiveEndFrame != expected.EndFrame ||
                 decode?.Generation != expected.DecodeGeneration || decode.Value.QueuedFrames < 3 ||
                 decode.Value.Failure is not null || !entry.Deck.HasPreparedAudio)
-                throw new InvalidOperationException("Prepared-next evidence is stale, replaced, expired or not ready. Prepare again.");
+                throw new MediaDeckPreparationException("Prepared-next evidence is stale, replaced, expired or not ready. Prepare again.");
             var result = apply();
             if (consume && committed(result)) _preparation = null;
             return result;
@@ -186,6 +191,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     {
         if (source is not null && _preparationSource != source) return;
         _preparation = null;
+        _preparationOwnerTicketId = null;
         _preparationFile?.Dispose();
         _preparationFile = null;
         _preparationSource = null;
