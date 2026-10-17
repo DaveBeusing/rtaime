@@ -85,7 +85,7 @@ try {
     $r = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -OutputPath $indexPath
     Require ($r.decision -eq "NO-GO" -and $r.overallStatus -eq "UNVERIFIED" -and $r.releasePromotionPerformed -eq $false) "Five software gates cannot grant Stable readiness."
     Require (@($r.domains | Where-Object { $_.name -eq "requiredGates" -and $_.status -eq "PASS" }).Count -eq 1) "Completed exact-source gates must be individually recognized."
-    foreach ($domain in @("productionSigningTrust", "knownIssues", "requiredHardwareEvidence", "independentBuildReproducibility", "stagedMixedLoad.8h", "stagedMixedLoad.24h", "stagedMixedLoad.72h", "continuousSingleProduction72h")) {
+    foreach ($domain in @("productionSigningTrust", "knownIssues", "requiredHardwareEvidence", "independentBuildReproducibility", "stagedMixedLoad.8h", "stagedMixedLoad.24h", "stagedMixedLoad.72h", "continuousSingleProduction72h", "ssdHardwareInventory")) {
         Require (@($r.domains | Where-Object { $_.name -eq $domain -and $_.status -eq "UNVERIFIED" }).Count -eq 1) "Missing $domain must remain UNVERIFIED."
     }
     $indexHash = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash
@@ -97,6 +97,13 @@ try {
     $invalidSsdIndex = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -SsdPlaybackEvidencePaths @($invalidSsd) -OutputPath (Join-Path $temp "ssd-invalid-index.json")
     Require ($invalidSsdIndex.overallStatus -eq "FAIL" -and
         @($invalidSsdIndex.domains | Where-Object { $_.name -eq "ssdPlayback.invalidInput" -and $_.status -eq "FAIL" }).Count -eq 1) "Supplied invalid SSD evidence must fail release correlation."
+    $invalidInventory = Join-Path $temp "environment.json"
+    Write-Json @{ schemaVersion = "1.1"; sourceCommit = $wrong; physicalStatus = "PASS" } $invalidInventory
+    # Give the correlation path a real sibling outcome; invalid contents must not qualify.
+    Write-Json @{ sourceCommit = $wrong; profile = "10m" } (Join-Path $temp "ssd-playback.outcome.json")
+    $inventoryIndex = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -RequiredGatesPath $snapshot -SsdPlaybackEnvironmentPaths @($invalidInventory) -OutputPath (Join-Path $temp "inventory-index.json")
+    Require ($inventoryIndex.overallStatus -eq "FAIL" -and
+        @($inventoryIndex.domains | Where-Object { $_.name -eq "ssdHardwareInventory" -and $_.status -eq "FAIL" }).Count -eq 1) "Invalid hardware inventory must fail readiness."
     Expect-Rejected { & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $head -OutputPath $indexPath } "retained evidence overwrite"
     Require ((Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash -eq $indexHash) "Existing index bytes changed."
     $stale = & (Join-Path $PSScriptRoot "New-ReleaseReadinessIndex.ps1") -ExpectedSourceCommit $wrong -OutputPath (Join-Path $temp "stale.json")
