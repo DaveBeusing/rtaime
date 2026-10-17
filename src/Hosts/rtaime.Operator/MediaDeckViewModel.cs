@@ -173,7 +173,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public string OutTimecode => FormatMarker(_snapshot.Markers?.OutPointFrame);
 	public string StatusDetail => LastError ??
 		(_snapshot.State == MediaDeckState.Unloaded
-			? "Open an MP4 file to prepare the local media deck."
+			? "Open an MP4 or qualified MOV file to prepare the local media deck."
 			: $"{State} · {Current} / {Duration}");
 	public string? LastError
 	{

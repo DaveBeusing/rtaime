@@ -31,7 +31,7 @@ The required regression matrix is:
 
 The current local-media Runtime output contract supports 1920x1080p50 and 1920x1080p59.94. It does not expose 2160p50 as a production output format, so UHD50 is not a required reference profile yet.
 
-HEVC/H.265 remains in the admitted local-file codec envelope, but Media Foundation HEVC decoder availability depends on the Windows host installation. It is therefore not a mandatory CI reference until the repository has a pinned, qualified HEVC decode environment. No codec support is added solely for this regression suite.
+HEVC/H.265 remains in the admitted local-file codec envelope, but Media Foundation HEVC decoder availability depends on the Windows host installation. It is therefore not a mandatory CI reference until the repository has a pinned, qualified HEVC decode environment. Generated HEVC Main/Main10 candidates record per-host decode or explicit unavailability. Those observations do not establish a pinned HEVC decoder.
 
 ## Signal construction
 
@@ -327,3 +327,42 @@ noncooperative reader, repeat cleanup after late return and deck Error/reopen bl
 The test deadline is shortened through an internal constructor; production remains
 ten seconds. No physical device removal, installed MFT/driver recovery, adversarial
 storage latency or 60-minute reference result is inferred from these controlled tests.
+
+## Container and codec outcomes
+
+The existing matrix also generates six bounded three-second variants from the
+internal-generator H.264 seed: `h264-baseline`, `hevc-main`, `hevc-main10`,
+`mov-aac`, `mov-pcm` and `vfr`. Encoding uses the existing pinned CI encoder;
+MOV AAC remuxes the seed and MOV PCM converts only audio. HEVC uses bounded encoder
+threads. No generated asset may exceed 20 MiB. Each manifest records actual
+profile, pixel format, encoder build, media hash and source identity.
+
+The real `LocalMediaDeckRuntimeService` path must probe, negotiate, preroll, admit
+110 frames with monotonic video PTS and contiguous audio, then seek to frames
+59 and 61. H.264, MOV/AAC, MOV/PCM and VFR are mandatory. HEVC decoder/RGB32
+negotiation rejection is retained as UNAVAILABLE with the actual failure code
+and detail; later read/preroll/seek failures are test failures, not availability
+exceptions. Positive decoding is SOFTWARE_DECODED, never physical qualification.
+
+The six `rtaime-format-*.outcome.json` reports are required by
+`Test-ReferenceMediaRegression.ps1` and retained alongside the original three
+profile manifests, including on workflow failure when reports exist. Each binds
+container/sample entry/profile/depth/chroma, native timing, Windows host, exact
+source and asset hash. No pinned decoder binary identity is claimed. Examine each
+outcome; an aggregate green test does not mean HEVC was available.
+
+`LocalMediaContainerProbeTests` exercises the actual independent parser with the
+checked-in reference and bounded synthetic faults: container renaming, VFR
+timing, edit lists, rotated matrix, pixel aspect, HDR, external media references,
+codec/profile exclusions, truncation, timing counts and allocation/traversal
+bounds. These run before broader solution qualification in Required Gates and
+before real reference decoding. They do not qualify adversarial native decoder
+internals, physical storage, 60-minute soak or calibrated conversion.
+
+See the [input matrix](LocalMediaFileSource.md#container-probes-and-format-qualification)
+for approved scope, unsupported professional formats and separate physical evidence.
+The prior intermittent ControlHost durability/shutdown findings remain separate
+release blockers until resolved and qualified through the packaged lifecycle.
+
+A separate generated negative fixture removes the redundant container `pasp`
+atom while retaining non-square pixel signaling in H.264 stream VUI. The bounded SPS probe must reject it before decoder normalization or READY; Windows native metadata alone was observed to omit this signaling.

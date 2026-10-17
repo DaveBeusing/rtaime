@@ -17,7 +17,7 @@ Change classification: `REALTIME_CRITICAL` for decoded-frame admission into the 
 
 ## V1 import contract
 
-The reference local-file provider accepts MP4 video through the Windows Media Foundation source/decoder path. The admitted codec set is H.264/AVC, HEVC/H.265, AV1, VP9, MPEG-4 Part 2, VC-1 and Motion JPEG. Embedded AAC, MP3 and PCM audio are normalized when present. Files without a supported audio stream remain playable as video and the Operator reports `NO AUDIO`. Native file resolution, frame rate and supported audio sample rate do not need to match the active production format exactly.
+The reference local-file provider accepts MP4 and a restricted QuickTime MOV/H.264 path through the Windows Media Foundation source/decoder path. For MP4, the admitted codec set is H.264/AVC, HEVC/H.265, AV1, VP9, MPEG-4 Part 2, VC-1 and Motion JPEG. Embedded AAC, MP3 and PCM audio are normalized when present. Files without a supported audio stream remain playable as video and the Operator reports `NO AUDIO`. Native file resolution, frame rate and supported audio sample rate do not need to match the active production format exactly.
 
 On Windows, the Media Foundation Source Reader uses advanced video processing to normalize decoded video to the RuntimeHost production format:
 
@@ -38,7 +38,7 @@ The import path accepts a broad native MP4 input envelope before normalizing to 
 
 | Input property | Supported import envelope |
 | --- | --- |
-| Container | MP4 |
+| Container | MP4; separately probed QuickTime MOV/H.264 with the restrictions below |
 | Video codecs | H.264/AVC, HEVC/H.265, AV1, VP9, MPEG-4 Part 2, VC-1, Motion JPEG |
 | Common sample entries | `avc1`, `avc3`, `hvc1`, `hev1`, `av01`, `vp09`, `mp4v`, `vc-1`, `jpeg` |
 | Resolution | 48×48 through 4096×2304 |
@@ -51,7 +51,7 @@ The import path accepts a broad native MP4 input envelope before normalizing to 
 
 The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second and applies only to H.264. It intentionally permits common H.264 profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting H.264 combinations such as 4K60. Other admitted codecs use the general resolution, frame-rate and bitrate envelope and still depend on an installed Media Foundation decoder.
 
-Variable-frame-rate MP4 files are admitted from their MP4 timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. Bitrate is not used to alter production timing; it is an input decode-admission property only.
+Variable-frame-rate files are admitted from bounded sample timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. Bitrate is not used to alter production timing; it is an input decode-admission property only.
 
 Acceptance by this software policy is not hardware-performance qualification. UHD/high-bitrate/high-frame-rate decoding remains `UNVERIFIED` on the reference hardware until dedicated sustained-load qualification evidence exists.
 
@@ -64,6 +64,8 @@ Acceptance by this software policy is not hardware-performance qualification. UH
 - `MediaVideoCodec`;
 - `MediaAudioCodec`;
 - `LocalMediaProbe`.
+
+`MediaContainerFormat.QuickTimeMov = 2` is additive; the existing MP4 numeric value remains 1. Existing MP4 messages retain their representation. MOV requires matched upgraded hosts/clients; old clients that reject unknown enum values cannot consume MOV snapshots. No persisted production schema changes.
 
 Bulk decoded video/audio payloads remain implementation-local and are not added to cross-process contracts. `MediaContractVersion.Current` remains `1.0`; Local Media File Source is an additive contract extension and does not change existing wire semantics.
 
@@ -276,3 +278,82 @@ A present signed stride is retained for contiguous buffers, whose checked visibl
 extent, padding and bottom-up orientation are validated before row copy. Both
 contiguous and 2D extraction share the same production row-copy/swizzle routines.
 See [Microsoft's stride attribute contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-default-stride-attribute).
+
+## Container probes and format qualification
+
+The approved V1 scope includes restricted MOV/H.264 with AAC or PCM through the
+existing Windows provider. ProRes and DNxHD/DNxHR are not approved or implemented
+input profiles. There is no additional production dependency. Recording support
+does not establish input support.
+
+Internal `ILocalMediaProbe` version 1 separates container inspection from native
+decoder creation. MP4 and QuickTime have distinct probe entry points sharing a
+bounded ISO-base-media box reader. File extension, `ftyp` brand, sample entry and
+the actual Windows native codec must agree. Legacy QuickTime without `ftyp`,
+multiple video/audio tracks or sample descriptions, external data references,
+non-unit/empty/repeated edit lists and unsupported track matrices fail closed.
+Only one self-contained data reference is admitted. QuickTime PCM is restricted
+to version-0 `sowt`, signed PCM16, stereo 48 kHz; AAC uses version-0 `mp4a` or version-1 `mp4a` with a validated 1,024-sample VBR packet description.
+
+The reader caps `moov` at 32 MiB, sibling/top-level box traversal at 4,096,
+tracks at 16 and each `stts`/`ctts` timing table at 65,536 runs. Composition and decode run tables are merged without per-frame expansion. Lengths and checked timing
+arithmetic are validated before allocation/traversal. Single nonnegative
+unit-rate edits are checked against movie/media timescales and durations;
+Windows performs demux and applies those edits. Generated playback tests check
+zero-origin contiguous audio, normalized video timestamps and seeks around GOPs.
+Arbitrary QuickTime edit programs are not supported.
+
+| Container | Sample entry / codec | Profile | Depth / chroma | Native reference / audio | Provider and admission | Repeatable evidence / physical |
+| --- | --- | --- | --- | --- | --- | --- |
+| MP4 | avc1/avc3 H.264 | Baseline/Main/Extended/High | 8-bit 4:2:0 | Baseline 1080p50; High 1080p25/50/59.94; AAC stereo 48 kHz | Windows MF, conditional per-file negotiation | Required real decode/preroll/seek/A-V suite; physical UNVERIFIED |
+| MP4 | hvc1/hev1 HEVC | Main | 8-bit 4:2:0 SDR | 1080p50; AAC stereo 48 kHz | Windows MF only when available | Generated outcome must say SOFTWARE_DECODED or UNAVAILABLE; pinned decoder and physical UNVERIFIED |
+| MP4 | hvc1/hev1 HEVC | Main10 | 10-bit 4:2:0 SDR to RGBA8 | 1080p50; AAC stereo 48 kHz | Windows MF only when available; output remains 8-bit | Same conditional evidence; no HDR/10-bit Program claim; physical UNVERIFIED |
+| QuickTime MOV | avc1/avc3 H.264 | 8-bit Baseline/Main/Extended/High | 8-bit 4:2:0 | Generated High 1080p50; AAC or PCM16 stereo 48 kHz | Separate qt-brand probe + existing Windows demux/decoder | Mandatory real AAC and PCM outcomes before integration; other rates/profiles unverified; physical UNVERIFIED |
+| MP4 | av01, vp09, mp4v, vc-1, jpeg | Host-dependent | Not qualified by this matrix | Existing policy envelope; AAC/MP3/PCM if decodable | Conditional admission only | No corresponding real reference evidence; UNVERIFIED |
+| MOV | ProRes apco/apcs/apcn/apch/ap4h, DNxHD/DNxHR AVdn/AVdh | Candidate only | Candidate only | No admitted profile | Rejected before native decoder | Unsupported; no provider/physical qualification |
+| MXF | Any | None | None | None | Input rejected | Recording qualification is unrelated |
+
+SOFTWARE_DECODED is a software observation for the exact source/host/asset,
+never a physical or pinned-decoder qualification. The source-bound JSON format
+outcomes include profile, sample entry, bit depth/chroma, average timing, color
+description, encoder build and media hash. General policy limits above are an
+admission envelope, not a tested cross-product of every resolution/rate/audio.
+
+Rotation/nonidentity matrices, non-square pixels, clean-aperture cropping,
+ICC/unknown color boxes and signaled HDR/wide-gamut transforms are rejected with
+specific `media.file.*_unsupported` errors. Known native logarithmic/HDR transfer
+functions are also rejected. Unspecified color remains explicitly unspecified;
+there is no calibrated colorimetry or HDR tone-map promise. Main10 SDR conversion
+uses Windows RGB32 normalization and reduces to the existing RGBA8 output.
+VFR retains its rational average and uses actual decoded PTS, never frame-index
+timing as a second clock.
+
+Missing HEVC decoder negotiation reports `media.file.decoder_unavailable`;
+other failed RGB32 negotiation reports `media.file.normalization_failed`, with
+container/profile context. Neither produces READY. A successful provider descriptor
+only states the Windows path exists, not that any codec is installed. The Runtime
+deck additionally requires its existing bounded preroll before READY.
+
+### Professional provider decision boundary
+
+No ProRes/DNx decoder availability has been established. If the Windows path
+cannot qualify an approved profile, a single optional demux/codec provider may
+later implement this probe/decoder seam. Before implementation it requires
+Product Owner scope approval, commercial redistribution and patent/license
+review, pinned binary/source hashes and versions, support ownership, deterministic
+cleanup and measured decode/preroll/seek/soak evidence. No FFmpeg runtime package
+is added here; the existing pinned test encoder remains CI-only.
+
+Native transfer-function values and source-reader normalization behavior follow
+the [Windows transfer-function enumeration](https://learn.microsoft.com/en-us/windows/win32/api/mfobjects/ne-mfobjects-mfvideotransferfunction)
+and [advanced source-reader processing contract](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-source-reader-enable-advanced-video-processing).
+
+B-frame edit validation uses presentation extent from bounded `stts`/`ctts` run merging, following [QuickTime composition offset semantics](https://developer.apple.com/documentation/quicktime-file-format/composition_offset_atom). Decode duration alone is not a presentation-end bound. Composition/decode sample counts must agree; unsupported composition-shift programs are rejected.
+
+QuickTime AAC version-1 packet fields follow the [sound sample description](https://developer.apple.com/documentation/quicktime-file-format/sound_sample_description_version_1). Native coded padding is admitted only with an exact, zero-origin [minimum display aperture](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-minimum-display-aperture-attribute) matching the probed visible size; arbitrary cropping remains excluded.
+
+H.264 SPS inspection also checks sequence geometry and early VUI aspect/color
+metadata independently of container atoms and Windows attributes. Native stream
+attributes alone can omit stream-only aspect signaling. SPS NALs are capped at
+65,535 bytes; exponential codes, scaling lists and picture-order cycles have
+finite bit/iteration limits. No decoded sample processing or Program work is added.

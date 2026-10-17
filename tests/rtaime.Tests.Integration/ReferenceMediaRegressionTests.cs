@@ -318,6 +318,101 @@ public sealed class ReferenceMediaRegressionTests
         Assert.Equal(afterSeek.Frame.Video.Timing.PresentationTimestamp, afterSeek.Frame.Audio.Timing.PresentationTimestamp);
     }
 
+    [Theory]
+    [InlineData("h264-baseline")]
+    [InlineData("hevc-main")]
+    [InlineData("hevc-main10")]
+    [InlineData("mov-aac")]
+    [InlineData("mov-pcm")]
+    [InlineData("vfr")]
+    public void Generated_format_profiles_use_real_probe_decode_preroll_and_seek(string profile)
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.GenerateFormat(profile);
+        ILocalMediaProbe containerProbe = profile.StartsWith("mov-", StringComparison.Ordinal)
+            ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+        var metadata = containerProbe.Read(asset.Path);
+        Assert.Equal(asset.Manifest.Container == "MP4" ? MediaContainerFormat.Mp4 : MediaContainerFormat.QuickTimeMov, metadata.Container);
+        Assert.Equal(profile == "hevc-main10" ? 10 : 8, metadata.BitDepth);
+        if (profile == "vfr") Assert.True(metadata.VariableFrameRate);
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8);
+        var source = MediaSourceId.New();
+        var opened = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current, source, asset.Path), Prepared(deck, source));
+        if (opened.Failure is { } unavailable && profile.StartsWith("hevc-", StringComparison.Ordinal))
+        {
+            // Host-specific negative evidence is retained, never reported as decoded or physically qualified.
+            Assert.Equal(MediaDeckState.Error, opened.State);
+            Assert.Null(opened.Probe);
+            Assert.True(unavailable.Code is "media.file.decoder_unavailable" or "media.file.normalization_failed",
+                $"{unavailable.Code}: {unavailable.Message}");
+            WriteFormatOutcome(asset, metadata, "UNAVAILABLE", unavailable.Code, unavailable.Message);
+            return;
+        }
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        Assert.True(opened.Failure is null, opened.Failure?.Message);
+        Assert.NotNull(opened.Probe);
+        Assert.Equal(metadata.Container, opened.Probe!.Container);
+        Assert.Equal(metadata.VideoCodec, opened.Probe.VideoCodec);
+        Assert.Equal(profile == "mov-pcm" ? MediaAudioCodec.Pcm : MediaAudioCodec.Aac, opened.Probe.AudioCodec);
+        var assetId = opened.Probe.AssetId;
+        Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, assetId, MediaTransportCommandKind.Play)).Succeeded);
+        ulong nextAudio = 0;
+        long previousPts = -1;
+        for (var index = 0; index < 110; index++)
+        {
+            var observed = LocalMediaTestPlayback.Next(deck);
+            Assert.NotEqual(MediaDeckState.Error, observed.State);
+            var frame = deck.LatestBoundary!;
+            Assert.Equal(LocalMediaRuntimeBoundaryStatus.Frame, frame.Status);
+            Assert.True(frame.Video!.Timing.PresentationTimestamp > previousPts);
+            previousPts = frame.Video.Timing.PresentationTimestamp;
+            Assert.NotNull(frame.Audio);
+            Assert.Equal(nextAudio, frame.Audio!.Timing.SamplePosition);
+            nextAudio += frame.Audio.Timing.SampleCount;
+            Assert.Equal(frame.Video.Timing.PresentationTimestamp, frame.Audio.Timing.PresentationTimestamp);
+        }
+        foreach (var target in new long[] { 59, 61 })
+        {
+            Assert.True(deck.ApplyTransport(new MediaTransportCommand(MediaContractVersion.Current, assetId,
+                MediaTransportCommandKind.Seek, target)).Succeeded);
+            Assert.Null(deck.LatestBoundary);
+            var observed = LocalMediaTestPlayback.Next(deck);
+            Assert.Equal(target, observed.Transport!.Position.CurrentFrame);
+            Assert.NotNull(deck.LatestBoundary!.Audio);
+        }
+        Assert.Equal(0UL, deck.PlaybackMeasurements!.Value.ReadFailures);
+        Assert.Equal(0UL, deck.PlaybackMeasurements!.Value.MissingAudioFrames);
+        WriteFormatOutcome(asset, metadata, "SOFTWARE_DECODED", null, null);
+    }
+
+    [Fact]
+    public void Stream_only_non_square_aspect_is_rejected_before_decode_or_ready()
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var asset = ReferenceMediaTestAsset.GenerateFormat("non-square");
+        // Container aspect is intentionally absent; actual stream metadata must still fence conversion.
+        Assert.Equal("media.file.pixel_aspect_unsupported", Assert.Throws<LocalMediaProbeException>(() =>
+            new Mp4LocalMediaProbe().Read(asset.Path)).Code);
+        var open = new LocalMediaFileProvider().TryOpen(asset.Path, MediaSourceId.New());
+        Assert.False(open.Succeeded);
+        Assert.Null(open.Source);
+        Assert.Equal("media.file.pixel_aspect_unsupported", open.Failure?.Code);
+    }
+
+    private static void WriteFormatOutcome(ReferenceMediaTestAsset asset, LocalMediaStreamMetadata metadata,
+        string outcome, string? failureCode, string? detail)
+    {
+        var report = new {
+            SchemaVersion = "1.0", SourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+            asset.Manifest, ProbeVersion = LocalMediaStreamMetadata.CurrentVersion, Metadata = metadata,
+            Provider = "Windows Media Foundation", DecoderBinaryIdentity = "UNVERIFIED", PinnedDecoder = false, Host = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            DecoderAvailability = outcome, FailureCode = failureCode, Detail = detail, PhysicalQualification = "UNVERIFIED"
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine("FORMAT OUTCOME: " + json);
+        File.WriteAllText(Path.ChangeExtension(asset.Path, ".outcome.json"), json);
+    }
+
 	private static ReferenceMediaProfile Profile(string id) =>
 		ReferenceMediaProfile.Required.Single(profile =>
 			string.Equals(profile.Id, id, StringComparison.Ordinal));

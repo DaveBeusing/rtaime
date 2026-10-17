@@ -60,7 +60,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		string path,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
-		VideoFormat outputFormat)
+		VideoFormat outputFormat,
+        LocalMediaStreamMetadata metadata)
 	{
 		if (!OperatingSystem.IsWindows())
 			return LocalMediaDecoderOpenResult.Rejected("media.file.platform_unsupported", "Windows Media Foundation is not available on this platform.");
@@ -108,22 +109,51 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				{
 					return LocalMediaDecoderOpenResult.Rejected(
 						"media.file.video_codec_unsupported",
-						$"The MP4 video subtype '{videoSubtype}' is not supported by the local media path.");
+						$"The local video subtype '{videoSubtype}' is not supported by the local media path.");
 				}
 
-				var audioCodec = audioNative is not null &&
+				if (metadata.VideoCodec != videoCodec)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.codec_mismatch", "Container sample entry and native video codec disagree.");
+
+                var audioCodec = audioNative is not null &&
 					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio
 						? ResolveAudioCodec(TryGetGuid(audioNative, MediaFoundation.MfMtSubtype))
 						: MediaAudioCodec.None;
 				var hasAudio = audioCodec != MediaAudioCodec.None;
+                if (metadata.Container == MediaContainerFormat.QuickTimeMov &&
+                    (metadata.AudioSampleEntry.Length != 0 && !hasAudio ||
+                     metadata.AudioSampleEntry == "mp4a" && audioCodec != MediaAudioCodec.Aac ||
+                     metadata.AudioSampleEntry == "sowt" && audioCodec != MediaAudioCodec.Pcm))
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.audio_codec_unsupported",
+                        "The QuickTime audio track could not be matched to the admitted AAC/PCM decoder.");
 
-				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid frame rate.");
 				if (metadata.Duration <= TimeSpan.Zero)
 					return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_invalid", "The local media file reports an invalid duration.");
 
-				var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
+				var nativeSizeKey = MediaFoundation.MfMtFrameSize;
+                MediaFoundation.ThrowIfFailed(videoNative.GetUINT64(ref nativeSizeKey, out var nativeSize));
+                var nativeWidth = (uint)(nativeSize >> 32);
+                var nativeHeight = (uint)nativeSize;
+                if (!NativeGeometryMatches(metadata.Width, metadata.Height, nativeWidth, nativeHeight,
+                    ReadMinimumDisplayAperture(videoNative)))
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.metadata_mismatch",
+                        $"Container visible dimensions {metadata.Width}x{metadata.Height} and native coded dimensions {nativeWidth}x{nativeHeight} have no matching zero-origin display aperture.");
+                var nativeTransfer = TryGetUInt32(videoNative, new Guid("5FB0FCE9-BE5C-4935-A811-EC838F8EED93"));
+                if (nativeTransfer is >= 9)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.color_unsupported",
+                        "Native logarithmic, HDR or wide-gamut transfer conversion is not qualified.");
+                var nativeAspectKey = MediaFoundation.MfMtPixelAspectRatio;
+                if (videoNative.GetUINT64(ref nativeAspectKey, out var nativeAspect) >= 0 &&
+                    ((uint)(nativeAspect >> 32) == 0 || (uint)(nativeAspect >> 32) != (uint)nativeAspect))
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.pixel_aspect_unsupported",
+                        "The native video stream reports non-square or invalid pixels.");
+                var nativeRotation = TryGetUInt32(videoNative, new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1"));
+                if (nativeRotation is > 0)
+                    return LocalMediaDecoderOpenResult.Rejected("media.file.transform_unsupported", "Native video rotation is not qualified.");
+
+                var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
 				var inputProfile = new LocalMediaInputProfile(
 					videoCodec.Value,
 					metadata.Width,
@@ -133,7 +163,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (LocalMediaInputPolicy.Validate(inputProfile) is { } inputFailure)
 					return LocalMediaDecoderOpenResult.Rejected(inputFailure.Code, inputFailure.Message);
 
-				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
+				try
+                {
+                    ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
+                }
+                catch (ExternalException exception)
+                {
+                    return LocalMediaDecoderOpenResult.Rejected(
+                        exception.HResult == unchecked((int)0xC00D5212) ? "media.file.decoder_unavailable" : "media.file.normalization_failed",
+                        $"{metadata.Container}/{metadata.SampleEntry} profile {metadata.Profile} ({metadata.BitDepth}-bit) could not negotiate the Windows RGB32 decoder: {exception.Message}");
+                }
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 				if (hasAudio)
 				{
@@ -146,7 +185,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					assetId,
 					sourceId,
 					System.IO.Path.GetFileName(path),
-					MediaContainerFormat.Mp4,
+					metadata.Container,
 					videoCodec.Value,
 					audioCodec,
 					outputFormat,
@@ -664,6 +703,34 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		var result = attributes.GetGUID(ref key, out var value);
 		return result >= 0 ? value : null;
 	}
+
+    private static byte[] ReadMinimumDisplayAperture(IMFMediaType type)
+    {
+        var key = new Guid("D7388766-18FE-48C6-A177-EE894867C8C4");
+        if (type.GetBlobSize(ref key, out var size) < 0) return [];
+        if (size != 16) throw new InvalidDataException("Native display aperture has an invalid size.");
+        var address = Marshal.AllocHGlobal(16);
+        try
+        {
+            MediaFoundation.ThrowIfFailed(type.GetBlob(ref key, address, 16, out var actual));
+            if (actual != 16) throw new InvalidDataException("Native display aperture is truncated.");
+            var bytes = new byte[16]; Marshal.Copy(address, bytes, 0, 16); return bytes;
+        }
+        finally { Marshal.FreeHGlobal(address); }
+    }
+
+    internal static bool NativeGeometryMatches(uint visibleWidth, uint visibleHeight,
+        uint codedWidth, uint codedHeight, ReadOnlySpan<byte> aperture)
+    {
+        if (codedWidth < visibleWidth || codedHeight < visibleHeight ||
+            codedWidth > LocalMediaInputPolicy.MaximumWidth || codedHeight > LocalMediaInputPolicy.MaximumHeight)
+            return false;
+        if (aperture.IsEmpty) return visibleWidth == codedWidth && visibleHeight == codedHeight;
+        return aperture.Length == 16 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(aperture) == 0 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(aperture[8..]) == visibleWidth &&
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(aperture[12..]) == visibleHeight;
+    }
 
 	private static MediaVideoCodec? ResolveVideoCodec(Guid subtype)
 	{

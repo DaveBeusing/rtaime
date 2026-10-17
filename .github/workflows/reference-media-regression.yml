@@ -11,6 +11,7 @@ on:
       - "src/Providers/rtaime.Provider.VirtualMedia/**"
       - "src/Hosts/rtaime.RuntimeHost/**"
       - "tests/rtaime.Tests.Integration/ReferenceMedia*"
+      - "tests/rtaime.Tests.Integration/LocalMediaContainerProbeTests.cs"
       - "build/testmedia/**"
       - "docs/ReferenceMediaRegression.md"
       - ".github/workflows/reference-media-regression.yml"
@@ -53,7 +54,7 @@ jobs:
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReferenceMediaPlaybackAllocationDiagnosticsTests|FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests.Segment_writers_reuse_exact_NV12_extent" --logger "console;verbosity=detailed"
 
   reference-media:
-    name: H264 AAC reference matrix
+    name: Local container and codec reference matrix
     runs-on: windows-latest
     timeout-minutes: 30
 
@@ -79,14 +80,14 @@ jobs:
         run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
 
       - name: Qualify worker ownership and admission isolation
-        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~AsynchronousLocalMediaDecodeTests" --logger "console;verbosity=detailed"
 
       - name: Generate and run reference media regressions
         shell: pwsh
         run: ./build/testmedia/Test-ReferenceMediaRegression.ps1
 
       - name: Upload reference manifests
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: rtaime-reference-media-manifests-${{ github.run_id }}
