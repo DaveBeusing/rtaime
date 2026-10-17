@@ -187,8 +187,18 @@ The verifier reports the exact source commit and releasePromotionPerformed = fal
 
 ## Current source boundary
 
-The current repository identity remains 0.1.0-dev in release stage DEV.
+The planned version is `0.5.39` (`Directory.Build.props`); the source remains in release stage DEV.
 
 Production support governance does not change that identity.
 
 A future Stable publication still requires the normal release-channel rules, production signing trust, exact release evidence, known-issues evidence, exact-source coordinated state-upgrade qualification evidence, required physical qualification, approved support commitments and deployment readiness. Missing state-upgrade qualification remains `UNVERIFIED`; inconsistent or source-mismatched evidence is `FAIL`.
+
+## SSD playback support boundary
+
+[Reference SSD hardware acceptance](ReferenceSsdHardwareAcceptance.md) records the
+exact-source device/controller/media/decoder/GPU evidence needed before any SSD
+support claim. Inventory observations and native software recovery tests do not
+qualify a hardware class. No SATA/NVMe tuple is currently declared SUPPORTED.
+The existing physical qualification binding policy and Stable-readiness rules
+remain authoritative; missing 60m/8h, output/A-V, decoder and recovery proof is
+UNVERIFIED and any unresolved durability or Program loss blocks acceptance.
