@@ -118,3 +118,25 @@ are interpreted by the Windows demux; the Runtime still uses decoded PTS and its
 existing rational Program cadence. Unsupported edit lists fail before decoder
 creation. Seek/preroll and generation fencing are shared across admitted formats;
 no alternate timeline or production clock is introduced.
+
+## Source-scoped deck control
+
+Two independent A/B sessions share the existing Program boundary. Transport and
+marker commands can carry `SourceId` alongside `AssetId`; an asset may be loaded
+on both sources. Source identity selects the session and asset identity fences
+replacement. A legacy asset-only command is rejected when ambiguous.
+
+Client snapshot and close overloads accept a source identity. Matched local pipe
+peers use distinct `media_deck.scoped.*` operations, so older peers reject an
+unknown operation rather than silently ignoring its selector. External control
+adds protobuf transport field 9, marker field 7 and source-target operations
+65/66; existing field numbers are preserved. Media contract 1.0 and stored
+production/checkpoint/marker document layouts remain unchanged. Deploy matched
+ControlHost, RuntimeHost, Operator and Client builds for multi-deck operation.
+
+Play, pause, stop, seek, IN/OUT policy, loop and readiness are session-local.
+Markers remain asset metadata in the existing persistence lane. A seek/stop or
+replacement invalidates the current payload; Program does not republish pixels
+from the previous clip generation. Empty/repeated boundaries do not replay audio.
+Logical Program tally follows the committed source; selecting a deck for editing
+does not perform a TAKE.

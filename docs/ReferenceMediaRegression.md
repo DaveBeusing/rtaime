@@ -366,3 +366,28 @@ release blockers until resolved and qualified through the packaged lifecycle.
 
 A separate generated negative fixture removes the redundant container `pasp`
 atom while retaining non-square pixel signaling in H.264 stream VUI. The bounded SPS probe must reject it before decoder normalization or READY; Windows native metadata alone was observed to omit this signaling.
+
+## Dual-file software observation
+
+`MultiDeckLocalMediaIntegrationTests` uses real Windows file sessions to cover
+same-asset A/B identity, independent seek/stop/loop, stale generation rejection,
+tally, deterministic inactive eviction and capacity rejection. The existing
+asynchronous decode tests inject blocked IO into one of the same session workers
+and prove that the other deck continues admitting owned video/audio.
+
+`MultiDeckSsdPlaybackQualificationTests` runs only in enabled reference regression.
+It plays two files through real RuntimeHost/ControlHost and Client transports for
+30 seconds, loops both and repeats authoritative TAKEs while retaining at most
+128 resource/queue samples. `dual-deck-software.outcome.json` binds observations
+to the exact source, records Program sequence/schedule statistics, capacity,
+private-byte and handle growth, and explicitly reports physical storage topology
+and high-bitrate qualification as UNVERIFIED. The existing script verifies the
+source identity and bounded report; the reference workflow retains it with its
+other JSON artifacts.
+
+These hosted observations do not measure a known SATA or NVMe device and do not
+qualify simultaneous reads on one drive versus separate drives. The next
+qualification dependency is an identified reference host/drive/decoder matrix
+with high-bitrate files, injected storage latency, replacement and near-simultaneous
+TAKE measurements, followed by sustained load/soak. Software PASS cannot promote
+that physical evidence or release readiness.
