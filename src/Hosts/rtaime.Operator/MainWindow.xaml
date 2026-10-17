@@ -395,11 +395,11 @@
             <controls:RtaimeButton Content="Close" Command="{Binding MediaPool.ClosePreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
         </WrapPanel>
         <TextBlock Text="{Binding MediaPool.PreparationStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-        <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
+        <controls:RtaimeScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding MediaPool.PreflightEvidence, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
                 <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Detail}" TextWrapping="Wrap" ToolTip="{Binding SourceLocation}" /></DataTemplate></ItemsControl.ItemTemplate>
             </ItemsControl>
-        </ScrollViewer>
+        </controls:RtaimeScrollViewer>
     </StackPanel>
 </Border>
 <controls:RtaimeButton Content="Batch · Remove selected…" Command="{Binding MediaPool.PrepareBatchRemoveCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" AutomationProperties.Name="Prepare selected catalogue records for removal" ToolTip="Review up to 128 selected records. Source files are retained." />
