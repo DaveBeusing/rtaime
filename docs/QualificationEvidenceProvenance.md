@@ -110,3 +110,19 @@ Until the dedicated reference-hardware workflows actually run and their bindings
 Normal GitHub-hosted Required Gates validate the mechanism and fail-closed regressions. They are not physical hardware qualification evidence.
 
 The Supported Performance Matrix follows the same boundary: it lists only values extracted from verified same-source physical payloads. Missing physical evidence keeps the matrix `UNVERIFIED` and produces no substituted or configured performance claim.
+
+## SSD playback observations
+
+Staged SSD playback extends the existing reference/soak runners and emits exact-source
+media/profile, hardware inventory, cleanup and bounded resource evidence. See
+[Reference Media Regression](ReferenceMediaRegression.md#sustained-ssd-playback-qualification).
+`New-ReleaseReadinessIndex.ps1 -SsdPlaybackEvidencePaths` consumes final outcome
+files; missing durations remain UNVERIFIED and invalid source/build/duration or
+measured Program timing failure produces FAIL. Retained read percentile counts cover
+the full worker run; sampled CPU/scheduler percentiles do not.
+
+This observation type does not authorize a new physical release binding or satisfy
+any of the existing twelve hardware dimensions. In particular it cannot substitute
+for TIMING_REFERENCE_SOAK, physical A/V/output telemetry or production decoder trust.
+The support-profile projection retains the outcome/environment hashes, exact media
+and selected duration without declaring a Windows/SSD/codec family SUPPORTED.
