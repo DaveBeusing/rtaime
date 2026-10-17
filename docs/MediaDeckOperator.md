@@ -199,9 +199,9 @@ belong to the selected deck; Play/Stop/Seek/Close remain bound to that source ev
 when the other deck contains the same asset. Deck selection does not change
 Program routing. CUT and DISSOLVE keep their existing authoritative path.
 
-The shared Operator status snapshot remains the legacy most-recently-opened deck
-projection. A source-scoped controller ignores snapshots for a different source;
-use **SELECT SOURCE DECK** or refresh the selected controller for its current
-confirmed state. No additional polling timer or independent preview renderer is
-created. After a Host restart, reopen each file through the normal supported path;
+The existing Operator status snapshot carries at most two confirmed deck states
+alongside the legacy most-recently-opened projection. A source-scoped controller
+accepts its own state and ignores the other source, so progress and faults keep
+updating after deck selection. The source bank retains both deck presentations.
+No additional polling timer or independent preview renderer is created. After a Host restart, reopen each file through the normal supported path;
 this change does not add automatic replay or alter saved productions.

@@ -40,7 +40,10 @@ public sealed class MediaDeckControlService
 			var runtime = await ReadDeckAsync(sourceId, cancellationToken).ConfigureAwait(false);
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
 			runtime = await SynchronizePlaybackRangeAsync(runtime, cancellationToken).ConfigureAwait(false);
-			return Compose(runtime);
+			var snapshot = Compose(runtime);
+            return sourceId is { } target && snapshot.SourceId is null
+                ? new MediaDeckSnapshot(snapshot.Version, snapshot.State, sourceId: target, failure: snapshot.Failure)
+                : snapshot;
 		}
 		finally
 		{
@@ -263,6 +266,9 @@ public sealed class MediaDeckControlService
 	{
 		if (runtime.Probe is null || runtime.Transport is null || _markers is null)
 			return runtime;
+        if (runtime.Transport.EffectiveStartFrame == (_markers.InPointFrame ?? 0) &&
+            runtime.Transport.EffectiveEndFrame == (_markers.OutPointFrame ?? runtime.Transport.Position.TotalFrames - 1))
+            return runtime;
 
 		var command = new MediaTransportCommand(
 			MediaContractVersion.Current,

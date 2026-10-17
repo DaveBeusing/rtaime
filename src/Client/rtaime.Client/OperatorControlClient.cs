@@ -891,7 +891,8 @@ public sealed record OperatorStatusSnapshot
         ShowControlWorkspaceSnapshot? showControl = null,
         OperatorShowProjectDescriptor? showProject = null,
         OperatorAudioProductionDescriptor? audioProduction = null,
-        ReplayControlSnapshot? replay = null)
+        ReplayControlSnapshot? replay = null,
+        IReadOnlyList<MediaDeckSnapshot>? mediaDecks = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -926,6 +927,8 @@ public sealed record OperatorStatusSnapshot
         Health = health ?? OperatorHealthDescriptor.Unavailable;
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
+        if (mediaDecks?.Count > 2) throw new ArgumentOutOfRangeException(nameof(mediaDecks));
+        MediaDecks = Array.AsReadOnly((mediaDecks ?? Array.Empty<MediaDeckSnapshot>()).ToArray());
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
         ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
@@ -952,6 +955,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorHealthDescriptor Health { get; }
     public OperatorAIShowcaseDescriptor AIShowcase { get; }
     public MediaDeckSnapshot MediaDeck { get; }
+    public IReadOnlyList<MediaDeckSnapshot> MediaDecks { get; }
     public OperatorProductionCgTextDescriptor ProductionCgText { get; }
     public ShowControlWorkspaceSnapshot ShowControl { get; }
     public OperatorShowProjectDescriptor ShowProject { get; }

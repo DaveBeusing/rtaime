@@ -94,6 +94,10 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
         Assert.True(secondOpen.IsLoaded, secondOpen.Failure?.Message);
         Assert.Equal(opened.Probe!.AssetId, secondOpen.Probe!.AssetId);
         Assert.Equal(2, runtime.MediaDeck!.Resources.Reserved);
+        var both = await client.SynchronizeAsync();
+        Assert.Equal(2, both.MediaDecks.Count);
+        Assert.Contains(both.MediaDecks, item => item.SourceId == mediaSourceId && item.IsLoaded);
+        Assert.Contains(both.MediaDecks, item => item.SourceId == standbyId && item.IsLoaded);
         await secondDeck.Timeline.SeekToFrameAsync(20);
         await secondDeck.ConfigurePlaybackAsync(true, MediaDeckEndBehavior.HoldLastFrame);
         await deck.RefreshAsync();
