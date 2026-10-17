@@ -8,6 +8,7 @@ param(
     [string]$QualificationCandidatePath = "",
     [string]$CoordinatedUpgradeQualificationPath = "",
     [string[]]$MixedLoadEvidencePaths = @(),
+    [string[]]$SsdPlaybackEvidencePaths = @(),
     [string]$RendererRunsPath = "",
     [Parameter(Mandatory)][string]$OutputPath
 )
@@ -159,6 +160,23 @@ foreach ($profile in @("smoke", "8h", "24h", "72h")) {
     } else { Add-Result "stagedMixedLoad.$profile" "UNVERIFIED" "staged summary.json" "No completed exact-source '$profile' workload evidence supplied; another duration cannot substitute." }
 }
 if ($mixedResults.ContainsKey("unknown")) { Add-Result "stagedMixedLoad.invalidInput" "FAIL" $mixedResults.unknown.source $mixedResults.unknown.details }
+$ssdResults = @{}
+foreach ($path in $SsdPlaybackEvidencePaths) {
+    try {
+        $full = Retain-Input $path "ssd-playback"
+        $e = Get-Content -LiteralPath $full -Raw | ConvertFrom-Json
+        $profile = [string]$e.profile
+        if ($profile -notin @("smoke","10m","60m","8h","24h","72h") -or $ssdResults.ContainsKey($profile)) { throw "Unknown or duplicate SSD profile." }
+        & (Join-Path $root "build/qualification/Test-SsdPlaybackEvidence.ps1") -EvidencePath $full -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $profile
+        $status = if ($e.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }
+        $ssdResults[$profile] = @{ status = $status; source = $full; details = "Actual dual-deck software observation; physical decoder/storage/output qualification remains UNVERIFIED. Measured Program misses are FAIL." }
+    } catch { Add-Result "ssdPlayback.invalidInput" "FAIL" $path $_.Exception.Message }
+}
+foreach ($profile in @("smoke","10m","60m","8h","24h","72h")) {
+    if ($ssdResults.ContainsKey($profile)) {
+        $r = $ssdResults[$profile]; Add-Result "ssdPlayback.$profile" $r.status $r.source $r.details
+    } else { Add-Result "ssdPlayback.$profile" "UNVERIFIED" "SSD playback outcome" "No verified exact-source media/hardware observation for this duration. Software CI cannot grant SSD support." }
+}
 $rendererResults = @{}
 if (-not [string]::IsNullOrWhiteSpace($RendererRunsPath)) {
     try {

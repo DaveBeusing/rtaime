@@ -391,3 +391,129 @@ qualification dependency is an identified reference host/drive/decoder matrix
 with high-bitrate files, injected storage latency, replacement and near-simultaneous
 TAKE measurements, followed by sustained load/soak. Software PASS cannot promote
 that physical evidence or release readiness.
+
+## Sustained SSD playback qualification
+
+The existing dual-deck RuntimeHost test also supports staged elapsed profiles through
+`build/qualification/Invoke-SsdPlaybackQualification.ps1` and the source-controlled
+`qualification/soak/ssd-playback.json` inventory. This is an extension of the same
+ControlHost/Client/RuntimeHost and reference/soak infrastructure, not another decoder,
+Program loop or renderer. The normal reference workflow executes a ten-minute
+two-deck loop/TAKE workload alongside the existing ten-minute long-container baseline.
+
+| Profile | Minimum actual playback | Execution |
+| --- | ---: | --- |
+| smoke | 30 seconds | explicit short reproduction |
+| 10m | 600 seconds | reference-media CI and local |
+| 60m | 3600 seconds | opt-in local/reference machine |
+| 8h / 24h / 72h | 28800 / 86400 / 259200 seconds | opt-in dedicated machine |
+
+The runner checks a clean exact source tree, pinned SDK, actual compiled source
+metadata for Media/Client/ControlHost/RuntimeHost, file SHA-256/size, actual input
+probes, real decoded progress, A/B ownership, Program sequence, host liveness and
+graceful cleanup. Both decks loop with repeated paired Preview/TAKE transitions.
+Continuous Replay and the existing Runtime audio/Program path remain active.
+
+Read/decode/seek/native-read measurements now retain seventeen inline exponential
+latency buckets: 0.125 ms through 4096 ms plus overflow. P50/P95/P99 are whole-run
+nearest-rank **upper bounds**, capped at actual maximum; overflow uses maximum.
+Counts accompany every distribution. No individual read samples are retained and
+steady-state observation allocates no managed memory. First-frame/open latency
+remains measured separately. These wall durations include decoder work and are
+not source-only disk latency.
+
+The outer observer samples process CPU, schedule lateness, queue high-water and
+starvation, RAM/GC/handles and sequence progress. CPU/scheduler distributions describe
+the **sampled observer cadence**, not every Program boundary. At most 128 resource
+snapshots and 96 hourly resource windows are retained. A single checkpoint is
+atomically replaced at minute intervals; the final report is bounded to 256 KiB.
+No raw decoded media or per-frame log is uploaded. Queue/starvation counters and
+consumer/output losses have distinct meanings; a software queue is not a physical
+scan-out measurement.
+
+The existing 512-MiB private-growth / 64-handle regression ceilings are reused, not
+new hardware SLAs. Long runs require the existing completed post-warmup hourly
+plateau check. Reports retain Program missed-slot deltas; any positive delta is
+timing FAIL, even when file decode and cleanup collection PASS. Zero sampled faults
+does not establish physical timing PASS. A canceled run retains RUNNING checkpoint
+evidence and cannot satisfy a completed duration.
+
+### Operator/headless runbook
+
+After the canonical Release build, with the existing pinned test encoder available:
+
+```powershell
+./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -NoBuild
+```
+
+For rights-cleared existing media, no test encoder is needed:
+
+```powershell
+./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 60m -MediaA D:\Reference\a.mp4 -MediaB E:\Reference\b.mov
+# Explicit long endurance, on an isolated reference machine:
+./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 8h -MediaA D:\Reference\a.mp4 -MediaB E:\Reference\b.mov
+```
+
+Use `Opt-in SSD playback endurance` only on a dedicated self-hosted Windows x64
+runner labeled `rtaime-ssd`. Durations 24h/72h are explicit selections; they never
+run for every developer commit. Retain reports from failed runs. Workflow completion
+only qualifies collection; `-RequirePhysicalPass` deliberately rejects incomplete
+physical evidence. No cache purge, destructive disk-pressure writer, device disable
+or physical removal is automated.
+
+Repeat identical source, hashes, input probes and duration on each identified SATA
+and NVMe device, first with both inputs on the same physical disk, then separately.
+Collect controller/firmware and filesystem identity, free capacity, queue depth and
+latency trace. A drive letter is not proof of a separate SSD. The automatic inventory
+maps explicit local input volumes to disks and GPU drivers; ambiguous volumes,
+generated-fixture locations and unknown SSD medium/controller identity remain
+UNVERIFIED. Hashing itself warms the input cache: do not label the default run COLD.
+Use an approved isolated cache/pressure procedure and independent trace, recording
+its timing after hash verification. Do not modify production drives or user media.
+
+Test each admitted input profile independently: MP4 H.264 Baseline/High, restricted
+MOV H.264 AAC/PCM and VFR. HEVC Main/Main10 needs a real installed decoder; inability
+to open is unavailable/FAIL for that selected workload, never a hardware PASS.
+The existing format matrix remains the codec availability authority. CFR native
+25/50/59.94, alternate GOP and no-audio files require distinct retained file hashes
+and probes; the default generated fixture does not cover every variation.
+No ProRes/DNx or additional production codec claim is added.
+
+Before endurance the runner executes the existing actual worker lifetime, blocked-read,
+generation, seek/Stop/Close concurrency and decoder progress tests. They classify
+controlled software decode faults separately from Program and consumers. The existing
+reference fault suite covers corrupt/truncated headers, sharing denial and removal
+before reload. Truncated tails, physical disappearance during an open handle, safe
+device removal, sustained external throttling and repeated real decoder-driver
+recovery require isolated reference-machine procedures and remain UNVERIFIED until
+measured. A controlled stalled reader is not an SSD latency measurement.
+
+### Evidence, support and release handoff
+
+Each run retains `environment.json`, `ssd-playback.outcome.json`,
+`support-profile.json`, TRX prerequisites/results and a SHA-256 manifest.
+The support projection binds exact source, selected duration, file/profile and
+environment hashes. Keep every hardware/profile separate; do not generalize a
+single successful file to its whole codec class or to all Windows machines.
+The existing release-readiness index accepts `-SsdPlaybackEvidencePaths` for
+the final outcome files and independently validates their source/duration/cleanup,
+quantiles and bounded resources. Missing profiles remain UNVERIFIED; supplied
+invalid evidence or measured Program misses are FAIL. These observations cannot
+satisfy the existing twelve physical release requirements or production trust.
+
+| Missing evidence / blocker | Current status | Next action |
+| --- | --- | --- |
+| Selected MFT binary/version and acceleration | UNVERIFIED | Capture selected transform identity and native trace on each decoder/driver tuple. |
+| Actual cold/warm cache, source-only I/O, pressure | UNVERIFIED | Retain approved procedure and measured device latency/queue-depth trace. |
+| GPU utilization/VRAM and actual output loss/A/V | UNVERIFIED | Correlate external GPU/output instrumentation with the same source/run. |
+| Program missed slots | FAIL when observed | Attribute scheduler/render/consumer stalls before claiming sustained timing. |
+| 60m/8h/24h/72h hardware and resource plateau | UNVERIFIED until executed | Run each selected real duration; an intermediate checkpoint is insufficient. |
+| Truncated tail / open-handle device loss / driver recovery | UNVERIFIED | Reproduce safely on an isolated reference machine and retain failure/cleanup evidence. |
+
+P0 production blockers are any unresolved Program/output loss, decoder quarantine
+that cannot recover within supported lifecycle, resource growth beyond existing
+budgets or loss of authoritative production state. Collection PASS never waives
+these findings. Hardware support remains UNVERIFIED/NO-GO until the missing
+measurements and approved acceptance criteria are present. The next dependency is
+reference-machine execution and fault attribution, followed by exact-source release
+evidence correlation; no support promotion is performed by these tools.

@@ -14,6 +14,8 @@ on:
       - "tests/rtaime.Tests.Integration/LocalMediaContainerProbeTests.cs"
       - "tests/rtaime.Tests.Integration/MultiDeck*"
       - "build/testmedia/**"
+      - "build/qualification/*SsdPlayback*"
+      - "qualification/soak/ssd-playback.json"
       - "docs/ReferenceMediaRegression.md"
       - ".github/workflows/reference-media-regression.yml"
   workflow_dispatch:
@@ -182,4 +184,34 @@ jobs:
         with:
           name: rtaime-local-playback-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/testmedia/local-playback/*.json
+          if-no-files-found: error
+
+  ssd-playback:
+    name: Staged dual-deck ten-minute playback
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Install existing pinned reference encoder
+        shell: pwsh
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
+      - name: Canonical Release build
+        shell: pwsh
+        run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+      - name: Real dual-deck duration and controlled fault prerequisites
+        shell: pwsh
+        run: ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -NoBuild
+      - name: Retain bounded SSD observations without media redistribution
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-ssd-playback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/qualification/ssd-playback/**/*.json
+            artifacts/qualification/ssd-playback/**/*.trx
           if-no-files-found: error
