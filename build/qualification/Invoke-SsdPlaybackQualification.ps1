@@ -89,11 +89,24 @@ try {
         [int]$trx.TestRun.ResultSummary.Counters.passed -ne 1) { throw "Actual playback test was not executed." }
     $report = Join-Path $run "ssd-playback.outcome.json"
     ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile
+    $outcome = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    $support = [ordered]@{
+        schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile
+        evidenceSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
+        environmentSha256 = (Get-FileHash -LiteralPath (Join-Path $run "environment.json") -Algorithm SHA256).Hash.ToLowerInvariant()
+        media = @($outcome.result.media); probedProfiles = @($outcome.result.deckProbes)
+        softwareCollection = "PASS"; programTiming = $outcome.result.timingStatus
+        supportStatus = if ($outcome.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }
+        physicalStatus = "UNVERIFIED"; releasePromotionPerformed = $false
+        missing = @("Pinned selected decoder/acceleration", "Measured cache/pressure",
+            "GPU/VRAM", "Physical output/A-V", "Physical storage latency", "Approved hardware acceptance")
+    }
+    $support | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $run "support-profile.json") -Encoding utf8
     $manifest = [ordered]@{
         schemaVersion = "1.0"; qualification = "rtaime-ssd-playback"; sourceCommit = $source
         buildCommit = $source; profile = $Profile; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
         descriptorSha256 = (Get-FileHash -LiteralPath qualification/soak/ssd-playback.json -Algorithm SHA256).Hash.ToLowerInvariant()
-        files = @("ssd-playback.outcome.json","environment.json","playback.trx","faults.trx" | ForEach-Object {
+        files = @("ssd-playback.outcome.json","environment.json","support-profile.json","playback.trx","faults.trx" | ForEach-Object {
             @{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $run $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
         })
         softwareStatus = "PASS"; physicalStatus = "UNVERIFIED"

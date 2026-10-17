@@ -23,8 +23,8 @@ $base = @{
         capacity = 2; resourceCapacity = 128; startSequence = 10; finalSequence = 1000; takes = 20
         media = @(@{ sha256 = "b"*64; bytes = 1000 },@{ sha256 = "c"*64; bytes = 1000 })
         deckProbes = @(@{ videoCodec = "H264" },@{ videoCodec = "H264" })
-        samples = @(@{ Milliseconds = 100; Resources = @{ Capacity = 2; Reserved = 2 }; First = $queue; Second = $queue },
-                    @{ Milliseconds = 28799000; Resources = @{ Capacity = 2; Reserved = 2 }; First = $queue; Second = $queue })
+        samples = @(0..120 | ForEach-Object { @{ Milliseconds = [Math]::Min(28799000, $_ * 240000)
+            Resources = @{ Capacity = 2; Reserved = 2 }; First = $queue; Second = $queue } })
         resourceWindows = @(1..7 | ForEach-Object { @{ Index = $_; Samples = 100; MeanPrivateBytes = 1000000; MeanHandles = 20 } })
         firstPlayback = $playback; secondPlayback = $playback; privateGrowth = 100; handleGrowth = 1
         resourcePlateau = "PASS"; startMissed = 2; missedDelta = 1; finalStats = @{ MissedSlots = 3 }

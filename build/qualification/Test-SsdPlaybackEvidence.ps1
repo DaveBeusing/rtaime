@@ -40,6 +40,7 @@ $previous = -1.0
 foreach ($sample in @($r.samples)) {
     $time = [double]$sample.Milliseconds
     if (-not [double]::IsFinite($time) -or $time -le $previous -or $time -lt 0 -or $time -gt ($elapsed * 1000) -or
+        ($previous -ge 0 -and $time - $previous -gt [Math]::Max(2, $required / 60.0) * 1000) -or
         $sample.Resources.Capacity -ne 2 -or $sample.Resources.Reserved -ne 2) { throw "Invalid resource coverage or owners." }
     $previous = $time
     foreach ($deck in @($sample.First,$sample.Second)) {
@@ -88,6 +89,9 @@ if ($required -ge 28800) {
         $windows[0].Index -ne 1 -or $windows[-1].Index -ne $closed - 1) { throw "Missing post-warmup plateau." }
     for ($i = 0; $i -lt $windows.Count; $i++) {
         $window = $windows[$i]
+        foreach ($value in @($window.MeanPrivateBytes,$window.MeanHandles)) {
+            if (-not [double]::IsFinite([double]$value) -or [double]$value -lt 0) { throw "Invalid resource window." }
+        }
         if ($window.Samples -lt 2 -or ($i -gt 0 -and $window.Index -ne $windows[$i-1].Index + 1) -or
             [double]$window.MeanPrivateBytes - [double]$windows[0].MeanPrivateBytes -gt 536870912 -or
             [double]$window.MeanHandles - [double]$windows[0].MeanHandles -gt 64) { throw "Resource plateau is not demonstrated." }
