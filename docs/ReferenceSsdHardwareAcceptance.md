@@ -168,3 +168,13 @@ remain UNVERIFIED. Previously observed checkpoint drain and Program timing failu
 require attribution and repair before production acceptance; later software passes
 do not erase earlier evidence. Next dependency: safe reference-machine execution
 and fault attribution, followed by exact-source existing physical release binding.
+
+The Required Gates package job may collect independent QUALIFICATION/test-signing
+lifecycle evidence after a CI or Quality failure when Security and Provider Smoke
+succeed. Failed gates remain mandatory FAIL in release readiness; this does not
+authorize merge, promotion or production trust. Retain failed predecessor results.
+The initial qualification at source `63102f4ec259f5ee6f1228b3922305d91ab9a1a1`
+(run 39052842807, Quality job 117454848822) exceeded the existing 45-second aggregate
+Operator XAML watchdog while the composite UI/GPU workload continued and subsequently
+reported productive surface checks. Its cause remains unqualified; no UI product fix
+or timeout increase is included. A later pass does not resolve that observation.

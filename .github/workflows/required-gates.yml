@@ -601,9 +601,9 @@ jobs:
       - quality
       - security
       - provider-smoke
-    # Preserve independent qualification evidence after functional CI failure.
-    # CI remains mandatory; this cannot make a failed candidate releasable.
-    if: ${{ !cancelled() && needs.quality.result == 'success' && needs.security.result == 'success' && needs['provider-smoke'].result == 'success' }}
+    # Preserve independent packaged qualification after CI or Quality failure.
+    # Both checks remain mandatory in readiness; test packaging cannot authorize release.
+    if: ${{ !cancelled() && needs.security.result == 'success' && needs['provider-smoke'].result == 'success' }}
 
     steps:
       - name: Checkout exact source candidate
