@@ -1,0 +1,76 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-ssd-playback",
+  "sdk": "10.0.401",
+  "lane": "EXISTING_CONTROL_RUNTIME_DUAL_DECK",
+  "profiles": [
+    {
+      "name": "smoke",
+      "minimumSeconds": 30
+    },
+    {
+      "name": "10m",
+      "minimumSeconds": 600
+    },
+    {
+      "name": "60m",
+      "minimumSeconds": 3600
+    },
+    {
+      "name": "8h",
+      "minimumSeconds": 28800
+    },
+    {
+      "name": "24h",
+      "minimumSeconds": 86400
+    },
+    {
+      "name": "72h",
+      "minimumSeconds": 259200
+    }
+  ],
+  "maximumResourceSamples": 128,
+  "maximumResourceWindows": 96,
+  "decoderCapacity": 2,
+  "codecProfiles": [
+    "h264-baseline",
+    "h264-high",
+    "mov-aac",
+    "mov-pcm",
+    "vfr",
+    "hevc-main",
+    "hevc-main10"
+  ],
+  "storageScenarios": [
+    "HOSTED",
+    "SATA",
+    "NVME"
+  ],
+  "cacheScenarios": [
+    "UNVERIFIED",
+    "WARM",
+    "COLD"
+  ],
+  "topologies": [
+    "UNVERIFIED",
+    "SAME_DEVICE",
+    "SEPARATE_DEVICES"
+  ],
+  "resourcePolicy": {
+    "maximumPrivateGrowthBytes": 536870912,
+    "maximumHandleGrowth": 64
+  },
+  "physicalRequirements": [
+    "SOURCE_BUILD_MEDIA_IDENTITY",
+    "STORAGE_DEVICE_MAPPING",
+    "CACHE_AND_PRESSURE_MEASUREMENT",
+    "PINNED_DECODER_AND_ACCELERATION",
+    "GPU_VRAM_TELEMETRY",
+    "PHYSICAL_OUTPUT_LOSS_AND_AV",
+    "SUSTAINED_PROGRAM_CADENCE",
+    "RESOURCE_PLATEAU",
+    "FAULT_RECOVERY"
+  ],
+  "physicalStatus": "UNVERIFIED"
+}
