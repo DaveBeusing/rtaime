@@ -131,7 +131,13 @@ public sealed class MediaAssetPreflightIntegrationTests
         Assert.Equal(MediaAssetReadinessState.Unavailable, done.State);
         Assert.Equal(1, decks.Resources.Reserved);
         Assert.False(decks.Probe(asset.Path, MediaAssetId.New()).Succeeded);
-        Assert.False(decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new()).Running);
+        var retry = decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new());
+        Assert.False(retry.Running);
+        Assert.Equal(MediaAssetReadinessState.Unavailable, retry.State);
+        Assert.Contains("Restart RuntimeHost", retry.Detail);
+        var cancelled = decks.CancelPreflight(done.JobId);
+        Assert.Equal(MediaAssetReadinessState.Unavailable, cancelled.State);
+        Assert.Contains("cleanup failed", cancelled.Detail);
         Assert.Throws<IOException>(decks.Dispose);
         Assert.Throws<IOException>(decks.Dispose);
         Assert.Equal(1, decoder.DisposeCalls);

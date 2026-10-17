@@ -64,8 +64,10 @@ public sealed partial class LocalMediaDeckRuntimeService
             ObjectDisposedException.ThrowIf(_disposed, this);
             lock (_gate)
             {
-                if (_preflight is { Running: true } || _probeReservations != 0 ||
-                    _preflightQuarantine is not null || _preflightIdentityQuarantine is not null || _entries.Any(e => e is not null))
+                if (_preflightQuarantine is not null || _preflightIdentityQuarantine is not null)
+                    return initial with { State = MediaAssetReadinessState.Unavailable,
+                        Detail = "Preflight cleanup retained an owner. Restart RuntimeHost through the supported application lifecycle before retrying." };
+                if (_preflight is { Running: true } || _probeReservations != 0 || _entries.Any(e => e is not null))
                     return initial with { Detail = "Preflight unavailable: close file decks deliberately first. Live decks are never evicted." };
                 _preflightStop?.Dispose();
                 _preflightStop = new CancellationTokenSource(TimeSpan.FromMinutes(30));
@@ -121,8 +123,10 @@ public sealed partial class LocalMediaDeckRuntimeService
             _preflightStop?.Cancel();
             lock (_gate)
             {
-                _preflight = _preflight! with { Cancelled = true, State = MediaAssetReadinessState.Unverified,
-                    Detail = "Cancelled; the worker retains its reservation until native cleanup completes." };
+                var failedOwner = _preflightQuarantine is not null || _preflightIdentityQuarantine is not null;
+                _preflight = _preflight! with { Cancelled = true,
+                    State = failedOwner ? MediaAssetReadinessState.Unavailable : MediaAssetReadinessState.Unverified,
+                    Detail = failedOwner ? _preflight.Detail : "Cancelled; the worker retains its reservation until native cleanup completes." };
                 return _preflight;
             }
         }
@@ -214,7 +218,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             try { identity?.Dispose(); }
             catch (Exception exception) { lock (_gate) _preflightIdentityQuarantine = identity; value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Identity handle cleanup failed; Runtime restart required: " + exception.Message }; }
-            if (token.IsCancellationRequested) value = value with { Cancelled = true, State = MediaAssetReadinessState.Unverified };
+            if (token.IsCancellationRequested) value = value with { Cancelled = true,
+                State = _preflightQuarantine is not null || _preflightIdentityQuarantine is not null
+                    ? MediaAssetReadinessState.Unavailable : MediaAssetReadinessState.Unverified };
             lock (_gate)
             {
                 if (_preflightQuarantine is null && _preflightIdentityQuarantine is null) _probeReservations--;

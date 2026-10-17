@@ -28,6 +28,7 @@ public sealed class MediaAssetCatalogService
 
     public async ValueTask<MediaAssetPreflightObservation> BeginPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         var snapshot = await GetSnapshotAsync(false, cancellationToken).ConfigureAwait(false);
         var asset = snapshot.Assets.SingleOrDefault(a => a.AssetId == assetId) ?? throw new InvalidOperationException("Catalogue asset is missing.");
