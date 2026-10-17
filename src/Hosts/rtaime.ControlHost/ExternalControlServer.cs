@@ -797,13 +797,16 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			case ExternalControlRequest.OperationOneofCase.RelinkMediaAsset: operation = "control.media_asset_catalog.relink"; payload = new { request.RelinkMediaAsset.AssetId, request.RelinkMediaAsset.SourceLocation }; break;
 			case ExternalControlRequest.OperationOneofCase.RemoveMediaAsset: operation = "control.media_asset_catalog.remove"; payload = new { request.RemoveMediaAsset.AssetId }; break;
 			case ExternalControlRequest.OperationOneofCase.RefreshMediaAssets: operation = "control.media_asset_catalog.availability.refresh"; payload = new { }; break;
-			case ExternalControlRequest.OperationOneofCase.GetMediaDeck: operation = "control.media_deck.snapshot.get"; payload = new { }; break;
+			case ExternalControlRequest.OperationOneofCase.GetScopedMediaDeck: operation = "control.media_deck.scoped.snapshot.get"; payload = new { request.GetScopedMediaDeck.SourceId }; break;
+            case ExternalControlRequest.OperationOneofCase.CloseScopedMediaDeck: operation = "control.media_deck.scoped.close"; payload = new { request.CloseScopedMediaDeck.SourceId }; break;
+            case ExternalControlRequest.OperationOneofCase.GetMediaDeck: operation = "control.media_deck.snapshot.get"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.OpenMediaDeck: operation = "control.media_deck.open"; payload = new { Version = request.OpenMediaDeck.ContractVersion, request.OpenMediaDeck.SourceId, request.OpenMediaDeck.Path, AssetId = NullIfEmpty(request.OpenMediaDeck.AssetId) }; break;
 			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckTransport:
-				operation = "control.media_deck.transport";
+				operation = string.IsNullOrEmpty(request.ApplyMediaDeckTransport.SourceId) ? "control.media_deck.transport" : "control.media_deck.scoped.transport";
 				payload = new
 				{
 					Version = request.ApplyMediaDeckTransport.ContractVersion,
+                    request.ApplyMediaDeckTransport.SourceId,
 					request.ApplyMediaDeckTransport.AssetId,
 					request.ApplyMediaDeckTransport.Kind,
 					TargetFrame = request.ApplyMediaDeckTransport.HasTargetFrame ? request.ApplyMediaDeckTransport.TargetFrame : (long?)null,
@@ -814,10 +817,11 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 				};
 				break;
 			case ExternalControlRequest.OperationOneofCase.ApplyMediaDeckMarker:
-				operation = "control.media_deck.marker";
+				operation = string.IsNullOrEmpty(request.ApplyMediaDeckMarker.SourceId) ? "control.media_deck.marker" : "control.media_deck.scoped.marker";
 				payload = new
 				{
 					Version = request.ApplyMediaDeckMarker.ContractVersion,
+                    request.ApplyMediaDeckMarker.SourceId,
 					request.ApplyMediaDeckMarker.AssetId,
 					request.ApplyMediaDeckMarker.Kind,
 					PositionFrame = request.ApplyMediaDeckMarker.HasPositionFrame ? request.ApplyMediaDeckMarker.PositionFrame : (long?)null,
