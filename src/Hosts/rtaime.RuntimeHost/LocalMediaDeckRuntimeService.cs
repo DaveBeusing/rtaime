@@ -17,6 +17,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
     {
         public bool Retiring { get; set; }
         public bool NeedsPublication { get; set; } = true;
+        public long? PublishedGeneration { get; set; }
     }
     private readonly object _gate = new();
     private readonly object _management = new();
@@ -243,6 +244,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 
             if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
             {
+                // Fence residual samples even when a seek/loop prerolls between consecutive Program slots.
+                var generation = boundary.Ownership?.Generation;
+                if (entry.NeedsPublication || entry.PublishedGeneration != generation)
+                    runtime.SetExternalAudioMeter(source, 0, 0, available: false);
+                entry.PublishedGeneration = generation;
                 runtime.SetExternalInputContent(source, boundary.RgbaPixels.Span,
                     boundary.Video.Surface.Format == runtime.Format ? V1InputSignalState.Valid : V1InputSignalState.Unstable);
                 entry.NeedsPublication = false;

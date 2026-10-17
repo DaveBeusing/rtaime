@@ -87,14 +87,17 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, capacity));
 
-    [Fact]
-    public void Independent_loop_seek_and_stop_fence_previous_payload_generation()
+    [Theory]
+    [InlineData(50, 1)]
+    [InlineData(60_000, 1_001)]
+    public void Independent_loop_seek_and_stop_fence_previous_payload_generation(long numerator, long denominator)
     {
         if (!OperatingSystem.IsWindows()) return;
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
         var a = MediaSourceId.New();
         var b = MediaSourceId.New();
-        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        var format = new VideoFormat(1920, 1080, new FrameRate(numerator, denominator), PixelFormat.Rgba8, ScanMode.Progressive);
+        using var decks = new LocalMediaDeckRuntimeService(format, 2, [a, b]);
         var first = decks.Open(new(MediaContractVersion.Current, a, asset.Path), Prepared(decks, a, 0));
         var second = decks.Open(new(MediaContractVersion.Current, b, asset.Path), Prepared(decks, b, 1));
         Assert.NotNull(first.Probe);
@@ -110,6 +113,8 @@ public sealed class MultiDeckLocalMediaIntegrationTests
             using var frame = Next(decks, a);
             Assert.Equal(expected, frame.Transport.Position.CurrentFrame);
             Assert.Equal(a, frame.Video!.SourceId);
+            Assert.False(frame.AudioPayload.IsEmpty);
+            Assert.Equal(frame.Video.Timing.PresentationTimestamp, frame.Audio!.Timing.PresentationTimestamp);
         }
         using (var frame = Next(decks, b))
             Assert.Equal(20, frame.Transport.Position.CurrentFrame);
