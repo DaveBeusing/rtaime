@@ -26,32 +26,16 @@ $root = if ([IO.Path]::IsPathRooted($OutputRoot)) { [IO.Path]::GetFullPath($Outp
 $run = Join-Path $root ([DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmss") + "-" + [Guid]::NewGuid().ToString("N"))
 [void][IO.Directory]::CreateDirectory($run)
 
-function Get-FileStorage([string]$Path) {
-    if ([string]::IsNullOrWhiteSpace($Path)) {
-        return @{ mapping = "UNVERIFIED"; reason = "Generated reference location is selected by the existing fixture." }
-    }
-    $full = [IO.Path]::GetFullPath($Path)
-    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Input file is missing: $full" }
-    try {
-        $drive = [IO.Path]::GetPathRoot($full).TrimEnd('\').TrimEnd(':')
-        if ($drive.Length -ne 1) { throw "Only a directly mapped local volume can identify this disk." }
-        $partitions = @(Get-Partition -DriveLetter $drive -ErrorAction Stop)
-        if ($partitions.Count -ne 1) { throw "Volume mapping is ambiguous." }
-        $disk = Get-Disk -Number $partitions[0].DiskNumber -ErrorAction Stop
-        $volume = Get-Volume -DriveLetter $drive -ErrorAction Stop
-        return @{ mapping = "OBSERVED"; diskNumber = $disk.Number; model = $disk.FriendlyName
-            busType = [string]$disk.BusType; firmware = [string]$disk.FirmwareVersion
-            fileSystem = [string]$volume.FileSystem; volumeSize = $volume.Size
-            # Serial numbers and source paths are deliberately not redistributed.
-            storageClass = "UNVERIFIED"; controllerDriver = "UNVERIFIED" }
-    } catch { return @{ mapping = "UNVERIFIED"; reason = $_.Exception.Message } }
-}
+. (Join-Path $PSScriptRoot "SsdPlaybackStorage.ps1")
 $inventory = [ordered]@{
-    schemaVersion = "1.0"; sourceCommit = $source; capturedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    schemaVersion = "1.1"; sourceCommit = $source; capturedAt = [DateTimeOffset]::UtcNow.ToString("O")
     operatingSystem = [Environment]::OSVersion.VersionString; architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
-    storage = @((Get-FileStorage $MediaA), (Get-FileStorage $MediaB))
+    captureStatus = "INITIAL"; storage = @((Get-SsdFileStorage $MediaA), (Get-SsdFileStorage $MediaB))
+    storageAfter = @(); media = @(); outcomeSha256 = $null; completedAt = $null; topology = "UNVERIFIED"
     gpu = @(); decoder = "Windows Media Foundation; selected MFT binary and acceleration UNVERIFIED"
     cache = "UNVERIFIED"; pressure = "UNVERIFIED"; physicalStatus = "UNVERIFIED"
+    selectedDecoder = "UNVERIFIED"; fileOnlyReadLatency = "UNVERIFIED"
+    physicalOutput = "UNVERIFIED"; gpuTelemetry = "UNVERIFIED"
 }
 try {
     $inventory.gpu = @(Get-CimInstance Win32_VideoController -ErrorAction Stop |
@@ -90,11 +74,30 @@ try {
     $report = Join-Path $run "ssd-playback.outcome.json"
     ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile
     $outcome = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    $inventory.storageAfter = @((Get-SsdFileStorage $MediaA), (Get-SsdFileStorage $MediaB))
+    $inventory.topology = Get-SsdStorageTopology $inventory.storage
+    $inventory.media = @($outcome.result.media)
+    $inventory.outcomeSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
+    $inventory.completedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    $inventory.captureStatus = "FINAL"
+    $environmentPath = Join-Path $run "environment.json"
+    $inventory | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $environmentPath -Encoding utf8
+    ./build/qualification/Test-SsdPlaybackEnvironment.ps1 -EnvironmentPath $environmentPath -ExpectedSourceCommit $source -OutcomePath $report
     $support = [ordered]@{
         schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile
         evidenceSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
         environmentSha256 = (Get-FileHash -LiteralPath (Join-Path $run "environment.json") -Algorithm SHA256).Hash.ToLowerInvariant()
         media = @($outcome.result.media); probedProfiles = @($outcome.result.deckProbes)
+        hardwareTuple = @{ topology = $inventory.topology; storage = @($inventory.storage)
+            gpu = @($inventory.gpu); selectedDecoder = "UNVERIFIED"; trust = "OBSERVATION_ONLY" }
+        acceptance = @(
+            @{ requirement = "SOURCE_BUILD_MEDIA_IDENTITY"; status = "PASS" },
+            @{ requirement = "STORAGE_DEVICE_MAPPING"; status = if ($inventory.topology -eq "UNVERIFIED") { "UNVERIFIED" } else { "OBSERVED" } },
+            @{ requirement = "SUSTAINED_PROGRAM_CADENCE"; status = $outcome.result.timingStatus },
+            @{ requirement = "RESOURCE_PLATEAU"; status = $outcome.result.resourcePlateau },
+            (@("CACHE_AND_PRESSURE_MEASUREMENT","PINNED_DECODER_AND_ACCELERATION","GPU_VRAM_TELEMETRY",
+                "PHYSICAL_OUTPUT_LOSS_AND_AV","FAULT_RECOVERY") | ForEach-Object { @{ requirement = $_; status = "UNVERIFIED" } })
+        )
         softwareCollection = "PASS"; programTiming = $outcome.result.timingStatus
         supportStatus = if ($outcome.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }
         physicalStatus = "UNVERIFIED"; releasePromotionPerformed = $false

@@ -60,6 +60,7 @@ jobs:
           dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaPlaybackMeasurementsTests" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Read histogram regression failed." }
           ./build/qualification/Test-SsdPlaybackVerifierRegression.ps1
+          ./build/qualification/Test-SsdPlaybackEnvironmentRegression.ps1
 
       - name: Qualify atomic journal batching before lifecycle load
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionJournalBatchIntegrationTests|FullyQualifiedName~DurablePersistenceIntegrationTests" --logger "console;verbosity=detailed"
