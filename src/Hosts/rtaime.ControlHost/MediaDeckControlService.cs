@@ -271,7 +271,7 @@ public sealed class MediaDeckControlService
 			autoPlayOnProgram: runtime.Transport.AutoPlayOnProgram,
 			endBehavior: runtime.Transport.EndBehavior,
 			inPointFrame: _markers.InPointFrame,
-			outPointFrame: _markers.OutPointFrame);
+			outPointFrame: _markers.OutPointFrame) { SourceId = runtime.SourceId };
 		await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
 		return await ReadDeckAsync(runtime.SourceId, cancellationToken).ConfigureAwait(false);
 	}

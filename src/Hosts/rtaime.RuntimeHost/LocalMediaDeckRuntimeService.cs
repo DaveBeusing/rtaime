@@ -44,14 +44,14 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
             throw new ArgumentException("Two distinct production sources are required.", nameof(allowedSources));
     }
     internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider, LocalMediaRuntimeSession session)
-        : this(session.Probe.VideoFormat)
+        : this(VideoFormat.Hd1080p50Rgba8)
     {
         _provider = provider;
         _selected = session.Probe.SourceId;
         _entries[0] = new Entry(session.Probe.SourceId, new LocalMediaDeckSlot(provider, session), ++_order);
     }
     internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider,
-        LocalMediaRuntimeSession first, LocalMediaRuntimeSession second) : this(first.Probe.VideoFormat)
+        LocalMediaRuntimeSession first, LocalMediaRuntimeSession second) : this(VideoFormat.Hd1080p50Rgba8)
     {
         if (first.Probe.SourceId == second.Probe.SourceId) throw new ArgumentException("Deck sources must differ.");
         _provider = provider;
@@ -253,7 +253,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
                 runtime.SetExternalAudioInput(source, boundary.AudioPayload.Span, available: true);
             else
                 runtime.SetExternalAudioMeter(source, 0, 0,
-                    snapshot.State is not (MediaDeckState.Error or MediaDeckState.Loading));
+                    !entry.NeedsPublication && snapshot.State is not (MediaDeckState.Error or MediaDeckState.Loading));
         }
     }
 
