@@ -558,10 +558,13 @@ public sealed class ProductionIpcIntegrationTests
 		controlStop.Cancel();
 		var controlExit = await controlRun;
         Console.WriteLine("RAPID TAKE SHUTDOWN PHASES: " + JsonSerializer.Serialize(control.ShutdownPhases));
-		Assert.True(controlExit == ControlHostExitCode.Success,
-			$"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
-		runtimeStop.Cancel();
-		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+        // Preserve the observed ControlHost result, then release the independent runtime
+        // even when that result is a failure so later qualification cases remain isolated.
+        runtimeStop.Cancel();
+        var runtimeExit = await runtimeRun;
+        Assert.True(controlExit == ControlHostExitCode.Success,
+            $"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
+        Assert.Equal(RuntimeHostExitCode.Success, runtimeExit);
 	}
 
 	[Fact]
