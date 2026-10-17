@@ -9,6 +9,7 @@ param(
     [string]$CoordinatedUpgradeQualificationPath = "",
     [string[]]$MixedLoadEvidencePaths = @(),
     [string[]]$SsdPlaybackEvidencePaths = @(),
+    [string[]]$SsdPlaybackEnvironmentPaths = @(),
     [string]$RendererRunsPath = "",
     [Parameter(Mandatory)][string]$OutputPath
 )
@@ -176,6 +177,22 @@ foreach ($profile in @("smoke","10m","60m","8h","24h","72h")) {
     if ($ssdResults.ContainsKey($profile)) {
         $r = $ssdResults[$profile]; Add-Result "ssdPlayback.$profile" $r.status $r.source $r.details
     } else { Add-Result "ssdPlayback.$profile" "UNVERIFIED" "SSD playback outcome" "No verified exact-source media/hardware observation for this duration. Software CI cannot grant SSD support." }
+}
+# Inventory is correlated observation, never an authorized physical release binding.
+if ($SsdPlaybackEnvironmentPaths.Count -eq 0) {
+    Add-Result "ssdHardwareInventory" "UNVERIFIED" "SSD environment" "No exact-source device/controller inventory supplied."
+}
+foreach ($path in $SsdPlaybackEnvironmentPaths) {
+    try {
+        $full = Retain-Input $path "ssd-environment"
+        $outcomePath = Retain-Input (Join-Path (Split-Path -Parent $full) "ssd-playback.outcome.json") "ssd-environment-outcome"
+        $outcome = Get-Content -LiteralPath $outcomePath -Raw | ConvertFrom-Json
+        & (Join-Path $root "build/qualification/Test-SsdPlaybackEvidence.ps1") -EvidencePath $outcomePath -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $outcome.profile
+        & (Join-Path $root "build/qualification/Test-SsdPlaybackEnvironment.ps1") -EnvironmentPath $full -ExpectedSourceCommit $ExpectedSourceCommit -OutcomePath $outcomePath
+        $inventory = Get-Content -LiteralPath $full -Raw | ConvertFrom-Json
+        $status = if ($outcome.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }
+        Add-Result "ssdHardwareInventory" $status $full "Correlated inventory topology $($inventory.topology); untrusted observation cannot satisfy physical release requirements."
+    } catch { Add-Result "ssdHardwareInventory" "FAIL" $path $_.Exception.Message }
 }
 $rendererResults = @{}
 if (-not [string]::IsNullOrWhiteSpace($RendererRunsPath)) {

@@ -127,6 +127,68 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         Assert.Equal(20, decks.GetSnapshot(b).Transport!.Position.CurrentFrame);
     }
 
+    [Theory]
+    [InlineData(50, 1)]
+    [InlineData(60_000, 1_001)]
+    public void Native_deck_reopens_after_missing_and_truncated_copy_without_disturbing_other_owner(long numerator, long denominator)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var originalHash = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(asset.Path));
+        var copy = Path.Combine(Path.GetTempPath(), $"rtaime-deck-fault-{Guid.NewGuid():N}.mp4");
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        var format = new VideoFormat(1920, 1080, new FrameRate(numerator, denominator), PixelFormat.Rgba8, ScanMode.Progressive);
+        using var decks = new LocalMediaDeckRuntimeService(format, 2, [a, b]);
+        try
+        {
+            Assert.NotNull(decks.Open(new(MediaContractVersion.Current, b, asset.Path), Prepared(decks, b, 1)).Probe);
+            Command(decks, b, MediaTransportCommandKind.Play);
+            decks.ObserveProgramSource(b);
+            long previousB = -1;
+            for (var cycle = 0; cycle < 4; cycle++)
+            {
+                Assert.NotNull(decks.Open(new(MediaContractVersion.Current, a, asset.Path), Prepared(decks, a, 0)).Probe);
+                Command(decks, a, MediaTransportCommandKind.Play);
+                using (var frame = Next(decks, a))
+                    Assert.Equal(0, frame.Transport.Position.CurrentFrame);
+                Command(decks, a, MediaTransportCommandKind.Stop);
+                Assert.Equal(0, decks.GetSnapshot(a).Transport!.Position.CurrentFrame);
+                decks.Close(a);
+                Assert.Equal(1, decks.Resources.Reserved);
+                var missing = decks.Open(new(MediaContractVersion.Current, a, copy), Prepared(decks, a, 0));
+                Assert.Equal(MediaDeckState.Error, missing.State);
+                Assert.Equal("media.file.not_found", missing.Failure?.Code);
+                decks.Close(a);
+                // Only a private, closed copy is truncated; the original input is retained.
+                File.Copy(asset.Path, copy);
+                using (var stream = new FileStream(copy, FileMode.Open, FileAccess.Write, FileShare.None))
+                    stream.SetLength(16);
+                var truncated = decks.Open(new(MediaContractVersion.Current, a, copy), Prepared(decks, a, 0));
+                Assert.Equal(MediaDeckState.Error, truncated.State);
+                Assert.NotNull(truncated.Failure);
+                Assert.Null(truncated.Probe);
+                decks.Close(a);
+                File.Delete(copy);
+                Assert.Equal(1, decks.Resources.Reserved);
+                using var other = Next(decks, b);
+                Assert.Equal(b, other.Video!.SourceId);
+                Assert.True(other.Transport.Position.CurrentFrame > previousB);
+                previousB = other.Transport.Position.CurrentFrame;
+                Assert.Null(decks.GetSnapshot(b).Failure);
+                Assert.True(decks.GetSnapshot(b).Transport!.IsOnProgram);
+            }
+            Assert.NotNull(decks.Open(new(MediaContractVersion.Current, a, asset.Path), Prepared(decks, a, 0)).Probe);
+            Command(decks, a, MediaTransportCommandKind.Play);
+            using (var recovered = Next(decks, a))
+                Assert.Equal(a, recovered.Video!.SourceId);
+            decks.Dispose();
+            Assert.Equal(0, decks.Resources.Reserved);
+            Assert.Equal(originalHash, System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        }
+        finally { if (File.Exists(copy)) File.Delete(copy); }
+    }
+
     private static void Command(LocalMediaDeckRuntimeService decks, MediaSourceId source,
         MediaTransportCommandKind kind, long? frame = null, bool configure = false)
     {

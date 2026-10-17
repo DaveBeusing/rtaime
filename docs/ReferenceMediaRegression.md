@@ -399,7 +399,7 @@ The existing dual-deck RuntimeHost test also supports staged elapsed profiles th
 `qualification/soak/ssd-playback.json` inventory. This is an extension of the same
 ControlHost/Client/RuntimeHost and reference/soak infrastructure, not another decoder,
 Program loop or renderer. The normal reference workflow executes a ten-minute
-two-deck loop/TAKE workload alongside the existing ten-minute long-container baseline.
+two-deck loop/TAKE workload at both 1080p50 and 1080p59.94 alongside the existing ten-minute long-container baseline.
 
 | Profile | Minimum actual playback | Execution |
 | --- | ---: | --- |
@@ -517,3 +517,20 @@ these findings. Hardware support remains UNVERIFIED/NO-GO until the missing
 measurements and approved acceptance criteria are present. The next dependency is
 reference-machine execution and fault attribution, followed by exact-source release
 evidence correlation; no support promotion is performed by these tools.
+
+### Physical SSD acceptance and correlated inventory
+
+The [reference SSD acceptance runbook](ReferenceSsdHardwareAcceptance.md) defines
+same/separate-device, 60m/8h, cache, source-only ETW I/O, selected-transform and
+isolated fault/recovery procedures. The existing runner accepts `-Format 1080p50`
+or `-Format 1080p59.94`; an explicit verifier format rejects substitution/missing
+format while older schema-1.0 observations remain readable without that request.
+
+Environment schema 1.1 records bounded before/after direct partition/disk identities,
+firmware, free space and associated signed controller drivers where available.
+Reparse/mounted/UNC and ambiguous paths remain unknown. SSD medium is independently
+observed, not inferred from SATA/NVMe. Source/media/outcome hashes and temporal
+correlation are checked by `Test-SsdPlaybackEnvironment.ps1`. The release index accepts
+`-SsdPlaybackEnvironmentPaths` and cannot turn inventory into physical PASS.
+Selected MFT, source-only disk latency, physical output and real sustained reference
+hardware tests remain UNVERIFIED until actually measured and bound.

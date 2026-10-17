@@ -60,6 +60,7 @@ jobs:
           dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaPlaybackMeasurementsTests" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Read histogram regression failed." }
           ./build/qualification/Test-SsdPlaybackVerifierRegression.ps1
+          ./build/qualification/Test-SsdPlaybackEnvironmentRegression.ps1
 
       - name: Qualify atomic journal batching before lifecycle load
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionJournalBatchIntegrationTests|FullyQualifiedName~DurablePersistenceIntegrationTests" --logger "console;verbosity=detailed"
@@ -600,9 +601,9 @@ jobs:
       - quality
       - security
       - provider-smoke
-    # Preserve independent qualification evidence after functional CI failure.
-    # CI remains mandatory; this cannot make a failed candidate releasable.
-    if: ${{ !cancelled() && needs.quality.result == 'success' && needs.security.result == 'success' && needs['provider-smoke'].result == 'success' }}
+    # Preserve independent packaged qualification after CI or Quality failure.
+    # Both checks remain mandatory in readiness; test packaging cannot authorize release.
+    if: ${{ !cancelled() && needs.security.result == 'success' && needs['provider-smoke'].result == 'success' }}
 
     steps:
       - name: Checkout exact source candidate

@@ -3,6 +3,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet("smoke","10m","60m","8h","24h","72h")][string]$Profile,
     [string]$MediaA, [string]$MediaB,
+    [ValidateSet("1080p50","1080p59.94")][string]$Format = "1080p50",
     [string]$OutputRoot = "artifacts/qualification/ssd-playback",
     [switch]$NoBuild,
     [switch]$RequirePhysicalPass
@@ -26,32 +27,16 @@ $root = if ([IO.Path]::IsPathRooted($OutputRoot)) { [IO.Path]::GetFullPath($Outp
 $run = Join-Path $root ([DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmss") + "-" + [Guid]::NewGuid().ToString("N"))
 [void][IO.Directory]::CreateDirectory($run)
 
-function Get-FileStorage([string]$Path) {
-    if ([string]::IsNullOrWhiteSpace($Path)) {
-        return @{ mapping = "UNVERIFIED"; reason = "Generated reference location is selected by the existing fixture." }
-    }
-    $full = [IO.Path]::GetFullPath($Path)
-    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Input file is missing: $full" }
-    try {
-        $drive = [IO.Path]::GetPathRoot($full).TrimEnd('\').TrimEnd(':')
-        if ($drive.Length -ne 1) { throw "Only a directly mapped local volume can identify this disk." }
-        $partitions = @(Get-Partition -DriveLetter $drive -ErrorAction Stop)
-        if ($partitions.Count -ne 1) { throw "Volume mapping is ambiguous." }
-        $disk = Get-Disk -Number $partitions[0].DiskNumber -ErrorAction Stop
-        $volume = Get-Volume -DriveLetter $drive -ErrorAction Stop
-        return @{ mapping = "OBSERVED"; diskNumber = $disk.Number; model = $disk.FriendlyName
-            busType = [string]$disk.BusType; firmware = [string]$disk.FirmwareVersion
-            fileSystem = [string]$volume.FileSystem; volumeSize = $volume.Size
-            # Serial numbers and source paths are deliberately not redistributed.
-            storageClass = "UNVERIFIED"; controllerDriver = "UNVERIFIED" }
-    } catch { return @{ mapping = "UNVERIFIED"; reason = $_.Exception.Message } }
-}
+. (Join-Path $PSScriptRoot "SsdPlaybackStorage.ps1")
 $inventory = [ordered]@{
-    schemaVersion = "1.0"; sourceCommit = $source; capturedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    schemaVersion = "1.1"; sourceCommit = $source; capturedAt = [DateTimeOffset]::UtcNow.ToString("O")
     operatingSystem = [Environment]::OSVersion.VersionString; architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
-    storage = @((Get-FileStorage $MediaA), (Get-FileStorage $MediaB))
+    captureStatus = "INITIAL"; storage = @((Get-SsdFileStorage $MediaA), (Get-SsdFileStorage $MediaB))
+    storageAfter = @(); media = @(); outcomeSha256 = $null; completedAt = $null; topology = "UNVERIFIED"
     gpu = @(); decoder = "Windows Media Foundation; selected MFT binary and acceleration UNVERIFIED"
     cache = "UNVERIFIED"; pressure = "UNVERIFIED"; physicalStatus = "UNVERIFIED"
+    selectedDecoder = "UNVERIFIED"; fileOnlyReadLatency = "UNVERIFIED"
+    physicalOutput = "UNVERIFIED"; gpuTelemetry = "UNVERIFIED"
 }
 try {
     $inventory.gpu = @(Get-CimInstance Win32_VideoController -ErrorAction Stop |
@@ -59,7 +44,7 @@ try {
 } catch { $inventory.gpu = @(@{ status = "UNVERIFIED"; reason = $_.Exception.Message }) }
 $inventory | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $run "environment.json") -Encoding utf8
 
-$names = @("RTAIME_SSD_PLAYBACK_PROFILE","RTAIME_SSD_MEDIA_A","RTAIME_SSD_MEDIA_B",
+$names = @("RTAIME_SSD_PLAYBACK_PROFILE","RTAIME_SSD_PROGRAM_FORMAT","RTAIME_SSD_MEDIA_A","RTAIME_SSD_MEDIA_B",
     "RTAIME_REFERENCE_MEDIA_REGRESSION","RTAIME_REFERENCE_MEDIA_OUTPUT","RTAIME_SOURCE_COMMIT",
     "RTAIME_BUILD_COMMIT","RTAIME_BASELINE_SDK")
 $previous = @{}
@@ -75,6 +60,7 @@ try {
     dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~AsynchronousLocalMediaDecodeTests|FullyQualifiedName~LocalMediaDecoderSafetyTests|FullyQualifiedName~MultiDeckLocalMediaIntegrationTests" --logger "trx;LogFileName=faults.trx" --results-directory $run
     if ($LASTEXITCODE -ne 0) { throw "Media lifetime/concurrency/fault prerequisites failed." }
     $env:RTAIME_SSD_PLAYBACK_PROFILE = $Profile
+    $env:RTAIME_SSD_PROGRAM_FORMAT = $Format
     $env:RTAIME_SSD_MEDIA_A = if ($MediaA) { [IO.Path]::GetFullPath($MediaA) } else { $null }
     $env:RTAIME_SSD_MEDIA_B = if ($MediaB) { [IO.Path]::GetFullPath($MediaB) } else { $null }
     $env:RTAIME_REFERENCE_MEDIA_REGRESSION = "1"
@@ -88,13 +74,33 @@ try {
     if ([int]$trx.TestRun.ResultSummary.Counters.executed -ne 1 -or
         [int]$trx.TestRun.ResultSummary.Counters.passed -ne 1) { throw "Actual playback test was not executed." }
     $report = Join-Path $run "ssd-playback.outcome.json"
-    ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile
+    ./build/qualification/Test-SsdPlaybackEvidence.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $Profile -ExpectedFormat $Format
     $outcome = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    $inventory.storageAfter = @((Get-SsdFileStorage $MediaA), (Get-SsdFileStorage $MediaB))
+    $inventory.topology = Get-SsdStorageTopology $inventory.storage
+    $inventory.media = @($outcome.result.media)
+    $inventory.outcomeSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
+    $inventory.completedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    $inventory.captureStatus = "FINAL"
+    $environmentPath = Join-Path $run "environment.json"
+    $inventory | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $environmentPath -Encoding utf8
+    ./build/qualification/Test-SsdPlaybackEnvironment.ps1 -EnvironmentPath $environmentPath -ExpectedSourceCommit $source -OutcomePath $report
     $support = [ordered]@{
-        schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile
+        schemaVersion = "1.0"; sourceCommit = $source; profile = $Profile; programFormat = $Format
         evidenceSha256 = (Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLowerInvariant()
         environmentSha256 = (Get-FileHash -LiteralPath (Join-Path $run "environment.json") -Algorithm SHA256).Hash.ToLowerInvariant()
         media = @($outcome.result.media); probedProfiles = @($outcome.result.deckProbes)
+        hardwareTuple = @{ topology = $inventory.topology; storage = @($inventory.storage)
+            gpu = @($inventory.gpu); selectedDecoder = "UNVERIFIED"; trust = "OBSERVATION_ONLY" }
+        acceptance = @(
+            @{ requirement = "SOURCE_BUILD_MEDIA_IDENTITY"; status = "PASS" }
+            @{ requirement = "STORAGE_DEVICE_MAPPING"; status = if ($inventory.topology -eq "UNVERIFIED") { "UNVERIFIED" } else { "OBSERVED" } }
+            @{ requirement = "SUSTAINED_PROGRAM_CADENCE"; status = $outcome.result.timingStatus }
+            @{ requirement = "RESOURCE_PLATEAU"; status = $outcome.result.resourcePlateau }
+            foreach ($requirement in @("CACHE_AND_PRESSURE_MEASUREMENT","PINNED_DECODER_AND_ACCELERATION","GPU_VRAM_TELEMETRY","PHYSICAL_OUTPUT_LOSS_AND_AV","FAULT_RECOVERY")) {
+                @{ requirement = $requirement; status = "UNVERIFIED" }
+            }
+        )
         softwareCollection = "PASS"; programTiming = $outcome.result.timingStatus
         supportStatus = if ($outcome.result.timingStatus -eq "FAIL") { "FAIL" } else { "UNVERIFIED" }
         physicalStatus = "UNVERIFIED"; releasePromotionPerformed = $false
@@ -104,7 +110,7 @@ try {
     $support | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $run "support-profile.json") -Encoding utf8
     $manifest = [ordered]@{
         schemaVersion = "1.0"; qualification = "rtaime-ssd-playback"; sourceCommit = $source
-        buildCommit = $source; profile = $Profile; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
+        buildCommit = $source; profile = $Profile; programFormat = $Format; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
         descriptorSha256 = (Get-FileHash -LiteralPath qualification/soak/ssd-playback.json -Algorithm SHA256).Hash.ToLowerInvariant()
         files = @("ssd-playback.outcome.json","environment.json","support-profile.json","playback.trx","faults.trx" | ForEach-Object {
             @{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $run $_) -Algorithm SHA256).Hash.ToLowerInvariant() }

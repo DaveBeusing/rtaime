@@ -187,7 +187,11 @@ jobs:
           if-no-files-found: error
 
   ssd-playback:
-    name: Staged dual-deck ten-minute playback
+    name: Staged dual-deck ten-minute playback (${{ matrix.format }})
+    strategy:
+      fail-fast: false
+      matrix:
+        format: ["1080p50", "1080p59.94"]
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -205,12 +209,14 @@ jobs:
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
       - name: Real dual-deck duration and controlled fault prerequisites
         shell: pwsh
-        run: ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -NoBuild
+        env:
+          RTAIME_SELECTED_FORMAT: ${{ matrix.format }}
+        run: ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -Format $env:RTAIME_SELECTED_FORMAT -NoBuild
       - name: Retain bounded SSD observations without media redistribution
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: rtaime-ssd-playback-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rtaime-ssd-playback-${{ matrix.format }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             artifacts/qualification/ssd-playback/**/*.json
             artifacts/qualification/ssd-playback/**/*.trx

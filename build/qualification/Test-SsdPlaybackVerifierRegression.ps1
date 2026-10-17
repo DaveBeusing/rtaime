@@ -18,7 +18,7 @@ $base = @{
     status = "PASS"; cleanup = "PASS"; failure = $null; cleanupFailure = $null
     result = @{
         schemaVersion = "1.0"; qualification = "rtaime-ssd-playback"; sdk = "10.0.401"
-        sourceCommit = $sha; buildCommit = $sha; profile = "8h"
+        sourceCommit = $sha; buildCommit = $sha; profile = "8h"; programFormat = "1080p50"
         startedAt = $now.AddHours(-8).ToString("O"); elapsedSeconds = 28800; requestedSeconds = 28800
         capacity = 2; resourceCapacity = 128; startSequence = 10; finalSequence = 1000; takes = 20
         media = @(@{ sha256 = "b"*64; bytes = 1000 },@{ sha256 = "c"*64; bytes = 1000 })
@@ -36,7 +36,7 @@ $base = @{
 }
 function Copy-Fixture { $base | ConvertTo-Json -Depth 32 | ConvertFrom-Json -AsHashtable }
 function Write-Fixture($value) { $value | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $path -Encoding utf8 }
-function Verify { & (Join-Path $PSScriptRoot "Test-SsdPlaybackEvidence.ps1") -EvidencePath $path -ExpectedSourceCommit $sha -ExpectedProfile "8h" }
+function Verify { & (Join-Path $PSScriptRoot "Test-SsdPlaybackEvidence.ps1") -EvidencePath $path -ExpectedSourceCommit $sha -ExpectedProfile "8h" -ExpectedFormat "1080p50" }
 $count = 0
 function Rejected($value, [string]$reason) {
     Write-Fixture $value
@@ -54,6 +54,8 @@ try {
     Write-Fixture $irregular; Verify
     $v = Copy-Fixture; $v.sourceCommit = "d"*40; Rejected $v "foreign source"
     $v = Copy-Fixture; $v.result.buildCommit = "d"*40; Rejected $v "foreign binary"
+    $v = Copy-Fixture; $v.result.programFormat = "1080p59.94"; Rejected $v "Program format substitution"
+    $v = Copy-Fixture; $v.result.Remove("programFormat"); Rejected $v "missing requested Program format"
     $v = Copy-Fixture; $v.result.profile = "10m"; Rejected $v "profile substitution"
     $v = Copy-Fixture; $v.result.elapsedSeconds = 600; Rejected $v "short run"
     $v = Copy-Fixture; $v.capturedAt = $now.AddHours(-7).ToString("O"); Rejected $v "wall-time mismatch"

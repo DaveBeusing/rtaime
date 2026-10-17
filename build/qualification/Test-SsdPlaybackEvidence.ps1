@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory)][string]$EvidencePath,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedSourceCommit,
-    [Parameter(Mandatory)][ValidateSet("smoke","10m","60m","8h","24h","72h")][string]$ExpectedProfile
+    [Parameter(Mandatory)][ValidateSet("smoke","10m","60m","8h","24h","72h")][string]$ExpectedProfile,
+    [ValidateSet("","1080p50","1080p59.94")][string]$ExpectedFormat = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,11 @@ if (-not (Test-Path -LiteralPath $EvidencePath -PathType Leaf) -or
     (Get-Item -LiteralPath $EvidencePath).Length -gt 256KB) { throw "Missing or oversized SSD playback evidence." }
 $e = Get-Content -LiteralPath $EvidencePath -Raw | ConvertFrom-Json
 $r = $e.result
+# Older schema-1.0 observations may omit format; they cannot meet an explicit format request.
+if ($ExpectedFormat) {
+    if ($r.programFormat -cne $ExpectedFormat) { throw "Program format substitution." }
+}
+if ($null -ne $r.PSObject.Properties["programFormat"] -and $r.programFormat -cnotin @("1080p50","1080p59.94")) { throw "Unsupported Program format." }
 $required = switch ($ExpectedProfile) { "smoke" {30} "10m" {600} "60m" {3600} "8h" {28800} "24h" {86400} "72h" {259200} }
 if ($e.schemaVersion -cne "1.0" -or $r.schemaVersion -cne "1.0" -or
     $r.qualification -cne "rtaime-ssd-playback" -or $r.sdk -cne "10.0.401") { throw "Unknown SSD evidence schema or SDK." }

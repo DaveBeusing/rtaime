@@ -126,3 +126,10 @@ any of the existing twelve hardware dimensions. In particular it cannot substitu
 for TIMING_REFERENCE_SOAK, physical A/V/output telemetry or production decoder trust.
 The support-profile projection retains the outcome/environment hashes, exact media
 and selected duration without declaring a Windows/SSD/codec family SUPPORTED.
+
+The optional `-SsdPlaybackEnvironmentPaths` index input additionally correlates the
+schema-1.1 environment with its sibling outcome bytes, source/build/media identities,
+pre/post device/controller observations and capture interval. Contradiction is FAIL;
+valid inventory remains UNVERIFIED for physical support. It is not a new binding type
+and cannot satisfy any physical release requirement. See the
+[reference SSD acceptance procedures](ReferenceSsdHardwareAcceptance.md).
