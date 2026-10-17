@@ -427,3 +427,12 @@ Explicit [asset preparation](docs/MediaLibraryAssetBrowser.md#explicit-asset-pre
 verifies selected files on a bounded non-Program worker. Availability, representative
 conditional success and resident deck readiness remain distinct; preparation never
 routes Program or changes saved production.
+
+## Decoder capability and dependency boundary
+
+See the [source-derived input compatibility inventory](docs/LocalMediaDecoderCapabilities.md)
+for exact sample-entry/profile/audio checks and qualification gaps, and the
+[proposed professional decoder ADR](docs/ProfessionalDecoderDecision.md)
+for backend alternatives and approval requirements. ProRes, DNxHD/DNxHR, MXF input
+and a production FFmpeg dependency remain outside approved scope. Existing test-only
+FFmpeg generation and MXF recording evidence do not authorize input support.

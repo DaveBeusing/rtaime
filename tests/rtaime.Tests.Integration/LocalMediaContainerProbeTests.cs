@@ -170,7 +170,79 @@ public sealed class LocalMediaContainerProbeTests
             H264LocalMediaSequenceMetadata.Validate(sequence, 1920, 1080)).Code);
     }
 
-    private static byte[] Movie(bool mov = false, string mutation = "")
+
+    public static IEnumerable<object[]> UnapprovedProfessionalEntries()
+    {
+        foreach (var mov in new[] { false, true })
+            foreach (var entry in new[] { "apco", "apcs", "apcn", "apch", "ap4h", "ap4x", "AVdn", "AVdh", "encv" })
+                yield return new object[] { mov, entry };
+    }
+
+    [Theory]
+    [MemberData(nameof(UnapprovedProfessionalEntries))]
+    public void Professional_and_encrypted_entries_stay_rejected_before_native_open(bool mov, string entry)
+    {
+        WithFile(Movie(mov: mov, sampleEntry: entry), path => {
+            ILocalMediaProbe probe = mov ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+            var failure = Assert.Throws<LocalMediaProbeException>(() => probe.Read(path));
+            Assert.Equal("media.file.video_codec_unsupported", failure.Code);
+            Assert.Contains(entry, failure.Message, StringComparison.Ordinal);
+        });
+    }
+
+    [Theory]
+    [InlineData("hvc1")]
+    [InlineData("hev1")]
+    [InlineData("av01")]
+    [InlineData("vp09")]
+    [InlineData("mp4v")]
+    [InlineData("vc-1")]
+    [InlineData("jpeg")]
+    public void MP4_codec_recognition_does_not_expand_QuickTime_scope(string entry)
+    {
+        WithFile(Movie(mov: true, sampleEntry: entry), path =>
+            Assert.Equal("media.file.video_codec_unsupported",
+                Assert.Throws<LocalMediaProbeException>(() => new QuickTimeLocalMediaProbe().Read(path)).Code));
+    }
+
+    [Theory]
+    [InlineData("lpcm")]
+    [InlineData("twos")]
+    [InlineData("alac")]
+    [InlineData("ac-3")]
+    [InlineData("enca")]
+    public void Unsupported_QuickTime_audio_is_not_silently_treated_as_video_only(string entry)
+    {
+        WithFile(Movie(mov: true, audioEntry: entry), path =>
+            Assert.Equal("media.file.audio_codec_unsupported",
+                Assert.Throws<LocalMediaProbeException>(() => new QuickTimeLocalMediaProbe().Read(path)).Code));
+    }
+
+    [Theory]
+    [InlineData("mp4a")]
+    [InlineData("sowt")]
+    public void Existing_QuickTime_audio_metadata_remains_admitted(string entry)
+    {
+        WithFile(Movie(mov: true, audioEntry: entry), path => {
+            var metadata = new QuickTimeLocalMediaProbe().Read(path);
+            Assert.Equal("avc1", metadata.SampleEntry);
+            Assert.Equal(entry, metadata.AudioSampleEntry);
+            // Metadata acceptance is not a real decoder or required-audio claim.
+        });
+    }
+
+    [Fact]
+    public void MXF_input_has_no_provider_path_even_when_the_file_contains_valid_MP4_metadata()
+    {
+        WithFile(Movie(), path => {
+            var result = new LocalMediaFileProvider().TryOpen(path, MediaSourceId.New());
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Source);
+            Assert.Equal("media.file.container_unsupported", result.Failure?.Code);
+        }, extension: ".mxf");
+    }
+
+    private static byte[] Movie(bool mov = false, string mutation = "", string? sampleEntry = null, string? audioEntry = null)
     {
         var mvhd = new byte[100]; U32(1000).CopyTo(mvhd, 12); U32(6000).CopyTo(mvhd, 16);
         var tkhd = new byte[84];
@@ -187,7 +259,7 @@ public sealed class LocalMediaContainerProbeTests
         var pasp = Box("pasp", Join(U32(mutation == "pasp" ? 2u : 1u), U32(1)));
         byte[] color = [.. Encoding.ASCII.GetBytes("nclx"), 0, 1, 0,
             mutation == "hdr" ? (byte)16 : (byte)1, 0, 1, 0];
-        var entry = Box(mutation == "prores" ? "apch" : "avc1", Join(visual, Box("avcC", avcc), pasp, Box("colr", color)));
+        var entry = Box(sampleEntry ?? (mutation == "prores" ? "apch" : "avc1"), Join(visual, Box("avcC", avcc), pasp, Box("colr", color)));
         var stsd = Box("stsd", Join(U32(0), U32(mutation == "descriptions" ? 2u : 1u), entry));
         var stts = Box("stts", mutation == "vfr"
             ? Join(U32(0), U32(2), U32(100), U32(20), U32(100), U32(40))
@@ -199,8 +271,21 @@ public sealed class LocalMediaContainerProbeTests
                 Box("url ", U32(mutation == "external" ? 0u : 1u))))), Box("stbl", Join(stsd, stts,
                     mutation.StartsWith("composition", StringComparison.Ordinal)
                         ? Box("ctts", Join(U32(0), U32(1), U32(mutation == "composition-count" ? 299u : 300u), U32(40))) : []))))))));
+        byte[] audioTrack = [];
+        if (audioEntry is not null)
+        {
+            var audioHandler = new byte[12]; Encoding.ASCII.GetBytes("soun").CopyTo(audioHandler, 8);
+            var audioDescription = new byte[28]; audioDescription[7] = 1;
+            BinaryPrimitives.WriteUInt16BigEndian(audioDescription.AsSpan(16), 2);
+            BinaryPrimitives.WriteUInt16BigEndian(audioDescription.AsSpan(18), 16);
+            U32(48000u << 16).CopyTo(audioDescription, 24);
+            var audioSamples = Box("stsd", Join(U32(0), U32(1), Box(audioEntry, audioDescription)));
+            var references = Box("dinf", Box("dref", Join(U32(0), U32(1), Box("url ", U32(1)))));
+            audioTrack = Box("trak", Box("mdia", Join(Box("mdhd", mdhd), Box("hdlr", audioHandler),
+                Box("minf", Join(references, Box("stbl", Join(audioSamples, stts)))))));
+        }
         var bytes = Join(Box("ftyp", Join(Encoding.ASCII.GetBytes(mov ? "qt  " : "isom"), U32(0))),
-            Box("moov", Join(Box("mvhd", mvhd), track, mutation == "duplicate-video" ? track : [])));
+            Box("moov", Join(Box("mvhd", mvhd), track, audioTrack, mutation == "duplicate-video" ? track : [])));
         return mutation == "truncated" ? bytes[..^1] : bytes;
     }
 
@@ -229,9 +314,9 @@ public sealed class LocalMediaContainerProbeTests
         Encoding.ASCII.GetBytes(name), payload);
     private static byte[] U32(uint value) { var bytes = new byte[4]; BinaryPrimitives.WriteUInt32BigEndian(bytes, value); return bytes; }
     private static byte[] Join(params byte[][] parts) => parts.SelectMany(part => part).ToArray();
-    private static void WithFile(byte[] bytes, Action<string> action)
+    private static void WithFile(byte[] bytes, Action<string> action, string extension = ".mp4")
     {
-        var path = Path.Combine(Path.GetTempPath(), $"rtaime-probe-{Guid.NewGuid():N}.mp4");
+        var path = Path.Combine(Path.GetTempPath(), $"rtaime-probe-{Guid.NewGuid():N}{extension}");
         try { File.WriteAllBytes(path, bytes); action(path); }
         finally { File.Delete(path); }
     }

@@ -450,3 +450,12 @@ failed owners, named-pipe/gRPC authority invariants and Operator batch rollback.
 Existing reference MP4/MOV, VFR, unsupported-profile and absent-decoder matrices
 remain the source/format acceptance mechanisms. Physical SATA/NVMe, latency,
 cold-cache pressure, full-file decode and long-soak qualification remain separate.
+
+## Decoder capability and dependency boundary
+
+See the [source-derived input compatibility inventory](LocalMediaDecoderCapabilities.md)
+for exact sample-entry/profile/audio checks and qualification gaps, and the
+[proposed professional decoder ADR](ProfessionalDecoderDecision.md)
+for backend alternatives and approval requirements. ProRes, DNxHD/DNxHR, MXF input
+and a production FFmpeg dependency remain outside approved scope. Existing test-only
+FFmpeg generation and MXF recording evidence do not authorize input support.
