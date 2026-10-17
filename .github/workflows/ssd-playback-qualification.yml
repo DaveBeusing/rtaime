@@ -47,5 +47,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: rtaime-ssd-endurance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/ssd-playback
+          path: |
+            artifacts/qualification/ssd-playback/**/*.json
+            artifacts/qualification/ssd-playback/**/*.trx
           if-no-files-found: error
