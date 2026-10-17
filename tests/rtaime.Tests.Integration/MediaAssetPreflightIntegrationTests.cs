@@ -182,6 +182,46 @@ public sealed class MediaAssetPreflightIntegrationTests
     }
 
     [Fact]
+    public async Task Concurrent_open_intents_cannot_cross_failed_preflight_cleanup_admission()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        using var raceEntered = new ManualResetEventSlim();
+        var decoder = new ControlledDecoder { BlockDispose = true, FailDispose = true };
+        var decks = new LocalMediaDeckRuntimeService {
+            PreflightEnvironment = () => "fixed",
+            PreflightOpen = (_, _, _) => LocalMediaOpenResult.Ready(Source(decoder))
+        };
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var job = decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new(SeekPoints: 1, FramesPerPoint: 1));
+        Assert.True(await Task.Run(() => decoder.DisposeBlocked.Wait(TimeSpan.FromSeconds(5))));
+        var source = MediaSourceId.New();
+        var request = new MediaDeckOpenRequest(MediaContractVersion.Current, source, Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4"));
+        var prepared = Prepared(new LocalMediaFileProvider(), source);
+        var race = Task.Run(() => {
+            for (var index = 0; index < 10000; index++)
+            {
+                if (index == 100) raceEntered.Set();
+                var result = decks.Open(request, prepared);
+                Assert.False(result.IsLoaded);
+                Assert.Contains(result.Failure?.Code, new[] { "runtime.media_deck.preflight_cancelling", "runtime.media_deck.cleanup_failed" });
+            }
+        });
+        try
+        {
+            Assert.True(await Task.Run(() => raceEntered.Wait(TimeSpan.FromSeconds(5))));
+        }
+        finally { decoder.ReleaseDispose.Set(); }
+        await race.WaitAsync(TimeSpan.FromSeconds(15));
+        var failed = await Completed(decks, job.JobId);
+        Assert.Equal(MediaAssetReadinessState.Unavailable, failed.State);
+        Assert.Equal(1, decks.Resources.Reserved);
+        Assert.Equal(1, decoder.DisposeCalls);
+        Assert.Equal(0, decks.Resources.Evicted);
+        Assert.Throws<IOException>(decks.Dispose);
+    }
+
+    [Fact]
     public void Loaded_decks_deny_preflight_before_any_optional_open_or_seek()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -272,6 +312,9 @@ public sealed class MediaAssetPreflightIntegrationTests
         public int DisposeCalls { get; private set; }
         public bool FailCancellation { get; init; }
         public bool FailDispose { get; init; }
+        public bool BlockDispose { get; init; }
+        public ManualResetEventSlim DisposeBlocked { get; } = new();
+        public ManualResetEventSlim ReleaseDispose { get; } = new();
         public bool Disposed { get; private set; }
         public long[]? Timestamps { get; init; }
         public ManualResetEventSlim ReadBlocked { get; } = new();
@@ -336,9 +379,12 @@ public sealed class MediaAssetPreflightIntegrationTests
             try
             {
                 DisposeCalls++;
+                if (BlockDispose) { DisposeBlocked.Set(); ReleaseDispose.Wait(); }
                 Disposed = true;
                 ReadBlocked.Dispose();
                 ReleaseRead.Dispose();
+                DisposeBlocked.Dispose();
+                ReleaseDispose.Dispose();
                 if (FailDispose) throw new IOException("Injected native decoder release failure.");
             }
             finally { Interlocked.Decrement(ref _operations); }
