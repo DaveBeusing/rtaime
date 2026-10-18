@@ -237,6 +237,10 @@ message ExternalControlRequest {
     EmptyRequest cancel_production_macro = 95;
     RecoveryAcknowledgementRequest acknowledge_production_macro_recovery = 96;
     ProductionMacroIdRequest get_production_macro = 97;
+
+    EmptyRequest get_output_canvas = 146;
+    JsonPayloadRequest validate_output_canvas = 147;
+    JsonPayloadRequest save_output_canvas = 148;
   }
 }
 

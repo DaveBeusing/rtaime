@@ -433,6 +433,102 @@ public sealed class ExternalControlIntegrationTests
 		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
 	}
 
+
+    [Fact]
+    public async Task Canvas_authoring_roundtrips_both_transports_and_restart_without_activating_output()
+    {
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var grpc = fixture.CreateClient();
+        var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(fixture.ControlEndpoint));
+        var before = await client.SynchronizeAsync();
+        var initial = await grpc.GetOutputCanvasAsync();
+        Assert.Equal(0UL, initial.SavedRevision);
+        Assert.Equal(2, initial.Saved.Canvases.Length);
+        Assert.Equal(2, initial.Saved.Surfaces.Length);
+        Assert.All(initial.Saved.Surfaces, s => {
+            Assert.Equal(new OutputCanvasCrop(0,0,1,1), s.Crop);
+            Assert.Contains(s.Input.BusRoleId, new[] {"program","aux"});
+        });
+        Assert.DoesNotContain(initial.AvailableTargets, t => t.RoleId is "preview" or "clean-feed");
+        Assert.Null(initial.ActiveRenderRevision);
+        Assert.Equal("RENDERER_REQUIRED", initial.ActivationState);
+        var id = Guid.NewGuid(); var surfaceId = Guid.NewGuid();
+        var edits = new OutputCanvasEdit[] {
+            new(OutputCanvasEditKind.AddCanvas, id, Canvas:new(id,"Stage",1280,720)),
+            new(OutputCanvasEditKind.AddSurface,surfaceId,Surface:new(surfaceId,id,new(BusRoleId:"program"),3,
+                new(.25,0,.5,1), new(new(0,0),new(1280,0),new(1100,720),new(100,720))))
+        };
+        var request = new OutputCanvasSaveRequest("1.0",Guid.NewGuid(),initial.Saved.ConfigurationId,0,edits);
+        var draft = rtaime.Control.OutputCanvasModel.Apply(initial.Saved,request);
+        var valid = await client.ValidateOutputCanvasAsync(draft);
+        Assert.True(valid.IsValid, string.Join("; ",valid.Issues.Select(i=>i.Message)));
+        Assert.Equal(draft.ConfigurationId,valid.ConfigurationId);
+        Assert.Equal(draft.EditRevision,valid.EditRevision);
+        var saved = await client.SaveOutputCanvasAsync(request);
+        Assert.True(saved.Saved,string.Join("; ",saved.Validation.Issues.Select(i=>i.Message)));
+        Assert.Equal(1UL,saved.SavedRevision);
+        var localAfter = await client.GetOutputCanvasAsync();
+        var read = await grpc.GetOutputCanvasAsync();
+        Assert.Equal(3,read.Saved.Canvases.Length);
+        Assert.Equal(surfaceId,read.Saved.Surfaces.Last().SurfaceId);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(localAfter.Saved,OutputCanvasJson.Options),
+            System.Text.Json.JsonSerializer.Serialize(read.Saved,OutputCanvasJson.Options));
+        var duplicate = await grpc.SaveOutputCanvasAsync(request);
+        Assert.True(duplicate.Replayed);
+        Assert.Equal(saved.SavedRevision,duplicate.SavedRevision);
+        var conflict = await grpc.SaveOutputCanvasAsync(request with { Edits = [edits[0]] });
+        Assert.False(conflict.Saved);
+        Assert.Contains(conflict.Validation.Issues,i=>i.Code=="canvas.transaction_conflict");
+        var stale = await grpc.SaveOutputCanvasAsync(request with { TransactionId=Guid.NewGuid() });
+        Assert.False(stale.Saved);
+        Assert.Contains(stale.Validation.Issues,i=>i.Code=="canvas.revision_conflict");
+        var boundSurface = read.Saved.Surfaces.First();
+        var remove = await client.SaveOutputCanvasAsync(new("1.0",Guid.NewGuid(),read.Saved.ConfigurationId,1,
+            [new(OutputCanvasEditKind.RemoveSurface,boundSurface.SurfaceId)]));
+        Assert.False(remove.Saved);
+        Assert.Equal(OperatorActionOutcome.Rejected, client.ActionHistory.Current.Last().Outcome);
+        Assert.Equal(before.Production,(await grpc.GetSnapshotAsync()).Production);
+        await fixture.RestartControlAsync();
+        await grpc.GetSnapshotAsync();
+        var restarted = await grpc.GetOutputCanvasAsync();
+        Assert.Equal(1UL,restarted.SavedRevision);
+        Assert.Null(restarted.ActiveRenderRevision);
+        Assert.Equal(surfaceId,restarted.Saved.Surfaces.Last().SurfaceId);
+        Assert.True((await grpc.SaveOutputCanvasAsync(request)).Replayed);
+        Assert.Equal(before.Production,(await grpc.GetSnapshotAsync()).Production);
+    }
+
+    [Fact]
+    public async Task Canvas_observer_can_read_and_validate_but_cannot_save()
+    {
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+        await using var grpc = fixture.CreateClient();
+        var initial = await grpc.GetOutputCanvasAsync();
+        var validation = await grpc.ValidateOutputCanvasAsync(initial.Saved with { EditRevision=1 });
+        Assert.True(validation.IsValid,string.Join("; ",validation.Issues.Select(i=>i.Message)));
+        var denied = await Assert.ThrowsAsync<RpcException>(async () =>
+            await grpc.SaveOutputCanvasAsync(new("1.0",Guid.NewGuid(),initial.Saved.ConfigurationId,0,[])));
+        Assert.Equal(StatusCode.PermissionDenied,denied.StatusCode);
+        Assert.Equal(0UL,(await grpc.GetOutputCanvasAsync()).SavedRevision);
+        Assert.Contains("control.output.canvas.save",(await grpc.DiscoverAsync()).Capabilities);
+    }
+
+    [Fact]
+    public async Task Canvas_unknown_version_and_unavailable_provider_fail_without_mutating_saved_state()
+    {
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var grpc = fixture.CreateClient();
+        var initial = await grpc.GetOutputCanvasAsync();
+        var binding = initial.Saved.Bindings.First();
+        var request = new OutputCanvasSaveRequest("2.0",Guid.NewGuid(),initial.Saved.ConfigurationId,0,
+            [new(OutputCanvasEditKind.Bind,binding.OutputId,Binding:binding with { ProfileId="unknown" })]);
+        Assert.False((await grpc.SaveOutputCanvasAsync(request)).Saved);
+        var invalid = await grpc.SaveOutputCanvasAsync(request with { Version="1.0",TransactionId=Guid.NewGuid() });
+        Assert.False(invalid.Saved);
+        Assert.Contains(invalid.Validation.Issues,i=>i.Code=="canvas.target_unsupported");
+        Assert.Equal(0UL,(await grpc.GetOutputCanvasAsync()).SavedRevision);
+    }
+
 	private sealed class ExternalFixture : IAsyncDisposable
 	{
 		private readonly CancellationTokenSource _runtimeStop;
