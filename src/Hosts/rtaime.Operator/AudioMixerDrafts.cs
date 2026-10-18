@@ -16,10 +16,10 @@ public static class AudioMixerPresentation
 {
     public static bool ValidPeak(double value) => double.IsFinite(value) && value >= 0;
     public static string PeakLabel(double value) => !ValidPeak(value) ? "—" : value == 0 ? "−∞" : $"{20 * Math.Log10(value):0.0}";
-    public static double ToDb(double gain) => gain <= 0 ? -96 : 20 * Math.Log10(gain);
+    public static double ToDb(double gain) => gain <= 0 ? -96 : Math.Max(-96, 20 * Math.Log10(gain));
     public static double FromDb(double db) => db <= -96 ? 0 : Math.Min(4, Math.Pow(10, db / 20));
     public static InspectorPropertyDefinition GainDb { get; } = new("mixer.gain.db", "Gain dB", -96, 20 * Math.Log10(4), 0, 0.1, "dB; -96 = silence");
-    public static string MeterDisclaimer => "Runtime sample peaks · RMS / LUFS / true peak unavailable · no peak hold or display decay";
+    public static string MeterDisclaimer => "Runtime sample peaks · RMS / LUFS / true peak and device measurements unavailable · no peak hold or display decay";
 }
 
 public sealed partial class OperatorAudioSourceStripViewModel : IAudioMixerDraftStrip
@@ -44,6 +44,7 @@ public sealed partial class OperatorAudioSourceStripViewModel : IAudioMixerDraft
 
 public sealed partial class OperatorAudioBusStripViewModel : IAudioMixerDraftStrip
 {
+    public string LiveSummary => $"{BusLabel} · L {LeftPeakLabel} / R {RightPeakLabel} dBFS · {EvidenceState}";
     private bool _inputsValid = true;
     public bool InputsValid { get => _inputsValid; set { if (Set(ref _inputsValid, value)) DraftChanged(); } }
     public double GainDb { get => AudioMixerPresentation.ToDb(MasterGain); set { if (AudioMixerPresentation.GainDb.Accepts(value)) MasterGain = AudioMixerPresentation.FromDb(value); } }

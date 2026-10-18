@@ -35,7 +35,7 @@ The existing Inspector numeric primitive provides culture-aware finite/range val
 Up/Down, Shift fine step, Ctrl coarse step, Alt-drag, Ctrl+Home field reset and Escape cancellation.
 An invalid visible field disables its strip Apply. Fixed-size vertical faders retain linear
 0..4 range with 0.01/0.1 steps. The companion dB editor uses 0.1 dB steps and the equivalent
-0..4 linear contract. Its -96 dB endpoint explicitly selects zero gain; confirmed labels retain
+0..4 linear contract. Gains below the -96 dB editor floor retain their exact linear value until an explicit dB edit; the -96 dB endpoint selects zero gain. Confirmed labels retain
 the actual gain and measured silence is independent of this editor convention.
 Unity changes gain to 1 locally; Discard restores the strip from confirmed state.
 

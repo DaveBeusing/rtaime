@@ -839,7 +839,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 
 	internal void RefreshEvidenceState()
 	{
-		foreach (var property in new[] { nameof(DisplayLeftPeak), nameof(DisplayRightPeak), nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
+		foreach (var property in new[] { nameof(LiveSummary), nameof(DisplayLeftPeak), nameof(DisplayRightPeak), nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
 			OnPropertyChanged(property);
 	}
 	public string LimiterActivity => !HasMeterEvidence ? "UNAVAILABLE" : LimiterHitCount > 0 ? $"{LimiterHitCount} HIT" : LimiterReductionDb > 0 ? $"{LimiterReductionDb:0.0} dB" : "IDLE";

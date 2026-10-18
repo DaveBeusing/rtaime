@@ -52,6 +52,10 @@
 				</DockPanel>
 				<TextBlock Text="{x:Static local:AudioMixerPresentation.MeterDisclaimer}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding AttributeTransferStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <ItemsControl ItemsSource="{Binding Buses}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding LiveSummary}" Style="{StaticResource MixerLabel}" Margin="0,0,12,4" /></DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <TextBlock Text="{Binding OutputRoutingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding DisabledReason}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 				<TextBlock Text="{Binding Owner.CommandStatus}" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
@@ -98,7 +102,7 @@
 						SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
 						Style="{StaticResource MixerBank}"
 						ItemContainerStyle="{StaticResource MixerStrip}"
-						AutomationProperties.Name="Audio source strips"
+						AutomationProperties.Name="Audio source strips" ToolTip="Input sample-peak observations; bus strips show mixed output peaks."
 						Margin="0,0,0,10">
 						<controls:RtaimeListBox.ItemTemplate>
 							<DataTemplate>
@@ -156,7 +160,7 @@
                                         <controls:RtaimeButton Content="COPY GAIN" Click="CopyGain_Click" IsCompact="True" AutomationProperties.Name="Copy gain to Inspector clipboard" />
                                         <controls:RtaimeButton Content="PASTE GAIN" Click="PasteGain_Click" IsEnabled="{Binding CanEditDraft}" IsCompact="True" AutomationProperties.Name="Paste Inspector gain into draft" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding ConfirmedGainLabel}" Style="{StaticResource MixerLabel}" />
+                                    <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat={}CONFIRMED GAIN {0}}" Style="{StaticResource MixerLabel}" />
 									<TextBlock Text="{Binding DraftRoutingSummary, StringFormat={}DRAFT BUS → {0}}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding RoutingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 									<TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
@@ -236,7 +240,7 @@
 						ItemsSource="{Binding Buses}"
 						Style="{StaticResource MixerBank}"
 						ItemContainerStyle="{StaticResource MixerStrip}"
-						AutomationProperties.Name="Audio bus strips"
+						AutomationProperties.Name="Audio bus strips" ToolTip="Bus output sample peaks after the existing Runtime mix and processing."
 						Margin="0,0,0,10">
 						<controls:RtaimeListBox.ItemTemplate>
 							<DataTemplate>
@@ -281,7 +285,7 @@
                                         <controls:RtaimeButton Content="COPY GAIN" Click="CopyGain_Click" IsCompact="True" AutomationProperties.Name="Copy gain to Inspector clipboard" />
                                         <controls:RtaimeButton Content="PASTE GAIN" Click="PasteGain_Click" IsEnabled="{Binding CanEditDraft}" IsCompact="True" AutomationProperties.Name="Paste Inspector gain into draft" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding ConfirmedGainLabel}" Style="{StaticResource MixerLabel}" />
+                                    <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat={}CONFIRMED GAIN {0}}" Style="{StaticResource MixerLabel}" />
 									<TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 									<Grid Margin="0,0,0,6">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
