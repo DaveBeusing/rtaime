@@ -4,7 +4,10 @@
 
 ## Purpose and status
 
-Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. This is a planning and traceability document, not an implementation request, release approval or a claim that the concept already matches the running application.
+Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. The [scope decision effective 2026-10-17](OperatorExperienceScope.md) makes the
+listed extensions approved implementation work. This roadmap supplies ownership,
+dependencies and acceptance; it grants no hardware/security/release certification
+and does not claim that the target already matches the running application.
 
 Reviewed integration source: `master` at `7bd13506272dec071bccda23beb767da44562fac`, including integrated media asset preparation. Existing repository capability documentation and relevant changes were inspected. No new build, Windows visual acceptance, hardware measurement or interaction benchmark was executed to establish this documentation baseline.
 
@@ -20,7 +23,7 @@ Before subsequent implementation, inspect current master, relevant remote branch
 | Preview / Program | Existing role controls, Client commands and [Monitoring Plane](OperatorMonitoringPlane.md) | Keep role, selected intent, pending authority and execution evidence unambiguous in every layout |
 | Image inspection | DPI-derived target, GPU/WPF fallback, zoom/pan/ROI and channel presentation documented in Operator UI V1 | Show delivered monitoring detail honestly; qualify scaling and fallback instead of promising lost source detail |
 | Workspace recovery | Schema-6 layouts, docking, retained detached panels, named templates, Focus/Cinema | Preserve restoration, focus, resource identity and physical work-area recovery |
-| Media Library | [Media Library](MediaLibraryAssetBrowser.md): virtualized grid/list, typed queries, named Smart Bins and bounded batches | Improve discoverability and state presentation; no duplicate asset store or decoder |
+| Media Library | [Media Library](MediaLibraryAssetBrowser.md): virtualized grid/list, typed queries, named Smart Bins and bounded batches | Improve discoverability/state presentation; reuse catalogue identity, Runtime admission and bounded provider lifecycle |
 | Asset preparation | Integrated representative-sample preparation, retry/cancel and Show checks | Keep availability, conditional observation and resident readiness separate; stale evidence cannot become READY |
 | Timeline / cues | [Layered Timeline](LayeredTimeline.md); [Show Control](ShowControlCueSequencing.md) | Preserve draft/confirmed cursors and distinguish asset markers from executable show cues |
 | Inspector | [Context Inspector](ContextInspector.md); existing draft editing/attribute transfer | Make selection context, units, pending values and Apply/Discard explicit without replaying live edits through undo |
@@ -34,9 +37,43 @@ Before subsequent implementation, inspect current master, relevant remote branch
 
 The following are already foundations, not new projects: commands/shortcut profiles, local draft undo, typed attribute transfer, portable workspace templates, docking, Focus/Cinema, named Smart Bins, read-only show checks and bounded asset preparation. An older overview saying a complete shortcut editor or all undo is absent must be read together with the later owning capability document. This does not imply timeline-wide live undo or unrestricted editing support.
 
-Independent position-based hover scrubbing remains unavailable. Existing hover/focus reuses monitoring thumbnails and must not open or seek a production deck. New full-resolution inspection, editable waveforms, reverse shuttle, multi-object live transactions, unrestricted processing graphs, 3D stage mapping and new device/protocol support require their own verified contracts and scope decisions.
+Independent position-based hover scrubbing is currently unavailable, while
+independent analysis/scrubbing, multitrack sequences/editing, Preview shuttle,
+2D canvas/mapping, contextual Inspector extensions and an independent AI workspace
+are approved TO IMPLEMENT. Existing hover/focus reuses monitoring thumbnails
+and must not open or seek a production deck. Missing real contracts are delivery
+work for their domain owners, not reasons to reopen a settled V1 feature decision.
+A replacement NLE, 3D stage, arbitrary plugin graphs, new commercial codecs and
+hardware drivers are not implicitly added obligations. See the scope record for
+compatibility, commercial and physical evidence boundaries.
 
-Current reference geometry and schema 6 remain unchanged. Four workflow groups are an information architecture, not four replacement serialized workspaces. Cyan does not replace green Preview or red Program. Proposed cosmetic motion does not override the current no-decorative-Storyboard policy.
+Current reference geometry and schema 6 remain unchanged by this baseline.
+They may evolve with migration/tests and focused policy updates; eight existing
+identities must remain readable. Four workflow groups are information architecture,
+not a permanent ceiling or four replacement serialized workspaces. Cyan does not replace green Preview or red Program. Proposed cosmetic motion does not override the current no-decorative-Storyboard policy.
+
+## Approved domain delivery and integration barrier
+
+After this scope/design baseline is integrated in master, UI composition
+decoupling, shared design-system work, resource admission, sequence model and
+canvas model may begin independently from that current master. Human/physical
+capture review is not a blanket implementation prerequisite.
+
+| Domain / target | Dependency and real completion |
+| --- | --- |
+| Independent analysis/scrub | Reuse Runtime admission/catalogue identity; bounded cancelable analysis sessions and Client/Host tests precede browser scrub UI |
+| Sequence model/execution | Versioned durable tracks/clips/edit transactions; revision/generation-fenced prepared Runtime sink on the existing cadence; real persistence/recovery before editing UI |
+| Preview shuttle | Typed directional/rate/end/cancel semantics and confirmed Preview identity; then shared commands/J-L handling with text-entry/repeat guards |
+| 2D canvas/mapping | Governed durable canvas/surface/assignment model and resource/output sink acceptance; then manipulation UI and output feedback |
+| Contextual Inspector | Extend existing editors, local undo and typed transfer; compatible multi-object changes require real atomic/revision validation before live Apply |
+| Independent AI workspace | Reuse current capability/approval/fallback services; implement additive navigation/layout migration and real backend evidence |
+| LIVE hierarchy/design system | Apply the [concrete LIVE target](OperatorExperienceDesign.md#live-operator-composition), container-owned geometry and English custom controls; preserve accessible compact actions and role identity |
+
+Use the [binding namespace/tag allocation](OperatorExperienceScope.md#binding-namespace-and-numeric-allocation-map).
+Only one owner changes shared dispatchers, Proto, root composition, show envelopes,
+workflow or shared documentation at a time. Integrate small shared patches
+serially after inspecting current master and PR diffs; no stacked branches,
+duplicate command registries or fake backend data as completion.
 
 ## Delivery sequence
 
@@ -50,7 +87,7 @@ Acceptance: a retained baseline with explicit findings, reproducible journeys an
 
 ### Consolidate shell hierarchy and semantic presentation
 
-Depends on the retained baseline. Refine shared tokens and existing shell/view composition only where the findings require it. Preserve canonical navigation identities, common command instances, monitor roles and reference/persisted geometry. Use stable Program/Preview identity, compact health and clear active-context labels. Remove duplicate visual controls only after verifying every existing workflow remains reachable.
+Use the retained software baseline; unresolved manual cases remain separately UNVERIFIED. Refine shared tokens and existing shell/view composition only where the findings require it. Preserve canonical navigation identities, common command instances, monitor roles and reference/persisted geometry. Use stable Program/Preview identity, compact health and clear active-context labels. Remove duplicate visual controls only after verifying every existing workflow remains reachable.
 
 Likely implementation surface: `src/Hosts/rtaime.Operator/MainWindow.xaml`, its code-behind, `Themes/OperatorTokens.xaml`, `Themes/OperatorTheme.xaml` and the existing workspace views. Locate the actual affected feature files before editing; do not create a replacement shell.
 
@@ -60,7 +97,7 @@ Acceptance: no visible stock-control inconsistency in the changed surfaces; sele
 
 Depends on shared shell geometry. Extend the existing monitor presentation rather than adding a renderer. Confirm aspect-safe Fit, explicit Fill cropping, physical-pixel inspection, resize settling and truthful source/delivered/target metadata. Preserve channel/ROI availability rules and the explicit GPU/WPF fallback. Do not promise original-resolution detail from a sampled stream.
 
-Acceptance: pointer and ROI coordinates remain stable across fractional DPI, zoom and pan; resize settles without per-frame target churn; retained/detached monitor identities and final resource counts remain bounded; monitoring pressure cannot delay Program. Full-resolution inspection backend work is excluded until separately approved.
+Acceptance: pointer and ROI coordinates remain stable across fractional DPI, zoom and pan; resize settles without per-frame target churn; retained/detached monitor identities and final resource counts remain bounded; monitoring pressure cannot delay Program. Independent analysis/full-resolution inspection is approved TO IMPLEMENT; its real bounded backend contract and qualified delivery metadata must precede UI claims.
 
 ### Consolidate preparation and live-operation journeys
 
@@ -114,4 +151,9 @@ Keep changes small and technically scoped: shared presentation, workspace integr
 
 Update the owning document when implementation changes behavior, then update this roadmap's evidence/status and the design contract only for an explicitly accepted design change. Do not copy entire capability specifications into this roadmap. Altering persisted layout structure requires a deliberate schema/migration decision; changing display allocations alone does not.
 
-The design baseline is complete when it is discoverable from the existing documentation, capability ownership is explicit, deferred features are not presented as implemented and subsequent work can choose one bounded improvement without redoing the architecture or inventing product authority.
+The scope baseline is complete when the accepted extensions are discoverable and
+approved TO IMPLEMENT, concrete visual/interaction acceptance and namespace
+ownership are explicit, current capabilities remain honestly classified and
+subsequent owners can implement real contracts without redoing authority or
+reopening former V1 deferrals. Feature completion and physical/release acceptance
+remain separate evidence decisions.
