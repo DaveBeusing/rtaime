@@ -468,3 +468,19 @@ distinguish UHD input policy and generic buffer sizes from approved Program
 output. Program remains HD50/59.94 RGBA8. 2160p25/50/59.94 and native
 10-bit/HDR/Fill-Key remain approval-gated and physically UNVERIFIED; see the
 [qualification plan](HighResolutionMediaQualification.md).
+
+## Runtime-wide capacity and retained ownership
+
+All RuntimeHost file deck Open/Close, Probe, resident Preload and background
+Preflight paths use the shared [file-deck resource policy](FileDeckCapacityAdmission.md).
+Tickets reserve before native open and pool allocation and remain charged until
+worker/native cleanup and final frame-lease release. Failed cleanup quarantines
+the owner and requires the supported host restart path.
+
+The default remains one/two A/B decoders. Explicit
+`--local-media-profile=development-four --local-media-decoders=4` enables the
+finite four-owner software development profile, including additional prepared
+sources through the existing Runtime IPC/registry. This is not physical
+four-deck, codec, GPU or SSD qualification. Native/GPU/storage budgets remain
+UNKNOWN and support diagnostics report the actual shared reservations and
+retained/quarantined owners.

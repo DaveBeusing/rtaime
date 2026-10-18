@@ -20,7 +20,8 @@ internal static class OperatorControlDesignSystemQualification
 	{
 		var subscriptions = OperatorControlPresentation.ActiveSystemSubscriptions;
 		var count = 0;
-		var button = new ClickButton { Content = "Apply", Command = new CountingCommand(() => count++) };
+		var button = new ClickButton { Content = "Apply", Command = new CountingCommand(() => count++),
+            Style = (Style)owner.FindResource(typeof(RtaimeButton)) };
 		AutomationProperties.SetName(button, "Apply local draft");
 		var editor = new RtaimeTextBox { Text = "Original", MinWidth = 180 };
 		var chooser = new RtaimeComboBox { MinWidth = 180 };
@@ -28,13 +29,13 @@ internal static class OperatorControlDesignSystemQualification
 		var badge = new RtaimeStatusBadge { Content = "Program", Status = RtaimeStatusKind.OnAir };
 		var state = new RtaimeEmptyStatePanel { Title = "No items", Detail = "Select a source." };
 		var panel = new StackPanel();
-		foreach (var control in new Control[] { button, editor, chooser, badge, state }) panel.Children.Add(control);
+		foreach (var control in new System.Windows.Controls.Control[] { button, editor, chooser, badge, state }) panel.Children.Add(control);
 		var window = new Window { Owner = owner, Content = panel, Width = 320, Height = 300, ShowInTaskbar = false };
 		try
 		{
 			window.Show();
 			await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
-			foreach (var control in new Control[] { button, editor, chooser })
+			foreach (var control in new System.Windows.Controls.Control[] { button, editor, chooser })
 			{
 				Assert.NotNull(control.Template);
 				Assert.True(control.ActualHeight >= 24);

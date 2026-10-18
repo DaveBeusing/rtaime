@@ -15,6 +15,8 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 {
     private sealed record Entry(MediaSourceId Source, LocalMediaDeckSlot Deck, long Order)
     {
+        public MediaDeckOpenRequest? Request { get; init; }
+        public PreparedExecutionContract? Execution { get; init; }
         public bool Retiring { get; set; }
         public bool NeedsPublication { get; set; } = true;
         public long? PublishedGeneration { get; set; }
@@ -23,6 +25,8 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     private readonly object _management = new();
     private readonly Entry?[] _entries;
     private readonly VideoFormat _format;
+    private readonly LocalMediaResourceLedger _ledger;
+    private readonly LocalMediaCapacityProfile _profile;
     private readonly LocalMediaFileProvider _provider;
     private readonly MediaSourceId[]? _allowedSources;
     private readonly HashSet<MediaSourceId> _knownSources = [];
@@ -35,20 +39,24 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 
     public LocalMediaDeckRuntimeService() : this(VideoFormat.Hd1080p50Rgba8) { }
     public LocalMediaDeckRuntimeService(VideoFormat outputFormat, int maximumDecoders = 2,
-        MediaSourceId[]? allowedSources = null)
+        MediaSourceId[]? allowedSources = null, LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
     {
-        if (maximumDecoders is < 1 or > 2) throw new ArgumentOutOfRangeException(nameof(maximumDecoders));
+        _ledger = new LocalMediaResourceLedger(outputFormat, maximumDecoders, profile);
+        _profile = profile;
         _format = outputFormat;
         _provider = new LocalMediaFileProvider(outputFormat);
         _entries = new Entry[maximumDecoders];
         _allowedSources = allowedSources?.ToArray();
-        if (_allowedSources is not null && (_allowedSources.Length != 2 || _allowedSources[0] == _allowedSources[1]))
-            throw new ArgumentException("Two distinct production sources are required.", nameof(allowedSources));
+        if (_allowedSources is not null && (_allowedSources.Length < 1 || _allowedSources.Length > 8 ||
+            profile == LocalMediaCapacityProfile.Conservative && _allowedSources.Length != 2 ||
+            _allowedSources.Any(source => source.Value.IsEmpty) || _allowedSources.Distinct().Count() != _allowedSources.Length))
+            throw new ArgumentException("Supply distinct configured source identities within the selected profile.", nameof(allowedSources));
     }
     internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider, LocalMediaRuntimeSession session)
         : this(VideoFormat.Hd1080p50Rgba8)
     {
         _provider = provider;
+        AdoptSession(session);
         _selected = session.Probe.SourceId;
         _entries[0] = new Entry(session.Probe.SourceId, new LocalMediaDeckSlot(provider, session), ++_order);
     }
@@ -57,17 +65,48 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     {
         if (first.Probe.SourceId == second.Probe.SourceId) throw new ArgumentException("Deck sources must differ.");
         _provider = provider;
+        AdoptSession(first);
+        AdoptSession(second);
         _selected = first.Probe.SourceId;
         _entries[0] = new Entry(first.Probe.SourceId, new LocalMediaDeckSlot(provider, first), ++_order);
         _entries[1] = new Entry(second.Probe.SourceId, new LocalMediaDeckSlot(provider, second), ++_order);
         _knownSources.Add(first.Probe.SourceId);
         _knownSources.Add(second.Probe.SourceId);
     }
+    private void AdoptSession(LocalMediaRuntimeSession session)
+    {
+        if (!_ledger.TryReserve(Guid.NewGuid(), new(_ledger.RuntimeEpoch, session.Probe.SourceId,
+            null, null, null, LocalMediaResourcePurpose.Resident), out var ticket, out var failure))
+            throw new InvalidOperationException(failure!.Value.Message);
+        session.AttachResources(ticket!);
+    }
+    internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.DevelopmentFour;
+
+    public void AdmitBoundary(V1RuntimeHostService runtime, ulong programSlot)
+    {
+        lock (_gate)
+        {
+            for (var i = 0; i < _entries.Length; i++)
+                if (_entries[i] is { } entry) AdmitBoundary(runtime, entry.Source, programSlot);
+            foreach (var source in _pendingInputClears)
+            {
+                runtime.ClearExternalAudioMeter(source);
+                runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+            }
+            _pendingInputClears.Clear();
+        }
+    }
+    public LocalMediaResourceSnapshot ResourceSnapshot => _ledger.Snapshot;
+    internal LocalMediaResourceLedger ResourceLedger => _ledger;
+    private bool SourceAllowed(MediaSourceId source) =>
+        _allowedSources is not null ? _allowedSources.Contains(source) :
+        _knownSources.Count < (_profile == LocalMediaCapacityProfile.DevelopmentFour ? 8 : 2) || _knownSources.Contains(source);
+
     public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
     public LocalMediaDeckResources Resources
     {
-        get { lock (_gate) return new(_entries.Length, _entries.Count(e => e is not null) + _probeReservations, _rejected, _evicted); }
+        get { lock (_gate) return new(_entries.Length, _ledger.Snapshot.ReservedOwners, _rejected, _evicted); }
     }
     private Entry? Find(MediaSourceId? source)
     {
@@ -114,14 +153,21 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             lock (_gate) _probeReservations++;
             try
             {
-                using var probe = new LocalMediaDeckSlot(_format);
-                return probe.Probe(path, assetId);
+                using var probe = new LocalMediaDeckSlot(_format, _ledger);
+                var result = probe.Probe(path, assetId);
+                if (result.Failure?.Code.StartsWith("runtime.media_resources.", StringComparison.Ordinal) == true)
+                    Interlocked.Increment(ref _rejected);
+                return result;
             }
             finally { lock (_gate) _probeReservations--; }
         }
     }
 
     public MediaDeckRuntimeSnapshot Open(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution)
+        => OpenCore(request, preparedExecution, null);
+
+    private MediaDeckRuntimeSnapshot OpenCore(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(preparedExecution);
@@ -141,13 +187,24 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                 return Reject("runtime.media_deck.preflight_cancelling",
                     "Live deck admission cancelled optional preflight. Retry after its native owner releases capacity.");
             }
+            if (!preparedExecution.Bindings.Any(binding => binding.MediaSourceId == request.SourceId &&
+                binding.Resource.ProviderId == _provider.Descriptor.ProviderId &&
+                binding.Resource.Kind == LocalMediaCapabilityKinds.MediaRoute &&
+                _provider.Descriptor.Resources.Any(resource => resource == binding.Resource)))
+                return Reject("runtime.local_media.binding_missing", "Prepare a current authoritative local media route for this source before retrying.");
+            var existing = Find(request.SourceId);
+            if (existing is { Retiring: false, Execution: not null } && existing.Request == request &&
+                existing.Execution.PreparedExecutionId == preparedExecution.PreparedExecutionId &&
+                existing.Execution.AuthoritySnapshot == preparedExecution.AuthoritySnapshot &&
+                existing.Execution.PlanGeneration == preparedExecution.PlanGeneration &&
+                existing.Execution.Bindings.SequenceEqual(preparedExecution.Bindings))
+                return existing.Deck.Snapshot;
             ClearPreparation(request.SourceId);
             Entry? previous = null;
             var index = -1;
             lock (_gate)
             {
-                if ((_allowedSources is not null && !_allowedSources.Contains(request.SourceId)) ||
-                    _knownSources.Count == 2 && !_knownSources.Contains(request.SourceId))
+                if (!SourceAllowed(request.SourceId))
                     return Reject("runtime.media_deck.source_invalid", "Deck source is outside the production source slots.");
                 for (var i = 0; i < _entries.Length; i++)
                     if (_entries[i]?.Source == request.SourceId) { index = i; previous = _entries[i]; break; }
@@ -183,9 +240,13 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                     Interlocked.Increment(ref _evicted);
                 }
             }
-            var candidate = new Entry(request.SourceId, new LocalMediaDeckSlot(_format), ++_order);
+            var candidate = new Entry(request.SourceId, new LocalMediaDeckSlot(_format, _ledger), ++_order)
+            { Request = request, Execution = preparedExecution };
             lock (_gate) { _entries[index] = candidate; _selected = request.SourceId; _knownSources.Add(request.SourceId); }
-            return candidate.Deck.Open(request, preparedExecution);
+            var opened = candidate.Deck.Open(request, preparedExecution, resources);
+            if (opened.Failure?.Code.StartsWith("runtime.media_resources.", StringComparison.Ordinal) == true)
+                Interlocked.Increment(ref _rejected);
+            return opened;
         }
     }
 
@@ -218,7 +279,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 
     public MediaDeckRuntimeSnapshot ObserveProgramSource(MediaSourceId? source)
     {
-        lock (_gate) _program = source;
+        lock (_gate) { _program = source; _ledger.ObserveProgram(source); }
         for (var i = 0; i < _entries.Length; i++)
         {
             Entry? entry;
@@ -316,9 +377,10 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
         lock (_management)
         {
             _disposed = true;
-            ClearPreparation(null);
-            StopPreflight();
+            _ledger.CloseAdmission();
             List<Exception>? failures = null;
+            try { ClearPreparation(null); } catch (Exception exception) { (failures ??= []).Add(exception); }
+            try { StopPreflight(); } catch (Exception exception) { (failures ??= []).Add(exception); }
             for (var i = 0; i < _entries.Length; i++)
             {
                 Entry? entry;
