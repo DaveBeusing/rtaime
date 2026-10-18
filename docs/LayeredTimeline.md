@@ -192,3 +192,7 @@ Undo/Redo retains at most 32 local cursor/resource-projection snapshots. A drag 
 Rundown has its own authoring history described in [Production Rundown](ProductionRundown.md). The two scopes never consume each other's shortcuts. Existing cue creation/rename/deletion and transport execution are not authoring-history entries.
 
 The Inspector now has independent bounded typed-property history; it shares the existing history primitive rather than the timeline cursor/resource stack. Its layer/processing/audio/cue drafts cannot seek media or rewind timeline marker commits. See [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer).
+
+## Durable sequence authoring
+
+See [Sequence Authoring and Persistence](SequenceAuthoring.md) for the canonical multitrack backend, rational time and revisioned edit contract. Playback remains unavailable; the existing timeline projections retain their current authority.
