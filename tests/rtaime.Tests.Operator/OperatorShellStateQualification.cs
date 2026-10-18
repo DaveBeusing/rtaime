@@ -44,6 +44,8 @@ public sealed partial class OperatorCombinedVisualQualification
             window.Shell.UpdateViewportSize(1600,900);
             await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
             await VerifyRepeatedShellMovesAsync(window,dispatcher);
+            var stressMetrics = await MeasureSettledAsync(window,stressRoot,dispatcher);
+            Console.WriteLine("SHELL UI METRICS: " + JsonSerializer.Serialize(stressMetrics));
             async Task CaptureState(string state)
             {
                 var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
@@ -108,7 +110,7 @@ public sealed partial class OperatorCombinedVisualQualification
                 File.WriteAllText(Path.Combine(evidence,"shell-states.json"),JsonSerializer.Serialize(new {
                     sourceCommit=Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     scope="Real compiled MainWindow with controlled Client responses; presentation only, no real-media/device/readiness certification.",
-                    cases=observations },new JsonSerializerOptions { WriteIndented=true }));
+                    stressCycles=100, stressMetrics, cases=observations },new JsonSerializerOptions { WriteIndented=true }));
             Assert.Equal(80,observations.Count);
             Assert.Equal(0,transport.MutationCalls);
             // The shared router must leave Enter on a focused shell button to that explicit button.
