@@ -118,6 +118,8 @@ public partial class MainWindow
                 "\n" + owner?.LastError + "\nSearch the lifecycle, Media Library and show preflight help below. Help never retries production commands."),
             new("active-shortcuts", "Active keyboard shortcuts · focus and gesture reference", Shortcuts.ReferenceText)
         };
+        topics.AddRange(OperatorOnboardingViewModel.Steps.Select(step =>
+            new OperatorHelpTopic("getting-started." + step.Id, "Getting started · " + step.Title, step.Detail)));
         // Prefer the current workspace's canonical document sections without duplicating help text.
         var preferred = Shell.SelectedWorkspace switch
         { "MEDIA" => "MediaLibrary", "HEALTH" or "OUTPUTS" => "WindowsProduction", "SCENES" => "DurableShow", _ => "OperatorCommands" };

@@ -274,6 +274,60 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		Assert.Contains("supported application lifecycle", text);
 	}
 
+
+	[Fact]
+	public void Private_key_failure_text_is_rejected_as_a_whole_diagnostic_field()
+	{
+		WriteEvidence(CreateStages(controlStatus: "FAILED",
+			controlFailure: "-----BEGIN PRIVATE KEY-----\nprivate-payload\n-----END PRIVATE KEY-----"),
+			ApplicationLifecycleStages.ControlHost);
+		using var model = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		Assert.DoesNotContain("private-payload", model.BuildDiagnosticsText());
+		Assert.Contains("Next step:", model.BuildDiagnosticsText());
+	}
+
+	[Fact]
+	public void Missing_or_invalid_lifecycle_evidence_cannot_qualify_startup()
+	{
+		using var missing = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		Assert.False(missing.HasCompletedInitialStartup);
+		Assert.Contains("Waiting", missing.Summary);
+		File.WriteAllText(EvidencePath, "{\"schemaVersion\":{},\"stages\":[]}");
+		Refresh(missing);
+		Assert.False(missing.HasCompletedInitialStartup);
+		Assert.Contains("Unsupported", missing.Summary);
+		File.WriteAllText(EvidencePath, new string('x', 2 * 1024 * 1024 + 1));
+		Refresh(missing);
+		Assert.False(missing.HasCompletedInitialStartup);
+	}
+
+	[Theory]
+	[InlineData("cancel")]
+	[InlineData("denied")]
+	public async Task Support_export_cancel_and_failure_preserve_startup_evidence_and_restore_the_action(string outcome)
+	{
+		WriteEvidence(CreateStages(controlStatus: "FAILED", controlFailure: "Review binding diagnostics."),
+			ApplicationLifecycleStages.ControlHost);
+		using var model = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext(),
+			new FailedExporter(outcome), () => Path.Combine(_root, "support.zip"));
+		var summary = model.Summary;
+		model.ExportSupportBundleCommand.Execute(null);
+		// The test exporter completes synchronously; no dispatcher or retry is required.
+		await Task.CompletedTask;
+		Assert.Contains(outcome == "cancel" ? "cancelled" : "Unable to export", model.DiagnosticActionStatus);
+		Assert.True(model.CanExportSupportBundle);
+		Assert.True(model.HasStartupFailure);
+		Assert.Equal(summary, model.Summary);
+		Assert.False(File.Exists(Path.Combine(_root, "support.zip")));
+	}
+
+	private sealed class FailedExporter(string outcome) : ISupportBundleExporter
+	{
+		public Task<SupportBundleExportResult> ExportAsync(string destinationPath, string? lifecycleEvidencePath,
+			CancellationToken cancellationToken = default) => Task.FromException<SupportBundleExportResult>(
+				outcome == "cancel" ? new OperationCanceledException() : new UnauthorizedAccessException("Destination denied."));
+	}
+
 	public void Dispose()
 	{
 		try

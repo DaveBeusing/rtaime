@@ -269,10 +269,12 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				FileMode.Open,
 				FileAccess.Read,
 				FileShare.ReadWrite | FileShare.Delete);
+			if (stream.Length > 2 * 1024 * 1024)
+				throw new InvalidDataException("Lifecycle evidence exceeds 2 MiB.");
 			using var document = JsonDocument.Parse(stream);
 			ApplyEvidence(document.RootElement);
 		}
-		catch (Exception exception) when (exception is IOException or JsonException)
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
 		{
 			if (Stages.Count == 0)
 				Summary = $"Waiting for stable lifecycle evidence: {exception.Message}";
@@ -282,6 +284,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	private void ApplyEvidence(JsonElement root)
 	{
 		if (!root.TryGetProperty("schemaVersion", out var schema) ||
+			schema.ValueKind != JsonValueKind.String ||
 			!string.Equals(schema.GetString(), "1.0", StringComparison.Ordinal))
 		{
 			Summary = "Unsupported AppHost lifecycle evidence format.";
@@ -298,7 +301,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 		if (root.TryGetProperty("stages", out var stages) && stages.ValueKind == JsonValueKind.Array)
 		{
-			foreach (var stage in stages.EnumerateArray())
+			foreach (var stage in stages.EnumerateArray().Take(64))
 			{
 				var id = ReadString(stage, "id", "unknown");
 				var displayName = ReadString(stage, "displayName", id);
@@ -650,29 +653,29 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 	internal string BuildDiagnosticsText()
 	{
+		static string Safe(string? value) => rtaime.Core.DiagnosticRedactor.RedactText(value ?? string.Empty);
 		var builder = new StringBuilder();
 		builder.AppendLine("rtaime startup diagnostics");
-		builder.AppendLine($"Phase: {StartupPhaseLabel}");
-		builder.AppendLine($"Observed: {ObservedAt}");
-		builder.AppendLine($"Evidence: {EvidencePath}");
-		builder.AppendLine($"Diagnostics: {DiagnosticPath}");
-		builder.AppendLine($"Active stage: {ActiveStageName}");
-		builder.AppendLine($"Summary: {Summary}");
-		builder.AppendLine($"Next step: {NextStep}");
+		builder.AppendLine($"Phase: {Safe(StartupPhaseLabel)}");
+		builder.AppendLine($"Observed: {Safe(ObservedAt)}");
+		builder.AppendLine($"Evidence: {Safe(EvidencePath)}");
+		builder.AppendLine($"Diagnostics: {Safe(DiagnosticPath)}");
+		builder.AppendLine($"Active stage: {Safe(ActiveStageName)}");
+		builder.AppendLine($"Summary: {Safe(Summary)}");
+		builder.AppendLine($"Next step: {Safe(NextStep)}");
 		builder.AppendLine();
 
 		foreach (var stage in Stages)
 		{
-			builder.AppendLine($"[{stage.Status}] {stage.DisplayName}");
-			builder.AppendLine($"  {stage.TechnicalDetail}");
+			builder.AppendLine($"[{stage.Status}] {Safe(stage.DisplayName)}");
+			builder.AppendLine($"  {Safe(stage.TechnicalDetail)}");
 			if (!string.IsNullOrWhiteSpace(stage.StatusText))
-				builder.AppendLine($"  Status: {stage.StatusText}");
+				builder.AppendLine($"  Status: {Safe(stage.StatusText)}");
 			if (!string.IsNullOrWhiteSpace(stage.FailureReason))
-				builder.AppendLine($"  Failure: {stage.FailureReason}");
+				builder.AppendLine($"  Failure: {Safe(stage.FailureReason)}");
 		}
 
-		return string.Join(Environment.NewLine, builder.ToString().TrimEnd().Split(Environment.NewLine)
-			.Select(rtaime.Core.DiagnosticRedactor.RedactText));
+		return rtaime.Core.DiagnosticRedactor.RedactExceptionDetail(builder.ToString().TrimEnd());
 	}
 
 	private static StartupLifecycleRequirement ResolveRequirement(
