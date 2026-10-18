@@ -9,7 +9,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class AudioMixerMutationTests
+public sealed partial class AudioMixerMutationTests
 {
 	[Fact]
 	public async Task Pending_source_commit_keeps_confirmed_routing_and_preserves_other_source_and_bus_drafts()

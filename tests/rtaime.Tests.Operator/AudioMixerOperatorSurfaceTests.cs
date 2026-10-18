@@ -8,7 +8,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class AudioMixerOperatorSurfaceTests
+public sealed partial class AudioMixerOperatorSurfaceTests
 {
 	[Fact]
 	public async Task Mixer_projects_maximum_eight_sources_and_four_buses_from_confirmed_Runtime_evidence()
