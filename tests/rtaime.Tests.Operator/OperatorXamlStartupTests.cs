@@ -185,6 +185,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
                     });
                     await Qualify("Library smart bins, menus and virtualization", () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Timeline draft ergonomics", () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Live console actions and focus", () => LiveConsoleWindowQualification.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Inspector precision", () => InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Compositing layer and Inspector editing", () => CompositingWorkspaceQualification.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Inspector draft undo and transfer", () => InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher));
