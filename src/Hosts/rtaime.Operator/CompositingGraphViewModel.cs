@@ -692,10 +692,9 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
             SelectLayers(selection);
             return;
         }
+        // Clear graph highlights before marking the shared owning layer and selected child.
+        foreach (var candidate in Nodes) candidate.IsSelected = false;
         foreach (var layer in Layers) layer.IsSelected = ResolveLayerId(node.Id) == ResolveLayerId(layer.Id);
-
-		if (SelectedNode is { } previous && !ReferenceEquals(previous, node))
-			previous.IsSelected = false;
 		node.IsSelected = true;
 		SelectedNode = node;
 		_inspector.SelectCompositingNode(node.Projection);

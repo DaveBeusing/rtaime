@@ -186,6 +186,12 @@ public sealed class InspectorPrecisionTests
         Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
         Assert.Equal(0, transport.MutationCalls);
         graph.SelectNodeCommand.Execute(first);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer0"));
+        Assert.Same(first, graph.SelectedLayerRow);
+        Assert.Equal(1, graph.SelectedLayerCount);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer7"));
+        Assert.False(first.IsSelected);
+        Assert.Equal(1, graph.SelectedLayerCount);
         graph.StageLayerOrder("layer7", "layer0");
         Assert.Equal("layer:layer7", graph.Layers[0].Id);
         Assert.Equal("layer0", owner.CompositingLayers[0].LayerId);
