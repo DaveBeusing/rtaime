@@ -39,6 +39,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
     {
         _resolve = resolve; _open = open; _help = help; _currentMedia = currentMedia;
         _currentScene = currentScene; _currentCommand = currentCommand; _store = store ?? new();
+        Onboarding = new(new OperatorOnboardingStore(_store.OnboardingPath));
         OpenCommand = new OperatorShellCommand(OpenSelected, () => !_disposed && Selected?.Available == true);
         ToggleHistoryCommand = new OperatorShellCommand(() =>
         {
@@ -54,6 +55,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? HistoryChanged;
+    public OperatorOnboardingViewModel Onboarding { get; }
     public ObservableCollection<OperatorLibraryRow> Rows { get; } = [];
     public IReadOnlyList<string> Views { get; } = ["Recent", "Favorites", "Help"];
     public ICommand OpenCommand { get; }
@@ -86,6 +88,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
         try
         {
+            await Onboarding.LoadAsync(linked.Token);
             var settings = await _store.ReadAsync(linked.Token);
             if (_disposed) return;
             _settings = settings; _loaded = true;
@@ -174,7 +177,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
             }
         }
     }
-    public Task FlushAsync() { lock (_saveGate) return _save; }
+    public Task FlushAsync() { lock (_saveGate) return Task.WhenAll(_save, Onboarding.FlushAsync()); }
     public void Refresh()
     {
         if (_disposed) return;
@@ -202,7 +205,7 @@ public sealed class OperatorLibraryViewModel : INotifyPropertyChanged, IDisposab
             FavoriteMediaCommand, FavoriteSceneCommand, FavoriteCommandCommand, RefreshCommand })
             (command as OperatorShellCommand)?.RaiseCanExecuteChanged();
     }
-    public void Dispose() { _disposed = true; _lifetime.Cancel(); _lifetime.Dispose(); }
+    public void Dispose() { Onboarding.Dispose(); _disposed = true; _lifetime.Cancel(); _lifetime.Dispose(); }
     private void Notify(string name) => PropertyChanged?.Invoke(this, new(name));
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

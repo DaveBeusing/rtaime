@@ -3,6 +3,7 @@
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+ xmlns:local="clr-namespace:rtaime.Operator"
  Title="rtaime — Recent, Favorites and Help" Width="760" Height="680" MinWidth="320" MinHeight="320"
  Background="{DynamicResource OperatorBackgroundBrush}" Foreground="{DynamicResource OperatorTextBrush}"
  FontFamily="{StaticResource OperatorFontFamily}" WindowStartupLocation="CenterOwner"
@@ -32,7 +33,15 @@
    </StackPanel></DataTemplate></controls:RtaimeListBox.ItemTemplate>
   </controls:RtaimeListBox>
   <controls:RtaimeScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,6">
-   <TextBlock Text="{Binding SelectedHelp}" TextWrapping="Wrap" AutomationProperties.Name="Selected item details and contextual help"/>
+   <StackPanel>
+    <Border>
+     <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
+      <Style.Triggers><DataTrigger Binding="{Binding View}" Value="Help"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+     </Style></Border.Style>
+     <local:OperatorOnboardingControl x:Name="GettingStartedGuide" DataContext="{Binding Onboarding}"/>
+    </Border>
+    <TextBlock Text="{Binding SelectedHelp}" TextWrapping="Wrap" AutomationProperties.Name="Selected item details and contextual help"/>
+   </StackPanel>
   </controls:RtaimeScrollViewer>
   <controls:RtaimeScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="152">
    <WrapPanel>

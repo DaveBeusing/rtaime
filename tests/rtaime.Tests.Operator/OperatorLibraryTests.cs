@@ -167,6 +167,24 @@ public sealed class OperatorLibraryTests
         try
         {
             Assert.True(window.IsVisible);
+            var guide = Assert.IsType<OperatorOnboardingControl>(window.FindName("GettingStartedGuide"));
+            Assert.Same(main.Library.Onboarding, guide.DataContext);
+            var onboarding = main.Library.Onboarding;
+            await onboarding.LoadAsync();
+            foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
+            {
+                window.LayoutTransform = new System.Windows.Media.ScaleTransform(scale, scale);
+                onboarding.ReopenCommand.Execute(null);
+                window.UpdateLayout();
+                Assert.True(guide.IsVisible);
+                onboarding.MinimizeCommand.Execute(null); Assert.False(onboarding.IsExpanded);
+                onboarding.ReopenCommand.Execute(null); Assert.True(onboarding.IsExpanded);
+                onboarding.DisableCommand.Execute(null); Assert.False(onboarding.IsExpanded);
+                Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(scene, owner.ActiveSceneId);
+            }
+            onboarding.ReopenCommand.Execute(null);
+            await onboarding.FlushAsync();
+            window.LayoutTransform = System.Windows.Media.Transform.Identity;
             window.Width = 360; window.Height = 360;
             var search = Assert.IsType<RtaimeTextBox>(window.FindName("SearchBox"));
             Assert.True(search.IsKeyboardFocusWithin);
