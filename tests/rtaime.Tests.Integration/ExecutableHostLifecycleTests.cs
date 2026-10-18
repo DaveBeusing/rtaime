@@ -15,6 +15,18 @@ namespace rtaime.Tests.Integration;
 
 public sealed class ExecutableHostLifecycleTests
 {
+    [Fact]
+    public void Decoder_profile_opt_in_is_explicit_and_finite()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => (RuntimeHostProcessOptions.Default with { MaximumLocalMediaDecoders = 4 }).Validate());
+        var options = RuntimeHostProcessOptions.Load(
+            ["--local-media-profile=development-four", "--local-media-decoders=4"], _ => null);
+        Assert.Equal(LocalMediaCapacityProfile.DevelopmentFour, options.LocalMediaProfile);
+        Assert.Equal(4, options.MaximumLocalMediaDecoders);
+        options.Validate();
+        Assert.Throws<ArgumentOutOfRangeException>(() => (options with { MaximumLocalMediaDecoders = 5 }).Validate());
+    }
+
 	[Fact]
 	public async Task ControlHost_composes_as_degraded_without_AP14_transport_and_drains_journal()
 	{

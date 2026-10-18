@@ -90,6 +90,22 @@ public static class RuntimeHostDiagnostics
 				.Status("monitoring.sessions.lastFailure", sessions.LastFailureDetail ?? "none");
 		}
 
+        if (process.MediaDeck is { } decks)
+        {
+            var resources = decks.ResourceSnapshot;
+            builder.Counter("mediaResources.capacity", resources.Capacity)
+                .Counter("mediaResources.reservedOwners", resources.ReservedOwners)
+                .Counter("mediaResources.workers", resources.WorkerReservations)
+                .Counter("mediaResources.knownManagedBytes", resources.KnownManagedBytes)
+                .Counter("mediaResources.retainedPoolOwners", resources.RetainedPoolOwners)
+                .Counter("mediaResources.quarantinedOwners", resources.QuarantinedOwners)
+                .Counter("mediaResources.unknownNativeOwners", resources.UnknownNativeOwners)
+                .Status("mediaResources.nativeBytes", resources.NativeBytes?.ToString(CultureInfo.InvariantCulture) ?? "UNKNOWN")
+                .Status("mediaResources.gpuBytes", resources.GpuBytes?.ToString(CultureInfo.InvariantCulture) ?? "UNKNOWN")
+                .Status("mediaResources.storagePressure", resources.StoragePressure)
+                .Status("mediaResources.lastRejection", resources.LastRejection ?? "none");
+        }
+
 		if (process.MediaIoStatistics is { } mediaIo)
 		{
 			builder.Counter("mediaIo.capturedA", ToCounter(mediaIo.CapturedA))

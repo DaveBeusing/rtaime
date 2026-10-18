@@ -61,6 +61,7 @@ public sealed record RuntimeHostProcessOptions(
 	bool RequireExternalReference = false)
 {
 	public int MaximumLocalMediaDecoders { get; init; } = 2;
+    public LocalMediaCapacityProfile LocalMediaProfile { get; init; } = LocalMediaCapacityProfile.Conservative;
 	public string AIEndpoint { get; init; } = "rtaime.v1.ai.default";
 	public IReadOnlyList<RuntimeNetworkOutputTarget> NetworkOutputs { get; init; } = Array.Empty<RuntimeNetworkOutputTarget>();
 
@@ -89,6 +90,12 @@ public sealed record RuntimeHostProcessOptions(
 			ParseMediaIoMode(Get(args, environment, "media-io", "RTAIME_RUNTIME_MEDIA_IO", "virtual")),
 			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"))
 		{
+            LocalMediaProfile = Get(args, environment, "local-media-profile", "RTAIME_LOCAL_MEDIA_PROFILE", "conservative").ToLowerInvariant() switch
+            {
+                "conservative" => LocalMediaCapacityProfile.Conservative,
+                "development-four" => LocalMediaCapacityProfile.DevelopmentFour,
+                _ => throw new ArgumentException("Unknown local media capacity profile.")
+            },
 			MaximumLocalMediaDecoders = ParsePositiveInt(Get(args, environment, "local-media-decoders", "RTAIME_LOCAL_MEDIA_DECODERS", "2"), "local-media-decoders"),
 			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint),
 			NetworkOutputs = RuntimeNetworkOutputConfigurationLoader.Load(args, environment, format)
@@ -97,7 +104,8 @@ public sealed record RuntimeHostProcessOptions(
 
 	public void Validate()
 	{
-		if (MaximumLocalMediaDecoders is < 1 or > 2)
+		if (!Enum.IsDefined(LocalMediaProfile) || MaximumLocalMediaDecoders < 1 ||
+            MaximumLocalMediaDecoders > (LocalMediaProfile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2))
 			throw new ArgumentOutOfRangeException(nameof(MaximumLocalMediaDecoders));
 		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
 			throw new ArgumentException("Runtime source identities must not be empty.");
@@ -325,7 +333,9 @@ public sealed class RuntimeHostProcess
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
 			_runtime.EnablePipelineTiming(_timingProbe);
-			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format, _options.MaximumLocalMediaDecoders, [_options.SourceAId, _options.SourceBId]);
+			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format, _options.MaximumLocalMediaDecoders,
+                _options.LocalMediaProfile == LocalMediaCapacityProfile.Conservative ? [_options.SourceAId, _options.SourceBId] : null,
+                _options.LocalMediaProfile);
 			_aiShowcase = _aiShowcaseFactory(_runtime, _options)
 				?? throw new InvalidOperationException("AI showcase factory returned null.");
 
@@ -530,8 +540,7 @@ public sealed class RuntimeHostProcess
 	private void AdmitMediaDeckBoundary(V1RuntimeHostService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
     {
         mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-        mediaDeck.AdmitBoundary(runtime, _options.SourceAId, programSlot);
-        mediaDeck.AdmitBoundary(runtime, _options.SourceBId, programSlot);
+        mediaDeck.AdmitBoundary(runtime, programSlot);
     }
 
 	private async Task<RuntimeHostExitCode> StopAsync(

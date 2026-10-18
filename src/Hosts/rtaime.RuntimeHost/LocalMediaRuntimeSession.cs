@@ -59,31 +59,47 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	public LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source)
         : this(provider, source, null) { }
 
-    internal LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source, TimeSpan? joinTimeout)
+    internal LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source, TimeSpan? joinTimeout,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
     {
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		try { _decode = new LocalMediaDecodeWorker(source, joinTimeout); }
+		try
+        {
+            _transport = new LocalMediaTransportController(source.Probe, Reposition);
+            _decode = new LocalMediaDecodeWorker(source, joinTimeout, resources);
+        }
         catch
         {
             // Ownership transfers only after the worker and fixed payload slots exist.
-            _pipeline.Dispose();
-            source.Dispose();
+            Exception? cleanupFailure = null;
+            try { _pipeline.Dispose(); } catch (Exception exception) { cleanupFailure = exception; }
+            try { source.Dispose(); } catch (Exception exception) { cleanupFailure ??= exception; }
+            if (cleanupFailure is not null)
+            {
+                resources?.Quarantine(new object[] { source, _pipeline });
+                throw new IOException("Failed media session construction retained uncertain cleanup.", cleanupFailure);
+            }
+            resources?.OwnerCompleted();
             throw;
         }
-        _transport = new LocalMediaTransportController(source.Probe, frame =>
-        {
-            _current?.Dispose();
-            _current = null;
-            _originFrame = frame;
-            _cadenceOrdinal = 0;
-            _lastProgramSlot = null;
-            _wasBuffering = false;
-            return _decode.Reposition(frame);
-        });
+
 	}
+
+    private Failure? Reposition(long frame)
+    {
+        _current?.Dispose();
+        _current = null;
+        _originFrame = frame;
+        _cadenceOrdinal = 0;
+        _lastProgramSlot = null;
+        _wasBuffering = false;
+        return _decode.Reposition(frame);
+    }
+
+    internal void AttachResources(LocalMediaResourceLedger.LocalMediaResourceTicket resources) => _decode.AttachResources(resources);
 
 	public LocalMediaProbe Probe => _source.Probe;
     public LocalMediaPlaybackMeasurements Measurements => _decode.Measurements;
