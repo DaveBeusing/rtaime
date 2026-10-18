@@ -17,7 +17,7 @@ namespace rtaime.Tests.Operator;
 
 public sealed partial class OperatorCombinedVisualQualification
 {
-    internal static async Task VerifyShellStatesAsync(MainWindow? main, Dispatcher dispatcher)
+    internal static async Task VerifyShellStatesAsync(MainWindow? main, Dispatcher dispatcher, bool stressOnly)
     {
         var directory = Path.Combine(Path.GetTempPath(), "rtaime-shell-states-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -37,15 +37,27 @@ public sealed partial class OperatorCombinedVisualQualification
             window.Show();
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await UntilShellState(() => !model.IsBusy);
-            var stressRoot = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
-            stressRoot.Width = 1600; stressRoot.Height = 900;
-            window.Width = 1600; window.Height = 900;
-            window.Shell.SelectWorkspace("LIVE");
-            window.Shell.UpdateViewportSize(1600,900);
-            await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
-            await VerifyRepeatedShellMovesAsync(window,dispatcher);
-            var stressMetrics = await MeasureSettledAsync(window,stressRoot,dispatcher);
-            Console.WriteLine("SHELL UI METRICS: " + JsonSerializer.Serialize(stressMetrics));
+            foreach (var surface in Descendants(window).OfType<OperatorDrawingSurface>()) surfaces.Add(surface);
+            if (stressOnly)
+            {
+                var stressRoot = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
+                stressRoot.Width = 1600; stressRoot.Height = 900;
+                window.Width = 1600; window.Height = 900;
+                window.Shell.SelectWorkspace("LIVE");
+                window.Shell.UpdateViewportSize(1600,900);
+                await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+                await VerifyRepeatedShellMovesAsync(window,dispatcher);
+                var stressMetrics = await MeasureSettledAsync(window,stressRoot,dispatcher);
+                Console.WriteLine("SHELL UI METRICS: " + JsonSerializer.Serialize(stressMetrics));
+                foreach (var surface in Descendants(window).OfType<OperatorDrawingSurface>()) surfaces.Add(surface);
+                Assert.Equal(0,transport.MutationCalls);
+                if (!string.IsNullOrWhiteSpace(evidence))
+                    File.WriteAllText(Path.Combine(evidence,"shell-stress.json"),JsonSerializer.Serialize(new {
+                        sourceCommit=Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                        scope="100 real visible workspace/float/dock cycles on retained owners; controlled Client presentation, no hardware acceptance.",
+                        stressCycles=100, stressMetrics },new JsonSerializerOptions { WriteIndented=true }));
+                return;
+            }
             async Task CaptureState(string state)
             {
                 var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
@@ -111,7 +123,7 @@ public sealed partial class OperatorCombinedVisualQualification
                 File.WriteAllText(Path.Combine(evidence,"shell-states.json"),JsonSerializer.Serialize(new {
                     sourceCommit=Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     scope="Real compiled MainWindow with controlled Client responses; presentation only, no real-media/device/readiness certification.",
-                    stressCycles=100, stressMetrics, cases=observations },new JsonSerializerOptions { WriteIndented=true }));
+                    cases=observations },new JsonSerializerOptions { WriteIndented=true }));
             Assert.Equal(80,observations.Count);
             Assert.Equal(0,transport.MutationCalls);
             // The shared router must leave Enter on a focused shell button to that explicit button.
