@@ -280,8 +280,9 @@ public sealed partial class ExternalControlIntegrationTests
         }
         Assert.False((await client.SaveAsync(new("2.0", Guid.NewGuid(), 0, empty.SequenceId, empty))).Saved);
         Assert.False((await client.SaveAsync(new("1.0", Guid.NewGuid(), 0, empty.SequenceId))).Saved);
-        await Assert.ThrowsAsync<ExternalControlRequestException>(async () =>
+        var oversized = await Assert.ThrowsAsync<RpcException>(async () =>
             await client.SaveAsync(new("1.0", Guid.NewGuid(), 0, empty.SequenceId, empty with { Name = new string('x', 600000) })));
+        Assert.Equal(StatusCode.InvalidArgument, oversized.StatusCode);
         Assert.Equal(0UL, (await client.ListAsync()).AuthoringRevision);
         Assert.True((await client.SaveAsync(new("1.0", Guid.NewGuid(), 0, empty.SequenceId, empty))).Saved);
         Assert.False((await client.EditAsync(new("1.0", Guid.NewGuid(), 1, empty.SequenceId, Edits: []))).Saved);
