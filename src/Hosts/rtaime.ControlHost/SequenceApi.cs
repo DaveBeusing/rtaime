@@ -43,7 +43,7 @@ public sealed partial class ControlHostIpcServer
             }
             if (project.Graphics.Bitmap is { } bitmap)
                 assets.Add(new(Guid.Parse(bitmap.AssetId.ToString()), SequenceMediaKind.Graphics, SequenceContract.MaximumTime, bitmap.ChecksumSha256));
-            var buses = project.AudioProduction?.Buses.Select(b => b.BusId.ToString()).ToArray() ?? ["program"];
+            var buses = project.AudioProduction?.Buses.Select(b => b.BusId.Value).ToArray() ?? ["program"];
             if (request.MessageType == "control.sequence.get")
             {
                 var get = SequenceJson.Read<SequenceGetRequest>(request.Payload.GetRawText());
