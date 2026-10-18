@@ -927,7 +927,7 @@ public sealed record OperatorStatusSnapshot
         Health = health ?? OperatorHealthDescriptor.Unavailable;
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
-        if (mediaDecks?.Count > 2) throw new ArgumentOutOfRangeException(nameof(mediaDecks));
+        if (mediaDecks?.Count > 8) throw new ArgumentOutOfRangeException(nameof(mediaDecks));
         MediaDecks = Array.AsReadOnly((mediaDecks ?? Array.Empty<MediaDeckSnapshot>()).ToArray());
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);

@@ -2859,13 +2859,13 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		var runtimeObservedAtUtc = runtimeObservation.ObservedAtUtc;
 
 		MediaDeckSnapshot? mediaDeck = null;
-        var mediaDecks = new List<MediaDeckSnapshot>(2);
+        var mediaDecks = new List<MediaDeckSnapshot>(8);
 		if (_mediaDeck is not null)
 		{
 			try
             {
                 mediaDeck = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-                foreach (var source in control.Specification.Sources.Take(2))
+                foreach (var source in control.Specification.Sources.Take(8))
                 {
                     try
                     {
