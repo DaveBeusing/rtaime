@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+extern alias ControlHostWire;
 using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Text.Json;
@@ -6,7 +7,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Rtaime.ExternalControl.V1;
+using SequenceLegacyWire = ControlHostWire::Rtaime.ExternalControl.V1;
 using Grpc.Core;
 using rtaime.Client;
 using rtaime.Control;
@@ -254,9 +255,9 @@ public sealed partial class ExternalControlIntegrationTests
         finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }
 
-    public sealed class SequenceLegacyGrpcService : ExternalControl.ExternalControlBase
+    public sealed class SequenceLegacyGrpcService : SequenceLegacyWire.ExternalControl.ExternalControlBase
     {
-        public override Task<ExternalControlReply> Execute(ExternalControlRequest request, ServerCallContext context) =>
+        public override Task<SequenceLegacyWire.ExternalControlReply> Execute(SequenceLegacyWire.ExternalControlRequest request, ServerCallContext context) =>
             throw new RpcException(new Status(StatusCode.Unimplemented, "Sequence capability is unavailable."));
     }
 
