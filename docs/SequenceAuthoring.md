@@ -125,7 +125,7 @@ retains the existing local operator trust model.
 List takes an empty object; Get takes `{ "sequenceId": "GUID" }`.
 Mutations use `SequenceMutationRequest`; responses are `SequenceMutationResult`.
 Structured issues include revision/transaction conflicts, missing assets, invalid buses,
-ranges, overlaps and orphan references. Invalid envelopes return `sequence.rejected`.
+ranges, overlaps and orphan references. Invalid envelopes return `sequence.rejected` or the existing transport-level invalid-argument error.
 
 Limits per show library: 16 sequences, 64 tracks, 2048 clips, 1024 transitions, 512 KiB
 serialized authored library. Each request is at most 512 KiB with 128 edits, depth 32,
