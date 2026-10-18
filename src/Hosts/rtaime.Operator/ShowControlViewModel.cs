@@ -458,6 +458,7 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 	private void RaiseCommandState()
 	{
 		OnPropertyChanged(nameof(LiveActionDetail));
+		OnPropertyChanged(nameof(NextCue));
 		OnPropertyChanged(nameof(CanEditAuthoring));
 		Templates.RaiseCommandState();
 		foreach (var command in new[]

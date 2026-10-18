@@ -68,7 +68,8 @@ public sealed class LiveConsoleTests
     {
         var model = new ShowControlViewModel(new OperatorControlClient(new ReadOnlyTransport()));
         var cue = new ShowControlCue(ShowControlCueId.New(), "Confirmed opening", [new(ShowControlActionId.New(), ShowControlActionKind.Cut)]);
-        var list = new ShowControlCueList(ShowControlContractVersion.Current, ShowControlCueListId.New(), "Show", [cue]);
+        var next = new ShowControlCue(ShowControlCueId.New(), "Confirmed next", [new(ShowControlActionId.New(), ShowControlActionKind.StopRecording)]);
+        var list = new ShowControlCueList(ShowControlContractVersion.Current, ShowControlCueListId.New(), "Show", [cue, next]);
         var idle = new ShowControlWorkspaceSnapshot([list], list.CueListId, ShowControlExecutionSnapshot.Idle);
         model.ApplyConfirmedSnapshot(idle);
         var local = model.SelectedCue!;
@@ -79,6 +80,7 @@ public sealed class LiveConsoleTests
         Assert.Same(local, model.SelectedCue);
         Assert.Equal("Unsaved local rename", local.Name);
         Assert.Equal("Confirmed opening", model.CurrentCue);
+        Assert.Equal("Confirmed next", model.NextCue);
         Assert.Contains("Confirmed opening", model.LiveActionDetail);
         Assert.False(model.CanEditAuthoring);
     }

@@ -11,6 +11,17 @@ public sealed partial class ShowControlViewModel
     public bool CanEditAuthoring => !IsBusy && _serverExecutionState is not
         (ShowControlExecutionState.Armed or ShowControlExecutionState.Executing or
          ShowControlExecutionState.Waiting or ShowControlExecutionState.RecoveryRequired);
+    public string NextCue
+    {
+        get
+        {
+            var snapshot = _confirmedLiveSnapshot;
+            if (snapshot is null) return "NONE";
+            var list = snapshot.CueLists.FirstOrDefault(item => item.CueListId == snapshot.Execution.CueListId);
+            var next = snapshot.Execution.CueIndex is { } index ? index + 1 : -1;
+            return list is not null && next >= 0 && next < list.Cues.Count ? list.Cues[next].Name : "NONE";
+        }
+    }
     public string LiveActionDetail => !LiveAuthorityAvailable ? _operator?.LiveAvailability ?? "Synchronize first." :
         IsBusy ? "Show Control command pending; wait for confirmation." :
         RequiresAcknowledgement ? "Review Program, then explicitly Resume or Cancel recovery." :

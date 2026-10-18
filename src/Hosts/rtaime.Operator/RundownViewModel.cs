@@ -543,7 +543,9 @@ public sealed partial class RundownOperatorItemViewModel : INotifyPropertyChange
 			execution.State == RundownExecutionState.Failed && execution.CurrentItemId == Item.ItemId ? "FAILED" :
 			execution.State == RundownExecutionState.RecoveryRequired && execution.CurrentItemId == Item.ItemId ? "RECOVERY" :
 			execution.CurrentItemId == Item.ItemId ? "CURRENT" :
-			execution.PreparedItemId == Item.ItemId ? execution.PreparedMediaState == "NEXT_READY" ? "NEXT READY" : "PREPARED" :
+			execution.PreparedItemId == Item.ItemId ? execution.PreparedMediaState == "NEXT_READY"
+                ? execution.PreparedMediaExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow ? "PREPARE AGAIN" : "NEXT READY"
+                : "PREPARED" :
 			execution.NextItemId == Item.ItemId ? "NEXT" :
 			execution.SelectedItemId == Item.ItemId ? "SELECTED" :
 			"UNVERIFIED";

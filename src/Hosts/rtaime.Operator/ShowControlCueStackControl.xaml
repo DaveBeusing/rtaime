@@ -100,7 +100,8 @@
 								<TextBlock Text="{Binding ExecutionState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
 								<TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</DockPanel>
-							<TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							<TextBlock Text="{Binding NextCue, StringFormat=NEXT CUE · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
 								<Run Text="CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />

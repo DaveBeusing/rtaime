@@ -77,7 +77,8 @@ public sealed class LiveConsoleRealHostTests
 
             var stopped = await client.ApplyMediaDeckTransportAsync(new(MediaContractVersion.Current,
                 opened.Probe!.AssetId, MediaTransportCommandKind.Stop) { SourceId = new MediaSourceId(Identity.Parse(next.Id)) });
-            Assert.True(stopped.Succeeded);
+            Assert.Null(stopped.Failure);
+            Assert.True(stopped.IsLoaded);
             var item = new RundownMediaItem(RundownItemId.New(), "Prepared clip", asset.AssetId.Value,
                 new ProductionSourceId(Identity.Parse(next.Id)), dissolve ? RundownTransition.Dissolve(2) : RundownTransition.Cut);
             var previous = await client.GetRundownSnapshotAsync();

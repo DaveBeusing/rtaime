@@ -39,7 +39,7 @@ public sealed partial class RundownOperatorItemViewModel
         Duration = duration;
         Readiness = execution?.PreparedItemId == Item.ItemId && execution.PreparedMediaState == "NEXT_READY"
             ? execution.PreparedMediaExpiresAtUtc is { } expires && expires <= DateTimeOffset.UtcNow
-                ? "PREPARE AGAIN · RESIDENCY EXPIRED" : "NEXT_READY · HOST REVALIDATES AT GO"
+                ? $"{availability} · PREPARE AGAIN · RESIDENCY EXPIRED" : $"{availability} · NEXT_READY · HOST REVALIDATES AT GO"
             : $"{availability} · NOT PREPARED";
         PropertyChanged?.Invoke(this, new(nameof(Thumbnail)));
         PropertyChanged?.Invoke(this, new(nameof(Duration)));
