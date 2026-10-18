@@ -32,6 +32,7 @@ public static class OperatorWorkspaceTemplateFiles
         if (count > MaximumBytes) throw new InvalidDataException("Layout file exceeds 1 MiB.");
         using var json = JsonDocument.Parse(bytes.AsMemory(0, count));
         if (json.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Expected a layout document.");
+        if (OperatorLayoutStore.HasFutureDocking(json.RootElement)) throw new InvalidDataException("Unsupported future docking layout.");
         OperatorWorkspaceTemplate template;
         if (json.RootElement.TryGetProperty("Format", out _))
         {

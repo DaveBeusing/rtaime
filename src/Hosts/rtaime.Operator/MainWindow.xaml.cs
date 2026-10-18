@@ -83,7 +83,7 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
-			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
+			Shell.RestoreWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck, client, PickLocalMediaFiles);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
@@ -127,10 +127,6 @@ public partial class MainWindow : Window
 		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportSize(
-			ActualWidth > 0 ? ActualWidth : Width,
-			ActualHeight > 0 ? ActualHeight : Height);
-		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
@@ -195,7 +191,7 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(layoutStore, SetProductionFullscreen);
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
-			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
+			Shell.RestoreWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
@@ -239,10 +235,6 @@ public partial class MainWindow : Window
 		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportSize(
-			ActualWidth > 0 ? ActualWidth : Width,
-			ActualHeight > 0 ? ActualHeight : Height);
-		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
@@ -645,7 +637,6 @@ public partial class MainWindow : Window
 
 			_shutdownComplete = true;
 			Closing -= OnClosingAsync;
-			SizeChanged -= OnShellSizeChanged;
 			Close();
 		}
 	}
@@ -804,8 +795,6 @@ public partial class MainWindow : Window
 		return requested.Width >= 96 && requested.Height >= 64;
 	}
 
-	private void OnShellSizeChanged(object sender, SizeChangedEventArgs e) =>
-		Shell.UpdateViewportSize(e.NewSize.Width, e.NewSize.Height);
 
 	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
 	{

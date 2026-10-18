@@ -8,9 +8,9 @@
 
 ## Purpose
 
-The Operator provides eight task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
+The Operator provides registered task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
 
-The currently implemented canonical workspaces remain MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS, HEALTH and SETTINGS. Switching workspaces never creates a second production snapshot or forks product state.
+The canonical workspaces are LIVE, SCENES, MULTIVIEW, MEDIA, EDIT, COMPOSITING, OUTPUTS, HEALTH, AI and SETTINGS. The original eight IDs remain valid. Switching workspaces never creates a second production snapshot or forks product state.
 
 ## Accepted experience direction
 
@@ -28,13 +28,12 @@ The four existing experience groups map onto current identifiers without replaci
 
 | Experience group | Existing destinations |
 | --- | --- |
-| Live Operator | LIVE, with SCENES for preparation and governed scene/cue operation |
+| Live Operator | LIVE, SCENES and MULTIVIEW |
 | Media & Timeline | MEDIA, EDIT, COMPOSITING |
 | Outputs | OUTPUTS |
-| System & Health | HEALTH, SETTINGS |
+| System & Health | HEALTH, AI, SETTINGS |
 
-2D canvas/mapping and an independent AI workspace are approved targets, with
-real contracts/Runtime sinks and additive layout integration still TO IMPLEMENT.
+The existing governed AI controls are integrated in AI. A 2D canvas/mapping editor remains a separately approved implementation target with real contracts/Runtime sinks; no inactive editor tab is registered.
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
@@ -46,15 +45,15 @@ The 1920×1080 composition is qualification/reference geometry, not a fixed rend
 
 ### Responsive render geometry
 
-Persisted workspace geometry remains in reference coordinates. Rendering derives from the live view container; temporary scaled values are not written to the layout store. Layout schema version 6 is unchanged.
+Persisted workspace geometry remains in reference coordinates. Rendering derives from the live view container; temporary scaled values are not written to the layout store. Schema 7 retains reference geometry and adds bounded destination registration plus lossless supported migration.
 
 | Logical viewport | Presentation scale | EDIT render height | Mode |
 | --- | ---: | ---: | --- |
-| 1920×1080 | 1.00 | 700 px | Reference |
-| 1600×900 | 0.83 | ~583 px | Standard window |
-| 1536×864 | 0.80 | 560 px | Scaled |
-| 1280×720 | 0.67 | ~467 px | Scaled |
-| 960×540 | 0.60 floor | 260 px | Compact |
+| 1920×1080 | 1.00 | bounded by the measured center viewport | Reference cap |
+| 1600×900 | 0.83 | viewport-bounded | Standard window |
+| 1536×864 | 0.80 | viewport-bounded | Scaled |
+| 1280×720 | 0.67 | viewport-bounded | Scaled |
+| 960×540 | 0.60 floor | one bus, viewport-bounded | Compact |
 
 The shell derives Media Deck preview height, LIVE lower output height, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width from the current container or bounded compact minimum. EDIT retains its reference proportions. Repeated output rows, monitor chrome, metric tracks and bounded aspect-ratio thumbnails may retain interaction/content dimensions.
 
@@ -66,27 +65,37 @@ PerMonitorV2 awareness, layout rounding, pixel snapping, compact allocation and 
 
 ## LIVE
 
-EXISTING: LIVE is the primary fast production workspace: source/cue selection
-on the left, adaptive multiview and Quick Controls in the center, and explicit
-Live Controls on the right. The approved TO IMPLEMENT
-[LIVE target](OperatorExperienceDesign.md#live-operator-composition) places the
-Media browser left, equal Preview-left/Program-right media canvases centrally,
-contextual Inspector right, Cue/Rundown below and compact status. It reuses this
-shell. Current geometry tests certify their stated baseline, not that new composition.
+LIVE is the media-first production console. The existing Library is left, the shared
+Preview/Program pair is central, the contextual Inspector is right and the existing
+Rundown/Timeline is below. Preview remains left/green and Program right/red with
+equal allocation in dual mode. Detailed EDIT diagnostic cards are hidden in LIVE.
+The action strip provides one explicit Set Preview, CUT and AUTO context; playback
+remains in the existing Preview viewer. Scene/cue ARM/GO semantics remain separate.
 
-The multiview reuses confirmed Preview/Program monitoring, existing source thumbnails/state/PGM-PVW tallies and source audio peaks. Its source bank adapts from two to three to four columns, bounded to sixteen displayed tiles. Failed sources remain visible. Enlarging a source/monitor tile changes presentation only; it never routes or takes.
+Show/project identity, synchronization, readiness, Program identity and incident access
+remain in the shell. Library/Inspector toggles reopen the existing panes. At compact
+sizes one bus is visible, with both bus identities and immediate PVW/PGM switching;
+the stored dual-view preference is retained. Controls and text are not scaled down.
 
-Selection changes only local intent. Set Preview, CUT and AUTO remain explicit existing commands; media cue selection is separate from Jump Selected Cue. Scene selection is presentation-only. TAKE SCENE invokes `ActivateSceneCommand` through Client/ControlHost/Runtime and waits for synchronized active-Scene/failure evidence.
+## MULTIVIEW and AI
 
-Live Controls reuse existing transition, graphics/layer, recording and Clean Program commands and compact health/error evidence. Program/Aux SRT or NDI transmission requires the existing authoritative Runtime/provider observations. LIVE requires CONNECTED plus a successful send no older than five seconds; missing, stale or faulted evidence cannot indicate confirmed transmission.
+MULTIVIEW retains the existing source bank, scene/cue preparation, compact output
+evidence and Live Controls. It uses the same production commands and monitoring owner.
+AI hosts the existing governed test/approval/activation controls; it does not add a
+model, Runtime path or capability claim. Empty, unavailable, busy and stale behavior
+continues through the owning feature projections.
 
-The workspace does not create another monitoring subscription, decoder, Program renderer or production authority.
+The single OperatorWorkspaceRegistry contributes stable IDs, labels, groups and
+canonical viewer defaults to navigation, the command palette and persistence.
+Groups are Live, Media & Timeline, Outputs & Mapping and System & Health. Only
+productive destinations are registered; there is no placeholder Mapping tab.
+Unknown IDs select LIVE and retain their bounded stored layout for later versions.
 
 ## EDIT
 
 EDIT is the reference Preview/Program production workspace. At 1920×1080 its center resolves to the 1070×700 reference composition; smaller viewports derive the rendered size from the shared scale:
 
-- The upper row retains the 390 reference weight, equal Preview/Program viewers and a 6-px separator; the reference viewer split is 532 / 6 / 532.
+- The complete region is capped by the actual center scroll viewport. The upper row retains the 390 reference weight, equal Preview/Program viewers and a 6-px separator; the reference viewer split is 532 / 6 / 532.
 - Shared monitor chrome retains a 40-px header, aspect-safe image and 42-px custom transport region.
 - The lower row retains the 320:462:276 Scene Stack / Output Routing / System Status proportions and 6-px gaps, within the 390:304 upper/lower reference allocation.
 - The compact Scene Stack reuses source projection and explicit Set Preview/CUT/AUTO; governed Scene activation remains a separate action.
@@ -189,13 +198,15 @@ It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Schema 6 stores each workspace's left/right widths, lower height, collapsed state, center-maximized state and viewer mode. Selected workspace, fullscreen preference and normalized window placement remain top-level UI preferences. Legacy names migrate to accepted destinations without production state. Pre-v4 geometry resets to canonical 400/340/320 defaults; v4/v5 reference sizes, modes and placement are retained on migration to v6, with container-dependent scaling applied only when rendering.
+Schema 7 stores each workspace's left/right widths, lower height, collapsed state, center-maximized state and viewer mode. Selected workspace, fullscreen preference and normalized window placement remain top-level UI preferences. Legacy names migrate to accepted destinations without production state. Supported v2–v6 geometry, collapse/viewer choices, templates and placement migrate without a reset. Missing fields use established defaults and invalid dimensions are clamped. Loading does not write. Explicit user actions save atomically; a newer schema is opened with safe presentation defaults and saving is blocked so its original bytes survive. Up to 32 valid destination layouts are retained; unsupported destination IDs remain inactive. Older executables cannot consume schema 7; export/import rejects unknown future schema versions explicitly.
 
 SAVE LAYOUT persists the active presentation. Switching captures the outgoing workspace and restores the destination's own preferences. LAYOUT RESET affects only the selected workspace. Missing, corrupt, non-finite, out-of-range or incompatible data recovers to safe defaults. The store remains `rtaime/operator-layout.json` below local application data, with serialized temporary-sibling/atomic replacement writes.
 
 | Workspace | Left | Right | Lower | Collapsed by default | Viewer |
 | --- | ---: | ---: | ---: | --- | --- |
 | LIVE | 400 | 340 | 320 | none | DUAL |
+| MULTIVIEW | 400 | 340 | 320 | none | DUAL |
+| AI | 400 | 340 | 320 | none | PROGRAM |
 | EDIT | 400 | 340 | 320 | none | DUAL |
 | MEDIA | 400 | 340 | 320 | none | PREVIEW |
 | SCENES | 400 | 340 | 320 | none | DUAL |
@@ -301,6 +312,7 @@ Existing `WorkspacePresentationTemplateTests` and real-window qualification cove
 
 Hosted geometry and window tests are not physical mixed-monitor hotplug, screen-reader/IME, touch or GPU scan-out qualification. Retain those as UNVERIFIED until actual reference evidence is recorded. The [experience roadmap](OperatorExperienceRoadmap.md#validation-contract) extends these existing checks with connected visual review, state honesty and combined operator journeys; it introduces no parallel qualification framework.
 
-### Live cue console
+### Confirmed cue operation in MULTIVIEW
 
-LIVE shows local selection separately from confirmed NEXT/PVW and LIVE/PGM. CUT/AUTO name the confirmed Preview target, Scene TAKE names the selected Scene, RUNDOWN GO names the prepared/pending rundown target, and SHOW GO names the armed Show Control cue/action. Disabled actions retain a reason and next step. Rundown is available from the Scenes & Cues tabs; order dragging and undo stay local until Save. Catalogue availability is separate from prepared resident readiness. See [Live operation](LiveMultiviewAndSceneControl.md#confirmed-live-console-operation) and [Rundown drafts](ProductionRundown.md#live-operator-console-and-local-order-drafts).
+
+MULTIVIEW shows local selection separately from confirmed NEXT/PVW and LIVE/PGM. CUT/AUTO name the confirmed Preview target, Scene TAKE names the selected Scene, RUNDOWN GO names the prepared/pending rundown target, and SHOW GO names the armed Show Control cue/action. Disabled actions retain a reason and next step. Rundown is available from the Scenes & Cues tabs; order dragging and undo stay local until Save. Catalogue availability is separate from prepared resident readiness. See [Live operation](LiveMultiviewAndSceneControl.md#confirmed-live-console-operation) and [Rundown drafts](ProductionRundown.md#live-operator-console-and-local-order-drafts).

@@ -13,7 +13,7 @@ using rtaime.Operator.Controls;
 namespace rtaime.Operator;
 
 // Moves existing view instances only. It has no transport, production command or frame subscription.
-public sealed class OperatorDockController : IDisposable
+public sealed partial class OperatorDockController : IDisposable
 {
     private readonly MainWindow _owner;
     private readonly Grid _legacy;
@@ -117,6 +117,11 @@ public sealed class OperatorDockController : IDisposable
     private void Loaded(object sender, RoutedEventArgs e) => Rebuild();
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(OperatorShellViewModel.IsCompactViewport) && _compact != _owner.Shell.IsCompactViewport)
+        {
+            _compact = _owner.Shell.IsCompactViewport;
+            if (_owner.Shell.Docking.Enabled) Rebuild();
+        }
         if (e.PropertyName == nameof(OperatorShellViewModel.SelectedWorkspace))
         {
             _focus = null;
@@ -169,6 +174,8 @@ public sealed class OperatorDockController : IDisposable
         try
         {
             var desired = _owner.Shell.Docking.Normalize();
+            if (TryUpdateGroups(desired)) { RememberRenderedLayout(desired); return; }
+            _renderedLayout = null;
             var preserved = desired.Enabled ? desired.Floating.Select(p => p.Panel).Where(_floating.ContainsKey).ToHashSet(StringComparer.Ordinal) : [];
             foreach (var pair in _presenters.Where(p => !preserved.Contains(p.Key)).ToArray())
             { pair.Value.Content = null; _presenters.Remove(pair.Key); }
@@ -181,7 +188,7 @@ public sealed class OperatorDockController : IDisposable
                 else if (panel.Parent is Decorator decorator) decorator.Child = null;
                 else if (panel.Parent is ContentControl control) control.Content = null;
             }
-            _host.Children.Clear(); _host.RowDefinitions.Clear(); _host.ColumnDefinitions.Clear();
+            _host.Children.Clear(); _groupRoots.Clear(); _host.RowDefinitions.Clear(); _host.ColumnDefinitions.Clear();
             var layout = _owner.Shell.Docking.Normalize();
             _host.Visibility = layout.Enabled ? Visibility.Visible : Visibility.Collapsed;
             if (!layout.Enabled)
@@ -194,6 +201,7 @@ public sealed class OperatorDockController : IDisposable
                     home.Parent.Children.Insert(Math.Min(home.Index, home.Parent.Children.Count), entry.Value);
                 }
                 _focus = null;
+                RememberRenderedLayout(layout);
                 return;
             }
             foreach (var panel in _panels.Values)
@@ -217,6 +225,17 @@ public sealed class OperatorDockController : IDisposable
                 AddGroup(layout.Groups[2], 2, 0, 1); AddGroup(layout.Groups[3], 0, 1, 3);
                 AddSplitter(0, true); AddSplitter(1, true); AddSplitter(0, false);
             }
+            EnsureFloatingWindows(layout);
+            RememberRenderedLayout(layout);
+        }
+        finally
+        {
+            _rebuilding = false;
+            if (focused is not null) _owner.Dispatcher.BeginInvoke(() => { if (!_disposed && focused.IsVisible) focused.Focus(); });
+        }
+    }
+    private void EnsureFloatingWindows(OperatorDockLayout layout)
+    {
             foreach (var floating in layout.Floating)
             {
                 if (_floating.TryGetValue(floating.Panel, out var retained))
@@ -240,12 +259,6 @@ public sealed class OperatorDockController : IDisposable
                 window.Show();
                 OperatorMonitorGeometry.Restore(window, floating.Placement);
             }
-        }
-        finally
-        {
-            _rebuilding = false;
-            if (focused is not null) _owner.Dispatcher.BeginInvoke(() => { if (!_disposed && focused.IsVisible) focused.Focus(); });
-        }
     }
     private void AddGroup(OperatorDockGroup group, int column, int row, int span)
     {
@@ -291,7 +304,7 @@ public sealed class OperatorDockController : IDisposable
             e.Effects = DragDropEffects.Move; e.Handled = true;
         };
         AutomationProperties.SetName(root, $"Dock group {group.Id}");
-        _host.Children.Add(root);
+        _host.Children.Add(root); _groupRoots[group.Id] = root;
     }
     private Grid Chrome(string panel, FrameworkElement view)
     {
@@ -391,6 +404,6 @@ public sealed class OperatorDockController : IDisposable
         foreach (var presenter in _presenters.Values) presenter.Content = null;
         _presenters.Clear();
         foreach (var window in _floating.Values) { window.Content = null; window.Close(); }
-        _floating.Clear(); _host.Children.Clear();
+        _floating.Clear(); _host.Children.Clear(); _groupRoots.Clear(); _renderedLayout = null;
     }
 }

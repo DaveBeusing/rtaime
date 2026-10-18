@@ -6,7 +6,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class WorkspacePresentationTemplateTests
+public sealed partial class WorkspacePresentationTemplateTests
 {
     [Theory]
     [InlineData(false)]
@@ -71,7 +71,7 @@ public sealed class WorkspacePresentationTemplateTests
         var path = System.IO.Path.Combine(f.Directory, "import.json");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(settings));
         var template = await OperatorWorkspaceTemplateFiles.ImportAsync(path);
-        Assert.Equal(version < 4 ? 400 : 430, template.Layout.LeftPanelWidth);
+        Assert.Equal(430, template.Layout.LeftPanelWidth);
         await OperatorWorkspaceTemplateFiles.ExportAsync(path, template);
         var second = await OperatorWorkspaceTemplateFiles.ImportAsync(path);
         Assert.Equal(JsonSerializer.Serialize(template), JsonSerializer.Serialize(second));

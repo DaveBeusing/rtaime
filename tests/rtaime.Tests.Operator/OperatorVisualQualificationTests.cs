@@ -103,7 +103,7 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 				shell.CenterWorkspacePrimaryMinWidth <= centerAvailableWidth + 0.5,
 				$"{caseName}/{workspace}: center minimum exceeds the available center container.");
 
-			if (shell.HasAuxiliaryWorkspaceColumn && !shell.IsCompactViewport)
+			if (shell.HasAuxiliaryWorkspaceColumn && (!shell.IsCompactViewport || shell.IsAiWorkspace))
 			{
 				Assert.True(shell.AuxiliaryWorkspaceColumnWidth.IsStar);
 				Assert.True(

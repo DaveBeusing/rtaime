@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Controls;
@@ -8,8 +9,29 @@ using System.Windows.Input;
 
 namespace rtaime.Operator;
 
-public partial class RundownControl : UserControl
+public partial class RundownControl : UserControl, INotifyPropertyChanged
 {
+    // Presentation only: the same rundown owner and governed commands serve both embeddings.
+    public static readonly DependencyProperty IsConsoleModeProperty = DependencyProperty.Register(
+        nameof(IsConsoleMode), typeof(bool), typeof(RundownControl),
+        new PropertyMetadata(false, (owner, _) => ((RundownControl)owner).RefreshPresentation()));
+    public bool IsConsoleMode { get => (bool)GetValue(IsConsoleModeProperty); set => SetValue(IsConsoleModeProperty, value); }
+    public Visibility AuthoringVisibility => IsConsoleMode ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility ConsoleVisibility => IsConsoleMode ? Visibility.Visible : Visibility.Collapsed;
+    public double MinimumListHeight => IsConsoleMode ? 0 : 140;
+    public GridLength NavigationColumnWidth => IsConsoleMode ? new(0) : new(1, GridUnitType.Star);
+    public GridLength NavigationGap => new(IsConsoleMode ? 0 : 3);
+    public GridLength ConsoleGoWidth => IsConsoleMode ? new(104) : new(1, GridUnitType.Star);
+    public double StatusMaximumHeight => IsConsoleMode ? 16 : double.PositiveInfinity;
+    public double DetailMaximumHeight => IsConsoleMode ? 28 : double.PositiveInfinity;
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void RefreshPresentation()
+    {
+        foreach (var name in new[] { nameof(AuthoringVisibility), nameof(ConsoleVisibility),
+            nameof(MinimumListHeight), nameof(NavigationColumnWidth), nameof(NavigationGap),
+            nameof(ConsoleGoWidth), nameof(StatusMaximumHeight), nameof(DetailMaximumHeight) })
+            PropertyChanged?.Invoke(this, new(name));
+    }
 	public RundownControl()
 	{
 		InitializeComponent();

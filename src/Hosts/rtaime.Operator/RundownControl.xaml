@@ -1,5 +1,5 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
-<UserControl x:Class="rtaime.Operator.RundownControl"
+<UserControl x:Class="rtaime.Operator.RundownControl" x:Name="RundownRoot"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
@@ -14,7 +14,7 @@
 			<RowDefinition Height="Auto" />
 		</Grid.RowDefinitions>
 
-		<Grid>
+		<Grid Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" />
 				<ColumnDefinition Width="6" />
@@ -27,7 +27,7 @@
 			<controls:RtaimeButton Grid.Column="2" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 		</Grid>
 
-		<StackPanel Grid.Row="1" Margin="0,6,0,6">
+		<StackPanel Grid.Row="1" Margin="0,6,0,6" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
@@ -105,7 +105,8 @@
 			</Grid>
 		</StackPanel>
 
-		<controls:RtaimeListBox Grid.Row="2" MinHeight="140" MaxHeight="280"
+		<TextBlock Text="RUNDOWN" Style="{StaticResource OperatorLabel}" Visibility="{Binding ConsoleVisibility, ElementName=RundownRoot}" ToolTip="Full rundown authoring: Multiview → RUNDOWN." />
+		<controls:RtaimeListBox Grid.Row="2" MinHeight="{Binding MinimumListHeight, ElementName=RundownRoot}" MaxHeight="280"
             AllowDrop="True" PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
             MouseMove="Rows_MouseMove" DragOver="Rows_DragOver" Drop="Rows_Drop"
             PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
@@ -140,7 +141,7 @@
 							<TextBlock Text="{Binding Duration}" Style="{StaticResource OperatorLabel}" />
                             <TextBlock Text="{Binding Readiness}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding RepeatLabel}" Style="{StaticResource OperatorLabel}" />
-                            <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 						</StackPanel>
 						<Border Grid.Column="1"
 							Margin="6,0,0,0"
@@ -159,13 +160,13 @@
 		</controls:RtaimeListBox>
 
 		<StackPanel Grid.Row="3" Margin="0,6,0,0">
-			<WrapPanel>
+			<WrapPanel Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 				<controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Z: undo local authoring only." AutomationProperties.Name="Undo rundown authoring draft" Margin="0,0,4,4" />
 				<controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Y: redo local authoring only." AutomationProperties.Name="Redo rundown authoring draft" />
 			</WrapPanel>
-			<TextBlock Text="Drag a row before another row. Save commits the local order." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
-			<Grid>
+			<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="Drag a row before another row. Save commits the local order." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+            <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
+			<Grid Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="3" />
@@ -182,17 +183,17 @@
 			</Grid>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<controls:RtaimeButton Content="PREV" Command="{Binding PreviousCommand}" IsCompact="True" />
+                    <ColumnDefinition Width="{Binding NavigationColumnWidth, ElementName=RundownRoot}" />
+                    <ColumnDefinition Width="{Binding NavigationGap, ElementName=RundownRoot}" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="3" />
+                    <ColumnDefinition Width="{Binding ConsoleGoWidth, ElementName=RundownRoot}" />
+                    <ColumnDefinition Width="3" />
+                    <ColumnDefinition Width="{Binding NavigationColumnWidth, ElementName=RundownRoot}" />
+                    <ColumnDefinition Width="{Binding NavigationGap, ElementName=RundownRoot}" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+				<controls:RtaimeButton Content="PREV" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Command="{Binding PreviousCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="2" Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="4"
 					Content="RUNDOWN GO"
@@ -201,10 +202,10 @@
 					Background="{DynamicResource OperatorAccentBrush}"
 					BorderBrush="{DynamicResource OperatorAccentBrush}"
 					Foreground="{DynamicResource OperatorBackgroundBrush}" />
-				<controls:RtaimeButton Grid.Column="6" Content="NEXT" Command="{Binding NextCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="6" Content="NEXT" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Command="{Binding NextCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="8" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" />
 			</Grid>
-			<Grid Margin="0,4,0,0">
+			<Grid Margin="0,4,0,0" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="3" />
@@ -226,11 +227,12 @@
 			BorderThickness="1"
 			CornerRadius="{DynamicResource OperatorRadiusControl}">
 			<StackPanel>
-				<DockPanel>
+				<DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding FollowCountdown}" FontSize="{StaticResource OperatorFontSizeCaption}" MaxWidth="130" TextTrimming="CharacterEllipsis" ToolTip="{Binding FollowCountdown}" Visibility="{Binding ConsoleVisibility, ElementName=RundownRoot}" />
 					<TextBlock Text="{Binding State}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
-					<TextBlock Text="{Binding StorageLabel}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+					<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding StorageLabel}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</DockPanel>
-				<Grid Margin="0,2,0,2">
+				<Grid Margin="0,2,0,2" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="Auto" />
 						<ColumnDefinition Width="*" />
@@ -244,16 +246,39 @@
 					<TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FollowStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 					<TextBlock Grid.Column="2" Text="{Binding RepeatStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</Grid>
-				<TextBlock Text="{Binding CurrentItemName, StringFormat=CURRENT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding PreparedItemName, StringFormat=PREPARED · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
-				<TextBlock Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding CurrentItemName, StringFormat=CURRENT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock MaxHeight="{Binding StatusMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding PreparedItemName}" Text="{Binding PreparedItemName, StringFormat=PREPARED · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock MaxHeight="{Binding DetailMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding LiveActionDetail}" Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
-				<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+				<TextBlock Text="{Binding Failure}" ToolTip="{Binding Failure}" MaxHeight="{Binding DetailMaximumHeight, ElementName=RundownRoot}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeCaption}" TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
+                                <Trigger Property="Text" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 				<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-					<controls:RtaimeButton Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />
-					<controls:RtaimeButton Content="CANCEL RECOVERY" Command="{Binding CancelRecoveryCommand}" IsCompact="True" />
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsConsoleMode, ElementName=RundownRoot}" Value="True" />
+                                        <Condition Binding="{Binding IsEnabled, ElementName=ResumeRecoveryButton}" Value="False" />
+                                        <Condition Binding="{Binding IsEnabled, ElementName=CancelRecoveryButton}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+					<controls:RtaimeButton x:Name="ResumeRecoveryButton" Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />
+					<controls:RtaimeButton x:Name="CancelRecoveryButton" Content="CANCEL RECOVERY" Command="{Binding CancelRecoveryCommand}" IsCompact="True" />
 				</StackPanel>
 			</StackPanel>
 		</Border>

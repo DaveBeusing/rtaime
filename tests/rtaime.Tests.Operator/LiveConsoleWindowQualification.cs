@@ -18,7 +18,7 @@ internal static class LiveConsoleWindowQualification
         var monitoring = window.Monitoring;
         var width = window.Width; var height = window.Height;
         var workspace = window.Shell.SelectedWorkspace;
-        window.Shell.SelectWorkspace("LIVE");
+        window.Shell.SelectWorkspace("MULTIVIEW");
         if (window.Shell.IsCenterMaximized) window.Shell.ToggleCenterMaximizeCommand.Execute(null);
         if (window.Shell.IsLeftCollapsed) window.Shell.ToggleLeftPanelCommand.Execute(null);
         if (window.Shell.IsRightCollapsed) window.Shell.ToggleRightPanelCommand.Execute(null);

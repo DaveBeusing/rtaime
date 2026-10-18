@@ -171,6 +171,7 @@
 						</controls:RtaimeStatusBadge>
 
 						<controls:RtaimeTransportButton
+							Visibility="{Binding PreviewPlaybackVisibility, ElementName=TimelineRoot}"
 							IconData="{StaticResource RtaimeIconPlayGeometry}"
 							Command="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Width="28"
@@ -178,6 +179,7 @@
 							Margin="0,0,3,0"
 							ToolTip="Play or pause Preview media (Space)." />
 						<controls:RtaimeTransportButton
+							Visibility="{Binding PreviewPlaybackVisibility, ElementName=TimelineRoot}"
 							IconData="{StaticResource RtaimeIconStopGeometry}"
 							Command="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Width="28"

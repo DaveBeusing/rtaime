@@ -27,7 +27,7 @@ public sealed class OperatorApplicationCollection
 }
 
 [Collection("Operator application")]
-public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
+public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 {
 	[Fact]
 	public async Task Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA()
