@@ -366,6 +366,8 @@ public sealed class InspectorPrecisionTests
 		private OperatorCompositingLayerDescriptor _layer = new("bitmap-graphics", 2, 0, true, 255, 0.1, 0.2, 1, "logo.rgba",
 			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1)), new("key", 2, true, chromaKey: new(0, 255, 0, 0.1, 0.1, 0))]);
 		internal int MutationCalls;
+        internal int RejectMutationCall;
+        internal Action<int>? OnMutation;
 		internal TaskCompletionSource? Hold;
 		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue, OmitBitmap;
         internal ulong RevisionValue = 1;
@@ -390,7 +392,8 @@ public sealed class InspectorPrecisionTests
         private OperatorAudioInputDescriptor Audio(string id) => new(id, "audio-stream", Gains.GetValueOrDefault(id, 1), false, 0, 0, 0, false, "HEALTHY");
         public ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(string sourceId, double gain, bool muted, CancellationToken cancellationToken = default)
         {
-            MutationCalls++; if (Reject) throw new InvalidOperationException("rejected audio");
+            MutationCalls++; OnMutation?.Invoke(MutationCalls);
+            if (Reject || MutationCalls == RejectMutationCall) throw new InvalidOperationException("rejected audio");
             Gains[sourceId] = gain; return ValueTask.FromResult(Audio(sourceId));
         }
         public ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(MediaMarkerCommand command, CancellationToken cancellationToken = default)

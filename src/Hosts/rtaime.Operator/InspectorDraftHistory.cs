@@ -100,7 +100,9 @@ public sealed partial class MediaPoolInspectorViewModel
     private void RestoreHistoryValue(InspectorAttributeValues values)
     {
         if (_activeDraft is null) return;
-        RestoreInspectorValues(values); _activeDraft.Current = values; NotifyInspectorHistory();
+        RestoreInspectorValues(values); _activeDraft.Current = values;
+        if (values == _activeDraft.Baseline && _activeInspectorTarget is { } target) RemoveReview(target);
+        NotifyInspectorHistory();
     }
     private void OnInspectorDraftValueChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -111,7 +113,9 @@ public sealed partial class MediaPoolInspectorViewModel
               e.PropertyName is nameof(AudioGainDraft) or nameof(CueNameDraft))) return;
         if (CaptureInspectorValues() is not { } current || _activeDraft!.Current == current) return;
         if (_transactionStart is null) _activeDraft.History.Remember(_activeDraft.Current);
-        _activeDraft.Current = current; _attributeStatus = ""; NotifyInspectorHistory();
+        _activeDraft.Current = current;
+        if (current == _activeDraft.Baseline && _activeInspectorTarget is { } target) RemoveReview(target);
+        _attributeStatus = ""; NotifyInspectorHistory();
     }
     private void RefreshInspectorDraftContext()
     {

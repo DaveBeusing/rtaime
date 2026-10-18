@@ -144,9 +144,9 @@ public sealed partial class MediaPoolInspectorViewModel
         if (_activeInspectorTarget is not { } target || _activeDraft is not { } draft || draft.Current == draft.Baseline ||
             _activeInspectorRevision is not { } revision) return;
         if (ReadInspectorTarget(target) == draft.Current) { RemoveReview(target); return; }
-        var existing = InspectorDraftReviews.FirstOrDefault(review => review.Target == target);
-        if (existing?.Draft == draft.Current && existing.Revision == revision) return;
         var production = revision[..revision.LastIndexOf(':')];
+        var existing = InspectorDraftReviews.FirstOrDefault(review => review.Target == target && review.Production == production);
+        if (existing?.Draft == draft.Current && existing.Revision == revision) return;
         var next = new InspectorDraftReview(target, production, revision, draft.Baseline, draft.Current,
             "DIRTY · selection may change; APPLY / DISCARD / KEEP DRAFT");
         if (existing is not null) ReplaceReview(existing, next);
@@ -163,7 +163,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void RemoveReview(InspectorEditTarget target)
     {
-        var review = InspectorDraftReviews.FirstOrDefault(review => review.Target == target);
+        var review = InspectorDraftReviews.FirstOrDefault(review => review.Target == target && review.Production == CurrentProduction);
         if (review is null) return;
         InspectorDraftReviews.Remove(review);
         if (ReferenceEquals(_selectedDraftReview, review)) _selectedDraftReview = InspectorDraftReviews.LastOrDefault();
