@@ -511,7 +511,7 @@ Assert-Condition ($shell -match 'ReferenceViewportWidth' -and $shell -match 'Ref
 Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'CompactViewportHeight' -and $shell -match 'IsCompactViewport') "Operator shell must retain centralized compact-viewport behavior."
 
 
-Assert-Condition ($shell -match 'CurrentVersion = 6') "Render-only responsive layout completion must not bump the persisted Operator layout schema."
+Assert-Condition ($shell -match 'CurrentVersion = 7' -and $shell -match '_futureVersion' -and $shell -notmatch 'if \(Version < 4\)') "Schema 7 must retain supported legacy geometry and protect newer files from overwrite."
 Assert-Condition ($shell -match 'CenterWorkspacePrimaryMinWidth' -and $shell -match 'MediaDeckPreviewHeight' -and $shell -match 'LiveLowerPanelHeight' -and $shell -match 'CompositingPreviewHeight' -and $shell -match 'HealthSidebarWidth' -and $shell -match 'TimelineHeaderColumnWidth') "Responsive feature geometry must be derived centrally from the Operator shell viewport."
 Assert-Condition ($window -notmatch 'MinWidth="610"' -and $deck -notmatch 'MinHeight="430"' -and $inspectorHost -notmatch 'MinWidth="260"' -and $liveSceneCue -notmatch 'MinWidth="280"' -and $liveControls -notmatch 'MinWidth="320"' -and $outputHealthControl -notmatch 'MinWidth="320"' -and $multiview -notmatch 'MinHeight="180"') "Feature surfaces must not reintroduce global minimum geometry that overrides their view containers."
 

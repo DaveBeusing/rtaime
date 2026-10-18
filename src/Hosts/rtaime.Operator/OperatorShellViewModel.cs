@@ -88,7 +88,7 @@ public sealed record OperatorWindowPlacementSettings(
 
 public sealed record OperatorLayoutSettings
 {
-	public const int CurrentVersion = 6;
+	public const int CurrentVersion = 7;
 	public const double DefaultLeftPanelWidth = 400;
 	public const double DefaultRightPanelWidth = 340;
 	public const double DefaultLowerPanelHeight = 320;
@@ -122,15 +122,6 @@ public sealed record OperatorLayoutSettings
 			return Default;
 
 		var selected = OperatorWorkspaceNames.Normalize(SelectedWorkspace);
-		if (Version < 4)
-		{
-			return Default with
-			{
-				IsFullscreen = IsFullscreen,
-				SelectedWorkspace = selected,
-				WindowPlacement = (WindowPlacement ?? OperatorWindowPlacementSettings.Default).Normalize()
-			};
-		}
 
 		var layouts = CreateCanonicalLayouts();
 		if (Workspaces is not null)
@@ -231,6 +222,8 @@ public sealed class OperatorLayoutStore
 	private readonly object _saveSync = new();
 	private Task _saveTail = Task.CompletedTask;
 	public string? LastSaveError { get; private set; }
+    public string? LoadWarning { get; private set; }
+    private bool _futureVersion;
 
 	public OperatorLayoutStore(string? path = null)
 	{
@@ -248,6 +241,15 @@ public sealed class OperatorLayoutStore
 				return OperatorLayoutSettings.Default;
 
 			var json = File.ReadAllText(_path);
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("Version", out var version) && version.TryGetInt32(out var schema) &&
+                schema > OperatorLayoutSettings.CurrentVersion)
+            {
+                _futureVersion = true;
+                LoadWarning = "Layout belongs to a newer version; the original file is preserved and saving is blocked.";
+                return OperatorLayoutSettings.Default;
+            }
 			return (JsonSerializer.Deserialize<OperatorLayoutSettings>(json, SerializerOptions) ?? OperatorLayoutSettings.Default)
 				.Normalize();
 		}
@@ -260,6 +262,8 @@ public sealed class OperatorLayoutStore
 	public Task SaveAsync(OperatorLayoutSettings settings)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
+        if (_futureVersion || settings.Version is < 2 or > OperatorLayoutSettings.CurrentVersion)
+        { LastSaveError = LoadWarning ?? "Unsupported layout version; original file preserved."; return Task.CompletedTask; }
 		var normalized = settings.Normalize();
 		var json = JsonSerializer.Serialize(normalized, SerializerOptions);
 
@@ -286,7 +290,19 @@ public sealed class OperatorLayoutStore
 			if (!string.IsNullOrWhiteSpace(directory))
 				Directory.CreateDirectory(directory);
 
-			await File.WriteAllTextAsync(temporaryPath, json).ConfigureAwait(false);
+			if (File.Exists(_path))
+            {
+                try
+                {
+                    using var current = JsonDocument.Parse(await File.ReadAllTextAsync(_path).ConfigureAwait(false));
+                    if (current.RootElement.ValueKind == JsonValueKind.Object &&
+                        current.RootElement.TryGetProperty("Version", out var version) && version.TryGetInt32(out var schema) &&
+                        schema > OperatorLayoutSettings.CurrentVersion)
+                    { LastSaveError = "A newer layout file was found; saving is blocked."; return; }
+                }
+                catch (JsonException) { /* An explicit save can replace malformed supported preferences. */ }
+            }
+            await File.WriteAllTextAsync(temporaryPath, json).ConfigureAwait(false);
 			File.Move(temporaryPath, _path, overwrite: true);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
