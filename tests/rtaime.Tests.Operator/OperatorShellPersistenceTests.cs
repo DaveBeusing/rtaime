@@ -42,6 +42,24 @@ public sealed class OperatorShellPersistenceTests
         finally { Directory.Delete(root, true); }
     }
     [Fact]
+    public async Task Failed_temporary_write_keeps_the_previous_committed_layout()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-shell-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root); var path = Path.Combine(root, "layout.json");
+        try
+        {
+            var store = new OperatorLayoutStore(path);
+            await store.SaveAsync(OperatorLayoutSettings.Default);
+            var committed = await File.ReadAllBytesAsync(path);
+            Directory.CreateDirectory(path + ".tmp");
+            await store.SaveAsync(OperatorLayoutSettings.Default with { SelectedWorkspace = "MEDIA" });
+            Assert.NotNull(store.LastSaveError);
+            Assert.Equal(committed, await File.ReadAllBytesAsync(path));
+            Assert.Equal("LIVE", new OperatorLayoutStore(path).Load().SelectedWorkspace);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    [Fact]
     public async Task Future_layout_is_preserved_even_after_a_save_or_external_replacement()
     {
         var root = Path.Combine(Path.GetTempPath(), "rtaime-shell-" + Guid.NewGuid().ToString("N"));

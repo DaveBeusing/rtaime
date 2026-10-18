@@ -54,6 +54,9 @@ public sealed partial class OperatorVisualQualificationTests
             shell.ToggleRightPanelCommand.Execute(null); Assert.Equal(0, shell.LeftColumnWidth.Value);
             Assert.InRange(shell.RightColumnWidth.Value, 260, 320);
             Assert.False(shell.IsLeftCollapsed); Assert.False(shell.IsRightCollapsed);
+            shell.ResetLayoutCommand.Execute(null);
+            Assert.Equal(0, shell.LeftColumnWidth.Value); Assert.Equal(0, shell.RightColumnWidth.Value);
+            Assert.Equal("PROGRAM", shell.EffectiveViewerMode);
             shell.UpdateViewportSize(1920,1080);
             Assert.Equal("DUAL", shell.EffectiveViewerMode);
             Assert.Equal(400, shell.LeftPanelWidth); Assert.Equal(340, shell.RightPanelWidth);

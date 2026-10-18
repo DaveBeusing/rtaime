@@ -844,6 +844,8 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	private void ResetLayout()
 	{
 		RestorePresentation();
+        _compactPane = null;
+        _compactBus = "PROGRAM";
 		var defaults = OperatorLayoutSettings.CreateCanonicalLayouts()[SelectedWorkspace];
 		_workspaceLayouts[SelectedWorkspace] = defaults;
 		ApplyWorkspaceLayout(defaults);
