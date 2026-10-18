@@ -70,6 +70,7 @@ public sealed class AudioMixerRealHostTests
             source.ToggleMuteCommand.Execute(null);
             Assert.False(client.Snapshot.AudioProduction.Configuration.GetSource(id).Muted);
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
+            runtime.SetExternalAudioInput(id, samples);
             using (var muted = runtime.ProcessNextBoundary())
             {
                 Assert.Equal(0, muted.Audio.LeftPeakLevel);
@@ -82,6 +83,7 @@ public sealed class AudioMixerRealHostTests
             route.ToggleCommand.Execute(null);
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
             Assert.Empty(client.Snapshot!.AudioProduction!.Configuration.GetSource(id).BusAssignments);
+            runtime.SetExternalAudioInput(id, samples);
             using (var unrouted = runtime.ProcessNextBoundary())
             {
                 // Audio is the pre-bus follow-video observation; only the emitted payload proves bus exclusion.
@@ -91,6 +93,7 @@ public sealed class AudioMixerRealHostTests
             }
             route.ToggleCommand.Execute(null); source.UnityDraft();
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
+            runtime.SetExternalAudioInput(id, samples);
             using (var unity = runtime.ProcessNextBoundary())
             {
                 Assert.Equal(.4f, BinaryPrimitives.ReadSingleLittleEndian(unity.ProgramAudioPayload), 4);
