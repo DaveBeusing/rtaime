@@ -214,13 +214,14 @@ public sealed class NotificationService : INotificationService
 		if (string.IsNullOrWhiteSpace(key))
 			return false;
 
-		OperatorNotification? removed;
+		OperatorNotification removed;
 		lock (_gate)
 		{
 			if (!_current.TryGetValue(key, out var current) ||
 				(!allowFatal && current.Condition == OperatorNotificationCondition.Fatal))
 				return false;
-			_current.Remove(key, out removed);
+			removed = current;
+			_current.Remove(key);
 		}
 
 		Removed?.Invoke(this, new OperatorNotificationEventArgs(removed));
