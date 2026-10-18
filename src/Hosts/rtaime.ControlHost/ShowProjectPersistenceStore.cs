@@ -56,7 +56,8 @@ public sealed record PersistedShowProject(
 	ulong ProductionMacrosStorageVersion = 0,
 	string? ProductionMacroExecutionJson = null,
 	ulong ProductionMacroExecutionVersion = 0,
-	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null)
+	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null,
+	string? OutputCanvasJson = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -94,7 +95,7 @@ public sealed record ShowProjectSubdocumentWriteResult(
 /// The JSON document contains bounded authored state only; bitmap payload bytes are retained
 /// in a checksummed sidecar so management persistence never carries bulk RGBA data.
 /// </summary>
-public sealed class ShowProjectPersistenceStore
+public sealed partial class ShowProjectPersistenceStore
 {
 	private const string Area = "show.project";
 	private const string DocumentFormat = "rtaime.show-project.v1";
@@ -745,7 +746,8 @@ public sealed class ShowProjectPersistenceStore
 			project.ProductionMacrosStorageVersion,
 			project.ProductionMacroExecutionJson,
 			project.ProductionMacroExecutionVersion,
-			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray());
+			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray(),
+			project.OutputCanvasJson);
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -785,7 +787,8 @@ public sealed class ShowProjectPersistenceStore
 			document.ProductionMacrosStorageVersion,
 			document.ProductionMacroExecutionJson,
 			document.ProductionMacroExecutionVersion,
-			adoptedSources);
+			adoptedSources,
+			document.OutputCanvasJson);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -802,6 +805,7 @@ public sealed class ShowProjectPersistenceStore
 		ValidateAdoptedSources(baseline, project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>());
 		ValidateScenes(effective, project.Scenes);
 		ValidateGraphics(project.Graphics);
+		if (project.OutputCanvasJson is { } canvasJson) _ = ReadOutputCanvasDocument(canvasJson);
 		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, effective);
 		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(effective), effective);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
@@ -1400,7 +1404,8 @@ public sealed class ShowProjectPersistenceStore
 		ulong ProductionMacrosStorageVersion = 0,
 		string? ProductionMacroExecutionJson = null,
 		ulong ProductionMacroExecutionVersion = 0,
-		SourceDocument[]? AdoptedSources = null);
+		SourceDocument[]? AdoptedSources = null,
+		string? OutputCanvasJson = null);
 
 	private sealed record SourceProviderBindingDocument(
 		string ProviderId,
