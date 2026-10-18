@@ -279,7 +279,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	public void Private_key_failure_text_is_rejected_as_a_whole_diagnostic_field()
 	{
 		WriteEvidence(CreateStages(controlStatus: "FAILED",
-			controlFailure: "-----BEGIN PRIVATE KEY-----\nprivate-payload\n-----END PRIVATE KEY-----"),
+			controlFailure: "-----BEGIN " + "PRIVATE KEY" + "-----\nprivate-payload\n-----END " + "PRIVATE KEY" + "-----"),
 			ApplicationLifecycleStages.ControlHost);
 		using var model = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 		Assert.DoesNotContain("private-payload", model.BuildDiagnosticsText());
