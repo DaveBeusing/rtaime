@@ -39,7 +39,7 @@ Library and Inspector buttons reveal one temporary pane at a time and can hide i
 again. Returning to a larger viewport restores the reference widths and dual
 presentation. Temporary pane allocations and compact bus choice are not serialized.
 The existing maximize, fullscreen, Focus/Cinema, dock/float/return and reset paths
-remain presentation-only.
+remain presentation-only. The existing keyboard router leaves focused-button Enter/Space to that explicit button; the shell strip reuses LiveConsoleInput for repeat/double-click handling.
 
 Viewer and property details scroll locally; fixed control targets do not shrink
 with the window. Existing taskbar-workarea, removed-display and negative-coordinate
@@ -52,7 +52,7 @@ DPI and monitor removal still require retained hardware qualification.
 | --- | --- | --- |
 | v2-v6 | Preserve valid geometry, collapse/viewer state, named templates and window/floating placement; fill missing defaults and clamp invalid dimensions | Explicit user actions write normalized v7 through the existing serialized temporary-sibling/atomic replacement path |
 | v7 | Restore registered destinations; retain valid inactive IDs within the finite budget | Same bounded v7 representation |
-| Future version | Use safe presentation defaults and surface the unsupported-file reason | Original file retained; writes blocked |
+| Future layout or nested docking version | Use safe presentation defaults and surface the unsupported-file reason | Original file retained; writes blocked |
 | Oversized file | Do not read more than the 1 MiB admission bound; surface the reason | Original file retained; writes blocked |
 | Malformed supported preferences | Safe defaults; loading writes nothing | An explicit successful save may replace the malformed file |
 | Interrupted temporary write | Load the committed destination, never the incomplete sibling | Subsequent atomic save uses the established serialized owner |
@@ -72,8 +72,8 @@ OperatorVisualQualificationTests covers the existing logical size matrix. Worksp
 OperatorCombinedVisualQualification checks actual compiled LIVE viewers, equal
 dual allocation, viewport fit, one visible playback/TAKE context and 100 real
 workspace/float/dock/restore cycles using the same monitoring, Inspector, selection
-and panel instances. Existing source-correlated PNG/JSON capture retains logical
-size and injected layout DPI. These are qualification targets; actual execution,
+and panel instances, with no monitor-panel unloads during Inspector moves. The stress phase starts in a stable 1600x900 docked layout and restores every original workspace layout. Only changed dock groups are rebuilt; unrelated groups and floating windows retain their presentation. Compact, ratio and Focus/Cinema topology changes retain the existing full restore path. Existing source-correlated PNG/JSON capture retains logical
+size and injected layout DPI. The additional 80-case matrix loads the real MainWindow with controlled Client responses in no-data, connected, busy and stale states across all destinations at 1920x1080 and 960x540. It verifies retained routing, explicit button keyboard ownership and teardown. These are qualification targets; actual execution,
 source SHA, failures and five Required Gate results are recorded in the PR.
 
 Software layout-DPI injection is not physical mixed-monitor or touch certification.

@@ -17,7 +17,7 @@ using Xunit;
 namespace rtaime.Tests.Operator;
 
 /// <summary>Geometry goldens and review images; deliberately no driver-dependent pixel equality.</summary>
-public sealed class OperatorCombinedVisualQualification
+public sealed partial class OperatorCombinedVisualQualification
 {
     private static readonly string[] Regions =
         ["TopBar", "WorkspaceNavigation", "CenterWorkspace", "StatusBar"];
@@ -150,8 +150,6 @@ public sealed class OperatorCombinedVisualQualification
                 await VerifyPreferenceTransitionsAsync(window, dispatcher, name, width, height, evidenceRoot, interactionCases);
             }
 
-            await VerifyRepeatedShellMovesAsync(window, dispatcher);
-
             // Warm up all workspaces above before measuring a stable viewport. No forced GC:
             // these are process observations, not an exclusive heap or physical latency claim.
             root.LayoutTransform = Transform.Identity; root.Width = 1600; root.Height = 900;
@@ -160,6 +158,8 @@ public sealed class OperatorCombinedVisualQualification
             window.Shell.UpdateViewportSize(1600, 900);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
+            await VerifyRepeatedShellMovesAsync(window, dispatcher);
+            await VerifyShellStatesAsync(window, dispatcher);
             var metrics = await MeasureSettledAsync(window, root, dispatcher);
             Assert.Equal(program, owner.ProgramSourceId);
             Assert.Equal(preview, owner.PreviewSourceId);
@@ -234,9 +234,20 @@ public sealed class OperatorCombinedVisualQualification
         var routing = (owner.PreviewSourceId, owner.ProgramSourceId);
         var original = shell.SelectedWorkspace;
         var templateName = shell.TemplateName;
+        var layouts = new Dictionary<string, OperatorDockLayout>(StringComparer.Ordinal);
+        var monitorUnloads = 0;
+        RoutedEventHandler monitorUnloaded = (_, _) => monitorUnloads++;
         shell.TemplateName = "Retained local layout draft";
         try
         {
+            foreach (var id in OperatorWorkspaceNames.All)
+            {
+                shell.SelectWorkspace(id); layouts[id] = shell.Docking;
+                shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
+            }
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            panels["MONITORS"].Unloaded += monitorUnloaded;
             for (var cycle = 0; cycle < 100; cycle++)
             {
                 shell.SelectWorkspace(OperatorWorkspaceNames.All[cycle % OperatorWorkspaceNames.All.Count]);
@@ -252,15 +263,16 @@ public sealed class OperatorCombinedVisualQualification
                 Assert.Empty(window.Docking.FloatingWindows);
                 foreach (var panel in panels) Assert.Same(panel.Value, window.Docking.Panels[panel.Key]);
                 Assert.Equal(routing, (owner.PreviewSourceId, owner.ProgramSourceId));
-                shell.SetDocking(OperatorDockLayout.Default);
             }
+            Assert.Equal(0, monitorUnloads);
             await shell.SaveAsync();
             Console.WriteLine("SHELL CYCLES PASS: 100 real workspace/float/dock/restore cycles; same monitoring, selection, Inspector and panel instances; local layout draft and routing retained.");
         }
         finally
         {
+            panels["MONITORS"].Unloaded -= monitorUnloaded;
+            foreach (var entry in layouts) { shell.SelectWorkspace(entry.Key); shell.SetDocking(entry.Value); }
             shell.TemplateName = templateName; shell.SelectWorkspace(original);
-            shell.SetDocking(OperatorDockLayout.Default);
         }
     }
 
