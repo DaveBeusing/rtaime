@@ -363,7 +363,7 @@ public sealed class OperatorCommandPaletteTests
 				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
 				var panel = main.Docking.FloatingWindows["TOOLS"];
 				panel.Activate();
-				var mediaSearch = Assert.IsType<RtaimeSearchBox>(main.FindName("MediaSearchBox"));
+				var mediaSearch = Assert.IsType<RtaimeSearchBox>(main.MediaLibraryView.FindName("MediaSearchBox"));
 				mediaSearch.Focus();
 				Assert.Same(main.Shortcuts, panel.Shortcuts);
 				Assert.True(panel.Shortcuts.TryHandle(Key.K, ModifierKeys.Control, false, true));

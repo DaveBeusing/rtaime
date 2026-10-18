@@ -152,7 +152,8 @@ $compositingGraphCode = Get-Content -LiteralPath $compositingGraphCodePath -Raw
 $compositingGraphViewModel = Get-Content -LiteralPath $compositingGraphViewModelPath -Raw
 $compositingGraphProjection = Get-Content -LiteralPath $compositingGraphProjectionPath -Raw
 $compositingGraphDocumentation = Get-Content -LiteralPath $compositingGraphDocumentationPath -Raw
-$mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
+$mediaPool = (Get-Content -LiteralPath $mediaPoolPath -Raw) + "`n" +
+    (Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibraryProjection.cs") -Raw)
 $inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
 $inspectorDraft = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/InspectorDraftHistory.cs") -Raw
 $inspectorAttributes = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/InspectorAttributeSets.cs") -Raw
@@ -900,7 +901,7 @@ Assert-Condition ($mediaLibrarySurface -match 'LOADING ASSETS' -and $mediaLibrar
 Assert-Condition ($mediaPool -match 'MaxProjectedItems = 4096' -and $mediaPool -match 'Take\(MaxProjectedItems\)') "Media Library projection must remain explicitly bounded while supporting large asset sets."
 $mediaSearch = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibrarySearch.cs") -Raw
 $mediaBatch = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibraryBatch.cs") -Raw
-Assert-Condition ($mediaPool -match '_allItems.Sort' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Category' -and $mediaPool -match 'StringComparer.OrdinalIgnoreCase.Compare\(left.Name' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Key') "Media Pool preordered projection must retain deterministic category/name/key ordering."
+Assert-Condition ($mediaPool -match 'Items.Sort' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Category' -and $mediaPool -match 'StringComparer.OrdinalIgnoreCase.Compare\(left.Name' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Key') "Media Pool preordered projection must retain deterministic category/name/key ordering."
 Assert-Condition ($mediaSearch -match 'MaximumTerms = 16' -and $mediaSearch -match 'SearchMetadata' -and $window -match 'Delay=180') "Media smart queries must be bounded, typed and debounced."
 Assert-Condition ($mediaBatch -match 'MaximumBatchItems = 128' -and $mediaBatch -match 'GetMediaAssetCatalogAsync' -and $mediaBatch -match 'fresh.Revision != _batchRevision' -and $mediaBatch -match 'ImportMediaAssetsAsync' -and $mediaBatch -match 'RemoveMediaAssetAsync') "Media batches must recheck catalogue revision and reuse existing Client mutations."
 Assert-Condition ($mediaLibrarySurface -match 'MediaPool.ExecuteBatchCommand' -and $mediaLibrarySurface -match 'MediaPool.CancelBatchCommand' -and $mediaLibrarySurface -match 'MediaBatchResults' -and $mediaBatch -match 'UNCONFIRMED') "Batch review, confirmation, cancellation and uncertain outcomes must remain visible."

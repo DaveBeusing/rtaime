@@ -10,4 +10,8 @@ public sealed record OperatorMediaLibraryContext(
     MediaTimelineViewModel Timeline,
     OperatorWorkspaceStateViewModel WorkspaceStates,
     NdiSourceDiscoveryViewModel NdiSources,
-    ICommand CollapseCommand);
+    ICommand CollapseCommand)
+{
+    public MediaLibraryProjection Library => MediaPool.Library;
+    public MediaSelectionContext Selection => MediaPool.Selection;
+}

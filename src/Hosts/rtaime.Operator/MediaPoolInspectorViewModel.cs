@@ -110,7 +110,6 @@ public sealed class MediaAssetCollection : ObservableCollection<MediaPoolItemVie
 
 public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDisposable
 {
-	private const int MaxProjectedItems = 4096;
 	private static readonly string[] SupportedCategories = ["All", "Sources", "Clips", "Audio", "Graphics", "Compositions"];
 	private static readonly string[] SupportedFilters = ["All", "Video", "Audio", "Graphics", "Online", "Offline"];
 
@@ -120,7 +119,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	private readonly Func<IReadOnlyList<string>>? _importFilePicker;
 	private readonly List<OperatorSourceTileViewModel> _sourceSubscriptions = [];
 	private readonly List<OperatorAudioInputViewModel> _audioSubscriptions = [];
-	private readonly List<MediaPoolItemViewModel> _allItems = [];
+	private List<MediaPoolItemViewModel> _allItems => Library.Items;
 	private readonly Dictionary<string, Dictionary<string, bool>> _groupExpansion = new(StringComparer.Ordinal);
 	private string _searchText = string.Empty;
 	private string _selectedCategory = "All";
@@ -172,8 +171,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_catalogClient = catalogClient;
 		_importFilePicker = importFilePicker;
 
+		Selection = new(this);
 		InitializeBrowsing();
-		FilteredItems = [];
 		SelectedItems = [];
         InitializePreparation();
 		InspectorProperties = [];
@@ -270,7 +269,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
-	public MediaAssetCollection FilteredItems { get; }
+	public MediaSelectionContext Selection { get; }
+	public MediaLibraryProjection Library { get; } = new();
+	public MediaAssetCollection FilteredItems => Library.FilteredItems;
 	public ObservableCollection<MediaPoolItemViewModel> SelectedItems { get; }
 	public ObservableCollection<InspectorPropertyViewModel> InspectorProperties { get; }
 	public ObservableCollection<InspectorPropertyViewModel> InspectorMetadataProperties { get; }
@@ -907,133 +908,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public void Refresh()
 	{
 		var selectedKey = SelectedItem?.Key;
-		_allItems.Clear();
-
-		foreach (var source in _operator.Sources.Take(MaxProjectedItems))
-		{
-			var online = IsOnlineState(source.Health);
-			_allItems.Add(new MediaPoolItemViewModel(
-				$"source:{source.Id}",
-				"Sources",
-				MediaPoolItemKind.Source,
-				source.Name,
-				source.Detail,
-				source.Format,
-				online ? source.StateDetail : $"OFFLINE · {source.StateDetail}",
-				source.Id,
-				source.Thumbnail,
-				online,
-				online));
-		}
-
-		foreach (var asset in _catalogSnapshot.Assets.Take(Math.Max(0, MaxProjectedItems - _allItems.Count)))
-		{
-			var online = asset.Availability == MediaAssetAvailability.Online;
-			var active = string.Equals(_mediaDeck.AssetId, asset.AssetId.ToString(), StringComparison.Ordinal);
-			_allItems.Add(new MediaPoolItemViewModel(
-				$"clip:{asset.AssetId}",
-				"Clips",
-				MediaPoolItemKind.Clip,
-				asset.DisplayName,
-				$"{FormatDuration(asset.Duration)} · {asset.VideoCodec.ToString().ToUpperInvariant()}",
-				$"{asset.VideoFormat.Width}×{asset.VideoFormat.Height} · {asset.VideoFormat.FrameRate}",
-				asset.Availability.ToString().ToUpperInvariant(),
-				asset.AssetId.ToString(),
-				active
-					? _operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail
-					: null,
-				online,
-				online && active && _mediaDeck.IsLoaded && !_mediaDeck.HasError && _mediaDeck.State is "READY" or "PLAYING" or "PAUSED",
-				asset.SourceLocation,
-				asset.Duration,
-				new MediaSearchMetadata(asset.VideoCodec, asset.AudioCodec, asset.VideoFormat),
-                online && active && _mediaDeck.IsLoaded && !_mediaDeck.HasError && _mediaDeck.State is "READY" or "PLAYING" or "PAUSED"
-                    ? "PREPARED" : AssetPreparationState(asset.AssetId.ToString())));
-		}
-
-		if (_mediaDeck.IsLoaded &&
-			_catalogSnapshot.Assets.All(asset => !string.Equals(asset.AssetId.ToString(), _mediaDeck.AssetId, StringComparison.Ordinal)))
-		{
-			var mediaOnline = !_mediaDeck.HasError;
-			_allItems.Add(new MediaPoolItemViewModel(
-				$"clip:{_mediaDeck.AssetId}",
-				"Clips",
-				MediaPoolItemKind.Clip,
-				_mediaDeck.FileName,
-				$"{_mediaDeck.Duration} · {_mediaDeck.VideoCodec}",
-				$"{_mediaDeck.Resolution} · {_mediaDeck.FrameRate}",
-				mediaOnline
-					? _mediaDeck.State
-					: $"OFFLINE · {(_mediaDeck.LastError ?? _mediaDeck.State)}",
-				_mediaDeck.AssetId,
-				_operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail,
-				mediaOnline,
-				mediaOnline && !_mediaDeck.IsBusy,
-				_mediaDeck.LocalPath));
-		}
-
-		foreach (var input in _operator.AudioInputs.Take(Math.Max(0, MaxProjectedItems - _allItems.Count)))
-		{
-			var online = IsOnlineState(input.Health);
-			_allItems.Add(new MediaPoolItemViewModel(
-				$"audio:{input.SourceId}:{input.StreamId}",
-				"Audio",
-				MediaPoolItemKind.Audio,
-				input.SourceName,
-				$"{input.SourceType} · {input.AfvLabel}",
-				input.StreamId,
-				online ? input.Health : $"OFFLINE · {input.Health}",
-				input.SourceId,
-				null,
-				online,
-				online));
-		}
-
-		if (!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
-			!string.Equals(_operator.GraphicsAssetName, "—", StringComparison.Ordinal))
-		{
-			_allItems.Add(new MediaPoolItemViewModel(
-				$"graphics:{_operator.GraphicsAssetName}",
-				"Graphics",
-				MediaPoolItemKind.Graphics,
-				_operator.GraphicsAssetName,
-				_operator.GraphicsDimensions,
-				"RGBA / PNG",
-				_operator.GraphicsState,
-				_operator.GraphicsAssetName,
-				null,
-				true,
-				true));
-		}
-
-		if (!string.IsNullOrWhiteSpace(_operator.AIFeature) &&
-			!string.Equals(_operator.AIFeature, "—", StringComparison.Ordinal))
-		{
-			var ready = !string.Equals(_operator.AIStatus, "UNAVAILABLE", StringComparison.OrdinalIgnoreCase);
-			_allItems.Add(new MediaPoolItemViewModel(
-				"composition:ai-showcase",
-				"Compositions",
-				MediaPoolItemKind.Composition,
-				_operator.AIFeature,
-				_operator.AIProvider,
-				"AI effect",
-				_operator.AIStatus,
-				null,
-				null,
-				ready,
-				ready));
-		}
-
-		if (_allItems.Count > MaxProjectedItems)
-			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
-
-		_allItems.Sort((left, right) =>
-		{
-			var category = StringComparer.Ordinal.Compare(left.Category, right.Category);
-			if (category != 0) return category;
-			var name = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
-			return name != 0 ? name : StringComparer.Ordinal.Compare(left.Key, right.Key);
-		});
+		Library.Refresh(_operator, _mediaDeck, _catalogSnapshot, AssetPreparationState);
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
         RefreshInspectorDraftContext();
@@ -1072,12 +947,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		var search = MediaLibrarySearch.Parse(bin.Search);
 		SearchStatus = search.Error ?? "AND terms · quotes for phrases · -term to exclude";
-		var filtered = _allItems
-			.Where(item => MediaSmartBinPolicy.Matches(item, bin, search))
-			.Take(MaxProjectedItems)
-			.ToArray();
-
-		FilteredItems.ReplaceWith(filtered);
+		var filtered = Library.Filter(bin, search);
 		var keys = filtered.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
 		if (SelectedItems.Any(item => !keys.Contains(item.Key)))
 			UpdateSelection(SelectedItems.Where(item => keys.Contains(item.Key)).ToArray());
@@ -1107,16 +977,6 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 				: "No assets match the current search and filter.";
 		OnPropertyChanged(nameof(HasItems));
 	}
-
-	private static string FormatDuration(TimeSpan duration) =>
-		duration.TotalHours >= 1
-			? duration.ToString(@"hh\:mm\:ss")
-			: duration.ToString(@"mm\:ss");
-
-	private static bool IsOnlineState(string value) =>
-		!value.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase) &&
-		!value.Contains("FAIL", StringComparison.OrdinalIgnoreCase) &&
-		!value.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase);
 
 	private void ProjectSelectionToExistingOperatorContext(MediaPoolItemViewModel? item)
 	{
