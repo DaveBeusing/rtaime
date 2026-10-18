@@ -116,6 +116,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private void RefreshInspectorDraftContext()
     {
         if (_restoringInspector) return;
+        PreserveInspectorDraft();
         var token = CurrentRevisionToken;
         if (token != _draftRevision || _operator.IsStale || !_operator.IsConnected)
         {
@@ -145,6 +146,8 @@ public sealed partial class MediaPoolInspectorViewModel
         if (!ReferenceEquals(_activeDraft, draft)) { EndDraftTransaction(); _transactionStart = null; }
         _activeDraft = draft; _activeDraftKey = key;
         _activeCompositingDraftNodeId = _compositingNode?.Id;
+        _activeInspectorTarget = CurrentInspectorTarget();
+        _activeInspectorRevision = CurrentRevisionToken;
         RestoreInspectorValues(draft.Current);
         NotifyInspectorHistory();
     }
@@ -211,6 +214,8 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void NotifyInspectorHistory()
     {
+        PreserveInspectorDraft();
+        NotifyDraftReview();
         NotifyCompositingRecovery();
         OnPropertyChanged(nameof(IsTransformDraftContext));
         (ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
