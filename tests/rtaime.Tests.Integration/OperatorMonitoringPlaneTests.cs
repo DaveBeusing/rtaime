@@ -446,7 +446,11 @@ public sealed class OperatorMonitoringPlaneTests
 				SourceA,
 				previewResource));
 
-			await WaitForProcessedAsync(tap, checked((ulong)iteration + 1), timeout: TimeSpan.FromSeconds(3));
+			// Processed observes publication; the worker retires replaced leases immediately afterwards.
+            // Await that existing asynchronous boundary before asserting the steady two-resource set.
+            await WaitForProcessedAsync(tap, checked((ulong)iteration + 1), timeout: TimeSpan.FromSeconds(3),
+                retired: () => gpu.SharedMonitoringResourceStatistics.ActiveResources <= 2 &&
+                    backend.ActiveAllocationCount <= 2);
 
 			Assert.InRange(tap.Statistics.ActiveSharedResources, 0, 2);
 			Assert.InRange(gpu.SharedMonitoringResourceStatistics.ActiveResources, 0, 2);
@@ -478,15 +482,17 @@ public sealed class OperatorMonitoringPlaneTests
 	private static async Task WaitForProcessedAsync(
 		RuntimeMonitoringTap tap,
 		ulong expected,
-		TimeSpan timeout)
+		TimeSpan timeout,
+        Func<bool>? retired = null)
 	{
 		var deadline = DateTimeOffset.UtcNow + timeout;
-		while (tap.Statistics.Processed < expected && DateTimeOffset.UtcNow < deadline)
+		while ((tap.Statistics.Processed < expected || retired is not null && !retired()) && DateTimeOffset.UtcNow < deadline)
 			await Task.Delay(1);
 
 		Assert.True(
 			tap.Statistics.Processed >= expected,
 			$"Monitoring tap processed {tap.Statistics.Processed} samples; expected at least {expected}.");
+        Assert.True(retired is null || retired(), "Replaced shared monitoring leases did not retire within the existing processing deadline.");
 	}
 
 	private static MonitoringFrame CreateFrame(
