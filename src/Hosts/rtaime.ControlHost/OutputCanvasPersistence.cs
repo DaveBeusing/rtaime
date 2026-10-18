@@ -67,7 +67,7 @@ public sealed partial class ShowProjectPersistenceStore
                 new(request.ConfigurationId, request.ExpectedSavedRevision, [new(code, "$", message)]));
             if (receipt is not null)
                 return receipt.RequestSha256 == hash
-                    ? new(true, receipt.Revision, saved, new(request.ConfigurationId, receipt.Revision, []), true)
+                    ? new(true, saved.EditRevision, saved, new(saved.ConfigurationId, saved.EditRevision, []), true)
                     : Reject("canvas.transaction_conflict", "Transaction identity was reused with different content.");
             if (request.ExpectedSavedRevision != saved.EditRevision)
                 return Reject("canvas.revision_conflict", "Expected saved revision does not match the current configuration.");

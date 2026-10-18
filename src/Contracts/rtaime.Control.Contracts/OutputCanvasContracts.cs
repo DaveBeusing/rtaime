@@ -31,7 +31,7 @@ public sealed record OutputCanvasBinding(Guid OutputId, Guid CanvasId, string Pr
 public sealed record OutputCanvasConfiguration(string Version, Guid ConfigurationId, ulong EditRevision,
     OutputCanvasDefinition[] Canvases, OutputCanvasSurface[] Surfaces, OutputCanvasBinding[] Bindings);
 public sealed record OutputCanvasTarget(string ProviderId, string TargetId, string ProfileId,
-    int Width, int Height, string Evidence);
+    int Width, int Height, string Evidence, string? RoleId = null);
 public sealed record OutputCanvasIssue(string Code, string Path, string Message);
 public sealed record OutputCanvasValidation(Guid ConfigurationId, ulong EditRevision, OutputCanvasIssue[] Issues)
 {

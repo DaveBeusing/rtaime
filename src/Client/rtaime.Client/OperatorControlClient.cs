@@ -1196,6 +1196,14 @@ public interface IOperatorControlTransport
     ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 
+
+    ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasSnapshot>(new NotSupportedException("Output canvas configuration is unavailable on this peer."));
+    ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasValidation>(new NotSupportedException("Output canvas configuration is unavailable on this peer."));
+    ValueTask<OutputCanvasSaveResult> SaveOutputCanvasAsync(OutputCanvasSaveRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasSaveResult>(new NotSupportedException("Output canvas configuration is unavailable on this peer."));
+
     ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<string>(new NotSupportedException("Show templates are unavailable on this transport."));
     ValueTask<ShowTemplatePreflight> PreflightShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default) =>
@@ -1863,6 +1871,14 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         ObserveOperationAsync("CloseMediaDeckAsync", () => _transport.CloseMediaDeckAsync(cancellationToken));
+
+
+    public ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetOutputCanvasAsync(cancellationToken);
+    public ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>
+        _transport.ValidateOutputCanvasAsync(draft, cancellationToken);
+    public ValueTask<OutputCanvasSaveResult> SaveOutputCanvasAsync(OutputCanvasSaveRequest request, CancellationToken cancellationToken = default) =>
+        ObserveOperationAsync("SaveOutputCanvasAsync", () => _transport.SaveOutputCanvasAsync(request, cancellationToken));
 
     public ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default) =>
         ObserveOperationAsync("CreateShowTemplateAsync", () => _transport.CreateShowTemplateAsync(name, cueListId, cancellationToken));

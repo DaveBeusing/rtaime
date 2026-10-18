@@ -19,9 +19,9 @@ public static class OutputCanvasLegacy
             canvases.Add(new(canvasId, id, width, height));
             surfaces.Add(new(Id("surface/" + id), canvasId, new(BusRoleId:id), 0,
                 new(0,0,1,1), OutputCanvasQuad.Rectangle(0,0,width,height), role.Enabled));
-            var target = targets.SingleOrDefault(t => t.TargetId == role.TargetId);
+            var target = targets.SingleOrDefault(t => t.RoleId == id);
             bindings.Add(new(Id("output/" + id), canvasId, target?.ProviderId ?? role.ProviderSelector,
-                role.TargetId, target?.ProfileId ?? "production", role.Enabled));
+                target?.TargetId ?? role.TargetId, target?.ProfileId ?? "production", role.Enabled));
         }
         return new(OutputCanvasContract.Version, Id("configuration"), 0, canvases.ToArray(), surfaces.ToArray(), bindings.ToArray());
     }

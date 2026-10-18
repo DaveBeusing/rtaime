@@ -730,7 +730,7 @@ public sealed partial class ShowProjectPersistenceStore
 	{
 		var effective = project.ApplyTo(baseline);
 		var document = new ProjectDocument(
-			DocumentFormat,
+			project.OutputCanvasJson is null ? DocumentFormat : "rtaime.show-project.v2",
 			project.ProjectId.ToString(),
 			project.ProductionId.ToString(),
 			project.Name,
@@ -757,11 +757,13 @@ public sealed partial class ShowProjectPersistenceStore
 	{
 		var document = JsonSerializer.Deserialize<ProjectDocument>(persisted.Json, JsonOptions)
 			?? throw new InvalidDataException("Persisted show project is empty.");
-		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal))
+		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal) && document.Format != "rtaime.show-project.v2")
 			throw new InvalidDataException($"Unsupported show project format '{document.Format}'.");
 		if (!string.Equals(document.ProductionId, baseline.ProductionId.ToString(), StringComparison.Ordinal))
 			throw new InvalidDataException("Persisted show project belongs to a different production.");
 
+		if ((document.Format == "rtaime.show-project.v2") != (document.OutputCanvasJson is not null))
+			throw new InvalidDataException("Show format and canvas extension must agree.");
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
 		var adoptedSources = (document.AdoptedSources ?? Array.Empty<SourceDocument>())
