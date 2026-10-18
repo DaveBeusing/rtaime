@@ -20,7 +20,8 @@ internal static class OperatorControlDesignSystemQualification
 	{
 		var subscriptions = OperatorControlPresentation.ActiveSystemSubscriptions;
 		var count = 0;
-		var button = new ClickButton { Content = "Apply", Command = new CountingCommand(() => count++) };
+		var button = new ClickButton { Content = "Apply", Command = new CountingCommand(() => count++),
+            Style = (Style)owner.FindResource(typeof(RtaimeButton)) };
 		AutomationProperties.SetName(button, "Apply local draft");
 		var editor = new RtaimeTextBox { Text = "Original", MinWidth = 180 };
 		var chooser = new RtaimeComboBox { MinWidth = 180 };
