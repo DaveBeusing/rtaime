@@ -37,7 +37,7 @@ Notifications are grouped as FATAL, ERROR, WARNING, RECOVERY, INFORMATION and SU
 
 **Pause reminders 5 min** affects presentation reminders only. The condition stays visible in its group and in the existing persistent active-problem list. Fatal conditions cannot be paused. Identical observations preserve the deadline, materially changed conditions resume reminders immediately, and the existing expiry timer resumes reminders at the deadline. **Resume reminders** ends the pause early. Neither action acknowledges or resolves a fault; no reconnect, production or launch policy changes.
 
-**Acknowledge** records presentation acknowledgement while retaining the active/fatal condition. Identical observations preserve it; a materially changed condition resets it. **Dismiss** removes presentation; a subsequent observation can publish the condition again. Neither operation changes Health, recovery state, production revision or launch policy. **Review** navigates only to an existing workspace. **Export support bundle** delegates directly to the existing startup/System exporter, picker, availability gate and visible result status. It does not add an exporter or include action arguments in history.
+**Acknowledge** records presentation acknowledgement while retaining the active/fatal condition. Identical observations preserve it; a materially changed condition resets it. **Dismiss** removes nonfatal presentation; fatal conditions stay visible until replaced by their owner. A subsequent observation can publish a dismissed nonfatal condition again. Neither operation changes Health, recovery state, production revision or launch policy. **Review** navigates only to an existing workspace. **Export support bundle** delegates directly to the existing startup/System exporter, picker, availability gate and visible result status. It does not add an exporter or include action arguments in history.
 
 Technical details remain opt-in and expanded state survives duplicate refreshes.
 
@@ -48,3 +48,36 @@ Free-form footer events are informational. Correlated response outcomes drive in
 Focused domain tests cover missing/stale evidence, references, media availability absence, audio freshness, inactive outputs, wire/revision correlation, rejection, uncertain completion, reconnect, refresh failure and history privacy/bounds. Notification tests cover capacity, duplicate acknowledgement, bounded snooze expiry/change/fatal handling, severity grouping and safe navigation. History regressions preserve submission provenance across a delayed reply and reconnect, and never invent acceptance or a server epoch. Preflight tests independently fail Program/AUX, reject unverified recording targets and mismatched AI sequences, and assert unchanged input snapshots. Operator tests cover a delayed dispatcher, incident presentation and disposal. The existing real MainWindow/BAML qualification opens the view, checks keyboard navigation, automation names and workspace deep links at 960×500 with injected 100/125/150/200% layout scales.
 
 Injected scales verify software layout, not physical mixed-monitor hardware qualification. Required Gates and packaged lifecycle results must be checked at the exact source head. Physical hardware and external release qualification remain UNVERIFIED until their separate evidence exists.
+
+## Preparation guidance and local progress
+
+Getting started / Help opens the existing modeless Recent, Favorites and Help
+window. In Help, the scrollable guide covers TEST MEDIA import, show checks,
+Preview, deliberate Preview-to-Program operation, cues/rundown, outputs and layout
+restore. Empty/missing media, denied requests, stale preflight, monitoring loss,
+disconnect and restart have explicit guidance. Sequence authoring and canvas
+configuration are described at their actual contract boundaries; the guide does
+not advertise a completed multitrack editor or Runtime mapping activation.
+
+Previous, Next and Mark reviewed locally only change guide preferences. Minimize
+and Turn guide off stop expansion; Open guide restores it without clearing prior
+review. The same topics are searchable in Help. No guide control invokes TAKE,
+GO, Seek, import, output start, layout application or saved-production writes.
+The existing Help window keeps its keyboard scope and Escape/focus-return rules.
+
+Guide preferences use a separate local operator-library.onboarding.json file
+(custom Library preference paths use the same sibling naming convention). Its
+version-1 document contains only Version, Enabled, Minimized, Step and ReviewedMask.
+Reads are capped at 4 KiB, reject duplicates/unknown fields and invalid/future
+versions, and preserve unsupported files until an explicit guide edit. Atomic
+writes coalesce pending current progress; shutdown flushes through the existing
+Library owner. This file is neither production state nor session recovery
+authority, and changes no existing protocol/checkpoint/layout schema.
+
+Focused regressions cover local cold start/review/minimize/disable/reopen,
+unsupported and oversized preferences, cancellation and failed persistence,
+startup evidence/redaction, export failure/cancel, unknown health and fatal
+notification retention. The existing real WPF Help journey exercises guide
+controls with injected 100/125/150/200% layout scales and unchanged Program/scene
+identities. These software checks do not certify physical mixed-DPI hardware or
+human visual acceptance. Exact-source Required Gates are reported in the PR.

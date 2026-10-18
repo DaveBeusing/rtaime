@@ -7,6 +7,24 @@ namespace rtaime.Tests.Unit;
 public sealed class OperatorNotificationTests
 {
 	[Fact]
+	public void Presentation_dismissal_cannot_remove_fatal_state_but_the_owner_can_resolve_it()
+	{
+		var service = new NotificationService();
+		var fatal = new OperatorNotification("fatal", OperatorNotificationCategory.Error,
+			OperatorNotificationCondition.Fatal, "Fatal condition", "Published evidence", "Runtime",
+			"Review Health", "Unknown", Persistent: true);
+		service.Publish(fatal);
+		service.Acknowledge("fatal");
+		Assert.False(service.DismissPresentation("fatal"));
+		Assert.Equal(OperatorNotificationCondition.Fatal, Assert.Single(service.Current).Condition);
+		Assert.True(service.Dismiss("fatal"));
+		Assert.Empty(service.Current);
+		service.Publish(fatal with { Condition = OperatorNotificationCondition.Resolved });
+		Assert.True(service.DismissPresentation("fatal"));
+		Assert.Empty(service.Current);
+	}
+
+	[Fact]
 	public void Transient_notification_expires_after_its_lifetime()
 	{
 		var now = new DateTimeOffset(2026, 9, 20, 16, 0, 0, TimeSpan.Zero);

@@ -15,6 +15,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		nameof(OperatorViewModel.StartupComplete),
 		nameof(OperatorViewModel.IsConnected),
 		nameof(OperatorViewModel.IsStale),
+		nameof(OperatorViewModel.RevisionLabel),
 		nameof(OperatorViewModel.OutputRoles),
 		nameof(OperatorViewModel.AvSyncState),
 		nameof(OperatorViewModel.AvSyncEvent),
@@ -297,13 +298,15 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				[
 					new("Health", _operator.ControlHealth),
 					new("Connection", _operator.IsConnected ? "CONNECTED" : "DISCONNECTED"),
+					new("Evidence status", !_operator.IsConnected ? "UNAVAILABLE" : _operator.IsStale ? "STALE" : "OBSERVED"),
+					new("Production revision", _operator.IsConnected && !_operator.IsStale ? _operator.RevisionLabel : "NOT CURRENT"),
 					new("Readiness", _operator.GlobalReadinessState)
 				],
 				_operator.IsStale
 					? "Automatic full-snapshot resynchronization is active."
 					: !_operator.IsConnected
 						? "Manual synchronization is available when the transport can connect."
-						: "No recovery action is required.",
+						: "Review the observed production revision and action history. Unconfirmed actions require a new explicit decision; synchronization never replays them.",
 				$"Connected={_operator.IsConnected}; Stale={_operator.IsStale}; GlobalReadiness={_operator.GlobalReadinessState}",
 				ControlImpact(ControlState()),
 				"Authoritative Control connection and health snapshot",
@@ -627,10 +630,13 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			now,
 			[
 				new("Plane", _monitoring.State),
+				new("Evidence status", _monitoring.State == "LIVE" ? "OBSERVED" : _monitoring.State == "STALE" ? "STALE" : "UNAVAILABLE"),
 				new("Preview", _monitoring.PreviewState),
 				new("Program", _monitoring.ProgramState)
 			],
-			state == SubsystemHealthState.Recovering ? "Monitoring reconnect is automatic." : "Monitoring is observational and does not own Program continuity.",
+			state == SubsystemHealthState.Healthy
+				? "Monitoring is observational; confirm production changes in Control state."
+				: "Any retained image is STALE and is not current output evidence. Monitoring reconnect follows the existing monitoring lifecycle. Review Health and export diagnostics if it persists.",
 			$"Preview={_monitoring.PreviewState}; Program={_monitoring.ProgramState}; State={_monitoring.State}",
 			state switch
 			{
@@ -808,6 +814,8 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			return candidate with
 			{
 				State = SubsystemHealthState.Unknown,
+				Metrics = candidate.Metrics.Where(metric => metric.Label != "Evidence status")
+					.Append(new HealthMetricSnapshot("Evidence status", !connected ? "UNAVAILABLE" : stale ? "STALE" : "UNKNOWN")).ToArray(),
 				ProgramImpact = SubsystemProgramImpact.Unknown,
 				Detail = "Evidence is unavailable or stale; retained measurements do not establish current Program health. " +
 					$"Last projection: {candidate.Detail}",

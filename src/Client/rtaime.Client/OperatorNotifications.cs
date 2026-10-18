@@ -73,6 +73,7 @@ public interface INotificationService
 	bool Snooze(string key, TimeSpan duration) => false;
 	bool Resume(string key) => false;
 	bool Dismiss(string key);
+	bool DismissPresentation(string key) => false;
 	int RemoveExpired(DateTimeOffset now);
 }
 
@@ -204,16 +205,23 @@ public sealed class NotificationService : INotificationService
 		return true;
 	}
 
-	public bool Dismiss(string key)
+	public bool Dismiss(string key) => DismissCore(key, allowFatal: true);
+
+	public bool DismissPresentation(string key) => DismissCore(key, allowFatal: false);
+
+	private bool DismissCore(string key, bool allowFatal)
 	{
 		if (string.IsNullOrWhiteSpace(key))
 			return false;
 
-		OperatorNotification? removed;
+		OperatorNotification removed;
 		lock (_gate)
 		{
-			if (!_current.Remove(key, out removed))
+			if (!_current.TryGetValue(key, out var current) ||
+				(!allowFatal && current.Condition == OperatorNotificationCondition.Fatal))
 				return false;
+			removed = current;
+			_current.Remove(key);
 		}
 
 		Removed?.Invoke(this, new OperatorNotificationEventArgs(removed));

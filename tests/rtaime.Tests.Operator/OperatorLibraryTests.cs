@@ -167,6 +167,33 @@ public sealed class OperatorLibraryTests
         try
         {
             Assert.True(window.IsVisible);
+            var guide = Assert.IsType<OperatorOnboardingControl>(window.FindName("GettingStartedGuide"));
+            Assert.Same(main.Library.Onboarding, guide.DataContext);
+            var onboarding = main.Library.Onboarding;
+            await onboarding.LoadAsync();
+            window.Width = 360; window.Height = 360;
+            var reopenGuide = Assert.IsType<RtaimeButton>(guide.FindName("ReopenGuideButton"));
+            var minimizeGuide = Assert.IsType<RtaimeButton>(guide.FindName("MinimizeGuideButton"));
+            var disableGuide = Assert.IsType<RtaimeButton>(guide.FindName("DisableGuideButton"));
+            var reviewGuide = Assert.IsType<RtaimeButton>(guide.FindName("ReviewGuideButton"));
+            Assert.Same(onboarding.ReopenCommand, reopenGuide.Command);
+            Assert.Same(onboarding.MinimizeCommand, minimizeGuide.Command);
+            Assert.Same(onboarding.DisableCommand, disableGuide.Command);
+            Assert.Same(onboarding.ReviewCommand, reviewGuide.Command);
+            foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
+            {
+                ((FrameworkElement)window.Content).LayoutTransform = new System.Windows.Media.ScaleTransform(scale, scale);
+                reopenGuide.Command.Execute(null);
+                window.UpdateLayout();
+                Assert.True(guide.IsVisible);
+                minimizeGuide.Command.Execute(null); Assert.False(onboarding.IsExpanded);
+                reopenGuide.Command.Execute(null); Assert.True(onboarding.IsExpanded);
+                disableGuide.Command.Execute(null); Assert.False(onboarding.IsExpanded);
+                Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(scene, owner.ActiveSceneId);
+            }
+            onboarding.ReopenCommand.Execute(null);
+            await onboarding.FlushAsync();
+            ((FrameworkElement)window.Content).LayoutTransform = System.Windows.Media.Transform.Identity;
             window.Width = 360; window.Height = 360;
             var search = Assert.IsType<RtaimeTextBox>(window.FindName("SearchBox"));
             Assert.True(search.IsKeyboardFocusWithin);

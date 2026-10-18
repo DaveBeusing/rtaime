@@ -28,6 +28,9 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 	public SubsystemHealthState HealthState => _snapshot.State;
 	public string State => FormatState(_snapshot.State);
 	public string Detail => _snapshot.Detail;
+	// Availability and freshness describe evidence, independently of subsystem severity.
+	public string EvidenceStatus => _snapshot.Metrics.FirstOrDefault(metric => metric.Label == "Evidence status")?.Value
+		?? (_snapshot.State == SubsystemHealthState.Unknown ? "UNKNOWN" : "OBSERVED");
 	public string StatusSince => _snapshot.StatusSince.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 	public string FirstObserved => StatusSince;
 	public string LastObserved
@@ -53,7 +56,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 		? "UNSPECIFIED"
 		: _snapshot.EvidenceSource;
 	public bool IsHealthy => _snapshot.State == SubsystemHealthState.Healthy;
-	public bool RequiresAttention => HealthSnapshotAnalysis.RequiresAttention(_snapshot.State);
+	public bool RequiresAttention => !IsHealthy;
 	public bool IsOverview => Id is "cpu" or "memory" or "gpu" or "media" or "audio" or "compositing" or "output" or "recording" or "frame-timing";
 
 	public void Apply(SubsystemHealthSnapshot snapshot)
@@ -70,6 +73,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 			nameof(HealthState),
 			nameof(State),
 			nameof(Detail),
+			nameof(EvidenceStatus),
 			nameof(StatusSince),
 			nameof(FirstObserved),
 			nameof(LastObserved),
@@ -219,7 +223,8 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	}
 	public string OverallState => FormatReadiness(_readiness.Current.State);
 	public string OverallSummary => _readiness.Current.Reasons.FirstOrDefault()?.Detail ??
-		"All required production readiness evidence is qualified.";
+		(_readiness.Current.IsProductionReady ? "All required production readiness evidence is qualified." :
+			"Current production readiness is not qualified. Review subsystem evidence and its safe next action.");
 	public string ProductionReadiness => _readiness.Current.IsProductionReady ? "PRODUCTION READY" : "PRODUCTION BLOCKED";
 	public int HealthyCount => Subsystems.Count(item => item.IsHealthy);
 	public int AttentionCount => Attention.Count;
@@ -363,6 +368,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		{
 			("Component", incident.DisplayName),
 			("Severity", incident.State),
+			("Evidence status", incident.EvidenceStatus),
 			("Program impact", incident.ProgramImpact),
 			("State first projected", incident.FirstObserved),
 			("Last projected", incident.LastObserved),

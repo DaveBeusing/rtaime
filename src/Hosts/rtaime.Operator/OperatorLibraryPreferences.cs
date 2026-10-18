@@ -32,6 +32,7 @@ public sealed class OperatorLibraryPreferenceStore(string? path = null)
     public const int MaximumBytes = 64 * 1024;
     private readonly string _path = path ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "rtaime", "operator-library.json");
+    internal string OnboardingPath => Path.ChangeExtension(_path, "onboarding.json");
     private readonly SemaphoreSlim _gate = new(1, 1);
     private static readonly JsonSerializerOptions Options = new() { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 

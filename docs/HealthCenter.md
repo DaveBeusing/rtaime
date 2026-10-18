@@ -106,3 +106,24 @@ Deterministic regressions cover simultaneous monitoring/audio/recording failures
 ## Show checks and activity
 
 Open **Show checks** in the navigation rail or search **Show preflight** in Commands (Ctrl+K). The [shared review view](ShowPreflightAndActivity.md) combines advisory asset/cue/output/audio/AI/durable-state observations with recent correlated requests and the existing notifications. Review links lead to existing workspaces. Health incidents, recovery and support bundles remain in their established services; acknowledgement does not change production health or permit show launch.
+
+## Evidence availability and recovery guidance
+
+Severity and evidence availability are separate fields. Unknown subsystems now
+remain in Attention as UNKNOWN, without incrementing Failed or establishing a
+Program outage. The incident view displays OBSERVED, STALE, UNAVAILABLE or UNKNOWN
+from existing projection state; these are observation labels, not new wire values.
+Control reports its current observed production revision only while connected
+and not stale. Retained values are labelled NOT CURRENT. Readiness without
+qualified evidence never receives an optimistic summary.
+
+A monitoring incident explicitly labels any retained image STALE. It does not
+disable otherwise authorized Control operations or certify Program continuity.
+Control recovery remains the existing synchronization command, with its existing
+authorization check. Reconnect guidance requires inspection of the restored
+revision and correlated action history before a new explicit decision on an
+unconfirmed action. No live request is replayed.
+
+Unknown and failed incidents retain their safe next step, provenance and copy/
+support actions. Acknowledgement and reminder controls are presentation only;
+fatal notifications cannot be dismissed in the Operator.

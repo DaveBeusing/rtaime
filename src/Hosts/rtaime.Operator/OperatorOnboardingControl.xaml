@@ -1,0 +1,33 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.OperatorOnboardingControl"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+ Focusable="False" Background="Transparent" Foreground="{DynamicResource OperatorTextBrush}">
+ <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+  <StackPanel>
+   <WrapPanel>
+    <TextBlock Text="GETTING STARTED · TEST MEDIA ONLY" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,8,4"/>
+    <controls:RtaimeButton x:Name="ReopenGuideButton" Content="Open guide" Command="{Binding ReopenCommand}" IsCompact="True" IsDefault="False"
+     AutomationProperties.Name="Reopen local getting started guide" Margin="0,0,0,4"/>
+   </WrapPanel>
+   <StackPanel x:Name="GuideContent">
+    <StackPanel.Style><Style TargetType="StackPanel">
+     <Setter Property="Visibility" Value="Collapsed"/>
+     <Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+    </Style></StackPanel.Style>
+    <TextBlock Text="{Binding Current.Title}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6"/>
+    <TextBlock Text="{Binding Current.Detail}" TextWrapping="Wrap" AutomationProperties.Name="Preparation guidance without automatic live actions"/>
+    <TextBlock Text="{Binding Progress}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,6"/>
+    <WrapPanel>
+     <controls:RtaimeButton Content="Previous" Command="{Binding PreviousCommand}" IsCompact="True" AutomationProperties.Name="Previous guide topic" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="ReviewGuideButton" Content="Mark reviewed locally" Command="{Binding ReviewCommand}" IsCompact="True" AutomationProperties.Name="Mark topic reviewed without sending a command" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="NextGuideButton" Content="Next" Command="{Binding NextCommand}" IsCompact="True" AutomationProperties.Name="Next guide topic" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="MinimizeGuideButton" Content="Minimize" Command="{Binding MinimizeCommand}" IsCompact="True" AutomationProperties.Name="Minimize getting started guide" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="DisableGuideButton" Content="Turn guide off" Command="{Binding DisableCommand}" IsCompact="True" AutomationProperties.Name="Disable automatic guide expansion locally" Margin="0,0,6,4"/>
+    </WrapPanel>
+   </StackPanel>
+   <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+  </StackPanel>
+ </Border>
+</UserControl>

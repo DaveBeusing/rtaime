@@ -13,6 +13,9 @@
    <TextBlock Text="SHOW CHECKS AND ACTIVITY" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,4"/>
    <controls:RtaimeButton x:Name="RefreshChecksButton" Content="Refresh checks" Command="{Binding RefreshChecksCommand}"
     IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Refresh local checks without sending a server request"/>
+   <controls:RtaimeButton Content="Getting started / Help" IsCompact="True" Margin="0,0,8,4"
+    Command="{Binding Owner.OpenInlineHelpCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+    AutomationProperties.Name="Open nonmodal preparation help without running production actions"/>
    <controls:RtaimeButton x:Name="ExportChecksSupportButton" Content="Export support bundle" IsCompact="True" Margin="0,0,8,4"
     Command="{Binding Owner.Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
     AutomationProperties.Name="Export diagnostics through the existing support bundle workflow"/>

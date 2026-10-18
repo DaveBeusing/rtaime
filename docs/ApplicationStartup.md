@@ -402,3 +402,23 @@ Native Windows access/sharing/lock failures during replacement or a reader's new
 A publication failure carries its target path and native error and is classified as `startup.evidence.publish.failed`. Host readiness observations remain distinct from evidence-storage failure. The Operator shows the actual failure when there are no unmet host criteria instead of an empty “Blocking criteria” list. Initial startup never reports success if critical lifecycle evidence cannot be published.
 
 Windows regressions cover initial publication/replacement, retained reader snapshots over repeated replacements, concurrent production reads/publications, persistent read/write sharing denial preserving previous evidence, failure attribution after qualified hosts, and the Operator failure summary. The integration fixture uses the same bounded production reader; process, barrier, deadline and retained-evidence assertions are unchanged. Required Gates and the packaged lifecycle/restart/legacy-checkpoint qualifications remain mandatory at the assessed source. Physical and external production qualification remain UNVERIFIED.
+
+## Evidence-bound Operator guidance
+
+A direct Operator session without AppHost evidence is labelled DIRECT OPERATOR
+SESSION / UNKNOWN, while still allowing the shell to open. Opening the shell is
+not qualified Runtime readiness. Managed startup continues to show the real
+published stage, host, requirement, failure and measured ready-stage count.
+Optional AI failure does not establish required-engine failure.
+
+Operator lifecycle reads reject evidence over 2 MiB and retain at most 64 stage
+rows. Missing, malformed, denied or unsupported evidence cannot complete initial
+qualification. Existing failure latching and post-start splash suppression remain.
+Copy Diagnostics applies the shared redactor to each field before assembling the
+bounded 96-line diagnostic text; private-key fields are rejected before truncation.
+Support export uses the existing picker, bounded exporter and cancellation path.
+Its failed or cancelled result leaves startup failure evidence available and
+restores export availability.
+
+The nonmodal Help guide explains preparation and uncertain-command recovery.
+Its local review count never changes readiness or a production revision.

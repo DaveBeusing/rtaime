@@ -142,3 +142,14 @@ After a Control transport failure, the client requires a full authoritative snap
 ## Show checks and activity
 
 [Show checks and activity](ShowPreflightAndActivity.md) provides the consolidated notification list with severity, occurrence count, presentation acknowledgement/dismissal, workspace Review and opt-in technical details. Retention is bounded to 64 conditions; transient toasts remain bounded to four. Acknowledgement never resolves an incident. Free-form footer text is informational; correlated Control responses determine request-outcome notifications. Expanded details and acknowledgement survive identical observations.
+
+## Fatal presentation and recovered requests
+
+Fatal notifications remain visible after acknowledgement and cannot be dismissed
+or reminder-paused through the Operator. Changed conditions re-evaluate command
+availability immediately. The owning service still replaces/resolves keyed
+conditions; acknowledgement is not recovery.
+
+A recovered Runtime notification directs the operator to inspect the current
+revision and action history before a new explicit decision on any unconfirmed
+request. Recovery does not imply that a lost request failed and never replays it.
