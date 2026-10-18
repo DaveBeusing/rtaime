@@ -63,7 +63,7 @@ capture review is not a blanket implementation prerequisite.
 | --- | --- |
 | Independent analysis/scrub | Reuse Runtime admission/catalogue identity; bounded cancelable analysis sessions and Client/Host tests precede browser scrub UI |
 | Sequence model/execution | Versioned durable tracks/clips/edit transactions; revision/generation-fenced prepared Runtime sink on the existing cadence; real persistence/recovery before editing UI |
-| Preview shuttle | Typed directional/rate/end/cancel semantics and confirmed Preview identity; then shared commands/J-L handling with text-entry/repeat guards |
+| Preview shuttle | Typed directional/rate/end/cancel semantics and confirmed Preview identity; extend existing J single-step/L normal-play through shared commands with text-entry/repeat guards |
 | 2D canvas/mapping | Governed durable canvas/surface/assignment model and resource/output sink acceptance; then manipulation UI and output feedback |
 | Contextual Inspector | Extend existing editors, local undo and typed transfer; compatible multi-object changes require real atomic/revision validation before live Apply |
 | Independent AI workspace | Reuse current capability/approval/fallback services; implement additive navigation/layout migration and real backend evidence |

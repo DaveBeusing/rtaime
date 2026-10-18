@@ -10,13 +10,21 @@
 
 The Operator provides eight task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
 
-The canonical workspaces remain MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS, HEALTH and SETTINGS. Switching workspaces never creates a second production snapshot or forks product state.
+The currently implemented canonical workspaces remain MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS, HEALTH and SETTINGS. Switching workspaces never creates a second production snapshot or forks product state.
 
 ## Accepted experience direction
 
 The [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, defines the cross-workspace target: a professional media-first Live Operator, dark graphite surfaces, restrained cyan interaction accents, contextual editing and compact operational evidence. A generic infrastructure dashboard is not the primary production surface. This document describes the existing workspace model; the [experience roadmap](OperatorExperienceRoadmap.md) separates present capabilities from proposed refinements and qualification work.
 
-The four experience groups map onto existing identifiers without replacing or migrating them:
+The [scope decision effective 2026-10-17](OperatorExperienceScope.md) supersedes
+former V1 functional deferrals. Independent analysis/scrubbing, multitrack
+sequences/editing, Preview shuttle, 2D canvas/mapping, Inspector extensions and an
+independent AI workspace are approved **TO IMPLEMENT**. The current eight
+destinations/schema 6 are an implementation inventory, not a permanent ceiling.
+An additive destination or changed persisted geometry needs migration/tests.
+Current scope approval grants no hardware/format/security/release certification.
+
+The four existing experience groups map onto current identifiers without replacing or migrating them:
 
 | Experience group | Existing destinations |
 | --- | --- |
@@ -25,7 +33,10 @@ The four experience groups map onto existing identifiers without replacing or mi
 | Outputs | OUTPUTS |
 | System & Health | HEALTH, SETTINGS |
 
-The conceptual Outputs & Mapping label does not authorize a new stage/warping/edge-blending subsystem. Existing AI controls remain in their established contexts; a separate AI Processing workspace is not introduced. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
+2D canvas/mapping and an independent AI workspace are approved targets, with
+real contracts/Runtime sinks and additive layout integration still TO IMPLEMENT.
+Existing output routing and AI controls remain available. A 3D stage, new driver,
+commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
 ## Shared visual contract
 
@@ -55,7 +66,13 @@ PerMonitorV2 awareness, layout rounding, pixel snapping, compact allocation and 
 
 ## LIVE
 
-LIVE is the primary fast production workspace: source/cue selection on the left, adaptive multiview and Quick Controls in the center, and explicit Live Controls on the right. The accepted refinement direction gives media and confirmed production identity priority over optional diagnostic detail without introducing another shell.
+EXISTING: LIVE is the primary fast production workspace: source/cue selection
+on the left, adaptive multiview and Quick Controls in the center, and explicit
+Live Controls on the right. The approved TO IMPLEMENT
+[LIVE target](OperatorExperienceDesign.md#live-operator-composition) places the
+Media browser left, equal Preview-left/Program-right media canvases centrally,
+contextual Inspector right, Cue/Rundown below and compact status. It reuses this
+shell. Current geometry tests certify their stated baseline, not that new composition.
 
 The multiview reuses confirmed Preview/Program monitoring, existing source thumbnails/state/PGM-PVW tallies and source audio peaks. Its source bank adapts from two to three to four columns, bounded to sixteen displayed tiles. Failed sources remain visible. Enlarging a source/monitor tile changes presentation only; it never routes or takes.
 
@@ -83,7 +100,9 @@ Seeking, IN/OUT, cue operations and take commands retain the existing Media Deck
 
 MEDIA emphasizes preparation: expanded Media Pool, governed NDI discovery/adoption, Preview-focused viewing, Media Deck, metadata/Context Inspector, import/open and IN/OUT/playback-policy preparation. It introduces no second ingest or media-management subsystem.
 
-The Media Library already provides virtualized grid/list browsing, typed search, named Smart Bins, selection-aware context menus, bounded batches and pressure-aware thumbnail reuse. Independent position scrubbing is unavailable; hover must not open or seek a production deck. See [Media Library](MediaLibraryAssetBrowser.md).
+The Media Library already provides virtualized grid/list browsing, typed search, named Smart Bins, selection-aware context menus, bounded batches and pressure-aware thumbnail reuse. Independent position scrubbing is currently unavailable and approved TO IMPLEMENT
+through bounded Runtime-owned analysis contracts; hover must not open or seek a
+production deck. This is a missing implementation, not a renewed V1 scope gate. See [Media Library](MediaLibraryAssetBrowser.md).
 
 Explicit asset preparation uses the integrated bounded non-Program verification path. File availability, a current representative conditional observation and actual resident deck readiness remain distinct. Prepare/Retry/Cancel reflect real capability and failure state; an expired observation or catalogue entry must not be presented as resident READY. Preparation does not route Program or change saved production.
 
@@ -153,7 +172,10 @@ Pins are stored in `rtaime/operator-quick-controls.json` below the user's local 
 | Ctrl+K | Commands palette |
 | F9 | Explicit Show Control GO when armed and eligible |
 
-Timeline-local Page Up/Page Down remains in the timeline. J/L reverse/forward shuttle is not invented where the deck contract does not expose it. Text-entry controls suppress production shortcuts; non-destructive synchronization/view commands retain their allowed scope. Repeat key-down events must not repeat production actions. Buttons and keyboard paths share command availability and authoritative validation.
+Timeline-local Page Up/Page Down remains in the timeline. J currently steps one Preview frame backwards and L plays at normal rate.
+Both commands require the confirmed Preview source and exclude an on-Program
+source. Reverse/multirate Preview shuttle is approved TO IMPLEMENT; extend real
+rate/direction/cancel semantics through the existing shared registry. Text-entry controls suppress production shortcuts; non-destructive synchronization/view commands retain their allowed scope. Repeat key-down events must not repeat production actions. Buttons and keyboard paths share command availability and authoritative validation.
 
 ## Shortcut discoverability
 
@@ -241,7 +263,9 @@ To recover a missing panel, cycle with Ctrl+Shift+N, dock centrally with Ctrl+Al
 
 ## Context Inspector editing
 
-[Context Inspector](ContextInspector.md) owns numeric ranges/units, Alt-drag precision, fine/coarse keys, reset, pinned metadata, mixed summaries, compatible attribute drafts and explicit Apply. [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) add grouped local draft undo and typed transfer. They do not undo confirmed live operations. Multi-selection live property transactions remain deferred.
+[Context Inspector](ContextInspector.md) owns numeric ranges/units, Alt-drag precision, fine/coarse keys, reset, pinned metadata, mixed summaries, compatible attribute drafts and explicit Apply. [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) add grouped local draft undo and typed transfer. They do not undo confirmed live operations. Compatible multi-object Inspector editing is approved TO IMPLEMENT. Its owning
+backend must provide revision-bound transaction/validation semantics before live
+Apply; current single-context commands must not masquerade as bulk transactions.
 
 ## Commands and shortcut profiles
 

@@ -13,6 +13,23 @@ The Operator depends only on `rtaime.Client`. All production mutations continue 
 
 Operator Monitoring Plane adds a separate non-authoritative monitoring transport through the same Client SDK assembly. Visual observation remains isolated from the management/control transport.
 
+## Accepted scope and implementation status
+
+This page inventories the existing reference client; its V1 title and protocol
+names are compatibility/history, not a functional ceiling. The
+[scope decision effective 2026-10-17](OperatorExperienceScope.md) authorizes
+independent analysis/scrubbing, true multitrack sequences/editing, Preview shuttle,
+2D canvas/mapping, contextual Inspector extensions and an independent AI workspace.
+They are **TO IMPLEMENT** until real contracts, consumers and failure/recovery
+paths exist. Current missing behavior below is not a permanent V1 prohibition.
+
+The [design contract](OperatorExperienceDesign.md) owns target visual/interaction
+acceptance; the [roadmap](OperatorExperienceRoadmap.md) owns delivery dependencies.
+The scope record defines EXISTING / TO IMPLEMENT / IMPLEMENTED / QUALIFIED and
+namespace/tag ownership. Approval is separate from hardware, codec/format,
+security and release qualification. Existing authority, finite resource admission,
+schema compatibility and tests remain binding.
+
 ## Control surface
 
 The professional V1 control surface provides:
@@ -40,6 +57,7 @@ Production mutations are disabled whenever the presentation snapshot is stale, s
 | `Ctrl+F` | Focus Media Library search |
 | `Ctrl+P` | Set selected source to Preview |
 | `Space` | Preview media Play/Pause when the loaded source is confirmed Preview |
+| `J` / `L` | Preview back one frame / normal-rate Play; confirmed Preview, excluded on Program; no reverse/multirate shuttle |
 | `K` | Preview media Pause |
 | `S` | Preview media Stop |
 | `I` / `O` | Set Preview media IN / OUT |
@@ -763,9 +781,12 @@ See `docs/MediaLibraryAssetBrowser.md` for the Media Library scalability, select
 
 The Operator exposes eight canonical task workspaces — MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS, HEALTH and SETTINGS — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace. COMPOSITING preserves the global Media Library, Inspector and Timeline shell while the 1070×700 center uses an approximately 64 / 6 / 36 graph-to-preview split. The graph projects current sources, Preview/Program routing, the existing graphics transform, GPU composition, Program output and recording from already observed state. Preview reuses the established monitor chrome and transport paths. System & Performance reuses existing lifecycle and bounded health metrics. CPU and system-memory measurements come from the RuntimeHost Windows telemetry sampler; GPU/VRAM measurements use Runtime-published NVML evidence when available. The Operator performs no local hardware probing and preserves unavailable measurements as UNVERIFIED. Node status refreshes update stable projection objects without moving the layout, node selection feeds the shared Inspector, and arbitrary Runtime rewiring remains unavailable because no authoritative rewiring contract exists. OUTPUTS, HEALTH and SETTINGS continue to reuse the existing operational projection. HEALTH adds the central event-driven subsystem-health presentation while global production readiness remains owned by RuntimeReadinessService.
 
-LIVE uses the dedicated 360 / 6 / flexible / 6 / 420 show-operation composition: Scenes & Cues on the left, a default 3×3 multiview with compact Output Routing in the center, and 420px Live Controls on the right. The multiview consumes the existing Preview/Program monitoring images and already available source thumbnails and does not open another monitoring transport. Its toolbar supports explicit 2×2, 3×3 and 4×4 presentation plus center fullscreen/maximize. PGM/PVW tallies, failed-input visibility, audio meters and timecode remain projections of existing authoritative or observed state. Scene/source selection is non-destructive; Set Preview/Take remain explicit commands.
+EXISTING LIVE uses the dedicated 360 / 6 / flexible / 6 / 420 show-operation composition: Scenes & Cues on the left, a default 3×3 multiview with compact Output Routing in the center, and 420px Live Controls on the right. The multiview consumes the existing Preview/Program monitoring images and already available source thumbnails and does not open another monitoring transport. Its toolbar supports explicit 2×2, 3×3 and 4×4 presentation plus center fullscreen/maximize. PGM/PVW tallies, failed-input visibility, audio meters and timecode remain projections of existing authoritative or observed state. Scene/source selection is non-destructive; Set Preview/Take remain explicit commands.
 
-Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls Preview media play/pause when the loaded Media Deck source is the confirmed Preview source; K/S, I/O, M and Up/Down use the same Preview-source guard. Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. Unsupported J/L shuttle semantics remain deliberately unbound.
+Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls Preview media play/pause when the loaded Media Deck source is the confirmed Preview source; K/S, I/O, M and Up/Down use the same Preview-source guard. Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. J currently steps one Preview frame backwards and L plays at normal rate,
+guarded to confirmed Preview and excluded when the loaded source is on Program.
+Reverse/multirate shuttle is approved TO IMPLEMENT through the real typed
+transport; the shared command registry is retained.
 
 OUTPUTS, HEALTH and SETTINGS reuse the existing lifecycle, health, monitoring, recording and output projections rather than creating a second diagnostics truth. HEALTH is the dedicated detailed diagnostics surface; SETTINGS remains configuration-oriented. Clean Program remains a presentation of the existing Runtime-derived Program monitoring image and is explicitly not the physical Program output path.
 
@@ -773,6 +794,13 @@ Layout persistence is schema-versioned and keeps only UI presentation fields. SA
 
 See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, shortcut, multiview and Clean Program operating model.\n\nSee `docs/CompositingNodeGraph.md` for the Compositing graph projection, interaction model and authority boundary.
 
+
+The current LIVE composition above is an inventory, not acceptance of the new
+[LIVE target](OperatorExperienceDesign.md#live-operator-composition): Media browser
+left, equal Preview-left/Program-right canvases, Inspector right, Cue/Rundown below
+and compact status. Reference geometry may evolve with deliberate migration/
+qualification and focused policy changes. Core identity/live actions stay
+reachable at 960×540 logical size; details rearrange instead of shrinking all text.
 
 ## Preview / Program production monitors
 
@@ -816,7 +844,12 @@ Authoring exposes the versioned bounded follow modes Manual, PrepareNext, AutoGo
 
 Manual HOLD, PREPARE, GO, NEXT and PREVIOUS invalidate an armed stale follow before establishing a new governed state. Display refresh may request newer snapshots, but no WPF timer or local countdown is production authority; delayed progression is driven by the Runtime-frame-backed Show Control wait.
 
-The integration does not claim full NLE editing. The existing timeline retains its current Media Deck/cue semantics, and reserved lanes remain non-authoritative where no backing production model exists. See `docs/ProductionRundown.md`.
+The existing timeline retains its Media Deck/cue semantics; reserved lanes remain
+non-authoritative while no backing sequence model exists. Real multitrack
+sequence/editing is approved TO IMPLEMENT through durable Control models and
+prepared Runtime execution. This does not claim a complete replacement NLE.
+See [scope and ownership](OperatorExperienceScope.md) and
+[Production Rundown](ProductionRundown.md).
 
 
 ## High-fidelity media presentation
