@@ -143,6 +143,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						throw;
 					}
 					Console.WriteLine("CONTENT RENDERED PASS [MainWindow]");
+					await OperatorControlDesignSystemQualification.VerifyAsync(window, dispatcher);
 					Assert.True(window.IsLoaded && window.IsVisible);
 
 					foreach (var workspace in OperatorWorkspaceNames.All)

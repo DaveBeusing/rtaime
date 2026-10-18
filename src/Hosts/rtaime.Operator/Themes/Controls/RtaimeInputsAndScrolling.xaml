@@ -26,7 +26,7 @@
 				<Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource OperatorAccentBrush}" />
 			</Trigger>
 			<Trigger Property="IsEnabled" Value="False">
-				<Setter TargetName="ThumbChrome" Property="Opacity" Value="0.35" />
+				<Setter TargetName="ThumbChrome" Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 			</Trigger>
 		</ControlTemplate.Triggers>
 	</ControlTemplate>
@@ -101,7 +101,7 @@
 	</ControlTemplate>
 
 	<ControlTemplate x:Key="RtaimeHorizontalSliderTemplate" TargetType="{x:Type controls:RtaimeSlider}">
-		<Grid MinHeight="20" SnapsToDevicePixels="True">
+		<Grid MinHeight="{DynamicResource OperatorMinimumTargetSize}" SnapsToDevicePixels="True">
 			<Border
 				Height="4"
 				Background="{DynamicResource OperatorRaisedSurfaceBrush}"
@@ -132,7 +132,7 @@
 				<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
 			</Trigger>
 			<Trigger Property="IsEnabled" Value="False">
-				<Setter Property="Opacity" Value="0.4" />
+				<Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 			</Trigger>
 		</ControlTemplate.Triggers>
 	</ControlTemplate>
@@ -166,12 +166,18 @@
 		</Grid>
 		<ControlTemplate.Triggers>
 			<Trigger Property="IsEnabled" Value="False">
-				<Setter Property="Opacity" Value="0.4" />
+				<Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 			</Trigger>
 		</ControlTemplate.Triggers>
 	</ControlTemplate>
 
 	<Style TargetType="{x:Type controls:RtaimeTextBox}">
+		<Setter Property="Validation.ErrorTemplate" Value="{StaticResource OperatorValidationErrorTemplate}" />
+		<Setter Property="ContextMenu" Value="{StaticResource OperatorTextContextMenu}" />
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="CaretBrush" Value="{DynamicResource OperatorTextBrush}" />
@@ -182,7 +188,7 @@
 		<Setter Property="Padding" Value="{DynamicResource OperatorControlPadding}" />
 		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
 		<Setter Property="VerticalContentAlignment" Value="Center" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeTextBox}">
@@ -217,20 +223,37 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeComboBoxItem}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="Background" Value="Transparent" />
 		<Setter Property="Padding" Value="8,5" />
 		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeComboBoxItem}">
@@ -257,9 +280,26 @@
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeComboBox}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
@@ -267,7 +307,7 @@
 		<Setter Property="MinHeight" Value="{DynamicResource OperatorControlHeight}" />
 		<Setter Property="Padding" Value="{DynamicResource OperatorControlPadding}" />
 		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
 		<Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
 		<Setter Property="Template">
@@ -329,8 +369,10 @@
 							Focusable="False"
 							IsOpen="{TemplateBinding IsDropDownOpen}"
 							Placement="Bottom"
-							PopupAnimation="Fade">
-							<Border
+							PopupAnimation="None">
+							<Border controls:OperatorControlPresentation.Enabled="True"
+								controls:OperatorControlPresentation.AnimateEntrance="True"
+								controls:OperatorControlPresentation.ReducedMotion="{Binding Path=(controls:OperatorControlPresentation.ReducedMotion), RelativeSource={RelativeSource TemplatedParent}}"
 								MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
 								MaxHeight="320"
 								Margin="0,2,0,0"
@@ -351,19 +393,36 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter TargetName="DropDownToggle" Property="Opacity" Value="0.45" />
+							<Setter TargetName="DropDownToggle" Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeCheckBox}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
 		<Setter Property="FontWeight" Value="SemiBold" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeCheckBox}">
@@ -407,19 +466,36 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter Property="Opacity" Value="0.45" />
+							<Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeRadioButton}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
 		<Setter Property="FontWeight" Value="SemiBold" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeRadioButton}">
@@ -461,33 +537,66 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter Property="Opacity" Value="0.45" />
+							<Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeSlider}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template" Value="{StaticResource RtaimeHorizontalSliderTemplate}" />
 		<Style.Triggers>
 			<Trigger Property="Orientation" Value="Vertical">
 				<Setter Property="Template" Value="{StaticResource RtaimeVerticalSliderTemplate}" />
 			</Trigger>
+		
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
 		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeScrollBar}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Background" Value="Transparent" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorBorderStrongBrush}" />
 		<Setter Property="Width" Value="8" />
 		<Setter Property="Height" Value="Auto" />
 		<Setter Property="MinWidth" Value="8" />
 		<Setter Property="MinHeight" Value="8" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template" Value="{StaticResource RtaimeVerticalScrollBarTemplate}" />
 		<Style.Triggers>
 			<Trigger Property="Orientation" Value="Horizontal">
@@ -495,11 +604,23 @@
 				<Setter Property="Height" Value="8" />
 				<Setter Property="Template" Value="{StaticResource RtaimeHorizontalScrollBarTemplate}" />
 			</Trigger>
+		
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
 		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeScrollViewer}">
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeScrollViewer}">
@@ -545,9 +666,13 @@
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeSplitter}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Background" Value="{DynamicResource OperatorBorderBrush}" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="KeyboardNavigation.IsTabStop" Value="True" />
 		<Setter Property="Template">
 			<Setter.Value>
@@ -564,22 +689,39 @@
 							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorAccentBrush}" />
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
-							<Setter TargetName="Chrome" Property="Opacity" Value="0.35" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeListBoxItem}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Background" Value="Transparent" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
 		<Setter Property="BorderBrush" Value="Transparent" />
 		<Setter Property="BorderThickness" Value="1" />
 		<Setter Property="Padding" Value="5" />
 		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
@@ -606,12 +748,25 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter TargetName="ItemChrome" Property="Opacity" Value="0.45" />
+							<Setter TargetName="ItemChrome" Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeListBox}">
@@ -623,7 +778,7 @@
 		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
 		<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
 		<Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeListBox}">
@@ -646,12 +801,16 @@
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeTabItem}">
+		<Setter Property="controls:OperatorControlPresentation.Enabled" Value="True" />
+		<Setter Property="AutomationProperties.ItemStatus" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="AutomationProperties.HelpText" Value="{Binding Path=(controls:OperatorControlPresentation.StateDescription), RelativeSource={RelativeSource Self}}" />
+		<Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorSecondaryTextBrush}" />
 		<Setter Property="Background" Value="Transparent" />
 		<Setter Property="Padding" Value="9,6" />
 		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
 		<Setter Property="FontWeight" Value="SemiBold" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeTabItem}">
@@ -683,12 +842,25 @@
 						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
-							<Setter Property="Opacity" Value="0.45" />
+							<Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" />
 						</Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+		<Style.Triggers>
+			<Trigger Property="controls:OperatorControlPresentation.HighContrast" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+				<Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+				<Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}" />
+			</Trigger>
+			<Trigger Property="Validation.HasError" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+			</Trigger>
+			<Trigger Property="controls:OperatorControlPresentation.IsPending" Value="True">
+				<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+			</Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style TargetType="{x:Type controls:RtaimeTabControl}">
@@ -697,7 +869,7 @@
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
 		<Setter Property="BorderThickness" Value="0" />
 		<Setter Property="Padding" Value="0" />
-		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="FocusVisualStyle" Value="{DynamicResource OperatorFocusVisual}" />
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeTabControl}">
@@ -773,13 +945,13 @@
 								Template="{StaticResource RtaimeTextContentHostTemplate}" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{Binding Definition.Unit, RelativeSource={RelativeSource TemplatedParent}}"
 								Foreground="{DynamicResource OperatorMutedTextBrush}" Margin="4,0,0,0"
-								FontSize="{DynamicResource OperatorFontSizeMicro}" VerticalAlignment="Center" IsHitTestVisible="False" />
+								FontSize="{DynamicResource OperatorReadableStatusFontSize}" VerticalAlignment="Center" IsHitTestVisible="False" />
 						</Grid>
 					</Border>
 					<ControlTemplate.Triggers>
 						<Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NumericChrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" /></Trigger>
 						<Trigger Property="HasInputError" Value="True"><Setter TargetName="NumericChrome" Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
-						<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
+						<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="{DynamicResource OperatorDisabledOpacity}" /></Trigger>
 					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>

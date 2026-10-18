@@ -657,7 +657,19 @@ Assert-Condition ($deck -notmatch '<KeyBinding Key="P"' -and $deck -notmatch '<K
 Assert-Condition ($window -match 'KeyboardNavigation.TabNavigation="Cycle"') "Showcase keyboard navigation must stay inside the Operator workspace."
 Assert-Condition ($customInputTheme -match 'RtaimeVerticalSplitter' -and $customInputTheme -match 'RtaimeHorizontalSplitter' -and $customInputTheme -match 'KeyboardNavigation.IsTabStop' -and $window -match 'Use arrow keys while focused') "Workspace splitters must expose custom visible keyboard focus and keyboard resize discoverability."
 Assert-Condition ($customInputTheme -match 'controls:RtaimeComboBox' -and $customInputTheme -match 'controls:RtaimeCheckBox' -and $customInputTheme -match 'controls:RtaimeTabItem') "Custom interactive controls must own shared keyboard-focus styling."
-Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation') "Production Operator XAML must not introduce decorative animation."
+
+# Presentation motion is centrally owned; no XAML timeline may animate production or layout state.
+Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation|PopupAnimation="(Fade|Slide|Scroll)"') "Operator XAML must delegate optional entrance motion to the cancellable shared presentation helper."
+$presentationPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/OperatorControlPresentation.cs"
+Assert-Condition (Test-Path -LiteralPath $presentationPath) "The shared presentation lifecycle is required."
+$presentation = Get-Content -LiteralPath $presentationPath -Raw
+Assert-Condition ($presentation -match 'SystemParameters.ClientAreaAnimation' -and $presentation -match 'SystemParameters.HighContrast' -and $presentation -match 'ReducedMotionProperty') "Motion must honor system and local preferences."
+Assert-Condition ($presentation -match '120, 180' -and $presentation -match 'EaseInOut' -and $presentation -match 'UIElement.OpacityProperty') "Presentation motion must be bounded, eased and opacity-only."
+Assert-Condition ($presentation -match 'SnapshotAndReplace' -and $presentation -match [regex]::Escape('_clock.Controller?.Remove') -and $presentation -match [regex]::Escape('StaticPropertyChanged -= SystemChanged') -and $presentation -match 'IDisposable') "Motion must replace obsolete clocks and release preference subscriptions."
+Assert-Condition ($presentation -notmatch 'DispatcherTimer|CompositionTarget|Task.Delay|WidthProperty|HeightProperty|MarginProperty|LayoutTransform|RuntimeHost|ControlHost') "Presentation motion must not animate layout, poll, or observe production cadence."
+Assert-Condition ($customInputTheme -match 'OperatorControlPresentation.AnimateEntrance' -and $customInputTheme -match 'PopupAnimation="None"') "Productive selection menus must use the shared reduced-motion path."
+Assert-Condition ($tokens -match 'OperatorMinimumTargetSize">24' -and $tokens -match 'OperatorLiveActionHeight">40' -and $tokens -match 'OperatorMotionDuration') "Shared target/density/motion tokens are required."
+
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
 Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="Take confirmed Preview to Program\."') "Primary showcase actions must expose consistent explanatory tooltips."
 Assert-Condition ($theme -match '<Style TargetType="ToolTip">' -and $theme -match 'ToolTipService\.InitialShowDelay') "Showcase tooltips must use the shared theme and bounded presentation timing."
