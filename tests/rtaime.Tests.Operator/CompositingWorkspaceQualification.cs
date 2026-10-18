@@ -57,11 +57,14 @@ internal static class CompositingWorkspaceQualification
             var transform = graph.Nodes.Single(node => node.Id == "transform:layer0");
             graph.SelectNodeCommand.Execute(transform);
             inspector.IsTransformExpanded = true;
+            Descendants(inspectorView).OfType<RtaimeTabItem>().First(tab => Equals(tab.Header, "Inspector")).IsSelected = true;
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Descendants(inspectorView).OfType<RtaimeTabItem>().First(tab => Equals(tab.Header, "Transform")).IsSelected = true;
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             var x = Descendants(inspectorView).OfType<RtaimeNumericField>()
                 .FirstOrDefault(field => field.IsVisible && field.Definition.Id == "layer.x");
             Assert.NotNull(x);
-            x!.Focus(); x.Text = "0.375";
+            Assert.True(x!.Focus()); x.Text = 0.375.ToString("G17", System.Globalization.CultureInfo.CurrentCulture);
             Assert.Equal(0.375, inspector.SelectedLayerPositionX);
             owner.SynchronizeCommand.Execute(null);
             Assert.Equal(0.375, inspector.SelectedLayerPositionX);

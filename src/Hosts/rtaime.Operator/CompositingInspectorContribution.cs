@@ -9,6 +9,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private sealed record CompositingIntent(string Production, string NodeId, InspectorAttributeValues Values);
     private readonly Dictionary<string, CompositingIntent> _compositingIntents = new(StringComparer.Ordinal);
     private int _compositingReviewCount;
+    private string? _activeCompositingDraftNodeId;
     private ICommand? _restoreCompositingIntent, _discardCompositingIntent;
     private string? CompositingIntentKey => _operator.Client?.Snapshot is { } snapshot && _compositingNode is { } node
         ? snapshot.Production.ProductionId + ":" + node.Id : null;
@@ -31,25 +32,25 @@ public sealed partial class MediaPoolInspectorViewModel
         $"RECOVERY · {_compositingIntents.Count} stored local intent(s). " +
         string.Join("; ", _compositingIntents.Values.Select(intent => intent.NodeId + ": " + intent.Values)) +
         " · Restore only in the matching current context; review and APPLY separately.";
-    private bool CanRestoreCompositingIntent() => CanEditInspectorDraft &&
+    private bool CanRestoreCompositingIntent() => CanEditInspectorDraft && _activeCompositingDraftNodeId == _compositingNode?.Id &&
         CompositingIntentKey is { } key && _compositingIntents.TryGetValue(key, out var intent) &&
         _activeDraft?.Current.GetType() == intent.Values.GetType();
     private void RetainCompositingIntent()
     {
-        if (_compositingNode is not { } node || _activeDraft is not { } draft || draft.Current == draft.Baseline ||
+        if (_activeCompositingDraftNodeId is not { } nodeId || _activeDraft is not { } draft || draft.Current == draft.Baseline ||
             _draftRevision is not { } revision || draft.Current is not (InspectorTransformAttributes or InspectorGradeAttributes or InspectorKeyAttributes))
             return;
         var separator = revision.LastIndexOf(':');
         if (separator < 0) return;
         var production = revision[..separator];
-        var key = production + ":" + node.Id;
+        var key = production + ":" + nodeId;
         if (_compositingIntents.Count == MaximumInspectorContexts && !_compositingIntents.ContainsKey(key))
         {
             var oldest = _compositingIntents.Keys.First();
             _attributeStatus = "Recovery capacity reached; oldest local intent discarded: " + oldest;
             _compositingIntents.Remove(oldest);
         }
-        _compositingIntents[key] = new(production, node.Id, draft.Current);
+        _compositingIntents[key] = new(production, nodeId, draft.Current);
     }
     private void NotifyCompositingRecovery()
     {

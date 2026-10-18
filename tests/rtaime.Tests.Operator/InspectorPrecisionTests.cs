@@ -189,7 +189,11 @@ public sealed class InspectorPrecisionTests
         graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer0"));
         Assert.Same(first, graph.SelectedLayerRow);
         Assert.Equal(1, graph.SelectedLayerCount);
+        inspector.SelectedLayerPositionX = 0.42;
         graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer7"));
+        Assert.Contains("transform:layer0:", inspector.CompositingRecoveryStatus);
+        Assert.DoesNotContain("transform:layer7:", inspector.CompositingRecoveryStatus);
+        Assert.Equal(0.1, inspector.SelectedLayerPositionX);
         Assert.False(first.IsSelected);
         Assert.Equal(1, graph.SelectedLayerCount);
         graph.StageLayerOrder("layer7", "layer0");
@@ -232,6 +236,31 @@ public sealed class InspectorPrecisionTests
         Assert.Equal(96, owner.CompositingLayers[0].Opacity);
         Assert.False(owner.CompositingLayers[0].Visible);
         Assert.False(graph.SelectedLayerRow.HasStateDraft);
+    }
+
+    [Fact]
+    public async Task Compositing_missing_bitmap_retains_selection_and_dirty_intent_until_identity_returns()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "layer:bitmap-graphics"));
+        graph.SelectedLayerRow!.OpacityDraft = 96;
+        transport.OmitBitmap = true;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Null(graph.SelectedNode);
+        Assert.Contains("opacity=96", graph.WorkspaceNotice);
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        owner.SynchronizeCommand.Execute(null);
+        transport.OmitBitmap = false;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Equal("layer:bitmap-graphics", graph.SelectedNode!.Id);
+        Assert.Contains("opacity=96", graph.WorkspaceNotice);
+        Assert.Equal(0, transport.MutationCalls);
     }
 
     [Fact]
@@ -338,7 +367,7 @@ public sealed class InspectorPrecisionTests
 			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1)), new("key", 2, true, chromaKey: new(0, 255, 0, 0.1, 0.1, 0))]);
 		internal int MutationCalls;
 		internal TaskCompletionSource? Hold;
-		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue;
+		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue, OmitBitmap;
         internal ulong RevisionValue = 1;
         internal string SourceId => _source.ToString();
         internal readonly ProductionSourceId OtherSource = ProductionSourceId.New();
@@ -374,7 +403,8 @@ public sealed class InspectorPrecisionTests
         private IReadOnlyList<OperatorCompositingLayerDescriptor> Layers => ManyLayers ?
             Enumerable.Range(0, 8).Select(i => new OperatorCompositingLayerDescriptor("layer" + i, 2, i, true, 255, 0.1, 0.2, 1, "logo.rgba",
                 processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1))])).ToArray() :
-            [_layer, new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba")];
+            (OmitBitmap ? new OperatorCompositingLayerDescriptor[] { new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba") } :
+            [_layer, new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba")]);
 		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
 			FailSnapshots ? ValueTask.FromException<OperatorStatusSnapshot>(new TimeoutException("Unavailable")) :
 			ValueTask.FromResult(new OperatorStatusSnapshot(

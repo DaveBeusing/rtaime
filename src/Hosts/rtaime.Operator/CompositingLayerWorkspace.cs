@@ -57,7 +57,8 @@ public sealed partial class CompositingGraphNodeViewModel
 public sealed partial class CompositingGraphViewModel
 {
     private string _searchText = "";
-    private bool _showLayers = true, _selectingLayers;
+    private bool _showLayers = true, _selectingLayers, _reviewingLayers;
+    private string? _missingSelectedNodeId;
     private List<string>? _orderDraft;
     private readonly Dictionary<string, string> _removedDrafts = new(StringComparer.Ordinal);
     private string _workspaceNotice = "";
@@ -97,7 +98,8 @@ public sealed partial class CompositingGraphViewModel
         : SelectedLayerRow is { HasStateDraft: true } ? "LOCAL DRAFT · APPLY confirms; graph remains Runtime evidence"
         : "Select a Layer / Transform / Processing node; detailed edits use the shared Inspector.";
     public string OrderEvidence => _orderDraft is null ? "RUNTIME ORDER" :
-        "LOCAL ORDER DRAFT · " + string.Join(" → ", _orderDraft);
+        (_orderDraft.ToHashSet(StringComparer.Ordinal).SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId))
+            ? "LOCAL ORDER DRAFT · " : "STALE ORDER DRAFT · layer set changed; discard and restage · ") + string.Join(" → ", _orderDraft);
     public InspectorPropertyDefinition OpacityDefinition { get; } = new("compositing.opacity", "Opacity", 0, 255, 255, 1, "8-bit", true);
     private void InitializeLayerWorkspace()
     {
@@ -151,6 +153,8 @@ public sealed partial class CompositingGraphViewModel
         try
         {
             var selected = selection.Where(Layers.Contains).Distinct().ToArray();
+            _missingSelectedNodeId = null;
+            _reviewingLayers = selected.Length > 1;
             foreach (var node in Nodes) node.IsSelected = selected.Contains(node);
             SelectedNode = selected.LastOrDefault();
             if (selected.Length == 1) _inspector.SelectCompositingNode(selected[0].Projection);
@@ -168,8 +172,17 @@ public sealed partial class CompositingGraphViewModel
         foreach (var layer in ordered)
             Nodes.FirstOrDefault(node => node.Id == "layer:" + layer.LayerId)?.ObserveLayer(layer);
         Reconcile(Layers, ordered.Select(layer => Nodes.First(node => node.Id == "layer:" + layer.LayerId)).ToArray());
-        if (SelectedLayerCount > 1) _inspector.ReviewCompositingLayers(
-            ordered.Where(layer => Layers.Any(row => row.IsSelected && ResolveLayerId(row.Id) == layer.LayerId)).ToArray());
+        if (SelectedLayerCount > 1)
+        {
+            _reviewingLayers = true;
+            _inspector.ReviewCompositingLayers(ordered.Where(layer => Layers.Any(row => row.IsSelected && ResolveLayerId(row.Id) == layer.LayerId)).ToArray());
+        }
+        else if (_reviewingLayers && SelectedLayerRow is { } remaining)
+        {
+            _reviewingLayers = false;
+            SelectedNode = remaining;
+            _inspector.SelectCompositingNode(remaining.Projection);
+        }
         SynchronizeSelectedLayerDraft();
         foreach (var property in new[] { nameof(SceneDeclaration), nameof(RuntimeEvidence), nameof(OrderEvidence) }) OnPropertyChanged(property);
         (ApplyOrderDraftCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

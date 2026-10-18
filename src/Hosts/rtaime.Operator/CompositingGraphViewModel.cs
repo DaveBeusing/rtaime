@@ -450,8 +450,8 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	public void Refresh()
 	{
 		var topologyBefore = string.Join("|", Nodes.Select(node => node.Id));
-        var selectedNodeId = SelectedNode?.Id;
-        var selectedLayerId = SelectedNode is null ? null : ResolveLayerId(SelectedNode.Id);
+        var selectedNodeId = SelectedNode?.Id ?? _missingSelectedNodeId;
+        var selectedLayerId = selectedNodeId is null ? null : ResolveLayerId(selectedNodeId);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -500,6 +500,13 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 				connection.Apply(projection);
 		}
 
+        if (SelectedNode is null && _missingSelectedNodeId is { } retainedId &&
+            Nodes.FirstOrDefault(node => node.Id == retainedId) is { } restored)
+        {
+            _missingSelectedNodeId = null;
+            SelectNode(restored);
+        }
+
 		if (SelectedNode is { } selected)
 		{
 			var current = Nodes.FirstOrDefault(node => string.Equals(node.Id, selected.Id, StringComparison.Ordinal));
@@ -520,7 +527,11 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 				SelectedNode = fallback;
 				_inspector.SelectCompositingNode(fallback.Projection);
 			}
-            else if (selectedNodeId is not null) _inspector.ObserveMissingCompositingNode(selectedNodeId);
+            else if (selectedNodeId is not null)
+            {
+                _missingSelectedNodeId = selectedNodeId;
+                _inspector.ObserveMissingCompositingNode(selectedNodeId);
+            }
 		}
 
 		SynchronizeLayers();
@@ -692,6 +703,8 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
             SelectLayers(selection);
             return;
         }
+        _missingSelectedNodeId = null;
+        _reviewingLayers = false;
         // Clear graph highlights before marking the shared owning layer and selected child.
         foreach (var candidate in Nodes) candidate.IsSelected = false;
         foreach (var layer in Layers) layer.IsSelected = ResolveLayerId(node.Id) == ResolveLayerId(layer.Id);

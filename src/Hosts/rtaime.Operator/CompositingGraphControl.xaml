@@ -234,6 +234,7 @@
                             <StackPanel Margin="0,3" ToolTip="{Binding Id}">
                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding LayerEvidence}" Style="{StaticResource GraphLabel}" TextWrapping="Wrap" MaxHeight="56" />
+                                <TextBlock Text="{Binding Status}" Style="{StaticResource GraphLabel}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail}" />
                                 <controls:RtaimeButton Content="EXPAND / COLLAPSE" Command="{Binding DataContext.CollapseLayerCommand, ElementName=Root}" CommandParameter="{Binding}" IsCompact="True" />
                             </StackPanel>
                         </DataTemplate></controls:RtaimeListBox.ItemTemplate>

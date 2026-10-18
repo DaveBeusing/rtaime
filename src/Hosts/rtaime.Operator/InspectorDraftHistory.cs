@@ -144,6 +144,7 @@ public sealed partial class MediaPoolInspectorViewModel
         }
         if (!ReferenceEquals(_activeDraft, draft)) { EndDraftTransaction(); _transactionStart = null; }
         _activeDraft = draft; _activeDraftKey = key;
+        _activeCompositingDraftNodeId = _compositingNode?.Id;
         RestoreInspectorValues(draft.Current);
         NotifyInspectorHistory();
     }
