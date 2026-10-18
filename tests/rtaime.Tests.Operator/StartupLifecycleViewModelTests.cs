@@ -301,6 +301,18 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		Assert.False(missing.HasCompletedInitialStartup);
 	}
 
+
+	[Fact]
+	public void Excess_stages_cannot_hide_a_failure_beyond_the_retained_bound()
+	{
+		WriteEvidence(Enumerable.Range(0, 65).Select(index => new TestStage("stage-" + index,
+			"Stage " + index, "RequiredForProduction", index == 64 ? "FAILED" : "READY", "Published stage", null)).ToArray(), null);
+		using var model = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		Assert.False(model.HasCompletedInitialStartup);
+		Assert.Contains("stage bound", model.Summary);
+		Assert.DoesNotContain("PRODUCTION RUNTIME READY", model.StartupPhaseLabel);
+	}
+
 	[Theory]
 	[InlineData("cancel")]
 	[InlineData("denied")]

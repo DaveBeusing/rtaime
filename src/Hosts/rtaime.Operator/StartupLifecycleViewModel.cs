@@ -301,7 +301,13 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 		if (root.TryGetProperty("stages", out var stages) && stages.ValueKind == JsonValueKind.Array)
 		{
-			foreach (var stage in stages.EnumerateArray().Take(64))
+			if (stages.GetArrayLength() > 64)
+			{
+				Summary = "AppHost lifecycle evidence exceeds the supported stage bound.";
+				NextStep = "Open diagnostics and review the lifecycle evidence; no readiness is inferred from partial stages.";
+				return;
+			}
+			foreach (var stage in stages.EnumerateArray())
 			{
 				var id = ReadString(stage, "id", "unknown");
 				var displayName = ReadString(stage, "displayName", id);
@@ -667,7 +673,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 		foreach (var stage in Stages)
 		{
-			builder.AppendLine($"[{stage.Status}] {Safe(stage.DisplayName)}");
+			builder.AppendLine($"[{Safe(stage.Status)}] {Safe(stage.DisplayName)}");
 			builder.AppendLine($"  {Safe(stage.TechnicalDetail)}");
 			if (!string.IsNullOrWhiteSpace(stage.StatusText))
 				builder.AppendLine($"  Status: {Safe(stage.StatusText)}");
