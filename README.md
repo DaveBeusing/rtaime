@@ -463,3 +463,12 @@ approval is established. The [proposed surface/fence design](docs/GpuMediaSurfac
 defines the private ownership, capability/fallback and paired-measurement gates.
 Existing GPU monitoring and green software checks do not qualify GPU-resident decode,
 P010/HDR, physical no-gap output or removal of the current Program readback.
+
+## High-resolution Program boundary
+
+The [high-resolution decision and approval record](docs/HighResolutionMediaDecision.md)
+retains HD50/59.94 RGBA8 Program. UHD source admission and Main10 SDR normalization
+do not authorize 2160p output or native 10-bit/HDR/Fill-Key. The
+[compatibility matrix](docs/HighResolutionMediaCompatibility.md) and
+[qualification plan](docs/HighResolutionMediaQualification.md) describe the
+blocked prerequisites and separate future color/alpha scope.
