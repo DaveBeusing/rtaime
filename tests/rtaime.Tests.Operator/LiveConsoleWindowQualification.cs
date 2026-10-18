@@ -13,10 +13,14 @@ internal static class LiveConsoleWindowQualification
 {
     internal static async Task VerifyWindowAsync(MainWindow window, Dispatcher dispatcher)
     {
+        var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
+        var rootWidth = root.Width; var rootHeight = root.Height; var transform = root.LayoutTransform;
         var monitoring = window.Monitoring;
         var width = window.Width; var height = window.Height;
         var workspace = window.Shell.SelectedWorkspace;
         window.Shell.SelectWorkspace("LIVE");
+        if (window.Shell.IsCenterMaximized) window.Shell.ToggleCenterMaximizeCommand.Execute(null);
+        if (window.Shell.IsLeftCollapsed) window.Shell.ToggleLeftPanelCommand.Execute(null);
         if (window.Shell.IsRightCollapsed) window.Shell.ToggleRightPanelCommand.Execute(null);
         await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         var live = Descendants(window).OfType<LiveControlsControl>().First();
@@ -30,8 +34,12 @@ internal static class LiveConsoleWindowQualification
             cut.Command = new OperatorShellCommand(() => cutCalls++);
             foreach (var size in new[] { (1280d, 720d), (1920d, 1080d) })
             {
+                root.Width = size.Item1; root.Height = size.Item2; root.LayoutTransform = Transform.Identity;
                 window.Width = size.Item1; window.Height = size.Item2;
-                await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(() => {
+                    window.Shell.UpdateViewportSize(size.Item1, size.Item2);
+                    window.UpdateLayout();
+                }, DispatcherPriority.Loaded);
                 cut.BringIntoView();
                 Assert.True(cut.IsVisible);
                 Assert.True(cut.Focus());
@@ -41,7 +49,7 @@ internal static class LiveConsoleWindowQualification
                 cut.Command.Execute(null);
                 // The actual window retains distinct commands and confirmed target bindings at both sizes.
                 Assert.NotSame(window.Rundown.GoCommand, window.ShowControl.GoCommand);
-                Assert.True(cut.ActualWidth > 0);
+                Assert.True(cut.ActualWidth > 0, $"CUT width {cut.ActualWidth}; viewport compact {window.Shell.IsCompactViewport}; right {window.Shell.RightColumnWidth}; center {window.Shell.IsCenterMaximized}");
             }
             Assert.Equal(2, cutCalls);
             var scenes = Descendants(window).OfType<LiveSceneCueControl>().First();
@@ -61,6 +69,8 @@ internal static class LiveConsoleWindowQualification
         }
         finally {
             cut.Command = original;
+            root.Width = rootWidth; root.Height = rootHeight; root.LayoutTransform = transform;
+            window.Shell.UpdateViewportSize(width, height);
             window.Width = width; window.Height = height;
             window.Shell.SelectWorkspace(workspace);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
