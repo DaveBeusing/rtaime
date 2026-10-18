@@ -24,6 +24,11 @@ public partial class RundownControl : UserControl
         _dragStart = e.GetPosition(this);
         _dragItem = RowAt(e.OriginalSource as DependencyObject);
     }
+    private void Rows_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is RundownViewModel model && RowAt(e.OriginalSource as DependencyObject) is { } row)
+            model.SelectedItem = row; // Context selection is local and never prepares or executes.
+    }
     private void Rows_MouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed || _dragItem is null ||

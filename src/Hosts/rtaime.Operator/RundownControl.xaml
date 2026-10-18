@@ -108,6 +108,7 @@
 		<controls:RtaimeListBox Grid.Row="2" MinHeight="140" MaxHeight="280"
             AllowDrop="True" PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
             MouseMove="Rows_MouseMove" DragOver="Rows_DragOver" Drop="Rows_Drop"
+            PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
 			ItemsSource="{Binding Items}"
 			SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
 			Background="Transparent"
@@ -116,6 +117,14 @@
 			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 			ScrollViewer.VerticalScrollBarVisibility="Auto"
 			AutomationProperties.Name="Rundown items">
+            <controls:RtaimeListBox.ContextMenu>
+                <controls:RtaimeContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <controls:RtaimeMenuItem Header="Prepare selected / retry preparation" Command="{Binding PrepareCommand}" />
+                    <controls:RtaimeMenuItem Header="Hold rundown" Command="{Binding HoldCommand}" />
+                    <controls:RtaimeMenuItem Header="{Binding SelectedItem.Readiness}" IsEnabled="False" />
+                    <controls:RtaimeMenuItem Header="{Binding SelectedItem.Detail}" IsEnabled="False" />
+                </controls:RtaimeContextMenu>
+            </controls:RtaimeListBox.ContextMenu>
 			<controls:RtaimeListBox.ItemTemplate>
 				<DataTemplate>
 					<Grid Margin="6,4">

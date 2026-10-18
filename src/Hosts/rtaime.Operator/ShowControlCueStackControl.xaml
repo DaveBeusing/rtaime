@@ -20,18 +20,20 @@
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="*" />
 							<ColumnDefinition Width="4" />
-							<ColumnDefinition Width="72" />
+							<ColumnDefinition Width="104" />
 						</Grid.ColumnDefinitions>
 						<controls:RtaimeComboBox
 							ItemsSource="{Binding CueLists}"
 							SelectedItem="{Binding SelectedCueList, Mode=TwoWay}"
 							DisplayMemberPath="Name"
 							AutomationProperties.Name="Show control cue list" />
-						<controls:RtaimeButton Grid.Column="2"
-							Content="SELECT"
+						<StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <controls:RtaimeButton Content="SELECT"
 							Command="{Binding SelectCueListCommand}"
 							IsCompact="True"
 							ToolTip="Select this cue list without executing production actions." />
+                        <controls:RtaimeButton Content="↻" Command="{Binding RefreshCommand}" ToolTip="Reload saved cue lists; discard unsaved editor changes." IsCompact="True" />
+                        </StackPanel>
 					</Grid>
 
 					<controls:RtaimeListBox Grid.Row="1"

@@ -72,7 +72,7 @@ public sealed partial class RundownViewModel
             _draftConflict |= snapshot.StorageVersion != _storageVersion;
             // Execution evidence must continue while authored rows and undo history remain local.
             ApplyObservedExecution(snapshot);
-            State = "DRAFT";
+            if (!_confirmedExecutionActive) State = "DRAFT";
         }
         else ApplyObservedExecution(snapshot);
         UpdateRowEvidence();
@@ -86,7 +86,7 @@ public sealed partial class RundownViewModel
         State = execution.State.ToString().ToUpperInvariant();
         RequiresAcknowledgement = execution.RequiresAcknowledgement;
         Failure = execution.Failure?.Message ?? "NONE";
-        AutomationState = execution.AutoAdvanceArmed ? "AUTO" : "HOLD";
+        AutomationState = execution.AutoAdvanceArmed ? "AUTO" : execution.State == RundownExecutionState.Held ? "HOLD" : execution.FollowActionKind == RundownFollowActionKind.Manual ? "MANUAL" : "HOLD";
         FollowStatus = execution.FollowActionKind.ToString().ToUpperInvariant();
         PendingNext = ResolveItem(execution.PendingNextItemId);
         FollowCountdown = execution.FollowTargetFrameSequence is { } target

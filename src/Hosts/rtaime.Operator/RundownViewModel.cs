@@ -62,7 +62,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
 		PrepareCommand = new AsyncRelayCommand(PrepareAsync, CanPrepare);
-		GoCommand = new AsyncRelayCommand(GoAsync, () => LiveAuthorityAvailable && !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
+		GoCommand = new AsyncRelayCommand(GoAsync, () => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
 		NextCommand = new AsyncRelayCommand(NextAsync, CanNavigate);
 		PreviousCommand = new AsyncRelayCommand(PreviousAsync, CanNavigate);
 		HoldCommand = new AsyncRelayCommand(HoldAsync, () => LiveAuthorityAvailable && !IsBusy && State is "EXECUTING" or "PREPARED" or "HELD");
@@ -376,7 +376,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		State = execution.State.ToString().ToUpperInvariant();
 		RequiresAcknowledgement = execution.RequiresAcknowledgement;
 		Failure = execution.Failure?.Message ?? "NONE";
-		AutomationState = execution.AutoAdvanceArmed ? "AUTO" : "HOLD";
+		AutomationState = execution.AutoAdvanceArmed ? "AUTO" : execution.State == RundownExecutionState.Held ? "HOLD" : execution.FollowActionKind == RundownFollowActionKind.Manual ? "MANUAL" : "HOLD";
 		FollowStatus = execution.FollowActionKind.ToString().ToUpperInvariant();
 		PendingNext = execution.PendingNextItemId is { } pendingId
 			? Items.FirstOrDefault(item => item.Item.ItemId == pendingId)?.Name ?? pendingId.ToString()
@@ -455,8 +455,8 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	private bool CanAddGraphics() => CanAddDraft() && CanUseSelectedFollowForNonMedia() &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
-	private bool CanPrepare() => LiveAuthorityAvailable && !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
-	private bool CanNavigate() => LiveAuthorityAvailable && !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanPrepare() => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanNavigate() => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
 	private bool CanUseSelectedFollowForNonMedia() => SelectedFollowAction != RundownFollowActionKind.AutoOnMediaEnd;
 
 	private bool CanMove(int offset)

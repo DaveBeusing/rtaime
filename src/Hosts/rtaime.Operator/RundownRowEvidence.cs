@@ -15,7 +15,7 @@ public sealed partial class RundownViewModel
             if (row.Item is RundownMediaItem clip)
             {
                 media = _mediaPool.Library.Items.FirstOrDefault(item => item.Kind == MediaPoolItemKind.Clip && item.ReferenceId == clip.AssetId.ToString());
-                source = _operator.Sources.FirstOrDefault(item => item.Id == clip.SourceId.ToString());
+                // A target-source thumbnail may depict another asset; only identity-matched Library evidence is valid.
             }
             else if (row.Item is RundownSceneItem scene)
                 source = _operator.Scenes.FirstOrDefault(item => item.Id == scene.SceneId.ToString())?.ProgramSource;

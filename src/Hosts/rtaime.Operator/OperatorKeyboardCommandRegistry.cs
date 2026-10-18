@@ -76,7 +76,7 @@ public sealed class OperatorKeyboardCommandRegistry
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
 		// Enter on a focused cue button belongs to that explicit button; list/context Enter never takes.
-		if (key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None &&
+		if (key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None && !IsTextEntryContext() &&
 			(LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is not null ||
 			 LiveConsoleInput.IsCueSurface(Keyboard.FocusedElement as System.Windows.DependencyObject)))
 		{
@@ -275,7 +275,7 @@ public sealed class OperatorKeyboardCommandRegistry
 	public static bool IsTextEntryContext(System.Windows.DependencyObject? focused)
 	{
 		for (var current = focused; current is not null; current = Parent(current))
-			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem) return true;
+			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem or MenuItem or ContextMenu) return true;
 		return false;
 	}
 	private static OperatorShortcutScope ResolveScope()
