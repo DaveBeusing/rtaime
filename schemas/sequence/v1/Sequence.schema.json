@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>. Semantic references, interval arithmetic and cross-document caps are validated by SequenceModel and the canonical store.",
+  "title": "rtaime sequence definition 1.0",
+  "$ref": "#/$defs/definition",
+  "$defs": {
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "properties": {
+        "numerator": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240000
+        },
+        "denominator": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assetId",
+        "kind",
+        "fingerprintSha256"
+      ],
+      "properties": {
+        "assetId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        },
+        "fingerprintSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trackId",
+        "name",
+        "kind",
+        "layerOrder"
+      ],
+      "properties": {
+        "trackId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "kind": {
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        },
+        "layerOrder": {
+          "type": "integer",
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "audioBusId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clipId",
+        "trackId",
+        "media",
+        "sourceIn",
+        "sourceOut",
+        "timelineStart",
+        "duration"
+      ],
+      "properties": {
+        "clipId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trackId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "media": {
+          "$ref": "#/$defs/media"
+        },
+        "sourceIn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20736000000
+        },
+        "sourceOut": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20736000000
+        },
+        "timelineStart": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20736000000
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20736000000
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "linkGroupId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transitionId",
+        "fromClipId",
+        "toClipId",
+        "kind",
+        "start",
+        "duration"
+      ],
+      "properties": {
+        "transitionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fromClipId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "toClipId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20736000000
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20736000000
+        }
+      }
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sequenceId",
+        "name",
+        "frameRate",
+        "tracks",
+        "clips",
+        "transitions"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.0"
+        },
+        "sequenceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "frameRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "tracks": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/track"
+          }
+        },
+        "clips": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/clip"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/transition"
+          }
+        }
+      }
+    }
+  }
+}

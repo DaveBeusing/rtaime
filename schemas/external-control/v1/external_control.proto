@@ -238,6 +238,13 @@ message ExternalControlRequest {
     RecoveryAcknowledgementRequest acknowledge_production_macro_recovery = 96;
     ProductionMacroIdRequest get_production_macro = 97;
 
+    // Sequence authoring range 114-145; no playback operation is exposed.
+    EmptyRequest list_sequences = 114;
+    JsonPayloadRequest get_sequence = 115;
+    JsonPayloadRequest save_sequence = 116;
+    JsonPayloadRequest edit_sequence = 117;
+    JsonPayloadRequest undo_sequence = 118;
+    JsonPayloadRequest redo_sequence = 119;
     EmptyRequest get_output_canvas = 146;
     JsonPayloadRequest validate_output_canvas = 147;
     JsonPayloadRequest save_output_canvas = 148;

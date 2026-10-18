@@ -157,7 +157,7 @@ Persistence acceptance evidence includes:
 Process Recovery & Supervision adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
 ## Durable show/project authoring state
 
-ControlHost owns one versioned durable show/project document per production under management area `show.project`. Legacy payloads use `rtaime.show-project.v1`; the first saved [output canvas configuration](OutputCanvasMapping.md) advances the envelope to `rtaime.show-project.v2` so older readers reject it without dropping the extension. The management SQLite schema remains version 1.
+ControlHost owns one versioned durable show/project document per production under management area `show.project`. Legacy payloads use `rtaime.show-project.v1`; the first saved [output canvas configuration](OutputCanvasMapping.md) advances the envelope to `rtaime.show-project.v2` so older readers reject it without dropping the extension. The first saved [sequence library](SequenceAuthoring.md) advances either legacy envelope to `rtaime.show-project.v3`, with optional canvas state preserved. The management SQLite schema remains version 1.
 
 The document contains:
 

@@ -9,7 +9,7 @@ david.beusing@gmail.com
 
 ControlHost owns one canonical durable authored show/project model per production.
 
-The persisted management document uses legacy format `rtaime.show-project.v1`, advancing to `rtaime.show-project.v2` on the first saved output canvas configuration, and is stored through the existing `SqliteManagementStore`. No second persistence database, production authority, scheduler or Runtime state owner is introduced.
+The persisted management document uses legacy format `rtaime.show-project.v1`, advancing to `rtaime.show-project.v2` on the first saved output canvas configuration or `rtaime.show-project.v3` on the first saved sequence, and is stored through the existing `SqliteManagementStore`. No second persistence database, production authority, scheduler or Runtime state owner is introduced.
 
 The durable show project owns:
 
@@ -163,7 +163,11 @@ and 64 bounded transaction receipts. The outer SQLite transaction and expected
 version protect all existing authored subdocuments. Legacy reads reconstruct
 identity Program/Aux surfaces without writing or activating anything. First save
 advances the show envelope to v2 so old readers fail closed; current readers accept
-v1 without the extension and v2 with it. Future/invalid formats fail startup without
+v1 without authored extensions, v2 with canvas only, and v3 with sequences and an optional canvas. Future/invalid formats fail startup without
 replacement. Existing checkpoints and Runtime prepare/commit remain unchanged.
 Saved canvas revision is separate from the currently unavailable active render
 revision. Existing database backups include this extension and its history.
+
+## Sequence authoring extension
+
+[Sequence authoring](SequenceAuthoring.md) stores its versioned library, bounded undo/redo history and transaction receipts in the canonical `sequenceJson` subdocument. The first successful mutation upgrades a v1/v2 show to v3 atomically, preserving all unrelated authored state. Reading legacy shows yields an empty sequence library without rewriting them. Authoring revisions remain separate from Control production and Runtime execution revisions; sequence playback is unavailable. Older executables reject v3 explicitly, so downgrade requires a compatible pre-upgrade backup.
