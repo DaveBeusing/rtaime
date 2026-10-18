@@ -75,7 +75,9 @@ gain transfer, invalid numeric gating and finite/NaN/infinite/stale meter cases.
 AudioMixerRealHostTests drives a real named-pipe Client, ControlHost and RuntimeHost from the
 productive Mixer view model, with a known stereo payload, gain, mute, route removal, unity and
 a competing writer revision conflict. The test advances real Runtime service boundaries explicitly
-and verifies emitted stereo sample bytes; autonomous 1080p50 scheduler/timing qualification remains
+and verifies emitted stereo sample bytes. It first checks that normal readiness blocks the
+unqualified manual Runtime, then uses the existing readiness test seam for audio functional
+requests. This is not end-to-end readiness qualification. Autonomous 1080p50 scheduler/timing qualification remains
 in the existing independent suites with unchanged bounds. Existing audio engine and host suites still qualify EQ,
 dynamics, follow-video/breakaway, test signals, clipping and sample payload behavior.
 

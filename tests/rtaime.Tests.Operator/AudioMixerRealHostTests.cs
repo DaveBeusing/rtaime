@@ -33,7 +33,20 @@ public sealed class AudioMixerRealHostTests
             await Until(() => Task.FromResult(control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true));
             using (var initialBoundary = runtime.ProcessNextBoundary()) { }
             var client = new OperatorControlClient(new NamedPipeOperatorControlTransport("rtaime.mixer.control." + suffix));
-            await using var owner = new OperatorViewModel(client);
+            // The manual Runtime has no scheduler qualification. The normal UI must stay blocked.
+            await using (var guarded = new OperatorViewModel(client))
+            {
+                guarded.SynchronizeCommand.Execute(null);
+                await Until(() => Task.FromResult(guarded.IsConnected && !guarded.IsBusy));
+                Assert.False(guarded.AudioMixer.CanEdit);
+                var blocked = guarded.AudioMixer.Sources[0];
+                blocked.Gain = .75;
+                var version = client.Snapshot!.AudioProduction!.Configuration.Revision;
+                Assert.False(await guarded.AudioMixer.ApplySourceAsync(blocked));
+                Assert.Equal(version, runtime.Snapshot.AudioProduction!.Revision);
+            }
+            // Controlled readiness is only a functional-test seam; real IPC, revisions, DSP and emitted bytes remain in use.
+            await using var owner = new OperatorViewModel(client, runtimeReadiness: new AudioFunctionalReadiness());
             owner.SynchronizeCommand.Execute(null);
             await Until(() => Task.FromResult(owner.IsConnected && !owner.IsBusy));
             Assert.True(owner.AudioMixer.CanEdit, owner.GlobalReadinessSummary + " · " + owner.RuntimeStatus);
@@ -89,6 +102,17 @@ public sealed class AudioMixerRealHostTests
             if (DateTime.UtcNow >= deadline) throw new TimeoutException("Mixer host startup did not settle.");
             await Task.Delay(20);
         }
+    }
+    private sealed class AudioFunctionalReadiness : IRuntimeReadinessService
+    {
+        public RuntimeReadinessSnapshot Current { get; } = new(RuntimeReadinessState.Degraded,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+            [new("audio.functional.fixture","Audio",ReadinessReasonSeverity.Warning,
+                "Manual Runtime boundary test; scheduler and physical output are unqualified.",false)],
+            false,RuntimePerformanceVerificationSnapshot.Unverified);
+        public event EventHandler<RuntimeReadinessChangedEventArgs>? Changed { add { } remove { } }
+        public void Observe(RuntimeReadinessObservation observation) { }
+        public void InvalidatePerformance(string detail) { }
     }
     private sealed class NullRecordingWriter : IProgramRecordingWriter
     {
