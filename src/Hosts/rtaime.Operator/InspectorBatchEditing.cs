@@ -53,7 +53,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     public ICommand ReviewInspectorBatchCommand => _reviewInspectorBatch ??= new OperatorShellCommand(() =>
     {
-        var targets = CurrentBatchTargets().ToArray();
+        var targets = CurrentBatchTargets().Take(MaximumInspectorBatchTargets + 1).ToArray();
         if (!CanReviewInspectorBatch() || targets.Length > MaximumInspectorBatchTargets) return;
         InspectorBatchItems.Clear();
         foreach (var target in targets)
@@ -162,7 +162,7 @@ public sealed partial class MediaPoolInspectorViewModel
                 RemoveDraftContext(row.Target);
                 _inspectorBatchRevision = CurrentRevisionToken;
                 var afterRevision = _operator.Client!.Snapshot!.Production.Revision.Value;
-                if (afterRevision < beforeRevision || afterRevision - beforeRevision > 1)
+                if (afterRevision < beforeRevision || afterRevision - beforeRevision > (row.Target.Kind == "gain" ? 0UL : 1UL))
                 { _inspectorBatchState = "STOPPED · concurrent revision advance detected after confirmation; review remaining targets."; break; }
                 _inspectorBatchState = "CONFIRMED " + InspectorBatchItems.Count(item => item.Result == "CONFIRMED") + " individual targets.";
             }

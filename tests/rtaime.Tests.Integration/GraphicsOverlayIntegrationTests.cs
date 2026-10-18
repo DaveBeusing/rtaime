@@ -823,7 +823,7 @@ public sealed class GraphicsOverlayIntegrationTests
         Assert.All(client.Snapshot!.AudioInputs, input => Assert.Equal(0.375, input.Gain));
         Assert.Equal(initial.Production.Routing.ProgramSourceId, client.Snapshot.Production.Routing.ProgramSourceId);
         var runtimeAudio = fixture.Runtime.Snapshot.AudioInputs!;
-        Assert.All(runtimeAudio, input => Assert.Equal(0.375, input.Gain));
+        Assert.All(runtimeAudio.Values, input => Assert.Equal(0.375, input.Gain));
     }
 
 	private static V1ProductionCgTextDefinition LowerThird(string text) => new(

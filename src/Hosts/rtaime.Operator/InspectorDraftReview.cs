@@ -79,6 +79,13 @@ public sealed partial class MediaPoolInspectorViewModel
         _inspectorReviewBusy = true; NotifyDraftReview();
         try
         {
+            await _operator.SynchronizeInspectorAsync();
+            if (_operator.IsStale || !_operator.IsConnected || _operator.IsBusy || _operator.RuntimeStatus != "READY" ||
+                review.Production != CurrentProduction || review.Revision != CurrentRevisionToken ||
+                ReadInspectorTarget(review.Target) != review.Confirmed)
+            {
+                _draftReviewNotice = "CONFLICT / STALE · target was not sent. Rebase and review current evidence."; return;
+            }
             var result = await ApplyInspectorTargetAsync(review.Target, review.Draft);
             if (result)
             {
@@ -143,8 +150,8 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         if (_activeInspectorTarget is not { } target || _activeDraft is not { } draft || draft.Current == draft.Baseline ||
             _activeInspectorRevision is not { } revision) return;
-        if (ReadInspectorTarget(target) == draft.Current) { RemoveReview(target); return; }
         var production = revision[..revision.LastIndexOf(':')];
+        if (production == CurrentProduction && ReadInspectorTarget(target) == draft.Current) { RemoveReview(target); return; }
         var existing = InspectorDraftReviews.FirstOrDefault(review => review.Target == target && review.Production == production);
         if (existing?.Draft == draft.Current && existing.Revision == revision) return;
         var next = new InspectorDraftReview(target, production, revision, draft.Baseline, draft.Current,
