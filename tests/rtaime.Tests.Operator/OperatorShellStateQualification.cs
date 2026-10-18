@@ -37,6 +37,13 @@ public sealed partial class OperatorCombinedVisualQualification
             window.Show();
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await UntilShellState(() => !model.IsBusy);
+            var stressRoot = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
+            stressRoot.Width = 1600; stressRoot.Height = 900;
+            window.Width = 1600; window.Height = 900;
+            window.Shell.SelectWorkspace("LIVE");
+            window.Shell.UpdateViewportSize(1600,900);
+            await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+            await VerifyRepeatedShellMovesAsync(window,dispatcher);
             async Task CaptureState(string state)
             {
                 var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);

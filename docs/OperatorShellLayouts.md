@@ -70,10 +70,10 @@ version, oversized-file and interrupted-temporary-write cases. The existing
 OperatorVisualQualificationTests covers the existing logical size matrix. WorkspacePresentationTemplateTests (extended in OperatorShellWorkspaceTests.cs) covers registry aliases, five LIVE size targets, compact bus/pane state and bounded layout transactions. These cases run in the existing focused Dock/Template filter before the broad suites.
 
 OperatorCombinedVisualQualification checks actual compiled LIVE viewers, equal
-dual allocation, viewport fit, one visible playback/TAKE context and 100 real
+dual allocation, viewport fit and one visible playback/TAKE context. Its isolated shell process additionally checks 100 real
 workspace/float/dock/restore cycles using the same monitoring, Inspector, selection
 and panel instances, with no monitor-panel unloads during Inspector moves. The stress phase starts in a stable 1600x900 docked layout and restores every original workspace layout. Only changed dock groups are rebuilt; unrelated groups and floating windows retain their presentation. Compact, ratio and Focus/Cinema topology changes retain the existing full restore path. Existing source-correlated PNG/JSON capture retains logical
-size and injected layout DPI. The additional 80-case matrix runs as an isolated child test in the existing OperatorXamlStartupTests filter, with a separate unchanged 45-second bound and one WPF Application/Dispatcher. It loads the real MainWindow with controlled Client responses in no-data, connected, busy and stale states across all destinations at 1920x1080 and 960x540. It verifies retained routing, explicit button keyboard ownership and teardown. These are qualification targets; actual execution,
+size and injected layout DPI. The additional 100-cycle stress and 80-case state matrix run together as an isolated child test in the existing OperatorXamlStartupTests filter, with a separate unchanged 45-second bound and one WPF Application/Dispatcher. The same MainWindow and owners serve both stress and states. It loads the real MainWindow with controlled Client responses in no-data, connected, busy and stale states across all destinations at 1920x1080 and 960x540. It verifies retained routing, explicit button keyboard ownership and teardown. These are qualification targets; actual execution,
 source SHA, failures and five Required Gate results are recorded in the PR.
 
 Software layout-DPI injection is not physical mixed-monitor or touch certification.

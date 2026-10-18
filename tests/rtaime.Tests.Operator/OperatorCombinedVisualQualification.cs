@@ -158,11 +158,10 @@ public sealed partial class OperatorCombinedVisualQualification
             window.Shell.UpdateViewportSize(1600, 900);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
-            await VerifyRepeatedShellMovesAsync(window, dispatcher);
             var metrics = await MeasureSettledAsync(window, root, dispatcher);
             Assert.Equal(program, owner.ProgramSourceId);
             Assert.Equal(preview, owner.PreviewSourceId);
-            Console.WriteLine($"COMBINED VISUAL PASS: {observations.Count} workspace/viewport cases; injected 100/125/150/200% layout; media-first LIVE, compact bus focus and 100 shell moves; Program unchanged.");
+            Console.WriteLine($"COMBINED VISUAL PASS: {observations.Count} workspace/viewport cases; injected 100/125/150/200% layout; media-first LIVE, compact bus focus; Program unchanged.");
             Console.WriteLine("COMBINED UI METRICS: " + JsonSerializer.Serialize(metrics));
             if (!string.IsNullOrWhiteSpace(evidenceRoot))
                 File.WriteAllText(Path.Combine(evidenceRoot, "combined-ui.json"), JsonSerializer.Serialize(new
@@ -222,7 +221,7 @@ public sealed partial class OperatorCombinedVisualQualification
             .Count(button => button.IsVisible && ReferenceEquals(button.Command, owner.CutCommand));
         Assert.Equal(1, cuts);
     }
-    private static async Task VerifyRepeatedShellMovesAsync(MainWindow window, Dispatcher dispatcher)
+    internal static async Task VerifyRepeatedShellMovesAsync(MainWindow window, Dispatcher dispatcher)
     {
         var shell = window.Shell;
         var monitoring = window.Monitoring;

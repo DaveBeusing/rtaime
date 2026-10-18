@@ -36,6 +36,7 @@ public sealed partial class OperatorXamlStartupTests
                 var report = await stdout;
                 Console.WriteLine(report);
                 Assert.True(process.ExitCode == 0, report + Environment.NewLine + await stderr);
+                Assert.Contains("SHELL CYCLES PASS: 100", report);
                 Assert.Contains("SHELL STATES PASS: 80", report);
             }
             finally
