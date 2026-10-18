@@ -141,6 +141,10 @@ linked edits, deterministic split identities, gap/ripple behavior, overlap valid
 malformed/future input. Integration tests use the real retained MP4 test asset and real
 ControlHost/RuntimeHost with both existing transports, 25/50/60000:1001 rates, restart,
 idempotency, stale writers, Undo/Redo, missing assets, RBAC and cancellation.
+The same host test first persists a v2 canvas, then verifies its contents after sequence writes
+and recovery. Legacy wire peers without sequence handlers must surface explicit pipe/gRPC
+errors; clients do not fabricate a successful empty sequence response. Existing transport
+session fencing requires a full snapshot after host replacement before further operations.
 Store tests compare every unrelated legacy show field before/after upgrade, reject malformed
 history and verify concurrent compare-and-swap behavior.
 
