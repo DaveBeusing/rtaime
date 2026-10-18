@@ -76,7 +76,7 @@
 					AutomationProperties.Name="Open Demo Production">
 					<StackPanel>
 						<TextBlock Text="{Binding ShowProjectName}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
-						<TextBlock Text="{Binding ShowProjectState}" ToolTip="{Binding ShowProjectDetail}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
+						<TextBlock Text="{Binding Shell.WorkspaceTitle, ElementName=RootWindow}" ToolTip="{Binding ShowProjectDetail}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 					</StackPanel>
 				</controls:RtaimeButton>
 

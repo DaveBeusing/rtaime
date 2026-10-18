@@ -41,6 +41,9 @@ public static class OperatorCommandCatalog
 				definition.Command, RequiresExplicitButton: !local && definition.Id != "sync",
 				UnavailableReason: local || definition.Id == "sync" ? null : Transport.Contains(definition.Id) ? PreviewReason : ProductionReason));
 		}
+		commands.Add(new("pane-library", "Show or hide Library pane", "Navigation", shell.ToggleLeftPanelCommand));
+        commands.Add(new("pane-inspector", "Show or hide Inspector pane", "Navigation", shell.ToggleRightPanelCommand));
+        commands.Add(new("workspace-restore", "Restore current workspace defaults", "Navigation", shell.ResetLayoutCommand));
 		foreach (var workspace in OperatorWorkspaceNames.All)
 			commands.Add(new("workspace-" + workspace.ToLowerInvariant(), "Workspace " + workspace, "Workspaces", shell.SelectWorkspaceCommand, workspace));
 		void Add(string id, string label, ICommand command, bool management = false) =>

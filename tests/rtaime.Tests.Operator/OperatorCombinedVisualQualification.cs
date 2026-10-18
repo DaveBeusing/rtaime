@@ -77,6 +77,7 @@ public sealed class OperatorCombinedVisualQualification
                 foreach (var workspace in OperatorWorkspaceNames.All)
                 {
                     window.Shell.SelectWorkspace(workspace);
+                    if (workspace == "LIVE") window.Shell.RestoreViewersCommand.Execute(null);
                     await dispatcher.InvokeAsync(() =>
                     {
                         window.Shell.UpdateViewportSize(width, height);
