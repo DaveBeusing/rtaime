@@ -146,38 +146,38 @@ public sealed partial class ExternalControlIntegrationTests
             return result.Sequence!;
         }
         var group = Guid.NewGuid();
-        await Edit(new(SequenceEditKind.AddTrack, tracks[0].TrackId, Track: tracks[0]),
+        await Edit(new SequenceEdit(SequenceEditKind.AddTrack, tracks[0].TrackId, Track: tracks[0]),
             new(SequenceEditKind.AddTrack, tracks[1].TrackId, Track: tracks[1]),
             new(SequenceEditKind.InsertClip, clips[0].ClipId, Clip: clips[0]),
             new(SequenceEditKind.InsertClip, clips[1].ClipId, Clip: clips[1]),
             new(SequenceEditKind.Link, group, Ids: clips.Select(c => c.ClipId).ToArray()));
-        var moved = await Edit(new(SequenceEditKind.MoveClip, clips[0].ClipId, Position: 10000));
+        var moved = await Edit(new SequenceEdit(SequenceEditKind.MoveClip, clips[0].ClipId, Position: 10000));
         Assert.All(moved.Clips, c => Assert.Equal(10000L, c.TimelineStart));
         var rights = new[] { Guid.NewGuid(), Guid.NewGuid() }; var rightGroup = Guid.NewGuid();
-        var split = await Edit(new(SequenceEditKind.SplitClip, clips[0].ClipId, Position: 15000, Ids: rights, LinkGroupId: rightGroup));
+        var split = await Edit(new SequenceEdit(SequenceEditKind.SplitClip, clips[0].ClipId, Position: 15000, Ids: rights, LinkGroupId: rightGroup));
         Assert.Equal(4, split.Clips.Length);
         Assert.All(clips, c => Assert.Equal(5000L, split.Clips.Single(s => s.ClipId == c.ClipId).Duration));
-        var closed = await Edit(new(SequenceEditKind.CloseGap, Guid.Empty, Position: 0, Duration: 10000));
+        var closed = await Edit(new SequenceEdit(SequenceEditKind.CloseGap, Guid.Empty, Position: 0, Duration: 10000));
         Assert.All(closed.Clips.Where(c => c.LinkGroupId == rightGroup), c => Assert.Equal(5000L, c.TimelineStart));
-        var ripple = await Edit(new(SequenceEditKind.RippleDelete, clips[0].ClipId));
+        var ripple = await Edit(new SequenceEdit(SequenceEditKind.RippleDelete, clips[0].ClipId));
         Assert.Equal(2, ripple.Clips.Length);
         Assert.All(ripple.Clips, c => Assert.Equal(0L, c.TimelineStart));
-        var unlinked = await Edit(new(SequenceEditKind.Unlink, rightGroup));
+        var unlinked = await Edit(new SequenceEdit(SequenceEditKind.Unlink, rightGroup));
         Assert.All(unlinked.Clips, c => Assert.Null(c.LinkGroupId));
         var video = unlinked.Clips.Single(c => c.Media.Kind == SequenceMediaKind.Video);
         var overlapping = video with { ClipId = Guid.NewGuid(), TimelineStart = 4000 };
         var fade = new SequenceTransition(Guid.NewGuid(), video.ClipId, overlapping.ClipId, SequenceTransitionKind.Dissolve, 4000, 1000);
-        await Edit(new(SequenceEditKind.InsertClip, overlapping.ClipId, Clip: overlapping),
+        await Edit(new SequenceEdit(SequenceEditKind.InsertClip, overlapping.ClipId, Clip: overlapping),
             new(SequenceEditKind.AddTransition, fade.TransitionId, Transition: fade));
         var invalid = await client.EditAsync(new("1.0", Guid.NewGuid(), revision, sequence.SequenceId,
             Edits: [new(SequenceEditKind.DeleteClip, video.ClipId)]));
         Assert.False(invalid.Saved);
         Assert.Contains(invalid.Issues, i => i.Code == "sequence.transition");
-        var cleaned = await Edit(new(SequenceEditKind.DeleteTransition, fade.TransitionId),
+        var cleaned = await Edit(new SequenceEdit(SequenceEditKind.DeleteTransition, fade.TransitionId),
             new(SequenceEditKind.DeleteClip, video.ClipId),
             new(SequenceEditKind.UpdateTrack, tracks[0].TrackId, Track: tracks[0] with { Muted = true, Enabled = false, LayerOrder = 2 }));
         Assert.True(cleaned.Tracks.Single(t => t.TrackId == tracks[0].TrackId).Muted);
-        await Edit(new(SequenceEditKind.DeleteClip, overlapping.ClipId), new(SequenceEditKind.DeleteTrack, tracks[0].TrackId));
+        await Edit(new SequenceEdit(SequenceEditKind.DeleteClip, overlapping.ClipId), new(SequenceEditKind.DeleteTrack, tracks[0].TrackId));
         Assert.Single((await client.GetAsync(sequence.SequenceId)).Sequence.Tracks);
     }
 
