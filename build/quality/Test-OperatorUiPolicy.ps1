@@ -123,6 +123,7 @@ $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $libraryView = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMediaLibraryView.xaml") -Raw
 $libraryCode = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMediaLibraryView.xaml.cs") -Raw
+$composition = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorComposition.cs") -Raw
 $outputHealthControl = Get-Content -LiteralPath $outputHealthControlPath -Raw
 $outputHealthViewModel = Get-Content -LiteralPath $outputHealthViewModelPath -Raw
 $runtimeStatusBar = Get-Content -LiteralPath $runtimeStatusBarPath -Raw
@@ -663,7 +664,7 @@ Assert-Condition ($theme -match '<Style TargetType="ToolTip">' -and $theme -matc
 Assert-Condition ($window -match 'No production sources available' -and $window -match 'Binding Sources\.Count') "Source Bin must expose an explicit empty state instead of a blank panel."
 Assert-Condition ($timeline -match 'DataContext\.LastEvent' -and $timeline -match 'DataContext\.LastError' -and $timeline -match 'Content="ERROR"') "Timeline toolbar must separate normal operator status from active error presentation after the legacy footer is collapsed."
 Assert-Condition ($shell -match '\.tmp' -and $shell -match 'File\.Move\(temporaryPath, _path, overwrite: true\)') "Operator layout persistence must use temporary-file replacement to avoid partial JSON state."
-Assert-Condition ($window -match 'OperatorLoadingState' -and $window -match 'OperatorErrorState') "Loading and error presentation must use shared Operator state styles."
+Assert-Condition ($libraryView -match 'OperatorLoadingState' -and $libraryView -match 'OperatorErrorState') "Loading and error presentation must use shared Operator state styles."
 Assert-Condition ($windowCode -match 'Closing \+= OnClosingAsync' -and $windowCode -match '_shutdownComplete' -and $windowCode -match 'await Monitoring\.DisposeAsync') "Operator shutdown must await owned monitoring and view-model resources before final close."
 Assert-Condition ($appCode -match 'DispatcherUnhandledException \+=' -and $appCode -match 'TryWriteCrashReport' -and $appCode -match 'LocalApplicationData') "Unexpected UI failures must produce controlled user-visible presentation and a local diagnostic report."
 Assert-Condition ($theme -match 'IsKeyboardFocused') "Primary controls must expose visible keyboard-focus state."
@@ -902,7 +903,7 @@ Assert-Condition ($mediaPool -match 'MaxProjectedItems = 4096' -and $mediaPool -
 $mediaSearch = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibrarySearch.cs") -Raw
 $mediaBatch = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaLibraryBatch.cs") -Raw
 Assert-Condition ($mediaPool -match 'Items.Sort' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Category' -and $mediaPool -match 'StringComparer.OrdinalIgnoreCase.Compare\(left.Name' -and $mediaPool -match 'StringComparer.Ordinal.Compare\(left.Key') "Media Pool preordered projection must retain deterministic category/name/key ordering."
-Assert-Condition ($mediaSearch -match 'MaximumTerms = 16' -and $mediaSearch -match 'SearchMetadata' -and $window -match 'Delay=180') "Media smart queries must be bounded, typed and debounced."
+Assert-Condition ($mediaSearch -match 'MaximumTerms = 16' -and $mediaSearch -match 'SearchMetadata' -and $libraryView -match 'Delay=180') "Media smart queries must be bounded, typed and debounced."
 Assert-Condition ($mediaBatch -match 'MaximumBatchItems = 128' -and $mediaBatch -match 'GetMediaAssetCatalogAsync' -and $mediaBatch -match 'fresh.Revision != _batchRevision' -and $mediaBatch -match 'ImportMediaAssetsAsync' -and $mediaBatch -match 'RemoveMediaAssetAsync') "Media batches must recheck catalogue revision and reuse existing Client mutations."
 Assert-Condition ($mediaLibrarySurface -match 'MediaPool.ExecuteBatchCommand' -and $mediaLibrarySurface -match 'MediaPool.CancelBatchCommand' -and $mediaLibrarySurface -match 'MediaBatchResults' -and $mediaBatch -match 'UNCONFIRMED') "Batch review, confirmation, cancellation and uncertain outcomes must remain visible."
 Assert-Condition ($mediaBatch -notmatch 'Task.WhenAll|File.Delete|Directory.Delete|CutPreviewAsync|SelectPreviewAsync') "Media batches cannot introduce parallel mutation fanout, source deletion or Program/Preview routing."
@@ -1041,7 +1042,7 @@ Assert-Condition ($keyboard -match 'new\("fullscreen".+Key\.F11.+shell\.ToggleFu
 Assert-Condition ($keyboard -match 'new\("exit-fullscreen".+Key\.Escape.+shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
 Assert-Condition ($windowCode -match 'WindowStyle = WindowStyle\.None' -and $windowCode -match 'ResizeMode = ResizeMode\.NoResize' -and $windowCode -match 'WindowStyle = _windowedStyle') "Fullscreen must enter borderless mode and restore windowed chrome."
 Assert-Condition ($window -match 'RtaimeVerticalSplitter' -and $window -match 'RtaimeHorizontalSplitter' -and $customInputTheme -match 'Property="ResizeDirection" Value="Columns"' -and $customInputTheme -match 'Property="ResizeDirection" Value="Rows"') "Production shell side panels and lower workspace must remain resizable through custom splitters."
-Assert-Condition ($window -match 'Shell\.ToggleLeftPanelCommand' -and $window -match 'Shell\.ToggleRightPanelCommand' -and $window -match 'Shell\.ToggleCenterMaximizeCommand') "Production shell must expose collapse and center-maximize controls."
+Assert-Condition ($composition -match 'shell.Shell.ToggleLeftPanelCommand' -and $libraryView -match 'Context.CollapseCommand' -and $window -match 'Shell\.ToggleRightPanelCommand' -and $window -match 'Shell\.ToggleCenterMaximizeCommand') "Production shell must expose collapse and center-maximize controls."
 Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSource=\{RelativeSource AncestorType=\{x:Type Window\}\}\}"') "The timeline must remain available in the persistent lower workspace."
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
 Assert-Condition ($shell -match 'record OperatorLayoutSettings' -and $shell -match 'Normalize\(\)' -and $shell -match 'Math\.Clamp') "Persisted layout dimensions must be normalized and safely clamped."

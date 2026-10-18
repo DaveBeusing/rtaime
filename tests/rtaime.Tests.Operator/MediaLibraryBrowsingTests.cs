@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 using rtaime.Client;
 using rtaime.Control.Contracts;
@@ -136,7 +137,12 @@ public sealed class MediaLibraryBrowsingTests
             Assert.Same(pool.FilteredItems, pool.Library.FilteredItems);
             Assert.Same(pool.SelectedItems, pool.Selection.Items);
             var selection = pool.Selection;
+            var visits = 0;
+            void Visited(MediaPoolItemViewModel item) => visits++;
+            pool.LibraryItemVisited += Visited;
             selection.Select(pool.FilteredItems.Take(1));
+            pool.LibraryItemVisited -= Visited;
+            Assert.Equal(1, visits);
             Assert.Same(pool.SelectedItem, selection.Primary);
             Assert.Equal(pool.EditingSelectionIdentity, selection.Identity);
             pool.Refresh();
@@ -406,7 +412,16 @@ public sealed class MediaLibraryBrowsingTests
 			Assert.Equal(Visibility.Visible, owner.MediaPool.MetadataFiltersVisibility);
 			var name = Assert.IsType<RtaimeTextBox>(owner.MediaLibraryView.FindName("MediaSmartBinName"));
 			Assert.True(name.IsVisible); Assert.True(name.Focus()); Assert.Equal("Smart Bin name", AutomationProperties.GetName(name));
-			var previousName = owner.MediaPool.SmartBinName;
+			Assert.True(OperatorKeyboardCommandRegistry.IsTextEntryContext(name));
+            var enter = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(name)!, 0, Key.Return)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+            name.RaiseEvent(enter);
+            Assert.False(enter.Handled);
+            var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(name)!, 0, Key.Escape)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+            name.RaiseEvent(escape);
+            Assert.True(escape.Handled);
+            var previousName = owner.MediaPool.SmartBinName;
 			name.Text = "Inspection bin"; name.GetBindingExpression(TextBox.TextProperty)!.UpdateSource();
 			Assert.Equal("Inspection bin", owner.MediaPool.SmartBinName); owner.MediaPool.SmartBinName = previousName;
 			Assert.Contains(Descendants(owner).OfType<RtaimeButton>(), button =>
