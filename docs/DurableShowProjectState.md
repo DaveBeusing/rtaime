@@ -9,7 +9,7 @@ david.beusing@gmail.com
 
 ControlHost owns one canonical durable authored show/project model per production.
 
-The persisted management document uses format `rtaime.show-project.v1` and is stored through the existing `SqliteManagementStore`. No second persistence database, production authority, scheduler or Runtime state owner is introduced.
+The persisted management document uses legacy format `rtaime.show-project.v1`, advancing to `rtaime.show-project.v2` on the first saved output canvas configuration, and is stored through the existing `SqliteManagementStore`. No second persistence database, production authority, scheduler or Runtime state owner is introduced.
 
 The durable show project owns:
 
@@ -154,3 +154,16 @@ The qualification boundary intentionally distinguishes durable authored state fr
 ## Portable template authoring
 
 [Production Show Templates](ProductionShowTemplates.md) reuse the existing scene codec and Show Control subdocument. Add-only instantiation compares both project and workspace versions and writes appended scenes plus a fresh cue list atomically. It preserves live authority, current execution and presentation settings. Templates are authored recipes; they do not replace this durable project or its recovery policy.
+
+## Output canvas extension
+
+[Output canvas configuration](OutputCanvasMapping.md) adds a versioned subdocument
+in the same show, with independent saved revision, four previous configurations
+and 64 bounded transaction receipts. The outer SQLite transaction and expected
+version protect all existing authored subdocuments. Legacy reads reconstruct
+identity Program/Aux surfaces without writing or activating anything. First save
+advances the show envelope to v2 so old readers fail closed; current readers accept
+v1 without the extension and v2 with it. Future/invalid formats fail startup without
+replacement. Existing checkpoints and Runtime prepare/commit remain unchanged.
+Saved canvas revision is separate from the currently unavailable active render
+revision. Existing database backups include this extension and its history.

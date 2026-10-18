@@ -108,10 +108,16 @@ Allocate the next contiguous free ranges from 98 for independent backend work:
 | --- | --- | --- |
 | `media.analysis` — media analysis owner | `control.media.analysis.*`; `runtime.media.analysis.*` | **98–113** (16 tags) |
 | `sequence` — sequence model/execution owner | `control.sequence.*`; `runtime.sequence.*` | **114–145** (32 tags) |
-| `output.canvas` — canvas/output model owner | `control.output.canvas.*`; `runtime.output.canvas.*` | **146–161** (16 tags) |
+| `output.canvas` — canvas/output model owner | `control.output.canvas.*`; `runtime.output.canvas.*` | **146–148 consumed; 149–161 allocated** |
 
-These are documentary allocations for future operations, not implemented Proto
-fields, advertised capabilities, performance limits or new wire enum values.
+The output.canvas owner consumes 146 get_output_canvas, 147 validate_output_canvas
+and 148 save_output_canvas for authored configuration contract 1.0. Tags 149–161
+remain unconsumed. The real Client/Control/persistence boundary, show-format-v2
+migration and rendering handoff are specified in [Output canvas configuration](OutputCanvasMapping.md).
+This backend does not implement or advertise Runtime canvas rendering/activation.
+
+Unconsumed ranges are documentary allocations for future operations, not implemented
+Proto fields, advertised capabilities, performance limits or new wire enum values.
 Each owner assigns concrete messages within its range in its real backend change,
 records consumed tags and version semantics here, and updates the existing
 Proto/Client/dispatcher/RBAC catalogue in one exclusive integration patch.
