@@ -50,6 +50,14 @@ jobs:
       - name: Restore
         run: dotnet restore rtaime.slnx
 
+      - name: Sequence authoring model persistence and transport regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-restore --filter "FullyQualifiedName~SequenceAuthoringTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Sequence model regression failed." }
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~ExternalControlIntegrationTests.Sequence_|FullyQualifiedName~ShowProjectPersistenceIntegrationTests.Sequence_" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Sequence persistence/transport regression failed." }
+
       - name: Build
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
