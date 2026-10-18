@@ -6,7 +6,7 @@ LIVE embeds the existing Library, shared role viewers, contextual Inspector and
 Rundown/Timeline. It hides EDIT's diagnostic cards. Preview is left and Program
 right with equal dual-view allocation; the available central media allocation
 is derived from the viewport and saved side-panel widths. The shell does not
-scale the complete control tree.
+scale the complete control tree. Client geometry excludes native caption/borders; the existing center scroll viewport supplies the settled viewer height, including any visible scrollbar allocation. These temporary measurements are never persisted.
 
 The LIVE action strip keeps the confirmed Preview/Program identities and existing
 SET PVW / CUT / AUTO commands separate from selection and media playback. Preview

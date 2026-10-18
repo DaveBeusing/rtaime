@@ -210,6 +210,9 @@ public sealed class OperatorCombinedVisualQualification
         foreach (var viewer in viewers)
             Assert.True(Fits(viewer.TransformToAncestor(root).TransformBounds(new Rect(viewer.RenderSize)), root.RenderSize),
                 "LIVE role viewer must fit the useful viewport.");
+        var viewport = Assert.IsAssignableFrom<ScrollViewer>(window.FindName("CenterWorkspaceScroll"));
+        Assert.InRange(viewport.ScrollableHeight, 0, 1);
+        foreach (var viewer in viewers) Assert.True(viewer.ActualHeight <= viewport.ViewportHeight + 1);
         var actions = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("LiveActionStrip"));
         Assert.True(actions.IsVisible && actions.ActualHeight >= 24);
         Assert.True(Fits(actions.TransformToAncestor(root).TransformBounds(new Rect(actions.RenderSize)), root.RenderSize));

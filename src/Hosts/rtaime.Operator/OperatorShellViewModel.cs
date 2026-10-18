@@ -363,6 +363,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	private OperatorWindowPlacementSettings _windowPlacement;
 	private double _viewportWidth = 1600;
 	private double _viewportHeight = 900;
+    private double _productionViewportHeight = double.NaN;
 
 	public OperatorShellViewModel(
 		OperatorLayoutStore store,
@@ -677,12 +678,18 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		string.Equals(EffectiveViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
 	public double ViewerGapWidth => string.Equals(EffectiveViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
-	public double ProductionWorkspaceHeight => IsLiveWorkspace ? Math.Max(180, _viewportHeight - 132 - LowerRowHeight.Value) : IsCompactViewport
-		? Math.Clamp(
-			_viewportHeight - OperatorLayoutSettings.CompactLowerPanelHeight - 90,
-			260,
-			520)
-		: 700 * WorkspaceScale;
+	public double ProductionWorkspaceHeight => IsLiveWorkspace || IsCenterMaximized
+        ? ProductionAvailableHeight : Math.Min(700 * WorkspaceScale, ProductionAvailableHeight);
+    private double ProductionAvailableHeight => double.IsFinite(_productionViewportHeight)
+        ? _productionViewportHeight : Math.Max(0, _viewportHeight - (IsLiveWorkspace ? 132 : 96) - LowerRowHeight.Value);
+    internal void UpdateProductionViewportHeight(double height)
+    {
+        if (!double.IsFinite(height) || height <= 0 ||
+            (double.IsFinite(_productionViewportHeight) && Math.Abs(_productionViewportHeight - height) < .5)) return;
+        _productionViewportHeight = height;
+        OnPropertyChanged(nameof(ProductionWorkspaceHeight));
+    }
+
 	public string ViewerModeLabel => EffectiveViewerMode switch
 	{
 		"PREVIEW" => "PREVIEW MAXIMIZED",
@@ -724,6 +731,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		var previousWorkspaceScale = WorkspaceScale;
 		_viewportWidth = width;
 		_viewportHeight = height;
+        _productionViewportHeight = double.NaN;
         RaiseAdaptivePresentationChanged();
 
 		OnPropertyChanged(nameof(CenterWorkspacePrimaryMinWidth));
@@ -915,6 +923,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void RaiseWorkspaceChanged()
 	{
+        _productionViewportHeight = double.NaN;
         RaiseAdaptivePresentationChanged();
         foreach (var link in NavigationGroups.SelectMany(g => g.Items)) link.Refresh();
 		OnPropertyChanged(nameof(TemplateCaptureWorkspace));

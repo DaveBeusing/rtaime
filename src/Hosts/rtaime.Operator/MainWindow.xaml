@@ -22,7 +22,7 @@
 	KeyboardNavigation.ControlTabNavigation="Cycle"
 	WindowStartupLocation="CenterScreen">
 
-	<Grid>
+	<Grid SizeChanged="OnWorkspaceViewportChanged">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="{StaticResource OperatorTopBarGridLength}" />
 			<RowDefinition Height="*" />
@@ -445,7 +445,7 @@
 					HorizontalAlignment="Stretch"
 					VerticalAlignment="Stretch" />
 
-				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll" Grid.Row="1"
+				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll" Grid.Row="1" ScrollChanged="OnProductionViewportChanged"
 					VerticalScrollBarVisibility="Auto"
 					HorizontalScrollBarVisibility="Disabled"
 					Visibility="{Binding Shell.NonLiveCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
