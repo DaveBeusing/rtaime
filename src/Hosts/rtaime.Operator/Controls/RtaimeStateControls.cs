@@ -2,12 +2,23 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation.Peers;
 using rtaime.Client;
 
 namespace rtaime.Operator.Controls;
 
 public abstract class RtaimeStateControl : System.Windows.Controls.Control
 {
+	protected override AutomationPeer OnCreateAutomationPeer() => new StatePeer(this);
+	private sealed class StatePeer(RtaimeStateControl owner) : FrameworkElementAutomationPeer(owner)
+	{
+		protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Text;
+		protected override string GetClassNameCore() => nameof(RtaimeStateControl);
+		protected override string GetNameCore() => string.IsNullOrWhiteSpace(base.GetNameCore()) ? owner.Title : base.GetNameCore();
+		protected override string GetHelpTextCore() => owner.Detail;
+		protected override string GetItemStatusCore() => owner.State.ToString();
+	}
+
 	public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
 		nameof(State),
 		typeof(OperatorUiStateKind),
