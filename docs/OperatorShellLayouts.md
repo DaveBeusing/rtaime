@@ -36,7 +36,7 @@ to 32 supported/inactive destination entries and the existing 16 named templates
 At compact logical viewports, a stored DUAL preference renders one bus at a time.
 Both identities and immediate PVW/PGM switching remain in the LIVE strip.
 Library and Inspector buttons reveal one temporary pane at a time and can hide it
-again. Returning to a larger viewport restores the reference widths and dual
+again. Compact Scenes, Outputs and Settings expose VIEW/DETAILS buttons for the existing auxiliary tools instead of hiding them behind a zero-width column. The compact LIVE lower region keeps 160 DIP and a 280-DIP Rundown column so deliberate cue actions remain reachable. Returning to a larger viewport restores the reference widths and dual
 presentation. Temporary pane allocations and compact bus choice are not serialized.
 The existing maximize, fullscreen, Focus/Cinema, dock/float/return and reset paths
 remain presentation-only. The existing keyboard router leaves focused-button Enter/Space to that explicit button; the shell strip reuses LiveConsoleInput for repeat/double-click handling.

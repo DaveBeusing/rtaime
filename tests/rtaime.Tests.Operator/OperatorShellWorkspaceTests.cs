@@ -64,6 +64,20 @@ public sealed partial class WorkspacePresentationTemplateTests
         }
         else Assert.Equal(shell.PreviewViewerWidth, shell.ProgramViewerWidth);
     }
+    [Theory]
+    [InlineData("SCENES")] [InlineData("OUTPUTS")] [InlineData("SETTINGS")]
+    public async Task Compact_details_remain_reachable_without_persisting_temporary_columns(string id)
+    {
+        await using var f = await Fixture.Create(false); var shell = f.Shell;
+        shell.SelectWorkspace(id); shell.UpdateViewportSize(960,540);
+        var before = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
+        Assert.Equal(Visibility.Visible, shell.AuxiliaryNavigationVisibility);
+        shell.SelectCompactAuxiliaryCommand.Execute("DETAILS");
+        Assert.Equal(0,shell.PrimaryWorkspaceWidth.Value); Assert.True(shell.AuxiliaryWorkspaceColumnWidth.IsStar);
+        Assert.Equal(before,JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+        shell.SelectCompactAuxiliaryCommand.Execute("PRIMARY");
+        Assert.True(shell.PrimaryWorkspaceWidth.IsStar); Assert.Equal(0,shell.AuxiliaryWorkspaceColumnWidth.Value);
+    }
     [Fact]
     public async Task One_hundred_workspace_dock_float_restore_transactions_retain_bounded_panel_identities()
     {

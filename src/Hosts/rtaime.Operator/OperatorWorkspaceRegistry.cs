@@ -48,22 +48,30 @@ public sealed partial class OperatorShellViewModel
 {
     private string? _compactPane;
     private string _compactBus = "PROGRAM";
+    private bool _compactAuxiliary;
     public IReadOnlyList<OperatorWorkspaceGroup> NavigationGroups { get; private set; } = [];
     public bool IsAiWorkspace => SelectedWorkspace == OperatorWorkspaceNames.Ai;
     public bool IsMultiviewWorkspace => SelectedWorkspace == OperatorWorkspaceNames.Multiview;
     public string LayoutPersistenceStatus => _store.LastSaveError ?? _store.LoadWarning ?? "Layout preferences available.";
     public string EffectiveViewerMode => IsCompactViewport && ViewerMode == "DUAL" ? _compactBus : ViewerMode;
-    public GridLength PrimaryWorkspaceWidth => IsAiWorkspace ? new(0) : new(2.2, GridUnitType.Star);
+    public GridLength PrimaryWorkspaceWidth => IsAiWorkspace || (IsCompactViewport && HasAuxiliaryWorkspaceColumn && _compactAuxiliary) ? new(0) : new(2.2, GridUnitType.Star);
+    public Visibility AuxiliaryNavigationVisibility => IsCompactViewport && HasAuxiliaryWorkspaceColumn && !IsAiWorkspace ? Visibility.Visible : Visibility.Collapsed;
+    public ICommand SelectCompactAuxiliaryCommand { get; private set; } = null!;
     public GridLength ProductionDetailsHeight => IsLiveWorkspace ? new(0) : new(304, GridUnitType.Star);
     public double ProductionDetailsGap => IsLiveWorkspace ? 0 : 6;
     public Visibility ProductionDetailsVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
     public Visibility LiveActionVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-    public GridLength RundownColumnWidth => new(IsCompactViewport ? 230 : 320);
+    public GridLength RundownColumnWidth => new(IsCompactViewport ? 280 : 320);
     public ICommand SelectCompactBusCommand { get; private set; } = null!;
     private void InitializeNavigation()
     {
         NavigationGroups = OperatorWorkspaceRegistry.Destinations.GroupBy(d => d.Group)
             .Select(g => new OperatorWorkspaceGroup(g.Key, g.Select(d => new OperatorWorkspaceLink(this, d)).ToArray())).ToArray();
+        SelectCompactAuxiliaryCommand = new OperatorShellCommand(p =>
+        {
+            _compactAuxiliary = p?.ToString() == "DETAILS";
+            RaiseAdaptivePresentationChanged();
+        }, () => IsCompactViewport && HasAuxiliaryWorkspaceColumn && !IsAiWorkspace);
         SelectCompactBusCommand = new OperatorShellCommand(p =>
         {
             _compactBus = p?.ToString() == "PREVIEW" ? "PREVIEW" : "PROGRAM";
@@ -78,11 +86,12 @@ public sealed partial class OperatorShellViewModel
     }
     private void RaiseAdaptivePresentationChanged()
     {
+        (SelectCompactAuxiliaryCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
         foreach (var property in new[] { nameof(IsAiWorkspace), nameof(IsMultiviewWorkspace),
             nameof(EffectiveViewerMode), nameof(ViewerModeLabel), nameof(PreviewViewerWidth), nameof(ProgramViewerWidth),
             nameof(PreviewViewerVisibility), nameof(ProgramViewerVisibility), nameof(ViewerGapWidth),
             nameof(ProductionDetailsHeight), nameof(ProductionDetailsGap), nameof(ProductionDetailsVisibility),
-            nameof(PrimaryWorkspaceWidth), nameof(LiveActionVisibility), nameof(RundownColumnWidth), nameof(LayoutPersistenceStatus) })
+            nameof(AuxiliaryWorkspaceColumnWidth), nameof(AuxiliaryNavigationVisibility), nameof(PrimaryWorkspaceWidth), nameof(LiveActionVisibility), nameof(RundownColumnWidth), nameof(LayoutPersistenceStatus) })
             OnPropertyChanged(property);
     }
 }

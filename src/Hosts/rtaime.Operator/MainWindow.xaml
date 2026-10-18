@@ -225,6 +225,11 @@
 
 			<Grid x:Name="CenterWorkspace" Grid.Column="4" ClipToBounds="True">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4"
+                    Visibility="{Binding Shell.AuxiliaryNavigationVisibility, ElementName=RootWindow}">
+                    <controls:RtaimeButton Content="VIEW" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="PRIMARY" AutomationProperties.Name="Primary workspace view" />
+                    <controls:RtaimeButton Content="DETAILS" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="DETAILS" AutomationProperties.Name="Workspace details" Margin="4,0,0,0" />
+                </StackPanel>
                 <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                     Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">

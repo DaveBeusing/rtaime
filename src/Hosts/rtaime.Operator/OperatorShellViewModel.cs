@@ -523,7 +523,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			IsCenterMaximized || IsMultiviewWorkspace || IsHealthWorkspace
 				? 0
 				: IsCompactViewport
-					? IsLiveWorkspace ? 120 : Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
+					? IsLiveWorkspace ? 160 : Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
 					: Math.Max(OperatorLayoutSettings.MinimumLowerPanelHeight, LowerPanelHeight * WorkspaceScale));
 		set
 		{
@@ -611,7 +611,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsAiWorkspace || IsScenesWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
-	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && (!IsCompactViewport || IsAiWorkspace) ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && (!IsCompactViewport || IsAiWorkspace || _compactAuxiliary) ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? Math.Max(170, 240 * WorkspaceScale) : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
@@ -773,9 +773,9 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
     {
 		var normalized = OperatorWorkspaceNames.Normalize(workspace);
 		RestorePresentation();
-        _compactPane = null;
+        _compactPane = null; _compactAuxiliary = false;
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
-        { RaiseLayoutGeometryChanged(); return; }
+        { RaiseLayoutGeometryChanged(); RaiseAdaptivePresentationChanged(); return; }
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
 		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
@@ -881,6 +881,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		RestorePresentation();
         _compactPane = null;
         _compactBus = "PROGRAM";
+        _compactAuxiliary = false;
 		var defaults = OperatorLayoutSettings.CreateCanonicalLayouts()[SelectedWorkspace];
 		_workspaceLayouts[SelectedWorkspace] = defaults;
 		ApplyWorkspaceLayout(defaults);
@@ -908,6 +909,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		_viewerMode = normalized.ViewerMode;
 		_docking = normalized.Docking;
 		OnPropertyChanged(nameof(Docking));
+        RaiseAdaptivePresentationChanged();
 		RaiseLayoutGeometryChanged();
 		OnPropertyChanged(nameof(IsLeftCollapsed));
 		OnPropertyChanged(nameof(IsRightCollapsed));

@@ -57,6 +57,22 @@ public sealed partial class OperatorCombinedVisualQualification
                         Assert.Same(monitoring, window.Monitoring);
                         if (state != "connected") Assert.False(model.CutCommand.CanExecute(null));
                         foreach (var surface in Descendants(window).OfType<OperatorDrawingSurface>()) surfaces.Add(surface);
+                        if(window.Shell.IsCompactViewport && window.Shell.HasAuxiliaryWorkspaceColumn && !window.Shell.IsAiWorkspace)
+                        {
+                            window.Shell.SelectCompactAuxiliaryCommand.Execute("DETAILS");
+                            await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+                            Assert.Equal(0,window.Shell.PrimaryWorkspaceWidth.Value);
+                            Assert.True(window.Shell.AuxiliaryWorkspaceColumnWidth.IsStar);
+                            window.Shell.SelectCompactAuxiliaryCommand.Execute("PRIMARY");
+                            await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+                        }
+                        if(id == "LIVE")
+                        {
+                            var rundown=Descendants(window).OfType<RundownControl>().Single(r=>r.IsVisible && r.ActualWidth>0);
+                            var go=Descendants(rundown).OfType<ButtonBase>().Single(b=>ReferenceEquals(b.Command,window.Rundown.GoCommand));
+                            Assert.True(Fits(go.TransformToAncestor(rundown).TransformBounds(new Rect(go.RenderSize)),rundown.RenderSize),
+                                "LIVE rundown GO must fit the allocated lower region.");
+                        }
                         observations.Add(new { state, workspace=id, width=size.Width, height=size.Height,
                             connected=model.IsConnected, busy=model.IsBusy, stale=model.IsStale });
                         if (id == "LIVE" && !string.IsNullOrWhiteSpace(evidence))
