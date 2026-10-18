@@ -346,7 +346,7 @@ $navigationSurface = $window.Substring($navigationStart, $leftRegionStart - $nav
 $mediaLibraryEnd = $window.IndexOf('<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5"', $leftRegionStart, [StringComparison]::Ordinal)
 Assert-Condition ($mediaLibraryEnd -gt $leftRegionStart) "Media Library surface must end before the right workspace splitter."
 $mediaLibrarySurface = $window.Substring($leftRegionStart, $mediaLibraryEnd - $leftRegionStart) + "`n" + $libraryView
-Assert-Condition ($window -match '<local:OperatorMediaLibraryView' -and $windowCode -match 'MediaLibraryView.Context = new' -and $libraryView -match 'Context.MediaPool' -and $libraryView -notmatch 'AncestorType=\{x:Type Window\}') "Productive Library must use its explicitly supplied borrowed context across docking boundaries."
+Assert-Condition ($window -match '<local:OperatorMediaLibraryView' -and $windowCode -match 'MediaLibraryView.Context = Composition.Library' -and $libraryView -match 'Context.MediaPool' -and $libraryView -notmatch 'AncestorType=\{x:Type Window\}') "Productive Library must use its explicitly supplied borrowed context across docking boundaries."
 $productionWorkspaceStart = $window.IndexOf('x:Name="PreviewProgramProductionWorkspace"', [StringComparison]::Ordinal)
 $productionWorkspaceEnd = $window.IndexOf('<local:MediaDeckControl', $productionWorkspaceStart, [StringComparison]::Ordinal)
 Assert-Condition ($productionWorkspaceStart -ge 0 -and $productionWorkspaceEnd -gt $productionWorkspaceStart) "Edit production workspace must remain an explicit bounded surface."

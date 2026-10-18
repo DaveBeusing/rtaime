@@ -133,7 +133,8 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
-		MediaLibraryView.Context = new(MediaPool, MediaDeck, Timeline, WorkspaceStates, NdiSources, Shell.ToggleLeftPanelCommand);
+		Composition = new(this);
+		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>
             {
@@ -241,7 +242,8 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
-		MediaLibraryView.Context = new(MediaPool, MediaDeck, Timeline, WorkspaceStates, NdiSources, Shell.ToggleLeftPanelCommand);
+		Composition = new(this);
+		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>
             {
@@ -264,6 +266,8 @@ public partial class MainWindow : Window
 		Closing += OnClosingAsync;
 	}
 
+	public OperatorComposition Composition { get; }
+	public OperatorInspectorControl InspectorView => RightInspectorRegion;
 	public StartupLifecycleViewModel Startup { get; }
 	public ShowReadinessViewModel ShowReadiness { get; }
 	public ICommand OpenShowChecksCommand { get; }
