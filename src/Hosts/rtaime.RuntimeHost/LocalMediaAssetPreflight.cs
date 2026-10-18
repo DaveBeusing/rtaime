@@ -13,6 +13,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private readonly string _preflightEpoch = Guid.NewGuid().ToString("N");
     private CancellationTokenSource? _preflightStop;
     private Task? _preflightTask;
+    private LocalMediaResourceLedger.LocalMediaResourceTicket? _preflightTicket;
     private MediaAssetPreflightObservation? _preflight;
     private LocalMediaFileSource? _preflightQuarantine;
     private FileStream? _preflightIdentityQuarantine;
@@ -69,12 +70,19 @@ public sealed partial class LocalMediaDeckRuntimeService
                         Detail = "Preflight cleanup retained an owner. Restart RuntimeHost through the supported application lifecycle before retrying." };
                 if (_preflight is { Running: true } || _probeReservations != 0 || _entries.Any(e => e is not null))
                     return initial with { Detail = "Preflight unavailable: close file decks deliberately first. Live decks are never evicted." };
+                var sourceId = MediaSourceId.New();
+                if (!_ledger.TryReserve(Guid.NewGuid(), new(_ledger.RuntimeEpoch, sourceId, null, null, null,
+                    LocalMediaResourcePurpose.Preflight), out var ticket, out var failure))
+                    return initial with { Detail = failure!.Value.Code + ": " + failure.Value.Message };
+                _preflightTicket = ticket;
                 _preflightStop?.Dispose();
                 _preflightStop = new CancellationTokenSource(TimeSpan.FromMinutes(30));
                 _probeReservations++;
                 _preflight = initial with { Running = true, Detail = "Verifying file identity on the non-Program worker." };
                 var token = _preflightStop.Token;
-                _preflightTask = Task.Run(() => RunPreflightAsync(initial, assetId, options, token));
+                _preflightTask = Task.Run(() => RunPreflightAsync(initial, assetId, options, token, ticket!));
+                _ = _preflightTask.ContinueWith(completed => ticket!.OwnerCompleted(),
+                    CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 return _preflight;
             }
         }
@@ -133,11 +141,12 @@ public sealed partial class LocalMediaDeckRuntimeService
     }
 
     private async Task RunPreflightAsync(MediaAssetPreflightObservation initial, MediaAssetId assetId,
-        MediaAssetPreflightOptions options, CancellationToken token)
+        MediaAssetPreflightOptions options, CancellationToken token, LocalMediaResourceLedger.LocalMediaResourceTicket ticket)
     {
         var value = initial;
         LocalMediaFileSource? source = null;
         FileStream? identity = null;
+        var nativeOpenInProgress = false;
         try
         {
             // No hashing, metadata probing or native work occurs before shared capacity admission.
@@ -164,9 +173,11 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (Convert.ToHexString(hash.GetHashAndReset()) != initial.FingerprintSha256)
                 throw new IOException("File content no longer matches the catalogue fingerprint; relink or reimport deliberately.");
             token.ThrowIfCancellationRequested();
+            nativeOpenInProgress = true;
             var opened = PreflightOpen is { } factory
-                ? factory(initial.SourceLocation, MediaSourceId.New(), assetId)
-                : _provider.TryOpen(initial.SourceLocation, MediaSourceId.New(), assetId);
+                ? factory(initial.SourceLocation, ticket.Identity.SourceId, assetId)
+                : _provider.TryOpen(initial.SourceLocation, ticket.Identity.SourceId, assetId);
+            nativeOpenInProgress = false;
             source = opened.Source;
             if (source is null) throw new IOException(opened.Failure?.Code + ": " + opened.Failure?.Message);
             token.ThrowIfCancellationRequested();
@@ -206,6 +217,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         }
         catch (Exception exception)
         {
+            if (nativeOpenInProgress) ticket.Quarantine(source ?? (object)this);
             value = value with { State = MediaAssetReadinessState.Unavailable, Detail = exception.Message };
         }
         finally
@@ -213,11 +225,12 @@ public sealed partial class LocalMediaDeckRuntimeService
             try { source?.Dispose(); }
             catch (Exception exception)
             {
+                ticket.Quarantine(source ?? (object)this);
                 lock (_gate) _preflightQuarantine = source;
                 value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Preflight cleanup failed; Runtime restart required: " + exception.Message };
             }
             try { identity?.Dispose(); }
-            catch (Exception exception) { lock (_gate) _preflightIdentityQuarantine = identity; value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Identity handle cleanup failed; Runtime restart required: " + exception.Message }; }
+            catch (Exception exception) { ticket.Quarantine(source ?? (object)this); lock (_gate) _preflightIdentityQuarantine = identity; value = value with { State = MediaAssetReadinessState.Unavailable, Detail = "Identity handle cleanup failed; Runtime restart required: " + exception.Message }; }
             if (token.IsCancellationRequested) value = value with { Cancelled = true,
                 State = _preflightQuarantine is not null || _preflightIdentityQuarantine is not null
                     ? MediaAssetReadinessState.Unavailable : MediaAssetReadinessState.Unverified };
@@ -238,7 +251,11 @@ public sealed partial class LocalMediaDeckRuntimeService
     {
         _preflightStop?.Cancel();
         if (_preflightTask is { } task && !task.Wait(TimeSpan.FromSeconds(10)))
+        {
+            _preflightTicket?.Quarantine(this);
             throw new IOException("Preflight native owner did not terminate; reservation remains quarantined until supported Runtime restart.");
+        }
+        if (_preflightTask is { IsCompleted: true }) _preflightTicket?.OwnerCompleted();
         if (_preflightQuarantine is not null || _preflightIdentityQuarantine is not null) throw new IOException("Preflight retained a failed native owner; supported Runtime restart is required.");
         _preflightStop?.Dispose();
         _preflightStop = null;

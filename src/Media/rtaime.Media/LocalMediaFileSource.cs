@@ -189,7 +189,7 @@ public sealed class LocalMediaFileSource : IDisposable
 
 public sealed class LocalMediaFileProvider
 {
-	private const int RouteResourceCount = 2;
+	private const int RouteResourceCount = 4;
 	private const int DecodeResourceCount = 4;
 	private static readonly VideoFormat[] SupportedVideoFormats =
 	{

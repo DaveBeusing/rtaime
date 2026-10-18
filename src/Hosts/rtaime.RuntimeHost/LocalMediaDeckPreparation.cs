@@ -13,6 +13,7 @@ public sealed partial class LocalMediaDeckRuntimeService
 {
     private readonly string _preparationEpoch = Guid.NewGuid().ToString("N");
     private FileStream? _preparationFile;
+    private LocalMediaResourceLedger.LocalMediaResourceTicket? _preparationResources;
     private MediaSourceId? _preparationSource;
     private string? _preparationFingerprint;
     private PreparedExecutionContract? _preparationExecution;
@@ -22,7 +23,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     internal TimeProvider PreparationClock { get; set; } = TimeProvider.System;
     internal Action? BeforePreparationPublish { get; set; }
 
-    // Explicit, bounded two-deck preparation. Hash/open/wait never hold the Program registry gate.
+    // Explicit, bounded resident preparation. Hash/open/wait never hold the Program registry gate.
     public MediaDeckRuntimeSnapshot Preload(MediaDeckOpenRequest request, PreparedExecutionContract execution, string fingerprint)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -36,9 +37,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 if (_program == request.SourceId)
                     return Reject("runtime.media_preload.source_on_program", "Preload requires an off-Program source.");
-                if ((_allowedSources is not null && !_allowedSources.Contains(request.SourceId)) ||
-                    (_knownSources.Count == 2 && !_knownSources.Contains(request.SourceId)))
-                    return Reject("runtime.media_deck.source_invalid", "Source is outside production A/B.");
+                if (!SourceAllowed(request.SourceId))
+                    return Reject("runtime.media_deck.source_invalid", "Source is outside the configured production sources.");
                 if (_probeReservations != 0 || _preflight is { Running: true } ||
                     _preflightQuarantine is not null || _preflightIdentityQuarantine is not null ||
                     _entries.Any(e => e?.Deck.Snapshot.Failure?.Code == "runtime.media_deck.cleanup_failed"))
@@ -47,7 +47,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     occupied.Deck.Snapshot.State is not (MediaDeckState.Ready or MediaDeckState.Paused or MediaDeckState.Ended))
                     return Reject("runtime.media_preload.deck_busy", "The selected target is active or has an uncertain owner; stop/close it deliberately.");
                 if (Find(request.SourceId) is null && _entries.All(e => e is not null))
-                    return Reject("runtime.media_preload.capacity", "No free A/B decoder slot; preload never evicts.");
+                    return Reject("runtime.media_preload.capacity", "No free decoder slot; preload never evicts.");
             }
             if (Find(request.SourceId) is not null)
             {
@@ -55,6 +55,13 @@ public sealed partial class LocalMediaDeckRuntimeService
                 var closed = Close(request.SourceId);
                 if (closed.State == MediaDeckState.Error) return closed;
             }
+            if (!_ledger.TryReserve(Guid.NewGuid(), new(_ledger.RuntimeEpoch, request.SourceId,
+                execution.PreparedExecutionId, execution.AuthoritySnapshot.Revision.Value, execution.PlanGeneration.Value,
+                LocalMediaResourcePurpose.Resident) { AuthorityStateId = execution.AuthoritySnapshot.StateId },
+                out var resources, out var failure))
+                return Reject(failure!.Value.Code, failure.Value.Message);
+            resources!.RetainPoolLease(); // Retains the identity handle as well as the future decode pool.
+            var transferred = false;
             lock (_gate) _probeReservations++;
             var reservationHeld = true;
             FileStream? identity = null;
@@ -88,8 +95,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                 ClearPreparation(null);
                 lock (_gate) _probeReservations--;
                 reservationHeld = false;
-                var opened = Open(request, execution);
+                var opened = OpenCore(request, execution, resources);
                 if (opened.State != MediaDeckState.Ready) return opened;
+                transferred = true;
+                _preparationResources = resources;
                 _preparationFile = identity;
                 identity = null;
                 _preparationSource = request.SourceId;
@@ -103,7 +112,12 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             finally
             {
-                identity?.Dispose();
+                if (!transferred)
+                {
+                    try { identity?.Dispose(); }
+                    catch { _preflightIdentityQuarantine = identity; resources.Quarantine(identity); throw; }
+                    finally { resources.ReleasePoolLease(); resources.OwnerCompleted(); }
+                }
                 if (reservationHeld) lock (_gate) _probeReservations--;
             }
         }
@@ -192,7 +206,13 @@ public sealed partial class LocalMediaDeckRuntimeService
         if (source is not null && _preparationSource != source) return;
         _preparation = null;
         _preparationOwnerTicketId = null;
-        _preparationFile?.Dispose();
+        try { _preparationFile?.Dispose(); }
+        catch { _preparationResources?.Quarantine(_preparationFile); throw; }
+        finally
+        {
+            _preparationResources?.ReleasePoolLease();
+            _preparationResources = null;
+        }
         _preparationFile = null;
         _preparationSource = null;
         _preparationFingerprint = null;
