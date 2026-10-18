@@ -2,6 +2,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
@@ -198,6 +199,15 @@ public class RtaimePanelHeader : HeaderedContentControl
 
 public class RtaimeStatusBadge : ContentControl
 {
+	protected override AutomationPeer OnCreateAutomationPeer() => new StatusPeer(this);
+	private sealed class StatusPeer(RtaimeStatusBadge owner) : FrameworkElementAutomationPeer(owner)
+	{
+		protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Text;
+		protected override string GetClassNameCore() => nameof(RtaimeStatusBadge);
+		protected override string GetNameCore() => string.IsNullOrWhiteSpace(base.GetNameCore()) ? owner.Content?.ToString() ?? string.Empty : base.GetNameCore();
+		protected override string GetItemStatusCore() => owner.Status.ToString();
+	}
+
 	public static readonly DependencyProperty StatusProperty = DependencyProperty.Register(
 		nameof(Status),
 		typeof(RtaimeStatusKind),

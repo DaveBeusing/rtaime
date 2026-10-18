@@ -48,7 +48,7 @@
 	<sys:Double x:Key="OperatorSpacing24">24</sys:Double>
 	<sys:Double x:Key="OperatorControlHeight">30</sys:Double>
 	<sys:Double x:Key="OperatorCompactControlHeight">26</sys:Double>
-	<sys:Double x:Key="OperatorFocusThickness">1</sys:Double>
+	<sys:Double x:Key="OperatorFocusThickness">2</sys:Double>
 	<Thickness x:Key="OperatorWindowPadding">6</Thickness>
 	<Thickness x:Key="OperatorPanelPadding">8</Thickness>
 	<Thickness x:Key="OperatorControlPadding">8,4</Thickness>
@@ -128,4 +128,16 @@
 	<Color x:Key="OperatorColorMeterSafe">#29D38B</Color>
 	<Color x:Key="OperatorColorMeterWarning">#F6B84A</Color>
 	<Color x:Key="OperatorColorMeterClip">#FF4D52</Color>
+
+	<!-- Additive interaction/accessibility contract; reference layout and semantic tally keys stay stable. -->
+	<sys:Double x:Key="OperatorMinimumTargetSize">24</sys:Double>
+	<sys:Double x:Key="OperatorLiveActionHeight">40</sys:Double>
+	<sys:Double x:Key="OperatorLiveActionFontSize">16</sys:Double>
+	<sys:Double x:Key="OperatorReadableStatusFontSize">12</sys:Double>
+	<sys:Double x:Key="OperatorDisabledOpacity">1</sys:Double>
+	<Thickness x:Key="OperatorFocusBorderThickness">2</Thickness>
+	<sys:TimeSpan x:Key="OperatorMotionDuration">00:00:00.150</sys:TimeSpan>
+	<Color x:Key="OperatorColorAccessibleMutedText">#A9B6C1</Color>
+	<Color x:Key="OperatorColorAccessibleDisabledText">#A9B6C1</Color>
 </ResourceDictionary>
+
