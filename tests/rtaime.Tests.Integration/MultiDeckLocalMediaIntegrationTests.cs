@@ -340,6 +340,26 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
     }
 
+    [Fact]
+    public void Development_source_identity_registry_is_finite_and_independent_of_concurrent_decoder_capacity()
+    {
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 4, null,
+            LocalMediaCapacityProfile.DevelopmentFour);
+        var sources = Enumerable.Range(0, 9).Select(_ => MediaSourceId.New()).ToArray();
+        var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4");
+        foreach (var source in sources.Take(8))
+        {
+            Assert.Equal("media.file.not_found", decks.Open(new(MediaContractVersion.Current, source, missing), Prepared(decks, source, 0)).Failure?.Code);
+            decks.Close(source);
+            Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        }
+        Assert.Equal("runtime.media_deck.source_invalid",
+            decks.Open(new(MediaContractVersion.Current, sources[8], missing), Prepared(decks, sources[8], 0)).Failure?.Code);
+        Assert.Equal("media.file.not_found",
+            decks.Open(new(MediaContractVersion.Current, sources[0], missing), Prepared(decks, sources[0], 0)).Failure?.Code);
+        decks.Close(sources[0]);
+    }
+
     private static void Command(LocalMediaDeckRuntimeService decks, MediaSourceId source,
         MediaTransportCommandKind kind, long? frame = null, bool configure = false)
     {

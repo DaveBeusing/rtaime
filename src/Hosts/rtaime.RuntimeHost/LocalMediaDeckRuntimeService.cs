@@ -100,7 +100,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     internal LocalMediaResourceLedger ResourceLedger => _ledger;
     private bool SourceAllowed(MediaSourceId source) =>
         _allowedSources is not null ? _allowedSources.Contains(source) :
-        _profile == LocalMediaCapacityProfile.DevelopmentFour || _knownSources.Count < 2 || _knownSources.Contains(source);
+        _knownSources.Count < (_profile == LocalMediaCapacityProfile.DevelopmentFour ? 8 : 2) || _knownSources.Contains(source);
 
     public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
