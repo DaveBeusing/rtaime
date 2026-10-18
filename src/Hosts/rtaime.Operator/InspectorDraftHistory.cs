@@ -119,6 +119,7 @@ public sealed partial class MediaPoolInspectorViewModel
         var token = CurrentRevisionToken;
         if (token != _draftRevision || _operator.IsStale || !_operator.IsConnected)
         {
+            RetainCompositingIntent();
             _inspectorDrafts.Clear(); _draftContextOrder.Clear(); _activeDraft = null;
             _transactionStart = null; _draftRevision = token;
         }
@@ -143,6 +144,7 @@ public sealed partial class MediaPoolInspectorViewModel
         }
         if (!ReferenceEquals(_activeDraft, draft)) { EndDraftTransaction(); _transactionStart = null; }
         _activeDraft = draft; _activeDraftKey = key;
+        _activeCompositingDraftNodeId = _compositingNode?.Id;
         RestoreInspectorValues(draft.Current);
         NotifyInspectorHistory();
     }
@@ -209,6 +211,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void NotifyInspectorHistory()
     {
+        NotifyCompositingRecovery();
         OnPropertyChanged(nameof(IsTransformDraftContext));
         (ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(InspectorDraftHistoryLabel)); OnPropertyChanged(nameof(InspectorEditState));
