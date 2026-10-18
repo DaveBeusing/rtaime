@@ -25,7 +25,7 @@ rtaime is built around a simple production principle:
 
 The platform combines video, audio, graphics, recording, outputs, monitoring and governed inference with explicit production authority, transactional Runtime execution, visible health and bounded recovery.
 
-This repository is the controlled development source for rtaime V1.
+This repository is the controlled development source for rtaime. Existing V1 contract/protocol names retain their compatibility meaning.
 
 ## Why rtaime
 
@@ -37,7 +37,7 @@ Operator UI state does not become production truth merely because it changed vis
 
 ### Operate the whole media path
 
-The V1 path brings together:
+The established production path brings together:
 
 - media library and local media playback;
 - Preview and Program;
@@ -71,7 +71,7 @@ rtaime exposes lifecycle and health as part of the operator experience:
 
 ## Current product scope
 
-The current V1 development repository implements production-shaped software paths for:
+The currently implemented production-shaped software paths include:
 
 | Area | Current capability |
 | --- | --- |
@@ -90,13 +90,32 @@ The current V1 development repository implements production-shaped software path
 | Production integrations | optional IntegrationHost gateway for OSC, Windows MIDI, virtual GPIO/GPI reference control and authenticated Companion-style HTTP/WebSocket feedback |
 | Delivery | release pipeline, offline packaging, update/rollback foundations and qualification evidence |
 
-The source-controlled product version is currently **0.1.0-dev** in the **DEV** release stage.
+The planned release target in Directory.Build.props is **0.5.40**; actual build
+identities and release stages follow [Product versioning](docs/Versioning.md).
+This target does not declare a stable or hardware-qualified release.
+
+### Approved Operator experience delivery
+
+The [scope decision effective 2026-10-17](docs/OperatorExperienceScope.md)
+supersedes former V1 functional deferrals. Independent media analysis/scrubbing,
+true multitrack sequences/editing, Preview shuttle, 2D canvas/mapping, contextual
+Inspector extensions and an independent AI workspace are approved **TO IMPLEMENT**.
+The capability table above describes existing implementation.
+
+The [design contract](docs/OperatorExperienceDesign.md) defines the concrete LIVE
+composition and compact acceptance; the [roadmap](docs/OperatorExperienceRoadmap.md)
+defines domain ownership/dependencies and the shared integration map.
+Implementation approval is separate from compatibility, security, codec/hardware
+qualification and release acceptance. Current authority, finite resources and
+saved-production/layout compatibility remain binding.
 
 Hardware and production-readiness claims remain limited to evidence explicitly recorded by the qualification system.
 
 Production-support policy and Stable-readiness governance are source-controlled in [Production Support and Stable Readiness](docs/ProductionSupport.md), with the generated [Support and Compatibility Matrix](docs/SupportCompatibilityMatrix.md) and [Production Deployment Baseline](docs/ProductionDeploymentBaseline.md). The current DEV source remains Stable-readiness `UNVERIFIED`; the readiness verifier does not promote release stage.
 
-The Media Library provides bounded local Smart Bins for existing duration, availability and readiness metadata, with cancelable reuse of monitoring thumbnails. Independent hover scrubbing is explicitly unsupported; filters and hover do not open or seek production media. See [Media Library & Asset Browser](docs/MediaLibraryAssetBrowser.md).
+The Media Library provides bounded local Smart Bins for existing duration, availability and readiness metadata, with cancelable reuse of monitoring thumbnails. Independent hover scrubbing is currently unavailable and approved TO IMPLEMENT
+through bounded Runtime-owned analysis; filters and hover do not open or seek
+production media. See [Media Library & Asset Browser](docs/MediaLibraryAssetBrowser.md).
 
 ## Architecture
 
@@ -441,9 +460,11 @@ FFmpeg generation and MXF recording evidence do not authorize input support.
 
 The [capacity admission audit and proposal](docs/FileDeckCapacityAdmission.md)
 distinguishes the existing one/two-deck A/B limit from advertised provider resources,
-retained frame-pool bytes and measured hardware capacity. Four-deck admission and
-SSD-pressure weighting remain proposed, pending scope approval and a confirmed
-physical baseline. A free decoder slot does not authorize another production source.
+retained frame-pool bytes and measured hardware capacity. Finite admission budgets may evolve under the
+[approved Operator scope](docs/OperatorExperienceScope.md), with explicit resource
+contracts and measured capacity. Four-deck admission and SSD-pressure weighting
+remain unimplemented proposals; no four-deck, SATA or NVMe production-support
+claim follows from this approval. A free decoder slot does not authorize another production source.
 Existing Program routing, cleanup quarantine and saved production remain unchanged.
 
 ## Resident next-clip preparation

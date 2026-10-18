@@ -10,7 +10,12 @@
 
 Design direction accepted on **2026-10-17**: a professional, media-first Live Operator with dark graphite surfaces, restrained cyan interaction accents, clearly separated Preview/Program, contextual tools and persistent operational evidence. A generic dashboard of large infrastructure cards is not the primary production interface.
 
-This is the cross-workspace design baseline for subsequent UI work, not a statement that every target below is implemented or visually accepted. The source review baseline is `master` at `7bd13506272dec071bccda23beb767da44562fac`. Implementation must recheck the current master, relevant branches and pull requests before changing anything.
+The [accepted scope decision](OperatorExperienceScope.md), effective **2026-10-17**,
+authorizes the full design implementation beyond the former V1 functional ceiling.
+Independent analysis/scrubbing, real multitrack sequences/editing, Preview shuttle,
+2D canvas/mapping, contextual Inspector extensions and an independent AI workspace
+are approved **TO IMPLEMENT**. This contract defines executable acceptance targets;
+documentation approval is not feature completion or visual/hardware/release acceptance. The historical design-foundation source was `7bd13506272dec071bccda23beb767da44562fac`; the [current reviewed baseline](OperatorExperienceScope.md#status-vocabulary-and-delivery-ownership) is recorded separately. Implementation must recheck the current master, relevant branches and pull requests before changing anything.
 
 Precedence is explicit:
 
@@ -40,7 +45,14 @@ Four experience groups organize the existing eight canonical destinations. They 
 | Outputs | OUTPUTS | Where is Program/Aux going, and what is actually confirmed? |
 | System & Health | HEALTH, SETTINGS | What is degraded, why, and which supported recovery action is safe? |
 
-The conceptual name Outputs & Mapping does not authorize a new 3D stage, projection-warp, edge-blend or arbitrary feed-mapping subsystem. Existing output-role routing remains the V1 implementation. Existing AI capability and effect controls remain available in their established contexts; a separate AI Processing workspace is a future product decision, not a replacement for them.
+The earlier functional deferrals are superseded by the
+[2026-10-17 scope record](OperatorExperienceScope.md#supersession-and-acceptance-checklist):
+2D canvas/mapping and an independent AI workspace are approved implementation
+targets. Existing output-role routing and AI controls remain the implemented
+baseline until their real replacements/extensions are wired. A complete 3D stage,
+new hardware drivers, formats or commercial SDKs are not implied delivery obligations.
+The eight existing workspace identities remain compatible; a new AI destination
+is additive and requires deliberate layout migration/tests.
 
 Retain the same production state, ViewModels, Client commands and monitoring resources across groups. Existing docking, layout templates, Focus/Cinema and detached views are foundations to extend, not systems to rebuild.
 
@@ -56,6 +68,33 @@ The visual hierarchy is Program identity and evidence, confirmed Preview, the ne
 - Keep compact Program/output/audio evidence in the production surface. Move detailed scopes, device configuration and performance histories to their existing destinations; unavailable measurements are not painted as activity.
 
 The confirmed Program name and bus state must remain visible when optional panes collapse or a different workspace is selected. Clean Program and Cinema remain monitoring views, not physical output controllers.
+
+### Required LIVE target and measurable acceptance
+
+This is the **TO IMPLEMENT** composition; current LIVE uses scene/cue selection,
+multiview and Live Controls. Existing screenshots do not certify the new target.
+
+| Region | Required target | Acceptance observation |
+| --- | --- | --- |
+| Left | Media browser/source preparation with usable names, thumbnails, search and readiness | Selection/hover/analysis never changes routing or transport on a production deck |
+| Center | Green Preview on the left, red Program on the right; equal media-canvas allocation | Same available width/height within one physical-pixel rounding tolerance; preserve each source aspect inside its canvas and label PVW/PGM without color dependence |
+| Right | Selection-driven contextual Inspector, explicit draft/Apply/Discard and committed evidence | Stable selection identity; pending/rejected/stale state and units remain visible; no second property store |
+| Bottom | Cue/Rundown context and deliberate ARM/GO/CUT/AUTO actions with confirmed targets | One visible Preview transport per context; Program has no Preview transport; distinct rundown/cue operations are not duplicate playback bars |
+| Shell | Project/Program identity, connection state and compact permanent status | No dashboard-card primary view; detailed health/scopes stay in their task destinations |
+
+Derive all regions from the available container, including titlebar/navigation/
+status space. At **960×540 logical** size, keep Program identity, current Preview
+target, deliberate live actions, critical incident access and restore/navigation
+logically reachable by pointer and keyboard. Move detail into tabs/collapsible
+panes/local scroll regions; do not shrink the entire text/control tree.
+A collapsed Inspector or Library must have a reachable reopen/focus path.
+
+Retain English UI, the existing logo/brand, cyan interaction and the role colors.
+The reference geometry may change when its owner supplies deliberate default/
+layout migration (where persisted meaning changes), source-bound geometry and
+interaction tests, and the necessary focused policy update. Current geometry/
+schema assertions remain active until that implementation; they are not a
+permanent prohibition on the accepted target.
 
 ## Tokens, typography and geometry
 
@@ -96,7 +135,12 @@ Distinguish three quantities whenever the contract supplies them: original media
 
 Preserve the existing GPU presentation path, explicit WPF fallback, high-quality scaling, integer physical target calculation and 80-ms resize settling. Avoid an outer Viewbox, chained resampling or per-frame target allocation. Inspect final resize settlement, fractional DPI edges, aspect preservation and pointer/ROI mapping. GPU/channel/ROI statistics are available only when the actual qualified path supplies them.
 
-Optional monitoring work loses quality/rate or drops frames before it can delay Program. A later full-resolution inspection backend requires bounded resource/admission/cancellation contracts and explicit approval; do not add a decoder or seek production media just to make hover previews look sharper.
+Optional monitoring work loses quality/rate or drops frames before it can delay Program. Independent analysis and position scrubbing are already approved by the scope
+record. Implement their bounded Runtime admission, ownership, source/generation
+and cancellation contracts before enabling them. A preview-only analysis session
+must never seek/reuse a live production deck or create a second admission owner.
+Until that real path exists, current hover remains thumbnail-only; unavailable
+original detail stays explicit.
 
 ## Interaction and production safety
 
@@ -122,7 +166,7 @@ The integrated preparation capability distinguishes:
 
 Present the backend's status, reason, freshness and allowed retry/cancel action. Never turn catalogue presence, an expired observation or an illustration's READY label into resident readiness. Show checks are advisory evidence, not an authorization to launch. See [Media Library](MediaLibraryAssetBrowser.md) and [Show Checks and Activity](ShowPreflightAndActivity.md).
 
-Retain distinct confirmed and draft timeline cursors, IN/OUT, cue identity and context-specific snapping. Only render waveform, transition or editing information that an owning contract actually provides. Show-control cues use the existing ARM/GO/CANCEL and recovery semantics; asset cue markers are not automatically show-control actions.
+Retain distinct confirmed and draft timeline cursors, IN/OUT, cue identity and context-specific snapping. Only render waveform, transition or editing information that an owning contract actually provides. Real multitrack sequences/editing and Preview shuttle are approved TO IMPLEMENT through their own versioned models and Runtime execution, not decorative extra lanes. Show-control cues use the existing ARM/GO/CANCEL and recovery semantics; asset cue markers are not automatically show-control actions.
 
 ## Loading, failure and recovery
 
@@ -146,7 +190,12 @@ Reusing custom drawing does not remove accessibility obligations. Retain bounded
 
 Implementation and visual acceptance are separate. Require the existing Windows/Operator qualification plus a human review of source-bound captures showing connected, disconnected, pending, rejected, unavailable, stale, compact, maximized and detached states. Record the exact commit, Windows/DPI/topology, relevant device/driver and media profile. Generated test fixtures or a successful screenshot export are not human visual acceptance or physical-output qualification.
 
-The roadmap defines the capability/document owners and validation sequence. Existing functional, performance, accessibility and release blockers are not waived by this design approval.
+The [scope integration map](OperatorExperienceScope.md#binding-namespace-and-numeric-allocation-map)
+defines backend namespace/tag ownership; the roadmap defines delivery dependencies.
+Use EXISTING, TO IMPLEMENT, IMPLEMENTED and QUALIFIED as defined in that record.
+Missing human/physical acceptance stays UNVERIFIED without blocking every
+independent model/implementation strand. Existing functional, performance,
+accessibility, security and release blockers are not waived by this approval.
 
 ## Market references and adopted principles
 
@@ -156,7 +205,7 @@ The following primary sources were reviewed on **2026-10-17**. They support the 
 | --- | --- | --- |
 | [Blackmagic Design: Resolve Edit](https://www.blackmagicdesign.com/uk/products/davinciresolve/edit/) and [Cut](https://www.blackmagicdesign.com/products/davinciresolve/cut) | Contextual Inspector, precise time-based work, markers and keyboard-oriented operation | Keep precise media preparation and contextual editing; do not import an entire NLE scope |
 | [Adobe: Source and Program monitors](https://helpx.adobe.com/premiere/desktop/get-started/source-and-program-monitor-adjustments/about-source-monitor-and-program-monitor.html) and [saved/resettable workspaces](https://helpx.adobe.com/premiere/desktop/get-started/tour-the-workspace/change-create-reset-workspaces.html) | Separate source/sequence inspection and persistent panel layouts | Preserve role clarity and recoverable layouts; an editor's Program monitor is not equivalent to live broadcast authority |
-| [PIXERA: User Interface Overview](https://help.pixera.one/user-interface-/user-interface-overview) | Task modes, selection pane, central workspace, selection-driven Inspector, detachable panes | Group existing destinations by workflow and reuse docking; no new projection-mapping scope |
+| [PIXERA: User Interface Overview](https://help.pixera.one/user-interface-/user-interface-overview) | Task modes, selection pane, central workspace, selection-driven Inspector, detachable panes | Reuse docking and selection-driven tools; implement approved 2D canvas/mapping through real governed contracts |
 | [Disguise: Designer User Interface](https://help.disguise.one/designer/ui/designer-user-interface) | Distinct Stage/Feed views and timeline transport | Separate content intent from output routing/evidence; no new 3D stage or feed engine |
 | [Resolume: Clips](https://resolume.com/support/en/clips) and [Screens](https://resolume.com/support/screens) | Direct clip access, previewing and explicit output-device assignment | Fast browsing and visible output targets, but retain explicit preparation/take safety rather than adopting single-click live triggering |
 | [Ross Video: Vertex](https://www.rossvideo.com/products/experiential/vertex/) and [Vertex ControlView](https://ioversal.com/ManualContent/controlview.html) | Unified AV/show-control context and purpose-built operator surfaces | Prefer concise operation over infrastructure dashboards; do not imply equivalent protocols, redundancy, codecs or automation scope |
