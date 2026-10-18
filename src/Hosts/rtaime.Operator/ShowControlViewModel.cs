@@ -11,7 +11,7 @@ using rtaime.Control.Contracts;
 
 namespace rtaime.Operator;
 
-public sealed class ShowControlViewModel : INotifyPropertyChanged
+public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorControlClient _client;
 	private ShowControlCueListEditorItem? _selectedCueList;
@@ -32,29 +32,30 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	private ShowControlExecutionState _serverExecutionState = ShowControlExecutionState.Idle;
 	private bool _requiresAcknowledgement;
 
-	public ShowControlViewModel(OperatorControlClient client)
+	public ShowControlViewModel(OperatorControlClient client, OperatorViewModel? operatorViewModel = null)
 	{
 		_client = client ?? throw new ArgumentNullException(nameof(client));
+		_operator = operatorViewModel;
 		CueLists = [];
 		Templates = new ShowTemplateViewModel(_client, () => SelectedCueList?.CueListId.ToString(), ApplyConfirmedSnapshot);
 		ActionKinds = Enum.GetValues<ShowControlActionKind>();
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
-		NewCueListCommand = new AsyncRelayCommand(NewCueListAsync, () => !IsBusy);
-		SelectCueListCommand = new AsyncRelayCommand(SelectCueListAsync, () => !IsBusy && SelectedCueList is not null);
-		SaveCueListCommand = new AsyncRelayCommand(SaveCueListAsync, () => !IsBusy && SelectedCueList is not null);
-		AddCueCommand = new AsyncRelayCommand(AddCueAsync, () => !IsBusy && SelectedCueList is not null);
-		RemoveCueCommand = new AsyncRelayCommand(RemoveCueAsync, () => !IsBusy && SelectedCueList is not null && SelectedCue is not null && SelectedCueList.Cues.Count > 1);
+		NewCueListCommand = new AsyncRelayCommand(NewCueListAsync, () => CanEditAuthoring);
+		SelectCueListCommand = new AsyncRelayCommand(SelectCueListAsync, () => CanEditAuthoring && SelectedCueList is not null);
+		SaveCueListCommand = new AsyncRelayCommand(SaveCueListAsync, () => CanEditAuthoring && SelectedCueList is not null);
+		AddCueCommand = new AsyncRelayCommand(AddCueAsync, () => CanEditAuthoring && SelectedCueList is not null);
+		RemoveCueCommand = new AsyncRelayCommand(RemoveCueAsync, () => CanEditAuthoring && SelectedCueList is not null && SelectedCue is not null && SelectedCueList.Cues.Count > 1);
 		MoveCueUpCommand = new AsyncRelayCommand(() => MoveCueAsync(-1), () => CanMoveCue(-1));
 		MoveCueDownCommand = new AsyncRelayCommand(() => MoveCueAsync(1), () => CanMoveCue(1));
-		AddActionCommand = new AsyncRelayCommand(AddActionAsync, () => !IsBusy && SelectedCue is not null);
-		RemoveActionCommand = new AsyncRelayCommand(RemoveActionAsync, () => !IsBusy && SelectedCue is not null && SelectedAction is not null && SelectedCue.Actions.Count > 1);
+		AddActionCommand = new AsyncRelayCommand(AddActionAsync, () => CanEditAuthoring && SelectedCue is not null);
+		RemoveActionCommand = new AsyncRelayCommand(RemoveActionAsync, () => CanEditAuthoring && SelectedCue is not null && SelectedAction is not null && SelectedCue.Actions.Count > 1);
 		MoveActionUpCommand = new AsyncRelayCommand(() => MoveActionAsync(-1), () => CanMoveAction(-1));
 		MoveActionDownCommand = new AsyncRelayCommand(() => MoveActionAsync(1), () => CanMoveAction(1));
 		ArmCommand = new AsyncRelayCommand(ArmAsync, CanArm);
 		GoCommand = new AsyncRelayCommand(GoAsync, CanGo);
 		CancelCommand = new AsyncRelayCommand(CancelAsync, CanCancel);
-		ResumeRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(true), () => !IsBusy && _requiresAcknowledgement);
-		CancelRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(false), () => !IsBusy && _requiresAcknowledgement);
+		ResumeRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(true), () => LiveAuthorityAvailable && !IsBusy && _requiresAcknowledgement);
+		CancelRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(false), () => LiveAuthorityAvailable && !IsBusy && _requiresAcknowledgement);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -162,6 +163,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	public void ApplyConfirmedSnapshot(ShowControlWorkspaceSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+		_confirmedLiveSnapshot = snapshot;
 		var localSelectionId = SelectedCueList?.CueListId;
 		var localCueId = SelectedCue?.CueId;
 		var localActionId = SelectedAction?.ActionId;
@@ -341,6 +343,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 		if (IsBusy)
 			return;
 		IsBusy = true;
+		OnPropertyChanged(nameof(IsBusy));
 		Status = "WORKING";
 		RaiseCommandState();
 		try
@@ -424,21 +427,21 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	}
 
 	private bool CanArm() =>
-		!IsBusy &&
+		LiveAuthorityAvailable && !IsBusy &&
 		SelectedCueList is not null &&
 		_serverSelectedCueListId.HasValue &&
 		SelectedCueList.CueListId == _serverSelectedCueListId.Value &&
 		_serverExecutionState is not (ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting or ShowControlExecutionState.RecoveryRequired);
 
-	private bool CanGo() => !IsBusy && _serverExecutionState == ShowControlExecutionState.Armed;
+	private bool CanGo() => LiveAuthorityAvailable && !IsBusy && _serverExecutionState == ShowControlExecutionState.Armed;
 
 	private bool CanCancel() =>
-		!IsBusy &&
+		LiveAuthorityAvailable && !IsBusy &&
 		_serverExecutionState is ShowControlExecutionState.Armed or ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting or ShowControlExecutionState.RecoveryRequired or ShowControlExecutionState.Failed;
 
 	private bool CanMoveCue(int offset)
 	{
-		if (IsBusy || SelectedCueList is null || SelectedCue is null)
+		if (!CanEditAuthoring || SelectedCueList is null || SelectedCue is null)
 			return false;
 		var index = SelectedCueList.Cues.IndexOf(SelectedCue);
 		return index >= 0 && index + offset >= 0 && index + offset < SelectedCueList.Cues.Count;
@@ -446,7 +449,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 
 	private bool CanMoveAction(int offset)
 	{
-		if (IsBusy || SelectedCue is null || SelectedAction is null)
+		if (!CanEditAuthoring || SelectedCue is null || SelectedAction is null)
 			return false;
 		var index = SelectedCue.Actions.IndexOf(SelectedAction);
 		return index >= 0 && index + offset >= 0 && index + offset < SelectedCue.Actions.Count;
@@ -454,6 +457,8 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 
 	private void RaiseCommandState()
 	{
+		OnPropertyChanged(nameof(LiveActionDetail));
+		OnPropertyChanged(nameof(CanEditAuthoring));
 		Templates.RaiseCommandState();
 		foreach (var command in new[]
 		{

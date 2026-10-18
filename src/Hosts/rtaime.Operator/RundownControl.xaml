@@ -105,7 +105,9 @@
 			</Grid>
 		</StackPanel>
 
-		<controls:RtaimeListBox Grid.Row="2"
+		<controls:RtaimeListBox Grid.Row="2" MinHeight="140" MaxHeight="280"
+            AllowDrop="True" PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
+            MouseMove="Rows_MouseMove" DragOver="Rows_DragOver" Drop="Rows_Drop"
 			ItemsSource="{Binding Items}"
 			SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
 			Background="Transparent"
@@ -117,13 +119,19 @@
 			<controls:RtaimeListBox.ItemTemplate>
 				<DataTemplate>
 					<Grid Margin="6,4">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Image Width="58" Height="34" Source="{Binding Thumbnail}" Stretch="Uniform" AutomationProperties.Name="Observed rundown thumbnail" />
+                        <Grid Grid.Column="1">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="*" />
 							<ColumnDefinition Width="Auto" />
 						</Grid.ColumnDefinitions>
 						<StackPanel>
 							<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
-							<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding Duration}" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding Readiness}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding RepeatLabel}" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 						</StackPanel>
 						<Border Grid.Column="1"
 							Margin="6,0,0,0"
@@ -136,6 +144,7 @@
 							<TextBlock Text="{Binding ExecutionState}" FontSize="{StaticResource OperatorFontSizeMicro}" FontWeight="SemiBold" />
 						</Border>
 					</Grid>
+                        </Grid>
 				</DataTemplate>
 			</controls:RtaimeListBox.ItemTemplate>
 		</controls:RtaimeListBox>
@@ -145,7 +154,8 @@
 				<controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Z: undo local authoring only." AutomationProperties.Name="Undo rundown authoring draft" Margin="0,0,4,4" />
 				<controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Y: redo local authoring only." AutomationProperties.Name="Redo rundown authoring draft" />
 			</WrapPanel>
-			<TextBlock Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
+			<TextBlock Text="Drag a row before another row. Save commits the local order." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
@@ -176,8 +186,8 @@
 				<controls:RtaimeButton Content="PREV" Command="{Binding PreviousCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="2" Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="4"
-					Content="GO"
-					Command="{Binding GoCommand}"
+					Content="RUNDOWN GO"
+					Command="{Binding GoCommand}" ToolTip="{Binding LiveActionDetail}" ToolTipService.ShowOnDisabled="True"
 					IsCompact="True"
 					Background="{DynamicResource OperatorAccentBrush}"
 					BorderBrush="{DynamicResource OperatorAccentBrush}"
@@ -225,7 +235,10 @@
 					<TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FollowStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 					<TextBlock Grid.Column="2" Text="{Binding RepeatStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</Grid>
-				<TextBlock Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+				<TextBlock Text="{Binding CurrentItemName, StringFormat=CURRENT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PreparedItemName, StringFormat=PREPARED · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 				<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />

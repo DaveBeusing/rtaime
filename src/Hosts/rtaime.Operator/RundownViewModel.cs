@@ -62,12 +62,12 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
 		PrepareCommand = new AsyncRelayCommand(PrepareAsync, CanPrepare);
-		GoCommand = new AsyncRelayCommand(GoAsync, () => !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
+		GoCommand = new AsyncRelayCommand(GoAsync, () => LiveAuthorityAvailable && !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
 		NextCommand = new AsyncRelayCommand(NextAsync, CanNavigate);
 		PreviousCommand = new AsyncRelayCommand(PreviousAsync, CanNavigate);
-		HoldCommand = new AsyncRelayCommand(HoldAsync, () => !IsBusy && State is "EXECUTING" or "PREPARED" or "HELD");
-		ResumeRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(true), () => !IsBusy && RequiresAcknowledgement);
-		CancelRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(false), () => !IsBusy && RequiresAcknowledgement);
+		HoldCommand = new AsyncRelayCommand(HoldAsync, () => LiveAuthorityAvailable && !IsBusy && State is "EXECUTING" or "PREPARED" or "HELD");
+		ResumeRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(true), () => LiveAuthorityAvailable && !IsBusy && RequiresAcknowledgement);
+		CancelRecoveryCommand = new AsyncRelayCommand(() => AcknowledgeRecoveryAsync(false), () => LiveAuthorityAvailable && !IsBusy && RequiresAcknowledgement);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -134,7 +134,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	public string RepeatStatus { get => _repeatStatus; private set => Set(ref _repeatStatus, value); }
 	public bool HasItems => Items.Count > 0;
 	public bool CanEditAuthoring => CanEditDraft();
-	public string StorageLabel => $"SAVED V{_storageVersion}";
+	public string StorageLabel => _draftConflict ? $"CONFLICT · SAVED V{_storageVersion} · Refresh to reload" : _hasLocalDraft ? $"UNSAVED DRAFT · BASE V{_storageVersion}" : $"SAVED V{_storageVersion}";
 
 	public RundownOperatorItemViewModel? SelectedItem
 	{
@@ -322,6 +322,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 
 	private void MarkDraft()
 	{
+		_hasLocalDraft = true;
 		State = "DRAFT";
 		Detail = "Local authoring changes are not authoritative until saved.";
 		Failure = "NONE";
@@ -342,6 +343,11 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 
 	private void ApplySnapshot(RundownWorkspaceSnapshot snapshot)
 	{
+		_hasLocalDraft = false;
+		_draftConflict = false;
+		_confirmedExecutionActive = snapshot.Execution.State is RundownExecutionState.Executing or RundownExecutionState.RecoveryRequired;
+		_confirmedSnapshot = snapshot;
+		_observationAvailable = true;
 		ClearDraftHistory();
 		var selectedId = SelectedItem?.Item.ItemId;
 		Items.Clear();
@@ -401,6 +407,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		};
 		OnPropertyChanged(nameof(HasItems));
 		OnPropertyChanged(nameof(StorageLabel));
+		UpdateRowEvidence();
 		RaiseCommandState();
 	}
 
@@ -408,7 +415,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	{
 		if (IsBusy)
 			return;
-		ClearDraftHistory();
+		Interlocked.Increment(ref _observationGeneration);
 		IsBusy = true;
 		RaiseCommandState();
 		try
@@ -425,7 +432,8 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 			NotSupportedException)
 		{
 			Failure = exception.Message;
-			State = "FAILED";
+			// A rejected save retains local draft identity and undo history.
+			if (!_hasLocalDraft) State = "FAILED";
 			Detail = "Rundown command was rejected; no local production authority was assumed.";
 		}
 		finally
@@ -435,8 +443,8 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		}
 	}
 
-	private bool CanSave() => CanEditDraft() && Items.Count > 0;
-	private bool CanEditDraft() => !IsBusy && State is not ("EXECUTING" or "RECOVERYREQUIRED");
+	private bool CanSave() => LiveAuthorityAvailable && !_draftConflict && CanEditDraft() && Items.Count > 0;
+	private bool CanEditDraft() => !IsBusy && !_confirmedExecutionActive && State is not ("EXECUTING" or "RECOVERYREQUIRED");
 	private bool CanAddDraft() => CanEditDraft() && Items.Count < RundownDefinition.MaximumItems;
 	private bool CanAddMedia() => CanAddDraft() &&
 		_mediaPool.SelectedItem?.Kind == MediaPoolItemKind.Clip &&
@@ -447,8 +455,8 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	private bool CanAddGraphics() => CanAddDraft() && CanUseSelectedFollowForNonMedia() &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
-	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
-	private bool CanNavigate() => !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanPrepare() => LiveAuthorityAvailable && !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanNavigate() => LiveAuthorityAvailable && !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
 	private bool CanUseSelectedFollowForNonMedia() => SelectedFollowAction != RundownFollowActionKind.AutoOnMediaEnd;
 
 	private bool CanMove(int offset)
@@ -462,6 +470,10 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	private void RaiseCommandState()
 	{
 		OnPropertyChanged(nameof(CanEditAuthoring));
+		OnPropertyChanged(nameof(LiveActionDetail));
+		OnPropertyChanged(nameof(CurrentItemName));
+		OnPropertyChanged(nameof(PreparedItemName));
+		OnPropertyChanged(nameof(StorageLabel));
 		OnPropertyChanged(nameof(DraftHistoryLabel));
 		(UndoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
 		(RedoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
@@ -488,9 +500,9 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
-public sealed class RundownOperatorItemViewModel : INotifyPropertyChanged
+public sealed partial class RundownOperatorItemViewModel : INotifyPropertyChanged
 {
-	private string _executionState = "READY";
+	private string _executionState = "UNVERIFIED";
 
 	public RundownOperatorItemViewModel(RundownItem item)
 	{
@@ -534,6 +546,6 @@ public sealed class RundownOperatorItemViewModel : INotifyPropertyChanged
 			execution.PreparedItemId == Item.ItemId ? execution.PreparedMediaState == "NEXT_READY" ? "NEXT READY" : "PREPARED" :
 			execution.NextItemId == Item.ItemId ? "NEXT" :
 			execution.SelectedItemId == Item.ItemId ? "SELECTED" :
-			"READY";
+			"UNVERIFIED";
 	}
 }

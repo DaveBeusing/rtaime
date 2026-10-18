@@ -76,13 +76,13 @@
 						</Grid.ColumnDefinitions>
 						<controls:RtaimeButton Content="ARM" Command="{Binding ArmCommand}" IsCompact="True" />
 						<controls:RtaimeButton Grid.Column="2"
-							Content="GO · F9"
+							Content="SHOW GO · F9"
 							Command="{Binding GoCommand}"
 							IsCompact="True"
 							Background="{DynamicResource OperatorAccentBrush}"
 							BorderBrush="{DynamicResource OperatorAccentBrush}"
 							Foreground="{DynamicResource OperatorBackgroundBrush}"
-							ToolTip="Execute the armed cue through governed Control commands." />
+							ToolTip="{Binding LiveActionDetail}" ToolTipService.ShowOnDisabled="True" />
 						<controls:RtaimeButton Grid.Column="4" Content="CANCEL" Command="{Binding CancelCommand}" IsCompact="True" />
 					</Grid>
 
@@ -98,7 +98,8 @@
 								<TextBlock Text="{Binding ExecutionState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
 								<TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</DockPanel>
-							<TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+							<TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
 								<Run Text="CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
@@ -114,7 +115,7 @@
 
 			<controls:RtaimeTabItem Header="EDIT">
 				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-					<StackPanel Margin="0,6,2,0">
+					<StackPanel Margin="0,6,2,0" IsEnabled="{Binding CanEditAuthoring}">
 						<TextBlock Text="CUE LIST" Style="{StaticResource OperatorLabel}" />
 						<Grid Margin="0,2,0,4">
 							<Grid.ColumnDefinitions>

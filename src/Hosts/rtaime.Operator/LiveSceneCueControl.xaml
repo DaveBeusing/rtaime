@@ -276,7 +276,12 @@
 					</Border>
 				</Grid>
 			</controls:RtaimeTabItem>
-			<controls:RtaimeTabItem Header="SHOW CONTROL">
+			<controls:RtaimeTabItem Header="RUNDOWN">
+                <controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <local:RundownControl />
+                </controls:RtaimeScrollViewer>
+            </controls:RtaimeTabItem>
+            <controls:RtaimeTabItem Header="SHOW CONTROL">
 				<local:ShowControlCueStackControl />
 			</controls:RtaimeTabItem>
 			<controls:RtaimeTabItem Header="MACROS">
