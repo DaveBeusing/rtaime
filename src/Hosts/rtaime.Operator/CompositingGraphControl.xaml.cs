@@ -97,6 +97,10 @@ public partial class CompositingGraphControl : UserControl
 		GraphViewport.ReleaseMouseCapture();
 		GraphViewport.Cursor = Cursors.Arrow;
 	}
+    private void OnNodeSelectionModifiers(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is { } model) model.ExtendSelection = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+    }
     private void OnWorkspaceUnloaded(object sender, RoutedEventArgs e) { EndPan(); _dragLayer = null; }
     private void OnWorkspaceKeyDown(object sender, KeyEventArgs e)
     {

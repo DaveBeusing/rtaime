@@ -232,7 +232,8 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		SelectNodeCommand = new CompositingGraphCommand(parameter =>
 		{
 			if (parameter is CompositingGraphNodeViewModel node)
-				SelectNode(node, (Keyboard.Modifiers & ModifierKeys.Control) != 0);
+				SelectNode(node, ExtendSelection);
+            ExtendSelection = false;
 		});
 		SelectModeCommand = new CompositingGraphCommand(_ => InteractionMode = CompositingGraphInteractionMode.Select);
 		PanModeCommand = new CompositingGraphCommand(_ => InteractionMode = CompositingGraphInteractionMode.Pan);
@@ -449,6 +450,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	public void Refresh()
 	{
 		var topologyBefore = string.Join("|", Nodes.Select(node => node.Id));
+        var selectedNodeId = SelectedNode?.Id;
         var selectedLayerId = SelectedNode is null ? null : ResolveLayerId(SelectedNode.Id);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
@@ -518,6 +520,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 				SelectedNode = fallback;
 				_inspector.SelectCompositingNode(fallback.Projection);
 			}
+            else if (selectedNodeId is not null) _inspector.ObserveMissingCompositingNode(selectedNodeId);
 		}
 
 		SynchronizeLayers();

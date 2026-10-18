@@ -60,6 +60,9 @@ public sealed partial class MediaPoolInspectorViewModel
         (_discardCompositingIntent as OperatorShellCommand)?.RaiseCanExecuteChanged();
     }
     // Refresh observes the same selected identity without performing another explicit selection.
+    public void ObserveMissingCompositingNode(string id) => SelectCompositingNode(new("missing:" + id,
+        CompositingGraphNodeKind.Composite, "Missing layer or processing node", "Runtime no longer reports " + id +
+        ". Stored local intent remains available for review; edits require a valid current context.", "MISSING", CompositingGraphHealth.Error, []));
     public void ObserveCompositingNode(CompositingGraphNodeProjection node)
     {
         if (_compositingNode?.Id != node.Id) return;

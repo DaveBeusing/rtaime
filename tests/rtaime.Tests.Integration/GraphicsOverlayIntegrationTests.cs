@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
@@ -726,6 +727,73 @@ public sealed class GraphicsOverlayIntegrationTests
 				Directory.Delete(root, recursive: true);
 		}
 	}
+
+
+    [Fact]
+    public async Task Compositing_workspace_commands_cross_real_pipes_preserve_typed_order_and_recall_scene_pixels()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+        var runtimeEndpoint = "rtaime.test.compositing.runtime." + Guid.NewGuid().ToString("N");
+        var controlEndpoint = "rtaime.test.compositing.control." + Guid.NewGuid().ToString("N");
+        await using var runtimeServer = new RuntimeHostIpcServer(runtimeEndpoint, () => fixture.Runtime);
+        await runtimeServer.StartAsync();
+        var runtimeTransport = new NamedPipeRuntimeHostTransport(runtimeEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        await runtimeTransport.ConnectAsync();
+        await using var controlServer = new ControlHostIpcServer(controlEndpoint, () => fixture.Control, runtimeTransport);
+        await controlServer.StartAsync();
+        var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint,
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(12)));
+        await client.SynchronizeAsync();
+        var program = client.Snapshot!.Production.Routing.ProgramSourceId;
+        await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset("compositing-logo.rgba", 1, 1,
+            new byte[] { 0, 200, 80, 255 }));
+        await client.SetGraphicsOverlayAsync(true, 0, 0, 1);
+        await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("COMPOSITING JOURNEY"));
+        await client.SetCompositingLayerTransformAsync("bitmap-graphics", 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
+        var stack = new OperatorCompositingProcessingNodeDescriptor[] {
+            new("journey-key", 2, true, chromaKey: new(0, 255, 0, 0.1, 0.5, 0.6)),
+            new("journey-grade", 1, true, colorGrade: new(0.05, 1.2, 0.4)) };
+        await client.SetCompositingLayerProcessingStackAsync("bitmap-graphics", stack);
+        await client.ReorderCompositingLayersAsync(["production-cg", "bitmap-graphics"]);
+        Assert.Equal(new[] { "production-cg", "bitmap-graphics" }, client.Snapshot!.CompositingLayers.Select(layer => layer.LayerId));
+        Assert.Equal(new[] { "journey-key", "journey-grade" },
+            client.Snapshot.CompositingLayers.Single(layer => layer.LayerId == "bitmap-graphics").ProcessingStack.Select(node => node.NodeId));
+        await using var monitoring = fixture.Runtime.MonitoringHub.Subscribe(capacity: 4, requiresCpuFallback: true);
+        using (var output = fixture.Runtime.ProcessNextBoundary())
+        {
+            AssertPixel(output.ProgramPixels, fixture.Format, 0, 0, 73, 131, 171, 255);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            MonitoringFrame? observed = null;
+            for (var index = 0; index < 3 && observed is null; index++)
+            {
+                var frame = await monitoring.ReadAsync(timeout.Token);
+                if (frame.Descriptor.StreamKind == MonitoringStreamKind.Program) observed = frame;
+            }
+            Assert.NotNull(observed);
+            Assert.Equal(output.ProgramPixels.Span[..4].ToArray(), observed!.Pixels.Span[..4].ToArray());
+        }
+        var sceneId = SceneId.New();
+        fixture.Control.AppendAuthoredScenes([new ProductionSceneSpecification(sceneId, "Confirmed compositing",
+            fixture.Control.State.Routing, fixture.Control.State.CompositingState)]);
+        await client.SynchronizeAsync();
+        Assert.True((await client.ActivateSceneAsync(sceneId.ToString())).Accepted);
+        Assert.Equal(sceneId, client.Snapshot!.Production.ActiveSceneId);
+        await client.SetCompositingLayerTransformAsync("bitmap-graphics", 0.25, 0.2, 1.25, 15, 0.5, 0.5, 0.1, 0.1, 0, 0);
+        Assert.Null(client.Snapshot!.Production.ActiveSceneId);
+        Assert.Equal(15, client.Snapshot.CompositingLayers.Single(layer => layer.LayerId == "bitmap-graphics").RotationDegrees);
+        await client.SetCompositingLayerProcessingStackAsync("bitmap-graphics", stack.Reverse().ToArray());
+        Assert.Equal(new[] { "journey-grade", "journey-key" },
+            client.Snapshot!.CompositingLayers.Single(layer => layer.LayerId == "bitmap-graphics").ProcessingStack.Select(node => node.NodeId));
+        Assert.True((await client.ActivateSceneAsync(sceneId.ToString())).Accepted);
+        using (var recalled = fixture.Runtime.ProcessNextBoundary())
+            AssertPixel(recalled.ProgramPixels, fixture.Format, 0, 0, 73, 131, 171, 255);
+        Assert.Equal(program, client.Snapshot!.Production.Routing.ProgramSourceId);
+        await client.ClearGraphicsOverlayAsync();
+        var rejected = await client.ActivateSceneAsync(sceneId.ToString());
+        Assert.False(rejected.Accepted);
+        Assert.False(fixture.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
+    }
 
 	private static V1ProductionCgTextDefinition LowerThird(string text) => new(
 		text,

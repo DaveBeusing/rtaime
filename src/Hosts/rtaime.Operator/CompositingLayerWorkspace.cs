@@ -77,6 +77,7 @@ public sealed partial class CompositingGraphViewModel
     public ICommand ReviewLayerDraftCommand { get; private set; } = null!;
     public ICommand ApplyOrderDraftCommand { get; private set; } = null!;
     public ICommand DiscardOrderDraftCommand { get; private set; } = null!;
+    public bool ExtendSelection { get; set; }
     public bool ShowLayers { get => _showLayers; set => Set(ref _showLayers, value); }
     public string SearchText
     {
@@ -89,7 +90,8 @@ public sealed partial class CompositingGraphViewModel
     public string SceneDeclaration => _operator.SelectedScene is { } scene
         ? $"SCENE DESIRED · {scene.Name} · {scene.DesiredLayerCount} declared layers" : "SCENE DESIRED · none selected";
     public string RuntimeEvidence => $"{(_operator.IsStale || !_operator.IsConnected ? "STALE / DISCONNECTED" : "RUNTIME OBSERVED")} · {_operator.CompositingLayers.Count} layers · active scene: {_operator.ActiveSceneName}";
-    public string SelectionEvidence => SelectedLayerCount > 1
+    public bool CanStageLayerDraft => SelectedLayerCount == 1 && SelectedLayer() is { Kind: 2 or 3 };
+    public string SelectionEvidence => SelectedLayerCount == 1 && !CanStageLayerDraft ? "READ ONLY · layer state capability is unavailable" : SelectedLayerCount > 1
         ? $"{SelectedLayerCount} layers · common-property review only; no atomic batch edit"
         : SelectedLayerRow is { StateConflict: true } ? "DRAFT CONFLICT · Runtime changed; REVIEW before APPLY"
         : SelectedLayerRow is { HasStateDraft: true } ? "LOCAL DRAFT · APPLY confirms; graph remains Runtime evidence"
@@ -174,6 +176,7 @@ public sealed partial class CompositingGraphViewModel
     }
     private void SynchronizeSelectedLayerDraft()
     {
+        OnPropertyChanged(nameof(CanStageLayerDraft));
         OnPropertyChanged(nameof(SelectedLayerRow));
         OnPropertyChanged(nameof(SelectedLayerCount));
         OnPropertyChanged(nameof(SelectionEvidence));
