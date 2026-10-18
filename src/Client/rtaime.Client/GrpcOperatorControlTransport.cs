@@ -554,11 +554,11 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 
 
     public async ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasSnapshot>((await ExecuteShowRequestAsync(r => r.GetOutputCanvas = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+        OutputCanvasJson.ReadResponse<OutputCanvasSnapshot>((await ExecuteShowRequestAsync(r => r.GetOutputCanvas = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
     public async ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasValidation>((await ExecuteShowRequestAsync(r => r.ValidateOutputCanvas = Raw(draft), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+        OutputCanvasJson.ReadResponse<OutputCanvasValidation>((await ExecuteShowRequestAsync(r => r.ValidateOutputCanvas = Raw(draft), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
     public async ValueTask<OutputCanvasSaveResult> SaveOutputCanvasAsync(OutputCanvasSaveRequest request, CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasSaveResult>((await ExecuteShowRequestAsync(r => r.SaveOutputCanvas = Raw(request), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+        OutputCanvasJson.ReadResponse<OutputCanvasSaveResult>((await ExecuteShowRequestAsync(r => r.SaveOutputCanvas = Raw(request), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
 
 	public async ValueTask<RundownWorkspaceSnapshot> GetRundownSnapshotAsync(CancellationToken cancellationToken = default) =>
 		NamedPipeOperatorControlTransport.DecodeExternalRundown((await ExecuteRundownRequestAsync(request => request.GetRundown = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.Span);

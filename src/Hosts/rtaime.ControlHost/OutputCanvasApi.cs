@@ -6,6 +6,8 @@ namespace rtaime.ControlHost;
 
 public sealed partial class ControlHostIpcServer
 {
+    private readonly ProductionSpecification? _outputCanvasBaseline;
+
     private async ValueTask<WireEnvelope> RunOutputCanvasAsync(WireEnvelope request, CancellationToken cancellationToken)
     {
         if (_showProjectStore is null) return Error(request, "canvas.unavailable", "Durable show persistence is unavailable.");
@@ -13,16 +15,23 @@ public sealed partial class ControlHostIpcServer
         try
         {
             var control = _controlAccessor() ?? throw new InvalidOperationException("Control authority is unavailable.");
-            var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+            var baseline = _outputCanvasBaseline ?? control.Specification;
+            var project = await _showProjectStore.LoadAsync(baseline, cancellationToken).ConfigureAwait(false);
+            var persisted = project.OutputCanvasJson is null ? null : ShowProjectPersistenceStore.ReadOutputCanvasDocument(project.OutputCanvasJson).Saved;
+            RuntimeRemoteSnapshot? runtime = null;
+            try { if (_runtimeTransport.IsConnected) runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+            catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException) { }
             var roles = control.State.OutputRoles;
-            var targets = (runtime.OutputRoles ?? []).Where(r => roles.Any(a =>
+            var targets = (runtime?.OutputRoles ?? []).Where(r => roles.Any(a =>
                     a.RoleId.ToString() == r.RoleId && a.SourceId.Value == r.SourceId.Value))
                 .Select(r => new OutputCanvasTarget(r.ProviderId.ToString(), r.TargetId.ToString(), "production",
                     checked((int)r.Format.Width), checked((int)r.Format.Height),
                     "Configured Runtime sink; canvas rendering and physical qualification are not established.", r.RoleId)).ToArray();
-            var legacy = OutputCanvasLegacy.Reconstruct(control.State.ProductionId, roles,
-                checked((int)runtime.Format.Width), checked((int)runtime.Format.Height), targets);
-            var saved = await _showProjectStore.LoadOutputCanvasAsync(control.Specification, legacy, cancellationToken).ConfigureAwait(false);
+            var legacy = persisted ?? (runtime is null
+                ? throw new InvalidOperationException("Runtime format is required to reconstruct legacy identity canvases.")
+                : OutputCanvasLegacy.Reconstruct(control.State.ProductionId, roles,
+                    checked((int)runtime.Format.Width), checked((int)runtime.Format.Height), targets));
+            var saved = legacy;
             switch (request.MessageType)
             {
                 case "control.output.canvas.get":
@@ -40,7 +49,7 @@ public sealed partial class ControlHostIpcServer
                     return Success(request, request.MessageType + ".response", validation with { Issues = issues.ToArray() });
                 case "control.output.canvas.save":
                     var edit = OutputCanvasJson.Read<OutputCanvasSaveRequest>(request.Payload.GetRawText());
-                    var result = await _showProjectStore.SaveOutputCanvasAsync(control.Specification, legacy, edit, targets, cancellationToken).ConfigureAwait(false);
+                    var result = await _showProjectStore.SaveOutputCanvasAsync(baseline, legacy, edit, targets, cancellationToken).ConfigureAwait(false);
                     if (result.Saved && !result.Replayed) NotifyObservableStateChanged();
                     return Success(request, request.MessageType + ".response", result);
                 default: return Error(request, "ipc.message.unknown", "Unknown canvas operation.");

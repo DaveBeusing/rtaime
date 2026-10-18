@@ -695,11 +695,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 
     public async ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasSnapshot>((await ExchangeAsync("control.output.canvas.get", new { }, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
+        OutputCanvasJson.ReadResponse<OutputCanvasSnapshot>((await ExchangeAsync("control.output.canvas.get", new { }, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
     public async ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasValidation>((await ExchangeAsync("control.output.canvas.validate", draft, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
+        OutputCanvasJson.ReadResponse<OutputCanvasValidation>((await ExchangeAsync("control.output.canvas.validate", draft, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
     public async ValueTask<OutputCanvasSaveResult> SaveOutputCanvasAsync(OutputCanvasSaveRequest request, CancellationToken cancellationToken = default) =>
-        OutputCanvasJson.Read<OutputCanvasSaveResult>((await ExchangeAsync("control.output.canvas.save", request, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
+        OutputCanvasJson.ReadResponse<OutputCanvasSaveResult>((await ExchangeAsync("control.output.canvas.save", request, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
 
 	public async ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default)
 	{

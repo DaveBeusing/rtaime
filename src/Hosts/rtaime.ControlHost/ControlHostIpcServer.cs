@@ -87,6 +87,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		if ((showProjectStore is null) != (showProject is null))
 			throw new ArgumentException("Durable show-project store and snapshot must be configured together.");
 		_showProjectStore = showProjectStore;
+		_outputCanvasBaseline = baselineSpecification;
 		_showProject = showProject;
 		_mediaSourceDiscovery = showProjectStore is not null && baselineSpecification is not null
 			? new MediaSourceDiscoveryAdoptionService(_controlAccessor, _runtimeTransport, showProjectStore, baselineSpecification)

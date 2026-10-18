@@ -562,6 +562,9 @@ public sealed class ShowProjectPersistenceIntegrationTests
                 await management.InitializeAsync();
                 var store = new ShowProjectPersistenceStore(management);
                 await store.LoadOrCreateAsync(specification);
+                var adopted = new ProductionSourceSpecification(ProductionSourceId.New(),"Adopted input",
+                    new ProductionSourceProviderBinding(Identity.New(),"media.input",Identity.New(),"ndi://Test"));
+                await store.AdoptSourceAsync(specification,adopted);
                 legacy = OutputCanvasLegacy.Reconstruct(specification.ProductionId,specification.InitialOutputRoles,1920,1080,targets);
                 var repeated = OutputCanvasLegacy.Reconstruct(specification.ProductionId,specification.InitialOutputRoles,1920,1080,targets);
                 Assert.Equal(legacy.ConfigurationId,repeated.ConfigurationId);
@@ -571,7 +574,10 @@ public sealed class ShowProjectPersistenceIntegrationTests
                 Assert.Equal(beforeRead,await management.GetDocumentAsync("show.project",specification.ProductionId.ToString()));
                 var id = Guid.NewGuid();
                 first = new("1.0",Guid.NewGuid(),legacy.ConfigurationId,0,
-                    [new(OutputCanvasEditKind.AddCanvas,id,Canvas:new(id,"Square",512,512))]);
+                    [new(OutputCanvasEditKind.AddCanvas,id,Canvas:new(id,"Square",512,512)),
+                     new(OutputCanvasEditKind.AddSurface,Guid.Parse("86000000-0000-0000-0000-000000000099"),
+                         Surface:new(Guid.Parse("86000000-0000-0000-0000-000000000099"),id,
+                             new(SourceId:adopted.SourceId.ToString()),0,new(0,0,1,1),OutputCanvasQuad.Rectangle(0,0,512,512)))]);
                 var write = await store.SaveOutputCanvasAsync(specification,legacy,first,targets);
                 Assert.True(write.Saved,string.Join(";",write.Validation.Issues.Select(i=>i.Message)));
                 for (ulong revision = 1; revision < 7; revision++)

@@ -12,9 +12,11 @@ public static class OutputCanvasJson
         MaxDepth = 32
     };
 
-    public static T Read<T>(string json)
+    public static T ReadResponse<T>(string json) => Read<T>(json, 1024 * 1024);
+
+    public static T Read<T>(string json, int maximumBytes = OutputCanvasContract.MaximumJsonBytes)
     {
-        if (Encoding.UTF8.GetByteCount(json) > OutputCanvasContract.MaximumJsonBytes)
+        if (Encoding.UTF8.GetByteCount(json) > maximumBytes)
             throw new InvalidDataException("Canvas request exceeds its byte limit.");
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 32 });
         RejectDuplicates(document.RootElement);
