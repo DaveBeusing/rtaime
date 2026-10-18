@@ -62,6 +62,9 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Mixer interaction regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~AudioMixer"
+
       - name: Output canvas geometry persistence and transport regressions
         shell: pwsh
         run: |
@@ -295,9 +298,6 @@ jobs:
 
       - name: Show template compatibility and authoring regressions
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~ShowTemplate|FullyQualifiedName~ShowControlCoordinatorIntegrationTests.Template_"
-
-      - name: Mixer interaction regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~AudioMixer"
 
       - name: Test
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1
