@@ -66,6 +66,7 @@ capture review is not a blanket implementation prerequisite.
 
 | Domain / target | Dependency and real completion |
 | --- | --- |
+| Resource admission | Extend existing Runtime/provider reservations with finite session/byte/queue budgets and cancellation/cleanup tests; measured capacity, not a V1 functional ceiling, governs supported concurrency |
 | Independent analysis/scrub | Reuse Runtime admission/catalogue identity; bounded cancelable analysis sessions and Client/Host tests precede browser scrub UI |
 | Sequence model/execution | Versioned durable tracks/clips/edit transactions; revision/generation-fenced prepared Runtime sink on the existing cadence; real persistence/recovery before editing UI |
 | Preview shuttle | Typed directional/rate/end/cancel semantics and confirmed Preview identity; extend existing J single-step/L normal-play through shared commands with text-entry/repeat guards |

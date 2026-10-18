@@ -460,9 +460,11 @@ FFmpeg generation and MXF recording evidence do not authorize input support.
 
 The [capacity admission audit and proposal](docs/FileDeckCapacityAdmission.md)
 distinguishes the existing one/two-deck A/B limit from advertised provider resources,
-retained frame-pool bytes and measured hardware capacity. Four-deck admission and
-SSD-pressure weighting remain proposed, pending scope approval and a confirmed
-physical baseline. A free decoder slot does not authorize another production source.
+retained frame-pool bytes and measured hardware capacity. Finite admission budgets may evolve under the
+[approved Operator scope](docs/OperatorExperienceScope.md), with explicit resource
+contracts and measured capacity. Four-deck admission and SSD-pressure weighting
+remain unimplemented proposals; no four-deck, SATA or NVMe production-support
+claim follows from this approval. A free decoder slot does not authorize another production source.
 Existing Program routing, cleanup quarantine and saved production remain unchanged.
 
 ## Resident next-clip preparation

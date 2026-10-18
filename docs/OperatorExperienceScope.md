@@ -77,6 +77,7 @@ this baseline changes no version, protocol, schema or production source file.
 
 | Requirement / status | Reuse and implementation owner | Real acceptance boundary |
 | --- | --- | --- |
+| Resource admission — EXISTING owners / TO IMPLEMENT extensions | Existing Runtime deck registry, provider capability/reservation and bounded pools | Evolve finite limits with explicit byte/session/queue budgets, ownership, cancellation and measured admission; no new global admission owner or inferred four-deck/hardware support |
 | Independent analysis/scrub — TO IMPLEMENT | MediaLibraryHoverPreview currently reuses a thumbnail; catalogue identity and Runtime admission/provider lifecycle are EXISTING | Runtime-owned bounded preview-only jobs; generation/source fencing, cancel/close, metadata/audio/sample results; no seek/open of the production deck from hover; Client/host tests before UI completion |
 | Multitrack sequence/editing — TO IMPLEMENT | MediaTimelineController/ViewModel, markers, local drafts, Show Control and Rundown are EXISTING | Control-owned versioned durable sequence/track/clip model, revision checks and migration; Runtime prepared execution/sink on existing cadence; authoring/transport/failure/recovery tests; current reference lanes are not tracks with this behavior |
 | Preview shuttle — TO IMPLEMENT | Existing confirmed-Preview guard and shared command/keyboard registry | Typed rate/direction, seek/cancel/end semantics and source identity through Client/Control/Runtime; no Program seek from J/L; existing J steps one Preview frame back and L plays at normal rate, both excluded on Program; reverse/multirate shuttle is still missing |
@@ -167,6 +168,7 @@ and documentation does not mark them repaired.
 | Workspace/design: Outputs & Mapping does not authorize mapping | 2D canvas/mapping is approved; 3D stage, new driver and physical output certification are separate |
 | Eight destinations / schema-6 geometry in current workspace/UI docs | Current implementation inventory, not a permanent workspace or geometry ceiling; migrate/test deliberate additions |
 | Layered Timeline explicit non-goals, Media Library unsupported scrub and Inspector batch deferrals | Historical/current implementation limits, superseded as functional prohibitions for approved sequence/editing, analysis/scrub and contextual editing; real contracts remain required |
+| Capacity proposals requiring another V1 functional inclusion decision | Finite resource-admission evolution is authorized; exact capacities need real contracts and measured evidence, with no automatic four-deck/SSD-support claim |
 | Bootstrap architecture, Media I/O accepted ADR and decoder decisions | Authority, dependencies, compatibility, native ABI, security and hardware/codec evidence remain binding; no blanket repeal |
 
 Review all active scope statements against this record; preserve old V1 names and
