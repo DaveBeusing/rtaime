@@ -40,9 +40,21 @@ approved for production.
 | At 50 fps | 1,658,880,000 B/s |
 | At 60000/1001 fps | approximately 1,988,667,333 B/s |
 | Upload plus readback once per frame | twice the corresponding directional demand |
-| Four retained host readback buffers (current GPU default count) | 132,710,400 bytes |
+| Four retained host readback buffers (standalone GPU provider default, not Runtime composition) | 132,710,400 bytes |
+| Sixty-four distinct retained recording frames (ProgramRecorder default queue count) | 2,123,366,400 bytes |
+| Runtime base readback capacity, 64 recording slots + 3 | 2,222,899,200 bytes |
 | Eight retained full-frame leases (replay default queue count) | 265,420,800 bytes |
 | Eight cached buffers of this size (managed backend cache count limit) | 265,420,800 bytes |
+
+Runtime composition does **not** use the standalone four-buffer default:
+`V1RuntimeHostService.ProgramReadbackBufferCapacity` is
+`ProgramRecorder.DefaultQueueCapacity + 3` (67), then adds the sum of configured
+network queue capacities and optional replay queue capacity. With default replay
+capacity eight and no network output the hypothetical UHD readback capacity is
+75 buffers / 2,488,320,000 bytes. These are potential pool payload bounds, not
+eager allocations, observed residency, additional independent copies or evidence
+that existing HD settings are appropriate for UHD. That multi-gigabyte envelope
+requires explicit byte admission before any format widening.
 
 Shared leases can reference one allocation; count unique allocations and retention
 duration, not just references. Conversely worker/current-frame buffers can exist
