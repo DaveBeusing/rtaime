@@ -57,7 +57,8 @@ public sealed record PersistedShowProject(
 	string? ProductionMacroExecutionJson = null,
 	ulong ProductionMacroExecutionVersion = 0,
 	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null,
-	string? OutputCanvasJson = null)
+	string? OutputCanvasJson = null,
+	string? SequenceJson = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -730,7 +731,7 @@ public sealed partial class ShowProjectPersistenceStore
 	{
 		var effective = project.ApplyTo(baseline);
 		var document = new ProjectDocument(
-			project.OutputCanvasJson is null ? DocumentFormat : "rtaime.show-project.v2",
+			project.SequenceJson is not null ? "rtaime.show-project.v3" : project.OutputCanvasJson is null ? DocumentFormat : "rtaime.show-project.v2",
 			project.ProjectId.ToString(),
 			project.ProductionId.ToString(),
 			project.Name,
@@ -747,7 +748,8 @@ public sealed partial class ShowProjectPersistenceStore
 			project.ProductionMacroExecutionJson,
 			project.ProductionMacroExecutionVersion,
 			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray(),
-			project.OutputCanvasJson);
+			project.OutputCanvasJson,
+			project.SequenceJson);
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -757,13 +759,14 @@ public sealed partial class ShowProjectPersistenceStore
 	{
 		var document = JsonSerializer.Deserialize<ProjectDocument>(persisted.Json, JsonOptions)
 			?? throw new InvalidDataException("Persisted show project is empty.");
-		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal) && document.Format != "rtaime.show-project.v2")
+		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal) && document.Format != "rtaime.show-project.v2" && document.Format != "rtaime.show-project.v3")
 			throw new InvalidDataException($"Unsupported show project format '{document.Format}'.");
 		if (!string.Equals(document.ProductionId, baseline.ProductionId.ToString(), StringComparison.Ordinal))
 			throw new InvalidDataException("Persisted show project belongs to a different production.");
 
-		if ((document.Format == "rtaime.show-project.v2") != (document.OutputCanvasJson is not null))
-			throw new InvalidDataException("Show format and canvas extension must agree.");
+		if ((document.Format == "rtaime.show-project.v3") != (document.SequenceJson is not null) ||
+            (document.Format != "rtaime.show-project.v3" && ((document.Format == "rtaime.show-project.v2") != (document.OutputCanvasJson is not null))))
+            throw new InvalidDataException("Show format and authored extensions must agree.");
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
 		var adoptedSources = (document.AdoptedSources ?? Array.Empty<SourceDocument>())
@@ -790,7 +793,8 @@ public sealed partial class ShowProjectPersistenceStore
 			document.ProductionMacroExecutionJson,
 			document.ProductionMacroExecutionVersion,
 			adoptedSources,
-			document.OutputCanvasJson);
+			document.OutputCanvasJson,
+			document.SequenceJson);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -807,6 +811,7 @@ public sealed partial class ShowProjectPersistenceStore
 		ValidateAdoptedSources(baseline, project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>());
 		ValidateScenes(effective, project.Scenes);
 		ValidateGraphics(project.Graphics);
+		if (project.SequenceJson is { } sequenceJson) _ = ReadSequenceDocument(sequenceJson);
 		if (project.OutputCanvasJson is { } canvasJson)
         {
             var canvas = ReadOutputCanvasDocument(canvasJson).Saved;
@@ -1416,7 +1421,8 @@ public sealed partial class ShowProjectPersistenceStore
 		string? ProductionMacroExecutionJson = null,
 		ulong ProductionMacroExecutionVersion = 0,
 		SourceDocument[]? AdoptedSources = null,
-		string? OutputCanvasJson = null);
+		string? OutputCanvasJson = null,
+		string? SequenceJson = null);
 
 	private sealed record SourceProviderBindingDocument(
 		string ProviderId,

@@ -9,7 +9,7 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Client;
 
-public sealed class NamedPipeOperatorControlTransport : IOperatorControlTransport
+public sealed partial class NamedPipeOperatorControlTransport : IOperatorControlTransport
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;

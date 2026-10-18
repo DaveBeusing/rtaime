@@ -14,7 +14,7 @@ using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
-public sealed class ExternalControlIntegrationTests
+public sealed partial class ExternalControlIntegrationTests
 {
     [Fact]
     public async Task Catalogue_preflight_roundtrips_grpc_and_pipes_without_changing_production_or_deck_state()

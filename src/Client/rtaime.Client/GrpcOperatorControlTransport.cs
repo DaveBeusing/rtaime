@@ -81,7 +81,7 @@ public sealed record ExternalControlCapabilitySnapshot(
 	string AuthenticatedRole,
 	IReadOnlyList<string> Capabilities);
 
-public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IAsyncDisposable
+public sealed partial class GrpcOperatorControlTransport : IOperatorControlTransport, IAsyncDisposable
 {
 	private const string ApiVersion = "1.0";
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

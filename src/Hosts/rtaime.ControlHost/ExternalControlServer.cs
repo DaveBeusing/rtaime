@@ -529,6 +529,7 @@ internal static class ExternalControlOperationCatalog
 	[
 		"control.ping", "control.snapshot.get",
 		"control.output.canvas.get", "control.output.canvas.validate", "control.output.canvas.save",
+        "control.sequence.list", "control.sequence.get", "control.sequence.save", "control.sequence.edit", "control.sequence.undo", "control.sequence.redo",
 		"control.preview.select", "control.scene.activate", "control.output.route", "control.program.cut", "control.program.dissolve",
 		"control.audio.input.set", "control.audio.routing.set", "control.audio.test_signal.set", "control.test_pattern.set",
 		"control.graphics.overlay.load", "control.graphics.cg.apply", "control.graphics.overlay.set", "control.graphics.overlay.clear",
@@ -546,7 +547,7 @@ internal static class ExternalControlOperationCatalog
 	public static IReadOnlyList<string> All => Capabilities;
 
 	public static ExternalControlRole RequiredRole(string operation) =>
-		operation is "control.output.canvas.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
+		operation is "control.sequence.list" or "control.sequence.get" or "control.output.canvas.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
 			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" or
 			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
 			"control.production_macro.snapshot.get" or "control.production_macro.get" or "control.production_macro.validate"
@@ -775,7 +776,13 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		string operation;
 		switch (request.OperationCase)
 		{
-			case ExternalControlRequest.OperationOneofCase.GetOutputCanvas: operation = "control.output.canvas.get"; payload = new { }; break;
+			case ExternalControlRequest.OperationOneofCase.ListSequences: operation = "control.sequence.list"; payload = new { }; break;
+            case ExternalControlRequest.OperationOneofCase.GetSequence: return Raw("control.sequence.get", request.GetSequence);
+            case ExternalControlRequest.OperationOneofCase.SaveSequence: return Raw("control.sequence.save", request.SaveSequence);
+            case ExternalControlRequest.OperationOneofCase.EditSequence: return Raw("control.sequence.edit", request.EditSequence);
+            case ExternalControlRequest.OperationOneofCase.UndoSequence: return Raw("control.sequence.undo", request.UndoSequence);
+            case ExternalControlRequest.OperationOneofCase.RedoSequence: return Raw("control.sequence.redo", request.RedoSequence);
+            case ExternalControlRequest.OperationOneofCase.GetOutputCanvas: operation = "control.output.canvas.get"; payload = new { }; break;
             case ExternalControlRequest.OperationOneofCase.ValidateOutputCanvas: return Raw("control.output.canvas.validate", request.ValidateOutputCanvas);
             case ExternalControlRequest.OperationOneofCase.SaveOutputCanvas: return Raw("control.output.canvas.save", request.SaveOutputCanvas);
             case ExternalControlRequest.OperationOneofCase.Ping: operation = "control.ping"; payload = new { }; break;

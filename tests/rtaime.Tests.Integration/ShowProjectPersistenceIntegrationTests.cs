@@ -9,7 +9,7 @@ using rtaime.Persistence;
 
 namespace rtaime.Tests.Integration;
 
-public sealed class ShowProjectPersistenceIntegrationTests
+public sealed partial class ShowProjectPersistenceIntegrationTests
 {
 	[Fact]
 	public async Task Adopted_external_source_persists_without_changing_production_routing()

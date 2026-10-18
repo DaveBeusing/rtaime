@@ -12,7 +12,13 @@
 			"prefixItems": [],
 			"items": {
 				"enum": [
-					"control.ping",
+					"control.sequence.list",
+                    "control.sequence.get",
+                    "control.sequence.save",
+                    "control.sequence.edit",
+                    "control.sequence.undo",
+                    "control.sequence.redo",
+                    "control.ping",
 					"control.snapshot.get",
                     "control.output.canvas.get",
                     "control.output.canvas.validate",

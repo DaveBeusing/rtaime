@@ -157,3 +157,7 @@ GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
 invalidates next evidence. See [prepared-next playout](PreparedNextPlayout.md)
 for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
 qualification limits. Physical/no-gap acceptance remains UNVERIFIED.
+
+## Durable sequence authoring
+
+See [Sequence Authoring and Persistence](SequenceAuthoring.md) for the canonical multitrack backend, rational time and revisioned edit contract. Playback remains unavailable; the existing Rundown execution model retain their current authority.
