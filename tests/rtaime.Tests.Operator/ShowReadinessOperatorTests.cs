@@ -100,7 +100,11 @@ public sealed class ShowReadinessOperatorTests
 		var item = Assert.Single(center.Groups[0].Items);
 		Assert.Equal("FATAL", center.Groups[0].Label);
 		Assert.False(item.SnoozeCommand.CanExecute(null));
+		Assert.False(item.DismissCommand.CanExecute(null));
+		item.DismissCommand.Execute(null); context.Drain();
+		item.AcknowledgeCommand.Execute(null); context.Drain();
 		Assert.Single(center.ActiveProblems);
+		Assert.Contains(center.Items, row => row.Key == "fatal");
 		Assert.Equal(center.Items.Count, center.Groups.Sum(group => group.Items.Count));
 		Assert.InRange(center.Toasts.Count, 0, 4);
 		var transient = center.Items.First(row => row.Key != "fatal");
@@ -110,6 +114,23 @@ public sealed class ShowReadinessOperatorTests
 		center.Dispose(); context.Drain();
 		service.Publish(fatal);
 		Assert.Empty(context.Pending);
+	}
+
+	[Fact]
+	public void Changing_a_notification_to_fatal_rechecks_dismissal_at_execution()
+	{
+		var service = new NotificationService();
+		var fault = new OperatorNotification("condition", OperatorNotificationCategory.Error,
+			OperatorNotificationCondition.Active, "Failure", "Evidence", "Runtime", "Review Health", "Unknown", true);
+		service.Publish(fault);
+		var item = new OperatorNotificationItemViewModel(service.Current.Single(), service);
+		Assert.True(item.DismissCommand.CanExecute(null));
+		var fatal = fault with { Condition = OperatorNotificationCondition.Fatal };
+		service.Publish(fatal); item.Apply(service.Current.Single());
+		Assert.False(item.DismissCommand.CanExecute(null));
+		item.DismissCommand.Execute(null);
+		Assert.Single(service.Current);
+		Assert.Equal(OperatorNotificationCondition.Fatal, service.Current.Single().Condition);
 	}
 
 	[Fact]

@@ -21,7 +21,8 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 		SnoozeCommand = new NotificationCommand(() => service?.Snooze(Key, TimeSpan.FromMinutes(5)),
 			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal && !IsSnoozed);
 		ResumeCommand = new NotificationCommand(() => service?.Resume(Key), () => service is not null && IsSnoozed);
-		DismissCommand = new NotificationCommand(() => service?.Dismiss(Key), () => service is not null);
+		DismissCommand = new NotificationCommand(() => service?.Dismiss(Key),
+			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal);
 		NavigateCommand = new NotificationCommand(() => navigate?.Invoke(_notification.TargetWorkspace), () => navigate is not null);
 		ToggleTechnicalDetailsCommand = new NotificationCommand(
 			() => IsTechnicalDetailsVisible = !IsTechnicalDetailsVisible,
@@ -45,6 +46,7 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 		(AcknowledgeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
 		(SnoozeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
 		(ResumeCommand as NotificationCommand)?.RaiseCanExecuteChanged();
+		(DismissCommand as NotificationCommand)?.RaiseCanExecuteChanged();
 	}
 	public string Key => _notification.Key;
 	public string Category => _notification.Category.ToString().ToUpperInvariant();
@@ -332,12 +334,12 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 					OperatorNotificationCategory.Success,
 					OperatorNotificationCondition.Resolved,
 					"Runtime recovery completed",
-					"Fresh authoritative state has been restored.",
+					"Fresh authoritative state has been restored. Review the current revision and correlated action history.",
 					"Runtime",
-					"No operator action is required.",
+					"Inspect any unconfirmed request before issuing a new explicit action. Recovery never replays live actions.",
 					"Production availability follows the current Runtime readiness state.",
 					Persistent: false,
-					TechnicalDetail: _operator.EngineLifecycleDetail,
+					TechnicalDetail: $"{_operator.RevisionLabel} · {_operator.EngineLifecycleDetail}",
 					Lifetime: TimeSpan.FromSeconds(8)));
 				break;
 
