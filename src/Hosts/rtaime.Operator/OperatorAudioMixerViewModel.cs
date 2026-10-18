@@ -383,7 +383,9 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 				? "ControlHost is disconnected. Mixer evidence is read-only until a confirmed snapshot returns."
 				: !string.Equals(_owner.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 					? $"Runtime is {_owner.RuntimeStatus}. Mixer mutations require READY state."
-					: _owner.IsBusy
+					: _owner.ProgramSafety == OperatorProgramSafetyStates.Blocked
+                        ? _owner.GlobalReadinessSummary + " Edits remain local; Apply is blocked."
+                    : _owner.IsBusy
 						? "A governed mutation is awaiting authoritative confirmation."
 						: _owner.Client?.Snapshot?.AudioProduction is null
 							? "Advanced audio production state is unavailable."

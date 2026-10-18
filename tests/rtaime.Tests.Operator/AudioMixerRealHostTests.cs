@@ -39,6 +39,7 @@ public sealed class AudioMixerRealHostTests
                 guarded.SynchronizeCommand.Execute(null);
                 await Until(() => Task.FromResult(guarded.IsConnected && !guarded.IsBusy));
                 Assert.False(guarded.AudioMixer.CanEdit);
+                Assert.Contains(guarded.GlobalReadinessSummary, guarded.AudioMixer.DisabledReason);
                 var blocked = guarded.AudioMixer.Sources[0];
                 blocked.Gain = .75;
                 var version = client.Snapshot!.AudioProduction!.Configuration.Revision;
