@@ -20,18 +20,20 @@
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="*" />
 							<ColumnDefinition Width="4" />
-							<ColumnDefinition Width="72" />
+							<ColumnDefinition Width="104" />
 						</Grid.ColumnDefinitions>
 						<controls:RtaimeComboBox
 							ItemsSource="{Binding CueLists}"
 							SelectedItem="{Binding SelectedCueList, Mode=TwoWay}"
 							DisplayMemberPath="Name"
 							AutomationProperties.Name="Show control cue list" />
-						<controls:RtaimeButton Grid.Column="2"
-							Content="SELECT"
+						<StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <controls:RtaimeButton Content="SELECT"
 							Command="{Binding SelectCueListCommand}"
 							IsCompact="True"
 							ToolTip="Select this cue list without executing production actions." />
+                        <controls:RtaimeButton Content="↻" Command="{Binding RefreshCommand}" ToolTip="Reload saved cue lists; discard unsaved editor changes." IsCompact="True" />
+                        </StackPanel>
 					</Grid>
 
 					<controls:RtaimeListBox Grid.Row="1"
@@ -76,13 +78,13 @@
 						</Grid.ColumnDefinitions>
 						<controls:RtaimeButton Content="ARM" Command="{Binding ArmCommand}" IsCompact="True" />
 						<controls:RtaimeButton Grid.Column="2"
-							Content="GO · F9"
+							Content="SHOW GO · F9"
 							Command="{Binding GoCommand}"
 							IsCompact="True"
 							Background="{DynamicResource OperatorAccentBrush}"
 							BorderBrush="{DynamicResource OperatorAccentBrush}"
 							Foreground="{DynamicResource OperatorBackgroundBrush}"
-							ToolTip="Execute the armed cue through governed Control commands." />
+							ToolTip="{Binding LiveActionDetail}" ToolTipService.ShowOnDisabled="True" />
 						<controls:RtaimeButton Grid.Column="4" Content="CANCEL" Command="{Binding CancelCommand}" IsCompact="True" />
 					</Grid>
 
@@ -98,7 +100,9 @@
 								<TextBlock Text="{Binding ExecutionState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
 								<TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</DockPanel>
-							<TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+							<TextBlock Text="{Binding NextCue, StringFormat=NEXT CUE · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
 								<Run Text="CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
@@ -114,7 +118,7 @@
 
 			<controls:RtaimeTabItem Header="EDIT">
 				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-					<StackPanel Margin="0,6,2,0">
+					<StackPanel Margin="0,6,2,0" IsEnabled="{Binding CanEditAuthoring}">
 						<TextBlock Text="CUE LIST" Style="{StaticResource OperatorLabel}" />
 						<Grid Margin="0,2,0,4">
 							<Grid.ColumnDefinitions>

@@ -9,5 +9,6 @@ public partial class LiveControlsControl : UserControl
 	public LiveControlsControl()
 	{
 		InitializeComponent();
+		LiveConsoleInput.Attach(this);
 	}
 }
