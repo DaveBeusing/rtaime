@@ -21,6 +21,8 @@ internal static class OperatorControlDesignSystemQualification
 		var subscriptions = OperatorControlPresentation.ActiveSystemSubscriptions;
 		var count = 0;
 		var button = new ClickButton { Content = "Apply", Command = new CountingCommand(() => count++) };
+		// The test subclass must explicitly consume the same implicit style as productive RtaimeButton.
+		button.SetResourceReference(FrameworkElement.StyleProperty, typeof(RtaimeButton));
 		AutomationProperties.SetName(button, "Apply local draft");
 		var editor = new RtaimeTextBox { Text = "Original", MinWidth = 180 };
 		var chooser = new RtaimeComboBox { MinWidth = 180 };

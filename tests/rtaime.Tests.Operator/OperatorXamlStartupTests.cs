@@ -252,6 +252,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 								await Task.Delay(25);
 							Assert.True(SessionClosedCleanly(Path.Combine(root, "session.json")),
 								"Closed fired before the real asynchronous service/session teardown completed.");
+							// Closed precedes WPF's deferred Unloaded broadcast; observe that boundary before counting handlers.
+                            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
 							Assert.False(window.IsVisible);
                             Assert.Empty(window.Docking.FloatingWindows);
                             Assert.Equal(0, window.InspectorView.InspectorSubscriptionCount);
