@@ -121,6 +121,9 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.False(window.Shortcuts.TryHandle(space));
             window.Shell.ToggleLeftPanelCommand.Execute(null);
             await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+            foreach (var action in Descendants(strip).OfType<ButtonBase>().Where(button => button.IsVisible))
+                Assert.True(Fits(action.TransformToAncestor(strip).TransformBounds(new Rect(action.RenderSize)),strip.RenderSize),
+                    "Compact LIVE actions must remain visible with Library open.");
             var mediaList = Descendants(window.MediaLibraryView).OfType<ListBox>().First(list => list.IsVisible);
             Assert.True(mediaList.Focus());
             foreach (var key in new[] { Key.Enter, Key.Space, Key.Up, Key.Down, Key.Delete })

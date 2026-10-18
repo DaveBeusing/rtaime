@@ -8,7 +8,7 @@ right with equal dual-view allocation; the available central media allocation
 is derived from the viewport and saved side-panel widths. The shell does not
 scale the complete control tree. Client geometry excludes native caption/borders; the existing center scroll viewport supplies the settled viewer height, including any visible scrollbar allocation. These temporary measurements are never persisted.
 
-The LIVE action strip keeps the confirmed Preview/Program identities and existing
+The LIVE action strip wraps to the available client width, including while a compact pane is open; core actions never depend on horizontal scrolling. It keeps the confirmed Preview/Program identities and existing
 SET PVW / CUT / AUTO commands separate from selection and media playback. Preview
 owns its transport; the Timeline embedding hides its duplicate Play/Stop pair in
 LIVE through PreviewPlaybackVisibility. Other Timeline embeddings retain their

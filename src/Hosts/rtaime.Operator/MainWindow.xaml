@@ -230,9 +230,9 @@
                     <controls:RtaimeButton Content="VIEW" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="PRIMARY" AutomationProperties.Name="Primary workspace view" />
                     <controls:RtaimeButton Content="DETAILS" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="DETAILS" AutomationProperties.Name="Workspace details" Margin="4,0,0,0" />
                 </StackPanel>
-                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"
                     Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <WrapPanel Margin="0,0,0,4">
                         <controls:RtaimeButton Content="LIBRARY" Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Library" />
                         <controls:RtaimeButton Content="INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Inspector" Margin="3,0" />
                         <controls:RtaimeButton Content="PVW" Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PREVIEW" ToolTip="Focus Preview in compact mode" Margin="3,0" />
@@ -244,7 +244,7 @@
                         <controls:RtaimeButton Content="AUTO" Command="{Binding DissolveCommand}" Margin="3,0" />
                         <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" VerticalAlignment="Center" Margin="4,0" />
                         <controls:RtaimeButton Content="RESTORE" Command="{Binding Shell.ResetLayoutCommand, ElementName=RootWindow}" ToolTip="Restore this workspace layout" Margin="3,0" />
-                    </StackPanel>
+                    </WrapPanel>
                 </controls:RtaimeScrollViewer>
 				<Grid x:Name="LiveWorkspaceSurface" Grid.Row="1"
 					Visibility="{Binding Shell.LiveWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
