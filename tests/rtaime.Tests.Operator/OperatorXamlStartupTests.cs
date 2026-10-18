@@ -252,6 +252,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 							Assert.True(SessionClosedCleanly(Path.Combine(root, "session.json")),
 								"Closed fired before the real asynchronous service/session teardown completed.");
 							Assert.False(window.IsVisible);
+                            Assert.Empty(window.Docking.FloatingWindows);
+                            Assert.Equal(0, window.InspectorView.InspectorSubscriptionCount);
                             Assert.All(observedSurfaces, surface => Assert.Equal(0, surface.RenderingSubscriptionBalance));
 						}
 						else if (owner is not null)

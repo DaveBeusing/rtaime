@@ -80,6 +80,37 @@ internal static class OperatorDockingWindowTests
             Assert.False(owner.Shell.Docking.Enabled);
             Assert.All(identities.Values, panel => Assert.NotNull(panel.Parent));
         }
+        // Move the actual extracted Library and existing Inspector, never replacement controls.
+        owner.Shell.SelectWorkspace("MEDIA");
+        var library = owner.MediaLibraryView;
+        var context = library.Context;
+        var inspector = owner.InspectorView;
+        var selection = owner.MediaPool.Selection;
+        var monitoring = owner.Monitoring;
+        try
+        {
+            foreach (var panel in new[] { "TOOLS", "INSPECTOR" })
+            {
+                owner.Docking.Float(panel);
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.DataBind);
+                Assert.Same(context, library.Context);
+                Assert.Same(selection, owner.Composition.Selection);
+                Assert.Same(owner.MediaPool, inspector.Inspector);
+                Assert.Same(owner.MediaDeck, inspector.MediaDeck);
+                Assert.Same(owner.DataContext, inspector.ControlState);
+                Assert.Same(monitoring, owner.Monitoring);
+                var grid = Assert.IsType<RtaimeListBox>(library.FindName("MediaAssetGrid"));
+                Assert.Same(owner.MediaPool.FilteredItems, grid.ItemsSource);
+                Assert.Equal(1, inspector.InspectorSubscriptionCount);
+                owner.Docking.FloatingWindows[panel].Close();
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+                Assert.Same(library, owner.MediaLibraryView);
+                Assert.Same(inspector, owner.InspectorView);
+            }
+        }
+        finally { owner.Shell.ResetLayoutCommand.Execute(null); }
+        Console.WriteLine("COMPOSITION SEAMS PASS: retained Library/Inspector contexts, projection, selection, commands and monitoring owner across floating/re-docking.");
         Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
         Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
         Assert.False(((OperatorViewModel)owner.DataContext).CutCommand.CanExecute(null));

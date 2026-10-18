@@ -121,8 +121,14 @@ public partial class OperatorMediaLibraryView : UserControl
 		if (_syncingMediaPoolSelection || sender is not ListBox listBox || !listBox.IsVisible)
 			return;
 
-		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
+		if (!MatchesSelection(listBox))
+			MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
 	}
+
+	private bool MatchesSelection(ListBox listBox) =>
+        listBox.SelectedItems.Count == MediaPool.SelectedItems.Count &&
+        listBox.SelectedItems.Cast<MediaPoolItemViewModel>().All(item =>
+            MediaPool.SelectedItems.Any(selected => string.Equals(selected.Key, item.Key, StringComparison.Ordinal)));
 
 	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
 	{

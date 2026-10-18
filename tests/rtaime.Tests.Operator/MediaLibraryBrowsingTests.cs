@@ -133,6 +133,18 @@ public sealed class MediaLibraryBrowsingTests
 		try
 		{
 			await pool.LoadCatalogAsync();
+            Assert.Same(pool.FilteredItems, pool.Library.FilteredItems);
+            Assert.Same(pool.SelectedItems, pool.Selection.Items);
+            var selection = pool.Selection;
+            selection.Select(pool.FilteredItems.Take(1));
+            Assert.Same(pool.SelectedItem, selection.Primary);
+            Assert.Equal(pool.EditingSelectionIdentity, selection.Identity);
+            pool.Refresh();
+            Assert.Same(selection, pool.Selection);
+            Assert.Equal(pool.SelectedItem?.Key, selection.Primary?.Key);
+            selection.Select([]);
+            Assert.Null(selection.Primary);
+            Assert.Empty(selection.Items);
 			Assert.InRange(pool.FilteredItems.Count, 4000, 4096);
 			Assert.All(pool.FilteredItems.Where(i => i.Kind == MediaPoolItemKind.Clip), item => Assert.NotNull(item.KnownDuration));
 			var program = owner.ProgramSourceId;
@@ -338,6 +350,20 @@ public sealed class MediaLibraryBrowsingTests
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
+        var composition = owner.Composition;
+        Assert.Same(owner.MediaPool, composition.Library.MediaPool);
+        Assert.Same(owner.MediaPool.Library, composition.Library.Library);
+        Assert.Same(owner.MediaPool.Selection, composition.Selection);
+        Assert.Same(composition.Selection, composition.Library.Selection);
+        Assert.Same(owner.MediaPool, composition.Inspector);
+        Assert.Same(owner.InspectorView, composition.InspectorView);
+        Assert.Same(owner.Monitoring, composition.Viewer);
+        Assert.Same(owner.DataContext, composition.Live);
+        Assert.Same(owner.DataContext, composition.Ai);
+        Assert.Same(owner.Timeline, composition.Timeline);
+        Assert.Same(owner.OutputHealth, composition.Outputs);
+        Assert.Same(owner.HealthCenter, composition.Health);
+        Assert.Same(composition.Library, owner.MediaLibraryView.Context);
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var combo = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaSmartBins"));
         var search = Assert.IsType<RtaimeSearchBox>(owner.MediaLibraryView.FindName("MediaSearchBox"));
