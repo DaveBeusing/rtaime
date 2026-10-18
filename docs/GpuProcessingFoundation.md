@@ -413,3 +413,12 @@ Color Grade and Chroma Key remain authoritative Runtime-side layer-materializati
 Hosted qualification covers both V1 frame rates with representative processing scenarios: no processing, Color Grade only, Chroma Key only, Chroma Key → Color Grade, and Color Grade → Chroma Key. Repeated transform/materialization mutations verify stable stack order, bounded managed allocation growth and return of active GPU-surface ownership to baseline.
 
 The existing renderer qualification separately retains its 0 / 1 / 2 / 4 / 8 GPU-layer matrix. These matrices are intentionally factored: current typed processing is materialized in managed Runtime code before GPU composition, so hosted CI and the CUDA renderer workflow must not label Color Grade or Chroma Key execution itself as a CUDA PASS. Physical processing-performance evidence remains **UNVERIFIED** until a provider-accelerated implementation exists and is qualified on exact-source reference hardware.
+
+## High-resolution output boundary
+
+The [high-resolution Program decision](HighResolutionMediaDecision.md) and
+[cross-layer compatibility inventory](HighResolutionMediaCompatibility.md)
+distinguish UHD input policy and generic buffer sizes from approved Program
+output. Program remains HD50/59.94 RGBA8. 2160p25/50/59.94 and native
+10-bit/HDR/Fill-Key remain approval-gated and physically UNVERIFIED; see the
+[qualification plan](HighResolutionMediaQualification.md).

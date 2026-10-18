@@ -561,3 +561,12 @@ approval is established. The [proposed surface/fence design](GpuMediaSurfaceDesi
 defines the private ownership, capability/fallback and paired-measurement gates.
 Existing GPU monitoring and green software checks do not qualify GPU-resident decode,
 P010/HDR, physical no-gap output or removal of the current Program readback.
+
+## High-resolution output boundary
+
+The [high-resolution Program decision](HighResolutionMediaDecision.md) and
+[cross-layer compatibility inventory](HighResolutionMediaCompatibility.md)
+distinguish UHD input policy and generic buffer sizes from approved Program
+output. Program remains HD50/59.94 RGBA8. 2160p25/50/59.94 and native
+10-bit/HDR/Fill-Key remain approval-gated and physically UNVERIFIED; see the
+[qualification plan](HighResolutionMediaQualification.md).
