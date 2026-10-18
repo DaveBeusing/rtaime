@@ -696,7 +696,16 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var prepared = FromWire(wire.PreparedExecution);
         // ControlHost serializes runtime exchanges; read committed authority before admission,
         // including a TAKE acknowledged before the next Program cadence observation.
-        deck.ObserveProgramSource(_runtimeAccessor()?.CommittedProgramSourceId);
+        var runtime = _runtimeAccessor();
+        deck.ObserveProgramSource(runtime?.CommittedProgramSourceId);
+        if (deck.AllowsAdditionalSources)
+        {
+            if (!prepared.Bindings.Any(binding => binding.MediaSourceId == open.SourceId &&
+                binding.Resource.ProviderId == deck.ProviderDescriptor.ProviderId && binding.Resource.Kind == "media.route" &&
+                deck.ProviderDescriptor.Resources.Any(resource => resource == binding.Resource)))
+                return Error(request, "runtime.local_media.binding_missing", "Source registration requires an authoritative prepared local media route.");
+            runtime?.RegisterExternalSource(open.SourceId);
+        }
 		var snapshot = request.MessageType == "runtime.media_deck.preload.open"
             ? deck.Preload(open, prepared, wire.Fingerprint ?? throw new InvalidDataException("Preload fingerprint is required."))
             : deck.Open(open, prepared);

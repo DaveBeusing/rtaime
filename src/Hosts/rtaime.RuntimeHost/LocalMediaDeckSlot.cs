@@ -17,6 +17,9 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 	private readonly object _gate = new();
     private readonly object _openGate = new();
 	private readonly LocalMediaFileProvider _provider;
+    private readonly LocalMediaResourceLedger? _ledger;
+    private LocalMediaResourceLedger.LocalMediaResourceTicket? _ticket;
+    private LocalMediaFileSource? _quarantinedProbe;
 	private LocalMediaRuntimeSession? _session;
     private LocalMediaRuntimeSession? _quarantinedSession;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
@@ -36,9 +39,10 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 	{
 	}
 
-	public LocalMediaDeckSlot(VideoFormat outputFormat)
+	public LocalMediaDeckSlot(VideoFormat outputFormat, LocalMediaResourceLedger? ledger = null)
 	{
 		_provider = new LocalMediaFileProvider(outputFormat);
+        _ledger = ledger ?? new LocalMediaResourceLedger(outputFormat, 1);
 	}
 
     internal LocalMediaDeckSlot(LocalMediaFileProvider provider, LocalMediaRuntimeSession session)
@@ -91,19 +95,38 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 
     private MediaAssetProbeResult ProbeCore(string path, MediaAssetId assetId)
     {
-		ObjectDisposedException.ThrowIf(_disposed, this);
-		var open = _provider.TryOpen(path, new MediaSourceId(Identity.New()), assetId);
-		if (!open.Succeeded || open.Source is null)
-		{
-			var failure = open.Failure ?? new Failure(
-				"runtime.media_asset.probe_failed",
-				"Local media could not be probed.");
-			return MediaAssetProbeResult.Rejected(failure.Code, failure.Message);
-		}
-
-		using var source = open.Source;
-		return MediaAssetProbeResult.Ready(source.Probe);
-	}
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var sourceId = MediaSourceId.New();
+        if (!_ledger!.TryReserve(Guid.NewGuid(), new(_ledger.RuntimeEpoch, sourceId, null, null, null,
+            LocalMediaResourcePurpose.Probe), out var ticket, out var denial))
+            return MediaAssetProbeResult.Rejected(denial!.Value.Code, denial.Value.Message);
+        LocalMediaFileSource? source = null;
+        var opened = false;
+        try
+        {
+            var result = _provider.TryOpen(path, sourceId, assetId);
+            opened = true;
+            source = result.Source;
+            if (source is null)
+                return MediaAssetProbeResult.Rejected(result.Failure!.Value.Code, result.Failure.Value.Message);
+            return MediaAssetProbeResult.Ready(source.Probe);
+        }
+        catch (Exception exception)
+        {
+            if (!opened) ticket!.Quarantine(source ?? (object)this);
+            return MediaAssetProbeResult.Rejected("runtime.media_asset.probe_failed", exception.Message);
+        }
+        finally
+        {
+            try { source?.Dispose(); ticket!.OwnerCompleted(); }
+            catch
+            {
+                _quarantinedProbe = source;
+                ticket!.Quarantine(source ?? (object)this);
+                throw;
+            }
+        }
+    }
 
 	public LocalMediaRuntimeBoundaryResult? LatestBoundary
 	{
@@ -125,12 +148,14 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 
 	public MediaDeckRuntimeSnapshot Open(
 		MediaDeckOpenRequest request,
-		PreparedExecutionContract preparedExecution)
+		PreparedExecutionContract preparedExecution,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
 	{
-        lock (_openGate) return OpenCore(request, preparedExecution);
+        lock (_openGate) return OpenCore(request, preparedExecution, resources);
     }
 
-    private MediaDeckRuntimeSnapshot OpenCore(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution)
+    private MediaDeckRuntimeSnapshot OpenCore(MediaDeckOpenRequest request, PreparedExecutionContract preparedExecution,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(preparedExecution);
@@ -154,15 +179,27 @@ internal sealed class LocalMediaDeckSlot : IDisposable
         }
         // Probing, allocation, preroll and worker join run outside the admission lock.
         if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
+        _ticket?.OwnerCompleted();
+        _ticket = resources;
+        if (_ticket is null && !_ledger!.TryReserve(Guid.NewGuid(),
+            new(_ledger.RuntimeEpoch, request.SourceId, preparedExecution.PreparedExecutionId,
+                preparedExecution.AuthoritySnapshot.Revision.Value, preparedExecution.PlanGeneration.Value,
+                LocalMediaResourcePurpose.Resident) { AuthorityStateId = preparedExecution.AuthoritySnapshot.StateId },
+            out _ticket, out var denial))
+        {
+            lock (_gate) { _opening = false; _failure = denial; return CreateSnapshot(); }
+        }
         LocalMediaRuntimeSession? candidate = null;
+        var nativeOpenReturned = false;
         Failure? failure = null;
         try
         {
             var open = _provider.TryOpen(request.Path, request.SourceId, request.AssetId);
+            nativeOpenReturned = true;
             if (open.Source is null) failure = open.Failure;
             else
             {
-                candidate = new LocalMediaRuntimeSession(_provider, open.Source);
+                candidate = new LocalMediaRuntimeSession(_provider, open.Source, null, _ticket);
                 var applied = candidate.ApplyExecution(preparedExecution);
                 if (!applied.Committed) failure = applied.Commit?.Failure ?? applied.Prepare.Failure ??
                     new Failure("runtime.media_deck.commit_failed", "Local media deck execution was not committed.");
@@ -170,6 +207,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
         }
         catch (Exception exception)
         {
+            if (!nativeOpenReturned) _ticket?.Quarantine(this);
             failure = new Failure("runtime.media_deck.open_failed", $"Local media preparation failed: {exception.Message}");
         }
         var accepted = false;
@@ -339,6 +377,8 @@ internal sealed class LocalMediaDeckSlot : IDisposable
             _isOnProgram = false;
         }
         if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
+        _ticket?.OwnerCompleted();
+        _ticket = null;
         return MediaDeckRuntimeSnapshot.Unloaded;
     }
 
@@ -361,6 +401,9 @@ internal sealed class LocalMediaDeckSlot : IDisposable
             _latestBoundary = null;
         }
         if (!ReleaseSession(previous)) throw new IOException(_failure!.Value.Message);
+        _ticket?.OwnerCompleted();
+        _ticket = null;
+        if (_quarantinedProbe is not null) throw new IOException("Probe cleanup retained a native owner; restart RuntimeHost.");
     }
 
     private bool ReleaseSession(LocalMediaRuntimeSession? session)
@@ -371,6 +414,7 @@ internal sealed class LocalMediaDeckSlot : IDisposable
         {
             lock (_gate)
             {
+                _ticket?.Quarantine(this);
                 _quarantinedSession = session;
                 _opening = false;
                 _failure = new Failure("runtime.media_deck.cleanup_failed",

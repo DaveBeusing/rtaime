@@ -10,7 +10,10 @@ public enum LocalMediaResourcePurpose { Resident = 1, Probe = 2, Preflight = 3 }
 
 public sealed record LocalMediaResourceIdentity(
     string RuntimeEpoch, MediaSourceId SourceId, PreparedExecutionId? ExecutionId,
-    ulong? AuthorityRevision, ulong? PlanGeneration, LocalMediaResourcePurpose Purpose);
+    ulong? AuthorityRevision, ulong? PlanGeneration, LocalMediaResourcePurpose Purpose)
+{
+    public Identity? AuthorityStateId { get; init; }
+}
 
 public sealed record LocalMediaResourceSnapshot(
     int Capacity, int ReservedOwners, int WorkerReservations, long KnownManagedBytes,
@@ -28,6 +31,8 @@ public sealed class LocalMediaResourceLedger
     private readonly long _bytesPerOwner;
     private MediaSourceId? _program;
     private string? _lastRejection;
+    private bool _closed;
+    internal void CloseAdmission() { lock (_gate) _closed = true; }
     public string RuntimeEpoch { get; } = Guid.NewGuid().ToString("N");
     public int Capacity { get; }
     public LocalMediaResourceLedger(VideoFormat format, int capacity, LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
@@ -61,7 +66,12 @@ public sealed class LocalMediaResourceLedger
         lock (_gate)
         {
             ticket = null;
-            if (identity.RuntimeEpoch != RuntimeEpoch || identity.SourceId.Value.IsEmpty || !Enum.IsDefined(identity.Purpose))
+            if (_closed)
+            {
+                failure = Reject("runtime.media_resources.stopped", "Runtime admission is closed; reconnect to the active RuntimeHost.");
+                return false;
+            }
+            if (intent == Guid.Empty || identity.RuntimeEpoch != RuntimeEpoch || identity.SourceId.Value.IsEmpty || !Enum.IsDefined(identity.Purpose))
             {
                 failure = Reject("runtime.media_resources.identity", "Admission identity/epoch is invalid; obtain current Runtime authority before retrying.");
                 return false;
@@ -115,6 +125,7 @@ public sealed class LocalMediaResourceLedger
         internal LocalMediaResourceTicket Ticket { get; set; } = null!;
         internal int Leases;
         internal bool Completed, Quarantined, Released;
+        internal object? RetainedOwner;
     }
     private bool Current(Owner owner) => _owners.TryGetValue(owner.Intent, out var current) && ReferenceEquals(current, owner);
     internal void Retain(Owner owner)
@@ -138,9 +149,14 @@ public sealed class LocalMediaResourceLedger
     {
         lock (_gate) { if (!Current(owner)) return; owner.Completed = true; ReleaseIfFinished(owner); }
     }
-    internal void Quarantine(Owner owner)
+    internal void Quarantine(Owner owner, object? retainedOwner)
     {
-        lock (_gate) { if (Current(owner)) owner.Quarantined = true; }
+        lock (_gate)
+        {
+            if (!Current(owner)) return;
+            owner.Quarantined = true;
+            owner.RetainedOwner ??= retainedOwner;
+        }
     }
     private void ReleaseIfFinished(Owner owner)
     {
@@ -161,6 +177,6 @@ public sealed class LocalMediaResourceLedger
         internal void ReleasePoolLease() => _ledger.ReleaseLease(_owner);
         // Cancellation is not completion. Call only after native cleanup and worker join/event disposal.
         internal void OwnerCompleted() => _ledger.Complete(_owner);
-        internal void Quarantine() => _ledger.Quarantine(_owner);
+        internal void Quarantine(object? retainedOwner = null) => _ledger.Quarantine(_owner, retainedOwner);
     }
 }

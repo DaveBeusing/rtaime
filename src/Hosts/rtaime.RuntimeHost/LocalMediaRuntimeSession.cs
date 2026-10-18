@@ -59,18 +59,20 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	public LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source)
         : this(provider, source, null) { }
 
-    internal LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source, TimeSpan? joinTimeout)
+    internal LocalMediaRuntimeSession(LocalMediaFileProvider provider, LocalMediaFileSource source, TimeSpan? joinTimeout,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
     {
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		try { _decode = new LocalMediaDecodeWorker(source, joinTimeout); }
+		try { _decode = new LocalMediaDecodeWorker(source, joinTimeout, resources); }
         catch
         {
             // Ownership transfers only after the worker and fixed payload slots exist.
             _pipeline.Dispose();
-            source.Dispose();
+            try { source.Dispose(); resources?.OwnerCompleted(); }
+            catch { resources?.Quarantine(source); throw; }
             throw;
         }
         _transport = new LocalMediaTransportController(source.Probe, frame =>
@@ -84,6 +86,8 @@ public sealed class LocalMediaRuntimeSession : IDisposable
             return _decode.Reposition(frame);
         });
 	}
+
+    internal void AttachResources(LocalMediaResourceLedger.LocalMediaResourceTicket resources) => _decode.AttachResources(resources);
 
 	public LocalMediaProbe Probe => _source.Probe;
     public LocalMediaPlaybackMeasurements Measurements => _decode.Measurements;

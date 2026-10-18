@@ -591,6 +591,8 @@ public sealed class AsynchronousLocalMediaDecodeTests
             Assert.True(healthy.Disposed);
             Assert.Equal(1, healthy.DisposeCalls);
             Assert.Equal(1, decks.Resources.Reserved);
+            Assert.Equal(1, decks.ResourceSnapshot.QuarantinedOwners);
+            Assert.Null(decks.ResourceSnapshot.NativeBytes);
         }
         finally
         {

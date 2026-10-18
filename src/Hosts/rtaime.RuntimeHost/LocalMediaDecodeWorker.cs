@@ -26,6 +26,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private readonly TimeSpan _joinTimeout;
     private bool _resourcesDisposed;
     private readonly LocalMediaFileSource _source;
+    private LocalMediaResourceLedger.LocalMediaResourceTicket? _resources;
+    private readonly List<LocalMediaFrameSlot> _slots = new(SlotCount);
     private readonly AutoResetEvent _wake = new(false);
     private readonly Thread _thread;
     private readonly Queue<LocalMediaFrameLease> _frames = new(QueueCapacity);
@@ -44,15 +46,21 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private Failure? _failure;
     private LocalMediaPlaybackMeasurements _measurements;
 
-    internal LocalMediaDecodeWorker(LocalMediaFileSource source, TimeSpan? joinTimeout = null)
+    internal LocalMediaDecodeWorker(LocalMediaFileSource source, TimeSpan? joinTimeout = null,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
     {
         _source = source;
+        _resources = resources;
         _joinTimeout = joinTimeout ?? TimeSpan.FromSeconds(10);
         try
         {
             var bytes = checked((int)((ulong)source.Probe.VideoFormat.Width * source.Probe.VideoFormat.Height * 4));
             for (var index = 0; index < SlotCount; index++)
-                _free.Push(new LocalMediaFrameSlot(bytes, Release));
+            {
+                var slot = new LocalMediaFrameSlot(bytes, Release, resources);
+                _slots.Add(slot);
+                _free.Push(slot);
+            }
             _thread = new Thread(Run) { IsBackground = true, Name = "Local media decode" };
             _thread.Start();
         }
@@ -61,6 +69,16 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             _epoch.Dispose();
             _wake.Dispose();
             throw;
+        }
+    }
+
+    internal void AttachResources(LocalMediaResourceLedger.LocalMediaResourceTicket resources)
+    {
+        lock (_gate)
+        {
+            if (_resources is not null) throw new InvalidOperationException("Decode resources are already attached.");
+            _resources = resources;
+            foreach (var slot in _slots) slot.AttachResources(resources);
         }
     }
 
@@ -327,6 +345,7 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                 {
                     lock (_gate) FailUnsafe(new Failure("runtime.media_decode.shutdown_timeout",
                         "Decode owner has not stopped; reader remains quarantined. Restart through the supported RuntimeHost lifecycle."));
+                    _resources?.Quarantine(this);
                     throw new TimeoutException("Local media decoder did not acknowledge cancellation within its shutdown deadline.");
                 }
                 _epoch.Dispose();
@@ -335,7 +354,11 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             }
             if (Snapshot.Failure is { Code: "runtime.media_decode.cancellation_failed" or
                 "runtime.media_decode.dispose_failed" or "runtime.media_decode.shutdown_timeout" } cleanupFailure)
+            {
+                _resources?.Quarantine(this);
                 throw new IOException(cleanupFailure.Message);
+            }
+            _resources?.OwnerCompleted();
         }
     }
 }
@@ -346,13 +369,26 @@ internal sealed class LocalMediaFrameSlot
     private readonly byte[] _audio = new byte[32_768];
     private readonly Action<LocalMediaFrameSlot> _release;
     private int _references;
+    private readonly object _resourceGate = new();
+    private LocalMediaResourceLedger.LocalMediaResourceTicket? _resources;
     internal LocalMediaDecodedFrame Frame { get; private set; } = null!;
     internal long PresentationTicks { get; private set; }
 
-    internal LocalMediaFrameSlot(int videoBytes, Action<LocalMediaFrameSlot> release)
+    internal LocalMediaFrameSlot(int videoBytes, Action<LocalMediaFrameSlot> release,
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
     {
         _video = new byte[videoBytes];
         _release = release;
+        _resources = resources;
+    }
+
+    internal void AttachResources(LocalMediaResourceLedger.LocalMediaResourceTicket resources)
+    {
+        lock (_resourceGate)
+        {
+            _resources = resources;
+            if (_references > 0) resources.RetainPoolLease();
+        }
     }
 
     internal void Copy(LocalMediaDecodedFrame frame)
@@ -380,11 +416,26 @@ internal sealed class LocalMediaFrameSlot
 
     internal LocalMediaFrameLease Lease(long generation)
     {
-        _references = 1;
+        lock (_resourceGate)
+        {
+            _resources?.RetainPoolLease();
+            _references = 1;
+        }
         return new(this, generation);
     }
     internal void Retain() => Interlocked.Increment(ref _references);
-    internal void Release() { if (Interlocked.Decrement(ref _references) == 0) _release(this); }
+    internal void Release()
+    {
+        LocalMediaResourceLedger.LocalMediaResourceTicket? resources;
+        lock (_resourceGate)
+        {
+            if (Interlocked.Decrement(ref _references) != 0) return;
+            resources = _resources;
+        }
+        // Return the slot before releasing its charge; a new lease may race its reuse.
+        _release(this);
+        resources?.ReleasePoolLease();
+    }
 }
 
 internal sealed class LocalMediaFrameLease : IDisposable

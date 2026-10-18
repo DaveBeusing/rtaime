@@ -22,6 +22,56 @@ public sealed class ProductionIpcIntegrationTests
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    [Fact]
+    public async Task Development_four_media_owners_cross_the_existing_Runtime_pipe_and_release_real_pools()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var options = RuntimeHostProcessOptions.Default with {
+            ListenEndpoint = Endpoint("media-resources"), MaximumLocalMediaDecoders = 4,
+            LocalMediaProfile = LocalMediaCapacityProfile.DevelopmentFour };
+        using var stop = new CancellationTokenSource();
+        var process = new RuntimeHostProcess(options);
+        var run = process.RunAsync(stop.Token);
+        try
+        {
+            var transport = new NamedPipeRuntimeHostTransport(options.ListenEndpoint,
+                TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15));
+            await RetryAsync(() => transport.ConnectAsync().AsTask());
+            var sources = new[] { options.SourceAId, options.SourceBId, MediaSourceId.New(), MediaSourceId.New() };
+            var provider = process.MediaDeck!.ProviderDescriptor;
+            var capability = provider.Capabilities.Single(item => item.Kind == "media.route");
+            for (var index = 0; index < sources.Length; index++)
+            {
+                var source = sources[index];
+                var route = provider.Resources.Where(item => item.Kind == "media.route").ElementAt(index);
+                var prepared = new PreparedExecutionContract(RuntimeContractVersion.Current, PreparedExecutionId.New(),
+                    new AuthoritySnapshotReference(source.Value, new Revision(1)), new Generation(1),
+                    [new PreparedExecutionBinding(source.Value, capability.CapabilityId, route, source, null)]);
+                var opened = await transport.OpenMediaDeckAsync(new(MediaContractVersion.Current, source, asset.Path), prepared);
+                Assert.NotNull(opened.Probe);
+                Assert.Equal(index + 1, process.MediaDeck.ResourceSnapshot.ReservedOwners);
+                var duplicate = await transport.OpenMediaDeckAsync(new(MediaContractVersion.Current, source, asset.Path), prepared);
+                Assert.Equal(opened.Probe, duplicate.Probe);
+                Assert.Equal(index + 1, process.MediaDeck.ResourceSnapshot.ReservedOwners);
+                Assert.Contains(source, process.Runtime!.Snapshot.InputSignals.Keys);
+            }
+            var resources = process.MediaDeck.ResourceSnapshot;
+            Assert.Equal(4, resources.WorkerReservations);
+            Assert.Null(resources.NativeBytes);
+            Assert.Null(resources.GpuBytes);
+            foreach (var source in sources)
+                Assert.Equal(MediaDeckState.Unloaded, (await transport.CloseMediaDeckAsync(source)).State);
+            Assert.Equal(0, process.MediaDeck.ResourceSnapshot.ReservedOwners);
+            Assert.Equal(0L, process.MediaDeck.ResourceSnapshot.KnownManagedBytes);
+        }
+        finally
+        {
+            stop.Cancel();
+            Assert.Equal(RuntimeHostExitCode.Success, await run);
+        }
+    }
+
 	[Fact]
 	public async Task ShowTemplate_create_preflight_and_import_cross_IPC_without_changing_Program()
 	{

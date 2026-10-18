@@ -50,9 +50,14 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         Assert.Equal("runtime.media_deck.source_active", replacement.Failure?.Code);
         Assert.Equal(12, decks.GetSnapshot(b).Transport!.Position.CurrentFrame);
         decks.Close(a);
+        Assert.Equal(2, decks.Resources.Reserved); // The caller still owns frameA's old pool.
+        Assert.Equal(1, decks.ResourceSnapshot.RetainedPoolOwners);
+        frameA.Dispose();
         Assert.Equal(1, decks.Resources.Reserved);
         Assert.Equal(b, decks.GetSnapshot(b).SourceId);
         decks.Dispose();
+        Assert.Equal(1, decks.Resources.Reserved); // frameB keeps its pool charged beyond shutdown.
+        frameB.Dispose();
         Assert.Equal(0, decks.Resources.Reserved);
     }
 
@@ -281,6 +286,58 @@ public sealed class MultiDeckLocalMediaIntegrationTests
         Assert.Equal(second, decks.GetSnapshot(b));
         Assert.Equal(MediaDeckState.Unloaded, decks.Close(b).State);
         Assert.Equal(0, decks.Resources.Reserved);
+    }
+
+    [Theory]
+    [InlineData(1, LocalMediaCapacityProfile.Conservative)]
+    [InlineData(2, LocalMediaCapacityProfile.Conservative)]
+    [InlineData(4, LocalMediaCapacityProfile.DevelopmentFour)]
+    public void Productive_open_close_and_retained_pool_use_one_ledger(int capacity, LocalMediaCapacityProfile profile)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var sources = Enumerable.Range(0, Math.Max(2, capacity)).Select(_ => MediaSourceId.New()).ToArray();
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, capacity, sources, profile);
+        for (var index = 0; index < capacity; index++)
+        {
+            var execution = Prepared(decks, sources[index], index);
+            var opened = decks.Open(new(MediaContractVersion.Current, sources[index], asset.Path), execution);
+            Assert.NotNull(opened.Probe);
+            Assert.Equal(index + 1, decks.ResourceSnapshot.ReservedOwners);
+        }
+        Command(decks, sources[0], MediaTransportCommandKind.Play);
+        using var held = Next(decks, sources[0]);
+        Command(decks, sources[0], MediaTransportCommandKind.Stop);
+        var bytes = decks.ResourceSnapshot.KnownManagedBytes;
+        Assert.Equal(MediaDeckState.Unloaded, decks.Close(sources[0]).State);
+        Assert.Equal(capacity, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Equal(bytes, decks.ResourceSnapshot.KnownManagedBytes);
+        Assert.Equal(1, decks.ResourceSnapshot.RetainedPoolOwners);
+        var denied = decks.Open(new(MediaContractVersion.Current, sources[0], asset.Path), Prepared(decks, sources[0], 0));
+        Assert.Equal("runtime.media_resources.capacity", denied.Failure?.Code);
+        held.Dispose();
+        Assert.Equal(capacity - 1, decks.ResourceSnapshot.ReservedOwners);
+        Assert.NotNull(decks.Open(new(MediaContractVersion.Current, sources[0], asset.Path), Prepared(decks, sources[0], 0)).Probe);
+        decks.Dispose();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Equal(0L, decks.ResourceSnapshot.KnownManagedBytes);
+    }
+
+    [Fact]
+    public void Probe_cannot_open_a_native_owner_beside_a_resident_when_storage_pressure_is_unknown()
+    {
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4");
+        Assert.Equal("media.file.not_found", decks.Open(new(MediaContractVersion.Current, a, missing), Prepared(decks, a, 0)).Failure?.Code);
+        var probe = decks.Probe(missing, MediaAssetId.New());
+        Assert.Equal("runtime.media_resources.pressure_unknown", probe.Failure?.Code);
+        Assert.Equal(1, decks.ResourceSnapshot.ReservedOwners);
+        decks.Close(a);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Equal("media.file.not_found", decks.Probe(missing, MediaAssetId.New()).Failure?.Code);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
     }
 
     private static void Command(LocalMediaDeckRuntimeService decks, MediaSourceId source,
