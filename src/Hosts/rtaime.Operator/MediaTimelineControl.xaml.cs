@@ -96,6 +96,9 @@ public sealed class TimelineItemWidthConverter : IMultiValueConverter
 
 public partial class MediaTimelineControl : UserControl
 {
+    public static readonly DependencyProperty PreviewPlaybackVisibilityProperty = DependencyProperty.Register(
+        nameof(PreviewPlaybackVisibility), typeof(Visibility), typeof(MediaTimelineControl), new PropertyMetadata(Visibility.Visible));
+    public Visibility PreviewPlaybackVisibility { get => (Visibility)GetValue(PreviewPlaybackVisibilityProperty); set => SetValue(PreviewPlaybackVisibilityProperty, value); }
 	private bool _pointerSeeking;
 	private string? _trimKind;
 	private long _gestureContext;

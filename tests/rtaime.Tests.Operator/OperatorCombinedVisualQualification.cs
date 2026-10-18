@@ -108,6 +108,7 @@ public sealed class OperatorCombinedVisualQualification
                     }
                     Assert.NotEmpty(Descendants(window).OfType<PreviewViewer>());
                     Assert.NotEmpty(Descendants(window).OfType<ProgramViewer>());
+                    if (workspace == "LIVE") VerifyLiveComposition(window, root, width);
                     var first = Capture(window, root);
                     Assert.All(Descendants(root).OfType<OperatorDrawingSurface>(),
                         surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
@@ -148,6 +149,8 @@ public sealed class OperatorCombinedVisualQualification
                 await VerifyPreferenceTransitionsAsync(window, dispatcher, name, width, height, evidenceRoot, interactionCases);
             }
 
+            await VerifyRepeatedShellMovesAsync(window, dispatcher);
+
             // Warm up all workspaces above before measuring a stable viewport. No forced GC:
             // these are process observations, not an exclusive heap or physical latency claim.
             root.LayoutTransform = Transform.Identity; root.Width = 1600; root.Height = 900;
@@ -159,7 +162,7 @@ public sealed class OperatorCombinedVisualQualification
             var metrics = await MeasureSettledAsync(window, root, dispatcher);
             Assert.Equal(program, owner.ProgramSourceId);
             Assert.Equal(preview, owner.PreviewSourceId);
-            Console.WriteLine("COMBINED VISUAL PASS: 40 workspace/viewport cases; injected 100/125/150/200% layout; geometry goldens; Program unchanged.");
+            Console.WriteLine($"COMBINED VISUAL PASS: {observations.Count} workspace/viewport cases; injected 100/125/150/200% layout; media-first LIVE, compact bus focus and 100 shell moves; Program unchanged.");
             Console.WriteLine("COMBINED UI METRICS: " + JsonSerializer.Serialize(metrics));
             if (!string.IsNullOrWhiteSpace(evidenceRoot))
                 File.WriteAllText(Path.Combine(evidenceRoot, "combined-ui.json"), JsonSerializer.Serialize(new
@@ -178,6 +181,82 @@ public sealed class OperatorCombinedVisualQualification
             window.Shell.SelectWorkspace(original.Workspace);
             window.Shell.UpdateViewportSize(window.Width, window.Height);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        }
+    }
+
+
+    private static void VerifyLiveComposition(MainWindow window, FrameworkElement root, double width)
+    {
+        var shell = window.Shell;
+        var owner = (OperatorViewModel)window.DataContext;
+        var viewers = Descendants(root).OfType<MonitorView>().Where(v => v.IsVisible && v.ActualWidth > 0).ToArray();
+        var previews = viewers.OfType<PreviewViewer>().ToArray();
+        var programs = viewers.OfType<ProgramViewer>().ToArray();
+        if (shell.IsCompactViewport)
+        {
+            Assert.Single(programs); Assert.Empty(previews);
+        }
+        else
+        {
+            var preview = Assert.Single(previews); var program = Assert.Single(programs);
+            Assert.InRange(Math.Abs(preview.ActualWidth - program.ActualWidth), 0, 1);
+            Assert.InRange(Math.Abs(preview.ActualHeight - program.ActualHeight), 0, 1);
+            var previewBounds = preview.TransformToAncestor(root).TransformBounds(new Rect(preview.RenderSize));
+            var programBounds = program.TransformToAncestor(root).TransformBounds(new Rect(program.RenderSize));
+            Assert.True(previewBounds.Right <= programBounds.Left + 1);
+            if (width == 1920) Assert.True(preview.ActualWidth + program.ActualWidth >= (width - shell.NavigationRailWidth) / 2);
+        }
+        foreach (var viewer in viewers)
+            Assert.True(Fits(viewer.TransformToAncestor(root).TransformBounds(new Rect(viewer.RenderSize)), root.RenderSize),
+                "LIVE role viewer must fit the useful viewport.");
+        var actions = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("LiveActionStrip"));
+        Assert.True(actions.IsVisible && actions.ActualHeight >= 24);
+        Assert.True(Fits(actions.TransformToAncestor(root).TransformBounds(new Rect(actions.RenderSize)), root.RenderSize));
+        var playback = Descendants(root).OfType<System.Windows.Controls.Primitives.ButtonBase>()
+            .Count(button => button.IsVisible && ReferenceEquals(button.Command, window.MediaDeck.TogglePlayPauseCommand));
+        Assert.Equal(previews.Length, playback);
+        var cuts = Descendants(root).OfType<System.Windows.Controls.Primitives.ButtonBase>()
+            .Count(button => button.IsVisible && ReferenceEquals(button.Command, owner.CutCommand));
+        Assert.Equal(1, cuts);
+    }
+    private static async Task VerifyRepeatedShellMovesAsync(MainWindow window, Dispatcher dispatcher)
+    {
+        var shell = window.Shell;
+        var monitoring = window.Monitoring;
+        var inspector = window.InspectorView;
+        var selection = window.Composition.Selection;
+        var panels = window.Docking.Panels.ToDictionary(p => p.Key, p => p.Value);
+        var owner = (OperatorViewModel)window.DataContext;
+        var routing = (owner.PreviewSourceId, owner.ProgramSourceId);
+        var original = shell.SelectedWorkspace;
+        var templateName = shell.TemplateName;
+        shell.TemplateName = "Retained local layout draft";
+        try
+        {
+            for (var cycle = 0; cycle < 100; cycle++)
+            {
+                shell.SelectWorkspace(OperatorWorkspaceNames.All[cycle % OperatorWorkspaceNames.All.Count]);
+                window.Docking.Float("INSPECTOR");
+                await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+                Assert.Same(monitoring, window.Docking.FloatingWindows["INSPECTOR"].Monitoring);
+                Assert.Same(inspector, window.Docking.Panels["INSPECTOR"]);
+                Assert.Same(selection, window.Composition.Selection);
+                Assert.Equal("Retained local layout draft", shell.TemplateName);
+                Assert.Equal(1, inspector.InspectorSubscriptionCount);
+                window.Docking.Dock("INSPECTOR", "RIGHT");
+                await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+                Assert.Empty(window.Docking.FloatingWindows);
+                foreach (var panel in panels) Assert.Same(panel.Value, window.Docking.Panels[panel.Key]);
+                Assert.Equal(routing, (owner.PreviewSourceId, owner.ProgramSourceId));
+                shell.SetDocking(OperatorDockLayout.Default);
+            }
+            await shell.SaveAsync();
+            Console.WriteLine("SHELL CYCLES PASS: 100 real workspace/float/dock/restore cycles; same monitoring, selection, Inspector and panel instances; local layout draft and routing retained.");
+        }
+        finally
+        {
+            shell.TemplateName = templateName; shell.SelectWorkspace(original);
+            shell.SetDocking(OperatorDockLayout.Default);
         }
     }
 
