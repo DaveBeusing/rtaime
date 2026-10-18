@@ -604,6 +604,31 @@ public sealed class AsynchronousLocalMediaDecodeTests
         Assert.Equal(1, decks.Resources.Reserved);
     }
 
+    [Fact]
+    public void Failed_native_cleanup_quarantines_the_shared_ticket_at_the_worker_failure()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 2);
+        var decoder = new ControlledDecoder { FailDispose = true, BlockCall = 4, FailCancellation = true };
+        var identity = new LocalMediaResourceIdentity(ledger.RuntimeEpoch, decoder.Probe.SourceId, null, null, null,
+            LocalMediaResourcePurpose.Resident);
+        Assert.True(ledger.TryReserve(Guid.NewGuid(), identity, out var ticket, out _));
+        var provider = new LocalMediaFileProvider();
+        var session = new LocalMediaRuntimeSession(provider, Source(decoder), null, ticket);
+        Assert.True(session.ApplyExecution(Prepared(provider, decoder.Probe.SourceId)).Committed);
+        Assert.True(decoder.ReadBlocked.Wait(TimeSpan.FromSeconds(3)));
+        try
+        {
+            var seek = session.ApplyTransport(Command(decoder, MediaTransportCommandKind.Stop));
+            Assert.True(seek.Succeeded);
+            Until(() => ledger.Snapshot.QuarantinedOwners == 1);
+            Assert.False(ledger.TryReserve(Guid.NewGuid(), identity with { SourceId = MediaSourceId.New() }, out _, out var failure));
+            Assert.Equal("runtime.media_resources.quarantined", failure!.Value.Code);
+            Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+        }
+        finally { Assert.Throws<IOException>(session.Dispose); }
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+    }
+
     private static LocalMediaFileSource Source(ControlledDecoder decoder) => new("controlled.mp4", decoder.Probe, decoder);
     private static MediaTransportCommand Command(ControlledDecoder decoder, MediaTransportCommandKind kind) =>
         new(MediaContractVersion.Current, decoder.Probe.AssetId, kind);

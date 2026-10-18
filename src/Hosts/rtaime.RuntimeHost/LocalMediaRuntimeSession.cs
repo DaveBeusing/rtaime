@@ -66,26 +66,38 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
-		try { _decode = new LocalMediaDecodeWorker(source, joinTimeout, resources); }
+		try
+        {
+            _transport = new LocalMediaTransportController(source.Probe, Reposition);
+            _decode = new LocalMediaDecodeWorker(source, joinTimeout, resources);
+        }
         catch
         {
             // Ownership transfers only after the worker and fixed payload slots exist.
-            _pipeline.Dispose();
-            try { source.Dispose(); resources?.OwnerCompleted(); }
-            catch { resources?.Quarantine(source); throw; }
+            Exception? cleanupFailure = null;
+            try { _pipeline.Dispose(); } catch (Exception exception) { cleanupFailure = exception; }
+            try { source.Dispose(); } catch (Exception exception) { cleanupFailure ??= exception; }
+            if (cleanupFailure is not null)
+            {
+                resources?.Quarantine(new object[] { source, _pipeline });
+                throw new IOException("Failed media session construction retained uncertain cleanup.", cleanupFailure);
+            }
+            resources?.OwnerCompleted();
             throw;
         }
-        _transport = new LocalMediaTransportController(source.Probe, frame =>
-        {
-            _current?.Dispose();
-            _current = null;
-            _originFrame = frame;
-            _cadenceOrdinal = 0;
-            _lastProgramSlot = null;
-            _wasBuffering = false;
-            return _decode.Reposition(frame);
-        });
+
 	}
+
+    private Failure? Reposition(long frame)
+    {
+        _current?.Dispose();
+        _current = null;
+        _originFrame = frame;
+        _cadenceOrdinal = 0;
+        _lastProgramSlot = null;
+        _wasBuffering = false;
+        return _decode.Reposition(frame);
+    }
 
     internal void AttachResources(LocalMediaResourceLedger.LocalMediaResourceTicket resources) => _decode.AttachResources(resources);
 

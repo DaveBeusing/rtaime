@@ -79,6 +79,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
             if (_resources is not null) throw new InvalidOperationException("Decode resources are already attached.");
             _resources = resources;
             foreach (var slot in _slots) slot.AttachResources(resources);
+            if (_failure is { Code: "runtime.media_decode.cancellation_failed" or "runtime.media_decode.dispose_failed" or "runtime.media_decode.shutdown_timeout" })
+                resources.Quarantine(this);
         }
     }
 
@@ -299,6 +301,8 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
 
     private void FailUnsafe(Failure failure)
     {
+        if (failure.Code is "runtime.media_decode.cancellation_failed" or "runtime.media_decode.dispose_failed" or "runtime.media_decode.shutdown_timeout")
+            _resources?.Quarantine(this);
         _failure = failure;
         _state = LocalMediaDecodeState.Failed;
         _prerolled = false;
