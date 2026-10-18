@@ -577,10 +577,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public bool IsLoading => _mediaDeck.IsBusy || _catalogBusy;
 	public bool HasError => _mediaDeck.HasError || !string.IsNullOrWhiteSpace(_catalogError);
 	public string ErrorState => _mediaDeck.LastError ?? _catalogError ?? string.Empty;
-	public int SelectionCount => _compositingNode is not null ? 1 : _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
-	public bool HasMultipleSelection => _compositingNode is null && (_timelineItems.Count > 1 ||
+	public int SelectionCount => _compositingNode?.Id == "review:layers" && _compositingReviewCount > 1 ? _compositingReviewCount : _compositingNode is not null ? 1 : _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
+	public bool HasMultipleSelection => _compositingNode?.Id == "review:layers" && _compositingReviewCount > 1 || _compositingNode is null && (_timelineItems.Count > 1 ||
 		(_timelineItem is null && _timelineCue is null && SelectedItems.Count > 1));
-	public string SelectionSummary => _compositingNode is not null
+	public string SelectionSummary => _compositingNode?.Id == "review:layers" && _compositingReviewCount > 1 ? $"{_compositingReviewCount} layers selected · review only" : _compositingNode is not null
 		? "1 graph node selected"
 		: _timelineItems.Count > 0
 			? _timelineItems.Count == 1 ? "1 timeline item selected" : $"{_timelineItems.Count} timeline items selected"
@@ -872,6 +872,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public void SelectCompositingNode(CompositingGraphNodeProjection node)
 	{
 		ArgumentNullException.ThrowIfNull(node);
+		RetainCompositingIntent();
+        var changed = _compositingNode?.Id != node.Id;
+        _compositingReviewCount = 0;
 		_compositingNode = node;
 		_selectedItem = null;
 		SelectedItems.Clear();
@@ -889,7 +892,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		}
 
 		OnPropertyChanged(nameof(SelectedItem));
-		SynchronizeCompositingDraft(force: true);
+		SynchronizeCompositingDraft(force: changed);
 		BuildInspector();
 		RaiseSelectionState();
 	}
@@ -1708,6 +1711,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void SynchronizeCompositingDraft(bool force = false)
 	{
+        RetainCompositingIntent();
 		var layer = SelectedCompositingLayer;
 		if (layer is null)
 			return;

@@ -149,7 +149,11 @@ jobs:
       - name: Timeline ergonomics and authoring history regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter FullyQualifiedName~TimelineErgonomicsTests --logger "console;verbosity=detailed"
       - name: Precision Inspector and draft authority regressions
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests" --logger "console;verbosity=detailed"
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~InspectorPrecisionTests|FullyQualifiedName~InspectorDraftTransactionTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Compositing/Inspector draft regression failed." }
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~GraphicsOverlayIntegrationTests.Compositing_workspace_commands" --logger "console;verbosity=detailed"
       - name: Dock workspace model and restore regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorDockLayoutTests|FullyQualifiedName~WorkspacePresentationTemplateTests" --logger "console;verbosity=detailed"
 
@@ -298,6 +302,7 @@ jobs:
 
       - name: Show template compatibility and authoring regressions
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~ShowTemplate|FullyQualifiedName~ShowControlCoordinatorIntegrationTests.Template_"
+
 
       - name: Test
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1

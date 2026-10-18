@@ -70,16 +70,32 @@ public sealed class AudioMixerRealHostTests
             source.ToggleMuteCommand.Execute(null);
             Assert.False(client.Snapshot.AudioProduction.Configuration.GetSource(id).Muted);
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
-            using (var muted = runtime.ProcessNextBoundary()) Assert.Equal(0, muted.Audio.LeftPeakLevel);
+            using (var muted = runtime.ProcessNextBoundary())
+            {
+                Assert.Equal(0, muted.Audio.LeftPeakLevel);
+                Assert.NotEmpty(muted.ProgramAudioPayload);
+                for (var offset = 0; offset < muted.ProgramAudioPayload.Length; offset += sizeof(float))
+                    Assert.Equal(0f, BinaryPrimitives.ReadSingleLittleEndian(muted.ProgramAudioPayload.AsSpan(offset)));
+            }
             source.ToggleMuteCommand.Execute(null);
             var route = source.Assignments.Single(a => a.BusId == "program");
             route.ToggleCommand.Execute(null);
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
             Assert.Empty(client.Snapshot!.AudioProduction!.Configuration.GetSource(id).BusAssignments);
-            using (var unrouted = runtime.ProcessNextBoundary()) Assert.Equal(0, unrouted.Audio.LeftPeakLevel);
+            using (var unrouted = runtime.ProcessNextBoundary())
+            {
+                // Audio is the pre-bus follow-video observation; only the emitted payload proves bus exclusion.
+                Assert.NotEmpty(unrouted.ProgramAudioPayload);
+                for (var offset = 0; offset < unrouted.ProgramAudioPayload.Length; offset += sizeof(float))
+                    Assert.Equal(0f, BinaryPrimitives.ReadSingleLittleEndian(unrouted.ProgramAudioPayload.AsSpan(offset)));
+            }
             route.ToggleCommand.Execute(null); source.UnityDraft();
             Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError);
-            using (var unity = runtime.ProcessNextBoundary()) Assert.Equal(.4, unity.Audio.LeftPeakLevel, 4);
+            using (var unity = runtime.ProcessNextBoundary())
+            {
+                Assert.Equal(.4f, BinaryPrimitives.ReadSingleLittleEndian(unity.ProgramAudioPayload), 4);
+                Assert.Equal(-.2f, BinaryPrimitives.ReadSingleLittleEndian(unity.ProgramAudioPayload.AsSpan(4)), 4);
+            }
             Assert.Equal(1, client.Snapshot!.AudioProduction!.Configuration.GetSource(id).Gain);
             var competing = new OperatorControlClient(new NamedPipeOperatorControlTransport("rtaime.mixer.control." + suffix));
             var current = (await competing.SynchronizeAsync()).AudioProduction!.Configuration;

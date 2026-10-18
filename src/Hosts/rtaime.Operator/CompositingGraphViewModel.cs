@@ -16,7 +16,7 @@ public enum CompositingGraphInteractionMode
 	Pan
 }
 
-public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
+public sealed partial class CompositingGraphNodeViewModel : INotifyPropertyChanged
 {
 	public const double NodeWidth = 214;
 	public const double NodeHeight = 116;
@@ -71,6 +71,10 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 		if (!string.Equals(Id, projection.Id, StringComparison.Ordinal))
 			throw new InvalidOperationException("Graph node identity cannot change.");
 
+		if (_projection.Kind == projection.Kind && _projection.Title == projection.Title &&
+            _projection.Detail == projection.Detail && _projection.Status == projection.Status &&
+            _projection.Health == projection.Health && _projection.CanRewire == projection.CanRewire &&
+            _projection.Ports.SequenceEqual(projection.Ports)) return;
 		_projection = projection;
 		OnPropertyChanged(nameof(Projection));
 		OnPropertyChanged(nameof(Title));
@@ -155,11 +159,13 @@ public sealed class CompositingGraphConnectionViewModel : INotifyPropertyChanged
 		ArgumentNullException.ThrowIfNull(projection);
 		if (!string.Equals(Id, projection.Id, StringComparison.Ordinal))
 			throw new InvalidOperationException("Graph connection identity cannot change.");
+		if (_projection == projection) return;
 		_projection = projection;
 		OnPropertyChanged(nameof(IsActive));
 		OnPropertyChanged(nameof(Opacity));
-		UpdateGeometry();
 	}
+
+	internal bool HasVisibleEndpoints(HashSet<string> ids) => ids.Contains(_from.Id) && ids.Contains(_to.Id);
 
 	public void UpdateGeometry()
 	{
@@ -193,7 +199,7 @@ public sealed class CompositingGraphConnectionViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
-public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, IDisposable
 {
 	private const double MinimumZoom = 0.35;
 	private const double MaximumZoom = 2.5;
@@ -226,7 +232,8 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		SelectNodeCommand = new CompositingGraphCommand(parameter =>
 		{
 			if (parameter is CompositingGraphNodeViewModel node)
-				SelectNode(node);
+				SelectNode(node, ExtendSelection);
+            ExtendSelection = false;
 		});
 		SelectModeCommand = new CompositingGraphCommand(_ => InteractionMode = CompositingGraphInteractionMode.Select);
 		PanModeCommand = new CompositingGraphCommand(_ => InteractionMode = CompositingGraphInteractionMode.Pan);
@@ -239,6 +246,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		DecreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(-16), CanEditSelectedLayer);
 		IncreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(16), CanEditSelectedLayer);
 
+		InitializeLayerWorkspace();
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_operator.Sources.CollectionChanged += OnSourcesChanged;
 		RewireSourceSubscriptions();
@@ -300,6 +308,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			if (!Set(ref _zoom, normalized))
 				return;
 			OnPropertyChanged(nameof(ZoomLabel));
+            RefreshViewportProjection();
 		}
 	}
 
@@ -308,13 +317,13 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	public double PanX
 	{
 		get => _panX;
-		private set => Set(ref _panX, double.IsFinite(value) ? value : 0);
+		private set { if (Set(ref _panX, double.IsFinite(value) ? value : 0)) RefreshViewportProjection(); }
 	}
 
 	public double PanY
 	{
 		get => _panY;
-		private set => Set(ref _panY, double.IsFinite(value) ? value : 0);
+		private set { if (Set(ref _panY, double.IsFinite(value) ? value : 0)) RefreshViewportProjection(); }
 	}
 
 	public double CanvasWidth
@@ -335,6 +344,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			_viewportWidth = width;
 		if (double.IsFinite(height) && height > 0)
 			_viewportHeight = height;
+        RefreshViewportProjection();
 	}
 
 	public void PanBy(double deltaX, double deltaY)
@@ -395,7 +405,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		Position("graphics-transform", 330, graphicsY);
 		var layerNodes = Nodes
 			.Where(node => node.Projection.Kind == CompositingGraphNodeKind.Layer)
-			.OrderBy(node => node.Id, StringComparer.Ordinal)
+			.OrderBy(node => _operator.CompositingLayers.FirstOrDefault(layer => layer.LayerId == ResolveLayerId(node.Id))?.Order ?? int.MaxValue)
 			.ToArray();
 		for (var index = 0; index < layerNodes.Length; index++)
 		{
@@ -439,7 +449,9 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	public void Refresh()
 	{
-		var selectedLayerId = SelectedNode is null ? null : ResolveLayerId(SelectedNode.Id);
+		var topologyBefore = string.Join("|", Nodes.Select(node => node.Id));
+        var selectedNodeId = SelectedNode?.Id ?? _missingSelectedNodeId;
+        var selectedLayerId = selectedNodeId is null ? null : ResolveLayerId(selectedNodeId);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -449,6 +461,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			{
 				if (ReferenceEquals(SelectedNode, Nodes[index]))
 					SelectedNode = null;
+				RetainMissingLayerDraft(Nodes[index]);
 				Nodes[index].PropertyChanged -= OnNodePropertyChanged;
 				Nodes.RemoveAt(index);
 			}
@@ -487,6 +500,13 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 				connection.Apply(projection);
 		}
 
+        if (SelectedNode is null && _missingSelectedNodeId is { } retainedId &&
+            Nodes.FirstOrDefault(node => node.Id == retainedId) is { } restored)
+        {
+            _missingSelectedNodeId = null;
+            SelectNode(restored);
+        }
+
 		if (SelectedNode is { } selected)
 		{
 			var current = Nodes.FirstOrDefault(node => string.Equals(node.Id, selected.Id, StringComparison.Ordinal));
@@ -494,7 +514,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			{
 				current.IsSelected = true;
 				SelectedNode = current;
-				_inspector.SelectCompositingNode(current.Projection);
+				if (SelectedLayerCount <= 1) _inspector.ObserveCompositingNode(current.Projection);
 			}
 		}
 		else if (selectedLayerId is not null)
@@ -507,9 +527,16 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 				SelectedNode = fallback;
 				_inspector.SelectCompositingNode(fallback.Projection);
 			}
+            else if (selectedNodeId is not null)
+            {
+                _missingSelectedNodeId = selectedNodeId;
+                _inspector.ObserveMissingCompositingNode(selectedNodeId);
+            }
 		}
 
-		UpdateConnections();
+		SynchronizeLayers();
+        if (topologyBefore != string.Join("|", Nodes.Select(node => node.Id))) AutoLayout();
+        RefreshViewportProjection();
 		PublishHealthRevision(graph.Nodes);
 		RefreshLayerCommandState();
 	}
@@ -543,14 +570,14 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	private bool CanEditSelectedLayer()
 	{
 		var layer = SelectedLayer();
-		return layer is not null &&
+		return SelectedLayerCount <= 1 && layer is not null &&
 			layer.Kind is 2 or 3 &&
 			_operator.CanManageCompositingLayers();
 	}
 
 	private bool CanMoveSelectedLayer(int delta)
 	{
-		if (!_operator.CanManageCompositingLayers())
+		if (SelectedLayerCount > 1 || !_operator.CanManageCompositingLayers())
 			return false;
 		var selected = SelectedLayer();
 		if (selected is null)
@@ -666,13 +693,25 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 				role.AuthoritativeActive,
 				role.Evidence)).ToArray());
 
-	private void SelectNode(CompositingGraphNodeViewModel node)
+	private void SelectNode(CompositingGraphNodeViewModel node, bool extend = false)
 	{
-		if (SelectedNode is { } previous && !ReferenceEquals(previous, node))
-			previous.IsSelected = false;
+        if (extend && ResolveLayerId(node.Id) is { } layerId)
+        {
+            var selection = Layers.Where(layer => layer.IsSelected).ToList();
+            var layer = Layers.FirstOrDefault(candidate => ResolveLayerId(candidate.Id) == layerId);
+            if (layer is not null) { if (!selection.Remove(layer)) selection.Add(layer); }
+            SelectLayers(selection);
+            return;
+        }
+        _missingSelectedNodeId = null;
+        _reviewingLayers = false;
+        // Clear graph highlights before marking the shared owning layer and selected child.
+        foreach (var candidate in Nodes) candidate.IsSelected = false;
+        foreach (var layer in Layers) layer.IsSelected = ResolveLayerId(node.Id) == ResolveLayerId(layer.Id);
 		node.IsSelected = true;
 		SelectedNode = node;
 		_inspector.SelectCompositingNode(node.Projection);
+        SynchronizeSelectedLayerDraft();
 		RefreshLayerCommandState();
 	}
 
@@ -687,9 +726,9 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	private void OnSourcesChanged(object? sender, NotifyCollectionChangedEventArgs e)
 	{
+		// The owner republishes CompositingLayers after its source collection transaction.
+        // Do not project the transient empty/partially rebuilt source collection.
 		RewireSourceSubscriptions();
-		Refresh();
-		AutoLayout();
 	}
 
 	private void RewireSourceSubscriptions()
@@ -704,11 +743,15 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		}
 	}
 
-	private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
+	private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(OperatorSourceTileViewModel.Thumbnail) or nameof(OperatorSourceTileViewModel.ThumbnailFormat)) return;
+        Refresh();
+    }
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName is nameof(OperatorViewModel.PreviewSourceId) or
+		if (e.PropertyName is nameof(OperatorViewModel.SelectedScene) or nameof(OperatorViewModel.ActiveSceneId) or nameof(OperatorViewModel.ActiveSceneName) or nameof(OperatorViewModel.PreviewSourceId) or
 			nameof(OperatorViewModel.ProgramSourceId) or
 			nameof(OperatorViewModel.RuntimeStatus) or
 			nameof(OperatorViewModel.RuntimeHealth) or
@@ -738,8 +781,9 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
+        if (e.PropertyName is nameof(CompositingGraphNodeViewModel.HasStateDraft) or nameof(CompositingGraphNodeViewModel.StateConflict)) SynchronizeSelectedLayerDraft();
 		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y))
-			UpdateConnections();
+			{ UpdateConnections(); RefreshViewportProjection(); }
 	}
 
 	private void PublishHealthRevision(IReadOnlyList<CompositingGraphNodeProjection> nodes)
