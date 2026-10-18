@@ -33,9 +33,12 @@ public readonly record struct MediaRenderTarget(
 			dpiScaleX,
 			dpiScaleY);
 
+		if (!double.IsFinite(physical.Width) || !double.IsFinite(physical.Height) ||
+			physical.Width > int.MaxValue || physical.Height > int.MaxValue)
+			throw new ArgumentOutOfRangeException(nameof(viewportWidthDip), "Physical target is not representable.");
 		return new MediaRenderTarget(
-			Math.Max(1, (int)Math.Round(physical.Width, MidpointRounding.AwayFromZero)),
-			Math.Max(1, (int)Math.Round(physical.Height, MidpointRounding.AwayFromZero)),
+			Math.Max(1, checked((int)Math.Ceiling(physical.Width))),
+			Math.Max(1, checked((int)Math.Ceiling(physical.Height))),
 			MediaScalingQuality.HighQuality,
 			path,
 			RequiresPresentationRescale: path == MediaScalingPath.WpfFallback);
@@ -64,7 +67,7 @@ public sealed class MediaRenderTargetStabilizer
 
 	public MediaRenderTargetStabilizer(TimeSpan? settleTime = null)
 	{
-		_settleTime = settleTime ?? TimeSpan.FromMilliseconds(75);
+		_settleTime = settleTime ?? TimeSpan.FromMilliseconds(80);
 		if (_settleTime < TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(settleTime));
 	}

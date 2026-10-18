@@ -33,6 +33,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private ID3D11Texture2D? _sharedTexture;
 	private ID3D11ShaderResourceView? _sharedView;
 	private MonitoringResourceId? _openedResourceId;
+	private MonitoringSharedResourceDescriptor? _openedResource;
 	private long _deviceAdapterLuid;
 	private DateTimeOffset _lastAnalysisAt;
 	private ulong _lastAnalysisSequence;
@@ -189,6 +190,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	private void OnUnloadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
+		_analysisRetryTimer.Stop();
 		CloseSharedResource();
 		DisposeAnalysisResources();
 		_pointSampler?.Dispose();
@@ -211,6 +213,11 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	{
 		e.Context.ClearRenderTargetView(e.Surface.ColorTextureView!, new Color4(0, 0, 0, 0));
 		var frame = GpuFrame;
+		if (Monitor is { } sized && (e.Surface.TextureWidth != sized.ViewportPixelWidth || e.Surface.TextureHeight != sized.ViewportPixelHeight))
+		{
+			sized.SetGpuPresentationState(false, "Resize settling · CPU/WPF fallback");
+			return;
+		}
 		if (frame is null || !TryOpenSharedResource(frame, e.Device))
 		{
 			Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
@@ -262,24 +269,35 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	private bool TryOpenSharedResource(OperatorGpuMonitoringFrame frame, ID3D11Device1 device)
 	{
-		if (_sharedTexture is not null && _openedResourceId == frame.Resource.ResourceId)
-			return true;
-
-		CloseSharedResource();
 		var interop = frame.Resource.Interop;
 		if (interop.Kind != MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle ||
 			interop.SharedHandle == 0 ||
 			interop.AdapterLuid != _deviceAdapterLuid)
 		{
+			CloseSharedResource();
 			return false;
 		}
 
+		if (_sharedTexture is not null && _openedResource is { } opened &&
+			_openedResourceId == frame.Resource.ResourceId && opened.ProviderInstanceId == frame.Resource.ProviderInstanceId &&
+			opened.Lifetime.Generation == frame.Resource.Lifetime.Generation && opened.Format == frame.Resource.Format &&
+			opened.Interop.AdapterLuid == interop.AdapterLuid && opened.Interop.SharedHandle == interop.SharedHandle)
+			return true;
+		CloseSharedResource();
 		try
 		{
 			_sharedTexture = device.OpenSharedResource<ID3D11Texture2D>(
 				new IntPtr(unchecked((long)interop.SharedHandle)));
+			var description = _sharedTexture.Description;
+			if (description.Width != frame.Resource.Format.Width || description.Height != frame.Resource.Format.Height ||
+				description.ArraySize != 1 || description.SampleDescription.Count != 1 ||
+				description.Format is not (Format.R8G8B8A8_UNorm or Format.B8G8R8A8_UNorm))
+			{
+				CloseSharedResource(); return false;
+			}
 			_sharedView = device.CreateShaderResourceView(_sharedTexture);
 			_openedResourceId = frame.Resource.ResourceId;
+			_openedResource = frame.Resource;
 			return true;
 		}
 		catch
@@ -301,13 +319,9 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 		if (Monitor is not null)
 		{
-			var dpiX = Math.Max(0.01, Monitor.DpiScaleX);
-			var dpiY = Math.Max(0.01, Monitor.DpiScaleY);
-			width = Monitor.PresentationWidth * dpiX;
-			height = Monitor.PresentationHeight * dpiY;
-			left = ((targetWidth - width) / 2.0) + (Monitor.PresentationOffsetX * dpiX);
-			top = ((targetHeight - height) / 2.0) + (Monitor.PresentationOffsetY * dpiY);
-			scale = width / sourceWidth;
+			var geometry = Monitor.CalculateGpuPresentation(checked((int)sourceWidth), checked((int)sourceHeight), targetWidth, targetHeight);
+			width = geometry.Width; height = geometry.Height;
+			left = geometry.X; top = geometry.Y; scale = geometry.Scale;
 		}
 		else
 		{
@@ -557,6 +571,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		_sharedView = null;
 		_sharedTexture = null;
 		_openedResourceId = null;
+		_openedResource = null;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]

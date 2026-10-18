@@ -8,7 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace rtaime.Operator;
 
-public class MonitorView : UserControl
+public partial class MonitorView : UserControl
 {
 	private double _viewportWidthDip;
 	private double _viewportHeightDip;
@@ -172,7 +172,7 @@ public class MonitorView : UserControl
 		nameof(State),
 		typeof(string),
 		typeof(MonitorView),
-		new PropertyMetadata("DISCONNECTED"));
+		new PropertyMetadata("DISCONNECTED", OnObservationStateChanged));
 
 	public static readonly DependencyProperty TimecodeProperty = DependencyProperty.Register(
 		nameof(Timecode),
@@ -520,22 +520,36 @@ public class MonitorView : UserControl
 
 	private static void OnFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
-		((MonitorView)dependencyObject).RefreshPresentation();
+		var view = (MonitorView)dependencyObject;
+		if (eventArgs.NewValue is not null) view._lastBitmapReceipt = DateTimeOffset.UtcNow;
+		view.RefreshPresentation();
 	}
 
 	private static void OnGpuFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var view = (MonitorView)dependencyObject;
-		if (eventArgs.NewValue is null)
-			view.SetGpuPresentationState(false, "CPU/WPF fallback");
+		if (eventArgs.NewValue is not null) view._lastGpuReceipt = DateTimeOffset.UtcNow;
+		var previous = eventArgs.OldValue as OperatorGpuMonitoringFrame;
+		var next = eventArgs.NewValue as OperatorGpuMonitoringFrame;
+		if (next is null || previous is null || previous.Resource.ProviderInstanceId != next.Resource.ProviderInstanceId ||
+			previous.Resource.Lifetime.Generation != next.Resource.Lifetime.Generation ||
+			previous.Resource.Interop.AdapterLuid != next.Resource.Interop.AdapterLuid ||
+			previous.Resource.Format != next.Resource.Format)
+		{
+			view.ClearInspectionRoi();
+			view.SetGpuPresentationState(false, "GPU resource transition · CPU/WPF fallback");
+		}
 		view.RefreshPresentation();
 	}
 
 	internal void SetGpuPresentationState(bool active, string detail)
 	{
+		var changed = IsGpuPresentationActive != active;
 		SetValue(IsGpuPresentationActivePropertyKey, active);
 		SetValue(GpuPresentationDetailPropertyKey, string.IsNullOrWhiteSpace(detail) ? "CPU/WPF fallback" : detail);
 		RefreshChannelInspectionAvailability();
+		if (changed) { ClearInspectionRoi(); RefreshPresentation(); }
+		RefreshPresentationEvidence();
 		if (ShowDiagnosticsHud)
 			RefreshDiagnosticsHud();
 	}
@@ -567,8 +581,8 @@ public class MonitorView : UserControl
 		SetValue(DpiScaleYPropertyKey, dpiScaleY);
 		SetValue(InverseDpiScaleXPropertyKey, 1.0 / dpiScaleX);
 		SetValue(InverseDpiScaleYPropertyKey, 1.0 / dpiScaleY);
-		SetValue(ViewportPixelWidthPropertyKey, Math.Max(1.0, Math.Round(widthDip * dpiScaleX)));
-		SetValue(ViewportPixelHeightPropertyKey, Math.Max(1.0, Math.Round(heightDip * dpiScaleY)));
+		SetValue(ViewportPixelWidthPropertyKey, Math.Max(1.0, Math.Ceiling(widthDip * dpiScaleX)));
+		SetValue(ViewportPixelHeightPropertyKey, Math.Max(1.0, Math.Ceiling(heightDip * dpiScaleY)));
 		RefreshPresentation();
 	}
 
@@ -744,7 +758,14 @@ public class MonitorView : UserControl
 
 	private void RefreshPresentation()
 	{
-		if ((Frame is null && GpuFrame is null) || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+		RefreshPresentationEvidence();
+		if (!HasPresentedFrame)
+		{
+			SetValue(SourcePixelWidthPropertyKey, 0); SetValue(SourcePixelHeightPropertyKey, 0);
+			SetValue(PresentationWidthPropertyKey, 0.0); SetValue(PresentationHeightPropertyKey, 0.0);
+			return;
+		}
+		if ((Frame is null && !IsGpuPresentationActive) || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
 			return;
 
 		var (sourceWidth, sourceHeight) = ResolveSourcePixels();
@@ -765,9 +786,10 @@ public class MonitorView : UserControl
 			_viewportWidthDip,
 			_viewportHeightDip,
 			_dpiScaleX,
-			_dpiScaleY);
+			_dpiScaleY,
+			IsGpuPresentationActive ? MediaScalingPath.GpuProvider : MediaScalingPath.WpfFallback);
 		var target = _renderTargetStabilizer.Adopt(requestedTarget, DateTimeOffset.UtcNow);
-		var physical = (Width: (double)target.PixelWidth, Height: (double)target.PixelHeight);
+		var physical = (Width: (double)requestedTarget.PixelWidth, Height: (double)requestedTarget.PixelHeight);
 		var (mode, zoom) = ResolvePresentationPolicy(ZoomMode);
 		var result = MediaPresentationGeometry.Calculate(
 			sourceWidth,
@@ -796,11 +818,12 @@ public class MonitorView : UserControl
 		SetValue(
 			PresentationInfoPropertyKey,
 			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | Target {target.PixelWidth}×{target.PixelHeight} px | {target.Quality} {target.Path} | Scale stages 1 | RT #{_renderTargetStabilizer.Revision}{(_renderTargetStabilizer.ResizePending ? " pending" : string.Empty)} | DPI {_dpiScaleX * 100:0}%");
+		RefreshPresentationEvidence();
 	}
 
 	private (double Width, double Height) ResolveSourcePixels()
 	{
-		if (GpuFrame is { Resource.Interop.IsPresentable: true } gpu)
+		if (IsGpuPresentationActive && GpuFrame is { Resource.Interop.IsPresentable: true } gpu)
 			return (gpu.Resource.Format.Width, gpu.Resource.Format.Height);
 		if (Frame is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
 			return (bitmap.PixelWidth, bitmap.PixelHeight);

@@ -167,7 +167,9 @@ public static class MediaPixelInspection
 	{
 		coordinate = default;
 		if (sourceWidth <= 0 || sourceHeight <= 0 || presentation.Scale <= 0 ||
-			!double.IsFinite(pointerXDip) || !double.IsFinite(pointerYDip))
+			!double.IsFinite(pointerXDip) || !double.IsFinite(pointerYDip) ||
+			!double.IsFinite(dpiScaleX) || !double.IsFinite(dpiScaleY) || dpiScaleX <= 0 || dpiScaleY <= 0 ||
+			!double.IsFinite(presentation.Scale) || !double.IsFinite(presentation.X) || !double.IsFinite(presentation.Y))
 			return false;
 
 		var physicalX = pointerXDip * dpiScaleX;
@@ -241,7 +243,7 @@ public static class MediaPixelInspection
 			Coordinate = sourceCoordinate,
 			Detail = sourceWidth == bitmap.PixelWidth && sourceHeight == bitmap.PixelHeight
 				? sample.Detail
-				: "BGRA32 bounded monitoring sample"
+				: $"REDUCED VALUE SAMPLE {bitmap.PixelWidth}×{bitmap.PixelHeight}"
 		};
 	}
 
@@ -271,7 +273,7 @@ public static class MediaPixelInspection
 
 	public static string Format(MediaPixelSample sample) =>
 		sample.IsValid
-			? $"X {sample.Coordinate.X}  Y {sample.Coordinate.Y}  R {sample.Red}  G {sample.Green}  B {sample.Blue}  A {sample.Alpha}  Y' {sample.Luma:0.0}  DISPLAY CODE"
+			? $"X {sample.Coordinate.X}  Y {sample.Coordinate.Y}  R {sample.Red}  G {sample.Green}  B {sample.Blue}  A {sample.Alpha}  Y' {sample.Luma:0.0}  DISPLAY CODE · {sample.Detail}"
 			: $"X {sample.Coordinate.X}  Y {sample.Coordinate.Y}  {sample.Detail.ToUpperInvariant()}";
 
 	public static string Format(MediaInspectionRoiStatistics statistics)

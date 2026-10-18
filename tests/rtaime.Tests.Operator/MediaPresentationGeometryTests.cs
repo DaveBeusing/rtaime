@@ -116,7 +116,7 @@ public sealed class MediaPresentationGeometryTests
 	public void Render_target_rounds_fractional_physical_extents_deterministically()
 	{
 		var target = MediaRenderTarget.Create(801, 451, 1.25, 1.25);
-		Assert.Equal(1001, target.PixelWidth);
+		Assert.Equal(1002, target.PixelWidth);
 		Assert.Equal(564, target.PixelHeight);
 	}
 
