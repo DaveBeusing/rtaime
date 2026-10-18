@@ -26,6 +26,95 @@ namespace rtaime.Tests.Operator;
 
 internal static class MonitorPresentationQualification
 {
+	internal static async Task RunIsolatedAsync()
+	{
+		const string childMarker = "RTAIME_VIEWER_QUALIFICATION_CHILD";
+		if (Environment.GetEnvironmentVariable(childMarker) == "1")
+		{
+			await RunStaAsync();
+			return;
+		}
+		DirectoryInfo? directory = new(AppContext.BaseDirectory);
+		while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
+			directory = directory.Parent;
+		Assert.NotNull(directory);
+		var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+		var start = new ProcessStartInfo("dotnet")
+		{
+			WorkingDirectory = directory.FullName, UseShellExecute = false, CreateNoWindow = true,
+			WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true
+		};
+		foreach (var argument in new[]
+		{
+			"test", Path.Combine(directory.FullName, "tests", "rtaime.Tests.Operator", "rtaime.Tests.Operator.csproj"),
+			"--configuration", configuration, "--no-build", "--no-restore", "--filter",
+			"FullyQualifiedName=rtaime.Tests.Operator.GpuDrawingSurfaceTests.Productive_program_viewer_and_resource_epochs_remain_isolated",
+			"--logger", "console;verbosity=detailed"
+		}) start.ArgumentList.Add(argument);
+		start.Environment[childMarker] = "1";
+		using var process = Process.Start(start)!;
+		var stdout = process.StandardOutput.ReadToEndAsync();
+		var stderr = process.StandardError.ReadToEndAsync();
+		try
+		{
+			await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(45));
+			var result = await stdout;
+			var errors = await stderr;
+			Console.WriteLine(result);
+			Console.WriteLine(errors);
+			Assert.True(process.ExitCode == 0, $"Isolated productive viewer failed: {result}\n{errors}");
+			Assert.Contains("VIEWER SHARED GPU PASS", result);
+			Assert.Contains("VIEWER PROGRAM PASS", result);
+		}
+		finally
+		{
+			if (!process.HasExited)
+			{
+				process.Kill(entireProcessTree: true);
+				await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+				Console.WriteLine(await stdout);
+				Console.WriteLine(await stderr);
+			}
+		}
+	}
+
+	private static async Task RunStaAsync()
+	{
+		var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var thread = new Thread(() =>
+		{
+			var dispatcher = Dispatcher.CurrentDispatcher;
+			SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+			Exception? failure = null;
+			dispatcher.UnhandledException += (_, args) => { failure ??= args.Exception; args.Handled = true; };
+			dispatcher.BeginInvoke(new Action(async () =>
+			{
+				OperatorResourceApplication? app = null;
+				try
+				{
+					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+					app.InitializeComponent();
+					await VerifyAsync(dispatcher);
+				}
+				catch (Exception exception) { failure = exception; }
+				finally
+				{
+					try { app?.Shutdown(); }
+					catch (Exception exception) { failure ??= exception; }
+					dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
+				}
+			}));
+			try { Dispatcher.Run(); }
+			catch (Exception exception) { failure ??= exception; }
+			if (failure is null) completed.TrySetResult();
+			else completed.TrySetException(failure);
+		}) { IsBackground = true, Name = "Program viewer qualification" };
+		thread.SetApartmentState(ApartmentState.STA);
+		thread.Start();
+		await completed.Task.WaitAsync(TimeSpan.FromSeconds(45));
+		Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "Viewer qualification dispatcher did not terminate.");
+	}
+
 	internal static async Task VerifyAsync(Dispatcher dispatcher)
 	{
 		dispatcher.VerifyAccess();
