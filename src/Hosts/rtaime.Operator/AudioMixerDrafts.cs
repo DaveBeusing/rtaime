@@ -68,16 +68,17 @@ public sealed partial class OperatorAudioBusAssignmentViewModel
         set
         {
             if (!_source.CanEditDraft || !Set(ref _draftAssigned, value)) return;
-            OnPropertyChanged(nameof(HasDraftChanges)); OnPropertyChanged(nameof(DraftLabel));
+            OnPropertyChanged(nameof(HasDraftChanges)); OnPropertyChanged(nameof(DraftLabel)); OnPropertyChanged(nameof(State));
             _source.AssignmentDraftChanged();
         }
     }
     public bool HasDraftChanges => DraftAssigned != IsAssigned;
     public string DraftLabel => $"{_source.SourceName} → {BusLabel}: draft {(DraftAssigned ? "ON" : "OFF")}, confirmed {(IsAssigned ? "ON" : "OFF")}";
-    internal void ResetDraft()
+    internal void ResetDraft(bool clearFeedback = true)
     {
+        if (clearFeedback) _state = "CONFIRMED";
         _draftAssigned = IsAssigned;
-        OnPropertyChanged(nameof(DraftAssigned)); OnPropertyChanged(nameof(HasDraftChanges)); OnPropertyChanged(nameof(DraftLabel));
+        OnPropertyChanged(nameof(DraftAssigned)); OnPropertyChanged(nameof(HasDraftChanges)); OnPropertyChanged(nameof(DraftLabel)); OnPropertyChanged(nameof(State));
     }
 }
 
@@ -90,5 +91,19 @@ public sealed partial class MediaPoolInspectorViewModel
         if (payload.Version != 1 || payload.RevisionToken != CurrentRevisionToken ||
             payload.Values is not InspectorGainAttributes { IsValid: true }) return false;
         _attributeClipboard = payload; NotifyInspectorHistory(); return true;
+    }
+}
+
+public sealed partial class OperatorAudioMixerViewModel
+{
+    private string _attributeTransferStatus = "Copy/paste gain uses the Inspector clipboard; Apply remains explicit.";
+    public string AttributeTransferStatus { get => _attributeTransferStatus; internal set => Set(ref _attributeTransferStatus, value); }
+    public string OutputRoutingEvidence { get; private set; } = "OUTPUT BUS MAPPING UNAVAILABLE";
+    private void ProjectOutputRoutes(IReadOnlyList<rtaime.Client.OperatorOutputRoleDescriptor> roles, string[] buses)
+    {
+        OutputRoutingEvidence = roles.Count == 0 ? "OUTPUT BUS MAPPING UNAVAILABLE" :
+            string.Join(" · ", roles.Select(r => $"{r.AudioBusId ?? "program"} → {r.RoleId.ToUpperInvariant()}" +
+                (buses.Contains(r.AudioBusId ?? "program", StringComparer.OrdinalIgnoreCase) ? "" : " · MISSING BUS")));
+        OnPropertyChanged(nameof(OutputRoutingEvidence));
     }
 }

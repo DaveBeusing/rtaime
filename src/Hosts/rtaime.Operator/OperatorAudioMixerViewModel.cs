@@ -121,6 +121,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 
 		var previousSelectedId = SelectedSource?.SourceId;
 		var busIds = production.Configuration.Buses.Select(bus => bus.BusId).ToArray();
+		ProjectOutputRoutes(outputRoles, busIds.Select(b => b.Value).ToArray());
 		var inputs = audioInputs.ToDictionary(input => input.SourceId, StringComparer.Ordinal);
 		var existingSources = Sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
 		var nextSources = new List<OperatorAudioSourceStripViewModel>();
@@ -499,11 +500,13 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 	
 	internal void RefreshEvidenceState()
 	{
-		foreach (var property in new[] { nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(RuntimeState), nameof(RoutingEvidence), nameof(ProcessingEvidence) })
+		foreach (var property in new[] { nameof(DisplayLeftPeak), nameof(DisplayRightPeak), nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(RuntimeState), nameof(RoutingEvidence), nameof(ProcessingEvidence) })
 			OnPropertyChanged(property);
 	}
 	public string LeftPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_leftPeak) : "—";
 	public string RightPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_rightPeak) : "—";
+	public double DisplayLeftPeak => HasMeterEvidence ? Math.Min(1, LeftPeak) : 0;
+	public double DisplayRightPeak => HasMeterEvidence ? Math.Min(1, RightPeak) : 0;
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool InputClipping { get => _inputClipping; private set { if (Set(ref _inputClipping, value)) OnPropertyChanged(nameof(RuntimeState)); } }
@@ -716,7 +719,7 @@ public sealed partial class OperatorAudioBusAssignmentViewModel : INotifyPropert
 	public string BusId { get; }
 	public string BusLabel => BusId.ToUpperInvariant();
 	public bool IsAssigned { get => _isAssigned; private set { if (Set(ref _isAssigned, value)) OnPropertyChanged(nameof(ActionLabel)); } }
-	public string State { get => _state; private set => Set(ref _state, value); }
+	public string State { get => _state is "PENDING" or "REJECTED" ? _state : HasDraftChanges ? "DRAFT" : _state; private set => Set(ref _state, value); }
 	public string ActionLabel => IsAssigned ? "ON" : "OFF";
 	public ICommand ToggleCommand { get; }
 
@@ -724,7 +727,7 @@ public sealed partial class OperatorAudioBusAssignmentViewModel : INotifyPropert
 	{
 		var keep = preserveDraft && HasDraftChanges;
 		IsAssigned = assigned;
-		if (!keep) ResetDraft();
+		if (!keep) ResetDraft(clearFeedback: false);
 		if (State is not ("PENDING" or "REJECTED"))
 			State = "CONFIRMED";
 	}
@@ -812,6 +815,8 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 	public string BusLabel => BusId.ToUpperInvariant();
 	public string LeftPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_leftPeak) : "—";
 	public string RightPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_rightPeak) : "—";
+	public double DisplayLeftPeak => HasMeterEvidence ? Math.Min(1, LeftPeak) : 0;
+	public double DisplayRightPeak => HasMeterEvidence ? Math.Min(1, RightPeak) : 0;
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool Clipping { get => _clipping; private set => Set(ref _clipping, value); }
@@ -834,7 +839,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 
 	internal void RefreshEvidenceState()
 	{
-		foreach (var property in new[] { nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
+		foreach (var property in new[] { nameof(DisplayLeftPeak), nameof(DisplayRightPeak), nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
 			OnPropertyChanged(property);
 	}
 	public string LimiterActivity => !HasMeterEvidence ? "UNAVAILABLE" : LimiterHitCount > 0 ? $"{LimiterHitCount} HIT" : LimiterReductionDb > 0 ? $"{LimiterReductionDb:0.0} dB" : "IDLE";
