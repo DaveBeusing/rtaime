@@ -123,8 +123,8 @@
 												AutomationProperties.Name="Source gain draft" ToolTip="Local gain draft: arrows 0.01x, Page Up/Down 0.1x; apply to commit" />
 											<TextBlock Text="{Binding DraftGainLabel}" Style="{StaticResource OperatorLabel}" />
 										</StackPanel>
-										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
-										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="4" Content="{Binding ContributionLabel}" Command="{Binding ToggleContributionCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="4" Content="{Binding DraftContributionLabel}" Command="{Binding ToggleContributionCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 									</Grid>
 
 									<TextBlock Text="{Binding ConfirmedGainLabel}" Style="{StaticResource OperatorLabel}" />
@@ -141,8 +141,8 @@
 											<DataTemplate>
 												<StackPanel Margin="0,0,6,5">
 													<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}"
-														Content="{Binding BusLabel}"
-														IsChecked="{Binding IsAssigned, Mode=OneWay}"
+														Content="{Binding BusLabel}" ToolTip="{Binding DraftLabel}"
+														IsChecked="{Binding DraftAssigned, Mode=OneWay}"
 														Command="{Binding ToggleCommand}"
 														IsCompact="True"
 														MinWidth="62" />
@@ -257,7 +257,7 @@
 												AutomationProperties.Name="Bus gain draft" ToolTip="Local gain draft: arrows 0.01x, Page Up/Down 0.1x; apply to commit" />
 											<TextBlock Text="{Binding DraftGainLabel}" Style="{StaticResource OperatorLabel}" />
 										</StackPanel>
-										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 									</Grid>
 
 									<Border Style="{StaticResource AudioProcessingPanel}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0">

@@ -10,7 +10,7 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
-public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
+public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorViewModel _owner;
 	private OperatorAudioSourceStripViewModel? _selectedSource;
@@ -203,12 +203,13 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(DisabledReason));
 	}
 
+	internal string? AttributeRevision => _owner.Client?.Snapshot is { } snapshot ? snapshot.Production.ProductionId + ":" + snapshot.Production.Revision.Value : null;
 	internal bool CanMutate() => CanEdit && _owner.Client?.Snapshot?.AudioProduction is not null;
 
 	internal async Task<bool> ApplySourceAsync(OperatorAudioSourceStripViewModel strip)
 	{
 		var production = _owner.Client?.Snapshot?.AudioProduction;
-		if (production is null || !CanMutate())
+		if (production is null || !CanMutate() || !strip.InputsValid)
 			return false;
 
 		var sourceId = new MediaSourceId(Identity.Parse(strip.SourceId));
@@ -330,7 +331,7 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	internal async Task<bool> ApplyBusAsync(OperatorAudioBusStripViewModel strip)
 	{
 		var production = _owner.Client?.Snapshot?.AudioProduction;
-		if (production is null || !CanMutate())
+		if (production is null || !CanMutate() || !strip.InputsValid)
 			return false;
 
 		var busId = new AudioBusId(strip.BusId);
@@ -432,7 +433,7 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
+public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorAudioMixerViewModel _owner;
 	private AudioProductionSourceConfiguration _confirmed;
@@ -476,8 +477,8 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 			DraftChanged();
 			return Task.CompletedTask;
 		}, () => MutationState != "PENDING");
-		ToggleMuteCommand = new AsyncRelayCommand(() => _owner.ToggleSourceMuteAsync(this), _owner.CanMutate);
-		ToggleContributionCommand = new AsyncRelayCommand(() => _owner.ToggleContributionAsync(this), _owner.CanMutate);
+		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => CanEditDraft);
+		ToggleContributionCommand = new AsyncRelayCommand(() => { FollowRoutedSource = !FollowRoutedSource; return Task.CompletedTask; }, () => CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -485,9 +486,9 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 	public string SourceId => _confirmed.SourceId.ToString();
 	public string SourceName { get => _sourceName; private set => Set(ref _sourceName, value); }
 	public string Health { get => _health; private set => Set(ref _health, value); }
-	public bool HasMeterEvidence => _owner.EvidenceIsCurrent && Health != "UNAVAILABLE";
+	public bool HasMeterEvidence => _owner.EvidenceIsCurrent && Health is not ("UNAVAILABLE" or "ERROR" or "UNDERRUN") && AudioMixerPresentation.ValidPeak(LeftPeak) && AudioMixerPresentation.ValidPeak(RightPeak);
 	public string RuntimeState => !_owner.EvidenceIsCurrent ? _owner.Availability :
-		Health is "UNDERRUN" or "ERROR" ? "MISSING / UNDERRUN" : InputClipping ? "INPUT OVERLOAD" : Health;
+		Health is "UNDERRUN" or "ERROR" ? "MISSING / UNDERRUN" : !AudioMixerPresentation.ValidPeak(LeftPeak) || !AudioMixerPresentation.ValidPeak(RightPeak) ? "INVALID METER" : InputClipping ? "INPUT OVERLOAD" : Health;
 	public string ConfirmedGainLabel => OperatorAudioMixerViewModel.FormatGain(_confirmed.Gain);
 	public bool CanEditDraft => MutationState != "PENDING";
 	public string DraftGainLabel => OperatorAudioMixerViewModel.FormatGain(Gain);
@@ -501,8 +502,8 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		foreach (var property in new[] { nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(RuntimeState), nameof(RoutingEvidence), nameof(ProcessingEvidence) })
 			OnPropertyChanged(property);
 	}
-	public string LeftPeakLabel => HasMeterEvidence ? (_leftPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_leftPeak):0.0}") : "—";
-	public string RightPeakLabel => HasMeterEvidence ? (_rightPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_rightPeak):0.0}") : "—";
+	public string LeftPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_leftPeak) : "—";
+	public string RightPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_rightPeak) : "—";
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool InputClipping { get => _inputClipping; private set { if (Set(ref _inputClipping, value)) OnPropertyChanged(nameof(RuntimeState)); } }
@@ -533,8 +534,8 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 	public double HighGainDb { get => _highGainDb; set { if (Set(ref _highGainDb, Clamp(value, AudioEqualizerLimits.MinimumGainDb, AudioEqualizerLimits.MaximumGainDb, _highGainDb))) DraftChanged(); } }
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
-	public bool HasDraftChanges => !DraftMatches(_confirmed);
-	public string DraftState => MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
+	public bool HasDraftChanges => !DraftMatches(_confirmed) || Assignments.Any(a => a.HasDraftChanges);
+	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
 
 	internal void Apply(
 		AudioProductionSourceConfiguration source,
@@ -553,7 +554,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		InputClipping = input?.Clipping == true;
 		if (!preserveDraft)
 			LoadDraft(source);
-		UpdateAssignments(busIds, source.BusAssignments);
+		UpdateAssignments(busIds, source.BusAssignments, preserveDraft);
 		if (refreshDrafts)
 			MutationState = "CONFIRMED";
 		OnPropertyChanged(nameof(BusSummary));
@@ -570,7 +571,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 			Gain,
 			Muted,
 			FollowRoutedSource,
-			confirmed.BusAssignments,
+			Assignments.Where(a => a.DraftAssigned).Select(a => new AudioBusId(a.BusId)).ToArray(),
 			new AudioSourceEqualizerConfiguration(
 				new AudioLowShelfEqualizerBand(LowEnabled, LowFrequencyHz, LowGainDb),
 				new AudioBellEqualizerBand(MidEnabled, MidFrequencyHz, MidGainDb, MidQ),
@@ -602,10 +603,11 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasDraftChanges));
 	}
 
-	private bool CanApply() => _owner.CanMutate() && HasDraftChanges && MutationState != "PENDING";
+	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && MutationState != "PENDING";
 
 	private void LoadDraft(AudioProductionSourceConfiguration source)
 	{
+		foreach (var assignment in Assignments) assignment.ResetDraft();
 		var equalizer = source.Equalizer;
 		_gain = source.Gain;
 		_muted = source.Muted;
@@ -648,7 +650,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 			HighGainDb.Equals(eq?.HighShelf.GainDb ?? 0d);
 	}
 
-	private void UpdateAssignments(IReadOnlyList<AudioBusId> busIds, IReadOnlyList<AudioBusId> confirmedAssignments)
+	private void UpdateAssignments(IReadOnlyList<AudioBusId> busIds, IReadOnlyList<AudioBusId> confirmedAssignments, bool preserveDraft)
 	{
 		var existing = Assignments.ToDictionary(item => item.BusId, StringComparer.OrdinalIgnoreCase);
 		var next = new List<OperatorAudioBusAssignmentViewModel>();
@@ -656,7 +658,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		{
 			if (!existing.TryGetValue(busId.Value, out var assignment))
 				assignment = new OperatorAudioBusAssignmentViewModel(_owner, this, busId);
-			assignment.Apply(confirmedAssignments.Contains(busId));
+			assignment.Apply(confirmedAssignments.Contains(busId), preserveDraft);
 			next.Add(assignment);
 		}
 		OperatorAudioMixerViewModel.Reconcile(Assignments, next);
@@ -668,7 +670,11 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
 		OnPropertyChanged(nameof(ContributionLabel));
+		OnPropertyChanged(nameof(DraftContributionLabel));
+		OnPropertyChanged(nameof(DraftRoutingSummary));
 		OnPropertyChanged(nameof(DraftGainLabel));
+		OnPropertyChanged(nameof(GainDb));
+		OnPropertyChanged(nameof(DraftMuteLabel));
 		RaiseCanExecuteChanged();
 	}
 
@@ -688,7 +694,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-public sealed class OperatorAudioBusAssignmentViewModel : INotifyPropertyChanged
+public sealed partial class OperatorAudioBusAssignmentViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorAudioMixerViewModel _owner;
 	private readonly OperatorAudioSourceStripViewModel _source;
@@ -703,7 +709,7 @@ public sealed class OperatorAudioBusAssignmentViewModel : INotifyPropertyChanged
 		_owner = owner;
 		_source = source;
 		BusId = busId.Value;
-		ToggleCommand = new AsyncRelayCommand(() => _owner.ToggleAssignmentAsync(_source, this), CanToggle);
+		ToggleCommand = new AsyncRelayCommand(() => { if (_source.CanEditDraft) { DraftAssigned = !DraftAssigned; } return Task.CompletedTask; }, () => _source.CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -714,9 +720,11 @@ public sealed class OperatorAudioBusAssignmentViewModel : INotifyPropertyChanged
 	public string ActionLabel => IsAssigned ? "ON" : "OFF";
 	public ICommand ToggleCommand { get; }
 
-	internal void Apply(bool assigned)
+	internal void Apply(bool assigned, bool preserveDraft = false)
 	{
+		var keep = preserveDraft && HasDraftChanges;
 		IsAssigned = assigned;
+		if (!keep) ResetDraft();
 		if (State is not ("PENDING" or "REJECTED"))
 			State = "CONFIRMED";
 	}
@@ -751,7 +759,7 @@ public sealed class OperatorAudioBusAssignmentViewModel : INotifyPropertyChanged
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
+public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorAudioMixerViewModel _owner;
 	private AudioProductionBusConfiguration _confirmed;
@@ -796,14 +804,14 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 			DraftChanged();
 			return Task.CompletedTask;
 		}, () => MutationState != "PENDING");
-		ToggleMuteCommand = new AsyncRelayCommand(() => _owner.ToggleBusMuteAsync(this), _owner.CanMutate);
+		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 	public string BusId => _confirmed.BusId.Value;
 	public string BusLabel => BusId.ToUpperInvariant();
-	public string LeftPeakLabel => HasMeterEvidence ? (_leftPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_leftPeak):0.0}") : "—";
-	public string RightPeakLabel => HasMeterEvidence ? (_rightPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_rightPeak):0.0}") : "—";
+	public string LeftPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_leftPeak) : "—";
+	public string RightPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_rightPeak) : "—";
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool Clipping { get => _clipping; private set => Set(ref _clipping, value); }
@@ -815,9 +823,9 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 	public int MissingSources { get => _missingSources; private set => Set(ref _missingSources, value); }
 	public string CountsEvidence => HasMeterEvidence ? $"ACTIVE {ActiveSources} · MISSING {MissingSources}" : "SOURCE COUNTS UNAVAILABLE";
 	public string OutputRoles { get => _outputRoles; private set => Set(ref _outputRoles, value); }
-	public bool HasMeterEvidence => _hasMeterEvidence && _owner.EvidenceIsCurrent;
+	public bool HasMeterEvidence => _hasMeterEvidence && _owner.EvidenceIsCurrent && AudioMixerPresentation.ValidPeak(LeftPeak) && AudioMixerPresentation.ValidPeak(RightPeak);
 	public string EvidenceState => !_owner.EvidenceIsCurrent ? _owner.Availability :
-		!_hasMeterEvidence ? "UNAVAILABLE" : Clipping ? "CLIPPING" : MissingSources > 0 ? "MISSING SOURCE" : "CONFIRMED";
+		!_hasMeterEvidence ? "UNAVAILABLE" : !AudioMixerPresentation.ValidPeak(LeftPeak) || !AudioMixerPresentation.ValidPeak(RightPeak) ? "INVALID METER" : Clipping ? "CLIPPING" : MissingSources > 0 ? "MISSING SOURCE" : "CONFIRMED";
 	public string ConfirmedGainLabel => OperatorAudioMixerViewModel.FormatGain(_confirmed.MasterGain);
 	public bool CanEditDraft => MutationState != "PENDING";
 	public string DraftGainLabel => OperatorAudioMixerViewModel.FormatGain(MasterGain);
@@ -849,7 +857,7 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
 	public bool HasDraftChanges => !DraftMatches(_confirmed);
-	public string DraftState => MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
+	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
 	public string MuteActionLabel => _confirmed.Muted ? "MUTE OFF" : "MUTE";
 
 	internal void Apply(
@@ -932,7 +940,7 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(DraftState));
 	}
 
-	private bool CanApply() => _owner.CanMutate() && HasDraftChanges && MutationState != "PENDING";
+	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && MutationState != "PENDING";
 
 	private void LoadDraft(AudioProductionBusConfiguration bus)
 	{
@@ -982,6 +990,8 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
 		OnPropertyChanged(nameof(DraftGainLabel));
+		OnPropertyChanged(nameof(GainDb));
+		OnPropertyChanged(nameof(DraftMuteLabel));
 		RaiseCanExecuteChanged();
 	}
 
