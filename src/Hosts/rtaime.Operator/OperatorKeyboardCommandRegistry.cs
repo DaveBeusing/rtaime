@@ -266,7 +266,7 @@ public sealed class OperatorKeyboardCommandRegistry
 	public static bool IsTextEntryContext(System.Windows.DependencyObject? focused)
 	{
 		for (var current = focused; current is not null; current = Parent(current))
-			if (current is TextBoxBase or PasswordBox or ComboBox or ComboBoxItem) return true;
+			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem) return true;
 		return false;
 	}
 	private static OperatorShortcutScope ResolveScope()

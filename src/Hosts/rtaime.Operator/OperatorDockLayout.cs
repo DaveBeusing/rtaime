@@ -22,8 +22,8 @@ public sealed record OperatorPanelBounds(double Left, double Top, double Width, 
 
 public sealed record OperatorDockLayout
 {
-    public const int CurrentVersion = 1;
-    public static IReadOnlyList<string> PanelIds { get; } = Array.AsReadOnly(new[] { "TOOLS", "MONITORS", "INSPECTOR", "TIMELINE" });
+    public const int CurrentVersion = 2;
+    public static IReadOnlyList<string> PanelIds { get; } = Array.AsReadOnly(new[] { "TOOLS", "MONITORS", "INSPECTOR", "TIMELINE", "AUDIO" });
     public static IReadOnlyList<string> GroupIds { get; } = Array.AsReadOnly(new[] { "LEFT", "CENTER", "RIGHT", "BOTTOM" });
     public int Version { get; init; } = CurrentVersion;
     public bool Enabled { get; init; }
@@ -33,28 +33,29 @@ public sealed record OperatorDockLayout
     public double RightRatio { get; init; } = .22;
     public double BottomRatio { get; init; } = .30;
     public static OperatorDockLayout Default => new();
-    private static OperatorDockGroup[] Defaults() => GroupIds.Select((g, i) => new OperatorDockGroup(g, [PanelIds[i]], PanelIds[i])).ToArray();
+    private static OperatorDockGroup[] Defaults() => GroupIds.Select((g, i) => new OperatorDockGroup(g, i == 2 ? [PanelIds[i], "AUDIO"] : [PanelIds[i]], PanelIds[i])).ToArray();
 
     public OperatorDockLayout Normalize()
     {
-        if (Version != CurrentVersion) return Default;
+        if (Version is not (1 or CurrentVersion)) return Default;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var groups = GroupIds.Select(id =>
         {
             var candidate = (Groups ?? []).Take(4).FirstOrDefault(g => g is not null && g.Id == id);
-            var panels = (candidate?.Panels ?? []).Take(4).Where(p => PanelIds.Contains(p) && seen.Add(p)).ToArray();
+            var panels = (candidate?.Panels ?? []).Take(PanelIds.Count).Where(p => PanelIds.Contains(p) && seen.Add(p)).ToArray();
             return new OperatorDockGroup(id, panels, panels.Contains(candidate?.ActivePanel) ? candidate!.ActivePanel : panels.FirstOrDefault());
         }).ToArray();
-        var floating = (Floating ?? []).Take(4)
+        var floating = (Floating ?? []).Take(PanelIds.Count)
             .Where(p => p is not null && PanelIds.Contains(p.Panel) && seen.Add(p.Panel))
             .Select(p => p with { ReturnGroup = GroupIds.Contains(p.ReturnGroup) ? p.ReturnGroup : "CENTER",
                 Placement = (p.Placement ?? OperatorPanelPlacement.Default).Normalize() }).ToArray();
         for (var i = 0; i < PanelIds.Count; i++)
         {
             if (!seen.Add(PanelIds[i])) continue;
-            groups[i] = groups[i] with { Panels = [.. groups[i].Panels, PanelIds[i]], ActivePanel = groups[i].ActivePanel ?? PanelIds[i] };
+            var home = i < GroupIds.Count ? i : 2;
+            groups[home] = groups[home] with { Panels = [.. groups[home].Panels, PanelIds[i]], ActivePanel = groups[home].ActivePanel ?? PanelIds[i] };
         }
-        return this with { Groups = groups, Floating = floating,
+        return this with { Version = CurrentVersion, Groups = groups, Floating = floating,
             LeftRatio = Ratio(LeftRatio, .22, .10, .35), RightRatio = Ratio(RightRatio, .22, .10, .35),
             BottomRatio = Ratio(BottomRatio, .30, .15, .60) };
     }
