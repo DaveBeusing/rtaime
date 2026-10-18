@@ -50,7 +50,9 @@ resolves the original item's PlacementTarget; no disconnected-menu ancestor
 binding or second command instance is required.
 
 The Inspector already has its own namescope and explicit dependency properties.
-Those are preserved. Its loaded/unloaded subscription follows the same Inspector
+OperatorComposition supplies the same model, ControlState, MediaDeck, QuickControls
+and collapse command directly. They do not depend on inherited DataContext or a
+Window ancestor during the detached interval between panel hosts. Its loaded/unloaded subscription follows the same Inspector
 model during moves and is removed at teardown. MainWindow and OperatorPanelWindow
 continue using the existing shared keyboard router. Ctrl+F selects MEDIA, reveals
 or floats the existing TOOLS panel as necessary, then calls the Library's own
@@ -82,10 +84,12 @@ Extend the existing OperatorXamlStartupTests real BAML/STA journey, not a second
 application harness. MediaLibraryBrowsingTests covers the actual Library view,
 shared projection/selection, custom text controls, context menus, 4096-item
 virtualization and unchanged Preview/Program identities. OperatorDockingWindowTests
-moves the actual Library and Inspector and checks retained model, selection,
+uses the existing three cycles for Library, Inspector and monitor floating and checks retained model, selection,
 commands and monitoring-owner identities. The real close checks floating windows,
 Inspector subscription cleanup and drawing-surface subscription balance.
 
+Pane/viewer assertions run in all forty matrix cases, avoiding a duplicate warmup.
+All newly realized native surfaces are retained for final teardown checks.
 The existing combined qualification covers 100/125/150/200% injected layout DPI,
 compact geometry, owned windows, focus, Cinema and restore. Existing Client/host
 integration tests retain snapshot/reconnect and monitoring isolation coverage.

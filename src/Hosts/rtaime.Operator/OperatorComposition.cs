@@ -18,6 +18,12 @@ public sealed class OperatorComposition
         Outputs = shell.OutputHealth;
         Health = shell.HealthCenter;
         Ai = Live;
+        // Borrowed values must survive the detached interval where inherited DataContext is null.
+        InspectorView.Inspector = Inspector;
+        InspectorView.ControlState = Live;
+        InspectorView.MediaDeck = shell.MediaDeck;
+        InspectorView.QuickControls = shell.QuickControls;
+        InspectorView.CollapseCommand = shell.Shell.ToggleRightPanelCommand;
     }
     public OperatorMediaLibraryContext Library { get; }
     public OperatorInspectorControl InspectorView { get; }

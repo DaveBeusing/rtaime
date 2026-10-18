@@ -177,7 +177,12 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
                                 elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds });
                         }
                     }
-                    await Qualify("Combined layouts and QoL focus transitions", () => OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher));
+                    await Qualify("Combined layouts and QoL focus transitions", async () =>
+                    {
+                        await OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher);
+                        // Hidden templates may realize more native surfaces in the matrix; retain every instance for teardown.
+                        observedSurfaces = observedSurfaces.Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>()).Distinct().ToArray();
+                    });
                     await Qualify("Library smart bins, menus and virtualization", () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Timeline draft ergonomics", () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Inspector precision", () => InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher));
