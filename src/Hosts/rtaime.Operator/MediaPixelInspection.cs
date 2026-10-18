@@ -180,8 +180,8 @@ public static class MediaPixelInspection
 			return false;
 
 		coordinate = new MediaPixelCoordinate(
-			Math.Clamp((int)Math.Floor(sourceX), 0, sourceWidth - 1),
-			Math.Clamp((int)Math.Floor(sourceY), 0, sourceHeight - 1));
+			(int)Math.Floor(Math.Clamp(sourceX, 0, sourceWidth - 1)),
+			(int)Math.Floor(Math.Clamp(sourceY, 0, sourceHeight - 1)));
 		return true;
 	}
 

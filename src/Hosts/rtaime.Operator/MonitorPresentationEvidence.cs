@@ -37,7 +37,8 @@ public partial class MonitorView
 			: bitmap is not null
 				? $"REDUCED CPU {bitmap.PixelWidth}×{bitmap.PixelHeight} · 100% = fallback pixel"
 				: "DETAIL UNAVAILABLE · no active presentation";
-		SetValue(PresentationQualityPropertyKey, basis);
+		SetValue(PresentationQualityPropertyKey, basis + (hasFrame && State != "LIVE" ? " · RETAINED / NOT CURRENT" : "") +
+			(ZoomMode == "FILL" ? " · FILL CROPS IMAGE" : ""));
 		var receipt = IsGpuPresentationActive ? _lastGpuReceipt : _lastBitmapReceipt;
 		var retained = hasFrame && !string.Equals(State, "LIVE", StringComparison.OrdinalIgnoreCase);
 		SetValue(ObservationStatusPropertyKey, !hasFrame ? $"{State} · FRAME UNAVAILABLE" :

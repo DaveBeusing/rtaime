@@ -49,9 +49,15 @@ public static class MediaPresentationGeometry
 
 		var width = sourceWidth * scale;
 		var height = sourceHeight * scale;
+		if (!double.IsFinite(panX) || !double.IsFinite(panY))
+			throw new ArgumentOutOfRangeException(nameof(panX));
 		var bounds = CalculatePanBounds(width, height, viewportWidth, viewportHeight);
 		var x = (viewportWidth - width) / 2.0 + Math.Clamp(panX, bounds.MinX, bounds.MaxX);
 		var y = (viewportHeight - height) / 2.0 + Math.Clamp(panY, bounds.MinY, bounds.MaxY);
+		if (scale >= 1 && Math.Abs(scale - Math.Round(scale)) < 0.000001)
+		{
+			x = Math.Floor(x); y = Math.Floor(y);
+		}
 		return new MediaPresentationRect(x, y, width, height, scale);
 	}
 

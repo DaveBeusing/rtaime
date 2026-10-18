@@ -250,6 +250,8 @@ public partial class MonitorView : UserControl
 
 	public MonitorView()
 	{
+		ZoomInCommand = new MonitorPresentationCommand(() => StepPresentationZoom(1));
+		ZoomOutCommand = new MonitorPresentationCommand(() => StepPresentationZoom(-1));
 		FitCommand = new MonitorPresentationCommand(() => ZoomMode = "FIT");
 		FillCommand = new MonitorPresentationCommand(() => ZoomMode = "FILL");
 		Zoom25Command = new MonitorPresentationCommand(() => ZoomMode = "25%");
@@ -439,6 +441,8 @@ public partial class MonitorView : UserControl
 	public ICommand ToggleFitPixelPerfectCommand { get; }
 	public ICommand ToggleTechnicalOverlayCommand { get; }
 	public ICommand ToggleDiagnosticsHudCommand { get; }
+	public ICommand ZoomInCommand { get; } = null!;
+	public ICommand ZoomOutCommand { get; } = null!;
 	public ICommand ShowRgbCommand { get; }
 	public ICommand ShowRedCommand { get; }
 	public ICommand ShowGreenCommand { get; }

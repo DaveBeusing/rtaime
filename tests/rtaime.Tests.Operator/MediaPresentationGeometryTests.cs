@@ -46,7 +46,7 @@ public sealed class MediaPresentationGeometryTests
 		Assert.Equal(1920, result.Width);
 		Assert.Equal(1080, result.Height);
 		Assert.Equal(-360, result.X);
-		Assert.Equal(-202.5, result.Y);
+		Assert.Equal(-203, result.Y);
 	}
 
 	[Theory]

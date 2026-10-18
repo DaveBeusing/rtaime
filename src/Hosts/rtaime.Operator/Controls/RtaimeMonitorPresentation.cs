@@ -15,6 +15,12 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	private FrameworkElement? _mediaViewport;
 	private Point? _panOrigin;
 	private bool _roiSelecting;
+
+	public RtaimeMonitorPresentation()
+	{
+		Loaded += (_, _) => RefreshViewport();
+		Unloaded += (_, _) => CancelInteraction();
+	}
 	private readonly DispatcherTimer _resizeSettleTimer = new(DispatcherPriority.Render)
 	{
 		Interval = TimeSpan.FromMilliseconds(80)
@@ -169,6 +175,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		_mediaViewport.MouseLeftButtonDown += OnViewportMouseLeftButtonDown;
 		_mediaViewport.MouseLeftButtonUp += OnViewportMouseLeftButtonUp;
 		_mediaViewport.MouseMove += OnViewportMouseMove;
+		_mediaViewport.LostMouseCapture += OnViewportLostMouseCapture;
 		RefreshViewport();
 	}
 
@@ -220,7 +227,17 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		if (Keyboard.Modifiers != ModifierKeys.None)
 			return;
 
-		if (e.Key == Key.D1 || e.Key == Key.NumPad1)
+		if (e.IsRepeat && e.Key is Key.F or Key.D1 or Key.NumPad1) { e.Handled = true; return; }
+		if (e.Key is Key.Add or Key.OemPlus or Key.Subtract or Key.OemMinus)
+		{
+			Monitor.StepPresentationZoom(e.Key is Key.Add or Key.OemPlus ? 1 : -1); e.Handled = true;
+		}
+		else if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+		{
+			Monitor.PanPresentation(e.Key == Key.Left ? 24 : e.Key == Key.Right ? -24 : 0,
+				e.Key == Key.Up ? 24 : e.Key == Key.Down ? -24 : 0); e.Handled = true;
+		}
+		else if (e.Key == Key.D1 || e.Key == Key.NumPad1)
 		{
 			Monitor.ZoomMode = "100%";
 			e.Handled = true;
@@ -320,6 +337,14 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		Monitor.UpdatePresentationViewport(_mediaViewport.ActualWidth, _mediaViewport.ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY);
 	}
 
+	private void OnViewportLostMouseCapture(object sender, MouseEventArgs e) => CancelInteraction();
+	private void CancelInteraction()
+	{
+		_panOrigin = null; _roiSelecting = false;
+		Monitor?.EndRoiSelection(); _resizeSettleTimer.Stop();
+		if (_mediaViewport?.IsMouseCaptured == true) _mediaViewport.ReleaseMouseCapture();
+	}
+
 	private void DetachViewport()
 	{
 		if (_mediaViewport is null)
@@ -331,6 +356,8 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseLeftButtonDown;
 		_mediaViewport.MouseLeftButtonUp -= OnViewportMouseLeftButtonUp;
 		_mediaViewport.MouseMove -= OnViewportMouseMove;
+		_mediaViewport.LostMouseCapture -= OnViewportLostMouseCapture;
+		CancelInteraction();
 		_mediaViewport = null;
 		_panOrigin = null;
 		_roiSelecting = false;
