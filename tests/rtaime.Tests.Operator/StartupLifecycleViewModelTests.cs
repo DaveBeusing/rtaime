@@ -250,6 +250,30 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		Assert.Equal("READY", viewModel.Stages.Single(stage => stage.Id == "control-host").Status);
 	}
 
+
+	[Fact]
+	public void Direct_session_has_no_fabricated_Runtime_qualification()
+	{
+		using var model = new StartupLifecycleViewModel(null, new PassiveSynchronizationContext());
+		Assert.True(model.IsShellAvailable);
+		Assert.True(model.HasCompletedInitialStartup);
+		Assert.Equal("DIRECT OPERATOR SESSION", model.StartupPhaseLabel);
+		Assert.Equal("UNKNOWN", model.StartupVisualState);
+		Assert.Equal("DIRECT OPERATOR SESSION", model.ReadinessSummary);
+		Assert.DoesNotContain("PRODUCTION RUNTIME READY", model.BuildDiagnosticsText());
+	}
+
+	[Fact]
+	public void Copied_startup_diagnostics_redact_secrets_while_preserving_safe_next_step()
+	{
+		WriteEvidence(CreateStages(controlStatus: "FAILED", controlFailure: "token=startup-secret"), ApplicationLifecycleStages.ControlHost);
+		using var model = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		var text = model.BuildDiagnosticsText();
+		Assert.DoesNotContain("startup-secret", text);
+		Assert.Contains("ControlHost", text);
+		Assert.Contains("supported application lifecycle", text);
+	}
+
 	public void Dispose()
 	{
 		try

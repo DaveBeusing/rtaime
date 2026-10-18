@@ -141,14 +141,14 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			(stage.Requirement == StartupLifecycleRequirement.Optional &&
 			 string.Equals(stage.Status, "FAILED", StringComparison.Ordinal)));
 	public bool HasCompletedInitialStartup => !HasEvidence || _initialStartupCompleted;
-	public string StartupPhaseLabel => HasStartupFailure
+	public string StartupPhaseLabel => !HasEvidence ? "DIRECT OPERATOR SESSION" : HasStartupFailure
 		? "STARTUP ATTENTION REQUIRED"
 		: HasStartupDegradation
 			? "STARTUP DEGRADED"
 			: HasCompletedInitialStartup
 				? "PRODUCTION RUNTIME READY"
 				: "STARTING PRODUCTION RUNTIME";
-	public string StartupVisualState => HasStartupFailure
+	public string StartupVisualState => !HasEvidence ? "UNKNOWN" : HasStartupFailure
 		? "FAILED"
 		: HasStartupDegradation
 			? "DEGRADED"
@@ -648,7 +648,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			: null;
 	}
 
-	private string BuildDiagnosticsText()
+	internal string BuildDiagnosticsText()
 	{
 		var builder = new StringBuilder();
 		builder.AppendLine("rtaime startup diagnostics");
@@ -671,7 +671,8 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				builder.AppendLine($"  Failure: {stage.FailureReason}");
 		}
 
-		return builder.ToString().TrimEnd();
+		return string.Join(Environment.NewLine, builder.ToString().TrimEnd().Split(Environment.NewLine)
+			.Select(rtaime.Core.DiagnosticRedactor.RedactText));
 	}
 
 	private static StartupLifecycleRequirement ResolveRequirement(
