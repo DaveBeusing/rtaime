@@ -134,7 +134,7 @@ public sealed record OperatorLayoutSettings
 				layouts[OperatorWorkspaceNames.Settings] = legacySystem.Normalize();
 			}
 
-			foreach (var workspace in Workspaces.Keys.Where(OperatorWorkspaceRegistry.IsPersistableId).Take(OperatorWorkspaceRegistry.MaximumRetainedLayouts))
+			foreach (var workspace in OperatorWorkspaceNames.All.Concat(Workspaces.Keys.Where(OperatorWorkspaceRegistry.IsPersistableId)).Distinct(StringComparer.Ordinal))
 			{
 				if (!layouts.ContainsKey(workspace) && layouts.Count >= OperatorWorkspaceRegistry.MaximumRetainedLayouts) continue;
 				if (Workspaces.TryGetValue(workspace, out var layout) && layout is not null)
