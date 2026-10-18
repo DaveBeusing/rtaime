@@ -161,3 +161,13 @@ qualification limits. Physical/no-gap acceptance remains UNVERIFIED.
 ## Durable sequence authoring
 
 See [Sequence Authoring and Persistence](SequenceAuthoring.md) for the canonical multitrack backend, rational time and revisioned edit contract. Playback remains unavailable; the existing Rundown execution model retain their current authority.
+
+## Live Operator console and local order drafts
+
+The LIVE Scenes & Cues region exposes the same Rundown view model used by the authoring workspace. Selecting or right-clicking a row changes local selection only. The context menu offers the existing Prepare/retry and Hold commands under their normal eligibility; its read-only evidence names the selected item. RUNDOWN GO, SHOW GO, Scene TAKE and Preview CUT/AUTO remain distinct controls.
+
+Drag an existing row before another row to change the local bounded order. No drop saves, prepares or executes. Undo/redo uses the existing 32-entry authoring history; Save explicitly persists against the displayed base storage version. Passive status observations preserve dirty names/order, selected identity and undo history. A newer saved version exposes CONFLICT and blocks Save/Prepare/GO; explicit Refresh reloads the saved document and discards that draft. A rejected Save retains the local draft and history. An observed active/recovery execution locks authoring even when a retained draft exists.
+
+Rows show real observed thumbnails when identity matches, known duration or DURATION UNKNOWN, declared follow/repeat, and confirmed current/prepared/next/failure state. Catalogue ONLINE does not mean playback-ready. Resident readiness comes only from the confirmed prepared item and expires according to Runtime; the UTC expiry label is presentation evidence, never a local production scheduler. Runtime revalidates the candidate at GO.
+
+The existing Operator loop observes current/prepared/pending identities, Manual/Auto/Hold, remaining production frames, finite repeat counts and failures. It never decrements frames or advances items locally. Older execution revisions and observations overtaken by a local command are ignored. Owner busy, stale, disconnected and Runtime-readiness gates also apply to cue execution. Recovery remains explicit; reconnect performs observation only.

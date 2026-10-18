@@ -28,6 +28,10 @@ public sealed partial class OperatorDockLayoutTests
             var store = new OperatorLayoutStore(path);
             var loaded = store.Load();
             Assert.Equal(original, await File.ReadAllTextAsync(path));
+            var restoredShell = new OperatorShellViewModel(store, _ => { });
+            restoredShell.RestoreWorkspace("EDIT");
+            Assert.Equal(original, await File.ReadAllTextAsync(path));
+            await restoredShell.StopTemplateFilesAsync();
             Assert.Equal(7, loaded.Version);
             Assert.Equal(430, loaded.Workspaces["MEDIA"].LeftPanelWidth);
             Assert.True(loaded.Workspaces["MEDIA"].IsRightCollapsed);

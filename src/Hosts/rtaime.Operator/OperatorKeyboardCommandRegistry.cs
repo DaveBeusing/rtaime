@@ -75,6 +75,15 @@ public sealed class OperatorKeyboardCommandRegistry
 			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
+		// Enter/Space on a focused button belongs to that explicit button; cue-list keys never issue global actions.
+		if ((key == Key.Enter || key == Key.Space) && Keyboard.Modifiers == ModifierKeys.None && !IsTextEntryContext() &&
+			(LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is not null ||
+			 LiveConsoleInput.IsCueSurface(Keyboard.FocusedElement as System.Windows.DependencyObject)))
+		{
+			if (args.IsRepeat || LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is null)
+			{ args.Handled = true; return true; }
+			return false;
+		}
 		var handled = TryHandle(key, Keyboard.Modifiers, args.IsRepeat, IsTextEntryContext(), ResolveScope());
 		if (handled) args.Handled = true;
 		return handled;
@@ -266,7 +275,7 @@ public sealed class OperatorKeyboardCommandRegistry
 	public static bool IsTextEntryContext(System.Windows.DependencyObject? focused)
 	{
 		for (var current = focused; current is not null; current = Parent(current))
-			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem) return true;
+			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem or MenuItem or ContextMenu) return true;
 		return false;
 	}
 	private static OperatorShortcutScope ResolveScope()

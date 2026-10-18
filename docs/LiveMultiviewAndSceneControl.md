@@ -52,12 +52,12 @@ The Scene contract may bundle Preview/Program routing with the bounded versioned
 
 The right 420-pixel LIVE region is divided into four compact sections:
 
-- **Transitions** — selected source versus confirmed NEXT/Preview versus confirmed LIVE/Program, explicit SET NEXT, TAKE and AUTO/DISSOLVE plus the existing transition duration.
+- **Transitions** — selected source versus confirmed NEXT/Preview versus confirmed LIVE/Program, explicit SET NEXT, CUT and AUTO/DISSOLVE plus the existing transition duration.
 - **Layer Stack (PGM)** — compact approximately 38-pixel layer rows and the existing governed graphics Show/Hide path.
 - **Stream & Record** — Program recording and Clean Program monitoring retain their governed command paths. Program/Aux network transmission is presented from Runtime/provider lifecycle and recent successful send evidence (SRT or NDI); unconfigured or stale outputs are never labeled LIVE.
 - **Alerts & Notifications** — existing lifecycle, health, Operator error and recording-failure evidence using severity-dot presentation and concise two-line messages.
 
-TAKE uses the cyan primary action treatment because it is an operator action, not a Program-state indicator. Red remains reserved for critical/live-state presentation such as confirmed PGM/LIVE or stop/critical conditions.
+CUT uses the cyan primary action treatment because it is an operator action, not a Program-state indicator. Red remains reserved for critical/live-state presentation such as confirmed PGM/LIVE or stop/critical conditions.
 
 No independent routing, transition, layer, recording, stream or alert authority is introduced.
 
@@ -123,3 +123,17 @@ The SCENES & CUES region now keeps Media Cues and governed Show Control as separ
 The Show Control RUN surface exposes explicit SELECT, ARM, GO and CANCEL operations plus recovery acknowledgement. `F9` is the centralized, conflict-checked GO shortcut. Execution evidence is projected from confirmed Control snapshots and shows the authoritative execution state, current cue/action and failure detail.
 
 The EDIT surface is bounded to the supported action union and preserves stable list/cue/action identities across rename and reorder. Server-side validation remains authoritative. See `docs/ShowControlCueSequencing.md` for the execution, timing and recovery model.
+
+## Confirmed Live console operation
+
+Live separates the local selected source/Scene from confirmed NEXT/PVW, LIVE/PGM and the active Scene. CUT and AUTO act on confirmed Preview; Scene TAKE acts on the explicitly selected Scene. Their target and availability detail stays visible, including while a command is disabled. No modal confirmation is added to ordinary takes.
+
+The Scenes & Cues tabs include the existing Rundown owner. RUNDOWN GO operates its prepared item or governed pending follow target. SHOW GO operates the armed Show Control cue/action, regardless of a different local editor selection. Media marker jump remains separate. Show Control lists can be explicitly reloaded with the refresh button; live execution observations preserve local editor rows and text drafts. ARM requires the selected definition to match the saved definition.
+
+The existing 200 ms Operator synchronization loop projects routing, source/Scene evidence and Show Control execution. Its attached Rundown observation uses the same Client and loop; no extra timer, transport, decoder or follow clock is introduced. Version/generation fences reject deliveries overtaken by a command. Busy cue actions also gate the existing production controls. Synchronization loss disables production actions until confirmed recovery. Recovery acknowledgement and continuation remain ControlHost decisions; reconnect sends no GO.
+
+NEXT badges are visible only for confirmed Preview evidence. PGM layers come from the existing confirmed compositing descriptors. Rundown thumbnails use identity-matched Library/monitoring evidence; missing images and durations stay missing/unknown. ONLINE describes catalogue availability, never resident readiness. NEXT_READY is shown only from prepared execution evidence, with expiry/reprepare detail and host revalidation at GO.
+
+Enter in a cue list does not take or GO. Enter on an explicitly focused button belongs to that button, text editors retain native commit behavior, and open menus suppress production shortcuts. The centralized registry remains the help source; F9 is Show GO, Ctrl+Enter is CUT and Enter outside editing/cue/button contexts retains AUTO. Key repeat and repeated pointer clicks cannot duplicate the same button gesture. No generic context-dependent TAKE/GO shortcut is added.
+
+Focused Live console tests cover retained drafts, storage conflict, stale/recovery eligibility and actual armed targets. Real-host Operator tests cover imported reference media, Preview CUT/AUTO, Scene activation/rejection, resident Rundown Prepare/GO, observed follow countdown, HOLD and independent reconnect observation. The existing coordinator/IPC suites retain bounded follow, ambiguous completion, restart and no-replay recovery qualification. The real MainWindow phase checks focused actions and text entry at compact and desktop sizes within the existing STA/monitoring lifetime. Physical output and performance qualification remain separate.

@@ -69,12 +69,12 @@
 						</Grid>
 						<Grid Margin="0,0,0,4">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="76" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-							<TextBlock Text="NEXT" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Text="NEXT / PVW" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{Binding PreviewSourceName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 						<Grid Margin="0,0,0,8">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="76" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-							<TextBlock Text="LIVE" Foreground="{DynamicResource OperatorProgramBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Text="LIVE / PGM" Foreground="{DynamicResource OperatorProgramBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{Binding ProgramSourceName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 
@@ -92,23 +92,23 @@
 								IsCompact="True"
 								ToolTip="Route the selected source to Preview." />
 							<controls:RtaimeButton Grid.Column="2"
-								Content="TAKE"
+								Content="CUT"
 								Command="{Binding CutCommand}"
 								IsCompact="True"
 								Background="{DynamicResource OperatorAccentBrush}"
 								BorderBrush="{DynamicResource OperatorAccentBrush}"
 								Foreground="{DynamicResource OperatorBackgroundBrush}"
-								ToolTip="Take the confirmed Preview source to Program." />
+								ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True" />
 							<controls:RtaimeButton Grid.Column="4"
 								Content="AUTO"
 								Command="{Binding DissolveCommand}"
 								IsCompact="True"
-								ToolTip="Dissolve the confirmed Preview source to Program." />
+								ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True" />
 						</Grid>
 
 						<Grid>
 							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="76" /></Grid.ColumnDefinitions>
-							<TextBlock Text="{Binding TransitionStatus}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding PreviewTakeDetail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 							<controls:RtaimeTextBox Grid.Column="1"
 								Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}"
 								Height="30"
@@ -148,6 +148,18 @@
 							</Grid>
 						</Border>
 
+                        <ItemsControl ItemsSource="{Binding CompositingLayers}" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource LiveLayerRow}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding LayerId}" Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding Visible, StringFormat=VISIBLE {0}}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 						<controls:RtaimeButton
 							Content="SHOW / HIDE CURRENT LAYER"
 							Command="{Binding ToggleGraphicsCommand}"
@@ -155,7 +167,7 @@
 							Margin="0,6,0,0"
 							ToolTip="Reuse the existing governed graphics visibility command." />
 						<TextBlock
-							Text="Additional PGM layer rows remain unavailable until governed layer-stack semantics exist."
+							Text="Confirmed layers below. Edit the layer stack in Compositing."
 							Style="{StaticResource OperatorLabel}"
 							FontSize="{StaticResource OperatorFontSizeMicro}"
 							TextWrapping="Wrap"

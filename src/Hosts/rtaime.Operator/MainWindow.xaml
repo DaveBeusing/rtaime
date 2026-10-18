@@ -225,7 +225,7 @@
 
 			<Grid x:Name="CenterWorkspace" Grid.Column="4" ClipToBounds="True">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                     Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <controls:RtaimeButton Content="LIBRARY" Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Library" />

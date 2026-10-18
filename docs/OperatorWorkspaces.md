@@ -28,13 +28,12 @@ The four existing experience groups map onto current identifiers without replaci
 
 | Experience group | Existing destinations |
 | --- | --- |
-| Live Operator | LIVE, with SCENES for preparation and governed scene/cue operation |
+| Live Operator | LIVE, SCENES and MULTIVIEW |
 | Media & Timeline | MEDIA, EDIT, COMPOSITING |
 | Outputs | OUTPUTS |
-| System & Health | HEALTH, SETTINGS |
+| System & Health | HEALTH, AI, SETTINGS |
 
-2D canvas/mapping and an independent AI workspace are approved targets, with
-real contracts/Runtime sinks and additive layout integration still TO IMPLEMENT.
+The existing governed AI controls are integrated in AI. A 2D canvas/mapping editor remains a separately approved implementation target with real contracts/Runtime sinks; no inactive editor tab is registered.
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
@@ -50,11 +49,11 @@ Persisted workspace geometry remains in reference coordinates. Rendering derives
 
 | Logical viewport | Presentation scale | EDIT render height | Mode |
 | --- | ---: | ---: | --- |
-| 1920×1080 | 1.00 | 700 px | Reference |
-| 1600×900 | 0.83 | ~583 px | Standard window |
-| 1536×864 | 0.80 | 560 px | Scaled |
-| 1280×720 | 0.67 | ~467 px | Scaled |
-| 960×540 | 0.60 floor | 260 px | Compact |
+| 1920×1080 | 1.00 | bounded by the measured center viewport | Reference cap |
+| 1600×900 | 0.83 | viewport-bounded | Standard window |
+| 1536×864 | 0.80 | viewport-bounded | Scaled |
+| 1280×720 | 0.67 | viewport-bounded | Scaled |
+| 960×540 | 0.60 floor | one bus, viewport-bounded | Compact |
 
 The shell derives Media Deck preview height, LIVE lower output height, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width from the current container or bounded compact minimum. EDIT retains its reference proportions. Repeated output rows, monitor chrome, metric tracks and bounded aspect-ratio thumbnails may retain interaction/content dimensions.
 
@@ -96,7 +95,7 @@ Unknown IDs select LIVE and retain their bounded stored layout for later version
 
 EDIT is the reference Preview/Program production workspace. At 1920×1080 its center resolves to the 1070×700 reference composition; smaller viewports derive the rendered size from the shared scale:
 
-- The upper row retains the 390 reference weight, equal Preview/Program viewers and a 6-px separator; the reference viewer split is 532 / 6 / 532.
+- The complete region is capped by the actual center scroll viewport. The upper row retains the 390 reference weight, equal Preview/Program viewers and a 6-px separator; the reference viewer split is 532 / 6 / 532.
 - Shared monitor chrome retains a 40-px header, aspect-safe image and 42-px custom transport region.
 - The lower row retains the 320:462:276 Scene Stack / Output Routing / System Status proportions and 6-px gaps, within the 390:304 upper/lower reference allocation.
 - The compact Scene Stack reuses source projection and explicit Set Preview/CUT/AUTO; governed Scene activation remains a separate action.
@@ -312,3 +311,8 @@ Unrelated tab/dock changes retain each unchanged floating native window, content
 Existing `WorkspacePresentationTemplateTests` and real-window qualification cover transient-save exclusion, independent layouts/reset, explicit template Apply, migration/roundtrip, bounds and malformed/future/oversized data, duplicate rejection, cancelled export/write failure, retained window/content identity, zero monitor unloads on unrelated changes, visible Program status, focus restore and unchanged Preview/Program identities. Synthetic 100/125/150/200% DPI/off-screen/topology tests remain required.
 
 Hosted geometry and window tests are not physical mixed-monitor hotplug, screen-reader/IME, touch or GPU scan-out qualification. Retain those as UNVERIFIED until actual reference evidence is recorded. The [experience roadmap](OperatorExperienceRoadmap.md#validation-contract) extends these existing checks with connected visual review, state honesty and combined operator journeys; it introduces no parallel qualification framework.
+
+### Confirmed cue operation in MULTIVIEW
+
+
+MULTIVIEW shows local selection separately from confirmed NEXT/PVW and LIVE/PGM. CUT/AUTO name the confirmed Preview target, Scene TAKE names the selected Scene, RUNDOWN GO names the prepared/pending rundown target, and SHOW GO names the armed Show Control cue/action. Disabled actions retain a reason and next step. Rundown is available from the Scenes & Cues tabs; order dragging and undo stay local until Save. Catalogue availability is separate from prepared resident readiness. See [Live operation](LiveMultiviewAndSceneControl.md#confirmed-live-console-operation) and [Rundown drafts](ProductionRundown.md#live-operator-console-and-local-order-drafts).

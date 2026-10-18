@@ -169,8 +169,9 @@
 								<controls:RtaimeStatusBadge.Style>
 									<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
 										<Setter Property="Status" Value="{x:Static controls:RtaimeStatusKind.Neutral}" />
+                                        <Setter Property="Visibility" Value="Collapsed" />
 										<Style.Triggers>
-											<DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Status" Value="{x:Static controls:RtaimeStatusKind.Preview}" /></DataTrigger>
+											<DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Status" Value="{x:Static controls:RtaimeStatusKind.Preview}" /><Setter Property="Visibility" Value="Visible" /></DataTrigger>
 										</Style.Triggers>
 									</Style>
 								</controls:RtaimeStatusBadge.Style>
@@ -215,7 +216,7 @@
 				Background="{DynamicResource OperatorAccentBrush}"
 				BorderBrush="{DynamicResource OperatorAccentBrush}"
 				Foreground="{DynamicResource OperatorBackgroundBrush}"
-				ToolTip="Atomically activate the selected Scene through authoritative Control." />
+				ToolTip="{Binding SceneTakeDetail}" ToolTipService.ShowOnDisabled="True" />
 			<controls:RtaimeButton Grid.Column="2"
 				Content="CUT PVW"
 				Command="{Binding CutCommand}"
@@ -276,7 +277,12 @@
 					</Border>
 				</Grid>
 			</controls:RtaimeTabItem>
-			<controls:RtaimeTabItem Header="SHOW CONTROL">
+			<controls:RtaimeTabItem Header="RUNDOWN">
+                <controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <local:RundownControl />
+                </controls:RtaimeScrollViewer>
+            </controls:RtaimeTabItem>
+            <controls:RtaimeTabItem Header="SHOW CONTROL">
 				<local:ShowControlCueStackControl />
 			</controls:RtaimeTabItem>
 			<controls:RtaimeTabItem Header="MACROS">

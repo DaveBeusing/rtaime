@@ -25,7 +25,7 @@ public sealed partial class WorkspacePresentationTemplateTests
         {
             shell.SelectWorkspaceCommand.Execute(destination.Id);
             Assert.Equal(destination.Id, shell.SelectedWorkspace);
-            Assert.Single(shell.NavigationGroups.SelectMany(g => g.Items).Where(i => i.IsActive));
+            Assert.Single(shell.NavigationGroups.SelectMany(g => g.Items), i => i.IsActive);
         }
         shell.SelectWorkspace("GRAPHICS"); Assert.Equal("COMPOSITING", shell.SelectedWorkspace);
         shell.SelectWorkspace("SYSTEM"); Assert.Equal("SETTINGS", shell.SelectedWorkspace);

@@ -767,8 +767,10 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			OnPropertyChanged(nameof(SecondaryMetricVisibility));
 	}
 
-	public void SelectWorkspace(string? workspace)
-	{
+	public void SelectWorkspace(string? workspace) => ChangeWorkspace(workspace, persist: true);
+    internal void RestoreWorkspace(string? workspace) => ChangeWorkspace(workspace, persist: false);
+    private void ChangeWorkspace(string? workspace, bool persist)
+    {
 		var normalized = OperatorWorkspaceNames.Normalize(workspace);
 		RestorePresentation();
         _compactPane = null;
@@ -777,7 +779,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
 		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
-		Save();
+		if (persist) Save();
 	}
 
 	public void Save() => _ = SaveAsync();

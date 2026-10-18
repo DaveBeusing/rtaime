@@ -9,5 +9,6 @@ public partial class ShowControlCueStackControl : UserControl
 	public ShowControlCueStackControl()
 	{
 		InitializeComponent();
+		LiveConsoleInput.Attach(this);
 	}
 }

@@ -5,6 +5,13 @@ namespace rtaime.Operator;
 
 public partial class MainWindow
 {
+    private bool _shellStripInputAttached;
+    private void OnShellLiveStripLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_shellStripInputAttached) return;
+        _shellStripInputAttached = true;
+        LiveConsoleInput.Attach(LiveActionStrip);
+    }
     // Client content excludes native caption/borders; viewer height comes from its actual scroll viewport.
     private void OnWorkspaceViewportChanged(object sender, SizeChangedEventArgs e)
     {

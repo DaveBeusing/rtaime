@@ -83,7 +83,7 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
-			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
+			Shell.RestoreWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck, client, PickLocalMediaFiles);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
@@ -95,9 +95,9 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		ShowControl = new ShowControlViewModel(client);
+		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
-		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
+		_liveConsole = new LiveConsoleBinding(viewModel, Rundown, ShowControl);
 
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -127,10 +127,6 @@ public partial class MainWindow : Window
 		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportSize(
-			ActualWidth > 0 ? ActualWidth : Width,
-			ActualHeight > 0 ? ActualHeight : Height);
-		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
@@ -195,7 +191,7 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(layoutStore, SetProductionFullscreen);
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
-			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
+			Shell.RestoreWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
@@ -207,9 +203,9 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		ShowControl = new ShowControlViewModel(client);
+		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
-		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
+		_liveConsole = new LiveConsoleBinding(viewModel, Rundown, ShowControl);
 
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -239,10 +235,6 @@ public partial class MainWindow : Window
 		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportSize(
-			ActualWidth > 0 ? ActualWidth : Width,
-			ActualHeight > 0 ? ActualHeight : Height);
-		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
@@ -292,6 +284,7 @@ public partial class MainWindow : Window
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
 	public NdiSourceDiscoveryViewModel NdiSources { get; }
+	private readonly LiveConsoleBinding _liveConsole;
 	public RundownViewModel Rundown { get; }
 	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
@@ -578,6 +571,7 @@ public partial class MainWindow : Window
 			return;
 
 		_shutdownStarted = true;
+		_liveConsole.Dispose();
 		IsEnabled = false;
 		var completedNormally = false;
 		try
@@ -643,7 +637,6 @@ public partial class MainWindow : Window
 
 			_shutdownComplete = true;
 			Closing -= OnClosingAsync;
-			SizeChanged -= OnShellSizeChanged;
 			Close();
 		}
 	}
@@ -802,8 +795,6 @@ public partial class MainWindow : Window
 		return requested.Width >= 96 && requested.Height >= 64;
 	}
 
-	private void OnShellSizeChanged(object sender, SizeChangedEventArgs e) =>
-		Shell.UpdateViewportSize(e.NewSize.Width, e.NewSize.Height);
 
 	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
 	{
