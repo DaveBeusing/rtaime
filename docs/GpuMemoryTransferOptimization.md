@@ -162,3 +162,12 @@ The following remain **UNVERIFIED** for this source until an exact-SHA reference
 - benefit of any future backend-native output capability.
 
 Do not infer physical performance improvement from software transfer counters alone.
+
+## GPU media decode evaluation
+
+The [GPU media transfer audit](GpuResidentMediaEvaluation.md) retains the
+current CPU/RGBA path: no exact-hardware performance win or GPU-input adoption
+approval is established. The [proposed surface/fence design](GpuMediaSurfaceDesign.md)
+defines the private ownership, capability/fallback and paired-measurement gates.
+Existing GPU monitoring and green software checks do not qualify GPU-resident decode,
+P010/HDR, physical no-gap output or removal of the current Program readback.

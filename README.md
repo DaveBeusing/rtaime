@@ -454,3 +454,12 @@ GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
 invalidates next evidence. See [prepared-next playout](docs/PreparedNextPlayout.md)
 for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
 qualification limits. Physical/no-gap acceptance remains UNVERIFIED.
+
+## GPU media decode evaluation
+
+The [GPU media transfer audit](docs/GpuResidentMediaEvaluation.md) retains the
+current CPU/RGBA path: no exact-hardware performance win or GPU-input adoption
+approval is established. The [proposed surface/fence design](docs/GpuMediaSurfaceDesign.md)
+defines the private ownership, capability/fallback and paired-measurement gates.
+Existing GPU monitoring and green software checks do not qualify GPU-resident decode,
+P010/HDR, physical no-gap output or removal of the current Program readback.

@@ -54,6 +54,16 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: GPU transfer ownership and surface compatibility regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-build --filter "FullyQualifiedName~BackendAgnosticResourceContractTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Backend-neutral surface contract regression failed." }
+          dotnet test tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj --configuration Release --no-build --filter "FullyQualifiedName~BackendNeutralResourceArchitectureTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Backend-neutral resource architecture regression failed." }
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~GpuMemoryTransferOptimizationTests|FullyQualifiedName~GpuReadbackOwnershipConcurrencyTests|FullyQualifiedName~GpuSchedulingSynchronizationTests|FullyQualifiedName~GpuLifecycleRecoveryTests|FullyQualifiedName~GpuBackendResourceSemanticsTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "GPU transfer and ownership regression failed." }
+
       - name: Resident next preparation and authoritative handoff regressions
         shell: pwsh
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PreparedMediaHandoffIntegrationTests|FullyQualifiedName~MediaAssetCatalogIntegrationTests.Prepared_execution_revision_lease" --logger "console;verbosity=detailed"
