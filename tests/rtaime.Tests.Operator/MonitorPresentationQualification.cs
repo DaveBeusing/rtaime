@@ -159,6 +159,11 @@ internal static class MonitorPresentationQualification
 			}
 			
 			await VerifySharedGpuAsync(viewer, surface, dispatcher);
+			var restored = await NextProgramAsync();
+			Present(restored);
+			Assert.True(restored.Descriptor.Timing.SequenceNumber > next.Descriptor.Timing.SequenceNumber);
+			Assert.DoesNotContain("NOT CURRENT", viewer.PresentationQuality);
+			Assert.Equal(before.Production.Revision, (await client.SynchronizeAsync()).Production.Revision);
 			host.Children.Remove(viewer);
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
@@ -265,12 +270,15 @@ internal static class MonitorPresentationQualification
 			viewer.GpuFrame = Frame(adapterLuid ^ 1, 1, 2);
 			await WaitAsync(() => !viewer.IsGpuPresentationActive, dispatcher, "adapter rejection fallback");
 			Assert.Contains("REDUCED CPU 320×180", viewer.PresentationQuality);
+			Assert.Contains("NOT CURRENT", viewer.PresentationQuality);
+			Assert.Contains("RETAINED", viewer.ObservationStatus);
 			Assert.Equal(320 / viewer.DpiScaleX, viewer.PresentationWidth, 6);
 			Assert.False(viewer.IsRoiActive);
 			viewer.GpuFrame = Frame(adapterLuid, 2, 1);
 			await WaitAsync(() => viewer.IsGpuPresentationActive, dispatcher, "new resource generation");
 			viewer.GpuFrame = null;
 			await WaitAsync(() => !viewer.IsGpuPresentationActive, dispatcher, "resource retirement");
+			Assert.Contains("NOT CURRENT", viewer.PresentationQuality);
 			Console.WriteLine("VIEWER SHARED GPU PASS: synthetic red texture through productive shader and native readback; 1920×1080 native basis, 64-byte ROI result, same-ID wrong-adapter fallback, generation restore and resource retirement. This is Operator D3D interop evidence, not provider/CUDA hardware acceptance.");
 		}
 		finally

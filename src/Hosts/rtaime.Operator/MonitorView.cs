@@ -525,14 +525,14 @@ public partial class MonitorView : UserControl
 	private static void OnFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var view = (MonitorView)dependencyObject;
-		if (eventArgs.NewValue is not null) view._lastBitmapReceipt = DateTimeOffset.UtcNow;
+		if (eventArgs.NewValue is not null) { view._lastBitmapReceipt = DateTimeOffset.UtcNow; view._lastBitmapOrder = ++view._observationOrder; }
 		view.RefreshPresentation();
 	}
 
 	private static void OnGpuFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var view = (MonitorView)dependencyObject;
-		if (eventArgs.NewValue is not null) view._lastGpuReceipt = DateTimeOffset.UtcNow;
+		if (eventArgs.NewValue is not null) { view._lastGpuReceipt = DateTimeOffset.UtcNow; view._lastGpuOrder = ++view._observationOrder; }
 		var previous = eventArgs.OldValue as OperatorGpuMonitoringFrame;
 		var next = eventArgs.NewValue as OperatorGpuMonitoringFrame;
 		if (next is null || previous is null || previous.Resource.ProviderInstanceId != next.Resource.ProviderInstanceId ||

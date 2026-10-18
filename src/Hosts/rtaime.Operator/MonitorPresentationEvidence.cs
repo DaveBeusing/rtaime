@@ -7,6 +7,7 @@ namespace rtaime.Operator;
 public partial class MonitorView
 {
 	private DateTimeOffset? _lastBitmapReceipt, _lastGpuReceipt;
+	private long _observationOrder, _lastBitmapOrder, _lastGpuOrder;
 	private static readonly DependencyPropertyKey PresentationQualityPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationQuality), typeof(string), typeof(MonitorView), new PropertyMetadata("DETAIL UNAVAILABLE"));
 	private static readonly DependencyPropertyKey ObservationStatusPropertyKey = DependencyProperty.RegisterReadOnly(
@@ -31,16 +32,17 @@ public partial class MonitorView
 	{
 		var hasFrame = Frame is not null || (IsGpuPresentationActive && GpuFrame is not null);
 		SetValue(HasPresentedFramePropertyKey, hasFrame);
+		var retained = hasFrame && (!string.Equals(State, "LIVE", StringComparison.OrdinalIgnoreCase) ||
+			(!IsGpuPresentationActive && _lastGpuOrder > _lastBitmapOrder));
 		var bitmap = Frame as BitmapSource;
 		var basis = IsGpuPresentationActive && GpuFrame is { } gpu
 			? $"GPU SHARED {gpu.Resource.Format.Width}×{gpu.Resource.Format.Height} · 100% = shared-resource pixel"
 			: bitmap is not null
 				? $"REDUCED CPU {bitmap.PixelWidth}×{bitmap.PixelHeight} · 100% = fallback pixel"
 				: "DETAIL UNAVAILABLE · no active presentation";
-		SetValue(PresentationQualityPropertyKey, basis + (hasFrame && State != "LIVE" ? " · RETAINED / NOT CURRENT" : "") +
+		SetValue(PresentationQualityPropertyKey, basis + (retained ? " · RETAINED / NOT CURRENT" : "") +
 			(ZoomMode == "FILL" ? " · FILL CROPS IMAGE" : ""));
 		var receipt = IsGpuPresentationActive ? _lastGpuReceipt : _lastBitmapReceipt;
-		var retained = hasFrame && !string.Equals(State, "LIVE", StringComparison.OrdinalIgnoreCase);
 		SetValue(ObservationStatusPropertyKey, !hasFrame ? $"{State} · FRAME UNAVAILABLE" :
 			$"{State}{(retained ? " · RETAINED FRAME / NOT CURRENT" : "")} · local viewer receipt " +
 			(receipt is { } time ? $"{time:HH:mm:ss.fff} UTC · age at refresh {Math.Max(0, (DateTimeOffset.UtcNow - time).TotalMilliseconds):0} ms" : "UNAVAILABLE"));
