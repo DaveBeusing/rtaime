@@ -17,7 +17,7 @@ namespace rtaime.Tests.Operator;
 
 public sealed partial class OperatorCombinedVisualQualification
 {
-    private static async Task VerifyShellStatesAsync(MainWindow main, Dispatcher dispatcher)
+    internal static async Task VerifyShellStatesAsync(MainWindow? main, Dispatcher dispatcher)
     {
         var directory = Path.Combine(Path.GetTempPath(), "rtaime-shell-states-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -145,7 +145,7 @@ public sealed partial class OperatorCombinedVisualQualification
             }
             else await model.DisposeAsync();
             if(Directory.Exists(directory)) Directory.Delete(directory,true);
-            main.Activate();
+            main?.Activate();
         }
     }
     private static async Task UntilShellState(Func<bool> condition)

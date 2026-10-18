@@ -159,7 +159,6 @@ public sealed partial class OperatorCombinedVisualQualification
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
             await VerifyRepeatedShellMovesAsync(window, dispatcher);
-            await VerifyShellStatesAsync(window, dispatcher);
             var metrics = await MeasureSettledAsync(window, root, dispatcher);
             Assert.Equal(program, owner.ProgramSourceId);
             Assert.Equal(preview, owner.PreviewSourceId);

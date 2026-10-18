@@ -73,7 +73,7 @@ OperatorCombinedVisualQualification checks actual compiled LIVE viewers, equal
 dual allocation, viewport fit, one visible playback/TAKE context and 100 real
 workspace/float/dock/restore cycles using the same monitoring, Inspector, selection
 and panel instances, with no monitor-panel unloads during Inspector moves. The stress phase starts in a stable 1600x900 docked layout and restores every original workspace layout. Only changed dock groups are rebuilt; unrelated groups and floating windows retain their presentation. Compact, ratio and Focus/Cinema topology changes retain the existing full restore path. Existing source-correlated PNG/JSON capture retains logical
-size and injected layout DPI. The additional 80-case matrix loads the real MainWindow with controlled Client responses in no-data, connected, busy and stale states across all destinations at 1920x1080 and 960x540. It verifies retained routing, explicit button keyboard ownership and teardown. These are qualification targets; actual execution,
+size and injected layout DPI. The additional 80-case matrix runs as an isolated child test in the existing OperatorXamlStartupTests filter, with a separate unchanged 45-second bound and one WPF Application/Dispatcher. It loads the real MainWindow with controlled Client responses in no-data, connected, busy and stale states across all destinations at 1920x1080 and 960x540. It verifies retained routing, explicit button keyboard ownership and teardown. These are qualification targets; actual execution,
 source SHA, failures and five Required Gate results are recorded in the PR.
 
 Software layout-DPI injection is not physical mixed-monitor or touch certification.
