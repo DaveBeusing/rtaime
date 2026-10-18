@@ -8,7 +8,8 @@
 	MinHeight="0"
 	Focusable="True"
 	UseLayoutRounding="True"
-	SnapsToDevicePixels="True">
+	SnapsToDevicePixels="True"
+    PreviewKeyDown="OnWorkspaceKeyDown" Unloaded="OnWorkspaceUnloaded">
 	<UserControl.Resources>
 		<SolidColorBrush x:Key="GraphBackgroundBrush" Color="{StaticResource OperatorColorDiagnosticSurface}" />
 		<SolidColorBrush x:Key="GraphMinorGridBrush" Color="{StaticResource OperatorColorGraphSurface}" />
@@ -89,6 +90,7 @@
 		
 		<Grid.RowDefinitions>
 			<RowDefinition Height="42" />
+            <RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
@@ -104,6 +106,7 @@
 			BorderBrush="{DynamicResource OperatorBorderBrush}"
 			BorderThickness="0,0,0,1"
 			Padding="8,0">
+            <controls:RtaimeScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
@@ -112,6 +115,7 @@
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <controls:RtaimeButton Content="LAYERS" Command="{Binding ToggleLayerListCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Show or hide the layer list." />
 					<controls:RtaimeButton Content="SELECT" Command="{Binding SelectModeCommand}">
 						<controls:RtaimeButton.Style>
 							<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
@@ -172,10 +176,70 @@
 						ShowIndicator="False" />
 				</StackPanel>
 			</Grid>
+            </controls:RtaimeScrollViewer>
 		</Border>
 
+        <Border Grid.Row="1" Padding="6" Background="{DynamicResource OperatorSurfaceBrush}">
+            <StackPanel>
+                <TextBlock Text="{Binding SceneDeclaration}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding RuntimeEvidence}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
+                <TextBlock Text="{Binding WorkspaceNotice}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Border Width="{Binding LayerPanelWidth}" Padding="6" Background="{DynamicResource OperatorSurfaceBrush}">
+                <Border.Style><Style TargetType="Border"><Style.Triggers>
+                    <DataTrigger Binding="{Binding ShowLayers}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                </Style.Triggers></Style></Border.Style>
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <StackPanel>
+                        <controls:RtaimeTextBox x:Name="LayerSearch" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Search compositing layers and nodes" ToolTip="Search layers and nodes. F3 focuses search; filtering never clears selection." Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding OrderEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        <WrapPanel>
+                            <controls:RtaimeButton Content="APPLY ORDER" Command="{Binding ApplyOrderDraftCommand}" IsCompact="True" />
+                            <controls:RtaimeButton Content="UNDO ORDER" Command="{Binding DiscardOrderDraftCommand}" IsCompact="True" />
+                        </WrapPanel>
+                    </StackPanel>
+                    <controls:RtaimeListBox x:Name="LayerList" Grid.Row="1" ItemsSource="{Binding Layers}" SelectionMode="Extended"
+                        SelectionChanged="OnLayerSelectionChanged" AllowDrop="True" Drop="OnLayerDrop"
+                        PreviewMouseLeftButtonDown="OnLayerDragStart" PreviewMouseMove="OnLayerDragMove"
+                        VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                        ScrollViewer.CanContentScroll="True" HorizontalContentAlignment="Stretch"
+                        AutomationProperties.Name="Confirmed layers, Control or Shift selects common-property review">
+                        <controls:RtaimeListBox.ItemContainerStyle>
+                            <Style TargetType="{x:Type controls:RtaimeListBoxItem}" BasedOn="{StaticResource {x:Type controls:RtaimeListBoxItem}}">
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                <Style.Triggers><DataTrigger Binding="{Binding MatchesSearch}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+                            </Style>
+                        </controls:RtaimeListBox.ItemContainerStyle>
+                        <controls:RtaimeListBox.ItemTemplate><DataTemplate>
+                            <StackPanel Margin="0,3" ToolTip="{Binding Id}">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding LayerEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" MaxHeight="56" />
+                                <controls:RtaimeButton Content="EXPAND / COLLAPSE" Command="{Binding DataContext.CollapseLayerCommand, ElementName=Root}" CommandParameter="{Binding}" IsCompact="True" />
+                            </StackPanel>
+                        </DataTemplate></controls:RtaimeListBox.ItemTemplate>
+                    </controls:RtaimeListBox>
+                    <controls:RtaimeScrollViewer Grid.Row="2" MaxHeight="230" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <TextBlock Text="{Binding SelectionEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <controls:RtaimeCheckBox Content="Draft visibility" IsChecked="{Binding SelectedLayerRow.VisibleDraft}" AutomationProperties.Name="Local visibility draft" />
+                            <controls:RtaimeNumericField x:Name="LayerOpacityEditor" Value="{Binding SelectedLayerRow.OpacityDraft, Mode=TwoWay}" Definition="{Binding OpacityDefinition}" InputValidityChanged="OnLayerInputValidityChanged" AutomationProperties.Name="Local opacity draft, zero to 255" />
+                            <WrapPanel>
+                                <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyLayerDraftCommand}" IsCompact="True" />
+                                <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardLayerDraftCommand}" IsCompact="True" />
+                                <controls:RtaimeButton Content="REVIEW" Command="{Binding ReviewLayerDraftCommand}" IsCompact="True" ToolTip="Review retained values against newer Runtime confirmation before applying." />
+                                <controls:RtaimeButton Content="RECALL SCENE" Command="{Binding RecallSceneCommand}" IsCompact="True" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </controls:RtaimeScrollViewer>
+                </Grid>
+            </Border>
+
 		<Grid x:Name="GraphViewport"
-			Grid.Row="1"
+			Grid.Column="1"
 			Background="{StaticResource GraphGridBrush}"
 			ClipToBounds="True"
 			MouseWheel="OnGraphMouseWheel"
@@ -197,7 +261,7 @@
 					</TransformGroup>
 				</Canvas.RenderTransform>
 
-				<ItemsControl ItemsSource="{Binding Connections}"
+				<ItemsControl ItemsSource="{Binding VisibleConnections}"
 					Width="{Binding CanvasWidth}"
 					Height="{Binding CanvasHeight}"
 					IsHitTestVisible="False">
@@ -239,7 +303,7 @@
 					</ItemsControl.ItemTemplate>
 				</ItemsControl>
 
-				<ItemsControl ItemsSource="{Binding Nodes}"
+				<ItemsControl ItemsSource="{Binding VisibleNodes}"
 					Width="{Binding CanvasWidth}"
 					Height="{Binding CanvasHeight}">
 					<ItemsControl.ItemsPanel>
@@ -262,7 +326,7 @@
 								Padding="0"
 								HorizontalContentAlignment="Stretch"
 								VerticalContentAlignment="Stretch"
-								ToolTip="Select node and project its observed state into the Inspector.">
+								ToolTip="{Binding Id}" AutomationProperties.Name="{Binding Id}">
 								<Border Style="{StaticResource GraphNodeBorder}">
 									<Grid>
 										<Grid.ColumnDefinitions>
@@ -336,5 +400,6 @@
 				<TextBlock Text="Wheel: zoom · Pan mode / middle mouse: move · Node click: inspect" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 			</Border>
 		</Grid>
+        </Grid>
 	</Grid>
 </UserControl>

@@ -284,6 +284,16 @@
 				</WrapPanel>
 				<TextBlock Text="{Binding AttributeCompatibilityLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding InspectorDraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <StackPanel Margin="0,4">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
+                        <DataTrigger Binding="{Binding CompositingRecoveryStatus}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                    </Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Text="{Binding CompositingRecoveryStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                    <WrapPanel>
+                        <controls:RtaimeButton Content="RESTORE INTENT" Command="{Binding RestoreCompositingIntentCommand}" IsCompact="True" ToolTip="Restore matching saved local values against current confirmation. Review and APPLY separately." />
+                        <controls:RtaimeButton Content="DISCARD RECOVERY" Command="{Binding DiscardCompositingIntentCommand}" IsCompact="True" />
+                    </WrapPanel>
+                </StackPanel>
 			</StackPanel>
 		</DataTemplate>
 		<DataTemplate x:Key="CompositingProcessingEditorTemplate">
