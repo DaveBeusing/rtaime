@@ -56,7 +56,8 @@ public sealed record PersistedShowProject(
 	ulong ProductionMacrosStorageVersion = 0,
 	string? ProductionMacroExecutionJson = null,
 	ulong ProductionMacroExecutionVersion = 0,
-	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null)
+	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null,
+	string? OutputCanvasJson = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -94,7 +95,7 @@ public sealed record ShowProjectSubdocumentWriteResult(
 /// The JSON document contains bounded authored state only; bitmap payload bytes are retained
 /// in a checksummed sidecar so management persistence never carries bulk RGBA data.
 /// </summary>
-public sealed class ShowProjectPersistenceStore
+public sealed partial class ShowProjectPersistenceStore
 {
 	private const string Area = "show.project";
 	private const string DocumentFormat = "rtaime.show-project.v1";
@@ -729,7 +730,7 @@ public sealed class ShowProjectPersistenceStore
 	{
 		var effective = project.ApplyTo(baseline);
 		var document = new ProjectDocument(
-			DocumentFormat,
+			project.OutputCanvasJson is null ? DocumentFormat : "rtaime.show-project.v2",
 			project.ProjectId.ToString(),
 			project.ProductionId.ToString(),
 			project.Name,
@@ -745,7 +746,8 @@ public sealed class ShowProjectPersistenceStore
 			project.ProductionMacrosStorageVersion,
 			project.ProductionMacroExecutionJson,
 			project.ProductionMacroExecutionVersion,
-			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray());
+			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray(),
+			project.OutputCanvasJson);
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -755,11 +757,13 @@ public sealed class ShowProjectPersistenceStore
 	{
 		var document = JsonSerializer.Deserialize<ProjectDocument>(persisted.Json, JsonOptions)
 			?? throw new InvalidDataException("Persisted show project is empty.");
-		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal))
+		if (!string.Equals(document.Format, DocumentFormat, StringComparison.Ordinal) && document.Format != "rtaime.show-project.v2")
 			throw new InvalidDataException($"Unsupported show project format '{document.Format}'.");
 		if (!string.Equals(document.ProductionId, baseline.ProductionId.ToString(), StringComparison.Ordinal))
 			throw new InvalidDataException("Persisted show project belongs to a different production.");
 
+		if ((document.Format == "rtaime.show-project.v2") != (document.OutputCanvasJson is not null))
+			throw new InvalidDataException("Show format and canvas extension must agree.");
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
 		var adoptedSources = (document.AdoptedSources ?? Array.Empty<SourceDocument>())
@@ -785,7 +789,8 @@ public sealed class ShowProjectPersistenceStore
 			document.ProductionMacrosStorageVersion,
 			document.ProductionMacroExecutionJson,
 			document.ProductionMacroExecutionVersion,
-			adoptedSources);
+			adoptedSources,
+			document.OutputCanvasJson);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -802,6 +807,16 @@ public sealed class ShowProjectPersistenceStore
 		ValidateAdoptedSources(baseline, project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>());
 		ValidateScenes(effective, project.Scenes);
 		ValidateGraphics(project.Graphics);
+		if (project.OutputCanvasJson is { } canvasJson)
+        {
+            var canvas = ReadOutputCanvasDocument(canvasJson).Saved;
+            var validation = rtaime.Control.OutputCanvasModel.Validate(canvas,
+                effective.Sources.Select(source => source.SourceId.ToString()).ToArray(),
+                baseline.InitialOutputRoles.Select(role => role.RoleId.ToString()).ToArray());
+            if (!validation.IsValid)
+                throw new InvalidDataException("Persisted canvas references are invalid: " +
+                    string.Join("; ", validation.Issues.Select(issue => issue.Message)));
+        }
 		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, effective);
 		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(effective), effective);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
@@ -1400,7 +1415,8 @@ public sealed class ShowProjectPersistenceStore
 		ulong ProductionMacrosStorageVersion = 0,
 		string? ProductionMacroExecutionJson = null,
 		ulong ProductionMacroExecutionVersion = 0,
-		SourceDocument[]? AdoptedSources = null);
+		SourceDocument[]? AdoptedSources = null,
+		string? OutputCanvasJson = null);
 
 	private sealed record SourceProviderBindingDocument(
 		string ProviderId,

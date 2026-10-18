@@ -95,3 +95,17 @@ Output-role configuration is persisted with the authoritative Control checkpoint
 Governed Program and Aux output roles include the confirmed audio-bus identity used by Runtime. Existing configurations without an explicit mapping remain backward compatible by selecting `program`. Aux may select another configured bus.
 
 A role that references a bus absent from the confirmed `AudioProductionConfiguration` fails closed and is surfaced as output/audio health evidence; Runtime does not silently fall back to another mix. Bus routing remains ControlHost authority, while RuntimeHost owns sample processing and timing.
+
+## Authored canvases and mapping
+
+The [output canvas backend](OutputCanvasMapping.md) provides saved 2D canvases,
+surfaces, source crops, projective destination quads and stable provider bindings
+through Client/Control get, validate and save operations. Its finite authoring caps
+allow multiple surfaces independently of the two currently governed live roles.
+Provider/target choices come from fresh Runtime sink configuration intersected
+with Control-authorized role/source state; they do not invent hardware outputs.
+Preview and Clean Feed retain their monitoring semantics. Configuration does not
+establish active render output: active render revision remains unavailable until
+a real mapping renderer and explicit Prepare/Commit activation are implemented.
+Program continues to use its existing transition command, independently of saving
+this authored model.
