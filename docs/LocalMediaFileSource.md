@@ -459,3 +459,12 @@ for exact sample-entry/profile/audio checks and qualification gaps, and the
 for backend alternatives and approval requirements. ProRes, DNxHD/DNxHR, MXF input
 and a production FFmpeg dependency remain outside approved scope. Existing test-only
 FFmpeg generation and MXF recording evidence do not authorize input support.
+
+## High-resolution output boundary
+
+The [high-resolution Program decision](HighResolutionMediaDecision.md) and
+[cross-layer compatibility inventory](HighResolutionMediaCompatibility.md)
+distinguish UHD input policy and generic buffer sizes from approved Program
+output. Program remains HD50/59.94 RGBA8. 2160p25/50/59.94 and native
+10-bit/HDR/Fill-Key remain approval-gated and physically UNVERIFIED; see the
+[qualification plan](HighResolutionMediaQualification.md).
