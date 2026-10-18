@@ -200,4 +200,4 @@ The shared viewer reports the actual active presentation basis separately from a
 
 The presentation surface delays target resize allocation by 80 ms and rejects an old target whose physical dimensions no longer match the viewport. Resource reuse validates provider, generation, adapter, handle and format as well as resource identity. Existing device caps, bounded recovery, monitoring lease ownership and fixed GPU ROI result transfers remain unchanged.
 
-See [Media Pixel and Channel Inspection](MediaPixelAndChannelInspection.md#viewer-presentation-and-inspection-evidence) for geometry, local controls, actual ProgramViewer/native D3D qualification and physical hardware limits.
+See [Media Pixel and Channel Inspection](MediaPixelAndChannelInspection.md#viewer-presentation-and-inspection-evidence) for geometry, local controls, actual isolated ProgramViewer/native D3D qualification and physical hardware limits.
