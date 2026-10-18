@@ -22,7 +22,8 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal && !IsSnoozed);
 		ResumeCommand = new NotificationCommand(() => service?.Resume(Key), () => service is not null && IsSnoozed);
 		DismissCommand = new NotificationCommand(() => service?.Dismiss(Key),
-			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal);
+			() => service is not null && _notification.Condition != OperatorNotificationCondition.Fatal &&
+				service.Current.Any(item => item.Key == Key && item.Condition != OperatorNotificationCondition.Fatal));
 		NavigateCommand = new NotificationCommand(() => navigate?.Invoke(_notification.TargetWorkspace), () => navigate is not null);
 		ToggleTechnicalDetailsCommand = new NotificationCommand(
 			() => IsTechnicalDetailsVisible = !IsTechnicalDetailsVisible,

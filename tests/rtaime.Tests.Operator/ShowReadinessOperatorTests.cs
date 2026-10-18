@@ -126,11 +126,15 @@ public sealed class ShowReadinessOperatorTests
 		var item = new OperatorNotificationItemViewModel(service.Current.Single(), service);
 		Assert.True(item.DismissCommand.CanExecute(null));
 		var fatal = fault with { Condition = OperatorNotificationCondition.Fatal };
-		service.Publish(fatal); item.Apply(service.Current.Single());
+		service.Publish(fatal);
+		// The service is already fatal while a delayed UI still holds the old active projection.
+		Assert.Equal("ACTIVE", item.Condition);
 		Assert.False(item.DismissCommand.CanExecute(null));
 		item.DismissCommand.Execute(null);
 		Assert.Single(service.Current);
 		Assert.Equal(OperatorNotificationCondition.Fatal, service.Current.Single().Condition);
+		item.Apply(service.Current.Single());
+		Assert.False(item.DismissCommand.CanExecute(null));
 	}
 
 	[Fact]
