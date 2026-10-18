@@ -75,12 +75,16 @@ public sealed class LiveConsoleRealHostTests
             Assert.False(rejected.Accepted);
             Assert.Equal(initialProgram, runtime.Runtime.CommittedProgramSourceId.ToString());
 
+            var stopped = await client.ApplyMediaDeckTransportAsync(new(MediaContractVersion.Current,
+                opened.Probe!.AssetId, MediaTransportCommandKind.Stop) { SourceId = new MediaSourceId(Identity.Parse(next.Id)) });
+            Assert.True(stopped.Succeeded);
             var item = new RundownMediaItem(RundownItemId.New(), "Prepared clip", asset.AssetId.Value,
                 new ProductionSourceId(Identity.Parse(next.Id)), dissolve ? RundownTransition.Dissolve(2) : RundownTransition.Cut);
             var previous = await client.GetRundownSnapshotAsync();
             await client.SaveRundownAsync(new(RundownContractVersion.Current, RundownId.New(), "Live", [item]), previous.StorageVersion);
             await rundown.RefreshAsync();
             await Execute(rundown.PrepareCommand, () => rundown.IsBusy);
+            Assert.True(rundown.State == "PREPARED", rundown.State + " · " + rundown.Failure + " · " + rundown.Detail);
             Assert.Contains("NEXT_READY", rundown.Items[0].Readiness);
             Assert.Equal(initialProgram, runtime.Runtime.CommittedProgramSourceId.ToString());
             await Execute(rundown.GoCommand, () => rundown.IsBusy);

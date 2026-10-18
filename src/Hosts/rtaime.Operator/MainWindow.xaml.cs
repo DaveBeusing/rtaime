@@ -579,6 +579,7 @@ public partial class MainWindow : Window
 			return;
 
 		_shutdownStarted = true;
+		_liveConsole.Dispose();
 		IsEnabled = false;
 		var completedNormally = false;
 		try
@@ -619,7 +620,6 @@ public partial class MainWindow : Window
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
-				_liveConsole.Dispose();
 				await viewModel.DisposeAsync();
 			}
 			else

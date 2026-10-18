@@ -56,7 +56,7 @@ public sealed partial class RundownViewModel
         if (IsBusy) return;
         var previous = _confirmedSnapshot;
         if (previous is not null && (snapshot.StorageVersion < previous.StorageVersion ||
-            (snapshot.Execution.RundownId == previous.Execution.RundownId &&
+            (snapshot.StorageVersion == previous.StorageVersion && snapshot.Execution.RundownId == previous.Execution.RundownId &&
              snapshot.Execution.Revision < previous.Execution.Revision))) return;
         _observationAvailable = true;
         if (!_hasLocalDraft && (previous is null || snapshot.StorageVersion != _storageVersion ||

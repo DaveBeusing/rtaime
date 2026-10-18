@@ -32,6 +32,7 @@ internal sealed class LiveConsoleBinding : IDisposable
     }
     public void Dispose()
     {
+        _owner.InvalidateLiveObservation();
         _owner.CaptureLiveObservationAsync = null;
         _owner.LiveCommandsBusy = null;
         _owner.ConfirmedShowControlSnapshot -= _show.ApplyLiveObservation;

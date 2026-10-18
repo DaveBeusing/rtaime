@@ -178,7 +178,7 @@
 				<controls:RtaimeButton Content="↑" Command="{Binding MoveUpCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="2" Content="↓" Command="{Binding MoveDownCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="4" Content="REMOVE" Command="{Binding RemoveCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="6" Content="REFRESH" Command="{Binding RefreshCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="6" Content="REFRESH" Command="{Binding RefreshCommand}" ToolTip="Reload saved rundown and discard unsaved authoring and undo history." IsCompact="True" />
 			</Grid>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>

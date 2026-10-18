@@ -79,7 +79,9 @@ public sealed partial class OperatorViewModel
             ? "Current Program state was not committed by a Scene activation." : "NONE";
         RuntimeStatus = snapshot.RuntimeStatus;
         RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
-        CommitStatus = $"CONFIRMED · REV {snapshot.Production.Revision.Value}";
+        CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
+            ? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"
+            : $"RUNTIME {snapshot.RuntimeStatus} · REV {snapshot.Production.Revision.Value}";
         ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
         NotifyLiveCommandsChanged();
     }

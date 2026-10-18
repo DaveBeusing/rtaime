@@ -21,8 +21,20 @@ public sealed partial class ShowControlViewModel
         if (SelectedCueList is null || _confirmedLiveSnapshot is null) return false;
         var saved = _confirmedLiveSnapshot.CueLists.FirstOrDefault(list => list.CueListId == SelectedCueList.CueListId);
         if (saved is null) return false;
-        try { return ShowControlCanonicalSerializer.Serialize(SelectedCueList.ToContract()) == ShowControlCanonicalSerializer.Serialize(saved); }
-        catch (ArgumentException) { return false; }
+        if (SelectedCueList.Name != saved.Name || SelectedCueList.Cues.Count != saved.Cues.Count) return false;
+        try
+        {
+            for (var cueIndex = 0; cueIndex < saved.Cues.Count; cueIndex++)
+            {
+                var local = SelectedCueList.Cues[cueIndex]; var confirmed = saved.Cues[cueIndex];
+                if (local.CueId != confirmed.CueId || local.Name != confirmed.Name ||
+                    local.Actions.Count != confirmed.Actions.Count) return false;
+                for (var actionIndex = 0; actionIndex < confirmed.Actions.Count; actionIndex++)
+                    if (local.Actions[actionIndex].ToContract() != confirmed.Actions[actionIndex]) return false;
+            }
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException) { return false; }
     }
     internal void NotifyLiveAuthorityChanged() => RaiseCommandState();
     internal void ApplyLiveObservation(ShowControlWorkspaceSnapshot snapshot)
