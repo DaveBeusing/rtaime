@@ -42,7 +42,14 @@ public sealed partial class ControlHostIpcServer
                     assets.Add(new(id, SequenceMediaKind.Audio, duration, asset.FingerprintSha256));
             }
             if (project.Graphics.Bitmap is { } bitmap)
-                assets.Add(new(Guid.Parse(bitmap.AssetId.ToString()), SequenceMediaKind.Graphics, SequenceContract.MaximumTime, bitmap.ChecksumSha256));
+            {
+                try
+                {
+                    _ = await _showProjectStore.LoadBitmapAssetAsync(bitmap, cancellationToken).ConfigureAwait(false);
+                    assets.Add(new(Guid.Parse(bitmap.AssetId.ToString()), SequenceMediaKind.Graphics, SequenceContract.MaximumTime, bitmap.ChecksumSha256));
+                }
+                catch (IOException) { } // Retain authored IDs; validation reports the unavailable asset.
+            }
             var buses = project.AudioProduction?.Buses.Select(b => b.BusId.Value).ToArray() ?? ["program"];
             if (request.MessageType == "control.sequence.get")
             {

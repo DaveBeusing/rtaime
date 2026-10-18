@@ -39,6 +39,10 @@ public sealed partial class ShowProjectPersistenceIntegrationTests
                 JsonSerializer.Serialize(history with { Format = "future" }, SequenceJson.Options)));
             Assert.Throws<InvalidDataException>(() => ShowProjectPersistenceStore.ReadSequenceDocument(
                 JsonSerializer.Serialize(history with { Saved = history.Saved with { Sequences = null! } }, SequenceJson.Options)));
+            Assert.Throws<InvalidDataException>(() => ShowProjectPersistenceStore.ReadSequenceDocument(
+                JsonSerializer.Serialize(history with { Undo = [history.Saved] }, SequenceJson.Options)));
+            Assert.Throws<InvalidDataException>(() => ShowProjectPersistenceStore.ReadSequenceDocument(
+                JsonSerializer.Serialize(history with { Undo = [history.Undo[0], history.Undo[0]] }, SequenceJson.Options)));
             var bad = request with { TransactionId = Guid.NewGuid(), ExpectedRevision = 1, Definition = sequence with { Clips = null! } };
             Assert.False((await store.MutateSequenceAsync(spec, "save", bad, [], [])).Saved);
             Assert.Equal(saved, await management.GetDocumentAsync("show.project", spec.ProductionId.ToString()));

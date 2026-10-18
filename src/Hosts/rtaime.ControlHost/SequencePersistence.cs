@@ -27,7 +27,12 @@ public sealed partial class ShowProjectPersistenceStore
             document.Receipts.Select(r => r.Revision).Distinct().Count() != document.Receipts.Length ||
             !document.Receipts.Any(r => r.Revision == document.Saved.Revision))
             throw new InvalidDataException("Unsupported or incoherent sequence history.");
-        foreach (var library in document.Undo.Concat(document.Redo).Append(document.Saved))
+        var retained = document.Undo.Concat(document.Redo).ToArray();
+        if (retained.Any(l => l is null || l.Revision >= document.Saved.Revision) ||
+            retained.Select(l => l.Revision).Distinct().Count() != retained.Length ||
+            !document.Receipts.Select(r => r.Revision).SequenceEqual(document.Receipts.Select(r => r.Revision).Order()))
+            throw new InvalidDataException("Sequence history must contain distinct earlier revisions and ordered receipts.");
+        foreach (var library in retained.Append(document.Saved))
         {
             if (library is null || library.Revision > document.Saved.Revision || ValidateSequenceLibrary(library).Length != 0)
                 throw new InvalidDataException("Invalid persisted sequence library.");
@@ -39,7 +44,8 @@ public sealed partial class ShowProjectPersistenceStore
         SequenceAsset[]? assets = null, string[]? buses = null)
     {
         if (library.Version != SequenceContract.Version || library.Sequences is null ||
-            library.Sequences.Length > SequenceContract.MaximumSequences || library.Sequences.Any(s => s is null))
+            library.Sequences.Length > SequenceContract.MaximumSequences || library.Sequences.Any(s => s is null) ||
+            (library.Revision == 0 && library.Sequences.Length != 0))
             return [new("sequence.library", "$", "Unsupported or oversized sequence library.")];
         var issues = library.Sequences.SelectMany(s => SequenceModel.Validate(s, library.Revision, assets, buses).Issues).Take(128).ToList();
         if (issues.Count != 0) return issues.ToArray();
