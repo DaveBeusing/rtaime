@@ -40,7 +40,9 @@ public partial class MonitorView
 			: bitmap is not null
 				? $"REDUCED CPU {bitmap.PixelWidth}×{bitmap.PixelHeight} · 100% = fallback pixel"
 				: "DETAIL UNAVAILABLE · no active presentation";
-		SetValue(PresentationQualityPropertyKey, basis + (retained ? " · RETAINED / NOT CURRENT" : "") +
+		var unavailable = IsChannelInspectionUnavailable ? ChannelInspectionStatus :
+			(IsRoiSelectionEnabled || IsRoiActive) && !IsGpuPresentationActive ? "ROI · GPU ANALYSIS UNAVAILABLE" : null;
+		SetValue(PresentationQualityPropertyKey, (unavailable is null ? "" : unavailable + " · ") + basis + (retained ? " · RETAINED / NOT CURRENT" : "") +
 			(ZoomMode == "FILL" ? " · FILL CROPS IMAGE" : ""));
 		var receipt = IsGpuPresentationActive ? _lastGpuReceipt : _lastBitmapReceipt;
 		SetValue(ObservationStatusPropertyKey, !hasFrame ? $"{State} · FRAME UNAVAILABLE" :

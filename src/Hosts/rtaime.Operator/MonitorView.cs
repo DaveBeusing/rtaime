@@ -232,7 +232,7 @@ public partial class MonitorView : UserControl
 
 	public static readonly DependencyProperty IsRoiSelectionEnabledProperty = DependencyProperty.Register(
 		nameof(IsRoiSelectionEnabled), typeof(bool), typeof(MonitorView),
-		new PropertyMetadata(false));
+		new PropertyMetadata(false, OnObservationStateChanged));
 
 	public static readonly DependencyProperty ZoomModeProperty = DependencyProperty.Register(
 		nameof(ZoomMode),
@@ -462,6 +462,7 @@ public partial class MonitorView : UserControl
 		else
 			view.SetValue(RoiInspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaInspectionRoiStatistics.Unavailable(roi.Value, "GPU analysis pending")));
 		view.RefreshChannelInspectionAvailability();
+		view.RefreshPresentationEvidence();
 	}
 
 	private static void OnDiagnosticsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)

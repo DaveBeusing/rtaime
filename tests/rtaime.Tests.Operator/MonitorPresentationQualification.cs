@@ -245,7 +245,14 @@ internal static class MonitorPresentationQualification
 			Assert.Equal(creates, surface.TargetCreateCount);
 			viewer.ShowRedCommand.Execute(null);
 			Assert.True(viewer.IsChannelInspectionUnavailable);
+			Assert.StartsWith("RED · GPU CHANNEL VIEW UNAVAILABLE", viewer.PresentationQuality);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
+			Assert.Contains(Descendants(presentation).OfType<TextBlock>(),
+				text => text.IsVisible && text.Text.Contains("GPU CHANNEL VIEW UNAVAILABLE", StringComparison.Ordinal));
 			viewer.ShowRgbCommand.Execute(null);
+			Assert.StartsWith("ROI · GPU ANALYSIS UNAVAILABLE", viewer.PresentationQuality);
+			viewer.ClearRoiCommand.Execute(null);
+			Assert.DoesNotContain("ANALYSIS UNAVAILABLE", viewer.PresentationQuality);
 			viewer.State = "DISCONNECTED";
 			Assert.True(viewer.HasPresentedFrame);
 			Assert.Contains("RETAINED", viewer.ObservationStatus);
