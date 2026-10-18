@@ -10,6 +10,7 @@ using Vortice.Mathematics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using rtaime.Client;
@@ -87,9 +88,19 @@ internal static class MonitorPresentationQualification
 			Assert.Contains("REDUCED CPU 320×180", viewer.PresentationQuality);
 			Assert.False(viewer.IsGpuPresentationActive);
 			var source = viewer.SourceId;
-			viewer.Zoom100Command.Execute(null);
+			Assert.True(viewport.Focus());
+			var nativeKey = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(viewport),
+				Environment.TickCount, Key.D1) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+			viewport.RaiseEvent(nativeKey);
+			Assert.True(nativeKey.Handled);
+			Assert.Equal("100%", viewer.ZoomMode);
 			Assert.Equal(320 / viewer.DpiScaleX, viewer.PresentationWidth, 6);
 			Assert.Equal(180 / viewer.DpiScaleY, viewer.PresentationHeight, 6);
+			var zoomKey = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(viewport),
+				Environment.TickCount, Key.Add) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+			viewport.RaiseEvent(zoomKey);
+			Assert.True(zoomKey.Handled);
+			Assert.Equal("FREE", viewer.ZoomMode);
 			viewer.FillCommand.Execute(null);
 			Assert.Contains("CROPS", viewer.PresentationQuality);
 			viewer.FitCommand.Execute(null);
@@ -164,15 +175,15 @@ internal static class MonitorPresentationQualification
 		{
 			window.Close();
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
-			if (surface is not null) Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
 			controlStop.Cancel();
-			runtimeStop.Cancel();
 			try { Assert.Equal(ControlHostExitCode.Success, await controlRun); }
 			finally
 			{
-				Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
-				if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+				runtimeStop.Cancel();
+				try { Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun); }
+				finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 			}
+			if (surface is not null) Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
 		}
 	}
 

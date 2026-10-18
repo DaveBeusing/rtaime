@@ -860,6 +860,12 @@ public partial class MonitorView : UserControl
 	private static void OnTransportContextChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var view = (MonitorView)dependencyObject;
+		if (eventArgs.Property == SourceIdProperty)
+		{
+			view.ClearInspectionRoi();
+			view._panXPhysical = view._panYPhysical = 0;
+			view.RefreshPresentation();
+		}
 		var sourceId = view.SourceId?.Trim();
 		var transportSourceId = view.TransportSourceId?.Trim();
 		var matches = !string.IsNullOrWhiteSpace(sourceId) &&
