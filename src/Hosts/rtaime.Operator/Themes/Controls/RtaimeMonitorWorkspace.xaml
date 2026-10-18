@@ -32,301 +32,106 @@
 
 	<Style x:Key="RtaimeMonitorPresentation" TargetType="{x:Type controls:RtaimeMonitorPresentation}">
 		<Setter Property="Focusable" Value="False" />
-		<Setter Property="Template">
-			<Setter.Value>
-				<ControlTemplate TargetType="{x:Type controls:RtaimeMonitorPresentation}">
-					<Border Style="{StaticResource RtaimeMonitorPanel}">
-						<Grid>
-							<Grid.RowDefinitions>
-								<RowDefinition Height="40" />
-								<RowDefinition Height="*" />
-								<RowDefinition Height="42" />
-							</Grid.RowDefinitions>
-
-							<Border Grid.Row="0" Style="{StaticResource RtaimeMonitorHeader}">
-								<Grid>
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="Auto" />
-										<ColumnDefinition Width="*" />
-										<ColumnDefinition Width="Auto" />
-									</Grid.ColumnDefinitions>
-									<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-										<TextBlock Text="{TemplateBinding RoleText}" Foreground="{TemplateBinding RoleBrush}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="Bold" />
-										<TextBlock Text="{Binding Monitor.SourceName, RelativeSource={RelativeSource TemplatedParent}}" Margin="10,0,0,0" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="190" />
-									</StackPanel>
-									<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0">
-										<TextBlock Text="{Binding Monitor.ProductionFormat, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-										<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-										<TextBlock Text="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
-									</StackPanel>
-									<ContentPresenter Grid.Column="2" Content="{TemplateBinding HeaderContent}" VerticalAlignment="Center" />
-								</Grid>
-							</Border>
-
-							<Grid x:Name="PART_MediaViewport" Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}" ClipToBounds="True">
-								<controls:RtaimeStatePlaceholder
-									State="{TemplateBinding PlaceholderState}"
-									Title="{TemplateBinding PlaceholderTitle}"
-									Detail="{TemplateBinding PlaceholderDetail}"
-									Panel.ZIndex="60"
-									Margin="10" />
-
-								<Border
-									Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
-									<Border.Background>
-										<DrawingBrush TileMode="Tile" Viewport="0,0,12,12" ViewportUnits="Absolute">
-											<DrawingBrush.Drawing>
-												<DrawingGroup>
-													<GeometryDrawing Brush="#FF30343A" Geometry="M0,0 H12 V12 H0 Z" />
-													<GeometryDrawing Brush="#FF454A52" Geometry="M0,0 H6 V6 H0 Z M6,6 H12 V12 H6 Z" />
-												</DrawingGroup>
-											</DrawingBrush.Drawing>
-										</DrawingBrush>
-									</Border.Background>
-									<Border.RenderTransform>
-										<TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
-									</Border.RenderTransform>
-								</Border>
-
-								<Image
-									Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}"
-									Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									Stretch="Fill"
-									HorizontalAlignment="Center"
-									VerticalAlignment="Center"
-									ClipToBounds="True"
-									SnapsToDevicePixels="True"
-									RenderOptions.BitmapScalingMode="HighQuality">
-									<Image.Style>
-										<Style TargetType="Image">
-											<Setter Property="Visibility" Value="Visible" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.IsGpuPresentationActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-													<Setter Property="Visibility" Value="Collapsed" />
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Image.Style>
-									<Image.RenderTransform>
-										<TranslateTransform
-											X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
-											Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
-									</Image.RenderTransform>
-								</Image>
-								<controls:GpuMonitorPresentationSurface
-									Monitor="{Binding Monitor, RelativeSource={RelativeSource TemplatedParent}}"
-									GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}"
-									InspectionChannel="{Binding Monitor.InspectionChannel, RelativeSource={RelativeSource TemplatedParent}}"
-									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
-									HorizontalAlignment="Stretch"
-									VerticalAlignment="Stretch"
-									Panel.ZIndex="10">
-								</controls:GpuMonitorPresentationSurface>
-								<controls:RtaimeRoiOverlay
-									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
-									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
-									OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"
-									SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									Stroke="{DynamicResource OperatorAccentBrush}"
-									Fill="{DynamicResource OperatorSelectionSurfaceBrush}"
-									IsHitTestVisible="False"
-									Panel.ZIndex="46" />
-
-								<controls:RtaimePixelGridOverlay
-									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
-									OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"
-									SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
-									SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
-									LineBrush="{DynamicResource OperatorGuideSubtleBrush}"
-									IsHitTestVisible="False" Panel.ZIndex="45">
-									<controls:RtaimePixelGridOverlay.Style>
-										<Style TargetType="{x:Type controls:RtaimePixelGridOverlay}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.IsPixelGridVisible, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</controls:RtaimePixelGridOverlay.Style>
-								</controls:RtaimePixelGridOverlay>
-
-								<Border
-									HorizontalAlignment="Left"
-									VerticalAlignment="Top"
-									Margin="8"
-									Padding="6,3"
-									Background="{DynamicResource OperatorAlternateSurfaceBrush}"
-									Panel.ZIndex="55"
-									IsHitTestVisible="False">
-									<Border.Style>
-										<Style TargetType="Border">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.ShowTechnicalOverlay, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-													<Setter Property="Visibility" Value="Visible" />
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="{Binding Monitor.PresentationInfo, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
-								</Border>
-
-								<Grid IsHitTestVisible="False">
-									<Grid.Style>
-										<Style TargetType="Grid">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Grid.Style>
-									<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-									<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-									<Border Grid.Column="0" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
-									<Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
-									<Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
-									<Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
-								</Grid>
-
-								<Grid IsHitTestVisible="False">
-									<Grid.Style>
-										<Style TargetType="Grid">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Grid.Style>
-									<Border Margin="22" BorderBrush="{DynamicResource OperatorGuideStrongBrush}" BorderThickness="1" />
-									<Border Margin="44" BorderBrush="{DynamicResource OperatorGuideMediumBrush}" BorderThickness="1" />
-								</Grid>
-
-								<Grid IsHitTestVisible="False">
-									<Grid.Style>
-										<Style TargetType="Grid">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Grid.Style>
-									<Border Width="1" Height="28" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-									<Border Width="28" Height="1" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-								</Grid>
-
-								<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
-									<controls:RtaimeStatusBadge Status="{TemplateBinding RoleStatus}" Content="{Binding Monitor.State, RelativeSource={RelativeSource TemplatedParent}}" />
-									<ContentPresenter Content="{TemplateBinding StatusContent}" Margin="4,0,0,0" />
+		<Setter Property="Template"><Setter.Value>
+			<ControlTemplate TargetType="{x:Type controls:RtaimeMonitorPresentation}">
+				<Border Style="{StaticResource RtaimeMonitorPanel}">
+					<Grid>
+						<Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="*"/><RowDefinition Height="42"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+						<Border Grid.Row="0" Style="{StaticResource RtaimeMonitorHeader}">
+							<Grid>
+								<Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+								<TextBlock Text="{TemplateBinding RoleText}" Foreground="{TemplateBinding RoleBrush}" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+								<StackPanel Grid.Column="1" VerticalAlignment="Center">
+									<TextBlock Text="{Binding Monitor.SourceName, RelativeSource={RelativeSource TemplatedParent}}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
+									 ToolTip="{Binding Monitor.SourceName, RelativeSource={RelativeSource TemplatedParent}}" AutomationProperties.Name="{Binding Monitor.SourceName, RelativeSource={RelativeSource TemplatedParent}}"/>
+									<TextBlock Text="{Binding Monitor.ProductionFormat, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
+									 ToolTip="{Binding Monitor.ProductionFormat, RelativeSource={RelativeSource TemplatedParent}}"/>
 								</StackPanel>
-
-								<Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
-									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
-								</Border>
-
-								<Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,36,8,0" Padding="7,5" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
-									<Border.Style>
-										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.ShowDiagnosticsHud, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="{Binding Monitor.DiagnosticsHudText, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
-								</Border>
-
-								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,36,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
-									<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
-								</Border>
-
-								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,60,8,0" Padding="6,3" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False" MaxWidth="680">
-									<Border.Style>
-										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.IsRoiActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="{Binding Monitor.RoiInspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
-								</Border>
-
-								<Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="8" Padding="4" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="57">
-									<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-										<TextBlock Text="{Binding Monitor.ChannelInspectionStatus, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-										<controls:RtaimeButton Content="RGB" Command="{Binding Monitor.ShowRgbCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Combined channel view" />
-										<controls:RtaimeButton Content="R" Command="{Binding Monitor.ShowRedCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Red channel view" />
-										<controls:RtaimeButton Content="G" Command="{Binding Monitor.ShowGreenCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Green channel view" />
-										<controls:RtaimeButton Content="B" Command="{Binding Monitor.ShowBlueCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Blue channel view" />
-										<controls:RtaimeButton Content="A" Command="{Binding Monitor.ShowAlphaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Alpha channel view" />
-										<controls:RtaimeButton Content="Y" Command="{Binding Monitor.ShowLumaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,4,0" ToolTip="Luma channel view" />
-										<controls:RtaimeToggleButton Content="ROI" IsChecked="{Binding Monitor.IsRoiSelectionEnabled, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,2,0" ToolTip="Select source-space ROI (Shift+R)" />
-										<controls:RtaimeButton Content="CLR" Command="{Binding Monitor.ClearRoiCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" ToolTip="Clear ROI (Esc/Delete)" />
-									</StackPanel>
-								</Border>
-
-								<Border VerticalAlignment="Center" HorizontalAlignment="Center" Padding="12,8" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="58" IsHitTestVisible="False">
-									<Border.Style>
-										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.IsChannelInspectionUnavailable, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="GPU CHANNEL VIEW UNAVAILABLE&#x0a;Combined view and 1×1 inspector remain available." TextAlignment="Center" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
-								</Border>
-
-								<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
-									<StackPanel Orientation="Horizontal">
-										<TextBlock Text="{Binding Monitor.Format, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
-										<TextBlock Text=" · " FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
-										<TextBlock Text="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
-									</StackPanel>
-								</Border>
-
-								<Border Background="{DynamicResource OperatorMonitorFooterOverlayBrush}">
-									<Border.Style>
-										<Style TargetType="Border">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-										<TextBlock Text="{Binding Monitor.State, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeSection}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-										<TextBlock Text="{TemplateBinding FrameUnavailableText}" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
-									</StackPanel>
-								</Border>
+								<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+									<controls:RtaimeStatusBadge Status="{TemplateBinding RoleStatus}" Content="{Binding Monitor.State, RelativeSource={RelativeSource TemplatedParent}}"/>
+									<ContentPresenter Content="{TemplateBinding HeaderContent}" Margin="4,0,0,0"/>
+								</StackPanel>
 							</Grid>
-
-							<Border Grid.Row="2" Style="{StaticResource RtaimeMonitorTransport}">
-								<Grid>
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="*" />
-										<ColumnDefinition Width="Auto" />
-									</Grid.ColumnDefinitions>
-									<ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" />
-									<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" IsEnabled="{TemplateBinding OverlayControlsEnabled}">
-										<controls:RtaimeToggleButton Content="SAFE" IsChecked="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Safe area" />
-										<controls:RtaimeToggleButton Content="CTR" IsChecked="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Center mark" />
-										<controls:RtaimeToggleButton Content="GRID" IsChecked="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" ToolTip="Thirds grid" />
-									</StackPanel>
-								</Grid>
+						</Border>
+						<Grid x:Name="PART_MediaViewport" Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}" ClipToBounds="True" AutomationProperties.Name="Viewer image; F Fit, 1 native pixels, plus or minus zoom, arrows pan, Shift R ROI">
+							<controls:RtaimeStatePlaceholder State="{TemplateBinding PlaceholderState}" Title="{TemplateBinding PlaceholderTitle}" Detail="{TemplateBinding PlaceholderDetail}" Panel.ZIndex="60" Margin="10"/>
+							<Border Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+								<Border.Background><DrawingBrush TileMode="Tile" Viewport="0,0,12,12" ViewportUnits="Absolute"><DrawingBrush.Drawing><DrawingGroup>
+									<GeometryDrawing Brush="#FF30343A" Geometry="M0,0 H12 V12 H0 Z"/><GeometryDrawing Brush="#FF454A52" Geometry="M0,0 H6 V6 H0 Z M6,6 H12 V12 H6 Z"/>
+								</DrawingGroup></DrawingBrush.Drawing></DrawingBrush></Border.Background>
+								<Border.RenderTransform><TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"/></Border.RenderTransform>
+							</Border>
+							<Image Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
+							 Stretch="Fill" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False">
+								<Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers>
+									<DataTrigger Binding="{Binding Monitor.IsGpuPresentationActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+								</Style.Triggers></Style></Image.Style>
+								<Image.RenderTransform><TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"/></Image.RenderTransform>
+							</Image>
+							<controls:GpuMonitorPresentationSurface Monitor="{Binding Monitor, RelativeSource={RelativeSource TemplatedParent}}" GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}" InspectionChannel="{Binding Monitor.InspectionChannel, RelativeSource={RelativeSource TemplatedParent}}" Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="10"/>
+							<controls:RtaimeRoiOverlay Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}" PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}" OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}" SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}" Stroke="{DynamicResource OperatorAccentBrush}" Fill="{DynamicResource OperatorSelectionSurfaceBrush}" IsHitTestVisible="False" Panel.ZIndex="46"/>
+							<controls:RtaimePixelGridOverlay PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}" OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}" SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}" LineBrush="{DynamicResource OperatorGuideSubtleBrush}" IsHitTestVisible="False" Panel.ZIndex="45">
+								<controls:RtaimePixelGridOverlay.Style><Style TargetType="{x:Type controls:RtaimePixelGridOverlay}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Monitor.IsPixelGridVisible, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></controls:RtaimePixelGridOverlay.Style>
+							</controls:RtaimePixelGridOverlay>
+							<controls:RtaimeMonitorGuides PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}" OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" Safe="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}}" Grid="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}}" Center="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}}" Stroke="{DynamicResource OperatorGuideStrongBrush}" IsHitTestVisible="False" Panel.ZIndex="44"/>
+							<Border Background="{DynamicResource OperatorMonitorFooterOverlayBrush}" Panel.ZIndex="58" IsHitTestVisible="False">
+								<Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Monitor.HasPresentedFrame, RelativeSource={RelativeSource TemplatedParent}}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style>
+								<TextBlock Text="{TemplateBinding FrameUnavailableText}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8"/>
 							</Border>
 						</Grid>
-					</Border>
-				</ControlTemplate>
-			</Setter.Value>
-		</Setter>
+						<Border Grid.Row="2" Style="{StaticResource RtaimeMonitorTransport}">
+							<controls:RtaimeScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" AutomationProperties.Name="Local viewer toolbar">
+								<StackPanel Orientation="Horizontal">
+									<ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+									<controls:RtaimeButton Content="Fit" Command="{Binding Monitor.FitCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Fit image"/>
+									<controls:RtaimeButton Content="Fill" Command="{Binding Monitor.FillCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" ToolTip="Fill crops the image" AutomationProperties.Name="Fill image with crop"/>
+									<controls:RtaimeButton Content="100%" Command="{Binding Monitor.Zoom100Command, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" ToolTip="{Binding Monitor.PresentationQuality, RelativeSource={RelativeSource TemplatedParent}}" AutomationProperties.Name="One presented pixel per physical pixel"/>
+									<controls:RtaimeButton Content="−" Command="{Binding Monitor.ZoomOutCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Zoom out"/>
+									<controls:RtaimeButton Content="+" Command="{Binding Monitor.ZoomInCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Zoom in"/>
+									<controls:RtaimeButton Content="RGB" Command="{Binding Monitor.ShowRgbCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Combined channels"/>
+									<controls:RtaimeButton Content="R" Command="{Binding Monitor.ShowRedCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Red channel"/>
+									<controls:RtaimeButton Content="G" Command="{Binding Monitor.ShowGreenCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Green channel"/>
+									<controls:RtaimeButton Content="B" Command="{Binding Monitor.ShowBlueCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Blue channel"/>
+									<controls:RtaimeButton Content="A" Command="{Binding Monitor.ShowAlphaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Alpha channel"/>
+									<controls:RtaimeButton Content="Y" Command="{Binding Monitor.ShowLumaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Luma channel"/>
+									<controls:RtaimeToggleButton Content="ROI" IsChecked="{Binding Monitor.IsRoiSelectionEnabled, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" AutomationProperties.Name="Select or resize inspection region; Shift R"/>
+									<controls:RtaimeButton Content="Clear ROI" Command="{Binding Monitor.ClearRoiCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Clear inspection region"/>
+									<controls:RtaimeToggleButton Content="SAFE" IsChecked="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" AutomationProperties.Name="Safe areas"/>
+									<controls:RtaimeToggleButton Content="CTR" IsChecked="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" AutomationProperties.Name="Center mark"/>
+									<controls:RtaimeToggleButton Content="GRID" IsChecked="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" AutomationProperties.Name="Image thirds and high zoom pixel grid"/>
+									<controls:RtaimeButton Content="Inspect" Command="{Binding Monitor.ToggleTechnicalOverlayCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Show or hide inspection details"/>
+									<controls:RtaimeButton Content="HUD" Command="{Binding Monitor.ToggleDiagnosticsHudCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Toggle frame diagnostics"/>
+									<controls:RtaimeButton Content="Full / Restore" Command="{Binding Monitor.FullscreenCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Fullscreen or restore existing viewer"/>
+									<controls:RtaimeButton Content="Max / Restore" Command="{Binding Monitor.MaximizeCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" AutomationProperties.Name="Maximize or restore existing viewer"/>
+									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" Margin="6,0" VerticalAlignment="Center"/>
+									<ContentPresenter Content="{TemplateBinding StatusContent}" VerticalAlignment="Center"/>
+								</StackPanel>
+							</controls:RtaimeScrollViewer>
+						</Border>
+						<Border Grid.Row="3" Padding="5,2" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0">
+							<StackPanel>
+								<TextBlock Text="{Binding Monitor.PresentationQuality, RelativeSource={RelativeSource TemplatedParent}}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Monitor.PresentationQuality, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}"/>
+								<controls:RtaimeScrollViewer MaxHeight="96" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Viewer inspection evidence">
+									<controls:RtaimeScrollViewer.Style><Style TargetType="{x:Type controls:RtaimeScrollViewer}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+										<DataTrigger Binding="{Binding Monitor.ShowTechnicalOverlay, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+										<DataTrigger Binding="{Binding Monitor.ShowDiagnosticsHud, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+									</Style.Triggers></Style></controls:RtaimeScrollViewer.Style>
+									<StackPanel>
+										<TextBlock Text="{Binding Monitor.ObservationStatus, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.CropStatus, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.PresentationInfo, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.ChannelInspectionStatus, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.RoiInspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap"/>
+										<TextBlock Text="{Binding Monitor.DiagnosticsHudText, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap" FontFamily="Consolas"/>
+									</StackPanel>
+								</controls:RtaimeScrollViewer>
+							</StackPanel>
+						</Border>
+					</Grid>
+				</Border>
+			</ControlTemplate>
+		</Setter.Value></Setter>
 	</Style>
 
 	<Style x:Key="RtaimeProductionLowerPanel" TargetType="Border">

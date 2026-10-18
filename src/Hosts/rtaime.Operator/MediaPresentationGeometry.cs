@@ -49,9 +49,16 @@ public static class MediaPresentationGeometry
 
 		var width = sourceWidth * scale;
 		var height = sourceHeight * scale;
+		if (!double.IsFinite(panX) || !double.IsFinite(panY))
+			throw new ArgumentOutOfRangeException(nameof(panX));
 		var bounds = CalculatePanBounds(width, height, viewportWidth, viewportHeight);
 		var x = (viewportWidth - width) / 2.0 + Math.Clamp(panX, bounds.MinX, bounds.MaxX);
 		var y = (viewportHeight - height) / 2.0 + Math.Clamp(panY, bounds.MinY, bounds.MaxY);
+		if (scale >= 1 && Math.Abs(scale - Math.Round(scale)) < 0.000001)
+		{
+			// Ignore arithmetic residue at an exact pixel boundary so anchored zoom does not walk.
+			x = Math.Floor(x + 1e-9); y = Math.Floor(y + 1e-9);
+		}
 		return new MediaPresentationRect(x, y, width, height, scale);
 	}
 

@@ -103,6 +103,10 @@ public sealed class GpuDrawingSurfaceTests
 		Assert.All(variants, descriptor => Assert.False(OperatorSurfaceTargetPolicy.IsValid(descriptor, 16384, 16384)));
 	}
 
+	[Fact]
+	public Task Productive_program_viewer_and_resource_epochs_remain_isolated() =>
+		MonitorPresentationQualification.RunIsolatedAsync();
+
 	internal static async Task VerifySurfaceLifetimeAsync(Dispatcher dispatcher)
 	{
 		dispatcher.VerifyAccess();

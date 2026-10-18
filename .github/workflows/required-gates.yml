@@ -568,7 +568,7 @@ jobs:
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests"
 
       - name: Operator visual and DPI qualification
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorVisualQualificationTests|FullyQualifiedName~OperatorCombinedVisualQualification|FullyQualifiedName~MonitoringVisualPerformanceQualificationTests"
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorVisualQualificationTests|FullyQualifiedName~OperatorCombinedVisualQualification|FullyQualifiedName~MonitoringVisualPerformanceQualificationTests|FullyQualifiedName~MediaPresentationGeometryTests|FullyQualifiedName~MediaPixelInspectionTests"
 
       - name: Media viewport visual quality qualification
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaViewportVisualQualityQualificationTests"

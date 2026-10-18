@@ -938,3 +938,12 @@ The [Media Library](MediaLibraryAssetBrowser.md) supports composable typed searc
 ## Productive composition ownership
 
 The Media Library is hosted by OperatorMediaLibraryView with an explicit borrowed context; the existing OperatorInspectorControl remains the contextual Inspector. MainWindow owns feature lifetimes and OperatorComposition supplies typed connections to the existing owners. See [composition and namescope ownership](OperatorComposition.md) for actual files, shared selection/drafts, docking/focus and regression boundaries. No layout schema, shortcut or production contract changes.
+
+
+## Viewer presentation and inspection evidence
+
+Preview and Program share a header for role, complete source identity, authoritative format and observed state; local tools and timecode sit below the image. Fit, cropped Fill, 100%, keyboard/pointer zoom, bounded pan, channels, ROI and image-aligned guides reuse the existing viewer. Fullscreen and restore retain its existing workspace instance.
+
+100% follows the confirmed active GPU resource or actual reduced fallback pixels. Retained images are explicitly NOT CURRENT; missing frames and unavailable GPU channels remain distinct. Inspection does not alter routing, transport, recording or saved production.
+
+See [Media Pixel and Channel Inspection](MediaPixelAndChannelInspection.md#viewer-presentation-and-inspection-evidence) for controls, physical DPI geometry and qualification boundaries.
