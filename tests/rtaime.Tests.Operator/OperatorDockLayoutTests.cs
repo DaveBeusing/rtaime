@@ -18,7 +18,22 @@ public sealed class OperatorDockLayoutTests
         layout = layout.Dock("MONITORS", layout.Floating[0].ReturnGroup);
         Assert.Empty(layout.Floating);
         Assert.Equal("MONITORS", layout.Groups.Single(g => g.Id == "CENTER").ActivePanel);
-        Assert.Equal(4, layout.Groups.SelectMany(g => g.Panels).Distinct().Count());
+        Assert.Equal(5, layout.Groups.SelectMany(g => g.Panels).Distinct().Count());
+    }
+    [Fact]
+    public void Legacy_dock_layout_preserves_placements_and_adds_one_audio_panel()
+    {
+        var previous = new OperatorDockLayout { Version = 1, Enabled = true,
+            Groups = [new("LEFT", ["TOOLS"], "TOOLS"), new("CENTER", ["MONITORS"], "MONITORS"),
+                new("RIGHT", [], null), new("BOTTOM", ["TIMELINE"], "TIMELINE")],
+            Floating = [new("INSPECTOR", "RIGHT", OperatorPanelPlacement.Default)] };
+        var migrated = previous.Normalize();
+        Assert.Equal(2, migrated.Version);
+        Assert.Equal(previous.Floating, migrated.Floating);
+        Assert.Equal(new[] { "AUDIO" }, migrated.Groups.Single(g => g.Id == "RIGHT").Panels);
+        var floating = migrated.Float("AUDIO", OperatorPanelPlacement.Default);
+        Assert.Equal(2, floating.Floating.Length);
+        Assert.Equal(5, floating.Groups.SelectMany(g => g.Panels).Concat(floating.Floating.Select(p => p.Panel)).Distinct().Count());
     }
     [Fact]
     public void Corrupt_duplicate_and_unknown_panel_preferences_recover_bounded_defaults()
@@ -31,7 +46,7 @@ public sealed class OperatorDockLayoutTests
                 OperatorPanelPlacement.Default with { Left = double.NaN, Dpi = double.PositiveInfinity })]
         }.Normalize();
         var panels = layout.Groups.SelectMany(g => g.Panels).Concat(layout.Floating.Select(f => f.Panel)).ToArray();
-        Assert.Equal(4, panels.Length); Assert.Equal(4, panels.Distinct().Count());
+        Assert.Equal(5, panels.Length); Assert.Equal(5, panels.Distinct().Count());
         Assert.Equal(.22, layout.LeftRatio); Assert.Equal(.22, layout.RightRatio);
         Assert.Equal("CENTER", layout.Floating[0].ReturnGroup);
         Assert.DoesNotContain("UNKNOWN", panels);

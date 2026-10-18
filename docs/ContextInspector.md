@@ -29,7 +29,7 @@ COPY ATTRIBUTES stores one bounded in-memory set for the selected transform, Col
 
 Pasting does not apply or submit a transaction. Apply remains explicit and uses the existing atomic layer-transform or processing-stack mutation. The local attribute copy lasts only for the Inspector's lifetime and does not use the system clipboard.
 
-Multi-selection remains a read-only mixed summary. Batch property editing is deferred because the current contracts do not provide an atomic multi-selection property transaction. Media technical metadata, graph topology and output evidence remain read-only unless an existing dedicated governed action exposes editing. Audio uses the existing mixer/source draft and explicit gain Apply; cross-source audio attribute paste is deferred.
+Multi-selection remains a read-only mixed summary. Batch property editing is deferred because the current contracts do not provide an atomic multi-selection property transaction. Media technical metadata, graph topology and output evidence remain read-only unless an existing dedicated governed action exposes editing. Audio uses the existing mixer/source draft and explicit gain Apply. The Mixer exchanges compatible gain-only values through the same typed Inspector clipboard and revision token; source/bus destination Apply remains explicit. EQ, routing and other audio attribute transfer remain excluded.
 
 ## Qualification
 

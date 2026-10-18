@@ -11,6 +11,8 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />
 		<ProjectReference Include="..\..\src\Hosts\rtaime.Operator\rtaime.Operator.csproj" />
+        <ProjectReference Include="..\..\src\Hosts\rtaime.ControlHost\rtaime.ControlHost.csproj" />
+        <ProjectReference Include="..\..\src\Hosts\rtaime.RuntimeHost\rtaime.RuntimeHost.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

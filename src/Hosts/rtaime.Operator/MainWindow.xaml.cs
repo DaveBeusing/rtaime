@@ -134,12 +134,15 @@ public partial class MainWindow : Window
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
+        AudioMixerView.Inspector = Composition.Inspector;
+        AudioMixerView.DataContext = viewModel.AudioMixer;
 		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>
             {
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
-                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
+                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion,
+                ["AUDIO"] = AudioMixerView
             });
         Shell.ConfigureTemplateFiles(PickWorkspaceTemplateImport, PickWorkspaceTemplateExport, Docking.Capture);
         OpenWorkspaceTemplatesCommand = new OperatorShellCommand(OpenWorkspaceTemplates, () => !_shutdownStarted);
@@ -243,12 +246,15 @@ public partial class MainWindow : Window
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		Composition = new(this);
+        AudioMixerView.Inspector = Composition.Inspector;
+        AudioMixerView.DataContext = viewModel.AudioMixer;
 		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>
             {
                 ["TOOLS"] = LeftToolRegion, ["MONITORS"] = CenterWorkspace,
-                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion
+                ["INSPECTOR"] = RightInspectorRegion, ["TIMELINE"] = LowerTimelineRegion,
+                ["AUDIO"] = AudioMixerView
             });
         Shell.ConfigureTemplateFiles(PickWorkspaceTemplateImport, PickWorkspaceTemplateExport, Docking.Capture);
         OpenWorkspaceTemplatesCommand = new OperatorShellCommand(OpenWorkspaceTemplates, () => !_shutdownStarted);

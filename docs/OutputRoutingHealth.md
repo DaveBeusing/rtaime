@@ -109,3 +109,7 @@ establish active render output: active render revision remains unavailable until
 a real mapping renderer and explicit Prepare/Commit activation are implemented.
 Program continues to use its existing transition command, independently of saving
 this authored model.
+
+## Mixer interaction and signal flow
+
+The [Audio Mixer workspace](AudioMixerWorkspace.md) presents confirmed source → bus → Program/Aux routing with independent source/bus drafts, validated gain/EQ/dynamics fields, accessible routing cells and Runtime sample-peak evidence. Missing bus references, stale/unavailable meters, silence and clipping remain distinct. AUDIO can float through the existing docking system; layout v1 migrates additively to v2. Configuration still crosses Client/ControlHost and is executed by Runtime.

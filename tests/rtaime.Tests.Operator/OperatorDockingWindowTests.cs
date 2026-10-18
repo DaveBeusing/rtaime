@@ -23,13 +23,13 @@ internal static class OperatorDockingWindowTests
         var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;
         var watch = Stopwatch.StartNew();
         Console.WriteLine("DOCK WORKSPACE BEGIN: loaded-window synchronization while live rendering remains active.");
-        var floatedPanels = new[] { "TOOLS", "INSPECTOR", "MONITORS" };
+        var floatedPanels = new[] { "TOOLS", "INSPECTOR", "MONITORS", "AUDIO" };
         var library = owner.MediaLibraryView;
         var context = library.Context;
         var inspector = owner.InspectorView;
         var selection = owner.MediaPool.Selection;
         var monitoring = owner.Monitoring;
-        for (var cycle = 0; cycle < 3; cycle++)
+        for (var cycle = 0; cycle < floatedPanels.Length; cycle++)
         {
             var panelId = floatedPanels[cycle];
             owner.Shell.SelectWorkspace(panelId == "MONITORS" ? "LIVE" : "MEDIA");
@@ -97,7 +97,7 @@ internal static class OperatorDockingWindowTests
             Assert.False(owner.Shell.Docking.Enabled);
             Assert.All(identities.Values, panel => Assert.NotNull(panel.Parent));
         }
-        Console.WriteLine("COMPOSITION SEAMS PASS: retained Library/Inspector contexts, projection, selection, commands and monitoring owner across three floating/re-docking cycles.");
+        Console.WriteLine("COMPOSITION SEAMS PASS: retained Library/Inspector contexts, projection, selection, commands and monitoring owner across four floating/re-docking cycles.");
         Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
         Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
         Assert.False(((OperatorViewModel)owner.DataContext).CutCommand.CanExecute(null));
@@ -121,6 +121,7 @@ internal static class OperatorDockingWindowTests
         owner.Docking.Float("INSPECTOR"); Assert.False(owner.Shell.PresentationActive);
         owner.Docking.FloatingWindows["INSPECTOR"].Close();
         owner.Shell.ResetLayoutCommand.Execute(null);
+        await AudioMixerWorkspaceQualification.VerifyAsync(owner, dispatcher);
         var workspace = owner.Shell.SelectedWorkspace;
         owner.OpenWorkspaceTemplatesCommand.Execute(null);
         await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
