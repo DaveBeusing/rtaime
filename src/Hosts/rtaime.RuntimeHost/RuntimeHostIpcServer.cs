@@ -696,6 +696,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var prepared = FromWire(wire.PreparedExecution);
         // ControlHost serializes runtime exchanges; read committed authority before admission,
         // including a TAKE acknowledged before the next Program cadence observation.
+        if (_committedAuthorityStateId is { } authority &&
+            (prepared.AuthoritySnapshot.StateId != authority ||
+             _committedAuthorityRevision is { } revision && prepared.AuthoritySnapshot.Revision.Value < revision.Value))
+            return Error(request, "runtime.media_resources.stale_authority", "Media admission requires current committed Control authority; synchronize and prepare again.");
         var runtime = _runtimeAccessor();
         deck.ObserveProgramSource(runtime?.CommittedProgramSourceId);
         if (deck.AllowsAdditionalSources)

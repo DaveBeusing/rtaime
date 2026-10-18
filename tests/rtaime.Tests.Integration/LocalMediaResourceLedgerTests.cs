@@ -118,6 +118,36 @@ public sealed class LocalMediaResourceLedgerTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 5, LocalMediaCapacityProfile.DevelopmentFour));
     }
 
+    [Fact]
+    public void Shutdown_closes_new_admission_but_final_retained_leases_can_still_release()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 1);
+        var identity = IdentityFor(ledger);
+        var intent = Guid.NewGuid();
+        Assert.True(ledger.TryReserve(intent, identity, out var ticket, out _));
+        ticket!.RetainPoolLease();
+        ledger.CloseAdmission();
+        ticket.OwnerCompleted();
+        Assert.False(ledger.TryReserve(intent, identity, out _, out var stopped));
+        Assert.Equal("runtime.media_resources.stopped", stopped!.Value.Code);
+        Assert.Equal(1, ledger.Snapshot.RetainedPoolOwners);
+        ticket.ReleasePoolLease();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+        Assert.Equal(0L, ledger.Snapshot.KnownManagedBytes);
+    }
+
+    [Fact]
+    public void Authority_state_is_part_of_the_idempotent_ticket_identity()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 1);
+        var identity = IdentityFor(ledger) with { AuthorityStateId = Identity.New() };
+        var intent = Guid.NewGuid();
+        Assert.True(ledger.TryReserve(intent, identity, out var ticket, out _));
+        Assert.False(ledger.TryReserve(intent, identity with { AuthorityStateId = Identity.New() }, out _, out var conflict));
+        Assert.Equal("runtime.media_resources.intent_conflict", conflict!.Value.Code);
+        ticket!.OwnerCompleted();
+    }
+
     private static LocalMediaResourceIdentity IdentityFor(LocalMediaResourceLedger ledger) =>
         new(ledger.RuntimeEpoch, MediaSourceId.New(), null, null, null, LocalMediaResourcePurpose.Resident);
 }

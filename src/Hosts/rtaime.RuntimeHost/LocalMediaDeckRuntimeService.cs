@@ -82,7 +82,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     }
     internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.DevelopmentFour;
 
-    public void AdmitBoundaries(V1RuntimeHostService runtime, ulong programSlot)
+    public void AdmitBoundary(V1RuntimeHostService runtime, ulong programSlot)
     {
         lock (_gate)
         {
@@ -154,7 +154,10 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             try
             {
                 using var probe = new LocalMediaDeckSlot(_format, _ledger);
-                return probe.Probe(path, assetId);
+                var result = probe.Probe(path, assetId);
+                if (result.Failure?.Code.StartsWith("runtime.media_resources.", StringComparison.Ordinal) == true)
+                    Interlocked.Increment(ref _rejected);
+                return result;
             }
             finally { lock (_gate) _probeReservations--; }
         }
@@ -240,7 +243,10 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             var candidate = new Entry(request.SourceId, new LocalMediaDeckSlot(_format, _ledger), ++_order)
             { Request = request, Execution = preparedExecution };
             lock (_gate) { _entries[index] = candidate; _selected = request.SourceId; _knownSources.Add(request.SourceId); }
-            return candidate.Deck.Open(request, preparedExecution, resources);
+            var opened = candidate.Deck.Open(request, preparedExecution, resources);
+            if (opened.Failure?.Code.StartsWith("runtime.media_resources.", StringComparison.Ordinal) == true)
+                Interlocked.Increment(ref _rejected);
+            return opened;
         }
     }
 

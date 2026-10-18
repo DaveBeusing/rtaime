@@ -540,7 +540,7 @@ public sealed class RuntimeHostProcess
 	private void AdmitMediaDeckBoundary(V1RuntimeHostService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
     {
         mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
-        mediaDeck.AdmitBoundaries(runtime, programSlot);
+        mediaDeck.AdmitBoundary(runtime, programSlot);
     }
 
 	private async Task<RuntimeHostExitCode> StopAsync(

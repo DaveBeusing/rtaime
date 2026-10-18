@@ -255,6 +255,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             _preflightTicket?.Quarantine(this);
             throw new IOException("Preflight native owner did not terminate; reservation remains quarantined until supported Runtime restart.");
         }
+        if (_preflightTask is { IsCompleted: true }) _preflightTicket?.OwnerCompleted();
         if (_preflightQuarantine is not null || _preflightIdentityQuarantine is not null) throw new IOException("Preflight retained a failed native owner; supported Runtime restart is required.");
         _preflightStop?.Dispose();
         _preflightStop = null;

@@ -42,6 +42,7 @@ public sealed class LocalMediaResourceLedger
         Capacity = capacity;
         // Ten video/audio slots plus one known RGBA decoder scratch frame. Native allocations are unknown.
         _bytesPerOwner = checked((long)format.Width * format.Height * 4 * 11 + 10 * 32_768L);
+        _ = checked(_bytesPerOwner * capacity); // Validate the entire finite profile before any grant.
     }
 
     public LocalMediaResourceSnapshot Snapshot
