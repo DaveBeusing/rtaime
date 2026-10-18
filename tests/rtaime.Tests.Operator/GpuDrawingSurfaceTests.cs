@@ -114,6 +114,7 @@ public sealed class GpuDrawingSurfaceTests
 			await VerifyProductiveSurfaceAsync(surface, dispatcher);
 		await VerifyDpiAndRecoveryAsync(dispatcher);
 		await VerifyViewportLayoutAsync(dispatcher);
+		await MonitorPresentationQualification.VerifyAsync(dispatcher);
 	}
 
 	private static async Task VerifyProductiveSurfaceAsync(OperatorDrawingSurface surface, Dispatcher dispatcher)
