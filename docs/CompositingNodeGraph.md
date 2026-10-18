@@ -56,7 +56,7 @@ The authoritative layer chain is projected as `Layer → Transform → [ordered 
 
 If the authoritative Preview or Program source identifier is absent from the current source projection, the routing node displays `MISSING SOURCE` with the affected role and error health. This is read-only diagnostic evidence: it does not synthesize a replacement source, alter routing, or claim a successful Runtime commit.
 
-The graph uses stable node identities. Ordinary status refreshes update the existing node view models in place and do not reset node positions. Source collection or topology changes may invoke deterministic Auto Layout.
+The graph uses stable node identities. Ordinary status refreshes update the existing node view models in place and do not reset node positions. Only changes to the projected topology invoke deterministic Auto Layout. Source snapshot transactions and thumbnail updates do not rebuild the graph. The graph culls offscreen nodes and connections before creating Canvas visuals; the layer list uses recycling virtualization and supports every layer admitted by the current Runtime contract.
 
 SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
 
@@ -65,6 +65,8 @@ Arbitrary source/routing topology rewiring is not exposed by the current contrac
 - move the selected active layer one position lower or higher;
 - toggle visibility for bitmap graphics or Production CG;
 - decrease or increase opacity for bitmap graphics or Production CG.
+
+The LAYERS panel shares the same node identities and selection as the graph. It displays confirmed order, visibility, opacity, content and health. Search and per-layer collapse are local presentation state. Ctrl/Shift selection provides a read-only common/mixed review in the shared Inspector; single-layer editing resumes after selecting one layer. Dragging a layer stages a local insert-before order; APPLY ORDER submits it and UNDO ORDER discards it. Visibility and integral 0..255 opacity fields also remain local until APPLY LAYER; invalid numeric input disables submission. Rejection preserves the draft and its confirmed comparison. REVIEW LAYER selects its existing Inspector entry.
 
 Layer selection remains presentation-only. A toolbar or Inspector mutation sends an explicit client command through ControlHost to RuntimeHost, displays the existing in-flight state and refreshes the graph only from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
 
@@ -92,7 +94,13 @@ This is **real telemetry only**: missing data remains visibly unavailable rather
 
 Selecting a Layer, Transform or Processing graph node uses the existing shared Inspector path and resolves back to the same authoritative layer identity. Runtime layer projections expose stable identity, confirmed order, visibility, opacity, transform and the complete ordered typed processing stack.
 
-The Inspector keeps editable processing values only as interaction state. Ordinary status refreshes preserve an in-progress draft for the same stable processing-node identity; a newer confirmed node state, explicit selection change, rejection recovery or resynchronization rebases the editor from authoritative state. APPLY and stack mutations travel through Operator → Client → ControlHost → RuntimeHost, show pending state while confirmation is outstanding, and only the returned confirmed snapshot updates production presentation. Mutations are unavailable while the Operator is stale, busy, disconnected or Runtime is not ready. Layer reorder, visibility and opacity remain bounded COMPOSITING toolbar commands; processing reorder remains scoped to the selected layer stack.
+The Inspector keeps editable processing values only as interaction state. Ordinary status refreshes preserve an in-progress draft for the same stable processing-node identity; a newer confirmed node state or resynchronization rebases the editor from authoritative state while retaining a bounded recovery copy of dirty transform/processing intent. RESTORE DRAFT explicitly restores compatible local values into the current context with local undo; DISCARD COPY removes the recovery copy. Neither action submits a mutation. Up to eight recovery contexts and eight removed-layer draft summaries are retained. Missing layers remain diagnostic evidence and are never recreated automatically. APPLY and stack mutations travel through Operator → Client → ControlHost → RuntimeHost, show pending state while confirmation is outstanding, and only the returned confirmed snapshot updates production presentation. Mutations are unavailable while the Operator is stale, busy, disconnected or Runtime is not ready. The local layer panel complements the existing bounded toolbar commands; processing reorder remains scoped to the selected layer stack.
+
+## Scene and local interaction evidence
+
+The workspace header separates the selected Scene declaration from Runtime-observed layer evidence. RECALL SCENE uses the existing scene command, and a confirmed direct layer or processing mutation invalidates ActiveScene through the existing authority path. Search, selection, collapse, local drafts, pan, zoom, Fit and local undo do not alter Scene or production state. A changed confirmed value is shown alongside a conflicting local layer draft; order submission requires the current confirmed layer identity set to match the staged order.
+
+F3 focuses layer search, Home fits the graph and +/- zooms when a text editor does not own the key. The toolbar remains horizontally accessible at compact widths, the layer panel adapts to the available width, and shared High Contrast/Reduced Motion preferences apply without introducing animation or a second monitoring session.
 
 ## Authority boundary
 
@@ -129,3 +137,9 @@ The graph continues to project only confirmed ordered processing state. Qualific
 Recording and CPU-fallback monitoring are verified against the same final post-processing Program payload rather than separately reconstructed pixels. Operator visual/DPI qualification continues through Required Gates after the processing workflow integration; no second Preview, local renderer, or monitoring poller is introduced.
 
 The hosted processing matrix covers both V1 frame rates and the representative none, Color Grade, Chroma Key, Chroma Key → Color Grade, and Color Grade → Chroma Key cases. The renderer's existing 0 / 1 / 2 / 4 / 8 layer matrix remains a separate GPU-compositor qualification dimension.
+
+## Workspace qualification
+
+`InspectorPrecisionTests` covers stable node/geometry identity across repeated snapshots, retained processing drafts, maximum admitted layers, viewport culling, local state/order drafts, rejected submission, common/mixed review and explicit reconnect recovery. `CompositingWorkspaceQualification` runs inside the existing real MainWindow STA/BAML fixture and exercises the actual graph and shared Inspector controls, numeric validity, local precision undo, compact width, search, collapse and shared presentation preferences. Its controlled transport is presentation evidence, not Runtime output evidence.
+
+`GraphicsOverlayIntegrationTests.Compositing_workspace_commands_cross_real_pipes_preserve_typed_order_and_recall_scene_pixels` uses the real Client, named-pipe ControlHost and RuntimeHost servers, confirmed transforms/typed processing/order, scene recall and final Program pixels. It also checks monitoring parity, ActiveScene invalidation and rejection of recall after bitmap resources are removed. Required Gates executes this focused integration case before the broad suites. CI results must be assessed at the current PR head; running, skipped or cancelled gates are not passing evidence.

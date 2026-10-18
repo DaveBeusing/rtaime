@@ -127,6 +127,170 @@ public sealed class InspectorPrecisionTests
 		Assert.Contains("REJECTED", inspector.InspectorEditState);
 	}
 
+
+    [Fact]
+    public async Task Compositing_refresh_preserves_graph_objects_geometry_selection_and_dirty_processing_values()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        var selected = graph.Nodes.Single(node => node.Id == "processing:bitmap-graphics:grade");
+        graph.SelectNodeCommand.Execute(selected);
+        inspector.SelectedColorGradeBrightness = 0.314159265;
+        var nodes = graph.Nodes.ToDictionary(node => node.Id);
+        var positions = graph.Nodes.ToDictionary(node => node.Id, node => (node.X, node.Y));
+        var geometry = graph.Connections.ToDictionary(connection => connection.Id, connection => connection.Geometry);
+        var resets = 0;
+        graph.Nodes.CollectionChanged += (_, change) => { if (change.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset) resets++; };
+        for (var refresh = 0; refresh < 20; refresh++) owner.SynchronizeCommand.Execute(null);
+        Assert.Same(selected, graph.SelectedNode);
+        Assert.Equal(0.314159265, inspector.SelectedColorGradeBrightness);
+        foreach (var node in graph.Nodes) { Assert.Same(nodes[node.Id], node); Assert.Equal(positions[node.Id], (node.X, node.Y)); }
+        foreach (var connection in graph.Connections) Assert.Same(geometry[connection.Id], connection.Geometry);
+        Assert.Equal(0, resets);
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.Same(owner.ActivateSceneCommand, graph.RecallSceneCommand);
+    }
+
+    [Fact]
+    public async Task Compositing_maximum_layer_projection_filters_collapses_and_reviews_without_batch_mutations()
+    {
+        var transport = new InspectorTransport { ManyLayers = true };
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        Assert.Equal(8, graph.Layers.Count);
+        graph.UpdateViewport(300, 220);
+        Assert.True(graph.VisibleNodes.Count < graph.Nodes.Count);
+        var first = graph.Layers[0];
+        graph.SelectNodeCommand.Execute(first);
+        graph.SearchText = "layer7";
+        Assert.Same(first, graph.SelectedNode);
+        Assert.False(first.MatchesSearch);
+        graph.SearchText = "";
+        first.IsCollapsed = true;
+        graph.CollapseLayerCommand.Execute(first);
+        Assert.False(first.IsCollapsed);
+        graph.SelectLayers(graph.Layers.Take(2).ToArray());
+        Assert.True(inspector.HasMultipleSelection);
+        Assert.Equal(2, inspector.SelectionCount);
+        Assert.Contains("review", graph.SelectionEvidence);
+        Assert.False(inspector.ApplyCompositingTransformCommand.CanExecute(null));
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        Assert.Equal(0, transport.MutationCalls);
+        graph.SelectNodeCommand.Execute(first);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer0"));
+        Assert.Same(first, graph.SelectedLayerRow);
+        Assert.Equal(1, graph.SelectedLayerCount);
+        inspector.SelectedLayerPositionX = 0.42;
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:layer7"));
+        Assert.Contains("transform:layer0:", inspector.CompositingRecoveryStatus);
+        Assert.DoesNotContain("transform:layer7:", inspector.CompositingRecoveryStatus);
+        Assert.Equal(0.1, inspector.SelectedLayerPositionX);
+        Assert.False(first.IsSelected);
+        Assert.Equal(1, graph.SelectedLayerCount);
+        graph.StageLayerOrder("layer7", "layer0");
+        Assert.Equal("layer:layer7", graph.Layers[0].Id);
+        Assert.Equal("layer0", owner.CompositingLayers[0].LayerId);
+        Assert.Contains("DRAFT", graph.OrderEvidence);
+        graph.DiscardOrderDraftCommand.Execute(null);
+        Assert.Equal("layer:layer0", graph.Layers[0].Id);
+        graph.ZoomAt(1.12, 150, 110); graph.PanBy(-40, -20); graph.Fit();
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
+    public async Task Compositing_visibility_opacity_and_order_are_local_until_apply_and_rejected_drafts_survive()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "layer:bitmap-graphics"));
+        graph.SelectedLayerRow!.OpacityDraft = 96;
+        graph.SelectedLayerRow.VisibleDraft = false;
+        Assert.Equal(255, owner.CompositingLayers[0].Opacity);
+        Assert.Equal(0, transport.MutationCalls);
+        graph.LayerDraftInputsValid = false;
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        graph.LayerDraftInputsValid = true;
+        transport.Reject = true;
+        graph.ApplyLayerDraftCommand.Execute(null);
+        await UntilAsync(() => !owner.IsBusy);
+        Assert.Equal(96, graph.SelectedLayerRow.OpacityDraft);
+        Assert.Equal(255, owner.CompositingLayers[0].Opacity);
+        Assert.Contains("REJECTED", graph.LayerCommandStatus);
+        transport.Reject = false;
+        graph.ApplyLayerDraftCommand.Execute(null);
+        await UntilAsync(() => !owner.IsBusy);
+        Assert.Equal(96, owner.CompositingLayers[0].Opacity);
+        Assert.False(owner.CompositingLayers[0].Visible);
+        Assert.False(graph.SelectedLayerRow.HasStateDraft);
+    }
+
+    [Fact]
+    public async Task Compositing_missing_bitmap_retains_selection_and_dirty_intent_until_identity_returns()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "layer:bitmap-graphics"));
+        graph.SelectedLayerRow!.OpacityDraft = 96;
+        transport.OmitBitmap = true;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Null(graph.SelectedNode);
+        Assert.Contains("opacity=96", graph.WorkspaceNotice);
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        owner.SynchronizeCommand.Execute(null);
+        transport.OmitBitmap = false;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Equal("layer:bitmap-graphics", graph.SelectedNode!.Id);
+        Assert.Contains("opacity=96", graph.WorkspaceNotice);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
+    public async Task Compositing_stale_revision_retains_intent_for_explicit_matching_recovery_and_local_undo()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.SelectNodeCommand.Execute(graph.Nodes.Single(node => node.Id == "transform:bitmap-graphics"));
+        inspector.SelectedLayerPositionX = 0.72;
+        transport.FailSnapshots = true;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.True(owner.IsStale);
+        Assert.Contains("RECOVERY", inspector.CompositingRecoveryStatus);
+        Assert.False(inspector.RestoreCompositingIntentCommand.CanExecute(null));
+        transport.FailSnapshots = false; transport.RevisionValue++;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.True(inspector.RestoreCompositingIntentCommand.CanExecute(null));
+        inspector.RestoreCompositingIntentCommand.Execute(null);
+        Assert.Equal(0.72, inspector.SelectedLayerPositionX);
+        Assert.Equal(0.1, owner.CompositingLayers[0].PositionX);
+        inspector.UndoInspectorDraftCommand.Execute(null);
+        Assert.Equal(0.1, inspector.SelectedLayerPositionX);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
 	internal static async Task VerifyWindowAsync(MainWindow owner, Dispatcher dispatcher)
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
@@ -203,7 +367,7 @@ public sealed class InspectorPrecisionTests
 			processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1)), new("key", 2, true, chromaKey: new(0, 255, 0, 0.1, 0.1, 0))]);
 		internal int MutationCalls;
 		internal TaskCompletionSource? Hold;
-		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue;
+		internal bool Reject, FailSnapshots, ManyLayers, RemoteCut, OmitSecondCue, OmitBitmap;
         internal ulong RevisionValue = 1;
         internal string SourceId => _source.ToString();
         internal readonly ProductionSourceId OtherSource = ProductionSourceId.New();
@@ -239,13 +403,25 @@ public sealed class InspectorPrecisionTests
         private IReadOnlyList<OperatorCompositingLayerDescriptor> Layers => ManyLayers ?
             Enumerable.Range(0, 8).Select(i => new OperatorCompositingLayerDescriptor("layer" + i, 2, i, true, 255, 0.1, 0.2, 1, "logo.rgba",
                 processingStack: [new("grade", 1, true, colorGrade: new(0, 1, 1))])).ToArray() :
-            [_layer, new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba")];
+            (OmitBitmap ? new OperatorCompositingLayerDescriptor[] { new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba") } :
+            [_layer, new("other", 2, 1, true, 255, 0.1, 0.2, 1, "logo.rgba")]);
 		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
 			FailSnapshots ? ValueTask.FromException<OperatorStatusSnapshot>(new TimeoutException("Unavailable")) :
 			ValueTask.FromResult(new OperatorStatusSnapshot(
 				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(RevisionValue), new ProductionRoutingState(_source, RemoteCut ? OtherSource : _source)),
 				[new(_source.ToString(), "Camera"), new(OtherSource.ToString(), "Camera 2")], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0,
 				compositingLayers: Layers, audioInputs: [Audio(SourceId), Audio(OtherSource.ToString())]));
+
+        public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+            string layerId, bool visible, byte opacity, CancellationToken cancellationToken = default)
+        {
+            MutationCalls++;
+            if (Reject) throw new InvalidOperationException("control.compositing.rejected");
+            _layer = new(layerId, 2, _layer.Order, visible, opacity, _layer.PositionX, _layer.PositionY,
+                _layer.Scale, _layer.ContentIdentity, _layer.RotationDegrees, _layer.AnchorX, _layer.AnchorY,
+                _layer.CropLeft, _layer.CropTop, _layer.CropRight, _layer.CropBottom, processingStack: _layer.ProcessingStack);
+            return ValueTask.FromResult(Layers);
+        }
 		public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerTransformAsync(
 			string layerId, double x, double y, double scale, double rotation, double ax, double ay,
 			double left, double top, double right, double bottom, CancellationToken cancellationToken = default)
