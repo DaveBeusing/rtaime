@@ -22,11 +22,18 @@ public sealed partial class ShowProjectPersistenceStore
         var document = JsonSerializer.Deserialize<OutputCanvasDocument>(json, OutputCanvasJson.Options)
             ?? throw new InvalidDataException("Canvas document is required.");
         if (document.Format != CanvasFormat || document.Saved is null || document.History is null || document.Receipts is null ||
-            document.History.Length > 4 || document.Receipts.Length > 64 ||
+            document.Saved.EditRevision == 0 || document.History.Length > 4 || document.Receipts.Length is < 1 or > 64 ||
             document.Receipts.Any(r => r is null || r.TransactionId == Guid.Empty || r.Revision == 0 || r.Revision > document.Saved.EditRevision ||
                 r.RequestSha256 is null || r.RequestSha256.Length != 64 || r.RequestSha256.Any(c => !Uri.IsHexDigit(c))) ||
             document.Receipts.Select(r => r.TransactionId).Distinct().Count() != document.Receipts.Length)
             throw new InvalidDataException("Unsupported or invalid canvas history/receipt document.");
+        if (document.History.Any(model => model is null) ||
+            document.History.Select(model => model.EditRevision).Distinct().Count() != document.History.Length ||
+            !document.History.Select(model => model.EditRevision).SequenceEqual(document.History.Select(model => model.EditRevision).Order()) ||
+            document.History.Any(model => model.EditRevision >= document.Saved.EditRevision) ||
+            document.Receipts.Select(receipt => receipt.Revision).Distinct().Count() != document.Receipts.Length ||
+            !document.Receipts.Any(receipt => receipt.Revision == document.Saved.EditRevision))
+            throw new InvalidDataException("Canvas history and receipts must retain coherent committed revisions.");
         foreach (var model in document.History.Append(document.Saved))
         {
             if (model is null || !OutputCanvasModel.Validate(model).IsValid ||

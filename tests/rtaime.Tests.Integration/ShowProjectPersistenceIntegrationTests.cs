@@ -589,7 +589,10 @@ public sealed class ShowProjectPersistenceIntegrationTests
                     Assert.True(write.Saved);
                 }
                 var retained = await store.LoadAsync(specification);
-                Assert.Equal(4,ShowProjectPersistenceStore.ReadOutputCanvasDocument(retained.OutputCanvasJson!).History.Length);
+                var canvasHistory = ShowProjectPersistenceStore.ReadOutputCanvasDocument(retained.OutputCanvasJson!);
+                Assert.Equal(4,canvasHistory.History.Length);
+                Assert.Throws<InvalidDataException>(() => ShowProjectPersistenceStore.ReadOutputCanvasDocument(
+                    System.Text.Json.JsonSerializer.Serialize(canvasHistory with { History=[canvasHistory.Saved] },OutputCanvasJson.Options)));
                 var beforeCancel = await management.GetDocumentAsync("show.project",specification.ProductionId.ToString());
                 Assert.Equal("rtaime.show-project.v2",JsonNode.Parse(beforeCancel!.Json)!["format"]!.GetValue<string>());
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
@@ -608,6 +611,17 @@ public sealed class ShowProjectPersistenceIntegrationTests
             var document = await reopened.GetDocumentAsync("show.project",specification.ProductionId.ToString());
             var outer = JsonNode.Parse(document!.Json)!;
             var canvas = JsonNode.Parse(outer["outputCanvasJson"]!.GetValue<string>())!;
+            var sourceSurface = canvas["saved"]!["surfaces"]!.AsArray().Single(node => node!["input"]!["sourceId"] is not null)!;
+            var originalSource = sourceSurface["input"]!["sourceId"]!.GetValue<string>();
+            sourceSurface["input"]!["sourceId"] = Guid.NewGuid().ToString();
+            outer["outputCanvasJson"] = canvas.ToJsonString();
+            var missingSource = await reopened.PutDocumentAsync("show.project",specification.ProductionId.ToString(),outer.ToJsonString(),document.Version);
+            Assert.True(missingSource.Written);
+            var rejected = await Assert.ThrowsAsync<InvalidDataException>(async () => await recoveredStore.LoadAsync(specification));
+            Assert.Contains("Persisted canvas references",rejected.Message);
+            Assert.Equal(missingSource.Document,await reopened.GetDocumentAsync("show.project",specification.ProductionId.ToString()));
+            sourceSurface["input"]!["sourceId"] = originalSource;
+            document = missingSource.Document;
             canvas["saved"]!["version"] = "2.0";
             outer["outputCanvasJson"] = canvas.ToJsonString();
             var future = await reopened.PutDocumentAsync("show.project",specification.ProductionId.ToString(),outer.ToJsonString(),document.Version);

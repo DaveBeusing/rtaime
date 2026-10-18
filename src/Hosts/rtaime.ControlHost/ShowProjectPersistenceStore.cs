@@ -807,7 +807,16 @@ public sealed partial class ShowProjectPersistenceStore
 		ValidateAdoptedSources(baseline, project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>());
 		ValidateScenes(effective, project.Scenes);
 		ValidateGraphics(project.Graphics);
-		if (project.OutputCanvasJson is { } canvasJson) _ = ReadOutputCanvasDocument(canvasJson);
+		if (project.OutputCanvasJson is { } canvasJson)
+        {
+            var canvas = ReadOutputCanvasDocument(canvasJson).Saved;
+            var validation = rtaime.Control.OutputCanvasModel.Validate(canvas,
+                effective.Sources.Select(source => source.SourceId.ToString()).ToArray(),
+                baseline.InitialOutputRoles.Select(role => role.RoleId.ToString()).ToArray());
+            if (!validation.IsValid)
+                throw new InvalidDataException("Persisted canvas references are invalid: " +
+                    string.Join("; ", validation.Issues.Select(issue => issue.Message)));
+        }
 		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, effective);
 		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(effective), effective);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
