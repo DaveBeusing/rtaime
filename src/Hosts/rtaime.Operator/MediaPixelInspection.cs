@@ -195,7 +195,9 @@ public static class MediaPixelInspection
 		int sourceHeight)
 	{
 		if (sourceWidth <= 0 || sourceHeight <= 0 || presentation.Scale <= 0 ||
-			!double.IsFinite(pointerXDip) || !double.IsFinite(pointerYDip))
+			!double.IsFinite(pointerXDip) || !double.IsFinite(pointerYDip) ||
+			!double.IsFinite(dpiScaleX) || !double.IsFinite(dpiScaleY) || dpiScaleX <= 0 || dpiScaleY <= 0 ||
+			!double.IsFinite(presentation.Scale) || !double.IsFinite(presentation.X) || !double.IsFinite(presentation.Y))
 			return default;
 
 		var physicalX = pointerXDip * dpiScaleX;
@@ -203,8 +205,8 @@ public static class MediaPixelInspection
 		var sourceX = (physicalX - presentation.X) / presentation.Scale;
 		var sourceY = (physicalY - presentation.Y) / presentation.Scale;
 		return new MediaPixelCoordinate(
-			Math.Clamp((int)Math.Floor(sourceX), 0, sourceWidth - 1),
-			Math.Clamp((int)Math.Floor(sourceY), 0, sourceHeight - 1));
+			(int)Math.Floor(Math.Clamp(sourceX, 0, sourceWidth - 1)),
+			(int)Math.Floor(Math.Clamp(sourceY, 0, sourceHeight - 1)));
 	}
 
 	public static MediaPixelCoordinate MapSourceToMonitoringSample(

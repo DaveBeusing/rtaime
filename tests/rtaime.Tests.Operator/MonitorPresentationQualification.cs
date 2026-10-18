@@ -2,6 +2,11 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using rtaime.Core;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+using Vortice.Mathematics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -140,6 +145,8 @@ internal static class MonitorPresentationQualification
 				using var output = File.Create(Path.Combine(evidence, "program-viewer-fallback.png"));
 				encoder.Save(output);
 			}
+			
+			await VerifySharedGpuAsync(viewer, surface, dispatcher);
 			host.Children.Remove(viewer);
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
@@ -166,6 +173,98 @@ internal static class MonitorPresentationQualification
 				Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 				if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
 			}
+		}
+	}
+
+	private static async Task VerifySharedGpuAsync(ProgramViewer viewer, GpuMonitorPresentationSurface surface, Dispatcher dispatcher)
+	{
+		// A synthetic D3D pattern tests Operator interop, separately from the live Runtime observation.
+		ID3D11Device1? device = null;
+		ID3D11DeviceContext1? context = null;
+		var verifyPixel = false;
+		var pixelVerified = false;
+		void Draw(object? sender, OperatorSurfaceDrawEventArgs args)
+		{
+			device = args.Device;
+			context = args.Context;
+			if (!verifyPixel || !viewer.IsGpuPresentationActive || pixelVerified) return;
+			var description = surface.ColorTexture!.Description;
+			description.Usage = ResourceUsage.Staging;
+			description.BindFlags = BindFlags.None;
+			description.MiscFlags = ResourceOptionFlags.None;
+			description.CPUAccessFlags = CpuAccessFlags.Read;
+			using var readback = args.Device.CreateTexture2D(description);
+			args.Context.CopyResource(readback, surface.ColorTexture);
+			var mapped = args.Context.Map(readback, 0, MapMode.Read);
+			try
+			{
+				var offset = checked((int)(mapped.RowPitch * (description.Height / 2) + (description.Width / 2) * 4));
+				Assert.Equal(0, Marshal.ReadByte(mapped.DataPointer, offset));
+				Assert.Equal(0, Marshal.ReadByte(mapped.DataPointer, offset + 1));
+				Assert.Equal(255, Marshal.ReadByte(mapped.DataPointer, offset + 2));
+				Assert.Equal(255, Marshal.ReadByte(mapped.DataPointer, offset + 3));
+				pixelVerified = true;
+			}
+			finally { args.Context.Unmap(readback, 0); }
+		}
+		surface.Draw += Draw;
+		try
+		{
+			surface.Invalidate();
+			await WaitAsync(() => device is not null && context is not null, dispatcher, "borrow existing viewer device");
+			using var texture = device!.CreateTexture2D(new Texture2DDescription
+			{
+				Width = 1920, Height = 1080, MipLevels = 1, ArraySize = 1,
+				Format = Format.R8G8B8A8_UNorm, SampleDescription = new SampleDescription(1, 0),
+				Usage = ResourceUsage.Default, BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+				MiscFlags = ResourceOptionFlags.Shared
+			});
+			using var target = device.CreateRenderTargetView(texture);
+			context!.ClearRenderTargetView(target, new Color4(1, 0, 0, 1));
+			context.Flush();
+			using var dxgiResource = texture.QueryInterface<IDXGIResource>();
+			using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
+			using var adapter = dxgiDevice.GetAdapter();
+			using var adapter1 = adapter.QueryInterface<IDXGIAdapter1>();
+			var luid = adapter1.Description1.Luid;
+			var adapterLuid = ((long)luid.HighPart << 32) | luid.LowPart;
+			var resourceId = MonitoringResourceId.New();
+			var provider = Identity.New();
+			OperatorGpuMonitoringFrame Frame(long adapterIdentity, ulong generation, ulong sequence) => new(
+				new MonitoringFrameDescriptor(MonitoringContractVersion.Current, MonitoringStreamKind.Program,
+					MediaSourceId.New(), 320, 180, PixelFormat.Rgba8,
+					new FrameTiming(sequence, checked((long)sequence), new Timebase(1, 50)), ColorDescription.SrgbFullRgba8,
+					MonitoringSharedResourceCapabilityState.Available,
+					new MonitoringSharedResourceDescriptor(resourceId, provider, SurfaceId.New(), VideoFormat.Hd1080p50Rgba8,
+						SurfaceStorageDomain.Shared, MonitoringResourceAccessMode.ReadOnly,
+						new SurfaceLifetimeDescriptor(new Generation(generation), resourceId.Value),
+						new MonitoringSharedResourceInteropDescriptor(MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+							adapterIdentity, unchecked((ulong)dxgiResource.SharedHandle.ToInt64())))));
+			viewer.FitCommand.Execute(null);
+			verifyPixel = true;
+			viewer.GpuFrame = Frame(adapterLuid, 1, 1);
+			await WaitAsync(() => viewer.IsGpuPresentationActive && pixelVerified, dispatcher, "shared GPU shader red pixel");
+			Assert.Contains("GPU SHARED 1920×1080", viewer.PresentationQuality);
+			viewer.Zoom100Command.Execute(null);
+			Assert.Equal(1920 / viewer.DpiScaleX, viewer.PresentationWidth, 6);
+			viewer.InspectionRoi = new MediaInspectionRoi(0, 0, 100, 100);
+			await WaitAsync(() => viewer.RoiInspectionReadout.Contains("64 B transfer", StringComparison.Ordinal),
+				dispatcher, "bounded shared-resource ROI result");
+			viewer.GpuFrame = Frame(adapterLuid ^ 1, 1, 2);
+			await WaitAsync(() => !viewer.IsGpuPresentationActive, dispatcher, "adapter rejection fallback");
+			Assert.Contains("REDUCED CPU 320×180", viewer.PresentationQuality);
+			Assert.Equal(320 / viewer.DpiScaleX, viewer.PresentationWidth, 6);
+			Assert.False(viewer.IsRoiActive);
+			viewer.GpuFrame = Frame(adapterLuid, 2, 1);
+			await WaitAsync(() => viewer.IsGpuPresentationActive, dispatcher, "new resource generation");
+			viewer.GpuFrame = null;
+			await WaitAsync(() => !viewer.IsGpuPresentationActive, dispatcher, "resource retirement");
+			Console.WriteLine("VIEWER SHARED GPU PASS: synthetic red texture through productive shader and native readback; 1920×1080 native basis, 64-byte ROI result, same-ID wrong-adapter fallback, generation restore and resource retirement. This is Operator D3D interop evidence, not provider/CUDA hardware acceptance.");
+		}
+		finally
+		{
+			viewer.GpuFrame = null;
+			surface.Draw -= Draw;
 		}
 	}
 

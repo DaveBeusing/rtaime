@@ -168,4 +168,13 @@ public sealed class MediaPixelInspectionTests
 		Assert.False(MediaPixelInspection.TryMapViewportToSource(20, 20, invalid, 1, rect, 1920, 1080, out _));
 		Assert.False(MediaPixelInspection.TryMapViewportToSource(20, 20, 1, invalid, rect, 1920, 1080, out _));
 	}
+
+	[Fact]
+	public void Clamped_pointer_does_not_wrap_positive_overflow_to_the_opposite_edge()
+	{
+		var rect = MediaPresentationGeometry.Calculate(320, 180, 320, 180, MediaPresentationMode.PixelPerfect);
+		Assert.Equal(new MediaPixelCoordinate(319, 179),
+			MediaPixelInspection.MapViewportToSourceClamped(double.MaxValue, double.MaxValue, 2, 2, rect, 320, 180));
+		Assert.Equal(default, MediaPixelInspection.MapViewportToSourceClamped(20, 20, double.NaN, 1, rect, 320, 180));
+	}
 }
