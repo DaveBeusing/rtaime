@@ -11,6 +11,7 @@ public partial class LiveSceneCueControl : UserControl
 	public LiveSceneCueControl()
 	{
 		InitializeComponent();
+		LiveConsoleInput.Attach(this);
 	}
 
 	private void SceneSearchBox_TextChanged(object sender, TextChangedEventArgs e)

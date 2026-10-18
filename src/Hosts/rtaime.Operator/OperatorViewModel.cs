@@ -561,6 +561,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 	}
 
 	private bool CanControl() =>
+		LiveCommandsBusy?.Invoke() != true &&
 		_client is not null &&
 		IsConnected &&
 		!IsStale &&
@@ -658,15 +659,17 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
-			if (_client is null || IsBusy)
+			if (_client is null || IsBusy || LiveCommandsBusy?.Invoke() == true)
 				continue;
 			var refreshVersion = _audioRefreshDelivery.Version;
 			try
 			{
 				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				var liveObservation = CaptureLiveObservationAsync is { } capture
+					? await capture(cancellationToken).ConfigureAwait(false) : null;
 				_audioRefreshDelivery.Enqueue(refreshVersion, () =>
 				{
-					if (IsBusy) return;
+					if (IsBusy || LiveCommandsBusy?.Invoke() == true) return;
 					var recovered = _hasSynchronized && (IsStale || !IsConnected);
 					if (!_hasSynchronized || recovered)
 					{
@@ -680,6 +683,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 					}
 					else
 					{
+						ApplyLiveEvidence(snapshot);
 						ApplyAudio(snapshot, preserveSelectedGainEdit: true);
 						AudioMixer.Apply(snapshot, refreshDrafts: false);
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
@@ -692,6 +696,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 						ApplyLifecycle(snapshot);
 						UpdateViewerStates(snapshot);
 					}
+					liveObservation?.Invoke();
 					AudioMeterStatus = "LIVE";
 				});
 			}
