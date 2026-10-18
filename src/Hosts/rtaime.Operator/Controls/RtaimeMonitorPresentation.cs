@@ -224,7 +224,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 			e.Handled = true;
 			return;
 		}
-		if (Keyboard.Modifiers != ModifierKeys.None)
+		if (Keyboard.Modifiers != ModifierKeys.None && !(Keyboard.Modifiers == ModifierKeys.Shift && e.Key == Key.OemPlus))
 			return;
 
 		if (e.IsRepeat && e.Key is Key.F or Key.D1 or Key.NumPad1) { e.Handled = true; return; }

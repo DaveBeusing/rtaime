@@ -43,6 +43,8 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	{
 		Interval = TimeSpan.FromMilliseconds(200)
 	};
+	private SizeChangedInfo? _pendingSize;
+	private readonly DispatcherTimer _resizeSettleTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(80) };
 	private const int MaxAnalysisSamples = 262_144;
 	private const int AnalysisResultCount = 16;
 
@@ -82,6 +84,12 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		{
 			if (SurfaceState != OperatorSurfaceState.Ready)
 				Monitor?.SetGpuPresentationState(false, SurfaceDetail);
+		};
+		_resizeSettleTimer.Tick += (_, _) =>
+		{
+			_resizeSettleTimer.Stop();
+			var pending = _pendingSize; _pendingSize = null;
+			if (pending is not null && IsLoaded) base.OnRenderSizeChanged(pending);
 		};
 		DepthStencilFormat = Format.Unknown;
 		ColorFormat = Format.B8G8R8A8_UNorm;
@@ -148,8 +156,16 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	private void OnSurfaceUnloaded(object sender, RoutedEventArgs e)
 	{
+		_resizeSettleTimer.Stop(); _pendingSize = null;
 		_analysisRetryTimer.Stop();
 		Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
+	}
+
+	protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+	{
+		if (!IsLoaded) { base.OnRenderSizeChanged(sizeInfo); return; }
+		Monitor?.SetGpuPresentationState(false, "Resize settling · CPU/WPF fallback");
+		_pendingSize = sizeInfo; _resizeSettleTimer.Stop(); _resizeSettleTimer.Start();
 	}
 
 	// Layout uses DIPs; only the texture allocation converts to physical pixels.

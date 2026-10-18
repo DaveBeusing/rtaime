@@ -490,7 +490,7 @@ public partial class MonitorView : UserControl
 			? $"{diagnostics.SourceWidth}×{diagnostics.SourceHeight}"
 			: "UNAVAILABLE";
 		var target = _viewportWidthDip > 0 && _viewportHeightDip > 0
-			? $"{Math.Max(1, (int)Math.Round(_viewportWidthDip * _dpiScaleX))}×{Math.Max(1, (int)Math.Round(_viewportHeightDip * _dpiScaleY))}"
+			? $"{Math.Max(1, (int)Math.Ceiling(_viewportWidthDip * _dpiScaleX))}×{Math.Max(1, (int)Math.Ceiling(_viewportHeightDip * _dpiScaleY))}"
 			: "UNAVAILABLE";
 		var scale = _presentationRect.Scale > 0 ? $"{_presentationRect.Scale * 100:0.#}%" : "UNAVAILABLE";
 		return $"FRAME {frame}  PTS {pts}  MEDIA {diagnostics.PresentationTime}  RATE {diagnostics.Rate}\n" +
@@ -604,7 +604,7 @@ public partial class MonitorView : UserControl
 
 	internal void ZoomPresentationAt(int direction, double anchorXDip, double anchorYDip)
 	{
-		if ((Frame is null && GpuFrame is null) || direction == 0 || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+		if (!HasPresentedFrame || direction == 0 || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
 			return;
 
 		var (sourceWidth, sourceHeight) = ResolveSourcePixels();
@@ -631,6 +631,7 @@ public partial class MonitorView : UserControl
 
 	internal bool BeginRoiSelectionAt(double pointerXDip, double pointerYDip)
 	{
+		if (!HasPresentedFrame) return false;
 		var (sourceWidthValue, sourceHeightValue) = ResolveSourcePixels();
 		var sourceWidth = Math.Max(1, checked((int)sourceWidthValue));
 		var sourceHeight = Math.Max(1, checked((int)sourceHeightValue));
@@ -765,6 +766,9 @@ public partial class MonitorView : UserControl
 		RefreshPresentationEvidence();
 		if (!HasPresentedFrame)
 		{
+			ClearInspectionRoi();
+			_presentationRect = default;
+			SetValue(IsPixelGridVisiblePropertyKey, false);
 			SetValue(SourcePixelWidthPropertyKey, 0); SetValue(SourcePixelHeightPropertyKey, 0);
 			SetValue(PresentationWidthPropertyKey, 0.0); SetValue(PresentationHeightPropertyKey, 0.0);
 			return;

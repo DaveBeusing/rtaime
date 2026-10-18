@@ -137,4 +137,35 @@ public sealed class MediaPixelInspectionTests
 	{
 		Assert.Equal(8.0, MediaPixelInspection.PixelGridMinimumScale);
 	}
+
+	[Theory]
+	[InlineData(1.0)]
+	[InlineData(1.25)]
+	[InlineData(1.5)]
+	[InlineData(2.0)]
+	public void Native_pixel_centers_round_trip_after_fractional_layout_and_pan(double dpi)
+	{
+		var target = MediaRenderTarget.Create(801.1, 451.1, dpi, dpi);
+		var rect = MediaPresentationGeometry.Calculate(1920, 1080, target.PixelWidth, target.PixelHeight,
+			MediaPresentationMode.PixelPerfect, panX: 37.25, panY: -18.75);
+		Assert.Equal(Math.Floor(rect.X), rect.X);
+		Assert.Equal(Math.Floor(rect.Y), rect.Y);
+		var x = (rect.X + 960.5) / dpi;
+		var y = (rect.Y + 540.5) / dpi;
+		Assert.True(MediaPixelInspection.TryMapViewportToSource(x, y, dpi, dpi, rect, 1920, 1080, out var pixel));
+		Assert.Equal(new MediaPixelCoordinate(960, 540), pixel);
+		Assert.Equal(pixel, MediaPixelInspection.MapViewportToSourceClamped(x, y, dpi, dpi, rect, 1920, 1080));
+	}
+
+	[Theory]
+	[InlineData(double.NaN)]
+	[InlineData(double.PositiveInfinity)]
+	[InlineData(0)]
+	[InlineData(-1)]
+	public void Pointer_mapping_rejects_invalid_dpi_and_scale(double invalid)
+	{
+		var rect = MediaPresentationGeometry.Calculate(1920, 1080, 800, 450, MediaPresentationMode.Fit);
+		Assert.False(MediaPixelInspection.TryMapViewportToSource(20, 20, invalid, 1, rect, 1920, 1080, out _));
+		Assert.False(MediaPixelInspection.TryMapViewportToSource(20, 20, 1, invalid, rect, 1920, 1080, out _));
+	}
 }
