@@ -236,18 +236,26 @@ public sealed partial class OperatorCombinedVisualQualification
         var monitorUnloads = 0;
         RoutedEventHandler monitorUnloaded = (_, _) => monitorUnloads++;
         shell.TemplateName = "Retained local layout draft";
+        var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
+        var originalVisibility = root.Visibility;
+        Console.WriteLine("SHELL CYCLES BEGIN: " + DateTime.UtcNow.ToString("O"));
         try
         {
+            // Prepare inactive layout models without allocating discarded GPU targets for each
+            // intermediate enabled/disabled topology. Every measured cycle below is visible.
+            root.Visibility = Visibility.Collapsed;
             foreach (var id in OperatorWorkspaceNames.All)
             {
                 shell.SelectWorkspace(id); layouts[id] = shell.Docking;
                 shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
             }
+            root.Visibility = originalVisibility;
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             panels["MONITORS"].Unloaded += monitorUnloaded;
             for (var cycle = 0; cycle < 100; cycle++)
             {
+                Assert.True(window.IsVisible && root.IsVisible);
                 shell.SelectWorkspace(OperatorWorkspaceNames.All[cycle % OperatorWorkspaceNames.All.Count]);
                 window.Docking.Float("INSPECTOR");
                 await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
@@ -269,8 +277,13 @@ public sealed partial class OperatorCombinedVisualQualification
         finally
         {
             panels["MONITORS"].Unloaded -= monitorUnloaded;
-            foreach (var entry in layouts) { shell.SelectWorkspace(entry.Key); shell.SetDocking(entry.Value); }
-            shell.TemplateName = templateName; shell.SelectWorkspace(original);
+            try
+            {
+                root.Visibility = Visibility.Collapsed;
+                foreach (var entry in layouts) { shell.SelectWorkspace(entry.Key); shell.SetDocking(entry.Value); }
+                shell.TemplateName = templateName; shell.SelectWorkspace(original);
+            }
+            finally { root.Visibility = originalVisibility; }
         }
     }
 

@@ -91,6 +91,7 @@ public sealed partial class OperatorCombinedVisualQualification
                 }
             }
             Assert.False(model.IsConnected);
+            Console.WriteLine("SHELL STATES BEGIN: " + DateTime.UtcNow.ToString("O"));
             await CaptureState("no-data");
             transport.Offline = false;
             model.SynchronizeCommand.Execute(null);

@@ -34,7 +34,6 @@ public sealed partial class OperatorXamlStartupTests
             {
                 await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(45));
                 var report = await stdout;
-                Console.WriteLine(report);
                 Assert.True(process.ExitCode == 0, report + Environment.NewLine + await stderr);
                 Assert.Contains("SHELL CYCLES PASS: 100", report);
                 Assert.Contains("SHELL STATES PASS: 80", report);
@@ -46,6 +45,9 @@ public sealed partial class OperatorXamlStartupTests
                     process.Kill(entireProcessTree: true);
                     await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
                 }
+                // Retain phase output even when the unchanged process watchdog expires.
+                Console.WriteLine(await stdout);
+                Console.WriteLine(await stderr);
             }
             return;
         }
