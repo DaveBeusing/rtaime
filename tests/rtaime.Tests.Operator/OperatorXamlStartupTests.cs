@@ -146,38 +146,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					await OperatorControlDesignSystemQualification.VerifyAsync(window, dispatcher);
 					Assert.True(window.IsLoaded && window.IsVisible);
 
-					foreach (var workspace in OperatorWorkspaceNames.All)
-					{
-						target = $"MainWindow/{workspace}";
-						Console.WriteLine($"WORKSPACE BEGIN [{workspace}]");
-						window.Shell.SelectWorkspace(workspace);
-						await Task.Delay(25);
-						Console.WriteLine($"VIEWPORT [{workspace}] {window.ActualWidth}x{window.ActualHeight}; compact={window.Shell.IsCompactViewport}; right={window.Shell.RightColumnWidth}");
-						await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
-						foreach (var name in new[]
-						{
-							"TopBar", "WorkspaceNavigation", "LeftToolRegion", "CenterWorkspace",
-							"RightInspectorRegion", "LowerTimelineRegion", "BottomTransportRegion"
-						})
-						{
-							var region = Assert.IsAssignableFrom<FrameworkElement>(window.FindName(name));
-							Assert.True(region.IsLoaded, $"{workspace}/{name}: pane was omitted from the real window.");
-							var allocated = name switch
-							{
-								"RightInspectorRegion" => window.Shell.RightColumnWidth.Value > 0,
-								"LeftToolRegion" => window.Shell.LeftColumnWidth.Value > 0,
-								_ => true
-							};
-							if (region.IsVisible && allocated)
-							{
-								Assert.True(region.ActualWidth > 0 && region.ActualHeight > 0,
-									$"{workspace}/{name}: visible pane has empty layout.");
-							}
-						}
-						Assert.NotEmpty(VisualDescendants(window).OfType<PreviewViewer>());
-						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
-						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
-					}
+                    // Workspace pane/viewer assertions run in every row of the existing 40-case matrix below.
                     observedSurfaces = VisualDescendants(window).OfType<OperatorDrawingSurface>().ToArray();
                     var identity = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
                     var monitoring = window.Monitoring;

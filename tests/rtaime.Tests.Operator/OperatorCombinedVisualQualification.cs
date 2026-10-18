@@ -84,6 +84,30 @@ public sealed class OperatorCombinedVisualQualification
                     }, DispatcherPriority.Loaded);
                     Assert.Equal(width, root.ActualWidth, 1);
                     Assert.Equal(height, root.ActualHeight, 1);
+                    // Fold the original eight-workspace pane/viewer warmup into this stronger matrix;
+                    // avoid eight extra native layout/target cycles without dropping an assertion.
+                    foreach (var paneName in new[]
+                    {
+                        "TopBar", "WorkspaceNavigation", "LeftToolRegion", "CenterWorkspace",
+                        "RightInspectorRegion", "LowerTimelineRegion", "BottomTransportRegion"
+                    })
+                    {
+                        var pane = Assert.IsAssignableFrom<FrameworkElement>(window.FindName(paneName));
+                        Assert.True(pane.IsLoaded, $"{workspace}/{paneName}: pane was omitted from the real window.");
+                        var allocated = paneName switch
+                        {
+                            "RightInspectorRegion" => window.Shell.RightColumnWidth.Value > 0,
+                            "LeftToolRegion" => window.Shell.LeftColumnWidth.Value > 0,
+                            _ => true
+                        };
+                        if (pane.IsVisible && allocated)
+                        {
+                            Assert.True(pane.ActualWidth > 0 && pane.ActualHeight > 0,
+                                $"{workspace}/{paneName}: visible pane has empty layout.");
+                        }
+                    }
+                    Assert.NotEmpty(Descendants(window).OfType<PreviewViewer>());
+                    Assert.NotEmpty(Descendants(window).OfType<ProgramViewer>());
                     var first = Capture(window, root);
                     Assert.All(Descendants(root).OfType<OperatorDrawingSurface>(),
                         surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
