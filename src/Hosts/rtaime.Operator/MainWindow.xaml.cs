@@ -95,9 +95,9 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		ShowControl = new ShowControlViewModel(client);
+		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
-		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
+		_liveConsole = new LiveConsoleBinding(viewModel, Rundown, ShowControl);
 
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -207,9 +207,9 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		ShowControl = new ShowControlViewModel(client);
+		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
-		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
+		_liveConsole = new LiveConsoleBinding(viewModel, Rundown, ShowControl);
 
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -292,6 +292,7 @@ public partial class MainWindow : Window
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
 	public NdiSourceDiscoveryViewModel NdiSources { get; }
+	private readonly LiveConsoleBinding _liveConsole;
 	public RundownViewModel Rundown { get; }
 	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
@@ -618,6 +619,7 @@ public partial class MainWindow : Window
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
+				_liveConsole.Dispose();
 				await viewModel.DisposeAsync();
 			}
 			else

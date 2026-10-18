@@ -75,6 +75,15 @@ public sealed class OperatorKeyboardCommandRegistry
 			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
+		// Enter on a focused cue button belongs to that explicit button; list/context Enter never takes.
+		if (key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None &&
+			(LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is not null ||
+			 LiveConsoleInput.IsCueSurface(Keyboard.FocusedElement as System.Windows.DependencyObject)))
+		{
+			if (args.IsRepeat || LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is null)
+			{ args.Handled = true; return true; }
+			return false;
+		}
 		var handled = TryHandle(key, Keyboard.Modifiers, args.IsRepeat, IsTextEntryContext(), ResolveScope());
 		if (handled) args.Handled = true;
 		return handled;
