@@ -77,13 +77,16 @@ public sealed class HighResolutionOutputAdmissionTests
 	}
 
 	[Theory]
-	[InlineData(8, AlphaMode.Straight)]
-	[InlineData(10, AlphaMode.Straight)]
-	[InlineData(8, AlphaMode.Premultiplied)]
-	public void Changing_HD_color_precision_or_alpha_does_not_inherit_legacy_capabilities(byte bitDepth, AlphaMode alpha)
+	[InlineData(8, AlphaMode.Straight, true)]
+	[InlineData(10, AlphaMode.Straight, false)]
+	[InlineData(8, AlphaMode.Premultiplied, false)]
+	public void Changing_HD_color_precision_or_alpha_does_not_inherit_legacy_capabilities(
+		byte bitDepth, AlphaMode alpha, bool explicitColor)
 	{
-		var color = new ColorDescription(ColorPrimaries.Rec709, ColorTransfer.Rec709,
-			ColorMatrix.IdentityRgb, NominalRange.Full, bitDepth, alpha, ColorMetadataAuthority.Authoritative);
+		var legacy = ColorDescription.UnknownRgba8;
+		var color = explicitColor ? ColorDescription.Rec709FullRgba8 :
+			new ColorDescription(legacy.Primaries, legacy.Transfer, legacy.Matrix,
+				legacy.Range, bitDepth, alpha, legacy.Authority);
 		var format = new VideoFormat(1920, 1080, FrameRate.Fps50,
 			PixelFormat.Rgba8, ScanMode.Progressive, color);
 
