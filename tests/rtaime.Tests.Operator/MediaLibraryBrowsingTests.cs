@@ -339,20 +339,20 @@ public sealed class MediaLibraryBrowsingTests
 	{
 		owner.Shell.SelectWorkspace("MEDIA");
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
-		var combo = Assert.IsType<RtaimeComboBox>(owner.FindName("MediaSmartBins"));
-        var search = Assert.IsType<RtaimeSearchBox>(owner.FindName("MediaSearchBox"));
+		var combo = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaSmartBins"));
+        var search = Assert.IsType<RtaimeSearchBox>(owner.MediaLibraryView.FindName("MediaSearchBox"));
         Assert.Equal(180, System.Windows.Data.BindingOperations.GetBindingExpression(search, TextBox.TextProperty)!.ParentBinding.Delay);
-        var results = Assert.IsType<RtaimeListBox>(owner.FindName("MediaBatchResults"));
+        var results = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaBatchResults"));
         Assert.Equal("Media batch preflight and results", AutomationProperties.GetName(results));
         Assert.True(VirtualizingPanel.GetIsVirtualizing(results));
         Assert.Contains(Descendants(owner).OfType<RtaimeButton>(), button => AutomationProperties.GetName(button) == "Confirm media batch");
 
-		var grid = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetGrid"));
-		var list = Assert.IsType<RtaimeListBox>(owner.FindName("MediaAssetList"));
+		var grid = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaAssetGrid"));
+		var list = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaAssetList"));
 		// Hosted displays can constrain the main window to compact mode, where the shell
 		// deliberately allocates no left column. Host the actual Library subtree visibly
 		// within the same Window; preserve its bindings, commands, resources and handlers.
-		var library = Assert.IsType<Grid>(Assert.IsType<Grid>(grid.Parent).Parent);
+		var library = owner.MediaLibraryView;
 		var parent = Assert.IsAssignableFrom<Panel>(library.Parent);
 		var root = Assert.IsType<Grid>(owner.Content);
 		var originalIndex = parent.Children.IndexOf(library);
@@ -378,7 +378,7 @@ public sealed class MediaLibraryBrowsingTests
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 			Assert.Equal(Visibility.Visible, owner.MediaPool.MetadataFiltersVisibility);
-			var name = Assert.IsType<RtaimeTextBox>(owner.FindName("MediaSmartBinName"));
+			var name = Assert.IsType<RtaimeTextBox>(owner.MediaLibraryView.FindName("MediaSmartBinName"));
 			Assert.True(name.IsVisible); Assert.True(name.Focus()); Assert.Equal("Smart Bin name", AutomationProperties.GetName(name));
 			var previousName = owner.MediaPool.SmartBinName;
 			name.Text = "Inspection bin"; name.GetBindingExpression(TextBox.TextProperty)!.UpdateSource();
@@ -429,7 +429,7 @@ public sealed class MediaLibraryBrowsingTests
                         var target = Descendants(container).OfType<FrameworkElement>().First(element => element.ContextMenu is not null);
                         var menu = target.ContextMenu!;
                         var pendingHover = owner.MediaPool.BeginHoverAsync((MediaPoolItemViewModel)browser.Items[0]);
-                        owner.PrepareMediaLibraryContextMenu(target);
+                        owner.MediaLibraryView.PrepareMediaLibraryContextMenu(target);
                         menu.PlacementTarget = target; menu.IsOpen = true;
                         try
                         {
@@ -446,7 +446,7 @@ public sealed class MediaLibraryBrowsingTests
                         await pendingHover;
                         browser.SelectedItems.Clear(); browser.SelectedItems.Add(browser.Items[0]);
                         owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
-                        owner.PrepareMediaLibraryContextMenu(target);
+                        owner.MediaLibraryView.PrepareMediaLibraryContextMenu(target);
                         Assert.All(menu.Items.OfType<RtaimeMenuItem>(), entry => Assert.True(entry.IsEnabled));
                         browser.SelectedItems.Clear();
                         owner.MediaPool.UpdateSelection([]);
