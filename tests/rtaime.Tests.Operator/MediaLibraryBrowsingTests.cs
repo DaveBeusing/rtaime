@@ -430,6 +430,18 @@ public sealed class MediaLibraryBrowsingTests
 			// Focus recovery from a hidden text field can otherwise compete with later ScrollIntoView.
 			Assert.True(combo.Focus());
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
+            // A hidden refresh preserves keys but replaces projected records. Re-show must adopt current objects.
+            owner.MediaPool.UpdateSelection(owner.MediaPool.FilteredItems.Take(2));
+            var selectedKeys = owner.MediaPool.SelectedItems.Select(item => item.Key).ToArray();
+            var visibility = library.Visibility;
+            library.SetCurrentValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+            owner.MediaPool.Refresh();
+            library.SetCurrentValue(UIElement.VisibilityProperty, visibility);
+            await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.Equal(selectedKeys.OrderBy(key => key), owner.MediaPool.SelectedItems.Select(item => item.Key).OrderBy(key => key));
+            Assert.All(owner.MediaPool.SelectedItems, item =>
+                Assert.Same(owner.MediaPool.FilteredItems.Single(current => current.Key == item.Key), item));
+            owner.MediaPool.UpdateSelection([]);
 			var items = owner.MediaPool.FilteredItems.ToArray();
 			foreach (var browser in new[] { grid, list })
 			{

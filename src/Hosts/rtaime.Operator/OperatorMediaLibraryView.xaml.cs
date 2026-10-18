@@ -128,7 +128,7 @@ public partial class OperatorMediaLibraryView : UserControl
 	private bool MatchesSelection(ListBox listBox) =>
         listBox.SelectedItems.Count == MediaPool.SelectedItems.Count &&
         listBox.SelectedItems.Cast<MediaPoolItemViewModel>().All(item =>
-            MediaPool.SelectedItems.Any(selected => string.Equals(selected.Key, item.Key, StringComparison.Ordinal)));
+            MediaPool.SelectedItems.Any(selected => ReferenceEquals(selected, item)));
 
 	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
 	{
