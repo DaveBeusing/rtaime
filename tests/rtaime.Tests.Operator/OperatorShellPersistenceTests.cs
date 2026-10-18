@@ -42,6 +42,28 @@ public sealed class OperatorShellPersistenceTests
         finally { Directory.Delete(root, true); }
     }
     [Fact]
+    public async Task Nested_future_dock_versions_are_retained_and_rejected_by_portable_import()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-shell-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root); var path = Path.Combine(root, "layout.json");
+        try
+        {
+            var settings = OperatorLayoutSettings.Default;
+            settings.Workspaces["LIVE"] = settings.Workspaces["LIVE"] with {
+                Docking = OperatorDockLayout.Default with { Version = 999 } };
+            var original = JsonSerializer.Serialize(settings);
+            await File.WriteAllTextAsync(path, original);
+            var store = new OperatorLayoutStore(path); _ = store.Load();
+            await store.SaveAsync(OperatorLayoutSettings.Default);
+            Assert.NotNull(store.LastSaveError); Assert.Equal(original, await File.ReadAllTextAsync(path));
+            await Assert.ThrowsAsync<InvalidDataException>(() => OperatorWorkspaceTemplateFiles.ImportAsync(path));
+            var fresh = new OperatorLayoutStore(Path.Combine(root, "new.json"));
+            await fresh.SaveAsync(settings);
+            Assert.NotNull(fresh.LastSaveError); Assert.False(File.Exists(Path.Combine(root, "new.json")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    [Fact]
     public async Task Failed_temporary_write_keeps_the_previous_committed_layout()
     {
         var root = Path.Combine(Path.GetTempPath(), "rtaime-shell-" + Guid.NewGuid().ToString("N"));

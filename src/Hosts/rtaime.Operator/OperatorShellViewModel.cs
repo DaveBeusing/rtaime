@@ -240,8 +240,12 @@ public sealed class OperatorLayoutStore
                 LoadWarning = "Layout belongs to a newer version; the original file is preserved and saving is blocked.";
                 return OperatorLayoutSettings.Default;
             }
-			return (JsonSerializer.Deserialize<OperatorLayoutSettings>(json, SerializerOptions) ?? OperatorLayoutSettings.Default)
-				.Normalize();
+			if (HasFutureDocking(document.RootElement))
+            {
+                _futureVersion = true; LoadWarning = "Layout contains a newer docking version; original file preserved.";
+                return OperatorLayoutSettings.Default;
+            }
+            return (JsonSerializer.Deserialize<OperatorLayoutSettings>(json, SerializerOptions) ?? OperatorLayoutSettings.Default).Normalize();
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
 		{
@@ -249,10 +253,29 @@ public sealed class OperatorLayoutStore
 		}
 	}
 
+    internal static bool HasFutureDocking(JsonElement root)
+    {
+        static bool FutureLayout(JsonElement layout) =>
+            layout.ValueKind == JsonValueKind.Object && layout.TryGetProperty("Docking", out var docking) &&
+            docking.ValueKind == JsonValueKind.Object && docking.TryGetProperty("Version", out var version) &&
+            version.ValueKind == JsonValueKind.Number && version.TryGetDouble(out var value) &&
+            value > OperatorDockLayout.Default.Version;
+        static bool FutureTemplate(JsonElement template) =>
+            template.ValueKind == JsonValueKind.Object && template.TryGetProperty("Layout", out var layout) && FutureLayout(layout);
+        if (root.ValueKind != JsonValueKind.Object) return false;
+        if (root.TryGetProperty("Workspaces", out var workspaces) && workspaces.ValueKind == JsonValueKind.Object &&
+            workspaces.EnumerateObject().Any(p => FutureLayout(p.Value))) return true;
+        if (root.TryGetProperty("Templates", out var templates) && templates.ValueKind == JsonValueKind.Array &&
+            templates.EnumerateArray().Any(FutureTemplate)) return true;
+        return root.TryGetProperty("Template", out var single) && FutureTemplate(single);
+    }
+
 	public Task SaveAsync(OperatorLayoutSettings settings)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
-        if (_futureVersion || settings.Version is < 2 or > OperatorLayoutSettings.CurrentVersion)
+        if (_futureVersion || settings.Version is < 2 or > OperatorLayoutSettings.CurrentVersion ||
+            settings.Workspaces?.Values.Any(l => l?.Docking is { } d && d.Version > OperatorDockLayout.Default.Version) == true ||
+            settings.Templates?.Any(t => t?.Layout?.Docking is { } d && d.Version > OperatorDockLayout.Default.Version) == true)
         { LastSaveError = LoadWarning ?? "Unsupported layout version; original file preserved."; return Task.CompletedTask; }
 		var normalized = settings.Normalize();
 		var json = JsonSerializer.Serialize(normalized, SerializerOptions);
@@ -287,6 +310,8 @@ public sealed class OperatorLayoutStore
                 try
                 {
                     using var current = JsonDocument.Parse(await File.ReadAllTextAsync(_path).ConfigureAwait(false));
+                    if (HasFutureDocking(current.RootElement))
+                    { LastSaveError = "A newer docking layout was found; original file preserved."; return; }
                     if (current.RootElement.ValueKind == JsonValueKind.Object &&
                         current.RootElement.TryGetProperty("Version", out var version) && version.ValueKind == JsonValueKind.Number && version.TryGetDouble(out var schema) &&
                         schema > OperatorLayoutSettings.CurrentVersion)
