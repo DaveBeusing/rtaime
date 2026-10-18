@@ -41,11 +41,16 @@ public sealed partial class ShowProjectPersistenceStore
         if (library.Version != SequenceContract.Version || library.Sequences is null ||
             library.Sequences.Length > SequenceContract.MaximumSequences || library.Sequences.Any(s => s is null))
             return [new("sequence.library", "$", "Unsupported or oversized sequence library.")];
-        var issues = library.Sequences.SelectMany(s => SequenceModel.Validate(s, library.Revision, assets, buses).Issues).ToList();
+        var issues = library.Sequences.SelectMany(s => SequenceModel.Validate(s, library.Revision, assets, buses).Issues).Take(128).ToList();
         if (issues.Count != 0) return issues.ToArray();
         var identities = library.Sequences.SelectMany(s => new[] { s.SequenceId }
             .Concat(s.Tracks.Select(t => t.TrackId)).Concat(s.Clips.Select(c => c.ClipId))
             .Concat(s.Transitions.Select(t => t.TransitionId))).ToArray();
+        var links = library.Sequences.SelectMany(s => s.Clips.Where(c => c.LinkGroupId is not null)
+            .Select(c => (Group: c.LinkGroupId!.Value, Sequence: s.SequenceId))).ToArray();
+        if (links.Any(l => identities.Contains(l.Group)) ||
+            links.GroupBy(l => l.Group).Any(g => g.Select(l => l.Sequence).Distinct().Count() != 1))
+            issues.Add(new("sequence.link", "$", "Link group identities must be distinct from all show entities and confined to one sequence."));
         if (identities.Distinct().Count() != identities.Length)
             issues.Add(new("sequence.identity", "$", "Entity identities must be unique across the show library."));
         if (library.Sequences.Sum(s => s.Tracks.Length) > SequenceContract.MaximumTracks ||

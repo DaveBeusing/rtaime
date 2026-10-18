@@ -8,7 +8,7 @@ public static class SequenceModel
         IReadOnlyCollection<SequenceAsset>? assets = null, IReadOnlyCollection<string>? audioBuses = null)
     {
         var issues = new List<SequenceIssue>();
-        void Error(string code,string path,string message) => issues.Add(new(code,path,message));
+        void Error(string code,string path,string message) { if (issues.Count < 128) issues.Add(new(code,path,message)); }
         if (model.Version != SequenceContract.Version) Error("sequence.version","version","Unsupported sequence capability version.");
         if (model.SequenceId == Guid.Empty) Error("sequence.identity","sequenceId","Sequence identity is required.");
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 128) Error("sequence.name","name","Name requires 1-128 characters.");
@@ -77,6 +77,8 @@ public static class SequenceModel
                 Error("sequence.link",$"links/{group.Key}","Linked clips require distinct group identity and equal timeline ranges.");
         }
         var pairs = new HashSet<(Guid,Guid)>();
+        var fadePairs = model.Transitions.Where(t => t.Kind != SequenceTransitionKind.Cut)
+            .Select(t => (t.FromClipId, t.ToClipId)).ToHashSet();
         foreach (var transition in model.Transitions)
         {
             var path = $"transitions/{transition.TransitionId}";
@@ -99,7 +101,7 @@ public static class SequenceModel
         {
             var ordered = group.OrderBy(c=>c.TimelineStart).ThenBy(c=>c.ClipId).ToArray();
             for (var i=0;i<ordered.Length;i++) for(var j=i+1;j<ordered.Length && ordered[j].TimelineStart<ordered[i].TimelineStart+ordered[i].Duration;j++)
-                if (!model.Transitions.Any(t=>t.FromClipId==ordered[i].ClipId && t.ToClipId==ordered[j].ClipId && t.Kind!=SequenceTransitionKind.Cut))
+                if (!fadePairs.Contains((ordered[i].ClipId, ordered[j].ClipId)))
                     Error("sequence.overlap",$"clips/{ordered[j].ClipId}","Same-track overlaps require an explicit validated transition.");
             var fades = model.Transitions.Where(t=>t.Kind!=SequenceTransitionKind.Cut && clips.TryGetValue(t.FromClipId,out var c) && c.TrackId==group.Key)
                 .OrderBy(t=>t.Start).ToArray();
