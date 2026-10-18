@@ -312,6 +312,21 @@ public sealed class InspectorDraftTransactionTests
         Assert.Contains("NOT ATOMIC", f.Model.InspectorBatchEvidence);
     }
     [Fact]
+    public async Task Inspector_disposal_finishes_current_request_and_stops_later_batch_mutations()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select([audio[0]]); f.Model.AudioGainDraft = 2; f.Model.CopyAttributesCommand.Execute(null);
+        f.Model.Selection.Select(audio); f.Model.ReviewInspectorBatchCommand.Execute(null);
+        f.Transport.OnMutation = _ => f.Model.Dispose();
+        await f.Model.ApplyInspectorBatchAsync();
+        Assert.Equal(1, f.Transport.MutationCalls);
+        Assert.Equal("CONFIRMED", f.Model.InspectorBatchItems[0].Result);
+        Assert.Contains("NOT ATTEMPTED", f.Model.InspectorBatchItems[1].Result);
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+    }
+    [Fact]
     public async Task Mixed_incompatible_empty_and_removed_targets_remain_read_only_with_explicit_reasons()
     {
         await using var f = await Fixture.Create();

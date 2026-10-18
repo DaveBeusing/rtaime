@@ -23,7 +23,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private string? _activeInspectorRevision;
     private InspectorDraftReview? _selectedDraftReview;
     private string _draftReviewNotice = "";
-    private bool _inspectorReviewBusy;
+    private bool _inspectorReviewBusy, _inspectorTransactionsStopped;
     private ICommand? _keepDraftReview, _discardDraftReview, _rebaseDraftReview, _restoreDraftReview, _applyDraftReview;
     public ObservableCollection<InspectorDraftReview> InspectorDraftReviews { get; } = [];
     public InspectorDraftReview? SelectedDraftReview
@@ -80,7 +80,7 @@ public sealed partial class MediaPoolInspectorViewModel
         try
         {
             await _operator.SynchronizeInspectorAsync();
-            if (_operator.IsStale || !_operator.IsConnected || _operator.IsBusy || _operator.RuntimeStatus != "READY" ||
+            if (_inspectorTransactionsStopped || _operator.IsStale || !_operator.IsConnected || _operator.IsBusy || _operator.RuntimeStatus != "READY" ||
                 review.Production != CurrentProduction || review.Revision != CurrentRevisionToken ||
                 ReadInspectorTarget(review.Target) != review.Confirmed)
             {
@@ -104,7 +104,7 @@ public sealed partial class MediaPoolInspectorViewModel
         finally { _inspectorReviewBusy = false; NotifyInspectorHistory(); }
     }, () => SelectedDraftReview is { } review && CanApplyReview(review));
     private string CurrentProduction => _operator.Client?.Snapshot?.Production.ProductionId.ToString() ?? "";
-    private bool InspectorMutationReady => !_inspectorReviewBusy && !_operator.IsBusy && !_mediaDeck.IsBusy &&
+    private bool InspectorMutationReady => !_inspectorTransactionsStopped && !_inspectorReviewBusy && !_operator.IsBusy && !_mediaDeck.IsBusy &&
         _operator.IsConnected && !_operator.IsStale && _operator.RuntimeStatus == "READY" &&
         _operator.ProgramSafety != OperatorProgramSafetyStates.Blocked;
     private bool CanReviewTarget(InspectorEditTarget target) => InspectorMutationReady && ReadInspectorTarget(target) is not null;
