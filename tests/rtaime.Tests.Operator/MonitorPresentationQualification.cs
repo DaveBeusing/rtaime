@@ -16,6 +16,7 @@ using System.Windows.Threading;
 using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Media.Contracts;
+using PixelFormat = rtaime.Media.Contracts.PixelFormat;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using rtaime.RuntimeHost;
