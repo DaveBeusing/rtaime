@@ -16,6 +16,14 @@ public sealed partial class ShowControlViewModel
         RequiresAcknowledgement ? "Review Program, then explicitly Resume or Cancel recovery." :
         CanGo() ? $"SHOW GO → {CurrentCue} · {CurrentAction}" :
         $"Select the saved list and ARM. Confirmed state: {ExecutionState}.";
+    private bool HasSavedSelection()
+    {
+        if (SelectedCueList is null || _confirmedLiveSnapshot is null) return false;
+        var saved = _confirmedLiveSnapshot.CueLists.FirstOrDefault(list => list.CueListId == SelectedCueList.CueListId);
+        if (saved is null) return false;
+        try { return ShowControlCanonicalSerializer.Serialize(SelectedCueList.ToContract()) == ShowControlCanonicalSerializer.Serialize(saved); }
+        catch (ArgumentException) { return false; }
+    }
     internal void NotifyLiveAuthorityChanged() => RaiseCommandState();
     internal void ApplyLiveObservation(ShowControlWorkspaceSnapshot snapshot)
     {

@@ -15,7 +15,7 @@ public sealed partial class RundownViewModel
     private string ResolveItem(RundownItemId? id) => id is { } value
         ? _confirmedSnapshot?.Rundown?.Items.FirstOrDefault(item => item.ItemId == value)?.Name ?? value.ToString()
         : "NONE";
-    public string LiveActionDetail => !LiveAuthorityAvailable ? _operator.LiveAvailability :
+    public string LiveActionDetail => !_observationAvailable ? "Rundown observation unavailable. Synchronize before executing." : !LiveAuthorityAvailable ? _operator.LiveAvailability :
         IsBusy ? "Rundown command pending; wait for confirmation." :
         _draftConflict ? "Saved rundown changed. Refresh to discard the local draft and reload." :
         _hasLocalDraft ? "Local draft; save before Prepare or GO." :
@@ -27,6 +27,7 @@ public sealed partial class RundownViewModel
     // Borrowed by the existing Operator synchronization loop. No timer or second connection.
     internal async Task<Action?> CaptureLiveObservationAsync(CancellationToken cancellationToken)
     {
+        if (IsBusy) return null;
         var generation = Interlocked.Read(ref _observationGeneration);
         try
         {
@@ -104,6 +105,7 @@ public sealed partial class RundownViewModel
         var from = Items.IndexOf(dragged);
         var to = Items.IndexOf(target);
         if (from < 0 || to < 0) return false;
+        if (from < to && from == to - 1) return false;
         RememberDraft();
         Items.Move(from, from < to ? to - 1 : to);
         SelectedItem = dragged;

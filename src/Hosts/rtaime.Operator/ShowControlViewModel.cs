@@ -427,7 +427,7 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 	}
 
 	private bool CanArm() =>
-		LiveAuthorityAvailable && !IsBusy &&
+		LiveAuthorityAvailable && !IsBusy && HasSavedSelection() &&
 		SelectedCueList is not null &&
 		_serverSelectedCueListId.HasValue &&
 		SelectedCueList.CueListId == _serverSelectedCueListId.Value &&
