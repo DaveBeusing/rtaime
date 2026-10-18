@@ -179,8 +179,9 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         var index = InspectorDraftReviews.IndexOf(old);
         if (index < 0) return;
+        var wasSelected = ReferenceEquals(_selectedDraftReview, old);
         InspectorDraftReviews[index] = next;
-        if (ReferenceEquals(_selectedDraftReview, old)) _selectedDraftReview = next;
+        if (wasSelected) _selectedDraftReview = next;
     }
     private void RemoveDraftContext(InspectorEditTarget target)
     {

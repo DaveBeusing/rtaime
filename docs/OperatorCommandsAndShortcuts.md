@@ -49,7 +49,9 @@ Paste changes a draft; it never calls ControlHost. Audio gain uses a separate In
 
 An authoritative production revision rebase clears Inspector stacks and invalidates the copied revision while retaining dirty typed intent in the explicit review card. Apply/Discard/Keep identify the original target after selection changes; REBASE / REVIEW updates its comparison without sending, and RESTORE LOCAL restores a matching reviewed context as one local transaction. Changed confirmed properties replace the affected context's history; missing or changed selections cannot execute it. No history action reverses confirmed CUT/TAKE, Program, audio, marker edits, SAVE, GO or ControlHost state. Refreshing unchanged evidence preserves local drafts.
 
-See [Inspector draft review and sequential edits](InspectorDraftTransactions.md) for target compatibility, capacity, partial failure and concurrency boundaries.\n\nTransform editing uses the selected layer or transform node; selecting a processing node exposes its typed processing draft. This keeps the visible property editor aligned with its history/clipboard context. Coupled crop validation also disables transform APPLY before any transport call.
+See [Inspector draft review and sequential edits](InspectorDraftTransactions.md) for target compatibility, capacity, partial failure and concurrency boundaries.
+
+Transform editing uses the selected layer or transform node; selecting a processing node exposes its typed processing draft. This keeps the visible property editor aligned with its history/clipboard context. Coupled crop validation also disables transform APPLY before any transport call.
 
 ## Workspace focus and portable layouts
 
