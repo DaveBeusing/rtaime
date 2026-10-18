@@ -1078,7 +1078,7 @@ Assert-Condition ($runtimeStatusBarViewModel -match '_performance\.CpuMetric' -a
 # Workspaces, Quick Controls, multiview and Clean Program.
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
-	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
+	Assert-Condition ($workspaceRegistry -match ('new\("' + $workspace + '"') -and $window -match 'Shell.NavigationGroups' -and $window -match 'CommandParameter="\{Binding Id\}"') "Canonical workspace '$workspace' must be selectable from the registered Operator navigation."
 }
 Assert-Condition ($shell -match 'CurrentVersion = 7' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'OperatorWorkspaceRegistry') "Workspace layout persistence must migrate supported geometry and retain bounded additive destinations."
 Assert-Condition ($shell -match '"GRAPHICS".+Compositing' -and $shell -match '"SYSTEM".+Settings') "Legacy workspace names must migrate to the canonical eight-workspace shell."

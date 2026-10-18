@@ -1363,7 +1363,7 @@
 					<ColumnDefinition Width="1" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<local:RundownControl Grid.Column="0" />
+				<local:RundownControl Grid.Column="0" IsConsoleMode="True" />
 				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" />
 				<local:MediaTimelineControl Grid.Column="2"
                     PreviewPlaybackVisibility="{Binding Shell.ProductionDetailsVisibility, ElementName=RootWindow}"

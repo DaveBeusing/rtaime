@@ -36,7 +36,7 @@ to 32 supported/inactive destination entries and the existing 16 named templates
 At compact logical viewports, a stored DUAL preference renders one bus at a time.
 Both identities and immediate PVW/PGM switching remain in the LIVE strip.
 Library and Inspector buttons reveal one temporary pane at a time and can hide it
-again. Compact Scenes, Outputs and Settings expose VIEW/DETAILS buttons for the existing auxiliary tools instead of hiding them behind a zero-width column. The compact LIVE lower region keeps 160 DIP and a 280-DIP Rundown column so deliberate cue actions remain reachable. Returning to a larger viewport restores the reference widths and dual
+again. Compact Scenes, Outputs and Settings expose VIEW/DETAILS buttons for the existing auxiliary tools instead of hiding them behind a zero-width column. The compact LIVE lower region keeps 200 DIP and a 280-DIP Rundown column so deliberate cue actions remain reachable. Returning to a larger viewport restores the reference widths and dual
 presentation. Temporary pane allocations and compact bus choice are not serialized.
 The existing maximize, fullscreen, Focus/Cinema, dock/float/return and reset paths
 remain presentation-only. The existing keyboard router leaves focused-button Enter/Space to that explicit button; the shell strip reuses LiveConsoleInput for repeat/double-click handling.
@@ -79,3 +79,5 @@ source SHA, failures and five Required Gate results are recorded in the PR.
 Software layout-DPI injection is not physical mixed-monitor or touch certification.
 Controlled snapshots are presentation evidence; production commands and actual
 media output remain qualified by the independent Client/host/Runtime suites.
+
+The persistent lower Rundown uses the existing control in console presentation: selection, PREPARE, RUNDOWN GO, HOLD, confirmed state/timing, prepared identity, live eligibility and recovery remain on the same owner. Full authoring and previous/next navigation remain available in Multiview → RUNDOWN. The compact lower region retains its existing 200-DIP budget; authoring rows do not impose their 140-DIP list minimum on the embedded console. No cue execution or production timing changes.

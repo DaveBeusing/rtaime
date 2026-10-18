@@ -523,7 +523,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			IsCenterMaximized || IsMultiviewWorkspace || IsHealthWorkspace
 				? 0
 				: IsCompactViewport
-					? IsLiveWorkspace ? 160 : Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
+					? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
 					: Math.Max(OperatorLayoutSettings.MinimumLowerPanelHeight, LowerPanelHeight * WorkspaceScale));
 		set
 		{
