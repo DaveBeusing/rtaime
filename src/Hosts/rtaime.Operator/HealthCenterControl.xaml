@@ -260,6 +260,8 @@
 							<TextBlock Text="{Binding SelectedSubsystem.ProgramImpact}" FontWeight="SemiBold" TextWrapping="Wrap" />
 							<TextBlock Text="EVIDENCE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.EvidenceSource}" TextWrapping="Wrap" />
+							<TextBlock Text="EVIDENCE AVAILABILITY / FRESHNESS" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.EvidenceStatus}" TextWrapping="Wrap" />
 							<TextBlock Text="CURRENT EVIDENCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.Detail}" TextWrapping="Wrap" />
 							<TextBlock Text="RECOMMENDED SAFE NEXT ACTION" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />

@@ -29,6 +29,23 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal(RuntimeReadinessState.Initializing, readiness.Current.State);
 	}
 
+	[Theory]
+	[InlineData("UNKNOWN")]
+	[InlineData("STALE")]
+	[InlineData("UNAVAILABLE")]
+	public void Missing_evidence_stays_in_attention_without_becoming_a_failed_subsystem(string evidence)
+	{
+		var snapshot = Snapshot("audio", SubsystemHealthState.Unknown, SubsystemProgramImpact.Unknown) with
+		{ Metrics = [new("Evidence status", evidence)] };
+		using var readiness = new RuntimeReadinessService(() => Start);
+		using var model = new HealthCenterViewModel(new TestProvider(snapshot), readiness, new TestCommand(), new QueuedContext());
+		Assert.Equal(evidence, Assert.Single(model.Attention).EvidenceStatus);
+		Assert.Equal("UNKNOWN", model.SelectedSubsystem!.State);
+		Assert.Equal(0, model.FailedCount);
+		Assert.DoesNotContain("All required production readiness evidence is qualified", model.OverallSummary);
+		Assert.False(model.RecoverCommand.CanExecute(null));
+	}
+
 	[Fact]
 	public void Slow_ui_keeps_one_pending_update_and_preserves_latest_active_faults_and_selection()
 	{
