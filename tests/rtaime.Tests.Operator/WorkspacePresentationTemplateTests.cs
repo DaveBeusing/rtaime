@@ -6,7 +6,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class WorkspacePresentationTemplateTests
+public sealed partial class WorkspacePresentationTemplateTests
 {
     [Theory]
     [InlineData(false)]

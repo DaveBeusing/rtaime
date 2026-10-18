@@ -5,7 +5,7 @@ using rtaime.Operator;
 using Xunit;
 namespace rtaime.Tests.Operator;
 
-public sealed class OperatorShellPersistenceTests
+public sealed partial class OperatorDockLayoutTests
 {
     [Theory]
     [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)]

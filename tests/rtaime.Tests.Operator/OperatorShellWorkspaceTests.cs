@@ -6,7 +6,7 @@ using rtaime.Operator;
 using Xunit;
 namespace rtaime.Tests.Operator;
 
-public sealed partial class OperatorVisualQualificationTests
+public sealed partial class WorkspacePresentationTemplateTests
 {
     [Fact]
     public async Task Registered_destinations_preserve_legacy_ids_and_unknown_layouts_without_dead_aliases()
@@ -17,7 +17,8 @@ public sealed partial class OperatorVisualQualificationTests
         Assert.Equal(OperatorWorkspaceNames.All.Count, OperatorWorkspaceNames.All.Distinct().Count());
         var settings = OperatorLayoutSettings.Default;
         settings.Workspaces["FUTURE_EDITOR"] = settings.Workspaces["MEDIA"] with { LeftPanelWidth = 470 };
-        var path = Path.Combine(_root, "registered.json");
+        await using var f = await Fixture.Create(false);
+        var path = Path.Combine(f.Directory, "registered.json");
         var store = new OperatorLayoutStore(path); await store.SaveAsync(settings);
         var shell = new OperatorShellViewModel(store, _ => { });
         foreach (var destination in OperatorWorkspaceRegistry.Destinations)
@@ -34,9 +35,9 @@ public sealed partial class OperatorVisualQualificationTests
     }
     [Theory]
     [InlineData(1920,1080)] [InlineData(1600,900)] [InlineData(1536,864)] [InlineData(1280,720)] [InlineData(960,540)]
-    public void Live_media_allocation_and_compact_bus_switch_preserve_reference_intent(double width, double height)
+    public async Task Live_media_allocation_and_compact_bus_switch_preserve_reference_intent(double width, double height)
     {
-        var shell = CreateShell(); shell.SelectWorkspace("LIVE"); shell.UpdateViewportSize(width, height);
+        await using var f = await Fixture.Create(false); var shell = f.Shell; shell.SelectWorkspace("LIVE"); shell.UpdateViewportSize(width, height);
         Assert.True(shell.HasTimelineRegion);
         var usable = width - shell.NavigationRailWidth - 6;
         var media = usable - shell.LeftColumnWidth.Value - shell.RightColumnWidth.Value - shell.LeftSplitterWidth - shell.RightSplitterWidth;
@@ -66,7 +67,7 @@ public sealed partial class OperatorVisualQualificationTests
     [Fact]
     public async Task One_hundred_workspace_dock_float_restore_transactions_retain_bounded_panel_identities()
     {
-        var shell = CreateShell();
+        await using var f = await Fixture.Create(false); var shell = f.Shell;
         for (var i=0;i<100;i++)
         {
             shell.SelectWorkspace(OperatorWorkspaceNames.All[i % OperatorWorkspaceNames.All.Count]);

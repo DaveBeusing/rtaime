@@ -9,7 +9,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed partial class OperatorVisualQualificationTests : IDisposable
+public sealed class OperatorVisualQualificationTests : IDisposable
 {
 	private const double ShellTopBarHeight = 60;
 	private const double ShellStatusBarHeight = 30;

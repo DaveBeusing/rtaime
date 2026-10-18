@@ -65,10 +65,9 @@ versions are rejected explicitly. Older executables cannot consume schema 7.
 
 ## Qualification boundaries
 
-OperatorShellPersistenceTests extends supported-version, future-file, malformed
+OperatorDockLayoutTests (extended in OperatorShellPersistenceTests.cs) covers supported-version, future-file, malformed
 version, oversized-file and interrupted-temporary-write cases. The existing
-OperatorVisualQualificationTests covers the five logical size targets, registry
-aliases, compact bus/pane state and bounded layout transactions.
+OperatorVisualQualificationTests covers the existing logical size matrix. WorkspacePresentationTemplateTests (extended in OperatorShellWorkspaceTests.cs) covers registry aliases, five LIVE size targets, compact bus/pane state and bounded layout transactions. These cases run in the existing focused Dock/Template filter before the broad suites.
 
 OperatorCombinedVisualQualification checks actual compiled LIVE viewers, equal
 dual allocation, viewport fit, one visible playback/TAKE context and 100 real

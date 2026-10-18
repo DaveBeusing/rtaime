@@ -6,7 +6,7 @@ using Xunit;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class OperatorDockLayoutTests
+public sealed partial class OperatorDockLayoutTests
 {
     [Fact]
     public void Tabs_float_and_return_keep_each_panel_exactly_once()
