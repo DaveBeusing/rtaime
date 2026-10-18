@@ -7,6 +7,7 @@ namespace rtaime.Operator;
 // Stable-target adapters share the existing mutation/lifecycle owner and Client; selection is never changed to submit an edit.
 public sealed partial class OperatorViewModel
 {
+    internal Task SynchronizeInspectorAsync() => SynchronizeAsync();
     internal async Task ApplyInspectorGainAsync(string sourceId, string streamId, double gain)
     {
         if (!CanControl() || _client is null ||

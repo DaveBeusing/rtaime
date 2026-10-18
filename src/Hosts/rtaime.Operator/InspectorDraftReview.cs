@@ -215,6 +215,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void NotifyDraftReview()
     {
+        NotifyInspectorBatch();
         foreach (var property in new[] { nameof(SelectedDraftReview), nameof(DraftReviewNotice), nameof(HasDraftReviews), nameof(InspectorContextEvidence), nameof(DraftReviewGate) }) OnPropertyChanged(property);
         foreach (var command in new[] { _keepDraftReview, _discardDraftReview, _rebaseDraftReview, _restoreDraftReview, _applyDraftReview })
         {
