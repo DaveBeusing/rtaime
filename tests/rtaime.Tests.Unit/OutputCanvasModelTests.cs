@@ -50,6 +50,27 @@ public sealed class OutputCanvasModelTests
         Assert.Contains(OutputCanvasModel.Validate(badCrop).Issues, i => i.Code == "canvas.crop");
     }
 
+
+    [Fact]
+    public void Explicit_unbind_allows_removal_but_duplicate_identity_and_capacity_fail()
+    {
+        var c = Guid.NewGuid(); var s = Guid.NewGuid(); var o = Guid.NewGuid();
+        var model = new OutputCanvasConfiguration("1.0",Guid.NewGuid(),4,[new(c,"Bound",100,100)],
+            [new(s,c,new(BusRoleId:"program"),0,new(0,0,1,1),OutputCanvasQuad.Rectangle(0,0,100,100))],
+            [new(o,c,"provider","target","production")]);
+        var remove = new OutputCanvasSaveRequest("1.0",Guid.NewGuid(),model.ConfigurationId,4,
+            [new(OutputCanvasEditKind.RemoveSurface,s)]);
+        Assert.Throws<ArgumentException>(()=>OutputCanvasModel.Apply(model,remove));
+        var cleared = OutputCanvasModel.Apply(model,remove with { Edits=[
+            new(OutputCanvasEditKind.Unbind,o),new(OutputCanvasEditKind.RemoveSurface,s),new(OutputCanvasEditKind.RemoveCanvas,c)] });
+        Assert.Empty(cleared.Canvases); Assert.Empty(cleared.Surfaces); Assert.Empty(cleared.Bindings);
+        Assert.Equal(5UL,cleared.EditRevision);
+        Assert.True(OutputCanvasModel.Validate(cleared).IsValid);
+        Assert.Contains(OutputCanvasModel.Validate(model with { Canvases=[model.Canvases[0],model.Canvases[0]] }).Issues,i=>i.Code=="canvas.identity");
+        Assert.Contains(OutputCanvasModel.Validate(model with { Canvases=Enumerable.Range(0,17).Select(i=>new OutputCanvasDefinition(Guid.NewGuid(),"Many",1,1)).ToArray() }).Issues,i=>i.Code=="canvas.capacity");
+        Assert.Contains(OutputCanvasModel.Validate(model with { Canvases=[new(c,"Large",16384,16384)] }).Issues,i=>i.Code=="canvas.capacity");
+    }
+
     [Fact]
     public void Unknown_sources_profiles_and_monitoring_roles_are_rejected()
     {

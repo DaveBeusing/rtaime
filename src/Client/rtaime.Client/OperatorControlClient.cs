@@ -2106,13 +2106,15 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
                 OperatorMutationResponse response => !response.Accepted,
                 OperatorRecordingCommandResult recording => !recording.Succeeded,
                 MediaAssetCatalogMutationResult catalogue => !catalogue.Succeeded,
+                OutputCanvasSaveResult canvas => !canvas.Saved,
                 _ => false
             };
             ActionHistory.Complete(id, rejected ? OperatorActionOutcome.Rejected : OperatorActionOutcome.Confirmed,
                 result is OperatorMutationResponse mutation ? mutation.State.Revision.Value : null,
                 result switch { OperatorMutationResponse response => response.Accepted,
                     OperatorRecordingCommandResult recording => recording.Succeeded,
-                    MediaAssetCatalogMutationResult catalogue => catalogue.Succeeded, _ => (bool?)null });
+                    MediaAssetCatalogMutationResult catalogue => catalogue.Succeeded,
+                    OutputCanvasSaveResult canvas => canvas.Saved, _ => (bool?)null });
             return result;
         }
         catch

@@ -54,6 +54,14 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Output canvas geometry persistence and transport regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~OutputCanvasModelTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Canvas geometry regression failed." }
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~Canvas_" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Canvas persistence/transport regression failed." }
+
       - name: HD output compatibility and UHD admission boundaries
         shell: pwsh
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~HighResolutionOutputAdmissionTests" --logger "console;verbosity=detailed"
