@@ -194,4 +194,33 @@ public sealed class MediaPresentationGeometryTests
 		Assert.Equal(1280, fit.Width, 4);
 		Assert.Equal(3840, inspect.Width, 4);
 	}
+
+	[Theory]
+	[InlineData(1.0)]
+	[InlineData(1.25)]
+	[InlineData(1.5)]
+	[InlineData(2.0)]
+	public void Repeated_fractional_pointer_zoom_returns_to_the_exact_native_pixel_origin(double dpi)
+	{
+		const double sw = 1920, sh = 1080;
+		var target = MediaRenderTarget.Create(801, 451, dpi, dpi);
+		var vw = (double)target.PixelWidth;
+		var vh = (double)target.PixelHeight;
+		var original = MediaPresentationGeometry.Calculate(sw, sh, vw, vh, MediaPresentationMode.PixelPerfect);
+		var current = original;
+		var anchorX = 333.36 * dpi;
+		var anchorY = 162.64 * dpi;
+		for (var cycle = 0; cycle < 100; cycle++)
+		{
+			var pan = MediaInspectionPolicy.AnchorZoom(sw, sh, vw, vh, 1, 1.25,
+				current.X - (vw - sw) / 2, current.Y - (vh - sh) / 2, anchorX, anchorY);
+			var zoomed = MediaPresentationGeometry.Calculate(sw, sh, vw, vh,
+				MediaPresentationMode.CustomZoom, 1.25, pan.PanX, pan.PanY);
+			pan = MediaInspectionPolicy.AnchorZoom(sw, sh, vw, vh, 1.25, 1,
+				zoomed.X - (vw - sw * 1.25) / 2, zoomed.Y - (vh - sh * 1.25) / 2, anchorX, anchorY);
+			current = MediaPresentationGeometry.Calculate(sw, sh, vw, vh,
+				MediaPresentationMode.PixelPerfect, panX: pan.PanX, panY: pan.PanY);
+		}
+		Assert.Equal(original, current);
+	}
 }
