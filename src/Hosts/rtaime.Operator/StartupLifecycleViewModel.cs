@@ -274,7 +274,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			using var document = JsonDocument.Parse(stream);
 			ApplyEvidence(document.RootElement);
 		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+		catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or InvalidOperationException)
 		{
 			if (Stages.Count == 0)
 				Summary = $"Waiting for stable lifecycle evidence: {exception.Message}";

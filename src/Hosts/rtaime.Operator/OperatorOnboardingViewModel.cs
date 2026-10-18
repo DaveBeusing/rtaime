@@ -120,7 +120,7 @@ public sealed class OperatorOnboardingViewModel : INotifyPropertyChanged, IDispo
 			Status = "Guidance only. Examples require TEST MEDIA; no production action runs.";
 		}
 		catch (OperationCanceledException) { throw; }
-		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+		catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or InvalidOperationException)
 		{
 			Status = "Guide preferences unavailable or unsupported. Original file retained; explicit guide edits replace only local guide preferences.";
 		}
