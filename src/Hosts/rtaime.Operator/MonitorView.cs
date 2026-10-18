@@ -608,7 +608,7 @@ public partial class MonitorView : UserControl
 			return;
 
 		var (sourceWidth, sourceHeight) = ResolveSourcePixels();
-		var physical = MediaPresentationGeometry.ToPhysicalPixels(_viewportWidthDip, _viewportHeightDip, _dpiScaleX, _dpiScaleY);
+		var physical = (Width: ViewportPixelWidth, Height: ViewportPixelHeight);
 		var (currentMode, currentScale) = ResolvePresentationPolicy(ZoomMode);
 		if (currentMode == MediaPresentationMode.Fit)
 			currentScale = Math.Min(physical.Width / sourceWidth, physical.Height / sourceHeight);

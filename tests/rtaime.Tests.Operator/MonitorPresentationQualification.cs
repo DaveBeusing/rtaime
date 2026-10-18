@@ -94,6 +94,7 @@ internal static class MonitorPresentationQualification
 				{
 					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
+					VerifyFractionalPointerZoom();
 					await VerifyAsync(dispatcher);
 				}
 				catch (Exception exception) { failure = exception; }
@@ -113,6 +114,30 @@ internal static class MonitorPresentationQualification
 		thread.Start();
 		await completed.Task.WaitAsync(TimeSpan.FromSeconds(45));
 		Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "Viewer qualification dispatcher did not terminate.");
+	}
+
+	private static void VerifyFractionalPointerZoom()
+	{
+		// Model regression: the real Program/interop qualification below uses actual Runtime observations.
+		var bitmap = BitmapSource.Create(1920, 1080, 96, 96, PixelFormats.Bgra32,
+			null, new byte[1920 * 1080 * 4], 1920 * 4);
+		bitmap.Freeze();
+		foreach (var dpi in new[] { 1d, 1.25, 1.5, 2d })
+		{
+			var monitor = new MonitorView { Frame = bitmap, State = "LIVE" };
+			monitor.UpdatePresentationViewport(801, 451, dpi, dpi);
+			monitor.ZoomMode = "100%";
+			var origin = (monitor.PresentationOffsetX, monitor.PresentationOffsetY);
+			for (var cycle = 0; cycle < 100; cycle++)
+			{
+				monitor.ZoomPresentationAt(1, 333.36, 162.64);
+				monitor.ZoomPresentationAt(-1, 333.36, 162.64);
+			}
+			Assert.Equal(origin, (monitor.PresentationOffsetX, monitor.PresentationOffsetY));
+			Assert.Equal(1920 / dpi, monitor.PresentationWidth);
+			Assert.Equal(1080 / dpi, monitor.PresentationHeight);
+		}
+		Console.WriteLine("VIEWER ZOOM PASS: actual local viewer entry points retain the exact native origin after 100 pointer zoom cycles at 100/125/150/200% DPI; rounded physical viewport is shared with rendering.");
 	}
 
 	internal static async Task VerifyAsync(Dispatcher dispatcher)
