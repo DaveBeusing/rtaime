@@ -222,13 +222,18 @@ public sealed class OperatorLayoutStore
 	{
 		try
 		{
-			if (!File.Exists(_path) || new FileInfo(_path).Length > 1024 * 1024)
-				return OperatorLayoutSettings.Default;
+			if (!File.Exists(_path)) return OperatorLayoutSettings.Default;
+            if (new FileInfo(_path).Length > 1024 * 1024)
+            {
+                _futureVersion = true;
+                LoadWarning = "Layout exceeds 1 MiB; the original file is preserved and saving is blocked.";
+                return OperatorLayoutSettings.Default;
+            }
 
 			var json = File.ReadAllText(_path);
             using var document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                document.RootElement.TryGetProperty("Version", out var version) && version.TryGetInt32(out var schema) &&
+                document.RootElement.TryGetProperty("Version", out var version) && version.ValueKind == JsonValueKind.Number && version.TryGetDouble(out var schema) &&
                 schema > OperatorLayoutSettings.CurrentVersion)
             {
                 _futureVersion = true;
@@ -277,11 +282,13 @@ public sealed class OperatorLayoutStore
 
 			if (File.Exists(_path))
             {
+                if (new FileInfo(_path).Length > 1024 * 1024)
+                { LastSaveError = "Existing layout exceeds 1 MiB; original file preserved."; return; }
                 try
                 {
                     using var current = JsonDocument.Parse(await File.ReadAllTextAsync(_path).ConfigureAwait(false));
                     if (current.RootElement.ValueKind == JsonValueKind.Object &&
-                        current.RootElement.TryGetProperty("Version", out var version) && version.TryGetInt32(out var schema) &&
+                        current.RootElement.TryGetProperty("Version", out var version) && version.ValueKind == JsonValueKind.Number && version.TryGetDouble(out var schema) &&
                         schema > OperatorLayoutSettings.CurrentVersion)
                     { LastSaveError = "A newer layout file was found; saving is blocked."; return; }
                 }

@@ -56,6 +56,12 @@ public sealed class OperatorShellPersistenceTests
             var second = new OperatorLayoutStore(path);
             await second.SaveAsync(OperatorLayoutSettings.Default);
             Assert.NotNull(second.LastSaveError); Assert.Equal(future, await File.ReadAllTextAsync(path));
+            await File.WriteAllTextAsync(path, new string('x', 1024 * 1024 + 1));
+            var oversized = new OperatorLayoutStore(path); _ = oversized.Load();
+            await oversized.SaveAsync(OperatorLayoutSettings.Default);
+            Assert.NotNull(oversized.LastSaveError); Assert.Equal(1024 * 1024 + 1, new FileInfo(path).Length);
+            await File.WriteAllTextAsync(path, "{\"Version\":\"broken\"}");
+            Assert.Equal("LIVE", new OperatorLayoutStore(path).Load().SelectedWorkspace);
             await File.WriteAllTextAsync(path, "{bad");
             var recovered = new OperatorLayoutStore(path); Assert.Equal("LIVE", recovered.Load().SelectedWorkspace);
             Assert.Equal("{bad", await File.ReadAllTextAsync(path));
