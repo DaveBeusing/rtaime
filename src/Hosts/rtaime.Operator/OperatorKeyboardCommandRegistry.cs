@@ -75,6 +75,19 @@ public sealed class OperatorKeyboardCommandRegistry
 			for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = current is Visual ? VisualTreeHelper.GetParent(current) : System.Windows.LogicalTreeHelper.GetParent(current))
 				if (current is MediaTimelineControl { OwnsEscape: true }) return false;
 		}
+		// Native list selection must not become Preview seek/delete or a global TAKE.
+        if (Keyboard.Modifiers == ModifierKeys.None && !IsTextEntryContext() &&
+            IsSelectorContext(Keyboard.FocusedElement as System.Windows.DependencyObject))
+        {
+            if (key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown or Key.Delete)
+                return false;
+            if ((key is Key.Enter or Key.Space) &&
+                !LiveConsoleInput.IsCueSurface(Keyboard.FocusedElement as System.Windows.DependencyObject))
+            {
+                if (args.IsRepeat) { args.Handled = true; return true; }
+                return false;
+            }
+        }
 		// Enter/Space on a focused button belongs to that explicit button; cue-list keys never issue global actions.
 		if ((key == Key.Enter || key == Key.Space) && Keyboard.Modifiers == ModifierKeys.None && !IsTextEntryContext() &&
 			(LiveConsoleInput.FindButton(Keyboard.FocusedElement as System.Windows.DependencyObject) is not null ||
@@ -278,6 +291,12 @@ public sealed class OperatorKeyboardCommandRegistry
 			if (current is AudioMixerControl or TextBoxBase or PasswordBox or ComboBox or ComboBoxItem or MenuItem or ContextMenu) return true;
 		return false;
 	}
+    private static bool IsSelectorContext(System.Windows.DependencyObject? focused)
+    {
+        for (var current = focused; current is not null; current = Parent(current))
+            if (current is Selector) return true;
+        return false;
+    }
 	private static OperatorShortcutScope ResolveScope()
 	{
 		for (var current = Keyboard.FocusedElement as System.Windows.DependencyObject; current is not null; current = Parent(current))

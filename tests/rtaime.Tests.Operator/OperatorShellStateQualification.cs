@@ -118,8 +118,17 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.False(window.Shortcuts.TryHandle(enter));
             var space=new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(library)!,0,Key.Space);
             Assert.False(window.Shortcuts.TryHandle(space));
+            window.Shell.ToggleLeftPanelCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+            var mediaList = Descendants(window.MediaLibraryView).OfType<ListBox>().First(list => list.IsVisible);
+            Assert.True(mediaList.Focus());
+            foreach (var key in new[] { Key.Enter, Key.Space, Key.Up, Key.Down, Key.Delete })
+            {
+                var nativeKey = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(mediaList)!, 0, key);
+                Assert.False(window.Shortcuts.TryHandle(nativeKey));
+            }
             Assert.Equal(0,transport.MutationCalls);
-            Console.WriteLine("SHELL STATES PASS: 80 real-window workspace/state/viewport cases, retained routing and focused-button Enter/Space; controlled Client presentation only.");
+            Console.WriteLine("SHELL STATES PASS: 80 real-window workspace/state/viewport cases, retained routing, focused-button Enter/Space and native Library selection; controlled Client presentation only.");
         }
         finally
         {

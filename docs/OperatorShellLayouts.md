@@ -81,3 +81,5 @@ Controlled snapshots are presentation evidence; production commands and actual
 media output remain qualified by the independent Client/host/Runtime suites.
 
 The persistent lower Rundown uses the existing control in console presentation: selection, PREPARE, RUNDOWN GO, HOLD, confirmed state/timing, prepared identity, live eligibility and recovery remain on the same owner. Full authoring and previous/next navigation remain available in Multiview → RUNDOWN. The compact lower region retains its existing 200-DIP budget; authoring rows do not impose their 140-DIP list minimum on the embedded console. No cue execution or production timing changes.
+
+The existing shortcut router leaves unmodified list navigation and deletion to the focused selector. Enter/Space in Library selection cannot invoke global AUTO or Preview playback; explicit cue-list and focused-button handling retains the shared Live Console input rules. The controlled MainWindow journey checks this boundary without issuing production mutations.
