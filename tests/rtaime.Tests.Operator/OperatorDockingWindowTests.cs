@@ -23,32 +23,49 @@ internal static class OperatorDockingWindowTests
         var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;
         var watch = Stopwatch.StartNew();
         Console.WriteLine("DOCK WORKSPACE BEGIN: loaded-window synchronization while live rendering remains active.");
+        var floatedPanels = new[] { "TOOLS", "INSPECTOR", "MONITORS" };
+        var library = owner.MediaLibraryView;
+        var context = library.Context;
+        var inspector = owner.InspectorView;
+        var selection = owner.MediaPool.Selection;
+        var monitoring = owner.Monitoring;
         for (var cycle = 0; cycle < 3; cycle++)
         {
+            var panelId = floatedPanels[cycle];
+            owner.Shell.SelectWorkspace(panelId == "MONITORS" ? "LIVE" : "MEDIA");
             owner.Docking.Dock("TOOLS", "CENTER");
             owner.Docking.Dock("MONITORS", "CENTER");
             Assert.Equal(2, owner.Shell.Docking.Groups.Single(g => g.Id == "CENTER").Panels.Length);
-            owner.Docking.Float("MONITORS");
+            owner.Docking.Float(panelId);
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
             Console.WriteLine($"DOCK CYCLE {cycle}: floating window loaded.");
-            var floating = owner.Docking.FloatingWindows["MONITORS"];
+            var floating = owner.Docking.FloatingWindows[panelId];
             Assert.Same(owner, floating.Owner);
             Assert.Same(owner.Monitoring, floating.Monitoring);
             Assert.Same(owner.Shortcuts, floating.Shortcuts);
             Assert.Same(owner.DataContext, floating.DataContext);
             Assert.True(floating.IsVisible);
+            Assert.Same(context, library.Context);
+            Assert.Same(selection, owner.Composition.Selection);
+            Assert.Same(owner.MediaPool, inspector.Inspector);
+            Assert.Same(owner.MediaDeck, inspector.MediaDeck);
+            Assert.Same(owner.DataContext, inspector.ControlState);
+            Assert.Same(monitoring, owner.Monitoring);
+            var grid = Assert.IsType<RtaimeListBox>(library.FindName("MediaAssetGrid"));
+            Assert.Same(owner.MediaPool.FilteredItems, grid.ItemsSource);
+            if (panelId == "INSPECTOR") Assert.Equal(1, inspector.InspectorSubscriptionCount);
             var retainedContent = floating.Content;
             var unloads = 0;
             RoutedEventHandler unloaded = (_, _) => unloads++;
-            identities["MONITORS"].Unloaded += unloaded;
+            identities[panelId].Unloaded += unloaded;
             try
             {
-                owner.Docking.Dock("TOOLS", "LEFT");
+                owner.Docking.Dock(panelId == "TOOLS" ? "TIMELINE" : "TOOLS", "LEFT");
                 await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
-                Assert.Same(floating, owner.Docking.FloatingWindows["MONITORS"]);
+                Assert.Same(floating, owner.Docking.FloatingWindows[panelId]);
                 Assert.Same(retainedContent, floating.Content); Assert.Equal(0, unloads);
             }
-            finally { identities["MONITORS"].Unloaded -= unloaded; }
+            finally { identities[panelId].Unloaded -= unloaded; }
             var probe = new TextBlock();
             BindingOperations.SetBinding(probe, TextBlock.TextProperty,
                 new Binding("Shell.SelectedWorkspace") { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(Window), 1) });
@@ -80,6 +97,7 @@ internal static class OperatorDockingWindowTests
             Assert.False(owner.Shell.Docking.Enabled);
             Assert.All(identities.Values, panel => Assert.NotNull(panel.Parent));
         }
+        Console.WriteLine("COMPOSITION SEAMS PASS: retained Library/Inspector contexts, projection, selection, commands and monitoring owner across three floating/re-docking cycles.");
         Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
         Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
         Assert.False(((OperatorViewModel)owner.DataContext).CutCommand.CanExecute(null));

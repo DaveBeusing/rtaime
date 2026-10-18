@@ -1,0 +1,407 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.OperatorMediaLibraryView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+    xmlns:local="clr-namespace:rtaime.Operator"
+    Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True">
+	<Grid>
+		<Grid.RowDefinitions>
+			<RowDefinition Height="34" />
+			<RowDefinition Height="34" />
+			<RowDefinition Height="32" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="220" />
+		</Grid.RowDefinitions>
+
+		<Grid Grid.Row="0">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="Auto" />
+			</Grid.ColumnDefinitions>
+			<StackPanel VerticalAlignment="Center">
+				<TextBlock Text="MEDIA LIBRARY" Style="{StaticResource OperatorSectionTitle}" />
+				<TextBlock
+					Text="{Binding Context.MediaPool.SelectionSummary, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+					Style="{StaticResource OperatorLabel}"
+					FontSize="{StaticResource OperatorFontSizeCompact}"
+					TextTrimming="CharacterEllipsis" />
+			</StackPanel>
+			<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+				<controls:RtaimeIconButton
+					IconData="{StaticResource RtaimeIconAddGeometry}"
+					Click="OnMediaPoolAddClick"
+					Width="26"
+					Height="26"
+					Margin="0,0,4,0"
+					ToolTip="Add media or a generated test signal."
+					AutomationProperties.Name="Add media or generator">
+					<controls:RtaimeIconButton.ContextMenu>
+						<controls:RtaimeContextMenu>
+							<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+							<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
+							<controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
+							<controls:RtaimeMenuSeparator />
+							<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
+							<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
+						</controls:RtaimeContextMenu>
+					</controls:RtaimeIconButton.ContextMenu>
+				</controls:RtaimeIconButton>
+				<controls:RtaimeIconButton
+					IconData="{StaticResource RtaimeIconGridGeometry}"
+					Command="{Binding Context.MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+					Width="26"
+					Height="26"
+					Margin="0,0,4,0"
+					ToolTip="Grid view"
+					AutomationProperties.Name="Media Library grid view" />
+				<controls:RtaimeIconButton
+					IconData="{StaticResource RtaimeIconListGeometry}"
+					Command="{Binding Context.MediaPool.ListViewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+					Width="26"
+					Height="26"
+					Margin="0,0,4,0"
+					ToolTip="List view"
+					AutomationProperties.Name="Media Library list view" />
+				<controls:RtaimeIconButton
+					IconData="{StaticResource RtaimeIconChevronLeftGeometry}"
+					Command="{Binding Context.CollapseCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+					Width="26"
+					Height="26"
+					ToolTip="Collapse Media Library"
+					AutomationProperties.Name="Collapse Media Library" />
+			</StackPanel>
+		</Grid>
+
+		<Grid Grid.Row="1">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="6" />
+				<ColumnDefinition Width="112" />
+			</Grid.ColumnDefinitions>
+			<controls:RtaimeSearchBox
+				x:Name="MediaSearchBox"
+				Grid.Column="0"
+				IconData="{StaticResource RtaimeIconSearchGeometry}"
+				Placeholder="Search media…"
+				Text="{Binding Context.MediaPool.SearchText, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, UpdateSourceTrigger=PropertyChanged, Delay=180}"
+				VerticalAlignment="Center"
+				ToolTip="{Binding Context.MediaPool.SearchStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+				AutomationProperties.Name="Media Pool search" />
+			<controls:RtaimeComboBox
+				Grid.Column="2"
+				Height="30"
+				ItemsSource="{Binding Context.MediaPool.Categories, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+				SelectedItem="{Binding Context.MediaPool.SelectedCategory, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+				ToolTip="Resource category"
+				AutomationProperties.Name="Media category" />
+		</Grid>
+
+		<controls:RtaimeListBox
+			Grid.Row="2"
+			Height="32"
+			ItemsSource="{Binding Context.MediaPool.Filters, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+			SelectedItem="{Binding Context.MediaPool.SelectedFilter, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+			ItemContainerStyle="{StaticResource RtaimeMediaFilterItem}"
+			Background="Transparent"
+			BorderThickness="0"
+			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+			ScrollViewer.VerticalScrollBarVisibility="Disabled"
+			ToolTip="Media type and availability filters"
+			AutomationProperties.Name="Media filters">
+			<controls:RtaimeListBox.ItemsPanel>
+				<ItemsPanelTemplate>
+					<UniformGrid Rows="1" Columns="6" />
+				</ItemsPanelTemplate>
+			</controls:RtaimeListBox.ItemsPanel>
+		</controls:RtaimeListBox>
+
+		<Grid Grid.Row="3" Margin="0,2,0,0">
+			<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+			<Grid>
+				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /><ColumnDefinition Width="36" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
+				<controls:RtaimeComboBox x:Name="MediaSmartBins" ItemsSource="{Binding Context.MediaPool.SmartBins, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedItem="{Binding Context.MediaPool.SelectedSmartBin, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+					DisplayMemberPath="Name" ToolTip="{Binding Context.MediaPool.BinStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" AutomationProperties.Name="Saved Smart Bin" />
+				<controls:RtaimeButton Grid.Column="1" Content="Save" Command="{Binding Context.MediaPool.SaveSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" ToolTip="Save current search and metadata filters (maximum 16)." AutomationProperties.Name="Save Smart Bin" />
+				<controls:RtaimeButton Grid.Column="2" Content="Del" Command="{Binding Context.MediaPool.DeleteSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" ToolTip="Delete selected Smart Bin; media stays in the library." AutomationProperties.Name="Delete Smart Bin" />
+				<controls:RtaimeButton Grid.Column="3" Content="Filters" Command="{Binding Context.MediaPool.ToggleMetadataFiltersCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" ToolTip="Show or hide duration and readiness filters." AutomationProperties.Name="Show media metadata filters" />
+			</Grid>
+			<Grid Grid.Row="3" Margin="0,2,0,0" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+                                <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="30"/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
+                                <controls:RtaimeTextBox x:Name="MediaSmartBinName" MaxLength="128" Text="{Binding Context.MediaPool.SmartBinName, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="Name for a new Smart Bin; Rename changes only the selected saved definition's name." AutomationProperties.Name="Smart Bin name"/>
+                                <controls:RtaimeButton Grid.Column="1" Content="Rename" Command="{Binding Context.MediaPool.RenameSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Rename selected Smart Bin"/>
+                                <controls:RtaimeCheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Hover thumbnails" IsChecked="{Binding Context.MediaPool.HoverPreviewsEnabled, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                                    ToolTip="Hover or keyboard focus shares existing images only. Scrubbing is unavailable; Runtime pressure pauses admission." AutomationProperties.Name="Enable hover and keyboard focus thumbnails"/>
+                            </Grid>
+                            <Grid Grid.Row="1" Height="30" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+				<controls:RtaimeComboBox ItemsSource="{Binding Context.MediaPool.DurationChoices, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValue="{Binding Context.MediaPool.DurationFilter, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+					ToolTip="Known catalogue duration; unknown durations stay explicit." AutomationProperties.Name="Media duration filter" />
+				<controls:RtaimeComboBox Grid.Column="1" ItemsSource="{Binding Context.MediaPool.ReadinessChoices, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValue="{Binding Context.MediaPool.ReadinessFilter, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+					ToolTip="Current presentation readiness; not a production qualification." AutomationProperties.Name="Media readiness filter" />
+			</Grid>
+
+                            <StackPanel Grid.Row="2">
+                                <TextBlock Text="{Binding Context.MediaPool.SearchStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeCompact}" AutomationProperties.LiveSetting="Polite" />
+                                <Border Visibility="{Binding Context.MediaPool.PreparationVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource RtaimeBorderBrush}">
+    <StackPanel>
+        <TextBlock Text="Prepare selected assets · representative verification" TextWrapping="Wrap" />
+        <TextBlock Text="Close file decks deliberately before starting. No routing changes. Seek points 1–3; frames per point 1–4." TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal">
+            <controls:RtaimeCheckBox Content="Require audio" IsChecked="{Binding Context.MediaPool.RequirePreparationAudio, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}" />
+            <TextBlock Text=" Seeks " VerticalAlignment="Center" />
+            <controls:RtaimeTextBox Width="32" Text="{Binding Context.MediaPool.PreparationSeekPoints, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Representative seek points" />
+            <TextBlock Text=" Frames " VerticalAlignment="Center" />
+            <controls:RtaimeTextBox Width="32" Text="{Binding Context.MediaPool.PreparationFramesPerPoint, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Frames per representative seek" />
+        </StackPanel>
+        <WrapPanel>
+            <controls:RtaimeButton Content="Prepare / Retry" Command="{Binding Context.MediaPool.PrepareAssetsCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" />
+            <controls:RtaimeButton Content="Cancel" Command="{Binding Context.MediaPool.CancelPreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" />
+            <controls:RtaimeButton Content="Close" Command="{Binding Context.MediaPool.ClosePreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" />
+        </WrapPanel>
+        <TextBlock Text="{Binding Context.MediaPool.PreparationStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+        <controls:RtaimeScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Context.MediaPool.PreflightEvidence, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+                <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Detail}" TextWrapping="Wrap" ToolTip="{Binding SourceLocation}" /></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </controls:RtaimeScrollViewer>
+    </StackPanel>
+</Border>
+<controls:RtaimeButton Content="Batch · Remove selected…" Command="{Binding Context.MediaPool.PrepareBatchRemoveCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Prepare selected catalogue records for removal" ToolTip="Review up to 128 selected records. Source files are retained." />
+                                <Border Visibility="{Binding Context.MediaPool.BatchVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Context.MediaPool.BatchStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <controls:RtaimeListBox x:Name="MediaBatchResults" MaxHeight="96" ItemsSource="{Binding Context.MediaPool.BatchItems, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" AutomationProperties.Name="Media batch preflight and results">
+                                            <controls:RtaimeListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" ToolTip="{Binding Detail}">
+                                                        <Run Text="{Binding State}" /><Run Text=" · " /><Run Text="{Binding Name}" /><Run Text=" · " /><Run Text="{Binding Detail}" />
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </controls:RtaimeListBox.ItemTemplate>
+                                        </controls:RtaimeListBox>
+                                        <WrapPanel>
+                                            <controls:RtaimeButton Content="Confirm" Command="{Binding Context.MediaPool.ExecuteBatchCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Confirm media batch" />
+                                            <controls:RtaimeButton Content="Stop" Command="{Binding Context.MediaPool.CancelBatchCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Stop media batch after current request" />
+                                            <controls:RtaimeButton Content="Retry failed" Command="{Binding Context.MediaPool.RetryBatchCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Prepare failed and unsent media items again" />
+                                            <controls:RtaimeButton Content="Close" Command="{Binding Context.MediaPool.CloseBatchCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Close media batch results" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+		</Grid>
+
+		<Grid Grid.Row="4" Margin="0,10,0,0">
+			<Grid Height="36" VerticalAlignment="Bottom" Panel.ZIndex="20" IsHitTestVisible="False" Background="{DynamicResource OperatorSurfaceBrush}" Visibility="{Binding Context.MediaPool.LibraryFeedbackVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+				<Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+				<Image Source="{Binding Context.MediaPool.HoverThumbnail, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Stretch="Uniform" Margin="0,2,4,2" />
+				<TextBlock Grid.Column="1" Text="{Binding Context.MediaPool.HoverStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" VerticalAlignment="Center"
+					ToolTip="{Binding Context.MediaPool.BinStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" AutomationProperties.LiveSetting="Polite" />
+			</Grid>
+			<controls:RtaimeStatePlaceholder
+							State="{Binding Context.WorkspaceStates.MediaLibrary.State, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+							Title="{Binding Context.WorkspaceStates.MediaLibrary.Title, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+							Detail="{Binding Context.WorkspaceStates.MediaLibrary.Detail, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+							Panel.ZIndex="60"
+							Margin="0" />
+			<controls:RtaimeListBox
+				x:Name="MediaAssetGrid"
+				ItemsSource="{Binding Context.MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+				SelectedItem="{Binding Context.MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+				SelectionMode="Extended"
+				SelectionChanged="OnMediaPoolSelectionChanged"
+				IsVisibleChanged="OnMediaPoolViewVisibilityChanged"
+				ItemContainerStyle="{StaticResource RtaimeMediaTileContainer}"
+				PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
+				PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+				VirtualizingPanel.IsVirtualizing="True"
+				VirtualizingPanel.VirtualizationMode="Recycling"
+				ScrollViewer.CanContentScroll="True"
+				MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
+				AutomationProperties.Name="Media Library grid">
+				<controls:RtaimeListBox.Style>
+					<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">
+						<Setter Property="Visibility" Value="Collapsed" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding Context.MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+								<Setter Property="Visibility" Value="Visible" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</controls:RtaimeListBox.Style>
+				<controls:RtaimeListBox.ItemsPanel>
+					<ItemsPanelTemplate>
+						<local:VirtualizingWrapPanel
+							IsItemsHost="True"
+							ItemWidth="120"
+							ItemHeight="104"
+							HorizontalSpacing="8"
+							VerticalSpacing="10" />
+					</ItemsPanelTemplate>
+				</controls:RtaimeListBox.ItemsPanel>
+				<controls:RtaimeListBox.ItemTemplate>
+					<DataTemplate>
+						<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
+							Thumbnail="{Binding Thumbnail}"
+							AssetName="{Binding Name}"
+							Duration="{Binding DurationLabel}"
+							FileType="{Binding FileTypeLabel}"
+							Availability="{Binding ReadinessLabel}"
+							ToolTip="{Binding PreviewCapabilityLabel}"
+							IsOnline="{Binding IsOnline}"
+							IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
+							<controls:RtaimeMediaTile.ContextMenu>
+								<controls:RtaimeContextMenu>
+									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+									<controls:RtaimeMenuSeparator />
+									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
+									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+								</controls:RtaimeContextMenu>
+							</controls:RtaimeMediaTile.ContextMenu>
+							<StackPanel Orientation="Horizontal">
+								<controls:RtaimeButton
+									Content="PVW"
+									Click="OnMediaPoolPreviewActionClick"
+									IsCompact="True"
+									MinHeight="22"
+									Padding="5,1"
+									Margin="0,0,3,0"
+									ToolTip="Open in Preview" />
+								<controls:RtaimeButton
+									Content="TL"
+									Click="OnMediaPoolTimelineActionClick"
+									IsCompact="True"
+									MinHeight="22"
+									Padding="5,1"
+									ToolTip="Add to Timeline" />
+							</StackPanel>
+						</controls:RtaimeMediaTile>
+					</DataTemplate>
+				</controls:RtaimeListBox.ItemTemplate>
+			</controls:RtaimeListBox>
+
+			<controls:RtaimeListBox
+				x:Name="MediaAssetList"
+				ItemsSource="{Binding Context.MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+				SelectedItem="{Binding Context.MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+				SelectionMode="Extended"
+				SelectionChanged="OnMediaPoolSelectionChanged"
+				IsVisibleChanged="OnMediaPoolViewVisibilityChanged"
+				ItemContainerStyle="{StaticResource RtaimeMediaListRowContainer}"
+				PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
+				PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+				VirtualizingPanel.IsVirtualizing="True"
+				VirtualizingPanel.VirtualizationMode="Recycling"
+				ScrollViewer.CanContentScroll="True"
+				MouseLeave="OnMediaLibraryLeave" LostKeyboardFocus="OnMediaLibraryLostFocus" GotKeyboardFocus="OnMediaLibraryFocus"
+				AutomationProperties.Name="Media Library list">
+				<controls:RtaimeListBox.Style>
+					<Style TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource RtaimeMediaAssetListBox}">
+						<Setter Property="Visibility" Value="Visible" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding Context.MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+								<Setter Property="Visibility" Value="Collapsed" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</controls:RtaimeListBox.Style>
+				<controls:RtaimeListBox.ItemsPanel>
+					<ItemsPanelTemplate>
+						<local:VirtualizingWrapPanel IsItemsHost="True" SingleColumn="True" ItemHeight="{StaticResource OperatorMediaListRowHeight}" />
+					</ItemsPanelTemplate>
+				</controls:RtaimeListBox.ItemsPanel>
+				<controls:RtaimeListBox.ItemTemplate>
+					<DataTemplate>
+						<Grid MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
+							<Grid.ContextMenu>
+								<controls:RtaimeContextMenu>
+									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+									<controls:RtaimeMenuSeparator />
+									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
+									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+								</controls:RtaimeContextMenu>
+							</Grid.ContextMenu>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<StackPanel>
+								<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+								<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
+							</StackPanel>
+							<StackPanel Grid.Column="1" HorizontalAlignment="Right">
+								<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
+								<TextBlock Text="{Binding ReadinessLabel}" ToolTip="{Binding PreviewCapabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
+							</StackPanel>
+						</Grid>
+					</DataTemplate>
+				</controls:RtaimeListBox.ItemTemplate>
+			</controls:RtaimeListBox>
+
+			<TextBlock
+				Text="{Binding Context.MediaPool.EmptyState, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+				TextWrapping="Wrap"
+				HorizontalAlignment="Center"
+				VerticalAlignment="Center"
+				Margin="12">
+				<TextBlock.Style>
+					<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+						<Setter Property="Visibility" Value="Visible" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding Context.MediaPool.HasItems, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+								<Setter Property="Visibility" Value="Collapsed" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</TextBlock.Style>
+			</TextBlock>
+
+			<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4">
+				<Border.Style>
+					<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorLoadingState}">
+						<Setter Property="Visibility" Value="Collapsed" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding Context.MediaPool.IsLoading, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+								<Setter Property="Visibility" Value="Visible" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</Border.Style>
+				<TextBlock Text="LOADING ASSETS…" Style="{StaticResource OperatorLabel}" />
+			</Border>
+
+			<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5">
+				<Border.Style>
+					<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorErrorState}">
+						<Setter Property="Visibility" Value="Collapsed" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding Context.MediaPool.HasError, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+								<Setter Property="Visibility" Value="Visible" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</Border.Style>
+				<TextBlock Text="{Binding Context.MediaPool.ErrorState, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" TextWrapping="Wrap" />
+			</Border>
+		</Grid>
+
+		<local:NdiSourceDiscoveryControl
+			Grid.Row="5"
+			DataContext="{Binding Context.NdiSources, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
+	</Grid>
+</UserControl>

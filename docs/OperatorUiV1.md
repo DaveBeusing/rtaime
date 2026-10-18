@@ -934,3 +934,7 @@ See [Operator commands and shortcuts](OperatorCommandsAndShortcuts.md#inspector-
 The [Media Library](MediaLibraryAssetBrowser.md) supports composable typed search and reviewed, bounded import/remove batches with per-item confirmation, partial failure and stop/retry handling through the existing Client path. Confirmed production operations remain outside local undo.
 
 [Workspace layout templates](OperatorWorkspaces.md#named-workspace-layout-templates) add named portable presentation presets, deterministic Focus/Cinema restore and retained detached views. They reuse the original Operator models and monitoring and do not change production state.
+
+## Productive composition ownership
+
+The Media Library is hosted by OperatorMediaLibraryView with an explicit borrowed context; the existing OperatorInspectorControl remains the contextual Inspector. MainWindow owns feature lifetimes and OperatorComposition supplies typed connections to the existing owners. See [composition and namescope ownership](OperatorComposition.md) for actual files, shared selection/drafts, docking/focus and regression boundaries. No layout schema, shortcut or production contract changes.

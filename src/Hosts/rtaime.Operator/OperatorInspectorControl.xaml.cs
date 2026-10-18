@@ -82,6 +82,7 @@ public partial class OperatorInspectorControl : UserControl
 		get => (ICommand?)GetValue(CollapseCommandProperty);
 		set => SetValue(CollapseCommandProperty, value);
 	}
+	internal int InspectorSubscriptionCount => _subscribedInspector is null ? 0 : 1;
 	private MediaPoolInspectorViewModel? _subscribedInspector;
 	private string? _selectionIdentity;
 	private static readonly DependencyPropertyKey NumericInputsValidKey = DependencyProperty.RegisterReadOnly(
