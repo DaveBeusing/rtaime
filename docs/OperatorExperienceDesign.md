@@ -15,7 +15,7 @@ authorizes the full design implementation beyond the former V1 functional ceilin
 Independent analysis/scrubbing, real multitrack sequences/editing, Preview shuttle,
 2D canvas/mapping, contextual Inspector extensions and an independent AI workspace
 are approved **TO IMPLEMENT**. This contract defines executable acceptance targets;
-documentation approval is not feature completion or visual/hardware/release acceptance. The source review baseline is `master` at `7bd13506272dec071bccda23beb767da44562fac`. Implementation must recheck the current master, relevant branches and pull requests before changing anything.
+documentation approval is not feature completion or visual/hardware/release acceptance. The historical design-foundation source was `7bd13506272dec071bccda23beb767da44562fac`; the [current reviewed baseline](OperatorExperienceScope.md#status-vocabulary-and-delivery-ownership) is recorded separately. Implementation must recheck the current master, relevant branches and pull requests before changing anything.
 
 Precedence is explicit:
 

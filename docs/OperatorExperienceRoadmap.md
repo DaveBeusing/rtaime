@@ -9,7 +9,12 @@ listed extensions approved implementation work. This roadmap supplies ownership,
 dependencies and acceptance; it grants no hardware/security/release certification
 and does not claim that the target already matches the running application.
 
-Reviewed integration source: `master` at `7bd13506272dec071bccda23beb767da44562fac`, including integrated media asset preparation. Existing repository capability documentation and relevant changes were inspected. No new build, Windows visual acceptance, hardware measurement or interaction benchmark was executed to establish this documentation baseline.
+Historical design-foundation source: `7bd13506272dec071bccda23beb767da44562fac`,
+including integrated media asset preparation. The
+[current reviewed scope/evidence baseline](OperatorExperienceScope.md) supersedes
+its functional deferrals and records available source-bound observations.
+New-head build/CI results belong to the corresponding PR; historical observations
+do not establish new human/physical acceptance.
 
 Before subsequent implementation, inspect current master, relevant remote branches and all applicable open/closed pull requests; continue usable work instead of duplicating it. Start a new technical branch only from current master when no reusable work exists. Preserve [repository governance](Governance/RepositoryGovernance.md), [versioning](Versioning.md), the existing five Required Gates and subsystem authority. Documentation changes do not allocate a new product version or change layout/production schemas.
 
