@@ -150,10 +150,15 @@ Control restart, legacy reconstruction, cancellation and fail-closed future data
 
 Run the focused cases after the canonical Windows Release build, then the affected
 projects and full solution as described in [Build and test](BuildAndTest.md).
-The PR records actual exact-source Required Gates evidence. A cancelled-save case
-does not establish actual OS termination during the SQLite commit; physical
-crash/power-loss, hardware output and renderer pixel qualification remain separate
-unverified evidence boundaries. Existing hardware/release NO-GO findings remain.
+The existing ProcessSupervisionRecoveryTests killed-ControlHost case also holds a
+real SQLite writer lock, issues an in-flight canvas save, kills the owned process
+and verifies the prior saved revision/receipt after supervised restart. Retrying
+the interrupted transaction then commits exactly once without advancing Program.
+This tests actual process termination with a blocked save; it does not simulate
+power loss inside the SQLite commit or qualify storage hardware durability.
+The PR records actual exact-source Required Gates evidence. Physical power-loss,
+hardware output and renderer pixel qualification remain separate unverified
+evidence boundaries. Existing hardware/release NO-GO findings remain.
 
 The next functional consumer is the mapping renderer/Prepare-Commit activation,
 then the editor using these real Client methods. Consumers must preserve stable IDs,

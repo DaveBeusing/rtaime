@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using Microsoft.Data.Sqlite;
 using System.Text.Json;
 using rtaime.Client;
 using rtaime.Control.Contracts;
@@ -144,8 +145,30 @@ public sealed class ProcessSupervisionRecoveryTests
 			var committedRevision = committed.Production.Revision;
 			await WaitForCheckpointAsync(root, controlEndpoint, committed.Production.ProductionId, committedRevision);
 
+            var canvasBefore = await staleClient.GetOutputCanvasAsync();
+            var canvasId = Guid.NewGuid();
+            var canvasCreate = new OutputCanvasSaveRequest("1.0",Guid.NewGuid(),canvasBefore.Saved.ConfigurationId,0,
+                [new(OutputCanvasEditKind.AddCanvas,canvasId,Canvas:new(canvasId,"Before crash",640,360))]);
+            var canvasSaved = await staleClient.SaveOutputCanvasAsync(canvasCreate);
+            Assert.True(canvasSaved.Saved,string.Join("; ",canvasSaved.Validation.Issues.Select(issue=>issue.Message)));
+            var interruptedEdit = new OutputCanvasSaveRequest("1.0",Guid.NewGuid(),canvasBefore.Saved.ConfigurationId,1,
+                [new(OutputCanvasEditKind.UpdateCanvas,canvasId,Canvas:new(canvasId,"After recovery",640,360))]);
+            var databasePath = Path.Combine(root,$"{committed.Production.ProductionId}-{controlEndpoint}","management.db");
+            // A real SQLite writer lock prevents the pending save from committing before process termination.
+            await using var writer = new SqliteConnection(new SqliteConnectionStringBuilder {
+                DataSource=databasePath,Pooling=false
+            }.ToString());
+            await writer.OpenAsync();
+            using var blockedWrite = writer.BeginTransaction();
+            var pendingSave = staleClient.SaveOutputCanvasAsync(interruptedEdit).AsTask();
+            await Task.Delay(100);
+            Assert.False(pendingSave.IsCompleted,"The save must still be in flight while the writer lock is held.");
+
 			var firstControlPid = controlSupervisor.Snapshot.OwnedProcessId!.Value;
 			Kill(firstControlPid);
+            blockedWrite.Rollback();
+            await writer.CloseAsync();
+            await Assert.ThrowsAnyAsync<Exception>(async () => await pendingSave);
 			await WaitUntilAsync(
 				() => controlSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null } snapshot && snapshot.OwnedProcessId != firstControlPid,
 				ProcessRecoveryTimeoutMilliseconds);
@@ -157,6 +180,15 @@ public sealed class ProcessSupervisionRecoveryTests
 			Assert.False(transport.RequiresFullSnapshot);
 			Assert.Equal(committedRevision, recovered.Production.Revision);
 			Assert.Equal(committed.Production.Routing, recovered.Production.Routing);
+            var recoveredCanvas = await staleClient.GetOutputCanvasAsync();
+            Assert.Equal(1UL,recoveredCanvas.SavedRevision);
+            Assert.Null(recoveredCanvas.ActiveRenderRevision);
+            Assert.Equal("Before crash",recoveredCanvas.Saved.Canvases.Single(canvas=>canvas.CanvasId==canvasId).Name);
+            Assert.True((await staleClient.SaveOutputCanvasAsync(canvasCreate)).Replayed);
+            var resumedCanvas = await staleClient.SaveOutputCanvasAsync(interruptedEdit);
+            Assert.True(resumedCanvas.Saved);
+            Assert.Equal(2UL,resumedCanvas.SavedRevision);
+            Assert.Equal(committedRevision,staleClient.Snapshot!.Production.Revision);
 
 			var freshClient = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(3)));
 			await RetrySnapshotAsync(freshClient, requireRuntimeReady: true);
