@@ -21,10 +21,10 @@
     <TextBlock Text="{Binding Progress}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,6"/>
     <WrapPanel>
      <controls:RtaimeButton Content="Previous" Command="{Binding PreviousCommand}" IsCompact="True" AutomationProperties.Name="Previous guide topic" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Mark reviewed locally" Command="{Binding ReviewCommand}" IsCompact="True" AutomationProperties.Name="Mark topic reviewed without sending a command" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Next" Command="{Binding NextCommand}" IsCompact="True" AutomationProperties.Name="Next guide topic" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Minimize" Command="{Binding MinimizeCommand}" IsCompact="True" AutomationProperties.Name="Minimize getting started guide" Margin="0,0,6,4"/>
-     <controls:RtaimeButton Content="Turn guide off" Command="{Binding DisableCommand}" IsCompact="True" AutomationProperties.Name="Disable automatic guide expansion locally" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="ReviewGuideButton" Content="Mark reviewed locally" Command="{Binding ReviewCommand}" IsCompact="True" AutomationProperties.Name="Mark topic reviewed without sending a command" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="NextGuideButton" Content="Next" Command="{Binding NextCommand}" IsCompact="True" AutomationProperties.Name="Next guide topic" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="MinimizeGuideButton" Content="Minimize" Command="{Binding MinimizeCommand}" IsCompact="True" AutomationProperties.Name="Minimize getting started guide" Margin="0,0,6,4"/>
+     <controls:RtaimeButton x:Name="DisableGuideButton" Content="Turn guide off" Command="{Binding DisableCommand}" IsCompact="True" AutomationProperties.Name="Disable automatic guide expansion locally" Margin="0,0,6,4"/>
     </WrapPanel>
    </StackPanel>
    <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>

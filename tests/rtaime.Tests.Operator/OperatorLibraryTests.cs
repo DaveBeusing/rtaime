@@ -171,20 +171,29 @@ public sealed class OperatorLibraryTests
             Assert.Same(main.Library.Onboarding, guide.DataContext);
             var onboarding = main.Library.Onboarding;
             await onboarding.LoadAsync();
+            window.Width = 360; window.Height = 360;
+            var reopenGuide = Assert.IsType<RtaimeButton>(guide.FindName("ReopenGuideButton"));
+            var minimizeGuide = Assert.IsType<RtaimeButton>(guide.FindName("MinimizeGuideButton"));
+            var disableGuide = Assert.IsType<RtaimeButton>(guide.FindName("DisableGuideButton"));
+            var reviewGuide = Assert.IsType<RtaimeButton>(guide.FindName("ReviewGuideButton"));
+            Assert.Same(onboarding.ReopenCommand, reopenGuide.Command);
+            Assert.Same(onboarding.MinimizeCommand, minimizeGuide.Command);
+            Assert.Same(onboarding.DisableCommand, disableGuide.Command);
+            Assert.Same(onboarding.ReviewCommand, reviewGuide.Command);
             foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
             {
-                window.LayoutTransform = new System.Windows.Media.ScaleTransform(scale, scale);
-                onboarding.ReopenCommand.Execute(null);
+                ((FrameworkElement)window.Content).LayoutTransform = new System.Windows.Media.ScaleTransform(scale, scale);
+                reopenGuide.Command.Execute(null);
                 window.UpdateLayout();
                 Assert.True(guide.IsVisible);
-                onboarding.MinimizeCommand.Execute(null); Assert.False(onboarding.IsExpanded);
-                onboarding.ReopenCommand.Execute(null); Assert.True(onboarding.IsExpanded);
-                onboarding.DisableCommand.Execute(null); Assert.False(onboarding.IsExpanded);
+                minimizeGuide.Command.Execute(null); Assert.False(onboarding.IsExpanded);
+                reopenGuide.Command.Execute(null); Assert.True(onboarding.IsExpanded);
+                disableGuide.Command.Execute(null); Assert.False(onboarding.IsExpanded);
                 Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(scene, owner.ActiveSceneId);
             }
             onboarding.ReopenCommand.Execute(null);
             await onboarding.FlushAsync();
-            window.LayoutTransform = System.Windows.Media.Transform.Identity;
+            ((FrameworkElement)window.Content).LayoutTransform = System.Windows.Media.Transform.Identity;
             window.Width = 360; window.Height = 360;
             var search = Assert.IsType<RtaimeTextBox>(window.FindName("SearchBox"));
             Assert.True(search.IsKeyboardFocusWithin);
