@@ -135,6 +135,7 @@ public partial class MainWindow : Window
 		DataContext = viewModel;
 		Composition = new(this);
         AudioMixerView.Inspector = Composition.Inspector;
+        AudioMixerView.DataContext = viewModel.AudioMixer;
 		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>
@@ -246,6 +247,7 @@ public partial class MainWindow : Window
 		DataContext = viewModel;
 		Composition = new(this);
         AudioMixerView.Inspector = Composition.Inspector;
+        AudioMixerView.DataContext = viewModel.AudioMixer;
 		MediaLibraryView.Context = Composition.Library;
         Docking = new OperatorDockController(this, LegacyWorkspaceGrid, DockWorkspaceHost,
             new Dictionary<string, FrameworkElement>

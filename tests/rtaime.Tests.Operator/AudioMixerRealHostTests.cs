@@ -30,7 +30,11 @@ public sealed class AudioMixerRealHostTests
             var client = new OperatorControlClient(new NamedPipeOperatorControlTransport("rtaime.mixer.control." + suffix));
             await using var owner = new OperatorViewModel(client);
             owner.SynchronizeCommand.Execute(null);
-            await Until(() => Task.FromResult(owner.IsConnected && !owner.IsBusy));
+            await Until(async () => {
+                if (!owner.IsBusy) owner.SynchronizeCommand.Execute(null);
+                await Task.Delay(20);
+                return owner.IsConnected && !owner.IsBusy && owner.AudioMixer.CanEdit;
+            }, () => owner.GlobalReadinessSummary + " · " + owner.LastError);
             var source = owner.AudioMixer.Sources[0];
             var id = new MediaSourceId(Identity.Parse(source.SourceId));
             var samples = new float[1920];
@@ -40,7 +44,7 @@ public sealed class AudioMixerRealHostTests
             source.Gain = .5;
             var baseline = client.Snapshot!.AudioProduction!.Configuration.Revision;
             Assert.Equal(baseline, runtime.Runtime.Snapshot.AudioProduction!.Revision);
-            Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+            Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError + " · " + owner.GlobalReadinessSummary);
             await Until(async () => {
                 var snapshot = await client.SynchronizeAsync();
                 return Math.Abs(snapshot.AudioProduction!.Buses.Single(b => b.BusId == "program").LeftPeak - .2) < .0001;
@@ -48,15 +52,15 @@ public sealed class AudioMixerRealHostTests
             Assert.Equal(.1, client.Snapshot!.AudioProduction!.Buses.Single(b => b.BusId == "program").RightPeak, 4);
             source.ToggleMuteCommand.Execute(null);
             Assert.False(client.Snapshot.AudioProduction.Configuration.GetSource(id).Muted);
-            Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+            Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError + " · " + owner.GlobalReadinessSummary);
             await Until(async () => (await client.SynchronizeAsync()).AudioProduction!.Buses.Single(b => b.BusId == "program").LeftPeak == 0);
             source.ToggleMuteCommand.Execute(null);
             var route = source.Assignments.Single(a => a.BusId == "program");
             route.ToggleCommand.Execute(null);
-            Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+            Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError + " · " + owner.GlobalReadinessSummary);
             Assert.Empty(client.Snapshot!.AudioProduction!.Configuration.GetSource(id).BusAssignments);
             route.ToggleCommand.Execute(null); source.UnityDraft();
-            Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+            Assert.True(await owner.AudioMixer.ApplySourceAsync(source), owner.LastError + " · " + owner.GlobalReadinessSummary);
             await Until(async () => Math.Abs((await client.SynchronizeAsync()).AudioProduction!.Buses.Single(b => b.BusId == "program").LeftPeak - .4) < .0001);
             Assert.Equal(1, client.Snapshot!.AudioProduction!.Configuration.GetSource(id).Gain);
             // A different real writer advances the revision. The retained draft must reject and remain editable.
@@ -74,9 +78,13 @@ public sealed class AudioMixerRealHostTests
             try { Directory.Delete(root, true); } catch (IOException) { }
         }
     }
-    private static async Task Until(Func<Task<bool>> condition)
+    private static async Task Until(Func<Task<bool>> condition, Func<string>? detail = null)
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!await condition()) await Task.Delay(20, deadline.Token);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!await condition())
+        {
+            if (DateTime.UtcNow >= deadline) throw new TimeoutException("Mixer host condition did not settle: " + detail?.Invoke());
+            await Task.Delay(20);
+        }
     }
 }

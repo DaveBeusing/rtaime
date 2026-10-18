@@ -71,6 +71,13 @@ public sealed partial class AudioMixerOperatorSurfaceTests
     [InlineData(-1, "—", false)]
     public async Task Mixer_meter_invalid_values_never_become_live_silence(double peak, string label, bool hasValue)
     {
+        if (!AudioMixerPresentation.ValidPeak(peak))
+        {
+            Assert.Equal(label, AudioMixerPresentation.PeakLabel(peak));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new OperatorAudioInputDescriptor(
+                "source", "stream", 1, false, peak, peak, peak, false, "HEALTHY"));
+            return;
+        }
         await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
         var id = new MediaSourceId(Identity.New());
         var config = new AudioProductionConfiguration(1, [new(AudioBusId.Program, 1, false)],

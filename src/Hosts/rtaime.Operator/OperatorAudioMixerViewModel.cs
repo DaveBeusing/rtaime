@@ -478,8 +478,8 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 			DraftChanged();
 			return Task.CompletedTask;
 		}, () => MutationState != "PENDING");
-		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => CanEditDraft);
-		ToggleContributionCommand = new AsyncRelayCommand(() => { FollowRoutedSource = !FollowRoutedSource; return Task.CompletedTask; }, () => CanEditDraft);
+		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
+		ToggleContributionCommand = new AsyncRelayCommand(() => { FollowRoutedSource = !FollowRoutedSource; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -712,7 +712,7 @@ public sealed partial class OperatorAudioBusAssignmentViewModel : INotifyPropert
 		_owner = owner;
 		_source = source;
 		BusId = busId.Value;
-		ToggleCommand = new AsyncRelayCommand(() => { if (_source.CanEditDraft) { DraftAssigned = !DraftAssigned; } return Task.CompletedTask; }, () => _source.CanEditDraft);
+		ToggleCommand = new AsyncRelayCommand(() => { if (_source.CanEditDraft) { DraftAssigned = !DraftAssigned; } return Task.CompletedTask; }, () => _owner.CanMutate() && _source.CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -807,7 +807,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 			DraftChanged();
 			return Task.CompletedTask;
 		}, () => MutationState != "PENDING");
-		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => CanEditDraft);
+		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
