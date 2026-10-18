@@ -134,8 +134,9 @@ public sealed record OperatorLayoutSettings
 				layouts[OperatorWorkspaceNames.Settings] = legacySystem.Normalize();
 			}
 
-			foreach (var workspace in OperatorWorkspaceNames.All)
+			foreach (var workspace in Workspaces.Keys.Where(OperatorWorkspaceRegistry.IsPersistableId).Take(OperatorWorkspaceRegistry.MaximumRetainedLayouts))
 			{
+				if (!layouts.ContainsKey(workspace) && layouts.Count >= OperatorWorkspaceRegistry.MaximumRetainedLayouts) continue;
 				if (Workspaces.TryGetValue(workspace, out var layout) && layout is not null)
 					layouts[workspace] = layout.Normalize();
 			}
@@ -152,17 +153,9 @@ public sealed record OperatorLayoutSettings
 		};
 	}
 
-	public static Dictionary<string, OperatorWorkspaceLayoutSettings> CreateCanonicalLayouts() => new(StringComparer.Ordinal)
-	{
-		[OperatorWorkspaceNames.Live] = CreateReferenceLayout("DUAL"),
-		[OperatorWorkspaceNames.Edit] = CreateReferenceLayout("DUAL"),
-		[OperatorWorkspaceNames.Media] = CreateReferenceLayout("PREVIEW"),
-		[OperatorWorkspaceNames.Scenes] = CreateReferenceLayout("DUAL"),
-		[OperatorWorkspaceNames.Compositing] = CreateReferenceLayout("DUAL"),
-		[OperatorWorkspaceNames.Outputs] = CreateReferenceLayout("PROGRAM"),
-		[OperatorWorkspaceNames.Health] = CreateReferenceLayout("PROGRAM"),
-		[OperatorWorkspaceNames.Settings] = CreateReferenceLayout("PROGRAM")
-	};
+	public static Dictionary<string, OperatorWorkspaceLayoutSettings> CreateCanonicalLayouts() =>
+        OperatorWorkspaceRegistry.Destinations.ToDictionary(d => d.Id,
+            d => CreateReferenceLayout(d.ViewerMode), StringComparer.Ordinal);
 
 	private static OperatorWorkspaceLayoutSettings CreateReferenceLayout(string viewerMode) => new(
 		DefaultLeftPanelWidth,
@@ -186,17 +179,9 @@ public static class OperatorWorkspaceNames
 	public const string Health = "HEALTH";
 	public const string Settings = "SETTINGS";
 
-	public static IReadOnlyList<string> All { get; } =
-	[
-		Media,
-		Edit,
-		Live,
-		Scenes,
-		Compositing,
-		Outputs,
-		Health,
-		Settings
-	];
+	public const string Ai = "AI";
+	public const string Multiview = "MULTIVIEW";
+	public static IReadOnlyList<string> All { get; } = OperatorWorkspaceRegistry.Destinations.Select(d => d.Id).ToArray();
 
 	public static string Normalize(string? value)
 	{
@@ -391,6 +376,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			() => SetViewerMode("DUAL"),
 			() => !string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal));
 		InitializeWorkspaceTemplates(settings.Templates);
+        InitializeNavigation();
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -419,7 +405,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
-	public double CenterWorkspacePrimaryMinWidth => IsCompactViewport ? 0 : Math.Max(260, 420 * WorkspaceScale);
+	public double CenterWorkspacePrimaryMinWidth => IsAiWorkspace || IsCompactViewport ? 0 : Math.Max(260, 420 * WorkspaceScale);
 	public double MediaDeckPreviewHeight => IsCompactViewport
 		? Math.Max(150, 220 * WorkspaceScale)
 		: Math.Max(180, 260 * WorkspaceScale);
@@ -480,20 +466,20 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(!HasLeftRegion || IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : (IsLiveWorkspace ? 360 : LeftPanelWidth) * WorkspaceScale);
+		get => new(IsCenterMaximized || !HasLeftRegion ? 0 : IsCompactViewport ? CompactPaneWidth("LIBRARY") : IsLeftCollapsed ? 0 : LeftPanelWidth * WorkspaceScale);
 		set
 		{
-			if (HasLeftRegion && !IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
+			if (HasLeftRegion && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value / WorkspaceScale;
 		}
 	}
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : (IsLiveWorkspace ? 420 : RightPanelWidth) * WorkspaceScale);
+		get => new(IsCenterMaximized || IsHealthWorkspace ? 0 : IsCompactViewport ? CompactPaneWidth("INSPECTOR") : IsRightCollapsed ? 0 : RightPanelWidth * WorkspaceScale);
 		set
 		{
-			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
 				RightPanelWidth = value.Value / WorkspaceScale;
 		}
 	}
@@ -501,10 +487,10 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public GridLength LowerRowHeight
 	{
 		get => new(
-			IsCenterMaximized || IsLiveWorkspace || IsHealthWorkspace
+			IsCenterMaximized || IsMultiviewWorkspace || IsHealthWorkspace
 				? 0
 				: IsCompactViewport
-					? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
+					? IsLiveWorkspace ? 120 : Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
 					: Math.Max(OperatorLayoutSettings.MinimumLowerPanelHeight, LowerPanelHeight * WorkspaceScale));
 		set
 		{
@@ -587,29 +573,29 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public bool IsHealthWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Health, StringComparison.Ordinal);
 	public bool IsSettingsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Settings, StringComparison.Ordinal);
 
-	public bool HasLeftRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
-	public bool HasTimelineRegion => IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
+	public bool HasLeftRegion => IsMultiviewWorkspace || IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
+	public bool HasTimelineRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
-	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
-	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+	public bool HasAuxiliaryWorkspaceColumn => IsAiWorkspace || IsScenesWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
+	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && (!IsCompactViewport || IsAiWorkspace) ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? Math.Max(170, 240 * WorkspaceScale) : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
-	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MultiviewVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility StandardViewerVisibility => IsAiWorkspace || IsMultiviewWorkspace || IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility LiveWorkspaceVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility NonLiveCenterVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
-	public bool WorkspacePanelResizeEnabled => !IsLiveWorkspace;
-	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility LiveWorkspaceVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility NonLiveCenterVisibility => IsMultiviewWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public bool WorkspacePanelResizeEnabled => true;
+	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SourceBinVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility MediaLibraryLeftVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
-	public Visibility LiveSceneCueVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility InspectorVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
-	public Visibility LiveControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MediaLibraryLeftVisibility => IsMultiviewWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility LiveSceneCueVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility InspectorVisibility => IsMultiviewWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility LiveControlsVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility OutputRoutingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility HealthCenterVisibility => IsHealthWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemWorkspaceVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -618,7 +604,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility GraphicsVisibility => IsScenesWorkspace || IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility AudioVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility RecordingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility AIVisibility => IsCompositingWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AIVisibility => IsAiWorkspace || IsCompositingWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility OperatorStateVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 
 	public string ViewerMode
@@ -638,14 +624,14 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		}
 	}
 
-	public GridLength PreviewViewerWidth => ViewerMode switch
+	public GridLength PreviewViewerWidth => EffectiveViewerMode switch
 	{
 		"PREVIEW" => new GridLength(1, GridUnitType.Star),
 		"PROGRAM" => new GridLength(0),
 		_ => new GridLength(1, GridUnitType.Star)
 	};
 
-	public GridLength ProgramViewerWidth => ViewerMode switch
+	public GridLength ProgramViewerWidth => EffectiveViewerMode switch
 	{
 		"PREVIEW" => new GridLength(0),
 		"PROGRAM" => new GridLength(1, GridUnitType.Star),
@@ -653,19 +639,19 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	};
 
 	public Visibility PreviewViewerVisibility =>
-		string.Equals(ViewerMode, "PROGRAM", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
+		string.Equals(EffectiveViewerMode, "PROGRAM", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
 	public Visibility ProgramViewerVisibility =>
-		string.Equals(ViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
+		string.Equals(EffectiveViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
-	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
-	public double ProductionWorkspaceHeight => IsCompactViewport
+	public double ViewerGapWidth => string.Equals(EffectiveViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
+	public double ProductionWorkspaceHeight => IsLiveWorkspace ? Math.Max(180, _viewportHeight - 132 - LowerRowHeight.Value) : IsCompactViewport
 		? Math.Clamp(
 			_viewportHeight - OperatorLayoutSettings.CompactLowerPanelHeight - 90,
 			260,
 			520)
 		: 700 * WorkspaceScale;
-	public string ViewerModeLabel => ViewerMode switch
+	public string ViewerModeLabel => EffectiveViewerMode switch
 	{
 		"PREVIEW" => "PREVIEW MAXIMIZED",
 		"PROGRAM" => "PROGRAM MAXIMIZED",
@@ -706,6 +692,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		var previousWorkspaceScale = WorkspaceScale;
 		_viewportWidth = width;
 		_viewportHeight = height;
+        RaiseAdaptivePresentationChanged();
 
 		OnPropertyChanged(nameof(CenterWorkspacePrimaryMinWidth));
 		OnPropertyChanged(nameof(MediaDeckPreviewHeight));
@@ -744,8 +731,9 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	{
 		var normalized = OperatorWorkspaceNames.Normalize(workspace);
 		RestorePresentation();
+        _compactPane = null;
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
-			return;
+        { RaiseLayoutGeometryChanged(); return; }
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
 		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
@@ -754,10 +742,10 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	public void Save() => _ = SaveAsync();
 
-	public Task SaveAsync()
+	public async Task SaveAsync()
 	{
 		CaptureCurrentWorkspace();
-		return _store.SaveAsync(new OperatorLayoutSettings
+		await _store.SaveAsync(new OperatorLayoutSettings
 		{
 			Version = OperatorLayoutSettings.CurrentVersion,
 			IsFullscreen = _presentation?.Fullscreen ?? IsFullscreen,
@@ -766,18 +754,21 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			WindowPlacement = _windowPlacement,
 			Workspaces = new Dictionary<string, OperatorWorkspaceLayoutSettings>(_workspaceLayouts, StringComparer.Ordinal)
 		});
+        OnPropertyChanged(nameof(LayoutPersistenceStatus));
 	}
 
 	private void ToggleLeftPanel()
 	{
 		if (!HasLeftRegion)
 			return;
+        if (IsCompactViewport) { ToggleCompactPane("LIBRARY"); return; }
 		IsLeftCollapsed = !IsLeftCollapsed;
 		Save();
 	}
 
 	private void ToggleRightPanel()
 	{
+        if (IsCompactViewport) { ToggleCompactPane("INSPECTOR"); return; }
 		IsRightCollapsed = !IsRightCollapsed;
 		Save();
 	}
@@ -890,6 +881,8 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	private void RaiseWorkspaceChanged()
 	{
+        RaiseAdaptivePresentationChanged();
+        foreach (var link in NavigationGroups.SelectMany(g => g.Items)) link.Refresh();
 		OnPropertyChanged(nameof(TemplateCaptureWorkspace));
 		OnPropertyChanged(nameof(WorkspaceTitle));
 		OnPropertyChanged(nameof(HasLeftRegion));

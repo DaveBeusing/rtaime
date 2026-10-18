@@ -75,8 +75,8 @@
 					ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control."
 					AutomationProperties.Name="Open Demo Production">
 					<StackPanel>
-						<TextBlock Text="V1 PRODUCTION" FontWeight="SemiBold" />
-						<TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
+						<TextBlock Text="{Binding ShowProjectName}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
+						<TextBlock Text="{Binding ShowProjectState}" ToolTip="{Binding ShowProjectDetail}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 					</StackPanel>
 				</controls:RtaimeButton>
 
@@ -169,39 +169,8 @@
 
 			<Grid x:Name="DockWorkspaceHost" Grid.RowSpan="2" Grid.Column="2" Grid.ColumnSpan="5" Panel.ZIndex="10" Visibility="Collapsed" />
 			<Border x:Name="WorkspaceNavigation" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource OperatorNavigationRail}" Padding="0" ClipToBounds="True">
-				<DockPanel LastChildFill="False">
-					<StackPanel DockPanel.Dock="Top">
-						<controls:RtaimeNavigationItem
-							Label="Media"
-							IconData="{StaticResource RtaimeIconMediaGeometry}"
-							Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							CommandParameter="MEDIA"
-							ToolTip="Media workspace">
-							<controls:RtaimeNavigationItem.Style>
-								<Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}">
-									<Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="MEDIA"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers>
-								</Style>
-							</controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Edit" IconData="{StaticResource RtaimeIconTimelineGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="EDIT" ToolTip="Edit workspace">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="EDIT"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Live" IconData="{StaticResource RtaimeIconLiveGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="LIVE" ToolTip="Live workspace">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LIVE"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Scenes" IconData="{StaticResource RtaimeIconMediaGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="SCENES" ToolTip="Scenes workspace">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="SCENES"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Comp" IconData="{StaticResource RtaimeIconCompositingGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="COMPOSITING" ToolTip="Compositing workspace">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="COMPOSITING"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Outputs" IconData="{StaticResource RtaimeIconOutputGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="OUTPUTS" ToolTip="Outputs workspace">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="OUTPUTS"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-						<controls:RtaimeNavigationItem Label="Health" IconData="{StaticResource RtaimeIconHealthGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="HEALTH" ToolTip="Health Center and diagnostics">
-							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="HEALTH"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-						</controls:RtaimeNavigationItem>
-					</StackPanel>
+				<DockPanel LastChildFill="True">
+
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom" Label="Show checks"
 						IconData="{StaticResource RtaimeIconHealthGeometry}"
 						Command="{Binding OpenShowChecksCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -218,14 +187,22 @@
                             </controls:RtaimeContextMenu>
                         </controls:RtaimeNavigationItem.ContextMenu>
                     </controls:RtaimeNavigationItem>
-					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom"
-						Label="Settings"
-						IconData="{StaticResource RtaimeIconSettingsGeometry}"
-						Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						CommandParameter="SETTINGS"
-						ToolTip="Settings and system status">
-						<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="SETTINGS"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
-					</controls:RtaimeNavigationItem>
+                    <controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Shell.NavigationGroups, ElementName=RootWindow}">
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label}" FontSize="{StaticResource OperatorFontSizeCaption}" TextWrapping="Wrap" Margin="4,5" Foreground="{DynamicResource OperatorSecondaryTextBrush}" />
+                                    <ItemsControl ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemTemplate><DataTemplate>
+                                            <controls:RtaimeNavigationItem Label="{Binding Label}" IconData="{Binding Icon}"
+                                                Command="{Binding Command}" CommandParameter="{Binding Id}" IsActive="{Binding IsActive}"
+                                                ToolTip="{Binding Description}" AutomationProperties.Name="{Binding Description}" MinHeight="42" Width="{Binding Shell.NavigationRailWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+                                        </DataTemplate></ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </controls:RtaimeScrollViewer>
 				</DockPanel>
 			</Border>
 
@@ -246,7 +223,24 @@
 			<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5" IsEnabled="{Binding Shell.WorkspacePanelResizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource RtaimeVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Inspector / Live Controls panel. Use arrow keys while focused." AutomationProperties.Name="Resize right workspace panel" />
 
 			<Grid x:Name="CenterWorkspace" Grid.Column="4" ClipToBounds="True">
-				<Grid x:Name="LiveWorkspaceSurface"
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <controls:RtaimeScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                    Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <controls:RtaimeButton Content="LIBRARY" Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Library" />
+                        <controls:RtaimeButton Content="INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Inspector" Margin="3,0" />
+                        <controls:RtaimeButton Content="PVW" Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PREVIEW" ToolTip="Focus Preview in compact mode" Margin="3,0" />
+                        <TextBlock Text="{Binding PreviewSourceName}" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource OperatorPreviewBrush}" />
+                        <controls:RtaimeButton Content="PGM" Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PROGRAM" ToolTip="Focus Program in compact mode" Margin="3,0" />
+                        <TextBlock Text="{Binding ProgramSourceName}" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource OperatorProgramBrush}" />
+                        <controls:RtaimeButton Content="SET PVW" Command="{Binding SetPreviewCommand}" Margin="6,0,3,0" />
+                        <controls:RtaimeButton Content="CUT" Command="{Binding CutCommand}" Margin="3,0" />
+                        <controls:RtaimeButton Content="AUTO" Command="{Binding DissolveCommand}" Margin="3,0" />
+                        <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" VerticalAlignment="Center" Margin="4,0" />
+                        <controls:RtaimeButton Content="RESTORE" Command="{Binding Shell.ResetLayoutCommand, ElementName=RootWindow}" ToolTip="Restore this workspace layout" Margin="3,0" />
+                    </StackPanel>
+                </controls:RtaimeScrollViewer>
+				<Grid Grid.Row="1" x:Name="LiveWorkspaceSurface"
 					Visibility="{Binding Shell.LiveWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 					<Grid.RowDefinitions>
 						<RowDefinition Height="*" />
@@ -271,7 +265,7 @@
 						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 
-				<Grid x:Name="CompositingWorkspaceSurface"
+				<Grid Grid.Row="1" x:Name="CompositingWorkspaceSurface"
 					Visibility="{Binding Shell.CompositingGraphVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="64*" />
@@ -443,20 +437,20 @@
 					</Grid>
 				</Grid>
 
-				<local:HealthCenterControl
+				<local:HealthCenterControl Grid.Row="1"
 					DataContext="{Binding HealthCenter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 					Visibility="{Binding Shell.HealthCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 					Margin="0"
 					HorizontalAlignment="Stretch"
 					VerticalAlignment="Stretch" />
 
-				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll"
+				<controls:RtaimeScrollViewer Grid.Row="1" x:Name="CenterWorkspaceScroll"
 					VerticalScrollBarVisibility="Auto"
 					HorizontalScrollBarVisibility="Disabled"
 					Visibility="{Binding Shell.NonLiveCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="2.2*" MinWidth="{Binding Shell.CenterWorkspacePrimaryMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+					<ColumnDefinition Width="{Binding Shell.PrimaryWorkspaceWidth, ElementName=RootWindow}" MinWidth="{Binding Shell.CenterWorkspacePrimaryMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceGapWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						MinWidth="{Binding Shell.AuxiliaryWorkspaceColumnMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
@@ -572,8 +566,8 @@
 						Visibility="{Binding Shell.ProductionControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<Grid.RowDefinitions>
 							<RowDefinition Height="390*" />
-							<RowDefinition Height="6" />
-							<RowDefinition Height="304*" />
+							<RowDefinition Height="{Binding Shell.ProductionDetailsGap, ElementName=RootWindow}" />
+							<RowDefinition Height="{Binding Shell.ProductionDetailsHeight, ElementName=RootWindow}" />
 						</Grid.RowDefinitions>
 
 						<Grid Grid.Row="0">
@@ -637,7 +631,7 @@
 								FullscreenCommand="{Binding Shell.FullscreenProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 						</Grid>
 
-						<Grid Grid.Row="2">
+						<Grid Grid.Row="2" Visibility="{Binding Shell.ProductionDetailsVisibility, ElementName=RootWindow}">
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="320*" />
 								<ColumnDefinition Width="6" />
@@ -1326,7 +1320,8 @@
 					<Border Style="{StaticResource OperatorPanel}"
 						Visibility="{Binding Shell.OperatorStateVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
-							<TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
+							<TextBlock Text="{Binding Shell.LayoutPersistenceStatus, ElementName=RootWindow}" TextWrapping="Wrap" ToolTip="Layout persistence status" />
+                            <TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Command" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 														<DockPanel Margin="0,0,0,8"><TextBlock Text="Commit" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommitStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 														<DockPanel Margin="0,0,0,8"><TextBlock Text="Transition" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding TransitionStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
@@ -1358,7 +1353,7 @@
 			Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="320" />
+					<ColumnDefinition Width="{Binding Shell.RundownColumnWidth, ElementName=RootWindow}" />
 					<ColumnDefinition Width="1" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
