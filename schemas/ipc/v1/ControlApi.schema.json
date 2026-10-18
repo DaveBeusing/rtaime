@@ -14,6 +14,9 @@
 				"enum": [
 					"control.ping",
 					"control.snapshot.get",
+                    "control.output.canvas.get",
+                    "control.output.canvas.validate",
+                    "control.output.canvas.save",
 					"control.show_template.create",
 					"control.show_template.preflight",
 					"control.show_template.instantiate",

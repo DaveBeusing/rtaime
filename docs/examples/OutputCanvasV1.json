@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "configurationId": "86000000-0000-0000-0000-000000000001",
+  "editRevision": 1,
+  "canvases": [
+    {
+      "canvasId": "86000000-0000-0000-0000-000000000010",
+      "name": "Wide stage",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "canvasId": "86000000-0000-0000-0000-000000000020",
+      "name": "Square stage",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "surfaces": [
+    {
+      "surfaceId": "86000000-0000-0000-0000-000000000011",
+      "canvasId": "86000000-0000-0000-0000-000000000010",
+      "input": {
+        "sourceId": null,
+        "busRoleId": "program"
+      },
+      "zOrder": 0,
+      "crop": {
+        "x": 0.25,
+        "y": 0,
+        "width": 0.5,
+        "height": 1
+      },
+      "destination": {
+        "topLeft": {
+          "x": 0,
+          "y": 0
+        },
+        "topRight": {
+          "x": 1280,
+          "y": 0
+        },
+        "bottomRight": {
+          "x": 1280,
+          "y": 720
+        },
+        "bottomLeft": {
+          "x": 0,
+          "y": 720
+        }
+      },
+      "enabled": true
+    },
+    {
+      "surfaceId": "86000000-0000-0000-0000-000000000021",
+      "canvasId": "86000000-0000-0000-0000-000000000020",
+      "input": {
+        "sourceId": null,
+        "busRoleId": "aux"
+      },
+      "zOrder": 1,
+      "crop": {
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1
+      },
+      "destination": {
+        "topLeft": {
+          "x": 0,
+          "y": 0
+        },
+        "topRight": {
+          "x": 1000,
+          "y": 0
+        },
+        "bottomRight": {
+          "x": 900,
+          "y": 1024
+        },
+        "bottomLeft": {
+          "x": 100,
+          "y": 1024
+        }
+      },
+      "enabled": true
+    }
+  ],
+  "bindings": []
+}
