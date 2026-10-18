@@ -4,6 +4,12 @@
 
 The Inspector follows the existing media, timeline, layer and processing-node selection. Confirmed metadata, mixed-selection summaries, pinnable properties, playback policies, audio gain, graphics placement and typed compositing Apply commands already existed. These remain the source of selection and production evidence.
 
+## Current review and multiple-object workflow
+
+[Inspector draft review and sequential edits](InspectorDraftTransactions.md) defines the current dirty-selection, explicit rebase and bounded per-object submission workflow. The read-only multi-selection baseline below describes the common-property summary and the absence of an atomic multi-object command. Explicit sequential review does not claim that missing atomicity.
+
+The Inspector now shows the original stable target beside confirmed and local values. Apply, Discard and Keep are reachable after selection changes. Reconnect, revision conflict and missing targets retain intent for review instead of silently applying or substituting another source.
+
 ## Shared numeric fields
 
 The 23 numeric Inspector fields share immutable property definitions for identity, label, range, unit, default, step and integral precision. Definitions describe an editor; existing view models retain draft values, and Control remains authoritative.
@@ -21,7 +27,7 @@ Invalid text remains visible for correction and does not replace the last valid 
 
 Typed, stepped, scrubbed, reset and pasted values are local drafts. Apply uses the existing validated Client mutation and confirmation path. Pending, stale, disconnected and rejected state remains visible; unavailable mutation commands stay disabled. Confirmed metadata and Program/Preview source identities are not replaced by local edits.
 
-Transform drafts survive periodic status refreshes while the confirmed transform is unchanged. A new confirmed transform or explicit selection resets the editor to the authoritative values. Processing drafts retain their existing signature-based confirmation behavior.
+Transform drafts survive periodic status refreshes while the confirmed transform is unchanged. A changed confirmation or revision rebases the editor while retaining typed intent in the local review card. Returning to an unchanged cached context retains its draft. Processing drafts retain their signature-based confirmation behavior and the same explicit review boundary.
 
 ## Compatible attributes
 

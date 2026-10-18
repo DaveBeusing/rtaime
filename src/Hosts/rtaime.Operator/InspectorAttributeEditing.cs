@@ -25,7 +25,7 @@ public sealed partial class MediaPoolInspectorViewModel
         !string.IsNullOrWhiteSpace(_mediaDeck.LastError) ? "REJECTED · " + _mediaDeck.LastError :
         HasInspectorDraft ? "DRAFT · APPLY requires confirmation" : "CONFIRMED · local edits require APPLY";
     public string AttributeCompatibilityLabel => _attributeStatus.Length > 0 ? _attributeStatus :
-        HasMultipleSelection ? "Batch editing deferred: no atomic multi-selection property contract." :
+        HasMultipleSelection ? "Read-only common values. REVIEW BATCH prepares compatible copied attributes; individual commands are not atomic." :
         _activeDraft is null ? "Select an editable layer, processing node, audio stream or cue." :
         _attributeClipboard is null ? "Copy typed attributes; paste changes a compatible draft only." :
         _attributeClipboard.RevisionToken != CurrentRevisionToken ? "STALE CLIPBOARD · copy again after authoritative rebase." :

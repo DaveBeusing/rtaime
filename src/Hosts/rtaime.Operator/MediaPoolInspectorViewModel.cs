@@ -920,6 +920,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	public void Dispose()
 	{
+        if (_inspectorTransactionsStopped) return;
+        _inspectorTransactionsStopped = true;
+        _inspectorBatchStop = true;
         PropertyChanged -= OnInspectorDraftValueChanged;
         DisposePreparation();
 		DisposeBrowsing();

@@ -46,7 +46,7 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool HasInspectorDraft => _transformDraftDirty || _processingDraftDirty ||
         _activeDraft is { } draft && draft.Current != draft.Baseline;
     private bool TransactionChanged => _transactionStart is not null && _activeDraft?.Current != _transactionStart;
-    private bool CanEditInspectorDraft => _activeDraft is not null && InspectorInputsValid && !HasMultipleSelection &&
+    private bool CanEditInspectorDraft => !_inspectorTransactionsStopped && _activeDraft is not null && InspectorInputsValid && !HasMultipleSelection &&
         _operator.IsConnected && !_operator.IsStale && !_operator.IsBusy && !_mediaDeck.IsBusy && CurrentRevisionToken == _draftRevision;
     public string InspectorDraftHistoryLabel => _activeDraft is null ? "LOCAL DRAFT · no editable context" :
         $"LOCAL UNDO {_activeDraft.History.UndoCount + (TransactionChanged ? 1 : 0)} / REDO {(TransactionChanged ? 0 : _activeDraft.History.RedoCount)} · APPLY / live operations excluded";
@@ -100,7 +100,9 @@ public sealed partial class MediaPoolInspectorViewModel
     private void RestoreHistoryValue(InspectorAttributeValues values)
     {
         if (_activeDraft is null) return;
-        RestoreInspectorValues(values); _activeDraft.Current = values; NotifyInspectorHistory();
+        RestoreInspectorValues(values); _activeDraft.Current = values;
+        if (values == _activeDraft.Baseline && _activeInspectorTarget is { } target) RemoveReview(target);
+        NotifyInspectorHistory();
     }
     private void OnInspectorDraftValueChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -111,11 +113,14 @@ public sealed partial class MediaPoolInspectorViewModel
               e.PropertyName is nameof(AudioGainDraft) or nameof(CueNameDraft))) return;
         if (CaptureInspectorValues() is not { } current || _activeDraft!.Current == current) return;
         if (_transactionStart is null) _activeDraft.History.Remember(_activeDraft.Current);
-        _activeDraft.Current = current; _attributeStatus = ""; NotifyInspectorHistory();
+        _activeDraft.Current = current;
+        if (current == _activeDraft.Baseline && _activeInspectorTarget is { } target) RemoveReview(target);
+        _attributeStatus = ""; NotifyInspectorHistory();
     }
     private void RefreshInspectorDraftContext()
     {
         if (_restoringInspector) return;
+        PreserveInspectorDraft();
         var token = CurrentRevisionToken;
         if (token != _draftRevision || _operator.IsStale || !_operator.IsConnected)
         {
@@ -145,6 +150,8 @@ public sealed partial class MediaPoolInspectorViewModel
         if (!ReferenceEquals(_activeDraft, draft)) { EndDraftTransaction(); _transactionStart = null; }
         _activeDraft = draft; _activeDraftKey = key;
         _activeCompositingDraftNodeId = _compositingNode?.Id;
+        _activeInspectorTarget = CurrentInspectorTarget();
+        _activeInspectorRevision = CurrentRevisionToken;
         RestoreInspectorValues(draft.Current);
         NotifyInspectorHistory();
     }
@@ -211,6 +218,8 @@ public sealed partial class MediaPoolInspectorViewModel
     }
     private void NotifyInspectorHistory()
     {
+        PreserveInspectorDraft();
+        NotifyDraftReview();
         NotifyCompositingRecovery();
         OnPropertyChanged(nameof(IsTransformDraftContext));
         (ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

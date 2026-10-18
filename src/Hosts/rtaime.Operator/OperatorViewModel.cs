@@ -22,7 +22,7 @@ internal enum OperatorTestSignalPreset
 	AvSync
 }
 
-public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
+public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly OperatorControlClient? _client;
 	private readonly IRuntimeReadinessService _runtimeReadiness;

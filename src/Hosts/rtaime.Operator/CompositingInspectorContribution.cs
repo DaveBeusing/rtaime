@@ -77,6 +77,7 @@ public sealed partial class MediaPoolInspectorViewModel
     public void ReviewCompositingLayers(IReadOnlyList<OperatorCompositingLayerDescriptor> layers)
     {
         if (layers.Count < 2) return;
+        _inspectorReviewLayerIds = layers.Select(layer => layer.LayerId).ToArray();
         static string Common<T>(IEnumerable<T> values)
         {
             var distinct = values.Distinct().Take(2).ToArray();

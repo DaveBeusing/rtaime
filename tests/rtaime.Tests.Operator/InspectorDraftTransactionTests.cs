@@ -200,6 +200,166 @@ public sealed class InspectorDraftTransactionTests
         await Until(() => !f.Owner.IsBusy); Assert.True(f.Owner.IsStale); Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
         Assert.Equal(1, f.Transport.MutationCalls);
     }
+
+    [Fact]
+    public async Task Dirty_selection_retains_audio_intent_and_applies_original_identity_without_changing_library_selection()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select([audio[0]]);
+        f.Model.AudioGainDraft = 2;
+        f.Model.Selection.Select([audio[1]]);
+        var identity = f.Model.EditingSelectionIdentity;
+        var review = Assert.Single(f.Model.InspectorDraftReviews, row => row.Target.Kind == "gain");
+        Assert.Contains("CONFIRMED", review.Summary); Assert.Contains("LOCAL", review.Summary);
+        f.Model.SelectedDraftReview = review;
+        f.Model.KeepDraftReviewCommand.Execute(null);
+        Assert.Equal(identity, f.Model.EditingSelectionIdentity);
+        Assert.True(f.Model.ApplyDraftReviewCommand.CanExecute(null));
+        f.Model.ApplyDraftReviewCommand.Execute(null);
+        await Until(() => f.Transport.MutationCalls == 1 && !f.Owner.IsBusy);
+        Assert.Equal(2, f.Transport.Gains[review.Target.Id]);
+        Assert.Equal(identity, f.Model.EditingSelectionIdentity);
+        Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Retained_cue_review_renames_only_original_marker_after_selection_changes()
+    {
+        await using var f = await Fixture.Create();
+        f.Deck.ApplyConfirmedSnapshot(f.Transport.MediaSnapshot());
+        var cue = f.Deck.Cues[0]; f.Deck.SelectedCue = cue;
+        f.Model.SelectTimelineCue(new(cue.Id, cue.Name, cue.Frame, cue.Timecode, TimelineCueType.Media, null));
+        f.Model.CueNameDraft = "Reviewed cue";
+        var audio = f.Model.FilteredItems.First(item => item.Kind == MediaPoolItemKind.Audio);
+        f.Model.Selection.Select([audio]);
+        f.Model.SelectedDraftReview = Assert.Single(f.Model.InspectorDraftReviews, row => row.Target.Kind == "cue");
+        var identity = f.Model.EditingSelectionIdentity;
+        Assert.True(f.Model.ApplyDraftReviewCommand.CanExecute(null));
+        f.Model.ApplyDraftReviewCommand.Execute(null);
+        await Until(() => f.Transport.MutationCalls == 1 && !f.Owner.IsBusy);
+        Assert.Equal("Reviewed cue", f.Deck.Cues[0].Name);
+        Assert.Equal("Same name", f.Deck.Cues[1].Name);
+        Assert.Equal(identity, f.Model.EditingSelectionIdentity);
+    }
+    [Fact]
+    public async Task Revision_conflict_keeps_values_and_requires_explicit_rebase_before_restore_or_apply()
+    {
+        await using var f = await Fixture.Create();
+        f.Model.SelectedLayerPositionX = 0.73;
+        f.Model.SelectCompositingNode(Node("layer:other"));
+        f.Model.SelectedDraftReview = Assert.Single(f.Model.InspectorDraftReviews, row => row.Target.Id == "bitmap-graphics");
+        f.Transport.RevisionValue++; f.Transport.RemoteCut = true;
+        f.Owner.SynchronizeCommand.Execute(null);
+        await Until(() => !f.Owner.IsBusy);
+        Assert.False(f.Model.ApplyDraftReviewCommand.CanExecute(null));
+        Assert.Contains("REBASE REQUIRED", f.Model.DraftReviewGate);
+        Assert.Equal(0.73, Assert.IsType<InspectorTransformAttributes>(f.Model.SelectedDraftReview!.Draft).X);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        f.Model.RebaseDraftReviewCommand.Execute(null);
+        Assert.True(f.Model.ApplyDraftReviewCommand.CanExecute(null));
+        f.Model.SelectCompositingNode(Node("transform:bitmap-graphics"));
+        f.Model.RestoreDraftReviewCommand.Execute(null);
+        Assert.Equal(0.73, f.Model.SelectedLayerPositionX);
+        f.Model.UndoInspectorDraftCommand.Execute(null);
+        Assert.Equal(0.1, f.Model.SelectedLayerPositionX);
+        Assert.Equal(0, f.Transport.MutationCalls);
+    }
+    [Fact]
+    public async Task Sequential_audio_batch_reports_partial_failure_and_explicit_retry_skips_confirmed_rows()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Transport.Gains[audio[1].ReferenceId!] = 0.5;
+        f.Owner.SynchronizeCommand.Execute(null);
+        audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select([audio[0]]); f.Model.AudioGainDraft = 2; f.Model.CopyAttributesCommand.Execute(null);
+        f.Model.Selection.Select(audio);
+        Assert.Contains("MIXED", f.Model.InspectorBatchSelectionEvidence);
+        f.Model.ReviewInspectorBatchCommand.Execute(null);
+        Assert.Equal(2, f.Model.InspectorBatchItems.Count);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        f.Transport.RejectMutationCall = 2;
+        await f.Model.ApplyInspectorBatchAsync();
+        Assert.Equal("CONFIRMED", f.Model.InspectorBatchItems[0].Result);
+        Assert.Contains("REJECTED", f.Model.InspectorBatchItems[1].Result);
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+        f.Transport.RejectMutationCall = 0;
+        f.Model.ReviewRemainingInspectorBatchCommand.Execute(null);
+        await f.Model.ApplyInspectorBatchAsync();
+        Assert.All(f.Model.InspectorBatchItems, row => Assert.Equal("CONFIRMED", row.Result));
+        Assert.Equal(3, f.Transport.MutationCalls);
+        Assert.All(f.Model.InspectorBatchItems, row => Assert.Equal(2, f.Transport.Gains[row.Target.Id]));
+    }
+    [Fact]
+    public async Task Batch_stop_and_revision_between_review_and_apply_never_send_later_targets_without_review()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select([audio[0]]); f.Model.AudioGainDraft = 2; f.Model.CopyAttributesCommand.Execute(null);
+        f.Model.Selection.Select(audio); f.Model.ReviewInspectorBatchCommand.Execute(null);
+        f.Transport.RevisionValue++;
+        f.Owner.SynchronizeCommand.Execute(null);
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        await f.Model.ApplyInspectorBatchAsync(); Assert.Equal(0, f.Transport.MutationCalls);
+        f.Model.ReviewRemainingInspectorBatchCommand.Execute(null);
+        f.Transport.OnMutation = _ => f.Model.StopInspectorBatchCommand.Execute(null);
+        await f.Model.ApplyInspectorBatchAsync();
+        Assert.Equal(1, f.Transport.MutationCalls);
+        Assert.Equal("CONFIRMED", f.Model.InspectorBatchItems[0].Result);
+        Assert.Contains("NOT ATTEMPTED", f.Model.InspectorBatchItems[1].Result);
+        Assert.Contains("NOT ATOMIC", f.Model.InspectorBatchEvidence);
+    }
+    [Fact]
+    public async Task Inspector_disposal_finishes_current_request_and_stops_later_batch_mutations()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select([audio[0]]); f.Model.AudioGainDraft = 2; f.Model.CopyAttributesCommand.Execute(null);
+        f.Model.Selection.Select(audio); f.Model.ReviewInspectorBatchCommand.Execute(null);
+        f.Transport.OnMutation = _ => f.Model.Dispose();
+        await f.Model.ApplyInspectorBatchAsync();
+        Assert.Equal(1, f.Transport.MutationCalls);
+        Assert.Equal("CONFIRMED", f.Model.InspectorBatchItems[0].Result);
+        Assert.Contains("NOT ATTEMPTED", f.Model.InspectorBatchItems[1].Result);
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        Assert.False(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+    }
+    [Fact]
+    public async Task Mixed_incompatible_empty_and_removed_targets_remain_read_only_with_explicit_reasons()
+    {
+        await using var f = await Fixture.Create();
+        f.Model.AudioGainDraft = 2; // no gain context: cannot copy a mismatched set
+        f.Model.CopyAttributesCommand.Execute(null); // transform set
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        f.Model.Selection.Select(audio); f.Model.ReviewInspectorBatchCommand.Execute(null);
+        Assert.All(f.Model.InspectorBatchItems, row => Assert.Contains("EXCLUDED", row.Result));
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        f.Model.Selection.Select([]);
+        Assert.False(f.Model.ReviewInspectorBatchCommand.CanExecute(null));
+        f.Model.ReviewCompositingLayers(f.Owner.CompositingLayers);
+        f.Model.ReviewInspectorBatchCommand.Execute(null);
+        f.Transport.OmitBitmap = true; f.Owner.SynchronizeCommand.Execute(null);
+        Assert.False(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+        Assert.Equal(0, f.Transport.MutationCalls);
+    }
+    [Fact]
+    public async Task Hundred_local_undo_redo_selection_cycles_bound_reviews_and_do_not_mutate_production()
+    {
+        await using var f = await Fixture.Create();
+        for (var i = 0; i < 100; i++)
+        {
+            f.Model.SelectCompositingNode(Node(i % 2 == 0 ? "layer:bitmap-graphics" : "layer:other"));
+            f.Model.BeginDraftTransaction(); f.Model.SelectedLayerPositionX = (i + 1) / 101d; f.Model.EndDraftTransaction();
+            Assert.True(f.Model.UndoInspectorDraftCommand.CanExecute(null));
+            f.Model.UndoInspectorDraftCommand.Execute(null); f.Model.RedoInspectorDraftCommand.Execute(null);
+            Assert.InRange(f.Model.InspectorContextCount, 1, MediaPoolInspectorViewModel.MaximumInspectorContexts);
+            Assert.InRange(f.Model.InspectorDraftReviews.Count, 0, MediaPoolInspectorViewModel.MaximumInspectorContexts);
+        }
+        Assert.Equal(0, f.Transport.MutationCalls);
+    }
+
     internal static async Task VerifyWindowAsync(MainWindow main, Dispatcher dispatcher)
     {
         main.Shell.SelectWorkspace("MEDIA");
@@ -231,7 +391,29 @@ public sealed class InspectorDraftTransactionTests
             undo.Focus(); undo.Command.Execute(null);
             Assert.Equal(0.1, f.Model.SelectedLayerPositionX); Assert.True(f.Model.RedoInspectorDraftCommand.CanExecute(null));
             Assert.Equal(0, f.Transport.MutationCalls);
-            Console.WriteLine("INSPECTOR DRAFT PASS: productive themed controls, focused numeric grouping, accessible undo/redo, unchanged production transport.");
+            f.Model.SelectedLayerPositionX = 0.61;
+            f.Model.SelectCompositingNode(Node("layer:other"));
+            await dispatcher.InvokeAsync(main.UpdateLayout, DispatcherPriority.Loaded);
+            var reviewSurface = Assert.Single(Descendants(control).OfType<InspectorDraftReviewControl>());
+            Assert.Same(f.Model, reviewSurface.DataContext);
+            Assert.Equal("bitmap-graphics", f.Model.SelectedDraftReview!.Target.Id);
+            var keep = Descendants(reviewSurface).OfType<RtaimeButton>().Single(button =>
+                AutomationProperties.GetName(button) == "Keep retained draft locally");
+            keep.BringIntoView(); Assert.True(keep.Focus()); keep.Command!.Execute(null);
+            Assert.Contains("KEPT", f.Model.SelectedDraftReview!.State);
+            Assert.Equal(1, control.InspectorSubscriptionCount);
+            var audioItems = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+            f.Model.Selection.Select([audioItems[0]]); f.Model.AudioGainDraft = 2; f.Model.CopyAttributesCommand.Execute(null);
+            f.Model.Selection.Select(audioItems);
+            await dispatcher.InvokeAsync(main.UpdateLayout, DispatcherPriority.Loaded);
+            var reviewBatch = Descendants(reviewSurface).OfType<RtaimeButton>().Single(button =>
+                AutomationProperties.GetName(button) == "Review compatible Inspector batch targets");
+            reviewBatch.BringIntoView(); Assert.True(reviewBatch.Focus()); reviewBatch.Command!.Execute(null);
+            Assert.Equal(2, f.Model.InspectorBatchItems.Count);
+            Assert.True(f.Model.ApplyInspectorBatchCommand.CanExecute(null));
+            Assert.Equal(0, f.Transport.MutationCalls);
+            Assert.Equal(1, control.InspectorSubscriptionCount);
+            Console.WriteLine("INSPECTOR DRAFT PASS: productive themed controls, focused numeric grouping, accessible undo/redo, retained dirty selection, explicit common-property/batch review, stable subscriptions and unchanged production transport.");
         }
         finally { surface.Children.Remove(field); control.Inspector = original; }
     }

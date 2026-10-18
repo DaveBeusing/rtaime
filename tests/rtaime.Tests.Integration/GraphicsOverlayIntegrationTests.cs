@@ -795,6 +795,37 @@ public sealed class GraphicsOverlayIntegrationTests
         Assert.False(fixture.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
     }
 
+
+    [Fact]
+    public async Task Inspector_individual_target_edits_cross_real_pipes_and_rejection_cannot_roll_back_prior_confirmation()
+    {
+        await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+        var runtimeEndpoint = "rtaime.test.inspector.runtime." + Guid.NewGuid().ToString("N");
+        var controlEndpoint = "rtaime.test.inspector.control." + Guid.NewGuid().ToString("N");
+        await using var runtimeServer = new RuntimeHostIpcServer(runtimeEndpoint, () => fixture.Runtime);
+        await runtimeServer.StartAsync();
+        var runtimeTransport = new NamedPipeRuntimeHostTransport(runtimeEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        await runtimeTransport.ConnectAsync();
+        await using var controlServer = new ControlHostIpcServer(controlEndpoint, () => fixture.Control, runtimeTransport);
+        await controlServer.StartAsync();
+        var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(12)));
+        var initial = await client.SynchronizeAsync();
+        var first = initial.AudioInputs[0];
+        var second = initial.AudioInputs[1];
+        await client.SetAudioInputStateAsync(first.SourceId, 0.375, first.Muted);
+        Assert.Equal(0.375, client.Snapshot!.AudioInputs.Single(input => input.SourceId == first.SourceId).Gain);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await client.SetAudioInputStateAsync(Guid.NewGuid().ToString(), 0.375, false));
+        await client.SynchronizeAsync();
+        Assert.Equal(0.375, client.Snapshot!.AudioInputs.Single(input => input.SourceId == first.SourceId).Gain);
+        Assert.Equal(second.Gain, client.Snapshot.AudioInputs.Single(input => input.SourceId == second.SourceId).Gain);
+        await client.SetAudioInputStateAsync(second.SourceId, 0.375, second.Muted);
+        Assert.All(client.Snapshot!.AudioInputs, input => Assert.Equal(0.375, input.Gain));
+        Assert.Equal(initial.Production.Routing.ProgramSourceId, client.Snapshot.Production.Routing.ProgramSourceId);
+        var runtimeAudio = fixture.Runtime.Snapshot.AudioInputs!;
+        Assert.All(runtimeAudio.Values, input => Assert.Equal(0.375, input.Gain));
+    }
+
 	private static V1ProductionCgTextDefinition LowerThird(string text) => new(
 		text,
 		"Segoe UI",

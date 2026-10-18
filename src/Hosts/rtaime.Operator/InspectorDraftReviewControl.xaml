@@ -1,0 +1,50 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.InspectorDraftReviewControl"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:rtaime.Operator.Controls">
+ <StackPanel>
+  <TextBlock Text="{Binding InspectorContextEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+  <Border BorderBrush="{DynamicResource OperatorWarningBrush}" BorderThickness="1" Padding="6" Margin="0,6">
+   <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers>
+    <DataTrigger Binding="{Binding HasDraftReviews}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+   </Style.Triggers></Style></Border.Style>
+   <StackPanel>
+    <TextBlock Text="LOCAL DRAFTS · Apply / Discard / Keep" FontWeight="SemiBold" />
+    <controls:RtaimeListBox ItemsSource="{Binding InspectorDraftReviews}" SelectedItem="{Binding SelectedDraftReview, Mode=TwoWay}"
+     DisplayMemberPath="Target.Label" MaxHeight="80" AutomationProperties.Name="Retained Inspector drafts by stable identity" />
+    <TextBlock Text="{Binding DraftReviewGate}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+    <TextBlock Text="{Binding SelectedDraftReview.Summary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+    <WrapPanel>
+     <controls:RtaimeButton Content="APPLY DRAFT" Command="{Binding ApplyDraftReviewCommand}" IsCompact="True" AutomationProperties.Name="Apply reviewed retained draft" />
+     <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardDraftReviewCommand}" IsCompact="True" AutomationProperties.Name="Discard retained local draft" />
+     <controls:RtaimeButton Content="KEEP DRAFT" Command="{Binding KeepDraftReviewCommand}" IsCompact="True" AutomationProperties.Name="Keep retained draft locally" />
+     <controls:RtaimeButton Content="REBASE / REVIEW" Command="{Binding RebaseDraftReviewCommand}" IsCompact="True" ToolTip="Refresh the confirmed comparison. Does not apply values." />
+     <controls:RtaimeButton Content="RESTORE LOCAL" Command="{Binding RestoreDraftReviewCommand}" IsCompact="True" ToolTip="Restore into the same selected context as one local undo step; APPLY separately." />
+    </WrapPanel>
+   </StackPanel>
+  </Border>
+  <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="6" Margin="0,6">
+   <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers>
+    <DataTrigger Binding="{Binding HasInspectorBatch}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+   </Style.Triggers></Style></Border.Style>
+   <StackPanel>
+    <TextBlock Text="MULTIPLE OBJECTS · explicit sequential Apply" FontWeight="SemiBold" />
+    <TextBlock Text="{Binding InspectorBatchSelectionEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+    <TextBlock Text="{Binding InspectorBatchEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+    <WrapPanel>
+     <controls:RtaimeButton Content="REVIEW BATCH" Command="{Binding ReviewInspectorBatchCommand}" IsCompact="True" AutomationProperties.Name="Review compatible Inspector batch targets" />
+     <controls:RtaimeButton Content="APPLY REVIEWED" Command="{Binding ApplyInspectorBatchCommand}" IsCompact="True" AutomationProperties.Name="Apply reviewed individual Inspector targets" />
+     <controls:RtaimeButton Content="STOP" Command="{Binding StopInspectorBatchCommand}" IsCompact="True" AutomationProperties.Name="Stop Inspector batch after current request" />
+     <controls:RtaimeButton Content="REVIEW REMAINING" Command="{Binding ReviewRemainingInspectorBatchCommand}" IsCompact="True" AutomationProperties.Name="Review remaining Inspector targets before retry" />
+    </WrapPanel>
+    <ItemsControl ItemsSource="{Binding InspectorBatchItems}">
+     <ItemsControl.ItemTemplate><DataTemplate>
+      <TextBlock Text="{Binding Summary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4" />
+     </DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+   </StackPanel>
+  </Border>
+  <TextBlock Text="{Binding DraftReviewNotice}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+ </StackPanel>
+</UserControl>

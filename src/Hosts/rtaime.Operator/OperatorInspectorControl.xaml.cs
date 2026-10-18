@@ -46,7 +46,7 @@ public partial class OperatorInspectorControl : UserControl
         AddHandler(Keyboard.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, e) =>
         { if (FindEditor(e.OldFocus as DependencyObject) is not null && !ReferenceEquals(FindEditor(e.OldFocus as DependencyObject), FindEditor(e.NewFocus as DependencyObject))) Inspector?.EndDraftTransaction(); }));
         AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler((_, e) =>
-        { if (FindEditor(e.OriginalSource as DependencyObject) is not null) Inspector?.BeginDraftTransaction(); }), true);
+        { if (FindEditor(e.OriginalSource as DependencyObject) is not null) { Inspector?.EndDraftTransaction(); Inspector?.BeginDraftTransaction(); } }), true);
         AddHandler(Mouse.PreviewMouseUpEvent, new MouseButtonEventHandler((_, e) =>
         { if (FindEditor(e.OriginalSource as DependencyObject) is not null) Inspector?.EndDraftTransaction(); }), true);
         PreviewKeyDown += OnDraftKeyDown;
@@ -136,7 +136,7 @@ public partial class OperatorInspectorControl : UserControl
     {
         if (Inspector is not { } model) return;
         var editor = FindEditor(Keyboard.FocusedElement as DependencyObject);
-        if (e.Key == Key.Escape && editor is not null) model.CancelDraftTransaction();
+        if (e.Key == Key.Escape && editor is not null) { model.CancelDraftTransaction(); return; }
         if (editor is not null) model.BeginDraftTransaction();
         if (OperatorKeyboardCommandRegistry.IsTextEntryContext(Keyboard.FocusedElement as DependencyObject) ||
             Keyboard.Modifiers != ModifierKeys.Control) return;
