@@ -78,6 +78,29 @@ public sealed partial class WorkspacePresentationTemplateTests
         shell.SelectCompactAuxiliaryCommand.Execute("PRIMARY");
         Assert.True(shell.PrimaryWorkspaceWidth.IsStar); Assert.Equal(0,shell.AuxiliaryWorkspaceColumnWidth.Value);
     }
+    [Theory]
+    [InlineData(1920,1080)]
+    [InlineData(960,540)]
+    public async Task AI_workspace_owns_a_full_center_view_and_preserves_independent_layouts(double width, double height)
+    {
+        await using var fixture = await Fixture.Create(false);
+        var shell = fixture.Shell;
+        shell.SelectWorkspace("AI");
+        shell.UpdateViewportSize(width, height);
+        Assert.Equal(Visibility.Visible, shell.AIWorkspaceVisibility);
+        Assert.Equal(Visibility.Collapsed, shell.NonLiveCenterVisibility);
+        Assert.Equal(Visibility.Collapsed, shell.StandardViewerVisibility);
+        Assert.False(shell.HasLeftRegion);
+        Assert.False(shell.HasTimelineRegion);
+        Assert.Equal(0, shell.LeftColumnWidth.Value);
+        var layout = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
+        shell.SelectWorkspace("COMPOSITING");
+        Assert.Equal(Visibility.Collapsed, shell.AIWorkspaceVisibility);
+        Assert.Equal(Visibility.Visible, shell.CompositingGraphVisibility);
+        shell.SelectWorkspace("AI");
+        Assert.Equal(layout, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+    }
+
     [Fact]
     public async Task One_hundred_workspace_dock_float_restore_transactions_retain_bounded_panel_identities()
     {
