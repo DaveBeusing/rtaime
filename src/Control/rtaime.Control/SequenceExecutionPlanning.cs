@@ -71,7 +71,7 @@ public sealed class SequenceExecutionPlan
                 {
                     var clip = window.At(index);
                     destination[index] = new SequenceRenderSample(clip.ClipId, clip.TrackId,
-                        clip.AssetId, clip.Kind, clip.LayerOrder, clip.AudioBusId,
+                        clip.AssetId, clip.FingerprintSha256, clip.Kind, clip.LayerOrder, clip.AudioBusId,
                         checked(clip.SourceIn + tick - clip.TimelineStart),
                         Weight(clip, tick), clip.TransitionKind);
                 }
@@ -110,13 +110,13 @@ public sealed class SequenceExecutionPlan
 }
 
 public readonly record struct SequenceRenderSample(Guid ClipId, Guid TrackId, Guid AssetId,
-    SequenceMediaKind Kind, int LayerOrder, string? AudioBusId,
+    string FingerprintSha256, SequenceMediaKind Kind, int LayerOrder, string? AudioBusId,
     long SourcePositionTicks, byte Opacity, SequenceTransitionKind? TransitionKind);
 
 public readonly record struct SequenceAudioWindow(ulong FirstSample, uint SampleCount);
 
 public sealed record SequenceScheduledClip(Guid ClipId, Guid TrackId, Guid AssetId,
-    SequenceMediaKind Kind, int LayerOrder, string? AudioBusId,
+    string FingerprintSha256, SequenceMediaKind Kind, int LayerOrder, string? AudioBusId,
     long SourceIn, long TimelineStart,
     SequenceTransitionKind? TransitionKind, long TransitionStart, long TransitionDuration, bool FadeIn);
 
@@ -219,7 +219,7 @@ public static class SequenceExecutionCompiler
                 if (matched.Length > 1)
                     throw new InvalidOperationException("Validated transitions cannot overlap for a clip.");
                 var fade = matched.Length == 1 ? matched[0] : default;
-                return new SequenceScheduledClip(c.ClipId, c.TrackId, c.Media.AssetId, c.Media.Kind,
+                return new SequenceScheduledClip(c.ClipId, c.TrackId, c.Media.AssetId, c.Media.FingerprintSha256, c.Media.Kind,
                     tracks[c.TrackId].LayerOrder, tracks[c.TrackId].AudioBusId,
                     c.SourceIn, c.TimelineStart, matched.Length == 1 ? fade.Transition.Kind : null,
                     matched.Length == 1 ? fade.Transition.Start : 0,
