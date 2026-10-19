@@ -96,10 +96,15 @@ public sealed partial class LocalMediaDeckRuntimeService
                     staged.Add(OpenSequenceOwner(sources[encountered], tickets[encountered], cancellationToken));
                 }
                 var ready = new PreparedSequenceMedia(execution.PreparedExecutionId,
-                    execution.AuthoritySnapshot.Revision.Value, map.SequenceId,
-                    map.AuthoringRevision, map.Generation, 0, staged.ToArray());
+                    execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision.Value,
+                    map.SequenceId, map.AuthoringRevision, map.Generation, map.Generation,
+                    0, staged.ToArray());
                 lock (_sequenceGate)
+                {
                     _sequenceOwners = ready;
+                    _sequenceShuttleMap = map;
+                    _sequenceShuttleRevision = 0;
+                }
                 return new(true, map.SequenceId, map.AuthoringRevision, map.Generation, 0,
                     staged.Count, null);
             }
@@ -279,6 +284,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 prepared = _sequenceOwners;
                 _sequenceOwners = null;
+                _sequenceShuttleMap = null;
+                _sequenceShuttleRevision = 0;
             }
             if (prepared is null) return;
             var error = CleanupSequenceOwners(prepared.Owners);
@@ -442,8 +449,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         new(false, map.SequenceId, map.AuthoringRevision, map.Generation, 0, 0, new(code, message));
 
     private sealed record PreparedSequenceMedia(
-        PreparedExecutionId PreparedExecution, ulong AuthorityRevision,
-        Guid SequenceId, ulong AuthoringRevision, ulong Generation, ulong LoopPass,
+        PreparedExecutionId PreparedExecution, Identity AuthorityStateId,
+        ulong AuthorityRevision, Guid SequenceId, ulong AuthoringRevision,
+        ulong InitialGeneration, ulong Generation, ulong LoopPass,
         SequenceMediaDecodeOwner[] Owners);
 
     private sealed class SequenceMediaDecodeOwner(
