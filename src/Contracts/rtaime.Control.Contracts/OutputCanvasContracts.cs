@@ -24,8 +24,11 @@ public sealed record OutputCanvasQuad(OutputCanvasPoint TopLeft, OutputCanvasPoi
         new(new(x, y), new(x + width, y), new(x + width, y + height), new(x, y + height));
 }
 public sealed record OutputCanvasInput(string? SourceId = null, string? BusRoleId = null);
+public sealed record OutputCanvasEdgeBlend(double Left, double Top, double Right, double Bottom,
+    string Curve = "smoothstep");
 public sealed record OutputCanvasSurface(Guid SurfaceId, Guid CanvasId, OutputCanvasInput Input,
-    int ZOrder, OutputCanvasCrop Crop, OutputCanvasQuad Destination, bool Enabled = true);
+    int ZOrder, OutputCanvasCrop Crop, OutputCanvasQuad Destination, bool Enabled = true,
+    OutputCanvasEdgeBlend? EdgeBlend = null);
 public sealed record OutputCanvasBinding(Guid OutputId, Guid CanvasId, string ProviderId,
     string TargetId, string ProfileId, bool Enabled = true);
 public sealed record OutputCanvasConfiguration(string Version, Guid ConfigurationId, ulong EditRevision,
