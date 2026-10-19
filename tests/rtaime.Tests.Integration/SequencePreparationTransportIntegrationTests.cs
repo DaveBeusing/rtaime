@@ -122,6 +122,44 @@ public sealed partial class ExternalControlIntegrationTests
     }
 
     [Fact]
+    public async Task Removing_catalogued_media_invalidates_native_sequence_preparation_without_changing_Program()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var external = fixture.CreateClient();
+        await CommitSequencePreparationAuthorityAsync(external);
+        var before = await external.GetSnapshotAsync();
+        var imported = await external.ImportMediaAssetsAsync([asset.Path]);
+        Assert.True(imported.Succeeded);
+        var media = Assert.Single(imported.Snapshot.Assets);
+        var sequence = PreparedVideoSequence(media);
+        var authoring = new SequenceAuthoringClient(external);
+        var saved = await authoring.SaveAsync(new(
+            SequenceContract.Version, Guid.NewGuid(), 0, sequence.SequenceId, sequence));
+        Assert.True(saved.Saved);
+
+        var preparation = new SequencePreparationClient(external);
+        var context = await preparation.ContextAsync();
+        var admitted = await preparation.PrepareAsync(new(SequencePreparationContract.Version,
+            sequence.SequenceId, saved.AuthoringRevision, context.RuntimeHostInstanceId));
+        Assert.Equal("PREPARED", admitted.State);
+        var reference = new SequencePreparationReference(admitted.Version, admitted.SequenceId,
+            admitted.AuthoringRevision, admitted.RuntimeHostInstanceId,
+            admitted.PreparedExecutionId, admitted.Generation);
+
+        // Catalogue identity changes independently of sequence authoring revision.
+        var removed = await external.RemoveMediaAssetAsync(media.AssetId);
+        Assert.True(removed.Succeeded);
+        Assert.Equal(saved.AuthoringRevision, (await authoring.ListAsync()).AuthoringRevision);
+        var stale = await preparation.GetAsync(reference);
+        Assert.Equal("STALE", stale.State);
+        Assert.Equal(0, stale.DecoderOwners);
+        Assert.Equal(before.Production, (await external.GetSnapshotAsync()).Production);
+        await Assert.ThrowsAnyAsync<Exception>(async () => await preparation.GetAsync(reference));
+    }
+
+    [Fact]
     public async Task Sequence_preparation_requires_Operator_role_and_does_not_advertise_playback()
     {
         if (!OperatingSystem.IsWindows()) return;
