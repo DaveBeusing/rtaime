@@ -260,7 +260,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                 b.MediaSourceId == source.SourceId &&
                 b.Resource.ProviderId == _provider.Descriptor.ProviderId &&
                 b.Resource.Kind == LocalMediaCapabilityKinds.MediaRoute &&
-                _provider.Descriptor.Resources.Contains(b.Resource)).ToArray();
+                _provider.Descriptor.Capabilities.Any(c => c.Kind == LocalMediaCapabilityKinds.MediaRoute &&
+                    c.CapabilityId == b.CapabilityId) &&
+                _provider.Descriptor.Resources.Any(r => r.ResourceId == b.Resource.ResourceId &&
+                    r.ProviderId == b.Resource.ProviderId && r.Kind == b.Resource.Kind)).ToArray();
             if (matches.Length != 1)
                 return new("runtime.sequence.binding",
                     "Every sequence media owner requires exactly one genuine prepared local-media resource binding.");
