@@ -170,6 +170,28 @@ public sealed class OutputMappingRuntimeIntegrationTests
         Assert.Equal(0, boundary.ActiveGpuSurfacesAfterBoundary);
     }
 
+    [Fact]
+    public async Task Mapping_provider_failure_falls_back_to_committed_program_and_releases_surfaces()
+    {
+        await using var fixture = CreateFixture(new FailingMappingBackend());
+        var runtime = fixture.Runtime;
+        var revision = runtime.Snapshot.Runtime.ExecutionRevision.Value;
+        var configuration = Configuration(fixture, revision: 15, twoSurfaces: true);
+        Assert.Equal("PREPARED", runtime.PrepareOutputMapping(
+            new(configuration, revision, "integration-runtime")).ActivationState);
+        Assert.Equal("PENDING_BOUNDARY", runtime.CommitOutputMapping(
+            configuration.ConfigurationId, 15, revision, true).ActivationState);
+
+        using var boundary = runtime.ProcessNextBoundary();
+        AssertPixel(boundary.ProgramPixels.Span, runtime.Format, 240, 540, 32, 72, 196);
+        AssertPixel(boundary.ProgramPixels.Span, runtime.Format, 1500, 540, 32, 72, 196);
+        Assert.Equal(0, boundary.ActiveGpuSurfacesAfterBoundary);
+        var state = runtime.OutputMappingSnapshot;
+        Assert.Equal("STALE_EXECUTION", state.ActivationState);
+        Assert.Equal("gpu.output_mapping.render_failed", state.FailureCode);
+        Assert.Null(state.ActiveRenderRevision);
+    }
+
     private static RuntimeOutputRoleSnapshot ProgramOutput(V1RuntimeHostService runtime) =>
         Assert.Single(runtime.Snapshot.OutputRoles!, o => o.RoleId == "program");
 
@@ -250,9 +272,10 @@ public sealed class OutputMappingRuntimeIntegrationTests
         public IReadOnlyList<ProviderDescriptor> GetProviders() => _providers;
     }
 
-    private sealed class BackendWithoutMapping : IGpuProcessingBackend
+    private class BackendWithoutMapping : IGpuProcessingBackend
     {
         private readonly ManagedReferenceGpuBackend _inner = new();
+        protected ManagedReferenceGpuBackend Inner => _inner;
         public GpuBackendInfo Info => _inner.Info;
         public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
         public void Start() => _inner.Start();
@@ -266,6 +289,17 @@ public sealed class OutputMappingRuntimeIntegrationTests
             _inner.ReadbackInto(id, format, destination);
         public void Release(SurfaceId id) => _inner.Release(id);
         public void Dispose() => _inner.Dispose();
+    }
+
+    private sealed class FailingMappingBackend : BackendWithoutMapping, IGpuOutputMappingBackend
+    {
+        public void RenderOutputMapping(SurfaceId outputSurfaceId, VideoFormat format,
+            IReadOnlyList<GpuOutputMappingSurface> surfaces)
+        {
+            Inner.Allocate(outputSurfaceId, format,
+                new byte[RgbaFrameBuffer.RequiredByteLength(format)]);
+            throw new InvalidOperationException("Injected output mapping failure.");
+        }
     }
 
     private sealed class NullRecordingWriter : IProgramRecordingWriter
