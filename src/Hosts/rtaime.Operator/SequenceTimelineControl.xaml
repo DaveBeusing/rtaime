@@ -39,6 +39,15 @@
                     <Setter Property="BorderThickness" Value="2" />
                     <Setter Property="Opacity" Value="1" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Pending}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+                    <Setter Property="Opacity" Value="0.72" />
+                    <Setter Property="BorderThickness" Value="2" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Invalid}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+                    <Setter Property="Opacity" Value="0.45" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding Enabled}" Value="False">
                     <Setter Property="Opacity" Value="0.4" />
                 </DataTrigger>
@@ -129,13 +138,17 @@
 
             <Grid Grid.Row="2" Margin="7,2,7,0">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding Feedback}" Style="{StaticResource OperatorLabel}"
                     TextTrimming="CharacterEllipsis" ToolTip="{Binding Feedback}"
                     VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="{Binding PlaybackLabel}" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" Text="{Binding GestureLabel}" Style="{StaticResource OperatorLabel}"
+                    TextTrimming="CharacterEllipsis" ToolTip="{Binding GestureLabel}"
+                    VerticalAlignment="Center" Margin="8,0,0,0" />
+                <TextBlock Grid.Column="2" Text="{Binding PlaybackLabel}" VerticalAlignment="Center"
                     Foreground="{DynamicResource OperatorWarningBrush}"
                     FontWeight="SemiBold" Margin="10,0,0,0"/>
             </Grid>
