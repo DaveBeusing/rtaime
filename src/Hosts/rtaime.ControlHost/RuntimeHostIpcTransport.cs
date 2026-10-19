@@ -370,12 +370,14 @@ public sealed record RuntimeRemoteApplyResult(
 	public bool Committed => Commit?.Status == RuntimeCommitStatus.Committed;
 }
 
-public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
+public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly object _gate = new();
 	private readonly SemaphoreSlim _requestGate = new(1, 1);
+    // Native sequence preroll must not hold the ordinary Program/control IPC lane.
+    private readonly SemaphoreSlim _sequencePreparationRequestGate = new(1, 1);
 	private readonly string _endpoint;
 	private readonly TimeSpan _connectTimeout;
 	private readonly TimeSpan _requestTimeout;
@@ -1104,7 +1106,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(_requestTimeout);
-		await _requestGate.WaitAsync(timeout.Token).ConfigureAwait(false);
+		var gate = messageType == "runtime.sequence.preparation.prepare"
+            ? _sequencePreparationRequestGate : _requestGate;
+        await gate.WaitAsync(timeout.Token).ConfigureAwait(false);
 		try
 		{
 			await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -1173,8 +1177,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		}
 		finally
 		{
-			_requestGate.Release();
-		}
+			gate.Release();
+        }
 	}
 
 	private static void EnsureNotError(WireEnvelope envelope)
