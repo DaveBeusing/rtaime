@@ -33,6 +33,25 @@ public sealed partial class ControlHostIpcServer
                 return Error(message, "sequence.preparation.unavailable",
                     "Live RuntimeHost, durable show project and catalogue are required.");
 
+            if (message.MessageType == "control.sequence.preparation.context.get")
+            {
+                _ = SequenceJson.Read<SequencePreparationEmpty>(
+                    message.Payload.GetRawText(), 16 * 1024);
+                var authority = _controlAccessor();
+                if (authority is null || !authority.HasAuthoritativeState)
+                    return Error(message, "sequence.preparation.authority_unavailable",
+                        "ControlHost has no committed production authority.");
+                var runtimeContext = await _runtimeTransport.GetSnapshotAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                var baselineContext = _outputCanvasBaseline ?? authority.Specification;
+                var savedContext = await _showProjectStore.LoadSequencesAsync(
+                    baselineContext, cancellationToken).ConfigureAwait(false);
+                var result = new SequencePreparationContext(SequencePreparationContract.Version,
+                    runtimeContext.HostInstanceId, savedContext.Revision);
+                result.Validate();
+                return Success(message, message.MessageType + ".response", result);
+            }
+
             if (message.MessageType == "control.sequence.prepare")
             {
                 var request = SequenceJson.Read<SequencePreparationRequest>(
