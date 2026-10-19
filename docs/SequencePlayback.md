@@ -124,7 +124,10 @@ A/B deck behavior remains unchanged.
   generations are rejected before native read. If an already validated native
   frame-set read encounters buffering or failure, previously acquired leases
   are disposed and no partial result is published; dequeued native frames
-  cannot be put back into the worker queue. No Program routing, video
+  cannot be put back into the worker queue. Every selected video clip also
+  requires actual RGBA payload and every selected audio clip actual decoded
+  PCM; missing media invalidates and releases the complete group. No Program
+  routing, video
   composite, audio mix or playback capability is activated by this seam.
 - `TryTakeSequenceFrameSet` gathers one to four distinct native owners at
   a single sequence tick under the existing Runtime generation fence.
