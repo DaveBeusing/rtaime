@@ -370,7 +370,7 @@ public sealed record RuntimeRemoteApplyResult(
 	public bool Committed => Commit?.Status == RuntimeCommitStatus.Committed;
 }
 
-public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
+public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
