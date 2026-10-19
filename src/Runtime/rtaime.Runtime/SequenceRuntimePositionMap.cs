@@ -99,7 +99,7 @@ public sealed class SequenceRuntimePositionMap
         var current = (Int128)StartTick * ProgramRate.Numerator / periodNumerator;
         var next = Math.Max(0L, checked((long)current + direction));
         var target = (Int128)next * periodNumerator / ProgramRate.Numerator;
-        return Cue(programSlot, (long)Math.Min((Int128)(DurationTicks - 1), target));
+        return Cue(programSlot, target >= DurationTicks ? DurationTicks - 1 : checked((long)target));
     }
 
     /// <summary>
