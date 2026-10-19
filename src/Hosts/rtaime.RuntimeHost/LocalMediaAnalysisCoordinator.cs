@@ -62,7 +62,15 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (!_analysisGenerations.TryGetValue(request.ConsumerId, out var prior))
             {
                 if (_analysisGenerations.Count >= MediaAnalysisContract.MaximumConsumers)
-                    return ToBegin(job, MediaAnalysisState.Unavailable, "The bounded analysis consumer capacity is full.");
+                {
+                    // Completed consumers are reusable; never evict an active or pending owner.
+                    var idle = _analysisGenerations.Keys.FirstOrDefault(name =>
+                        (_analysisActive is null || _analysisActive.Request.ConsumerId != name) &&
+                        !_analysisPending.ContainsKey(name));
+                    if (idle is null)
+                        return ToBegin(job, MediaAnalysisState.Unavailable, "The bounded analysis consumer capacity is full.");
+                    _analysisGenerations.Remove(idle);
+                }
             }
             else if (request.Generation <= prior)
                 return ToBegin(job, MediaAnalysisState.Stale, "The analysis request generation is no longer current.");
@@ -380,6 +388,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             source.Probe.VideoFormat.FrameRate.Numerator, 0, MidpointRounding.AwayFromZero));
         long? firstActual = null;
         var ended = false;
+        var decodeFailed = false;
         const int maxDecodeWindows = 7_200;
         for (var offset = 0; offset < maxDecodeWindows; offset++)
         {
@@ -387,7 +396,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             var next = source.ReadNext((ulong)offset, stop);
             if (!next.Succeeded)
             {
-                ended = true;
+                ended = next.Status == LocalMediaFrameReadStatus.Ended;
+                decodeFailed = next.Status == LocalMediaFrameReadStatus.Failed;
                 break;
             }
             var frame = next.Frame!;
@@ -405,10 +415,11 @@ public sealed partial class LocalMediaDeckRuntimeService
         var buckets = accumulator.Build();
         return job.Observation with {
             State = !accumulator.HasSamples ? MediaAnalysisState.Unavailable :
-                ended && !accumulator.HasDiscontinuities ? MediaAnalysisState.Complete : MediaAnalysisState.Partial,
+                ended && !decodeFailed && !accumulator.HasDiscontinuities ? MediaAnalysisState.Complete : MediaAnalysisState.Partial,
             ActualTicks = firstActual, SampleRate = rate, ChannelCount = channels,
             Waveform = buckets, Detail = !accumulator.HasSamples
                 ? "No decoded audio samples are available in the requested range."
+                : decodeFailed ? "Audio decoder failed; only confirmed decoded samples are retained."
                 : accumulator.HasDiscontinuities ? "Audio peaks include explicit discontinuities."
                 : ended ? "Decoded channel peaks and RMS from actual PCM." :
                     "Partial waveform: bounded decode window limit reached."
