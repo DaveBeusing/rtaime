@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Security.Cryptography;
+using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Runtime;
@@ -66,9 +67,9 @@ public sealed class SequenceMediaPreparationIntegrationTests
         Assert.Equal(new[] { 0, 0, 1, 1 }, indices);
         Assert.Equal(owners[0].SourceId, frameLeases[indices[0]]!.Frame.Video.SourceId);
         Assert.Equal(owners[1].SourceId, frameLeases[indices[2]]!.Frame.Video.SourceId);
-        Assert.NotEmpty(frameLeases[indices[0]]!.Frame.RgbaPixels.Span.ToArray());
-        Assert.NotEmpty(frameLeases[indices[1]]!.Frame.AudioPayload.Span.ToArray());
-        Assert.NotEmpty(frameLeases[indices[3]]!.Frame.AudioPayload.Span.ToArray());
+        Assert.False(frameLeases[indices[0]]!.Frame.RgbaPixels.IsEmpty);
+        Assert.False(frameLeases[indices[1]]!.Frame.AudioPayload.IsEmpty);
+        Assert.False(frameLeases[indices[3]]!.Frame.AudioPayload.IsEmpty);
         Assert.All(frameLeases, frame => Assert.True(decks.IsCurrentSequenceFrame(frame!)));
 
         foreach (var lease in frameLeases) lease!.Dispose();
