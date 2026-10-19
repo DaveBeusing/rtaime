@@ -14,7 +14,7 @@ public static class OperatorInlineHelp
         var topics = new List<OperatorHelpTopic>();
         var assembly = typeof(OperatorInlineHelp).Assembly;
         foreach (var name in new[] { "OperatorCommandsAndShortcuts", "MediaLibraryAssetBrowser", "OperatorWorkspaces",
-            "DurableShowProjectState", "ShowPreflightAndActivity", "WindowsProductionLifecycle" })
+            "AIProcessingWorkspace", "DurableShowProjectState", "ShowPreflightAndActivity", "WindowsProductionLifecycle" })
         {
             using var stream = assembly.GetManifestResourceStream("OperatorHelp." + name + ".md");
             if (stream is null) continue;

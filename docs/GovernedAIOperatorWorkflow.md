@@ -4,7 +4,7 @@
 
 ## Scope and inventory
 
-This change improves the existing V1 person-segmentation showcase. It adds no inference engine, renderer, model downloader, production action family or production authority. Classification: CONTRACT (private host/client payloads), REALTIME_CRITICAL (fallback and continuity), Operator workflow. Public AI/Control/Runtime contract identities and persistent schemas are unchanged. The existing closed V1 effect scope is retained; no new architectural direction or ADR is introduced.
+The governed reference person-segmentation showcase remains the supported backend capability. The independently approved AI workspace now presents provider/model evidence, descriptor-only tests, source-bound approval and Runtime execution/fallback observations without adding an inference engine, renderer, model downloader, production action family or production authority. Classification: CONTRACT (existing private host/client payloads), REALTIME_CRITICAL (fallback and continuity), Operator workflow. Public AI/Control/Runtime contract identities and persistent schemas remain unchanged. No additional trained effects or physical GPU qualifications are implied.
 
 AIHost advertises installed provider capabilities and model-package descriptors. The browser obtains evidence through Operator → Client → ControlHost → RuntimeHost → AIHost. An empty response means no advertised installed capability. Missing or unsupported discovery is UNVERIFIED/UNSUPPORTED, never a fabricated catalogue. AVAILABLE describes a ready advertised provider with a matching descriptor package, not trained-model quality or physical hardware qualification. Unknown effect kinds are UNSUPPORTED.
 
@@ -27,7 +27,7 @@ No segmentation accuracy, trained-model quality, GPU inference latency or physic
 
 1. Refresh installed capabilities. Select a provider-advertised row. Selection makes no production request.
 2. TEST invokes governed inference on a descriptor of the current committed Program sample. It produces metadata only. Neither Preview nor Program pixels change; it is not a second visual preview renderer.
-3. Successful test evidence must match the selected provider and the current Production revision. The browser requires fresh catalogue evidence (30 seconds) and explicit approval of the reference effect on Program.
+3. Successful test evidence must match the selected provider, current Production revision and committed Program source; a descriptor without a sample sequence cannot be approved. The browser requires fresh catalogue evidence (30 seconds) and explicit approval of the reference effect on Program.
 4. AI ON requests activation through ControlHost. ControlHost rejects a missing/stale expected Production revision, pending production execution, unavailable Runtime or a fresh Runtime authority mismatch.
 5. Acceptance arms Runtime execution. EXECUTED is shown only for Runtime RUNNING plus visible effect and separate source/applied sequences. Acceptance does not promise a visible result.
 Activation also rejects an already occupied dynamic visual layer, preserving its existing content instead of replacing an unrelated effect.
@@ -36,7 +36,7 @@ Activation also rejects an already occupied dynamic visual layer, preserving its
 
 Refresh, selection changes, production revision changes, stale/disconnected control, failed test and activation attempts invalidate approval. There is no automatic activation/retry after reconnect. Test and activation cannot run concurrently within the showcase service. Runtime replacement starts with AI bypassed; activation is deliberately not persisted or replayed from a session.
 
-The UI uses existing custom controls, dark resources and the existing workspace scroll container. Capability and diagnostic text wrap; controls expose accessible names and normal keyboard focus.
+The dedicated AI center surface uses existing custom controls, dark resources, workspace navigation and the same Program monitoring owner. Capability/diagnostic text wraps and controls expose accessible names and normal keyboard focus. The monitored Program image is not an independent original/result pair, and descriptor-only TEST never produces a visually comparable result. See [AI Processing Workspace](AIProcessingWorkspace.md).
 
 ## Compatibility and authority
 
@@ -54,6 +54,6 @@ Canonical developer build remains ./build/development/Invoke-DeveloperBuild.ps1 
 
 Actual OS kill/restart, production model signing/trust, real GPU inference, hardware arbitration, external peers, soak and physical mixed-monitor DPI/focus inspection remain UNVERIFIED. Managed AIHost shutdown/IPC loss evidence is separately scoped and does not claim an OS crash qualification.
 
-## Deferred proposals
+## Additional capability limitations
 
 Trained segmentation model packages, background replacement/blur, tracking, enhancement, generative effects and additional provider families require separately approved contracts, admission/fallback policy and qualification evidence. They are not advertised as installed or selectable.

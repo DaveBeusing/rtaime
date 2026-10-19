@@ -19,8 +19,10 @@ The [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted
 The [scope decision effective 2026-10-17](OperatorExperienceScope.md) supersedes
 former V1 functional deferrals. Independent analysis/scrubbing, multitrack
 sequences/editing, Preview shuttle, 2D canvas/mapping, Inspector extensions and an
-independent AI workspace are approved **TO IMPLEMENT**. The current eight
-destinations/schema 6 are an implementation inventory, not a permanent ceiling.
+independent AI workspace were approved for implementation. The dedicated AI
+workspace now reuses governed provider evidence and Program monitoring; the other
+workstreams retain their separate delivery status. The original eight workspace
+identities remain compatible with additive schema-7 destination registration.
 An additive destination or changed persisted geometry needs migration/tests.
 Current scope approval grants no hardware/format/security/release certification.
 
@@ -77,13 +79,25 @@ remain in the shell. Library/Inspector toggles reopen the existing panes. At com
 sizes one bus is visible, with both bus identities and immediate PVW/PGM switching;
 the stored dual-view preference is retained. Controls and text are not scaled down.
 
-## MULTIVIEW and AI
+## MULTIVIEW
 
 MULTIVIEW retains the existing source bank, scene/cue preparation, compact output
 evidence and Live Controls. It uses the same production commands and monitoring owner.
-AI hosts the existing governed test/approval/activation controls; it does not add a
-model, Runtime path or capability claim. Empty, unavailable, busy and stale behavior
-continues through the owning feature projections.
+
+## AI
+
+AI owns an independent full-center processing workspace with provider/model evidence,
+descriptor-only TEST, revision- and Program-source-bound approval, explicit ON/OFF,
+a shared Program monitor and separate accepted/executed/fallback state. It reuses
+the existing AIEffectBrowserViewModel, OperatorViewModel and Control/Runtime authority;
+there is no second inference session, clock, viewer renderer or approval path.
+
+The viewer is an observation of **current Program**, not an A/B Original-vs-Result
+test image. The reference TEST returns metadata only. Resource requirements are
+advertised descriptors, not measured CPU/GPU/VRAM or costs. Unsupported packages
+are shown as unavailable and are never installed automatically. See
+[AI Processing Workspace](AIProcessingWorkspace.md) for the workflow, failure recovery
+and qualification boundaries.
 
 The single OperatorWorkspaceRegistry contributes stable IDs, labels, groups and
 canonical viewer defaults to navigation, the command palette and persistence.
@@ -233,7 +247,8 @@ Workspace changes, selection, maximize/restore and docking do not mutate product
 4. Pin frequently edited properties through the existing Inspector.
 5. Use LIVE for confirmed Preview/Program, explicit actions and Quick Controls.
 6. Open Clean Program for dedicated monitoring when needed.
-7. Use OUTPUTS for provider/recording/audio evidence, HEALTH for diagnosis and SETTINGS for shell preferences.
+7. Use AI for provider/model discovery, descriptor-only testing and explicitly governed Program activation.
+8. Use OUTPUTS for provider/recording/audio evidence, HEALTH for diagnosis and SETTINGS for shell preferences.
 
 One underlying production state remains active throughout.
 
