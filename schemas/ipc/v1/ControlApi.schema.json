@@ -24,6 +24,7 @@
                     "control.output.canvas.validate",
                     "control.output.canvas.save",
                     "control.output.canvas.activate",
+                    "control.output.canvas.evidence.get",
 					"control.show_template.create",
 					"control.show_template.preflight",
 					"control.show_template.instantiate",
