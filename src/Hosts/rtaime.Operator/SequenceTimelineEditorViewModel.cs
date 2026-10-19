@@ -255,6 +255,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         if (_gesture is not { } g || _snapshot?.AuthoringRevision != g.Revision) { CancelGesture(); return; }
         var tick = SequenceTimelineGeometry.Snap(Math.Max(0, pointerTick), Sequence!, Snapping);
+        if (g.PreviewTick == tick) return;
         _gesture = g with { PreviewTick = tick };
         Changed(nameof(GestureLabel)); RefreshViewport();
     }
@@ -265,6 +266,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         _gesture = null;
         Changed(nameof(GestureLabel)); RefreshViewport();
         if (_snapshot?.AuthoringRevision != g.Revision || !CanEdit) return;
+        if (!TryDraftClip(g.Clip, g, out _))
+        {
+            Feedback = "REJECTED · drag would create an out-of-range timeline or source interval.";
+            return;
+        }
         var delta = checked(g.PreviewTick - g.StartPointerTick);
         SequenceEdit? edit = g.Kind switch
         {
@@ -597,6 +603,35 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         finally { _busy = false; Changed(nameof(CanEdit)); RaiseCommands(); }
     }
 
+    private static bool TryDraftClip(SequenceClip clip, SequenceEditorGesture intent, out SequenceClip draft)
+    {
+        var delta = checked(intent.PreviewTick - intent.StartPointerTick);
+        draft = intent.Kind switch
+        {
+            SequenceEditorGestureKind.Move => clip with
+            {
+                TimelineStart = checked(clip.TimelineStart + delta)
+            },
+            SequenceEditorGestureKind.TrimStart => clip with
+            {
+                TimelineStart = checked(clip.TimelineStart + delta),
+                SourceIn = checked(clip.SourceIn + delta),
+                Duration = checked(clip.Duration - delta)
+            },
+            SequenceEditorGestureKind.TrimEnd => clip with
+            {
+                SourceOut = checked(clip.SourceOut + delta),
+                Duration = checked(clip.Duration + delta)
+            },
+            _ => clip
+        };
+        return draft.SourceIn >= 0 && draft.SourceOut > draft.SourceIn &&
+            draft.SourceOut <= SequenceContract.MaximumTime &&
+            draft.TimelineStart >= 0 && draft.Duration > 0 &&
+            draft.TimelineStart <= SequenceContract.MaximumTime - draft.Duration &&
+            draft.SourceOut - draft.SourceIn == draft.Duration;
+    }
+
     public void RefreshViewport()
     {
         VisibleRows.Clear();
@@ -605,9 +640,34 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             var rows = SequenceTimelineGeometry.Project(definition, VisibleStart, VisibleEnd,
                 FirstTrack, _visibleTrackCount, _viewportWidth);
             foreach (var row in rows)
-                VisibleRows.Add(row with { Clips = row.Clips.Select(c => c with {
-                    Selected = _selectedClips.Contains(c.Id),
-                    Waveform = c.Id == SelectedWaveform?.ClipId ? SelectedWaveform : null
+                VisibleRows.Add(row with { Clips = row.Clips.Select(clip =>
+                {
+                    var visible = clip with
+                    {
+                        Selected = _selectedClips.Contains(clip.Id),
+                        Waveform = clip.Id == SelectedWaveform?.ClipId ? SelectedWaveform : null
+                    };
+                    if (_gesture is not { } intent) return visible;
+                    var source = definition.Clips.Single(c => c.ClipId == clip.Id);
+                    if (source.ClipId != intent.Clip.ClipId &&
+                        (intent.Clip.LinkGroupId is null ||
+                         source.LinkGroupId != intent.Clip.LinkGroupId))
+                        return visible;
+                    if (!TryDraftClip(source, intent, out var preview))
+                        return visible with { Pending = true, Invalid = true };
+                    var from = Math.Max(VisibleStart, preview.TimelineStart);
+                    var end = Math.Min(VisibleEnd, SequenceTimelineGeometry.ClipEnd(preview));
+                    var left = SequenceTimelineGeometry.Pixel(from, VisibleStart, VisibleEnd, _viewportWidth);
+                    var right = SequenceTimelineGeometry.Pixel(Math.Max(from, end),
+                        VisibleStart, VisibleEnd, _viewportWidth);
+                    return visible with
+                    {
+                        Pending = true,
+                        StartTick = preview.TimelineStart,
+                        EndTick = SequenceTimelineGeometry.ClipEnd(preview),
+                        SourceIn = preview.SourceIn, SourceOut = preview.SourceOut,
+                        Left = left, Width = Math.Max(1, right - left)
+                    };
                 }).ToArray() });
         }
         Changed(nameof(VisibleStart)); Changed(nameof(VisibleEnd));
