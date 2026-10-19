@@ -65,7 +65,13 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         PrepareAssetsCommand = new AsyncRelayCommand(PrepareSelectedAssetsAsync, CanPrepareAssets);
         CancelPreparationCommand = new AsyncRelayCommand(() => { _preparationStop?.Cancel(); return Task.CompletedTask; }, () => _preparing);
-        ClosePreparationCommand = new AsyncRelayCommand(() => { _preparationVisible = false; OnPropertyChanged(nameof(PreparationVisibility)); return Task.CompletedTask; }, () => !_preparing);
+        ClosePreparationCommand = new AsyncRelayCommand(() =>
+        {
+            _preparationVisible = false;
+            _preparationTimer?.Stop();
+            OnPropertyChanged(nameof(PreparationVisibility));
+            return Task.CompletedTask;
+        }, () => !_preparing);
         PropertyChanged += PreparationContextChanged;
         _operator.PropertyChanged += PreparationOperatorChanged;
         _preparationTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
@@ -74,6 +80,8 @@ public sealed partial class MediaPoolInspectorViewModel
     public void ShowPreparation()
     {
         _preparationVisible = true;
+        ExpirePreparationEvidence(); // Reject expired conditional observations before showing them.
+        _preparationTimer?.Start(); // Presentation-only one-second age updates while the panel is visible.
         OnPropertyChanged(nameof(PreparationVisibility));
         OnPropertyChanged(nameof(PreparationRows));
         RaisePreparationCommands();
