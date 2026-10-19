@@ -666,6 +666,8 @@ public sealed class MediaLibraryBrowsingTests
 		}
 		public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
 			ValueTask.FromResult(MediaAssetCatalogSnapshot.Empty);
+		public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
+			ValueTask.FromResult(MediaAssetCatalogSnapshot.Empty);
 		public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> paths,
 			CancellationToken cancellationToken = default) => throw new NotSupportedException();
 		public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId id, string path,
