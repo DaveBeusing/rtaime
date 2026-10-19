@@ -380,6 +380,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             _ledger.CloseAdmission();
             List<Exception>? failures = null;
             try { ClearPreparation(null); } catch (Exception exception) { (failures ??= []).Add(exception); }
+            try { StopMediaAnalysis(); } catch (Exception exception) { (failures ??= []).Add(exception); }
             try { StopPreflight(); } catch (Exception exception) { (failures ??= []).Add(exception); }
             for (var i = 0; i < _entries.Length; i++)
             {
