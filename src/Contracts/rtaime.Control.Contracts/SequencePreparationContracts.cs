@@ -72,3 +72,15 @@ public sealed record SequencePreparationStatus(
             throw new InvalidDataException("Invalid bounded sequence preparation observation.");
     }
 }
+
+/// <summary>Current Control-observed epoch and saved revision; no resource readiness promise.</summary>
+public sealed record SequencePreparationContext(
+    string Version, string RuntimeHostInstanceId, ulong AuthoringRevision)
+{
+    public void Validate()
+    {
+        if (Version != SequencePreparationContract.Version ||
+            !Guid.TryParse(RuntimeHostInstanceId, out var runtime) || runtime == Guid.Empty)
+            throw new InvalidDataException("Sequence preparation context is stale or unavailable.");
+    }
+}
