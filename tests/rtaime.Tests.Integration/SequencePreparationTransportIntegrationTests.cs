@@ -10,7 +10,7 @@ namespace rtaime.Tests.Integration;
 
 public sealed partial class ExternalControlIntegrationTests
 {
-    private static SequenceDefinition PreparedVideoSequence(OperatorMediaAssetDescriptor asset)
+    private static SequenceDefinition PreparedVideoSequence(MediaAssetDescriptor asset)
     {
         var track = new SequenceTrack(Guid.NewGuid(), "Video", SequenceMediaKind.Video, 0);
         var clip = new SequenceClip(Guid.NewGuid(), track.TrackId,
