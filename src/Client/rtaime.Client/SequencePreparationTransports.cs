@@ -6,6 +6,16 @@ namespace rtaime.Client;
 
 public sealed partial class NamedPipeOperatorControlTransport : ISequencePreparationTransport
 {
+    public async ValueTask<SequencePreparationContext> GetSequencePreparationContextAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var response = SequenceJson.Read<SequencePreparationContext>(
+            (await ExchangeAsync("control.sequence.preparation.context.get", new { }, cancellationToken)
+                .ConfigureAwait(false)).Payload.GetRawText(), 16 * 1024);
+        response.Validate();
+        return response;
+    }
+
     public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
         SequencePreparationRequest request, CancellationToken cancellationToken = default)
     {
