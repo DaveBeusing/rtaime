@@ -18,6 +18,7 @@ public sealed partial class ControlHostIpcServer
     private readonly SemaphoreSlim _sequencePreparationGate = new(1, 1);
     private PreparedSequenceBinding? _preparedSequence;
 
+    private sealed record SequencePreparationEmpty;
     private sealed record PreparedSequenceBinding(
         SequencePreparationReference Reference, Identity AuthorityStateId,
         Revision AuthorityRevision, ulong CatalogueRevision);
