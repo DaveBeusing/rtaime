@@ -554,6 +554,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			"control.media_source.adopt" => await AdoptMediaSourceAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_input.health.get" => await GetMediaInputHealthAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.preflight.begin" or "control.media_asset_catalog.preflight.get" or "control.media_asset_catalog.preflight.cancel" => await PreflightMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
+            "control.media.analysis.begin" or "control.media.analysis.get" or "control.media.analysis.cancel" => await RunMediaAnalysisAsync(request, cancellationToken).ConfigureAwait(false),
             "control.media_asset_catalog.snapshot.get" => await GetMediaAssetCatalogAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.import" => await ImportMediaAssetsAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.relink" => await RelinkMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
