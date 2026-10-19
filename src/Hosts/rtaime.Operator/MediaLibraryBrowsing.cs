@@ -38,6 +38,7 @@ public sealed partial class MediaPoolInspectorViewModel
 	private MediaPoolItemViewModel? _hoverItem;
 	private double _hoverFraction = -1;
 	private string? _hoverCatalogRevision;
+	private bool _dragIntentVisible;
 	private bool _browsingDisposed;
 	private bool _metadataFiltersExpanded;
 	private bool _feedbackVisible;
@@ -275,6 +276,22 @@ public sealed partial class MediaPoolInspectorViewModel
 			return Task.CompletedTask;
 		var position = _hoverKey == item.Key ? _hoverFraction : 0.5;
 		return BeginHoverAsync(item, Math.Clamp(position + direction * 0.05, 0, 1));
+	}
+	public void ShowDragIntent(MediaAssetDragPayload payload)
+	{
+		ArgumentNullException.ThrowIfNull(payload);
+		CancelHover();
+		_dragIntentVisible = true;
+		HoverStatus = payload.Items.Count + (payload.Items.Count == 1 ? " asset" : " assets") +
+			" · " + payload.Primary.Kind + " · Preview target: primary asset opens in Preview; " +
+			"Timeline target: primary becomes a local draft; Program: no implicit Take.";
+		SetFeedbackVisible(true);
+	}
+	public void ClearDragIntent()
+	{
+		if (!_dragIntentVisible) return;
+		_dragIntentVisible = false;
+		CancelHover();
 	}
 	public void CancelHover()
 	{
