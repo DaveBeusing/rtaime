@@ -112,11 +112,21 @@ public sealed class SequenceRuntimePositionMap
     public SequenceRuntimePositionMap SetLoop(ulong programSlot, bool loop)
     {
         if (Loop == loop) return this;
-        var tick = State == SequenceRuntimeTransportState.Playing && TryMap(programSlot, out var mapped)
-            ? mapped.Tick : StartTick;
+        if (State == SequenceRuntimeTransportState.Playing &&
+            !TryMap(programSlot, out _))
+            throw new InvalidOperationException("A completed sequence requires an explicit Stop, Seek or new approved activation.");
+        var tick = State == SequenceRuntimeTransportState.Playing
+            ? GetPlayingTick(programSlot) : StartTick;
         var update = Reanchor(programSlot, tick, State);
         return new(update.SequenceId, update.AuthoringRevision, update.ProgramRate, update.DurationTicks,
             update.AnchorProgramSlot, update.StartTick, update.Generation, loop, update.State);
+    }
+
+    private long GetPlayingTick(ulong programSlot)
+    {
+        if (!TryMap(programSlot, out var mapped))
+            throw new InvalidOperationException("The current Program slot is not inside an active sequence.");
+        return mapped.Tick;
     }
 
     private SequenceRuntimePositionMap Reanchor(ulong programSlot, long tick, SequenceRuntimeTransportState state)
