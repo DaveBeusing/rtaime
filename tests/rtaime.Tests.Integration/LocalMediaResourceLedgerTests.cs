@@ -148,6 +148,74 @@ public sealed class LocalMediaResourceLedgerTests
         ticket!.OwnerCompleted();
     }
 
+    [Fact]
+    public void Sequence_group_is_atomic_and_cannot_displace_Program_or_retained_pools()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
+            LocalMediaCapacityProfile.DevelopmentFour);
+        var program = IdentityFor(ledger);
+        Assert.True(ledger.TryReserve(Guid.NewGuid(), program, out var committed, out _));
+        committed!.RetainPoolLease();
+        var group = Enumerable.Range(0, 4).Select(_ =>
+            new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger))).ToArray();
+
+        Assert.False(ledger.TryReserveGroup(group, out var rejected, out var reason));
+        Assert.Empty(rejected);
+        Assert.Equal("runtime.media_resources.capacity", reason?.Code);
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+
+        committed.OwnerCompleted();
+        Assert.Equal(1, ledger.Snapshot.RetainedPoolOwners);
+        Assert.False(ledger.TryReserveGroup(group, out rejected, out reason));
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+        committed.ReleasePoolLease();
+
+        Assert.True(ledger.TryReserveGroup(group, out var admitted, out reason));
+        Assert.Null(reason);
+        Assert.Equal(4, admitted.Count);
+        Assert.Equal(4, ledger.Snapshot.ReservedOwners);
+        Assert.False(ledger.TryReserveGroup(group, out _, out reason));
+        Assert.Equal("runtime.media_resources.sequence_intent_conflict", reason?.Code);
+        foreach (var ticket in admitted) ticket.OwnerCompleted();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+    }
+
+    [Fact]
+    public void Sequence_group_rollback_does_not_charge_partial_admissions_or_weaken_optional_exclusion()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
+            LocalMediaCapacityProfile.DevelopmentFour);
+        var optional = IdentityFor(ledger) with { Purpose = LocalMediaResourcePurpose.Analysis };
+        Assert.True(ledger.TryReserve(Guid.NewGuid(), optional, out var occupied, out _));
+        var group = Enumerable.Range(0, 3).Select(_ =>
+            new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger))).ToArray();
+        Assert.False(ledger.TryReserveGroup(group, out var refused, out var failure));
+        Assert.Empty(refused);
+        Assert.Equal("runtime.media_resources.optional_releasing", failure?.Code);
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+        occupied!.OwnerCompleted();
+        Assert.True(ledger.TryReserveGroup(group, out var admitted, out failure));
+        Assert.Equal(3, admitted.Count);
+        foreach (var ticket in admitted) ticket.OwnerCompleted();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+    }
+
+    [Fact]
+    public void Sequence_group_rejects_stale_identity_without_retaining_any_reserved_part()
+    {
+        var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
+            LocalMediaCapacityProfile.DevelopmentFour);
+        var ids = new[]
+        {
+            new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger)),
+            new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger) with { RuntimeEpoch = "stale" })
+        };
+        Assert.False(ledger.TryReserveGroup(ids, out var tickets, out var failure));
+        Assert.Empty(tickets);
+        Assert.Equal("runtime.media_resources.identity", failure?.Code);
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+    }
+
     private static LocalMediaResourceIdentity IdentityFor(LocalMediaResourceLedger ledger) =>
         new(ledger.RuntimeEpoch, MediaSourceId.New(), null, null, null, LocalMediaResourcePurpose.Resident);
 }
