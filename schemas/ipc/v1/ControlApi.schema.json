@@ -21,6 +21,7 @@
                     "control.sequence.prepare",
                     "control.sequence.preparation.get",
                     "control.sequence.preparation.cancel",
+                    "control.sequence.preparation.context.get",
                     "control.ping",
 					"control.snapshot.get",
                     "control.output.canvas.get",
