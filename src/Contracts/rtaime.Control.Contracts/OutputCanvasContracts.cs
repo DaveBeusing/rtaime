@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 namespace rtaime.Control.Contracts;
 
@@ -28,6 +29,7 @@ public sealed record OutputCanvasEdgeBlend(double Left, double Top, double Right
     string Curve = "smoothstep");
 public sealed record OutputCanvasSurface(Guid SurfaceId, Guid CanvasId, OutputCanvasInput Input,
     int ZOrder, OutputCanvasCrop Crop, OutputCanvasQuad Destination, bool Enabled = true,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     OutputCanvasEdgeBlend? EdgeBlend = null);
 public sealed record OutputCanvasBinding(Guid OutputId, Guid CanvasId, string ProviderId,
     string TargetId, string ProfileId, bool Enabled = true);
@@ -41,8 +43,7 @@ public sealed record OutputCanvasValidation(Guid ConfigurationId, ulong EditRevi
     public bool IsValid => Issues.Length == 0;
 }
 public sealed record OutputCanvasSnapshot(OutputCanvasConfiguration Saved, ulong SavedRevision,
-    ulong? ActiveRenderRevision, OutputCanvasTarget[] AvailableTargets, string ActivationState,
-    OutputCanvasActivationResult? RuntimeEvidence = null);
+    ulong? ActiveRenderRevision, OutputCanvasTarget[] AvailableTargets, string ActivationState);
 
 public enum OutputCanvasEditKind
 {
