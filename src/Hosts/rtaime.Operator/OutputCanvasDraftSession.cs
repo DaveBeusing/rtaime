@@ -50,7 +50,7 @@ internal sealed class OutputCanvasDraftSession
         crop.X + crop.Width <= 1 && crop.Y + crop.Height <= 1;
 
     public static bool IsValidBlend(OutputCanvasEdgeBlend? blend) =>
-        blend is null || (blend.Curve is "linear" or "smoothstep" &&
+        blend is null || ((blend.Curve is "linear" or "smoothstep") &&
             ValidEdge(blend.Left) && ValidEdge(blend.Top) &&
             ValidEdge(blend.Right) && ValidEdge(blend.Bottom));
 
