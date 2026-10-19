@@ -109,9 +109,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                 // Existing workers own the joined native cleanup. Retained leases or
                 // quarantined handles keep their charges through the same ledger.
                 var cleanupFailure = CleanupSequenceOwners(staged);
-                // A failed opener completes its own ticket. Tickets for sources never
-                // opened must also be released before admission can be retried.
-                for (var index = encountered + 1; index < tickets.Count; index++)
+                // The failing index may have been cancelled before it opened.
+                // OwnerCompleted is idempotent even when the worker already joined;
+                // quarantine always retains its charge.
+                for (var index = encountered; index < tickets.Count; index++)
                     tickets[index].OwnerCompleted();
                 if (cleanupFailure is not null)
                     return RejectSequence(map, "runtime.sequence.cleanup_quarantined",
