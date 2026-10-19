@@ -163,12 +163,14 @@ internal sealed class SequenceFrameComposition
                 _mixedAudio.AsSpan(0, audioDestination.Length).Clear();
 
             // Every GPU surface is temporary and disposed on rejection.
-            using var black = _gpu.Upload(_blackSource, _black, timing,
-                Generation.Initial, "sequence-background");
+            // A failing or stopped GPU provider never publishes a partial output.
+            GpuFrame? black = null;
             var uploaded = new GpuFrame[videoLayers.Length];
             GpuFrame? output = null;
             try
             {
+                black = _gpu.Upload(_blackSource, _black, timing,
+                    Generation.Initial, "sequence-background");
                 var layers = new GpuKeyLayer[videoLayers.Length];
                 for (var index = 0; index < videoLayers.Length; index++)
                 {
@@ -207,11 +209,22 @@ internal sealed class SequenceFrameComposition
                 failure = null;
                 return true;
             }
+            catch (Exception exception) when (exception is ArgumentException or
+                InvalidOperationException or NotSupportedException)
+            {
+                failure = new("runtime.sequence.composition_gpu",
+                    "GPU composition failed without publishing output: " +
+                    exception.GetType().Name);
+                return false;
+            }
             finally
             {
+                if (video is null)
+                    audio = null;
                 output?.Dispose();
                 foreach (var frame in uploaded)
                     frame?.Dispose();
+                black?.Dispose();
             }
         }
     }
