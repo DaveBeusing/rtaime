@@ -228,6 +228,14 @@ public sealed partial class MediaPoolInspectorViewModel
 			SetFeedbackVisible(true);
 			return;
 		}
+		if (_catalogClient is not null && MediaLibraryHoverPreview.CanAnalyze(item) &&
+			(!_operator.IsConnected || _operator.IsStale))
+		{
+			CancelHover();
+			HoverStatus = "UNAVAILABLE · Control disconnected or stale; reconnect and retry";
+			SetFeedbackVisible(true);
+			return;
+		}
 		var position = Math.Clamp(fraction, 0, 1);
 		// Avoid a decoder request per mouse pixel; one pending generation always supersedes the previous one.
 		if (_hoverKey == item.Key && Math.Abs(_hoverFraction - position) < 0.025) return;
@@ -249,6 +257,14 @@ public sealed partial class MediaPoolInspectorViewModel
 		var preview = await _hoverPreview.RequestAsync(item, position);
 		if (_browsingDisposed || _hoverKey != item.Key || _hoverFraction != position || preview is null ||
 			_hoverCatalogRevision != _catalogSnapshot.Revision.ToString()) return;
+		if (_catalogClient is not null && MediaLibraryHoverPreview.CanAnalyze(item) &&
+			(!_operator.IsConnected || _operator.IsStale))
+		{
+			CancelHover();
+			HoverStatus = "UNAVAILABLE · Control connection changed; focus to retry";
+			SetFeedbackVisible(true);
+			return;
+		}
 		if (!HoverPreviewsEnabled || MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
 		{
 			CancelHover();
@@ -333,6 +349,12 @@ public sealed partial class MediaPoolInspectorViewModel
 			current.IsOnline != previous.IsOnline || current.KnownDuration != previous.KnownDuration ||
 			MediaLibraryHoverPreview.Capability(current) != MediaLibraryHoverPreview.Capability(previous))
 			CancelHover();
+		else if (!ReferenceEquals(current, previous))
+		{
+			// Reprojection can replace the record without a source change. Retain only this one local overlay.
+			current.SetScrubPreview(previous.ScrubFrame, previous.ScrubRequestedTicks);
+			_hoverItem = current;
+		}
 	}
 	private void DisposeBrowsing()
 	{
