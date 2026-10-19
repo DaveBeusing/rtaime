@@ -1,0 +1,80 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using rtaime.Control.Contracts;
+using Rtaime.ExternalControl.V1;
+
+namespace rtaime.Client;
+
+public sealed partial class NamedPipeOperatorControlTransport : ISequencePreparationTransport
+{
+    public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
+        SequencePreparationRequest request, CancellationToken cancellationToken = default)
+    {
+        request.Validate();
+        var response = SequenceJson.Read<SequencePreparationStatus>(
+            (await ExchangeAsync("control.sequence.prepare", request, cancellationToken).ConfigureAwait(false))
+            .Payload.GetRawText(), 16 * 1024);
+        response.Validate();
+        if (response.SequenceId != request.SequenceId ||
+            response.AuthoringRevision != request.ExpectedAuthoringRevision ||
+            response.RuntimeHostInstanceId != request.ExpectedRuntimeHostInstanceId)
+            throw new InvalidDataException("Sequence preparation response does not match the requested revision or RuntimeHost.");
+        return response;
+    }
+
+    public async ValueTask<SequencePreparationStatus> GetSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        ValidateSequencePreparationResponse(reference,
+            (await ExchangeAsync("control.sequence.preparation.get", reference, cancellationToken)
+                .ConfigureAwait(false)).Payload.GetRawText());
+
+    public async ValueTask<SequencePreparationStatus> CancelSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        ValidateSequencePreparationResponse(reference,
+            (await ExchangeAsync("control.sequence.preparation.cancel", reference, cancellationToken)
+                .ConfigureAwait(false)).Payload.GetRawText());
+
+    internal static SequencePreparationStatus ValidateSequencePreparationResponse(
+        SequencePreparationReference reference, string json)
+    {
+        reference.Validate();
+        var result = SequenceJson.Read<SequencePreparationStatus>(json, 16 * 1024);
+        result.Validate();
+        if (result.SequenceId != reference.SequenceId ||
+            result.AuthoringRevision != reference.AuthoringRevision ||
+            result.RuntimeHostInstanceId != reference.RuntimeHostInstanceId ||
+            result.PreparedExecutionId != reference.PreparedExecutionId ||
+            result.Generation != reference.Generation)
+            throw new InvalidDataException("Sequence preparation observation is stale or belongs to another owner.");
+        return result;
+    }
+}
+
+public sealed partial class GrpcOperatorControlTransport : ISequencePreparationTransport
+{
+    public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
+        SequencePreparationRequest request, CancellationToken cancellationToken = default)
+    {
+        request.Validate();
+        var reply = await ExecuteShowRequestAsync(r => r.PrepareSequence = Raw(request), cancellationToken)
+            .ConfigureAwait(false);
+        var status = SequenceJson.Read<SequencePreparationStatus>(reply.PayloadJson.ToStringUtf8(), 16 * 1024);
+        status.Validate();
+        if (status.SequenceId != request.SequenceId ||
+            status.AuthoringRevision != request.ExpectedAuthoringRevision ||
+            status.RuntimeHostInstanceId != request.ExpectedRuntimeHostInstanceId)
+            throw new InvalidDataException("Sequence preparation response does not match the requested revision or RuntimeHost.");
+        return status;
+    }
+
+    public async ValueTask<SequencePreparationStatus> GetSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        NamedPipeOperatorControlTransport.ValidateSequencePreparationResponse(reference,
+            (await ExecuteShowRequestAsync(r => r.GetSequencePreparation = Raw(reference), cancellationToken)
+                .ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+
+    public async ValueTask<SequencePreparationStatus> CancelSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        NamedPipeOperatorControlTransport.ValidateSequencePreparationResponse(reference,
+            (await ExecuteShowRequestAsync(r => r.CancelSequencePreparation = Raw(reference), cancellationToken)
+                .ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+}
