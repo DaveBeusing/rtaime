@@ -81,6 +81,21 @@ public sealed class SequenceRuntimePositionMapTests
     }
 
     [Fact]
+    public void Enabling_loop_after_finished_playback_cannot_restart_media_implicitly()
+    {
+        var map = SequenceRuntimePositionMap.Prepare(SequenceId, 4,
+            FrameRate.Fps50, 2 * 4800, 20, 7).Play(20);
+        Assert.False(map.TryMap(22, out _));
+        Assert.Throws<InvalidOperationException>(() => map.SetLoop(22, true));
+        var stopped = map.Stop(22);
+        var loop = stopped.SetLoop(22, true).Play(23);
+        Assert.True(loop.TryMap(23, out var selected));
+        Assert.Equal(0, selected.Tick);
+        Assert.True(loop.TryMap(25, out selected));
+        Assert.Equal(1UL, selected.LoopPass);
+    }
+
+    [Fact]
     public void Illegal_rate_revision_seek_and_backward_program_slot_fail_closed()
     {
         Assert.Throws<ArgumentException>(() =>
