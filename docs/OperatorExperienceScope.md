@@ -61,6 +61,16 @@ contract must implement and test that real contract before claiming completion.
   five [Required Gates](Governance/RepositoryGovernance.md). Failed/unknown
   hardware, latency, security and release evidence stays FAIL/UNVERIFIED.
 
+## Current implementation and acceptance
+
+The source-bound [joint Operator integration qualification](OperatorExperienceIntegrationQualification.md)
+supersedes the **implementation status** of the historical source inventory
+below without changing the 2026-10-17 product approval. Its merged
+feature references, exact-head Windows checks and still-unverified
+sequence Preview/Take and physical output state determine current
+acceptance. The following reviewed baseline table remains a historical
+record, not a claim that approved work is still permanently deferred.
+
 ## Status vocabulary and delivery ownership
 
 | Status | Meaning |

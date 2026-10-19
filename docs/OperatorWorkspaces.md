@@ -39,6 +39,17 @@ The AI workspace reuses governed model/provider approval and the shared Program 
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
+## Shared feature integration boundary
+
+The [joint Operator integration qualification](OperatorExperienceIntegrationQualification.md)
+verifies that Sequence Editor, legacy A/B media timeline, Output Canvas,
+governed AI and Health are presentations over existing owners in one
+productive MainWindow. Opening a workspace never gives an authored draft
+Program/Preview authority. Current native sequence Shuttle management
+reports an unavailable output, not a sequence Take. Disconnected WPF
+composition, connected media/production operations and physical display
+review must each be qualified independently.
+
 ## Shared visual contract
 
 All workspaces consume the shared Operator design system for typography, media/thumbnail canvases, diagnostic surfaces, monitor overlays, scrims, guides, badges and repeated panel chrome. Shared values belong in `Themes/OperatorTokens.xaml` or common theme resources; feature XAML must not create a competing palette. One-off functional geometry may remain local. Preview and Program share presentation mechanics, never command or state authority.

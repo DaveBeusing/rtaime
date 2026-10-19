@@ -198,12 +198,30 @@ Physical matrix results must be recorded with Windows build, adapter/driver, mon
 
 Windows software-adapter evidence: [Required gates run 38292301980](https://github.com/DaveBeusing/rtaime/actions/runs/38292301980), source `fcc4f0db23c70558e3ce3bc9286ad0403109d659`, SDK 10.0.401. CI's focused qualification passed 34/34, including the real primary/secondary-window lifetime; the complete Operator suite passed 229/229. All three productive control windows reported eight targets created/eight released, three device generations, and successful native BGRA8 red-pixel readback both initially and after injected device restoration. The injected 100/125/150/200% target matrix and exact three-retry exhaustion also passed. The later show-template integration step failed the separate AUX active-confirmation prerequisite; these results do not constitute a complete Required Gates pass. Final candidate status is recorded on the relevant pull request's exact head.
 
+## Cross-feature integration and review limits
+
+The [shared Operator experience qualification](OperatorExperienceIntegrationQualification.md)
+extends the **same** productive `OperatorXamlStartupTests` STA
+Application/Dispatcher with `OperatorExperienceIntegrationQualification`.
+The check retains single ViewModel/monitoring/Inspector/Health owners while
+switching Sequence/legacy timeline, OUTPUTS canvas and AI workspaces,
+and verifies that disconnected editing and CUT remain unauthorized.
+It uses actual compiled WPF controls, but is not a connected sequence
+Preview pixel capture or a human visual sign-off.
+
+Existing 1920×1080–960×540 logical and injected
+100/125/150/200% matrices, five LIVE and twenty owned-window review
+images, resource and focus tests are still required. No existing STA
+deadline, GPU allocation bound or action-authorization assertion is relaxed.
+Physical mixed-monitor DPI, IME/screen reader, contrast/text review and
+native media scan-out remain **UNVERIFIED** without retained direct evidence.
+
 ## Combined workspace regression evidence
 
 `OperatorCombinedVisualQualification.VerifyWindowAsync` runs inside the existing real
 MainWindow STA fixture, before the docking/Inspector/timeline/library/palette/show-check
 interaction fixtures and native GPU recovery fixture. It reuses all five viewport rows
-above across all eight workspaces (40 cases). Layout transforms inject the row's
+above across all ten registered workspaces (50 cases). Layout transforms inject the row's
 100/125/150/200% scale; they do not simulate Windows monitor messages. Both requested
 logical dimensions and actual Windows DPI are recorded separately.
 
@@ -216,7 +234,7 @@ size formula.
 
 CI and Quality retain `rtaime-operator-visual-<job>-<run>-<attempt>` artifacts:
 five LIVE PNG review images and `combined-ui.json` with the exact source, SDK,
-40 geometry observations, actual DPI, injected scale, overlay visibility and measurements.
+50 geometry observations, actual DPI, injected scale, overlay visibility and measurements.
 The environment variable `RTAIME_OPERATOR_VISUAL_EVIDENCE` opts into artifact writing.
 Images capture WPF composition; D3DImage hardware pixels may be absent. The startup
 overlay visibility is recorded rather than silently removed. Images require human
@@ -292,7 +310,7 @@ Fractional pointer mapping covers all four presentation modes at 100/125/150/200
 it qualifies the common DIP-to-source arithmetic, not physical touch delivery.
 
 Each native surface records its actual CompositionTarget rendering attach/detach
-balance. All 40 layouts and all subsequent interaction phases require a balance of
+balance. All 50 layouts and all subsequent interaction phases require a balance of
 zero or one per retained surface; final MainWindow teardown requires zero. Existing
 floating-panel identity/no-unload and GPU resource create/release checks remain active.
 This is rendering-event subscription evidence, not an assertion that the disconnected
@@ -301,7 +319,7 @@ fixture observed a live monitoring pipe or every production transport subscripti
 The same artifact now includes `interaction-ui.json`: exact source/SDK, ten named
 phase outcomes and elapsed times, Input queue observations, subscription balance,
 final teardown result and failures. Existing `combined-ui.json` contains the 20
-surface/focus observations as well as 40 geometry cases and settled resource metrics.
+surface/focus observations as well as 50 geometry cases and settled resource metrics.
 A phase failure leaves FAILED evidence and fails the test; later cases are not implied
 to have run. The unchanged 45-second STA deadline and 5-second dispatcher ceiling
 remain gross regression bounds, not a low-latency target.
@@ -322,7 +340,10 @@ claim in generated source documentation.
 | Sustained monitoring while resizing and selecting | No extra monitoring reader; bounded UI queue, target churn and input latency | Retained surfaces/event balance plus existing monitoring integration suites; physical loaded latency UNVERIFIED |
 | Five shell and twenty owned-window images | Typography, contrast, clipping, scroll access and keyboard focus visibly usable | Images require human review; D3DImage media pixels may be absent |
 
-Independent position scrubbing remains unsupported until a bounded cancelable
-preview-only backend contract exists. Physical/manual rows stay UNVERIFIED until
-Windows build, adapter/driver, monitor topology/DPI, media, exact source and observed
+Independent asset-position frame scrubbing is available for online catalogue
+media through the bounded, cancelable Media Analysis observation path. Its
+requested position and actual decoded PTS remain separate; remote/unsupported
+observers cannot fabricate pixels. This does not grant sequence Preview/Take
+or Program seek authority. Physical/manual rows stay UNVERIFIED until Windows
+build, adapter/driver, monitor topology/DPI, media, exact source and observed
 outcomes are retained with release evidence.

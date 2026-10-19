@@ -183,6 +183,8 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                         // Hidden templates may realize more native surfaces in the matrix; retain every instance for teardown.
                         observedSurfaces = observedSurfaces.Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>()).Distinct().ToArray();
                     });
+                    await Qualify("Integrated sequence, Outputs, AI and Health ownership", () =>
+                        OperatorExperienceIntegrationQualification.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Library smart bins, menus and virtualization", () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Timeline draft ergonomics", () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
                     await Qualify("Live console actions and focus", () => LiveConsoleWindowQualification.VerifyWindowAsync(window, dispatcher));
