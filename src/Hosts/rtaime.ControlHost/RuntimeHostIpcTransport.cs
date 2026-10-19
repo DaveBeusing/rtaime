@@ -905,6 +905,43 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+    public async ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+        MediaAnalysisFileIdentity identity, string path, CancellationToken cancellationToken = default)
+    {
+        request.Validate();
+        identity.Validate();
+        var envelope = await ExchangeAsync("runtime.media.analysis.begin",
+            new { Request = request, FileIdentity = identity, Path = path }, cancellationToken).ConfigureAwait(false);
+        var result = envelope.Payload.Deserialize<MediaAnalysisBegin>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Analysis begin response is missing.");
+        if (result.Version != MediaAnalysisContract.Version || result.AssetId != request.AssetId ||
+            result.Generation != request.Generation || result.ConsumerId != request.ConsumerId)
+            throw new InvalidDataException("Analysis response does not match the requested asset or generation.");
+        return result;
+    }
+
+    public async ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        var envelope = await ExchangeAsync("runtime.media.analysis.get", new { JobId = jobId },
+            cancellationToken).ConfigureAwait(false);
+        var result = envelope.Payload.Deserialize<MediaAnalysisObservation>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Analysis result is missing.");
+        result.Validate();
+        return result;
+    }
+
+    public async ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        var envelope = await ExchangeAsync("runtime.media.analysis.cancel", new { JobId = jobId },
+            cancellationToken).ConfigureAwait(false);
+        var result = envelope.Payload.Deserialize<MediaAnalysisObservation>(Wire.JsonOptions)
+            ?? throw new InvalidDataException("Analysis cancellation result is missing.");
+        result.Validate();
+        return result;
+    }
+
     public async ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId, string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default)
     {
         options.Validate();

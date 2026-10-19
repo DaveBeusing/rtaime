@@ -265,6 +265,14 @@ public interface IControlRuntimeTransportSeam
     ValueTask<RuntimeRemoteApplyResult> ApplyPreparedMediaExecutionAsync(PreparedExecutionContract execution, MediaSinkId sink, RuntimeProgramTransitionIntent? transition, MediaDeckPreparation preparation, bool consume, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<RuntimeRemoteApplyResult>(new NotSupportedException("Runtime does not expose guarded prepared-media commit."));
 
+    ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+        MediaAnalysisFileIdentity identity, string path, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisBegin>(new NotSupportedException("Runtime media analysis is unavailable."));
+    ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Runtime media analysis is unavailable."));
+    ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(string jobId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Runtime media analysis is unavailable."));
+
     ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(string path, MediaAssetId assetId, string fingerprint, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Runtime preflight is unavailable."));
     ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>

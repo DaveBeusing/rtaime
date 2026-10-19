@@ -451,6 +451,10 @@ Existing reference MP4/MOV, VFR, unsupported-profile and absent-decoder matrices
 remain the source/format acceptance mechanisms. Physical SATA/NVMe, latency,
 cold-cache pressure, full-file decode and long-soak qualification remain separate.
 
+## Independent analysis and scrubbing boundary
+
+The optional Runtime analysis worker is separate from every resident deck session and shares the existing decoder resource ledger. It decodes timestamped RGBA thumbnails and per-channel PCM bucket data under strict time/byte/consumer caps, with cancellation-aware ownership and a read-only observation pipe. Media Library hover still requires a separate UI integration, and this feature does not expand the existing audio-only input, codec or native hardware support envelope. See [IndependentMediaAnalysis.md](IndependentMediaAnalysis.md) for transport, identity, cache, recovery and qualification limits.
+
 ## Decoder capability and dependency boundary
 
 See the [source-derived input compatibility inventory](LocalMediaDecoderCapabilities.md)

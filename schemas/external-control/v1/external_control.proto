@@ -238,6 +238,11 @@ message ExternalControlRequest {
     RecoveryAcknowledgementRequest acknowledge_production_macro_recovery = 96;
     ProductionMacroIdRequest get_production_macro = 97;
 
+    // Independent media observation lifecycle; no production mutation or media payload.
+    JsonPayloadRequest begin_media_analysis = 98;
+    JsonPayloadRequest get_media_analysis = 99;
+    JsonPayloadRequest cancel_media_analysis = 100;
+
     // Sequence authoring range 114-145; no playback operation is exposed.
     EmptyRequest list_sequences = 114;
     JsonPayloadRequest get_sequence = 115;

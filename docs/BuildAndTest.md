@@ -395,6 +395,19 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 
 The real OperatorXamlStartupTests qualification also checks the themed timeline's focused edit-cursor key, local undo and unchanged confirmed transport. Required source-bound visual, lifecycle, failure and packaged checks remain in place. Physical mixed-DPI behavior remains UNVERIFIED until reference-platform execution.
 
+## Independent media analysis regression path
+
+The dedicated analysis contract, waveform, native decoder and derived-cache tests are in the existing test projects. On a qualified Windows machine, run them after the canonical Release build, then run the complete solution:
+
+```powershell
+dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaAnalysisContractTests"
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~MediaAnalysisWaveformTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~IndependentMediaAnalysisIntegrationTests|FullyQualifiedName~LocalMediaResourceLedgerTests"
+dotnet test rtaime.slnx --configuration Release --no-build -m:1
+```
+
+Test presence is not proof of test success. Final-head CI/Quality/Security/Provider Smoke/Packaged E2E status and actual native-resource cleanup evidence remain mandatory. See [IndependentMediaAnalysis.md](IndependentMediaAnalysis.md).
+
 ## Media Library Smart Bin and hover regressions
 
 After the canonical pinned-SDK Release build:

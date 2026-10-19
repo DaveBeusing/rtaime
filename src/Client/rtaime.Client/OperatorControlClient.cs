@@ -1139,6 +1139,16 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("Operator transport does not expose AI showcase control."));
 
+    ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisBegin>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+    ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+    ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+
     ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
     ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
@@ -1312,6 +1322,16 @@ public interface IOperatorControlTransport
 
 public interface IMediaAssetCatalogClient
 {
+    ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisBegin>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+    ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+    ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAnalysisObservation>(new NotSupportedException("Independent media analysis is unavailable on this transport."));
+
     ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaAssetPreflightObservation>(new NotSupportedException("Media preflight is unavailable on this transport."));
     ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) =>
@@ -1810,6 +1830,16 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         }
         return result;
     }
+
+    public ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+        CancellationToken cancellationToken = default) =>
+        _transport.BeginMediaAnalysisAsync(request, cancellationToken);
+    public ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        _transport.GetMediaAnalysisAsync(job, cancellationToken);
+    public ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(MediaAnalysisJobRequest job,
+        CancellationToken cancellationToken = default) =>
+        _transport.CancelMediaAnalysisAsync(job, cancellationToken);
 
     public ValueTask<MediaAssetPreflightObservation> BeginMediaAssetPreflightAsync(MediaAssetId assetId, MediaAssetPreflightOptions options, CancellationToken cancellationToken = default) => _transport.BeginMediaAssetPreflightAsync(assetId, options, cancellationToken);
     public ValueTask<MediaAssetPreflightObservation> GetMediaAssetPreflightAsync(string jobId, CancellationToken cancellationToken = default) => _transport.GetMediaAssetPreflightAsync(jobId, cancellationToken);
