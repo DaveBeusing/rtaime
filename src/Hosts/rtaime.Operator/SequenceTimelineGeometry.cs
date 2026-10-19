@@ -136,4 +136,5 @@ public sealed record SequenceEditorRow(Guid Id, string Name, SequenceMediaKind K
 public sealed record SequenceEditorClip(Guid Id, Guid TrackId, Guid AssetId,
     SequenceMediaKind Kind, long StartTick, long EndTick, long SourceIn, long SourceOut,
     bool Enabled, bool Muted, double Left, double Width,
-    SequenceWaveformPresentation? Waveform = null, bool Selected = false);
+    SequenceWaveformPresentation? Waveform = null, bool Selected = false,
+    bool Pending = false, bool Invalid = false);
