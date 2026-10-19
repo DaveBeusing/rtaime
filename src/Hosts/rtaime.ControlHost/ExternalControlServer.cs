@@ -530,7 +530,7 @@ internal static class ExternalControlOperationCatalog
 		"control.ping", "control.snapshot.get",
 		"control.output.canvas.get", "control.output.canvas.validate", "control.output.canvas.save", "control.output.canvas.activate", "control.output.canvas.evidence.get",
         "control.sequence.list", "control.sequence.get", "control.sequence.save", "control.sequence.edit", "control.sequence.undo", "control.sequence.redo",
-        "control.sequence.prepare", "control.sequence.preparation.get", "control.sequence.preparation.cancel",
+        "control.sequence.prepare", "control.sequence.preparation.get", "control.sequence.preparation.cancel", "control.sequence.preparation.context.get",
 		"control.preview.select", "control.scene.activate", "control.output.route", "control.program.cut", "control.program.dissolve",
 		"control.audio.input.set", "control.audio.routing.set", "control.audio.test_signal.set", "control.test_pattern.set",
 		"control.graphics.overlay.load", "control.graphics.cg.apply", "control.graphics.overlay.set", "control.graphics.overlay.clear",
