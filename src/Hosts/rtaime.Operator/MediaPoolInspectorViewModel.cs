@@ -378,6 +378,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		{
 			if (!Set(ref _selectedItem, value))
 				return;
+			if (_hoverKey is not null && value?.Key != _hoverKey)
+				CancelHover();
 			_timelineItem = null;
 			_timelineItems.Clear();
 			_timelineCue = null;
@@ -1368,6 +1370,12 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
+		if (e.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) &&
+			(!_operator.IsConnected || _operator.IsStale))
+		{
+			CancelHover();
+			HoverStatus = "UNAVAILABLE · Control disconnected or stale; reconnect and focus to retry";
+		}
 		if (e.PropertyName is nameof(OperatorViewModel.HealthObserved) or nameof(OperatorViewModel.FrameTime) or nameof(OperatorViewModel.RuntimeHealth))
 			ReconcileHoverPressure();
 		if (e.PropertyName is nameof(OperatorViewModel.SelectedAudioInput) or
