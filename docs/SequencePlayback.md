@@ -205,6 +205,40 @@ promote `SequenceList.PlaybackState` or `SequenceSnapshot.PlaybackState`
 from `UNAVAILABLE`. No Play/Pause/Seek/Loop/Take operation is advertised
 yet, because no sequence samples reach a committed output sink.
 
+## Isolated two-source image and audio composition
+
+`SequenceFrameComposition` is an internal, non-authoritative Runtime
+materialization seam. It takes previously acquired, generation-fenced native
+frame leases together with the **existing Runtime slot's** FrameTiming and
+48-kHz sample window. It neither opens a decoder nor advances its own clock.
+
+- Actual native RGBA pixels are copied into finitely reserved reusable CPU
+  scratch buffers, uploaded to the existing `GpuProcessingProvider`, and
+  combined as ordered source-over layers. The managed reference and CUDA
+  implementations retain the same `GpuCompositeRequest` semantics.
+- Actual native stereo Float32 samples are preweighted using exact
+  240,000-tick/second sequence transition boundaries and 5-tick PCM
+  sample positions, then combined and clipped through the existing
+  `AudioProductionEngine.ProcessBus`, not a second mixing engine.
+- Current sequence identity, authoring revision, native decoder generation
+  and loop pass are checked before rendering and again after image/audio
+  processing. Invalid input, unavailable PCM/RGBA, incorrect source format,
+  unconfigured audio identity and lost native ownership fail closed.
+  Scratch PCM is not published until both media paths succeed.
+- The reference implementation preallocates no more than eight reusable
+  video staging buffers and eight audio tracks of 2,048 stereo samples.
+  GPU uploads/composites and readback remain real provider operations;
+  this testable preparation is **not yet qualified for Program cadence**.
+  Its returned GPU frame is disposable caller-owned evidence only.
+
+`SequenceFrameCompositionIntegrationTests` exercises two genuine native
+MP4/H.264/AAC decoder owners, their actual combined RGBA readback through
+the reference GPU backend and actual mixed PCM through the established
+audio-production engine. It also tests complementary sample weights and
+denial of output after native seek/generation replacement. This is an
+internal source-to-image/audio proof, **not** two distinct externally
+authored media sources committed to Program or a real Preview/Take.
+
 ## Required productive execution integration
 
 These are **open acceptance obligations**, not simulated features:
