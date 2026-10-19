@@ -21,7 +21,7 @@
 				<ColumnDefinition Width="Auto" />
 			</Grid.ColumnDefinitions>
 			<StackPanel VerticalAlignment="Center">
-				<TextBlock Text="MEDIA LIBRARY" Style="{StaticResource OperatorSectionTitle}" />
+				<TextBlock Text="MEDIA LIBRARY" Style="{StaticResource OperatorSectionTitle}" ToolTip="Import → Analyze (read-only frames) → Prepare (conditional verification) → Preview (resident deck) → Take (explicit Program action)." AutomationProperties.HelpText="Import a media file, inspect frames using independent analysis, prepare representative samples, open a resident deck in Preview, then explicitly Take to Program." />
 				<TextBlock
 					Text="{Binding Context.MediaPool.SelectionSummary, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
 					Style="{StaticResource OperatorLabel}"
@@ -134,8 +134,8 @@
                                 <controls:RtaimeTextBox x:Name="MediaSmartBinName" MaxLength="128" Text="{Binding Context.MediaPool.SmartBinName, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, UpdateSourceTrigger=PropertyChanged}"
                                     ToolTip="Name for a new Smart Bin; Rename changes only the selected saved definition's name." AutomationProperties.Name="Smart Bin name"/>
                                 <controls:RtaimeButton Grid.Column="1" Content="Rename" Command="{Binding Context.MediaPool.RenameSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" AutomationProperties.Name="Rename selected Smart Bin"/>
-                                <controls:RtaimeCheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Hover thumbnails" IsChecked="{Binding Context.MediaPool.HoverPreviewsEnabled, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
-                                    ToolTip="Hover or keyboard focus shares existing images only. Scrubbing is unavailable; Runtime pressure pauses admission." AutomationProperties.Name="Enable hover and keyboard focus thumbnails"/>
+                                <controls:RtaimeCheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Hover / scrub previews" IsChecked="{Binding Context.MediaPool.HoverPreviewsEnabled, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                                    ToolTip="For online catalogue clips, request an isolated time-indexed frame. Ctrl+Left/Right scrubs the focused asset in 5% steps. No Preview/Program seek or Take. Other assets may show an existing monitoring thumbnail. Runtime pressure may pause admission." AutomationProperties.Name="Enable hover and keyboard focus scrub previews"/>
                             </Grid>
                             <Grid Grid.Row="1" Height="30" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
 				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -165,8 +165,15 @@
         </WrapPanel>
         <TextBlock Text="{Binding Context.MediaPool.PreparationStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
         <controls:RtaimeScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Context.MediaPool.PreflightEvidence, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
-                <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Detail}" TextWrapping="Wrap" ToolTip="{Binding SourceLocation}" /></DataTemplate></ItemsControl.ItemTemplate>
+            <ItemsControl ItemsSource="{Binding Context.MediaPool.PreparationRows, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2">
+                            <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource OperatorAccentBrush}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
             </ItemsControl>
         </controls:RtaimeScrollViewer>
     </StackPanel>
@@ -219,6 +226,7 @@
 				ItemContainerStyle="{StaticResource RtaimeMediaTileContainer}"
 				PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
 				PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+				PreviewKeyDown="OnMediaLibraryScrubKeyDown"
 				VirtualizingPanel.IsVirtualizing="True"
 				VirtualizingPanel.VirtualizationMode="Recycling"
 				ScrollViewer.CanContentScroll="True"
@@ -246,13 +254,15 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
-							Thumbnail="{Binding Thumbnail}"
+						<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
+							Thumbnail="{Binding DisplayThumbnail}"
+							ScrubLabel="{Binding ScrubPositionLabel}"
 							AssetName="{Binding Name}"
 							Duration="{Binding DurationLabel}"
 							FileType="{Binding FileTypeLabel}"
 							Availability="{Binding ReadinessLabel}"
 							ToolTip="{Binding PreviewCapabilityLabel}"
+							AutomationProperties.HelpText="Hover to inspect an independent asset frame; Ctrl plus Left or Right changes scrub position. Preview and Program are never seeked by scrubbing."
 							IsOnline="{Binding IsOnline}"
 							IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
 							<controls:RtaimeMediaTile.ContextMenu>
@@ -300,6 +310,7 @@
 				ItemContainerStyle="{StaticResource RtaimeMediaListRowContainer}"
 				PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
 				PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+				PreviewKeyDown="OnMediaLibraryScrubKeyDown"
 				VirtualizingPanel.IsVirtualizing="True"
 				VirtualizingPanel.VirtualizationMode="Recycling"
 				ScrollViewer.CanContentScroll="True"
@@ -322,7 +333,7 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<Grid MouseEnter="OnMediaLibraryHover" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
+						<Grid MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
 							<Grid.ContextMenu>
 								<controls:RtaimeContextMenu>
 									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
@@ -337,16 +348,19 @@
 								</controls:RtaimeContextMenu>
 							</Grid.ContextMenu>
 							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="56" />
 								<ColumnDefinition Width="*" />
 								<ColumnDefinition Width="Auto" />
 							</Grid.ColumnDefinitions>
-							<StackPanel>
+							<Image Grid.Column="0" Source="{Binding DisplayThumbnail}" Width="52" Height="32" Stretch="Uniform" IsHitTestVisible="False" />
+							<StackPanel Grid.Column="1">
 								<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 								<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
 							</StackPanel>
-							<StackPanel Grid.Column="1" HorizontalAlignment="Right">
+							<StackPanel Grid.Column="2" HorizontalAlignment="Right">
 								<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
 								<TextBlock Text="{Binding ReadinessLabel}" ToolTip="{Binding PreviewCapabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
+								<TextBlock Text="{Binding ScrubPositionLabel}" Foreground="{DynamicResource OperatorAccentBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" AutomationProperties.Name="Requested asset scrub timecode" />
 							</StackPanel>
 						</Grid>
 					</DataTemplate>
