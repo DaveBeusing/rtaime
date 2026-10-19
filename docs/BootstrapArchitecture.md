@@ -77,6 +77,8 @@ composition at Hosts
 
 The direct production `ProjectReference` graph is encoded in the project files and validated by `rtaime.Tests.Architecture`.
 
+The output-canvas execution extension introduces one explicit Host-to-stable-Contract reference: `rtaime.RuntimeHost` references `rtaime.Control.Contracts` for versioned canvas configuration, activation and evidence DTOs. ControlHost retains persistence and mutation authority; RuntimeHost only executes a prepared revision through its existing Program boundary. This is not a dependency on the `rtaime.Control` implementation or another host, and it does not authorize Runtime library dependencies on Control implementations. The architecture reference-graph qualification includes this controlled contract edge.
+
 Key rules include:
 
 - `rtaime.Core` has no rtaime project dependencies.
