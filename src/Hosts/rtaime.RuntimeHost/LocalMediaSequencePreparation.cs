@@ -50,6 +50,12 @@ public sealed partial class LocalMediaDeckRuntimeService
 {
     private readonly object _sequenceGate = new();
     private PreparedSequenceMedia? _sequenceOwners;
+    // A confirmed clean native shutdown retains only the original stable owner
+    // identity until ControlHost observes or cancels it, not disposed frame pools.
+    private CleanedSequencePreparation? _sequenceCleanedAfterFault;
+    private sealed record CleanedSequencePreparation(
+        Guid SequenceId, ulong AuthoringRevision,
+        string PreparedExecutionId, ulong InitialGeneration);
     private const long SequenceTicksPerSecond = 240_000;
 
     /// <summary>Native open, fingerprint verification and preroll: management thread only, never a Program boundary.</summary>
@@ -102,6 +108,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 lock (_sequenceGate)
                 {
                     _sequenceOwners = ready;
+                    _sequenceCleanedAfterFault = null;
                     _sequenceShuttleMap = map;
                     _sequenceShuttleRevision = 0;
                 }
@@ -266,10 +273,16 @@ public sealed partial class LocalMediaDeckRuntimeService
             catch (Exception exception) when (exception is IOException or OverflowException or InvalidOperationException)
             {
                 var cleanup = CleanupSequenceOwners(original.Owners);
+                var cleaned = cleanup is null && _ledger.Snapshot.QuarantinedOwners == 0;
+                if (cleaned)
+                    lock (_sequenceGate)
+                        _sequenceCleanedAfterFault = new(original.SequenceId,
+                            original.AuthoringRevision, original.PreparedExecution.ToString(),
+                            original.InitialGeneration);
                 return new(false, sequenceId, authoringRevision, next.Generation,
-                    next.LoopPass, 0, new(cleanup is null ? "runtime.sequence.reposition_failed" :
+                    next.LoopPass, 0, new(cleaned ? "runtime.sequence.reposition_failed" :
                     "runtime.sequence.cleanup_quarantined",
-                    cleanup is null ? "Native repreroll failed and the staged owners were closed: " + exception.Message :
+                    cleaned ? "Native repreroll failed and the staged owners were closed: " + exception.Message :
                     "Native repreroll failed; uncertain cleanup was quarantined. Restart RuntimeHost."));
             }
         }
