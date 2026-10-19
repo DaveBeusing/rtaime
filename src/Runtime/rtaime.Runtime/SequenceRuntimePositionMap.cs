@@ -45,7 +45,8 @@ public sealed class SequenceRuntimePositionMap
     {
         if (sequenceId == Guid.Empty || authoringRevision == 0 || generation == 0 ||
             durationTicks <= 0 || durationTicks > MaximumTimeTicks ||
-            programRate.Numerator <= 0 || programRate.Denominator <= 0 ||
+            programRate.Numerator is <= 0 or > 240000 ||
+            programRate.Denominator is <= 0 or > 100000 ||
             (Int128)programRate.Numerator > (Int128)240 * programRate.Denominator)
             throw new ArgumentException("A valid, finite saved sequence and existing Program rate are required.");
         return new(sequenceId, authoringRevision, programRate, durationTicks,
