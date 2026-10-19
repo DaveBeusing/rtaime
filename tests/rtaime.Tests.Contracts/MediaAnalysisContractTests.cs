@@ -18,7 +18,7 @@ public sealed class MediaAnalysisContractTests
         Assert.Throws<ArgumentException>(() => Frame(320, 181).Validate());
         Assert.Throws<ArgumentException>(() => (Frame() with { Version = "v2" }).Validate());
         Assert.Throws<ArgumentException>(() => (Frame() with { Generation = -1 }).Validate());
-        Assert.Throws<ArgumentException>(() => (Frame() with { ConsumerId = "bad\\nconsumer" }).Validate());
+        Assert.Throws<ArgumentException>(() => (Frame() with { ConsumerId = "bad" + (char)10 }).Validate());
     }
 
     [Fact]
