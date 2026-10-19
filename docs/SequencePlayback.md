@@ -81,6 +81,57 @@ bind actual admitted native media owner tickets, prepared bounded
 queues and Program output to this generation/pass; a mapped tick by
 itself never proves usable decoded frame/audio data.
 
+## Shared Runtime media admission and native preroll
+
+The existing `LocalMediaDeckRuntimeService` now owns an internal sequence
+preparation seam. It is deliberately **not a new process, decoder registry
+or ControlHost operation**. The seam is available to the future authorized
+sequence execution coordinator; ordinary A/B deck behavior remains unchanged.
+
+- `LocalMediaResourceLedger.TryReserveGroup` charges every distinct
+  SourceId/native pool owner **atomically** against the same Runtime capacity,
+  existing resident reservations, retained consumer leases and quarantined
+  owners. A group that cannot fit is rejected without partially reserving
+  or evicting Program.
+- `PrepareSequenceMedia` requires the genuine PreparedExecution resource
+  bindings, matching Runtime format, authority revision and execution-plan
+  generation. It verifies each actual local file fingerprint against the
+  Control-supplied catalogue identity under a read lock. The current bounded
+  resident preparation lane is limited to **32 MiB per file**, five seconds
+  for fingerprint verification and ten seconds for native preroll.
+  These are existing reference-preload constraints, not a general decoder
+  throughput/capacity claim. Preparation may be cancelled and cannot start
+  from the Program boundary.
+- Native owners are created with the **existing**
+  `LocalMediaFileProvider` and `LocalMediaDecodeWorker`, including the
+  eight-frame ready queue, retained frame leases, joined cleanup and
+  uncertain-native-owner quarantine. Source offset conversion and
+  repreroll occur off the Program cadence.
+- `TryTakeSequenceMedia` accepts only an expected sequence identity,
+  authoring revision, generation/loop pass, native decode generation,
+  exact source/timeline offset and corresponding SourceId. Missing,
+  ended, too-old or stale decoded frames are rejected rather than
+  fabricated. Native frame/audio buffer memory is leased; it is not
+  copied into a second media cache.
+- `SequenceMediaFrameLease` retains the source/epoch/generation identity.
+  `IsCurrentSequenceFrame` is the final sink fence: a previously acquired
+  video/audio payload remains memory-safe while retained, but is **not
+  eligible for presentation** after an authoritative seek, loop replace
+  or shutdown. Native reservations remain charged until every consumer
+  releases its leases.
+- Registry disposal closes sequence workers as part of the existing
+  managed shutdown, but does not release uncertain owners or broaden
+  existing hardware/IO qualification. Interrupted native cleanup must
+  quarantine the ledger owner.
+
+The attached Windows integration fixtures use the real native MP4/AAC
+decoder twice, with separate SourceIds, frame/audio payloads and native
+reader owners. These checks establish independently buffered source
+selection, source fencing, atomic reservation/rollback, fingerprint failure,
+cancellation, seek, and retained-pool cleanup. They do **not** establish
+two different pictures in one **combined Program frame**, correctly mixed
+audio samples at the committed sink, or a live sequence Take.
+
 ## Required productive execution integration
 
 These are **open acceptance obligations**, not simulated features:
@@ -89,9 +140,10 @@ These are **open acceptance obligations**, not simulated features:
    Prepare through the existing Client, ControlHost and RuntimeHost path,
    retain current catalogue leases and validate Runtime-admitted decoder
    tickets for every simultaneous source and transition overlap.
-2. Runtime must own playback session generations, timestamped clip queues,
-   seek/loop/stop/drain and queued frame/audio preparation **off** its
-   Program boundary. No second clock or unmanaged decoder work on cadence.
+2. Connect the now-implemented internal native preparation/queue seam to
+   a Control-authorized prepared plan, including explicit begin/stop/seek/loop,
+   source-to-clip ownership, real runtime output admission and bounded
+   recovery. Work is prepared **off** Program cadence; no second clock.
 3. Runtime's existing GPU compositor and audio production mixer must
    combine at least two actual independent video frames and two actual
    audio tracks with the same rational boundary. Graphics layers,
@@ -132,12 +184,13 @@ Runtime Program cadence remain unchanged by execution-planning work.
 
 ## Validation boundary
 
-`SequenceExecutionPlanningTests` and `SequenceRuntimePositionMapTests` exercise rational 50/60000:1001 frame
+`SequenceExecutionPlanningTests`, `SequenceRuntimePositionMapTests`, `LocalMediaResourceLedgerTests` and `SequenceMediaPreparationIntegrationTests` exercise rational 50/60000:1001 frame
 and 48-kHz sample mapping, simultaneous videos/audio, precise transition
 edges, source offsets, overbudget/missing asset rejection, black gaps,
 immutability and deterministic fixed-point fade envelopes.
-The tests exercise actual compiler code but **not live decoded pixels or
-Program samples**. The production Runtime and physical hardware require
+Compiler tests are pure scheduling tests; the native preparation integration
+uses real decoded RGBA/PCM frame leases but **does not composite or mix them
+into committed Program pixels or samples**. The production Runtime and physical hardware require
 their own integrated evidence. Run focused sequence Unit tests, then the
 canonical Release developer build and complete `rtaime.slnx` tests.
 
