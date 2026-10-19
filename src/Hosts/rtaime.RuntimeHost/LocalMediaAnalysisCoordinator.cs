@@ -29,6 +29,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private sealed class AnalysisWork(MediaAnalysisRequest request, MediaAnalysisFileIdentity identity, string path, string epoch)
     {
         internal readonly string Id = Guid.NewGuid().ToString("D");
+        internal readonly byte[] FrameToken = RandomNumberGenerator.GetBytes(32);
         internal readonly CancellationTokenSource Stop = new(TimeSpan.FromSeconds(45));
         internal readonly MediaAnalysisRequest Request = request;
         internal readonly MediaAnalysisFileIdentity FileIdentity = identity;
@@ -106,8 +107,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         {
             if (!_analysisJobs.TryGetValue(jobId, out var job))
                 throw new InvalidOperationException("Analysis job is unknown or belongs to another Runtime lifetime.");
-            if (_analysisPending.Remove(job.Request.ConsumerId, out var pending) && ReferenceEquals(pending, job))
+            if (_analysisPending.TryGetValue(job.Request.ConsumerId, out var pending) && ReferenceEquals(pending, job))
             {
+                _analysisPending.Remove(job.Request.ConsumerId);
                 RemoveQueued(job);
                 job.Stop.Cancel();
                 job.Observation = Finished(job, MediaAnalysisState.Canceled, "Canceled before native admission.", true);
@@ -126,9 +128,33 @@ public sealed partial class LocalMediaDeckRuntimeService
         }
     }
 
+    public bool TryReadAnalysisFrame(string jobId, ReadOnlySpan<byte> token,
+        out int width, out int height, out byte[]? rgba)
+    {
+        width = 0;
+        height = 0;
+        rgba = null;
+        if (token.Length != 32) return false;
+        lock (_analysisGate)
+        {
+            if (_analysisStopped || !_analysisJobs.TryGetValue(jobId, out var job) ||
+                job.Request.Kind != MediaAnalysisKind.Frame || job.Observation.State != MediaAnalysisState.Complete ||
+                job.Observation.RgbaPixels is not { } pixels ||
+                !_analysisGenerations.TryGetValue(job.Request.ConsumerId, out var current) ||
+                current != job.Request.Generation ||
+                !CryptographicOperations.FixedTimeEquals(token, job.FrameToken))
+                return false;
+            width = job.Observation.Width;
+            height = job.Observation.Height;
+            rgba = pixels.ToArray();
+            return true;
+        }
+    }
+
     private static MediaAnalysisBegin ToBegin(AnalysisWork work, MediaAnalysisState state, string detail) =>
         new(MediaAnalysisContract.Version, work.Id, work.Request.AssetId, work.Request.ConsumerId,
-            work.Request.Generation, work.Epoch, state, detail);
+            work.Request.Generation, work.Epoch, state, detail, null,
+            state is MediaAnalysisState.Pending or MediaAnalysisState.Running ? Convert.ToHexString(work.FrameToken) : null);
 
     private static MediaAnalysisObservation Finished(AnalysisWork job, MediaAnalysisState state, string detail,
         bool acknowledged = false, string? code = null) =>
