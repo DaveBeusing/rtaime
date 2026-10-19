@@ -11,7 +11,9 @@ AIEffectBrowserViewModel, OperatorViewModel and shared Client → ControlHost �
 RuntimeHost → AIHost reference path, not a second inference engine or a local
 production authority. The existing workspace ID AI and schema-7 layout/shortcut
 registration are retained; original workspace identities and stored layouts
-remain compatible.
+remain compatible. While the AI destination is visible, its dedicated center
+surface stays on top of optional panel-docking presentations; saved docking
+state is preserved and restored when returning to a different workspace.
 
 ## Workflow
 
