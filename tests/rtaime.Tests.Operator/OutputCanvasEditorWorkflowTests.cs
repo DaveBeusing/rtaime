@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using Xunit;
 using System.IO;
 using rtaime.Client;
 using rtaime.Control;
