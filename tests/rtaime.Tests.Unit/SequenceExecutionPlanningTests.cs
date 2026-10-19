@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using rtaime.Control;
 using rtaime.Control.Contracts;
+using rtaime.Core;
+using rtaime.Runtime;
 using Xunit;
 
 namespace rtaime.Tests.Unit;
@@ -152,6 +154,27 @@ public sealed class SequenceExecutionPlanningTests
         }
         Assert.Equal((byte)255, SequenceExecutionPlan.Weight(outgoing, 6 * 4800));
         Assert.Equal((byte)0, SequenceExecutionPlan.Weight(incoming, 6 * 4800));
+    }
+
+    [Theory]
+    [InlineData(50, 1)]
+    [InlineData(60000, 1001)]
+    public void Control_compiled_plan_matches_Runtime_owned_program_slot_position(int numerator, int denominator)
+    {
+        var sequence = FourOwnerSequence(new(numerator, denominator));
+        var plan = Prepare(sequence);
+        var map = SequenceRuntimePositionMap.Prepare(sequence.SequenceId, plan.AuthoringRevision,
+            new FrameRate(numerator, denominator), plan.DurationTicks, 300, 20).Play(300);
+        var selection = new SequenceRenderSample[plan.MaximumSimultaneousClips];
+        for (ulong slot = 0; slot < 10; slot++)
+        {
+            Assert.True(map.TryMap(300 + slot, out var clock));
+            Assert.Equal(plan.TickAtFrame(slot), clock.Tick);
+            Assert.True(plan.TrySelectAtTick(clock.Tick, selection, out var count));
+            Assert.InRange(count, 1, plan.MaximumSimultaneousClips);
+            Assert.Equal(map.Generation, clock.Generation);
+        }
+        Assert.False(map.TryMap(310, out _));
     }
 
     [Fact]
