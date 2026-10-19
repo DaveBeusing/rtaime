@@ -114,7 +114,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 // quarantine always retains its charge.
                 for (var index = encountered; index < tickets.Count; index++)
                     tickets[index].OwnerCompleted();
-                if (cleanupFailure is not null)
+                if (cleanupFailure is not null || _ledger.Snapshot.QuarantinedOwners > 0)
                     return RejectSequence(map, "runtime.sequence.cleanup_quarantined",
                         "Native cleanup could not be confirmed. Restart RuntimeHost; sequence admission remains blocked.");
                 return RejectSequence(map, "runtime.sequence.prepare_failed",
@@ -146,6 +146,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             var owner = prepared.Owners.SingleOrDefault(candidate => candidate.Request.SourceId == source);
             if (owner is null || requestedSourceTick < 0 ||
+                requestedSourceTick > 24L * 3600 * SequenceTicksPerSecond ||
+                position.Tick < 0 || position.Tick >= 24L * 3600 * SequenceTicksPerSecond ||
                 (Int128)requestedSourceTick - position.Tick !=
                     (Int128)owner.Request.SourceInTicks - owner.Request.TimelineStartTicks)
             {
