@@ -114,6 +114,18 @@ A/B deck behavior remains unchanged.
   ended, too-old or stale decoded frames are rejected rather than
   fabricated. Native frame/audio buffer memory is leased; it is not
   copied into a second media cache.
+- `TryTakeSequenceClipFrameSet` resolves up to 32 selected Video/Audio
+  clips at one exact sequence tick against the already prepared catalogue
+  identity, fingerprint and source/timeline offset. Multiple clips representing
+  matching video and audio from the same native asset/offset reuse a single
+  frame lease, while distinct source offsets require distinct admitted owners.
+  Caller-owned bounded spans retain the clip-to-owner index mapping. Duplicate
+  clip identities, forged fingerprints, mismatched offsets and stale sequence
+  generations are rejected before native read. If an already validated native
+  frame-set read encounters buffering or failure, previously acquired leases
+  are disposed and no partial result is published; dequeued native frames
+  cannot be put back into the worker queue. No Program routing, video
+  composite, audio mix or playback capability is activated by this seam.
 - `TryTakeSequenceFrameSet` gathers one to four distinct native owners at
   a single sequence tick under the existing Runtime generation fence.
   It validates all source/timeline offsets before consuming any queued
