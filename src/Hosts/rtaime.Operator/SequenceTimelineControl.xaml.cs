@@ -145,6 +145,37 @@ public partial class SequenceTimelineControl : UserControl
         e.Handled = true;
     }
 
+    private void OnTrackDragOver(object sender, DragEventArgs e)
+    {
+        var row = (sender as FrameworkElement)?.DataContext as SequenceEditorRow;
+        var drag = e.Data.GetDataPresent(typeof(MediaAssetDragPayload))
+            ? e.Data.GetData(typeof(MediaAssetDragPayload)) as MediaAssetDragPayload : null;
+        var item = drag?.Primary;
+        e.Effects = Editor?.CanEdit == true &&
+            row is not null && row.Kind is (SequenceMediaKind.Video or SequenceMediaKind.Audio) &&
+            item is { Kind: MediaPoolItemKind.Clip, IsOnline: true } &&
+            Guid.TryParse(item.ReferenceId, out var asset) && asset != Guid.Empty
+            ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnTrackDrop(object sender, DragEventArgs e)
+    {
+        var row = (sender as FrameworkElement)?.DataContext as SequenceEditorRow;
+        var drag = e.Data.GetDataPresent(typeof(MediaAssetDragPayload))
+            ? e.Data.GetData(typeof(MediaAssetDragPayload)) as MediaAssetDragPayload : null;
+        var item = drag?.Primary;
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+        if (Editor is not { CanEdit: true } editor ||
+            row is null || row.Kind is not (SequenceMediaKind.Video or SequenceMediaKind.Audio) ||
+            item is not { Kind: MediaPoolItemKind.Clip, IsOnline: true } ||
+            !Guid.TryParse(item.ReferenceId, out var asset) || asset == Guid.Empty)
+            return;
+        await editor.InsertCatalogueAssetAsync(row.Id, asset);
+        e.Effects = DragDropEffects.Copy;
+    }
+
     private static T? FindParent<T>(DependencyObject? element) where T : DependencyObject
     {
         while (element is not null)
