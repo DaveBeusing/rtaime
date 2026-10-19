@@ -83,7 +83,8 @@ public static class GpuOutputMappingRaster
         VideoFormat format,
         Span<byte> destination,
         IReadOnlyList<GpuOutputMappingSurface> surfaces,
-        Func<SurfaceId, ReadOnlyMemory<byte>> resolveSource)
+        Func<SurfaceId, ReadOnlyMemory<byte>> resolveSource,
+        bool opaqueProgramSink = false)
     {
         ArgumentNullException.ThrowIfNull(surfaces);
         ArgumentNullException.ThrowIfNull(resolveSource);
@@ -165,6 +166,22 @@ public static class GpuOutputMappingRaster
                     destination[offset + channel] = (byte)Math.Clamp((int)Math.Round(blended * 255.0), 0, 255);
                 }
                 destination[offset + 3] = (byte)Math.Clamp((int)Math.Round(newAlpha * 255.0), 0, 255);
+            }
+        }
+
+        // The existing Program sink is an opaque RGBA8 output. Flatten
+        // straight-alpha mapping against black so edge blends actually
+        // attenuate transmitted RGB values instead of being ignored by an
+        // alpha-discarding output encoder.
+        if (opaqueProgramSink)
+        {
+            for (var offset = 0; offset < destination.Length; offset += 4)
+            {
+                var alpha = destination[offset + 3];
+                for (var channel = 0; channel < 3; channel++)
+                    destination[offset + channel] =
+                        (byte)((destination[offset + channel] * alpha + 127) / 255);
+                destination[offset + 3] = 255;
             }
         }
     }
