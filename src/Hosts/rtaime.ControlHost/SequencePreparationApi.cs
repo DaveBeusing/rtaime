@@ -320,7 +320,7 @@ public sealed partial class ControlHostIpcServer
                         owner, CancellationToken.None).ConfigureAwait(false);
                     _preparedSequence = null;
                 }
-                catch (Exception) when (true)
+                catch (Exception)
                 {
                     _preparedSequence ??= new PreparedSequenceBinding(
                         owner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
