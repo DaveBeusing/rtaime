@@ -184,6 +184,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		_mediaDeck = mediaDeck ?? throw new ArgumentNullException(nameof(mediaDeck));
 		_catalogClient = catalogClient;
 		_importFilePicker = importFilePicker;
+		_hoverPreview = new MediaLibraryHoverPreview(_catalogClient);
 
 		Selection = new(this);
 		InitializeBrowsing();
