@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.IO.Pipes;
 using System.Text.Json;
 using rtaime.Core;
+using rtaime.Control.Contracts;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
