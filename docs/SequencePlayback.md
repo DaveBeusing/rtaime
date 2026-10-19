@@ -166,9 +166,10 @@ lifetime. Every distinct asset/source-timeline offset requires a retained
 native owner; staging conservatively rejects a whole sequence needing
 more than four total owners, even if fewer overlap in any one interval.
 
-The staging operation has its own serial gate: the global Control mutation
-gate is not held while the native decoders perform blocking fingerprint
-verification and preroll. Control rechecks saved and production revisions
+The staging operation has its own serial Control gate and a separate
+bounded Runtime-IPC request lane: neither the global Control mutation gate
+nor the ordinary Program/control IPC request gate is held during native
+fingerprint verification and preroll. Control rechecks saved and production revisions
 after Runtime confirms preparation and cancels stale work. RuntimeHost
 validates its epoch and the currently committed production authority,
 reserves via the existing global ledger, opens/prerolls native owners,
