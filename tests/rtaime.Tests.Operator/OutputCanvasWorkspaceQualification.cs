@@ -5,6 +5,8 @@ using System.Windows.Threading;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 
+using Xunit;
+
 namespace rtaime.Tests.Operator;
 
 // Runs inside the existing productive MainWindow STA/dispatcher qualification.
