@@ -21,6 +21,10 @@ public interface ISequencePreparationTransport
 /// </summary>
 public sealed class SequencePreparationClient(ISequencePreparationTransport transport)
 {
+    public ValueTask<SequencePreparationContext> ContextAsync(
+        CancellationToken cancellationToken = default) =>
+        transport.GetSequencePreparationContextAsync(cancellationToken);
+
     public ValueTask<SequencePreparationStatus> PrepareAsync(
         SequencePreparationRequest request, CancellationToken cancellationToken = default)
     {
