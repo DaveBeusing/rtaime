@@ -63,9 +63,10 @@ public sealed partial class ControlHostIpcServer
             MediaAnalysisBinding binding;
             lock (_mediaAnalysisBindingsGate)
             {
-                if (!_mediaAnalysisBindings.TryGetValue(job.JobId, out binding!) ||
-                    binding.Job != job)
+                if (!_mediaAnalysisBindings.TryGetValue(job.JobId, out var located) ||
+                    located.Job != job)
                     throw new InvalidOperationException("Analysis job reference is unknown to this Control lifetime.");
+                binding = located;
             }
             var observation = message.MessageType == "control.media.analysis.cancel"
                 ? await _runtimeTransport.CancelMediaAnalysisAsync(job.JobId, cancellationToken).ConfigureAwait(false)
