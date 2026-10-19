@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Text.Json;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Client;
