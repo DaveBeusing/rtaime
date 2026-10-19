@@ -143,7 +143,7 @@ internal sealed class SequenceFrameComposition
                     var samples = _audioScratch[index].AsSpan(0, audioDestination.Length);
                     for (var sample = 0; sample < audioSampleCount; sample++)
                     {
-                        var sampleTick = checked((long)((Int128)(audioSamplePosition + sample) *
+                        var sampleTick = checked((long)((Int128)(audioSamplePosition + (ulong)sample) *
                             TicksPerAudioSample));
                         var weight = TransitionWeight(track, sampleTick) / 255f;
                         var offset = checked((int)sample * 2);
