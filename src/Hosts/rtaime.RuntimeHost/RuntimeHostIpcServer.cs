@@ -209,6 +209,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.replay.range.set" => ValueTask.FromResult(SetReplayRange(request, runtime)),
 				"runtime.replay.clip.create" => CreateReplayClipAsync(request, runtime, cancellationToken),
 				"runtime.media_asset.preflight.begin" or "runtime.media_asset.preflight.get" or "runtime.media_asset.preflight.cancel" => ValueTask.FromResult(PreflightMediaAsset(request)),
+                "runtime.media.analysis.begin" or "runtime.media.analysis.get" or "runtime.media.analysis.cancel" => ValueTask.FromResult(DispatchMediaAnalysis(request)),
                 "runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" or "runtime.media_deck.preload.open" => ValueTask.FromResult(OpenMediaDeck(request)),
@@ -647,6 +648,35 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
         return Success(request, request.MessageType + ".response", result);
     }
     private sealed record WireMediaAssetPreflight(string Path, string AssetId, string Fingerprint, MediaAssetPreflightOptions Options);
+
+    private sealed record WireAnalysisBegin(MediaAnalysisRequest Request, MediaAnalysisFileIdentity FileIdentity, string Path);
+
+    private WireEnvelope DispatchMediaAnalysis(WireEnvelope request)
+    {
+        var deck = _mediaDeckAccessor();
+        if (deck is null)
+            return Error(request, "runtime.media.analysis.unavailable", "Runtime media source service is unavailable.");
+        try
+        {
+            if (request.MessageType.EndsWith(".begin", StringComparison.Ordinal))
+            {
+                var begin = request.Payload.Deserialize<WireAnalysisBegin>(Wire.JsonOptions)
+                    ?? throw new InvalidDataException("Analysis begin request is required.");
+                var started = deck.BeginAnalysis(begin.Request, begin.FileIdentity, begin.Path);
+                return Success(request, request.MessageType + ".response", started);
+            }
+            var jobId = request.Payload.GetProperty("jobId").GetString()
+                ?? throw new InvalidDataException("Analysis job identity is required.");
+            var observation = request.MessageType.EndsWith(".cancel", StringComparison.Ordinal)
+                ? deck.CancelAnalysis(jobId) : deck.GetAnalysis(jobId);
+            observation.Validate();
+            return Success(request, request.MessageType + ".response", observation);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidDataException or InvalidOperationException or IOException)
+        {
+            return Error(request, "runtime.media.analysis.rejected", exception.Message);
+        }
+    }
 
 	private WireEnvelope ProbeMediaAsset(WireEnvelope request)
 	{
