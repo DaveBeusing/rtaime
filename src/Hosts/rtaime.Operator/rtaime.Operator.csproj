@@ -40,6 +40,7 @@
     <EmbeddedResource Include="..\..\..\docs\OperatorCommandsAndShortcuts.md" LogicalName="OperatorHelp.OperatorCommandsAndShortcuts.md" />
     <EmbeddedResource Include="..\..\..\docs\MediaLibraryAssetBrowser.md" LogicalName="OperatorHelp.MediaLibraryAssetBrowser.md" />
     <EmbeddedResource Include="..\..\..\docs\OperatorWorkspaces.md" LogicalName="OperatorHelp.OperatorWorkspaces.md" />
+    <EmbeddedResource Include="..\..\..\docs\AIProcessingWorkspace.md" LogicalName="OperatorHelp.AIProcessingWorkspace.md" />
     <EmbeddedResource Include="..\..\..\docs\DurableShowProjectState.md" LogicalName="OperatorHelp.DurableShowProjectState.md" />
     <EmbeddedResource Include="..\..\..\docs\ShowPreflightAndActivity.md" LogicalName="OperatorHelp.ShowPreflightAndActivity.md" />
     <EmbeddedResource Include="..\..\..\docs\WindowsProductionLifecycle.md" LogicalName="OperatorHelp.WindowsProductionLifecycle.md" />
