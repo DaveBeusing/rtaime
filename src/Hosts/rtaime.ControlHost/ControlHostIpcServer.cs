@@ -520,7 +520,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		{
 			"control.ping" => Success(request, "control.ping.response", new { status = _runtimeTransport.IsConnected ? "ready" : "degraded" }),
 			"control.sequence.list" or "control.sequence.get" or "control.sequence.save" or "control.sequence.edit" or "control.sequence.undo" or "control.sequence.redo" => await RunSequenceAsync(request, cancellationToken).ConfigureAwait(false),
-			"control.output.canvas.get" or "control.output.canvas.validate" or "control.output.canvas.save" => await RunOutputCanvasAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.output.canvas.get" or "control.output.canvas.validate" or "control.output.canvas.save" or "control.output.canvas.activate" => await RunOutputCanvasAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.snapshot.get" => await GetSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.preview.select" => await MutateAsync(request, MutationKind.SelectPreview, cancellationToken).ConfigureAwait(false),
 			"control.scene.activate" => await MutateAsync(request, MutationKind.ActivateScene, cancellationToken).ConfigureAwait(false),
