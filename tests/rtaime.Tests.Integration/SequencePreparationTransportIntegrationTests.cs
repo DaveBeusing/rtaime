@@ -39,8 +39,10 @@ public sealed partial class ExternalControlIntegrationTests
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
         await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
         await using var grpcTransport = fixture.CreateClient();
-        await CommitSequencePreparationAuthorityAsync(grpcTransport);
+        // The initial committed authority is revision zero, not an absent authority.
+        // Native media preparation must not require an unrelated Program mutation.
         var before = await grpcTransport.GetSnapshotAsync();
+        Assert.Equal(Revision.Initial, before.Production.Revision);
         var imported = await grpcTransport.ImportMediaAssetsAsync([asset.Path]);
         Assert.True(imported.Succeeded);
         var media = Assert.Single(imported.Snapshot.Assets);
