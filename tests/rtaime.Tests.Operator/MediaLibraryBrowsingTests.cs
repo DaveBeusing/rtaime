@@ -258,7 +258,7 @@ public sealed class MediaLibraryBrowsingTests
 			var hover = pool.BeginHoverAsync(pool.FilteredItems[0]);
 			for (var index = 0; index < 5; index++) { pool.Refresh(); await Task.Delay(10); }
 			await hover;
-			Assert.Contains("UNSUPPORTED", pool.HoverStatus);
+			Assert.Contains("UNAVAILABLE", pool.HoverStatus);
 			pool.CancelHover();
 			Assert.Null(pool.HoverThumbnail);
 			Assert.Equal(program, owner.ProgramSourceId); Assert.Equal(preview, owner.PreviewSourceId);
@@ -570,7 +570,7 @@ public sealed class MediaLibraryBrowsingTests
                             var entries = menu.Items.OfType<RtaimeMenuItem>().ToArray();
                             Assert.Equal(8, entries.Length);
                             foreach (var entry in entries)
-                                Assert.Equal(entry.Header?.ToString() is "Properties" or "Reveal in Explorer" or "Prepare selected assets…", entry.IsEnabled);
+                                Assert.Equal(entry.Header?.ToString() is "Prepare selected assets…", entry.IsEnabled);
                             Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
                             Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
                         }
@@ -579,7 +579,14 @@ public sealed class MediaLibraryBrowsingTests
                         browser.SelectedItems.Clear(); browser.SelectedItems.Add(browser.Items[0]);
                         owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
                         owner.MediaLibraryView.PrepareMediaLibraryContextMenu(target);
-                        Assert.All(menu.Items.OfType<RtaimeMenuItem>(), entry => Assert.True(entry.IsEnabled));
+                        Assert.True(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
+                            entry.Header?.ToString() == "Prepare selected assets…").IsEnabled);
+                        Assert.False(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
+                            entry.Header?.ToString() == "Add Cue at Playhead").IsEnabled);
+                        Assert.False(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
+                            entry.Header?.ToString() == "Open in Preview").IsEnabled);
+                        Assert.True(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
+                            entry.Header?.ToString() == "Properties").IsEnabled);
                         browser.SelectedItems.Clear();
                         owner.MediaPool.UpdateSelection([]);
                         Assert.False(owner.MediaPool.HasMultipleSelection);
@@ -590,7 +597,7 @@ public sealed class MediaLibraryBrowsingTests
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));
 			}
 			await owner.MediaPool.BeginHoverAsync(items[0]);
-			Assert.Contains("UNSUPPORTED", owner.MediaPool.HoverStatus);
+			Assert.Contains("UNAVAILABLE", owner.MediaPool.HoverStatus);
 			owner.MediaPool.CancelHover();
 			Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
 			Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
