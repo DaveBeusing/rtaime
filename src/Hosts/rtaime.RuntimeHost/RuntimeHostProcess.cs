@@ -221,6 +221,7 @@ public sealed class RuntimeHostProcess
 	private RuntimeAIShowcaseService? _aiShowcase;
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
+    private RuntimeHostMediaAnalysisObservationServer? _analysisServer;
 	private Task? _mediaLoop;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
@@ -300,6 +301,8 @@ public sealed class RuntimeHostProcess
 	public LocalMediaDeckRuntimeService? MediaDeck => _mediaDeck;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
+    public RuntimeHostMediaAnalysisObservationServer? AnalysisServer => _analysisServer;
+    public string MediaAnalysisEndpoint => _options.ListenEndpoint + ".analysis";
 	public RuntimeAIShowcaseService? AIShowcase => _aiShowcase;
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
@@ -380,12 +383,17 @@ public sealed class RuntimeHostProcess
 			};
 			_monitoringServer.ListenerFaulted += (snapshot, exception) =>
 				NotifyListenerFault(MonitoringIpcListenerFaulted, snapshot, exception);
+            _analysisServer = new RuntimeHostMediaAnalysisObservationServer(
+                MediaAnalysisEndpoint, () => _mediaDeck, null, _ipcSessionDrainTimeout);
+            _analysisServer.ListenerFaulted += (snapshot, exception) =>
+                NotifyListenerFault(MonitoringIpcListenerFaulted, snapshot, exception);
 
 			await _ipcServer.StartAsync(runStop.Token).ConfigureAwait(false);
 			if (_ipcServer.ListenerTerminalFault is { } startupListenerFailure)
 				throw new InvalidOperationException("RuntimeHost primary IPC listener failed during startup.", startupListenerFailure);
 
 			await _monitoringServer.StartAsync(runStop.Token).ConfigureAwait(false);
+            await _analysisServer.StartAsync(runStop.Token).ConfigureAwait(false);
 			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaDeck, _mediaIo, _aiShowcase, runStop.Token);
 		}
 		catch (ArgumentException exception)
@@ -553,6 +561,9 @@ public sealed class RuntimeHostProcess
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+            if (_analysisServer is not null)
+                await _analysisServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+            _analysisServer = null;
 			if (_monitoringServer is not null)
 				await _monitoringServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 
@@ -603,6 +614,14 @@ public sealed class RuntimeHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+        try
+        {
+            if (_analysisServer is not null)
+                await _analysisServer.DisposeAsync().ConfigureAwait(false);
+        }
+        catch { }
+        _analysisServer = null;
+
 		try
 		{
 			if (_monitoringServer is not null)

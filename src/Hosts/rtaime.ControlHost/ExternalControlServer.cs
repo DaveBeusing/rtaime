@@ -536,6 +536,7 @@ internal static class ExternalControlOperationCatalog
 		"control.compositing.layer.set", "control.compositing.layer.transform", "control.compositing.layer.processing", "control.compositing.layers.reorder",
 		"control.recording.start", "control.recording.stop", "control.ai_showcase.set",
 		"control.media_asset_catalog.preflight.begin", "control.media_asset_catalog.preflight.get", "control.media_asset_catalog.preflight.cancel",
+        "control.media.analysis.begin", "control.media.analysis.get", "control.media.analysis.cancel",
         "control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
 		"control.media_deck.scoped.snapshot.get", "control.media_deck.scoped.close", "control.media_deck.scoped.transport", "control.media_deck.scoped.marker",
         "control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
@@ -816,6 +817,9 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
                 operation = "control.media_asset_catalog.preflight.get"; payload = new { request.GetMediaAssetPreflight.JobId }; break;
             case ExternalControlRequest.OperationOneofCase.CancelMediaAssetPreflight:
                 operation = "control.media_asset_catalog.preflight.cancel"; payload = new { request.CancelMediaAssetPreflight.JobId }; break;
+            case ExternalControlRequest.OperationOneofCase.BeginMediaAnalysis: return Raw("control.media.analysis.begin", request.BeginMediaAnalysis);
+            case ExternalControlRequest.OperationOneofCase.GetMediaAnalysis: return Raw("control.media.analysis.get", request.GetMediaAnalysis);
+            case ExternalControlRequest.OperationOneofCase.CancelMediaAnalysis: return Raw("control.media.analysis.cancel", request.CancelMediaAnalysis);
             case ExternalControlRequest.OperationOneofCase.GetMediaAssetCatalog: operation = "control.media_asset_catalog.snapshot.get"; payload = new { request.GetMediaAssetCatalog.Offset, request.GetMediaAssetCatalog.Limit }; break;
 			case ExternalControlRequest.OperationOneofCase.ImportMediaAssets: operation = "control.media_asset_catalog.import"; payload = new { SourceLocations = request.ImportMediaAssets.SourceLocations.ToArray() }; break;
 			case ExternalControlRequest.OperationOneofCase.RelinkMediaAsset: operation = "control.media_asset_catalog.relink"; payload = new { request.RelinkMediaAsset.AssetId, request.RelinkMediaAsset.SourceLocation }; break;

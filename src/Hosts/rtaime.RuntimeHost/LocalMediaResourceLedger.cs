@@ -6,7 +6,7 @@ using rtaime.Runtime.Contracts;
 namespace rtaime.RuntimeHost;
 
 public enum LocalMediaCapacityProfile { Conservative = 1, DevelopmentFour = 2 }
-public enum LocalMediaResourcePurpose { Resident = 1, Probe = 2, Preflight = 3 }
+public enum LocalMediaResourcePurpose { Resident = 1, Probe = 2, Preflight = 3, Analysis = 4 }
 
 public sealed record LocalMediaResourceIdentity(
     string RuntimeEpoch, MediaSourceId SourceId, PreparedExecutionId? ExecutionId,
