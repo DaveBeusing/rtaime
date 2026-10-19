@@ -4,14 +4,14 @@
 
 ## Integration status
 
-Sequence authoring is durable and can represent simultaneous Video, Audio and
-Graphics tracks, but **the current product has no live multitrack sequence
-playback authority**. This change begins the execution integration with a
-source-bound, finite Control-side plan compiler and rational selection tests.
-It does **not** create, advertise or implicitly enable Preview playback,
-Program Take, Runtime media decoding, audio mix or pixel compositing. The
-existing sequence List/Get playback state remains `UNAVAILABLE` until the
-real cross-host path is implemented and qualified.
+Sequence authoring is durable and supports simultaneous Video, Audio and
+Graphics tracks. Source/revision-bound planning, native Runtime admission,
+bounded decoder preroll and a versioned Client -> ControlHost -> RuntimeHost
+**preparation-only** lifecycle are implemented. The product still has **no
+live multitrack sequence playback authority**. Native PREPARED means neither
+Preview playback nor Program pixels/audio, Take or committed execution.
+Sequence List/Get deliberately retain playback state `UNAVAILABLE` until
+the real output path and recovery are integrated and qualified.
 
 See [Sequence Authoring](SequenceAuthoring.md), [Local Media File Source](LocalMediaFileSource.md), [Production Rundown](ProductionRundown.md),
 [Operator Experience Scope](OperatorExperienceScope.md) and
@@ -84,9 +84,10 @@ itself never proves usable decoded frame/audio data.
 ## Shared Runtime media admission and native preroll
 
 The existing `LocalMediaDeckRuntimeService` now owns an internal sequence
-preparation seam. It is deliberately **not a new process, decoder registry
-or ControlHost operation**. The seam is available to the future authorized
-sequence execution coordinator; ordinary A/B deck behavior remains unchanged.
+preparation seam. It is deliberately **not a new process or decoder
+registry**. The new ControlHost preparation operations call this existing
+Runtime ownership path without creating a production mutation. Ordinary
+A/B deck behavior remains unchanged.
 
 - `LocalMediaResourceLedger.TryReserveGroup` charges every distinct
   SourceId/native pool owner **atomically** against the same Runtime capacity,
@@ -141,18 +142,62 @@ cancellation, seek, and retained-pool cleanup. They do **not** establish
 two different pictures in one **combined Program frame**, correctly mixed
 audio samples at the committed sink, or a live sequence Take.
 
+## Versioned client-to-Runtime native preparation
+
+`rtaime.sequence-preparation.v1` is a separate, bounded observation and
+resource-staging capability. `SequencePreparationClient` uses the existing
+Named Pipe or authenticated external gRPC path. Additive Control operation
+tags 120-123 are Prepare, preparation Get, preparation Cancel and read-only
+context discovery; prior
+operation tags 114-119 and saved show format v3 are unchanged. Observer
+role may read current preparation observations; only Operator/Administrator
+may prepare/cancel. Old peers reject the unknown capability explicitly.
+
+Clients first read `SequencePreparationContext` to obtain the current
+saved sequence revision and RuntimeHost epoch. This is not a decoder readiness
+guarantee. A request contains only a saved sequence ID, exact authoring revision and
+previously observed RuntimeHost identity. It cannot supply file paths,
+source IDs, GPU resources or a production command. Control loads the
+canonical show and catalogue, validates all referenced assets, audio buses
+and fixed-point execution windows, chooses genuine available media.route
+resources and binds a fresh prepared-execution identity to the current
+committed production authority. One staged sequence is allowed per Control
+lifetime. Every distinct asset/source-timeline offset requires a retained
+native owner; staging conservatively rejects a whole sequence needing
+more than four total owners, even if fewer overlap in any one interval.
+
+The staging operation has its own serial Control gate and a separate
+bounded Runtime-IPC request lane: neither the global Control mutation gate
+nor the ordinary Program/control IPC request gate is held during native
+fingerprint verification and preroll. Control rechecks saved and production revisions
+after Runtime confirms preparation and cancels stale work. A subsequent
+Get also compares the original catalogue revision: removing or relinking
+an asset makes the prepared native decoder group STALE and requires
+confirmed cancellation, even when authoring and production are unchanged.
+A committed production can legitimately have initial revision zero;
+this state is accepted only when both hosts agree on its exact authority
+identity and revision, with a separate positive preparation generation.
+RuntimeHost
+validates its epoch and the currently committed production authority,
+reserves via the existing global ledger, opens/prerolls native owners,
+and returns only identity/generation/resource count and typed status.
+Get/Cancel are fenced by that exact identity and epoch. No original
+media bytes or paths are returned to the Client.
+
+States `PREPARED`, `REJECTED`, `STALE`, and `CANCELED` describe
+the **native preparation lifecycle only**. In particular, they never
+promote `SequenceList.PlaybackState` or `SequenceSnapshot.PlaybackState`
+from `UNAVAILABLE`. No Play/Pause/Seek/Loop/Take operation is advertised
+yet, because no sequence samples reach a committed output sink.
+
 ## Required productive execution integration
 
 These are **open acceptance obligations**, not simulated features:
 
-1. Control must issue a versioned source/revision/plan-generation bound
-   Prepare through the existing Client, ControlHost and RuntimeHost path,
-   retain current catalogue leases and validate Runtime-admitted decoder
-   tickets for every simultaneous source and transition overlap.
-2. Connect the now-implemented internal native preparation/queue seam to
-   a Control-authorized prepared plan, including explicit begin/stop/seek/loop,
-   source-to-clip ownership, real runtime output admission and bounded
-   recovery. Work is prepared **off** Program cadence; no second clock.
+1. Connect the admitted source/revision plan to real Runtime source-to-clip
+   ownership, native Play/Pause/Seek/Loop on the one existing clock, and
+   the committed compositor/audio sink with explicit recovery. Preparation
+   and its bounded native queues exist, but no playout is activated.
 3. Runtime's existing GPU compositor and audio production mixer must
    combine at least two actual independent video frames and two actual
    audio tracks with the same rational boundary. Graphics layers,
@@ -170,9 +215,9 @@ These are **open acceptance obligations**, not simulated features:
    seek/loop/host loss and actual output. Only then may List/Get
    advertise playback as available.
 
-Until that end-to-end qualification exists, neither the renderer,
-ControlHost API, Runtime IPC nor external operation registry is
-modified to claim playback support.
+Until that end-to-end qualification exists, the new ControlHost,
+Runtime IPC and external operations are **preparation-only**. The renderer,
+program routing and advertised sequence playback are unchanged.
 
 ## Reference safety and recovery
 
@@ -197,9 +242,10 @@ Runtime Program cadence remain unchanged by execution-planning work.
 and 48-kHz sample mapping, simultaneous videos/audio, precise transition
 edges, source offsets, overbudget/missing asset rejection, black gaps,
 immutability and deterministic fixed-point fade envelopes.
-Compiler tests are pure scheduling tests; the native preparation integration
-uses real decoded RGBA/PCM frame leases but **does not composite or mix them
-into committed Program pixels or samples**. The production Runtime and physical hardware require
+Compiler tests are pure scheduling tests; the native preparation and
+Client/Control/Runtime integration exercise real catalogue-authorized
+MP4 native admission and resource cleanup but **do not composite or mix
+decoded RGBA/PCM into committed Program pixels or samples**. The production Runtime and physical hardware require
 their own integrated evidence. Run focused sequence Unit tests, then the
 canonical Release developer build and complete `rtaime.slnx` tests.
 

@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using Xunit;
 using System.IO;
 using rtaime.Client;
 using rtaime.ControlHost;
@@ -7,8 +8,6 @@ using rtaime.Media.Contracts;
 using rtaime.Operator;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
-
-using Xunit;
 
 namespace rtaime.Tests.Operator;
 

@@ -530,6 +530,7 @@ internal static class ExternalControlOperationCatalog
 		"control.ping", "control.snapshot.get",
 		"control.output.canvas.get", "control.output.canvas.validate", "control.output.canvas.save", "control.output.canvas.activate", "control.output.canvas.evidence.get",
         "control.sequence.list", "control.sequence.get", "control.sequence.save", "control.sequence.edit", "control.sequence.undo", "control.sequence.redo",
+        "control.sequence.prepare", "control.sequence.preparation.get", "control.sequence.preparation.cancel", "control.sequence.preparation.context.get",
 		"control.preview.select", "control.scene.activate", "control.output.route", "control.program.cut", "control.program.dissolve",
 		"control.audio.input.set", "control.audio.routing.set", "control.audio.test_signal.set", "control.test_pattern.set",
 		"control.graphics.overlay.load", "control.graphics.cg.apply", "control.graphics.overlay.set", "control.graphics.overlay.clear",
@@ -548,7 +549,7 @@ internal static class ExternalControlOperationCatalog
 	public static IReadOnlyList<string> All => Capabilities;
 
 	public static ExternalControlRole RequiredRole(string operation) =>
-		operation is "control.sequence.list" or "control.sequence.get" or "control.output.canvas.get" or "control.output.canvas.evidence.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
+		operation is "control.sequence.list" or "control.sequence.get" or "control.sequence.preparation.get" or "control.sequence.preparation.context.get" or "control.output.canvas.get" or "control.output.canvas.evidence.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
 			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" or
 			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
 			"control.production_macro.snapshot.get" or "control.production_macro.get" or "control.production_macro.validate"
@@ -783,6 +784,11 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
             case ExternalControlRequest.OperationOneofCase.EditSequence: return Raw("control.sequence.edit", request.EditSequence);
             case ExternalControlRequest.OperationOneofCase.UndoSequence: return Raw("control.sequence.undo", request.UndoSequence);
             case ExternalControlRequest.OperationOneofCase.RedoSequence: return Raw("control.sequence.redo", request.RedoSequence);
+            case ExternalControlRequest.OperationOneofCase.PrepareSequence: return Raw("control.sequence.prepare", request.PrepareSequence);
+            case ExternalControlRequest.OperationOneofCase.GetSequencePreparation: return Raw("control.sequence.preparation.get", request.GetSequencePreparation);
+            case ExternalControlRequest.OperationOneofCase.CancelSequencePreparation: return Raw("control.sequence.preparation.cancel", request.CancelSequencePreparation);
+            case ExternalControlRequest.OperationOneofCase.GetSequencePreparationContext:
+                operation = "control.sequence.preparation.context.get"; payload = new { }; break;
             case ExternalControlRequest.OperationOneofCase.GetOutputCanvas: operation = "control.output.canvas.get"; payload = new { }; break;
             case ExternalControlRequest.OperationOneofCase.ValidateOutputCanvas: return Raw("control.output.canvas.validate", request.ValidateOutputCanvas);
             case ExternalControlRequest.OperationOneofCase.SaveOutputCanvas: return Raw("control.output.canvas.save", request.SaveOutputCanvas);
