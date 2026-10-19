@@ -905,6 +905,12 @@
 						Visibility="{Binding Shell.OutputRoutingVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Margin="0,0,0,14" />
 
+					<local:OutputCanvasEditorControl
+						DataContext="{Binding OutputHealth.CanvasEditor, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Visibility="{Binding Shell.OutputRoutingVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Margin="0,0,0,14"
+						AutomationProperties.Name="Output canvas mapping authoring and Runtime confirmation" />
+
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.SystemWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
