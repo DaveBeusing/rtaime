@@ -2372,7 +2372,7 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend, IGpuOutp
                         if (!_surfaces.TryGetValue(id, out var allocation))
                             throw new InvalidOperationException("Output mapping input surface was retired.");
                         return allocation.Pixels;
-                    });
+                    }, opaqueProgramSink: true);
                 _surfaces.Add(outputSurfaceId, new Allocation(format, target));
             }
             catch
