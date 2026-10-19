@@ -128,7 +128,7 @@ internal sealed class SequenceFrameComposition
 
             var configured = _mixer.Configuration;
             if (!ValidateLayers(videoLayers, audioTracks, nativeFrames, configured,
-                out failure))
+                audioSampleCount, out failure))
                 return false;
 
             // These are already-allocated scratch buffers. All nontrivial mixing
@@ -221,7 +221,7 @@ internal sealed class SequenceFrameComposition
         ReadOnlySpan<SequenceAudioCompositionTrack> audios,
         ReadOnlySpan<SequenceMediaFrameLease?> frames,
         AudioProductionConfiguration configuration,
-        out Failure? failure)
+        uint audioSampleCount, out Failure? failure)
     {
         for (var index = 0; index < videos.Length; index++)
         {
@@ -259,9 +259,9 @@ internal sealed class SequenceFrameComposition
                     SequenceTicksPerSecond * 24L * 3600) ||
                 frames[track.OwnerIndex]!.Frame.Audio is not { } nativeAudio ||
                 nativeAudio.Format != AudioFormat.Stereo48kFloat32 ||
-                frames[track.OwnerIndex]!.Frame.AudioPayload.Length <
-                    _mixedAudio.Length * sizeof(float) &&
-                    frames[track.OwnerIndex]!.Frame.AudioPayload.Length == 0 ||
+                nativeAudio.Timing.SampleCount != audioSampleCount ||
+                frames[track.OwnerIndex]!.Frame.AudioPayload.Length !=
+                    checked((int)audioSampleCount * 2 * sizeof(float)) ||
                 !configuration.Sources.Any(source =>
                     source.SourceId == track.LogicalSourceId &&
                     source.IsAssignedTo(AudioBusId.Program) && !source.FollowRoutedSource))
