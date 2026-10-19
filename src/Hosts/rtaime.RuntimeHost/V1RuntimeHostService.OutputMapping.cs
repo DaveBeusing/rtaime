@@ -210,6 +210,9 @@ public sealed partial class V1RuntimeHostService
         var knownSources = execution.PreparedExecution.Bindings
             .Where(binding => binding.MediaSourceId is not null)
             .Select(binding => binding.MediaSourceId!.Value.ToString())
+            // The two already-registered virtual sources remain available even if
+            // neither currently owns the Preview or Program route.
+            .Concat(_virtualMedia.Sources.Select(source => source.SourceId.ToString()))
             .Concat(_externalSourcePipelines.Keys.Select(s => s.ToString()))
             .Distinct(StringComparer.Ordinal).ToArray();
         var activeBuses = execution.PreparedExecution.Bindings
