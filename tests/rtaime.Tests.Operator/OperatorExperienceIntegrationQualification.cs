@@ -52,10 +52,10 @@ internal static class OperatorExperienceIntegrationQualification
         Assert.Same(control, ai.DataContext);
         Assert.Same(window.OutputHealth.CanvasEditor, canvas.DataContext);
 
-        var openSequence = Assert.Single(elements.OfType<RtaimeButton>().Where(button =>
-            AutomationProperties.GetName(button) == "Open saved multitrack sequence editor"));
-        var openLegacy = Assert.Single(elements.OfType<RtaimeButton>().Where(button =>
-            AutomationProperties.GetName(button) == "Open legacy media deck timeline"));
+        var openSequence = Assert.Single(elements.OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Open saved multitrack sequence editor");
+        var openLegacy = Assert.Single(elements.OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Open legacy media deck timeline");
 
         try
         {
