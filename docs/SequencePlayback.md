@@ -113,6 +113,15 @@ sequence execution coordinator; ordinary A/B deck behavior remains unchanged.
   ended, too-old or stale decoded frames are rejected rather than
   fabricated. Native frame/audio buffer memory is leased; it is not
   copied into a second media cache.
+- `TryTakeSequenceFrameSet` gathers one to four distinct native owners at
+  a single sequence tick under the existing Runtime generation fence.
+  It validates all source/timeline offsets before consuming any queued
+  frames, rejects duplicate owners, and releases every already-acquired
+  lease if another owner cannot supply a due frame. Callers never receive
+  an incomplete frame set; no additional decoded-frame cache or Program
+  mutation is introduced. The subsequent output sink must still recheck
+  every lease immediately before use. Multi-source consumption remains
+  bounded by the configured Runtime resource profile.
 - `SequenceMediaFrameLease` retains the source/epoch/generation identity.
   `IsCurrentSequenceFrame` is the final sink fence: a previously acquired
   video/audio payload remains memory-safe while retained, but is **not

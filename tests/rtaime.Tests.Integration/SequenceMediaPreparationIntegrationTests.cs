@@ -137,6 +137,119 @@ public sealed class SequenceMediaPreparationIntegrationTests
     }
 
     [Fact]
+    public void Native_frame_set_is_all_or_none_when_one_prepared_owner_has_no_due_frame()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, fingerprint);
+        var prepared = decks.PrepareSequenceMedia(execution, map, owners);
+        Assert.True(prepared.Prepared, prepared.Failure?.Message);
+
+        var playing = map.Play(100);
+        Assert.True(playing.TryMap(100, out var position));
+        var preroll = decks.RepositionSequenceMedia(map.SequenceId, 7, position);
+        Assert.True(preroll.Prepared, preroll.Failure?.Message);
+
+        var requests = new[]
+        {
+            new SequenceMediaFrameRequest(owners[0].SourceId, 0),
+            new SequenceMediaFrameRequest(owners[1].SourceId, 0)
+        };
+        var selected = new SequenceMediaFrameLease?[2];
+        Assert.True(decks.TryTakeSequenceFrameSet(map.SequenceId, 7, position,
+            requests, selected, out var failure), failure?.Message);
+        Assert.All(selected, lease => Assert.NotNull(lease));
+        Assert.Equal(owners[0].SourceId, selected[0]!.Frame.Video.SourceId);
+        Assert.Equal(owners[1].SourceId, selected[1]!.Frame.Video.SourceId);
+        Assert.False(selected[0]!.Frame.RgbaPixels.IsEmpty);
+        Assert.False(selected[1]!.Frame.RgbaPixels.IsEmpty);
+        Assert.False(selected[0]!.Frame.AudioPayload.IsEmpty);
+        Assert.False(selected[1]!.Frame.AudioPayload.IsEmpty);
+        Assert.True(decks.IsCurrentSequenceFrame(selected[0]!));
+        Assert.True(decks.IsCurrentSequenceFrame(selected[1]!));
+        Assert.Equal(2, decks.ResourceSnapshot.ReservedOwners);
+        selected[0]!.Dispose();
+        selected[1]!.Dispose();
+
+        var sought = playing.Seek(101, 4800);
+        Assert.True(sought.TryMap(101, out var nextPosition));
+        var repositioned = decks.RepositionSequenceMedia(map.SequenceId, 7, nextPosition);
+        Assert.True(repositioned.Prepared, repositioned.Failure?.Message);
+
+        // Pre-consume the second owner's only frame due at tick 4800.
+        // The first source can still supply a frame, but it must be
+        // released if the second source cannot join that same frame set.
+        Assert.True(decks.TryTakeSequenceMedia(map.SequenceId, 7,
+            owners[1].SourceId, nextPosition, 4800, out var consumed, out var dueIssue),
+            dueIssue?.Message);
+        consumed!.Dispose();
+        var partial = new SequenceMediaFrameLease?[2];
+        var later = new[]
+        {
+            new SequenceMediaFrameRequest(owners[0].SourceId, 4800),
+            new SequenceMediaFrameRequest(owners[1].SourceId, 4800)
+        };
+        Assert.False(decks.TryTakeSequenceFrameSet(map.SequenceId, 7, nextPosition,
+            later, partial, out var notReady));
+        Assert.Equal("runtime.sequence.buffering", notReady?.Code);
+        Assert.All(partial, lease => Assert.Null(lease));
+        Assert.Equal(2, decks.ResourceSnapshot.ReservedOwners);
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
+    public void Native_frame_set_rejects_duplicate_and_unbound_sources_before_consumption()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, fingerprint);
+        var prepared = decks.PrepareSequenceMedia(execution, map, owners);
+        Assert.True(prepared.Prepared, prepared.Failure?.Message);
+        var playing = map.Play(100);
+        Assert.True(playing.TryMap(100, out var position));
+        var preroll = decks.RepositionSequenceMedia(map.SequenceId, 7, position);
+        Assert.True(preroll.Prepared, preroll.Failure?.Message);
+
+        var slots = new SequenceMediaFrameLease?[2];
+        var duplicate = new[]
+        {
+            new SequenceMediaFrameRequest(owners[0].SourceId, 0),
+            new SequenceMediaFrameRequest(owners[0].SourceId, 0)
+        };
+        Assert.False(decks.TryTakeSequenceFrameSet(map.SequenceId, 7, position,
+            duplicate, slots, out var duplicated));
+        Assert.Equal("runtime.sequence.frame_set_duplicate", duplicated?.Code);
+        Assert.All(slots, lease => Assert.Null(lease));
+
+        var invalidOffset = new[]
+        {
+            new SequenceMediaFrameRequest(owners[0].SourceId, 0),
+            new SequenceMediaFrameRequest(owners[1].SourceId, 4800)
+        };
+        Assert.False(decks.TryTakeSequenceFrameSet(map.SequenceId, 7, position,
+            invalidOffset, slots, out var offsetError));
+        Assert.Equal("runtime.sequence.source_mismatch", offsetError?.Code);
+        Assert.All(slots, lease => Assert.Null(lease));
+
+        var valid = new[]
+        {
+            new SequenceMediaFrameRequest(owners[0].SourceId, 0),
+            new SequenceMediaFrameRequest(owners[1].SourceId, 0)
+        };
+        Assert.True(decks.TryTakeSequenceFrameSet(map.SequenceId, 7, position,
+            valid, slots, out var readyError), readyError?.Message);
+        slots[0]!.Dispose();
+        slots[1]!.Dispose();
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
     public void Tampered_second_source_rolls_back_all_native_owners_without_publishing_a_session()
     {
         if (!OperatingSystem.IsWindows()) return;
