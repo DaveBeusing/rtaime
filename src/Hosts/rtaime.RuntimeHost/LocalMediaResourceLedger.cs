@@ -15,6 +15,9 @@ public sealed record LocalMediaResourceIdentity(
     public Identity? AuthorityStateId { get; init; }
 }
 
+/// <summary>A single prepared native owner intent, reserved with its siblings as one admission group.</summary>
+public sealed record LocalMediaResourceRequest(Guid Intent, LocalMediaResourceIdentity Identity);
+
 public sealed record LocalMediaResourceSnapshot(
     int Capacity, int ReservedOwners, int WorkerReservations, long KnownManagedBytes,
     int RetainedPoolOwners, int QuarantinedOwners, int UnknownNativeOwners,
@@ -114,6 +117,64 @@ public sealed class LocalMediaResourceLedger
             return true;
         }
     }
+    /// <summary>
+    /// All-or-none reservation on the existing Runtime ledger. Tickets are native/pool
+    /// ownership charges, not an authorization to publish or mutate Program.
+    /// No decoder is opened while the ledger gate is held.
+    /// </summary>
+    public bool TryReserveGroup(
+        IReadOnlyList<LocalMediaResourceRequest> requested,
+        out IReadOnlyList<LocalMediaResourceTicket> tickets,
+        out Failure? failure)
+    {
+        ArgumentNullException.ThrowIfNull(requested);
+        lock (_gate)
+        {
+            tickets = Array.Empty<LocalMediaResourceTicket>();
+            if (requested.Count == 0 || requested.Count > Capacity ||
+                requested.Any(r => r is null || r.Identity is null || r.Intent == Guid.Empty) ||
+                requested.Select(r => r.Intent).Distinct().Count() != requested.Count ||
+                requested.Select(r => r.Identity.SourceId).Distinct().Count() != requested.Count)
+            {
+                failure = Reject("runtime.media_resources.sequence_identity",
+                    "A sequence group requires one unique nonempty intent and source identity per native owner within the finite profile.");
+                return false;
+            }
+
+            // A group never adopts an unrelated, previously issued ticket. Avoiding
+            // idempotent group admission keeps rollback ownership unambiguous.
+            if (requested.Any(r => _owners.ContainsKey(r.Intent)))
+            {
+                failure = Reject("runtime.media_resources.sequence_intent_conflict",
+                    "A sequence group cannot reuse a previously reserved admission intent.");
+                return false;
+            }
+            if ((long)_owners.Count + requested.Count > Capacity)
+            {
+                failure = Reject("runtime.media_resources.capacity",
+                    "All sequence decoder/pool owners must fit together with retained, resident and quarantined owners.");
+                return false;
+            }
+
+            var granted = new List<LocalMediaResourceTicket>(requested.Count);
+            foreach (var request in requested)
+            {
+                if (!TryReserve(request.Intent, request.Identity, out var ticket, out failure))
+                {
+                    // Reentrant lock: group reservations are not observable between
+                    // admission and complete rollback. No native worker owns a grant yet.
+                    foreach (var issued in granted)
+                        issued.OwnerCompleted();
+                    return false;
+                }
+                granted.Add(ticket!);
+            }
+            tickets = granted.AsReadOnly();
+            failure = null;
+            return true;
+        }
+    }
+
     private Failure Reject(string code, string message)
     {
         _lastRejection = code;
