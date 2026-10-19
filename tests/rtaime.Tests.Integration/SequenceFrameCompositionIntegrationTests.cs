@@ -132,13 +132,13 @@ public sealed class SequenceFrameCompositionIntegrationTests
     [InlineData(9600)]
     public void Sample_exact_linear_audio_crossfades_have_complementary_weights(long durationTicks)
     {
-        var from = new SequenceAudioCompositionTrack(
+        var outgoingTrack = new SequenceAudioCompositionTrack(
             Guid.NewGuid(), 0, MediaSourceId.New(), 0, durationTicks, FadeIn: false);
-        var to = from with { ClipId = Guid.NewGuid(), FadeIn = true };
+        var incomingTrack = outgoingTrack with { ClipId = Guid.NewGuid(), FadeIn = true };
         for (long sampleTick = 0; sampleTick < durationTicks; sampleTick += 5)
         {
-            var outgoing = SequenceFrameComposition.TransitionWeight(from, sampleTick);
-            var incoming = SequenceFrameComposition.TransitionWeight(to, sampleTick);
+            var outgoing = SequenceFrameComposition.TransitionWeight(outgoingTrack, sampleTick);
+            var incoming = SequenceFrameComposition.TransitionWeight(incomingTrack, sampleTick);
             Assert.Equal(255, (int)outgoing + incoming);
             if (sampleTick == 0)
             {
