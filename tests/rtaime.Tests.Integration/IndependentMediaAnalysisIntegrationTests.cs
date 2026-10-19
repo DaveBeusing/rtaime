@@ -120,6 +120,30 @@ public sealed class IndependentMediaAnalysisIntegrationTests
     }
 
     [Fact]
+    public async Task Replacing_a_completed_frame_revokes_the_prior_observation_token()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        using var runtime = new LocalMediaDeckRuntimeService();
+        var mediaId = MediaAssetId.New();
+        var identity = IdentityFor(asset.Path).Identity;
+        var first = runtime.BeginAnalysis(Frame(mediaId, 1), identity, asset.Path);
+        var completed = await Completed(runtime, first);
+        Assert.Equal(MediaAnalysisState.Complete, completed.State);
+        Assert.True(runtime.TryReadAnalysisFrame(first.JobId,
+            Convert.FromHexString(first.ObservationToken!), out _, out _, out _));
+
+        var next = runtime.BeginAnalysis(Frame(mediaId, 2, TimeSpan.FromMilliseconds(300).Ticks),
+            identity, asset.Path);
+        Assert.NotEqual(first.JobId, next.JobId);
+        Assert.False(runtime.TryReadAnalysisFrame(first.JobId,
+            Convert.FromHexString(first.ObservationToken!), out _, out _, out _));
+        var current = await Completed(runtime, next);
+        Assert.Equal(2, current.Generation);
+        Assert.Equal(MediaAnalysisState.Complete, current.State);
+    }
+
+    [Fact]
     public void Atomic_cache_requires_valid_manifest_checksum_and_matching_request_identity()
     {
         var folder = Path.Combine(Path.GetTempPath(), "rtaime-analysis-cache-" + Guid.NewGuid().ToString("N"));
