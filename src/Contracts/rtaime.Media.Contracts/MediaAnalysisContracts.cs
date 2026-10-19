@@ -101,7 +101,8 @@ public sealed record MediaAnalysisJobRequest(
 
 public sealed record MediaAnalysisBegin(
     string Version, string JobId, string AssetId, string ConsumerId, long Generation,
-    string RuntimeEpoch, MediaAnalysisState State, string Detail);
+    string RuntimeEpoch, MediaAnalysisState State, string Detail,
+    string? ObservationEndpoint = null, string? ObservationToken = null);
 
 /// <summary>
 /// Each bucket is an exact range of samples; HasSamples=false and Discontinuity
