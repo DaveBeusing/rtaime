@@ -133,6 +133,19 @@ public sealed class OutputMappingGpuTests
                 provider.Readback(frame).Take(4).ToArray());
         }
         Assert.Equal(1, provider.ActiveSurfaceCount);
+        var feathered = provider.MapOutput(uploaded,
+            [new GpuOutputMappingInput(uploaded,
+                Quad(uploaded.SurfaceId, Small, 2, 2,
+                    new GpuOutputEdgeBlend(0.5, 0, 0, 0)))]);
+        Assert.True(feathered.Succeeded, feathered.Failure?.Message);
+        using (var featheredFrame = feathered.Frame!)
+        {
+            var submittedPixels = provider.Readback(featheredFrame);
+            Assert.Equal((byte)35, submittedPixels[0]);
+            Assert.Equal((byte)45, submittedPixels[1]);
+            Assert.Equal((byte)55, submittedPixels[2]);
+            Assert.Equal((byte)255, submittedPixels[3]);
+        }
         uploaded.Dispose();
         Assert.Equal(0, provider.ActiveSurfaceCount);
         Assert.Equal(0, backend.ActiveAllocationCount);
