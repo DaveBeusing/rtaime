@@ -112,6 +112,14 @@ public sealed partial class ControlHostIpcServer
 
             var status = await _runtimeTransport.GetSequencePreparationAsync(
                 reference, cancellationToken).ConfigureAwait(false);
+            if (status.State == "CANCELED")
+            {
+                // Native worker cleanup was confirmed, even if a shuttle command
+                // failed before its response arrived. Retire the matching
+                // Control owner so an explicit new preparation can be admitted.
+                _preparedSequence = null;
+                return Success(message, message.MessageType + ".response", status);
+            }
             var control = _controlAccessor();
             var baseline = control is null ? null : _outputCanvasBaseline ?? control.Specification;
             var saved = baseline is null ? null :
