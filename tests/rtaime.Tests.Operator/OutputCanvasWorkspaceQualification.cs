@@ -16,9 +16,20 @@ internal static class OutputCanvasWorkspaceQualification
     internal static async Task VerifyWindowAsync(MainWindow window, Dispatcher dispatcher)
     {
         var previous = window.Shell.SelectedWorkspace;
+        var selectedCompactDetails = false;
         try
         {
             window.Shell.SelectWorkspace(OperatorWorkspaceNames.Outputs);
+            // The compact shell deliberately gives its auxiliary DETAILS column
+            // zero width in PRIMARY mode. Qualify the actual navigation the
+            // operator uses before measuring the editable canvas surface.
+            if (window.Shell.IsCompactViewport)
+            {
+                Assert.Equal(Visibility.Visible, window.Shell.AuxiliaryNavigationVisibility);
+                window.Shell.SelectCompactAuxiliaryCommand.Execute("DETAILS");
+                selectedCompactDetails = true;
+                Assert.True(window.Shell.AuxiliaryWorkspaceColumnWidth.IsStar);
+            }
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
 
             var editors = Descendants<OutputCanvasEditorControl>(window).ToArray();
@@ -41,6 +52,8 @@ internal static class OutputCanvasWorkspaceQualification
         }
         finally
         {
+            if (selectedCompactDetails)
+                window.Shell.SelectCompactAuxiliaryCommand.Execute("PRIMARY");
             window.Shell.SelectWorkspace(previous);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         }
