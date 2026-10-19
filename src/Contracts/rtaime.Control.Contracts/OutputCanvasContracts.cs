@@ -56,3 +56,28 @@ public sealed record OutputCanvasSaveRequest(string Version, Guid TransactionId,
     Guid ConfigurationId, ulong ExpectedSavedRevision, OutputCanvasEdit[] Edits);
 public sealed record OutputCanvasSaveResult(bool Saved, ulong SavedRevision,
     OutputCanvasConfiguration Configuration, OutputCanvasValidation Validation, bool Replayed = false);
+
+
+// Activation is an explicit production operation separate from durable Save.
+public sealed record OutputCanvasActivationRequest(
+    Guid ConfigurationId, ulong ExpectedSavedRevision, bool Enabled = true);
+
+// Control binds the saved revision and the currently observed Runtime epoch.
+// A Runtime replacement or execution revision change must reject preparation.
+public sealed record OutputCanvasRuntimeRequest(
+    OutputCanvasConfiguration Configuration,
+    ulong ExpectedExecutionRevision,
+    string ExpectedRuntimeHostInstanceId,
+    bool Enabled = true);
+
+public sealed record OutputCanvasActivationResult(
+    ulong? ActiveRenderRevision,
+    ulong? PendingRenderRevision,
+    string ActivationState,
+    string? FailureCode = null,
+    string? AppliedSourceId = null,
+    string? TargetId = null,
+    int TargetWidth = 0,
+    int TargetHeight = 0,
+    ulong? RuntimeExecutionRevision = null,
+    ulong? LastRenderedSequence = null);
