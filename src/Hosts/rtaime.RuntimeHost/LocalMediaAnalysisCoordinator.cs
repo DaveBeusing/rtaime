@@ -401,7 +401,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         return output;
     }
 
-    private sealed class FileIdentityChangedException : IOException;
+    private sealed class FileIdentityChangedException : IOException { }
 
     private static void VerifyPathIdentity(string path, MediaAnalysisFileIdentity identity)
     {
@@ -486,6 +486,6 @@ public sealed partial class LocalMediaDeckRuntimeService
             active.Ticket?.Quarantine(active);
             throw new IOException("Media analysis native owner did not finish cleanup; reservation remains quarantined.");
         }
-        if (active?.Ticket is { } ticket && task.IsCompleted) ticket.OwnerCompleted();
+        if (active?.Ticket is { } ticket && active.Execution?.IsCompleted == true) ticket.OwnerCompleted();
     }
 }
