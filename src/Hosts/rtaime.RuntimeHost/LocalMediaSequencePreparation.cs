@@ -292,8 +292,11 @@ public sealed partial class LocalMediaDeckRuntimeService
     {
         if (map.State != SequenceRuntimeTransportState.Stopped ||
             map.ProgramRate != _format.FrameRate || map.AuthoringRevision == 0 ||
-            map.Generation != execution.PlanGeneration.Value ||
-            execution.AuthoritySnapshot.Revision.Value == 0)
+            map.Generation != execution.PlanGeneration.Value)
+            // Revision.Initial (0) is a valid committed production revision.
+            // RuntimeHost checks the exact live authority state and revision
+            // before invoking this admission; never substitute a positive
+            // production revision solely to obtain a decoder ticket.
             return new("runtime.sequence.authority",
                 "A stopped, source-bound sequence at the current Runtime rate and prepared authority is required.");
         if (sources.Count == 0 || sources.Count > _ledger.Capacity ||
