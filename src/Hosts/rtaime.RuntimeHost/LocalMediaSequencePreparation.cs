@@ -22,6 +22,27 @@ internal readonly record struct SequenceMediaPreparationReceipt(
     int DecoderOwners, Failure? Failure);
 
 /// <summary>
+/// Retained native slot evidence. Consumers must recheck current sequence/loop
+/// authority at their final output sink; possessing old pixels is not permission
+/// to render them after seek, replacement or host recovery.
+/// </summary>
+internal sealed class SequenceMediaFrameLease(
+    LocalMediaFrameLease native, Guid sequenceId, ulong authoringRevision,
+    MediaSourceId sourceId, string runtimeEpoch, SequenceRuntimePosition position) : IDisposable
+{
+    private LocalMediaFrameLease? _native = native;
+    internal Guid SequenceId { get; } = sequenceId;
+    internal ulong AuthoringRevision { get; } = authoringRevision;
+    internal MediaSourceId SourceId { get; } = sourceId;
+    internal string RuntimeEpoch { get; } = runtimeEpoch;
+    internal SequenceRuntimePosition Position { get; } = position;
+    internal long NativeGeneration { get; } = native.Generation;
+    internal LocalMediaDecodedFrame Frame =>
+        _native?.Frame ?? throw new ObjectDisposedException(nameof(SequenceMediaFrameLease));
+    public void Dispose() => Interlocked.Exchange(ref _native, null)?.Dispose();
+}
+
+/// <summary>
 /// Sequence decoder admission stays inside the already-owned local media registry.
 /// Staged native owners are not Program sources and carry no output authority.
 /// </summary>
@@ -107,7 +128,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     internal bool TryTakeSequenceMedia(
         Guid sequenceId, ulong authoringRevision, MediaSourceId source,
         SequenceRuntimePosition position, long requestedSourceTick,
-        out LocalMediaFrameLease? result, out Failure? failure)
+        out SequenceMediaFrameLease? result, out Failure? failure)
     {
         result = null;
         lock (_sequenceGate)
@@ -153,9 +174,31 @@ public sealed partial class LocalMediaDeckRuntimeService
                     "Decoder returned a stale generation or mismatched source/audio observation.");
                 return false;
             }
-            result = selected;
+            result = new SequenceMediaFrameLease(selected, sequenceId, authoringRevision,
+                source, _ledger.RuntimeEpoch, position);
             failure = null;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Final sink fence for a previously acquired native frame. The caller must
+    /// check this after any potentially delayed compositor/audio scheduling step.
+    /// </summary>
+    internal bool IsCurrentSequenceFrame(SequenceMediaFrameLease frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        lock (_sequenceGate)
+        {
+            var prepared = _sequenceOwners;
+            if (prepared is null || prepared.SequenceId != frame.SequenceId ||
+                prepared.AuthoringRevision != frame.AuthoringRevision ||
+                prepared.Generation != frame.Position.Generation ||
+                prepared.LoopPass != frame.Position.LoopPass ||
+                frame.RuntimeEpoch != _ledger.RuntimeEpoch)
+                return false;
+            var owner = prepared.Owners.SingleOrDefault(o => o.Request.SourceId == frame.SourceId);
+            return owner is not null && owner.Decode.Snapshot.Generation == frame.NativeGeneration;
         }
     }
 
