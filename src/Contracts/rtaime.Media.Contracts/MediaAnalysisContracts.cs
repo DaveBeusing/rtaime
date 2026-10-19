@@ -85,6 +85,20 @@ public sealed record MediaAnalysisFileIdentity(string FingerprintSha256, long Le
     }
 }
 
+public sealed record MediaAnalysisJobRequest(
+    string Version, string JobId, string AssetId, string ConsumerId, long Generation, string RuntimeEpoch)
+{
+    public void Validate()
+    {
+        if (Version != MediaAnalysisContract.Version || !Guid.TryParse(JobId, out var job) ||
+            job == Guid.Empty || !Guid.TryParse(AssetId, out var asset) || asset == Guid.Empty ||
+            string.IsNullOrWhiteSpace(ConsumerId) || ConsumerId.Length > MediaAnalysisContract.MaximumConsumerLength ||
+            ConsumerId.Any(char.IsControl) || Generation < 0 || string.IsNullOrWhiteSpace(RuntimeEpoch) ||
+            RuntimeEpoch.Length > 128)
+            throw new ArgumentException("Media analysis observation reference is invalid.");
+    }
+}
+
 public sealed record MediaAnalysisBegin(
     string Version, string JobId, string AssetId, string ConsumerId, long Generation,
     string RuntimeEpoch, MediaAnalysisState State, string Detail);
