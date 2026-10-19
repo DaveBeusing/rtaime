@@ -23,6 +23,29 @@ public sealed partial class ControlHostIpcServer
         SequencePreparationReference Reference, Identity AuthorityStateId,
         Revision AuthorityRevision, ulong CatalogueRevision);
 
+    /// <summary>
+    /// Release optional native staging when this ControlHost lifetime ends.
+    /// A bounded failure never claims that Runtime released native ownership;
+    /// Runtime shutdown/quarantine remains responsible for final cleanup.
+    /// </summary>
+    private async ValueTask DrainPreparedSequenceAsync()
+    {
+        if (_preparedSequence is not { } staged || !_runtimeTransport.IsConnected) return;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            var result = await _runtimeTransport.CancelSequencePreparationAsync(
+                staged.Reference, timeout.Token).ConfigureAwait(false);
+            if (result.State == "CANCELED") _preparedSequence = null;
+        }
+        catch (Exception error) when (error is IOException or TimeoutException or
+            OperationCanceledException or InvalidOperationException or NotSupportedException)
+        {
+            // The native Runtime ledger retains uncertain ownership; there is
+            // no optimistic release or silent successful cancellation.
+        }
+    }
+
     private async ValueTask<WireEnvelope> RunSequencePreparationAsync(
         WireEnvelope message, CancellationToken cancellationToken)
     {
