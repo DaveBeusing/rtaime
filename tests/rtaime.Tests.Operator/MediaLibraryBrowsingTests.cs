@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using System.Windows.Threading;
 using rtaime.Client;
@@ -119,6 +120,84 @@ public sealed class MediaLibraryBrowsingTests
 		Assert.Contains("scrubbing unsupported", preview.Status);
 		preview = await hover.RequestAsync(item with { IsOnline = false });
 		Assert.Null(preview!.Thumbnail); Assert.Contains("OFFLINE", preview.Status);
+	}
+
+	private static MediaPoolItemViewModel AnalysisItem(double seconds = 12)
+	{
+		var id = Guid.NewGuid().ToString("D");
+		return Item(seconds, key: "clip:" + id) with { ReferenceId = id };
+	}
+
+	[Fact]
+	public void Independent_scrub_position_is_clamped_to_known_asset_duration()
+	{
+		var duration = TimeSpan.FromSeconds(12);
+		Assert.Equal(0, MediaLibraryHoverPreview.MapPositionTicks(duration, -10));
+		Assert.Equal(TimeSpan.FromSeconds(3).Ticks, MediaLibraryHoverPreview.MapPositionTicks(duration, 0.25));
+		Assert.Equal(duration.Ticks - 1, MediaLibraryHoverPreview.MapPositionTicks(duration, 100));
+		Assert.Throws<ArgumentOutOfRangeException>(() => MediaLibraryHoverPreview.MapPositionTicks(duration, double.NaN));
+		Assert.False(MediaLibraryHoverPreview.CanAnalyze(Item(12)));
+		Assert.True(MediaLibraryHoverPreview.CanAnalyze(AnalysisItem()));
+		Assert.False(MediaLibraryHoverPreview.CanAnalyze(AnalysisItem() with { IsOnline = false }));
+		Assert.False(MediaLibraryHoverPreview.CanAnalyze(AnalysisItem() with { KnownDuration = null }));
+	}
+
+	[Fact]
+	public async Task Isolated_asset_scrub_returns_real_pts_and_correct_bgra_without_changing_monitor_image()
+	{
+		var catalog = new AnalysisCatalog();
+		var monitor = new DrawingImage(); monitor.Freeze();
+		var item = AnalysisItem() with { Thumbnail = monitor };
+		using var hover = new MediaLibraryHoverPreview(catalog);
+		var result = await hover.RequestAsync(item, 0.25);
+		Assert.NotNull(result);
+		Assert.Equal(TimeSpan.FromSeconds(3).Ticks, result.RequestedTicks);
+		Assert.Equal(result.RequestedTicks + 400000, result.ActualTicks);
+		Assert.Contains("actual PTS", result.Status);
+		var bitmap = Assert.IsAssignableFrom<BitmapSource>(result.Thumbnail);
+		Assert.True(bitmap.IsFrozen);
+		Assert.Equal(MediaAnalysisContract.MaximumFrameWidth, bitmap.PixelWidth);
+		var pixel = new byte[4];
+		bitmap.CopyPixels(new Int32Rect(0, 0, 1, 1), pixel, 4, 0);
+		Assert.Equal(new byte[] { 34, 12, 240, 255 }, pixel);
+		item.SetScrubPreview(result.Thumbnail, result.RequestedTicks);
+		Assert.Same(result.Thumbnail, item.DisplayThumbnail);
+		Assert.Same(monitor, item.Thumbnail);
+		item.SetScrubPreview(null);
+		Assert.Same(monitor, item.DisplayThumbnail);
+		Assert.Equal(1, catalog.Begins);
+		Assert.Equal(1, catalog.Gets);
+		Assert.Equal(0, catalog.Cancels);
+	}
+
+	[Fact]
+	public async Task Superseded_scrub_cancels_old_job_and_never_publishes_its_frame()
+	{
+		var catalog = new AnalysisCatalog { BlockFirstGet = true };
+		var item = AnalysisItem();
+		using var hover = new MediaLibraryHoverPreview(catalog);
+		var first = hover.RequestAsync(item, 0.1);
+		await Until(() => catalog.Gets == 1);
+		var second = hover.RequestAsync(item, 0.8);
+		Assert.Null(await first.WaitAsync(TimeSpan.FromSeconds(5)));
+		var last = await second.WaitAsync(TimeSpan.FromSeconds(5));
+		Assert.NotNull(last);
+		Assert.Equal(TimeSpan.FromSeconds(9.6).Ticks, last.RequestedTicks);
+		Assert.NotNull(last.Thumbnail);
+		Assert.Equal(2, catalog.Begins);
+		Assert.Equal(1, catalog.Cancels);
+	}
+
+	[Fact]
+	public async Task Mismatched_frame_generation_is_rejected_and_cleanup_requested()
+	{
+		var catalog = new AnalysisCatalog { WrongGeneration = true };
+		using var hover = new MediaLibraryHoverPreview(catalog);
+		var result = await hover.RequestAsync(AnalysisItem(), 0.5);
+		Assert.NotNull(result);
+		Assert.Null(result.Thumbnail);
+		Assert.Contains("STALE", result.Status);
+		Assert.Equal(1, catalog.Cancels);
 	}
 
 	[Fact]
@@ -535,6 +614,57 @@ public sealed class MediaLibraryBrowsingTests
 			var child = VisualTreeHelper.GetChild(root, i); yield return child;
 			foreach (var descendant in Descendants(child)) yield return descendant;
 		}
+	}
+	private sealed class AnalysisCatalog : IMediaAssetCatalogClient
+	{
+		private MediaAnalysisRequest? _lastRequest;
+		private string? _firstJob;
+		public int Begins, Gets, Cancels;
+		public bool BlockFirstGet, WrongGeneration;
+		public ValueTask<MediaAnalysisBegin> BeginMediaAnalysisAsync(MediaAnalysisRequest request,
+			CancellationToken cancellationToken = default)
+		{
+			request.Validate();
+			Interlocked.Increment(ref Begins);
+			_lastRequest = request;
+			var job = Guid.NewGuid().ToString("D");
+			_firstJob ??= job;
+			return ValueTask.FromResult(new MediaAnalysisBegin(MediaAnalysisContract.Version, job,
+				request.AssetId, request.ConsumerId, request.Generation, "runtime-test",
+				MediaAnalysisState.Pending, "Admitted"));
+		}
+		public async ValueTask<MediaAnalysisObservation> GetMediaAnalysisAsync(MediaAnalysisJobRequest job,
+			CancellationToken cancellationToken = default)
+		{
+			Interlocked.Increment(ref Gets);
+			if (BlockFirstGet && job.JobId == _firstJob)
+				await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+			var request = _lastRequest!;
+			var frame = new byte[checked(request.Width * request.Height * 4)];
+			frame[0] = 240; frame[1] = 12; frame[2] = 34; frame[3] = 255;
+			return new MediaAnalysisObservation(MediaAnalysisContract.Version, job.JobId,
+				job.AssetId, job.ConsumerId, WrongGeneration ? job.Generation + 1 : job.Generation,
+				job.RuntimeEpoch, MediaAnalysisKind.Frame, MediaAnalysisState.Complete,
+				request.PositionTicks, request.PositionTicks + 400000, request.Width, request.Height,
+				frame, 0, 0, null, false, false, null, "Decoded frame");
+		}
+		public ValueTask<MediaAnalysisObservation> CancelMediaAnalysisAsync(MediaAnalysisJobRequest job,
+			CancellationToken cancellationToken = default)
+		{
+			Interlocked.Increment(ref Cancels);
+			return ValueTask.FromResult(new MediaAnalysisObservation(MediaAnalysisContract.Version, job.JobId,
+				job.AssetId, job.ConsumerId, job.Generation, job.RuntimeEpoch, MediaAnalysisKind.Frame,
+				MediaAnalysisState.Canceled, 0, null, 0, 0, null, 0, 0, null, false, true,
+				null, "Cancelled"));
+		}
+		public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
+			ValueTask.FromResult(MediaAssetCatalogSnapshot.Empty);
+		public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> paths,
+			CancellationToken cancellationToken = default) => throw new NotSupportedException();
+		public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId id, string path,
+			CancellationToken cancellationToken = default) => throw new NotSupportedException();
+		public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(MediaAssetId id,
+			CancellationToken cancellationToken = default) => throw new NotSupportedException();
 	}
 	private sealed class Catalog : IMediaAssetCatalogClient
 	{
