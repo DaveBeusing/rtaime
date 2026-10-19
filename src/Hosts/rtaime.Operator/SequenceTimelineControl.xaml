@@ -225,7 +225,7 @@
                                                         LostMouseCapture="OnClipCaptureLost">
                                                         <Grid ClipToBounds="True">
                                                             <TextBlock Text="{Binding AssetId}" Margin="7,1,7,0"
-                                                                FontSize="10" TextTrimming="CharacterEllipsis"
+                                                                FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis"
                                                                 Foreground="{DynamicResource OperatorTextBrush}" />
                                                             <local:SequenceWaveformGlyph
                                                                 Presentation="{Binding Waveform}" Height="22"
