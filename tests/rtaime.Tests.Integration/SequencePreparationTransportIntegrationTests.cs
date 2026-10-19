@@ -20,6 +20,17 @@ public sealed partial class ExternalControlIntegrationTests
             new(50, 1), [track], [clip], []);
     }
 
+    private static async Task CommitSequencePreparationAuthorityAsync(GrpcOperatorControlTransport transport)
+    {
+        var snapshot = await transport.GetSnapshotAsync();
+        var selected = new ProductionSourceId(Identity.Parse(snapshot.Sources[1].Id));
+        var result = await transport.SelectPreviewAsync(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                snapshot.Production.ProductionId, snapshot.Production.Revision), selected));
+        Assert.True(result.Accepted);
+        Assert.True(result.State.Revision.Value > 0);
+    }
+
     [Fact]
     public async Task Real_native_sequence_prepare_get_cancel_roundtrips_client_Control_and_Runtime_without_Program_mutation()
     {
@@ -27,6 +38,7 @@ public sealed partial class ExternalControlIntegrationTests
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
         await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
         await using var grpcTransport = fixture.CreateClient();
+        await CommitSequencePreparationAuthorityAsync(grpcTransport);
         var before = await grpcTransport.GetSnapshotAsync();
         var imported = await grpcTransport.ImportMediaAssetsAsync([asset.Path]);
         Assert.True(imported.Succeeded);
@@ -70,6 +82,7 @@ public sealed partial class ExternalControlIntegrationTests
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
         await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
         await using var external = fixture.CreateClient();
+        await CommitSequencePreparationAuthorityAsync(external);
         var imported = await external.ImportMediaAssetsAsync([asset.Path]);
         Assert.True(imported.Succeeded);
         var media = Assert.Single(imported.Snapshot.Assets);
