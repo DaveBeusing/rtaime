@@ -153,7 +153,9 @@ operation tags 114-119 and saved show format v3 are unchanged. Observer
 role may read current preparation observations; only Operator/Administrator
 may prepare/cancel. Old peers reject the unknown capability explicitly.
 
-A request contains only a saved sequence ID, exact authoring revision and
+Clients first read `SequencePreparationContext` to obtain the current
+saved sequence revision and RuntimeHost epoch. This is not a decoder readiness
+guarantee. A request contains only a saved sequence ID, exact authoring revision and
 previously observed RuntimeHost identity. It cannot supply file paths,
 source IDs, GPU resources or a production command. Control loads the
 canonical show and catalogue, validates all referenced assets, audio buses
