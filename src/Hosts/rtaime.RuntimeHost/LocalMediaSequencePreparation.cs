@@ -56,7 +56,8 @@ public sealed partial class LocalMediaDeckRuntimeService
     internal SequenceMediaPreparationReceipt PrepareSequenceMedia(
         PreparedExecutionContract execution,
         SequenceRuntimePositionMap map,
-        IReadOnlyList<SequenceMediaOwnerRequest> sources)
+        IReadOnlyList<SequenceMediaOwnerRequest> sources,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(execution);
         ArgumentNullException.ThrowIfNull(map);
@@ -91,7 +92,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                 {
                     // The current sequence's entire resource group has been charged
                     // before its first path is examined or native decoder is opened.
-                    staged.Add(OpenSequenceOwner(sources[encountered], tickets[encountered]));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    staged.Add(OpenSequenceOwner(sources[encountered], tickets[encountered], cancellationToken));
                 }
                 var ready = new PreparedSequenceMedia(execution.PreparedExecutionId,
                     execution.AuthoritySnapshot.Revision.Value, map.SequenceId,
@@ -102,7 +104,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     staged.Count, null);
             }
             catch (Exception exception) when (exception is IOException or InvalidDataException or
-                ArgumentException or InvalidOperationException or TimeoutException or OverflowException)
+                ArgumentException or InvalidOperationException or TimeoutException or OverflowException or OperationCanceledException)
             {
                 // Existing workers own the joined native cleanup. Retained leases or
                 // quarantined handles keep their charges through the same ledger.
@@ -164,8 +166,13 @@ public sealed partial class LocalMediaDeckRuntimeService
                     ended ? "Sequence decoder reached end of source." : "No prepared frame is due; do not block Program.");
                 return false;
             }
+            var maximumFrameAge = checked((long)(((Int128)TimeSpan.TicksPerSecond *
+                _format.FrameRate.Denominator + _format.FrameRate.Numerator - 1) /
+                _format.FrameRate.Numerator));
             if (selected.Generation != owner.Decode.Snapshot.Generation ||
                 selected.Frame.Video.SourceId != source ||
+                selected.PresentationTicks > targetTicks ||
+                targetTicks - selected.PresentationTicks >= maximumFrameAge ||
                 selected.Frame.Audio is { } audio &&
                     audio.Timing.PresentationTimestamp != selected.Frame.Video.Timing.PresentationTimestamp)
             {
@@ -318,7 +325,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     }
 
     private SequenceMediaDecodeOwner OpenSequenceOwner(SequenceMediaOwnerRequest request,
-        LocalMediaResourceLedger.LocalMediaResourceTicket ticket)
+        LocalMediaResourceLedger.LocalMediaResourceTicket ticket, CancellationToken cancellationToken)
     {
         FileStream? lockedIdentity = null;
         LocalMediaFileSource? nativeSource = null;
@@ -345,6 +352,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 int count;
                 while ((count = lockedIdentity.Read(scratch)) > 0)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (deadline.Elapsed > TimeSpan.FromSeconds(5))
                         throw new IOException("Sequence source identity verification exceeded its five-second budget.");
                     hash.AppendData(scratch, 0, count);
@@ -353,6 +361,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     .Equals(request.FingerprintSha256, StringComparison.OrdinalIgnoreCase))
                     throw new IOException("The local file no longer matches the saved sequence fingerprint.");
             }
+            cancellationToken.ThrowIfCancellationRequested();
             var opened = _provider.TryOpen(fullPath, request.SourceId, request.AssetId);
             if (opened.Source is null)
                 throw new IOException(opened.Failure?.Message ?? "Native decoder was not available.");
@@ -367,6 +376,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (!decode.WaitForPreroll(TimeSpan.FromSeconds(10)) ||
                 decode.Snapshot.Failure is not null)
                 throw new IOException(decode.Snapshot.Failure?.Message ?? "Sequence decoder preroll timed out.");
+            cancellationToken.ThrowIfCancellationRequested();
             var owner = new SequenceMediaDecodeOwner(request, lockedIdentity, decode, ticket);
             lockedIdentity = null;
             decode = null;
