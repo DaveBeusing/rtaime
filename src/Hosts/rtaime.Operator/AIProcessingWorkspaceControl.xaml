@@ -152,6 +152,10 @@
                     <Border Style="{StaticResource OperatorPanel}" Padding="10">
                         <StackPanel>
                             <TextBlock Text="AUTHORITY / EXECUTION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                            <TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
+                            <TextBlock Text="{Binding AIEnabled, StringFormat=Effect requested: {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
+                            <TextBlock Text="{Binding AISynchronization}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
+                            <TextBlock Text="{Binding AIInferenceTime, StringFormat=Reported inference time: {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
                             <TextBlock Text="{Binding AIEffects.Execution}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding AIEffects.ResultEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,5" />
                             <TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" />
