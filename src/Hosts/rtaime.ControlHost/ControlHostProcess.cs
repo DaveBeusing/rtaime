@@ -67,6 +67,19 @@ public interface IControlRuntimeTransportSeam
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OutputCanvasActivationResult>(
             new NotSupportedException("Runtime output mapping evidence is unavailable."));
+    ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
+        SequenceRuntimePrepareCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequencePreparationStatus>(
+            new NotSupportedException("Runtime sequence preparation is unavailable."));
+    ValueTask<SequencePreparationStatus> GetSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequencePreparationStatus>(
+            new NotSupportedException("Runtime sequence preparation observation is unavailable."));
+    ValueTask<SequencePreparationStatus> CancelSequencePreparationAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequencePreparationStatus>(
+            new NotSupportedException("Runtime sequence preparation cancellation is unavailable."));
+
 	ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
 	ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaSourceDiscoverySnapshot>(
