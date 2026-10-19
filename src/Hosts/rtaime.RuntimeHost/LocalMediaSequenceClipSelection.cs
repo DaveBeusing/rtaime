@@ -30,8 +30,10 @@ public sealed partial class LocalMediaDeckRuntimeService
     /// offset reuse one lease, not another decoder or a second read.
     ///
     /// All caller buffers are bounded and owned outside the Runtime boundary.
-    /// On rejection, no source frames are consumed. The acquired leases are
-    /// an observation only: the eventual sink must recheck their generation
+    /// Invalid clip bindings are rejected before decoder reads. If a native
+    /// frame-set read subsequently fails, acquired leases are released and no
+    /// partial result is published; consumed frames are not rewound.
+    /// The acquired leases are observations only: the sink rechecks generation
     /// and have separate Control-authorized production execution.
     /// </summary>
     internal bool TryTakeSequenceClipFrameSet(
@@ -73,6 +75,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
 
             var count = 0;
+            var accepted = false;
+            try
+            {
             for (var index = 0; index < clips.Length; index++)
             {
                 var clip = clips[index];
@@ -163,7 +168,14 @@ public sealed partial class LocalMediaDeckRuntimeService
 
             ownerCount = count;
             failure = null;
+            accepted = true;
             return true;
+            }
+            finally
+            {
+                if (!accepted)
+                    clipOwnerIndices[..clips.Length].Fill(-1);
+            }
         }
     }
 }
