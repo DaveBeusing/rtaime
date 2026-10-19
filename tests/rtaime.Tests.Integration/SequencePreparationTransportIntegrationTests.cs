@@ -2,6 +2,7 @@
 using Grpc.Core;
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.Core;
 using rtaime.ControlHost;
 using rtaime.Media.Contracts;
 using Xunit;
