@@ -49,11 +49,14 @@ public sealed record MediaPoolItemViewModel(
 {
 	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
 	private ImageSource? _scrubFrame;
+	internal ImageSource? ScrubFrame => _scrubFrame;
+	internal long? ScrubRequestedTicks { get; private set; }
 	public ImageSource? DisplayThumbnail => _scrubFrame ?? Thumbnail;
 	public string ScrubPositionLabel { get; private set; } = string.Empty;
 	internal void SetScrubPreview(ImageSource? frame, long? requestedTicks = null)
 	{
 		_scrubFrame = frame;
+		ScrubRequestedTicks = requestedTicks;
 		ScrubPositionLabel = requestedTicks is { } ticks
 			? new TimeSpan(ticks).ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture)
 			: string.Empty;
