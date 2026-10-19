@@ -170,7 +170,14 @@ The staging operation has its own serial Control gate and a separate
 bounded Runtime-IPC request lane: neither the global Control mutation gate
 nor the ordinary Program/control IPC request gate is held during native
 fingerprint verification and preroll. Control rechecks saved and production revisions
-after Runtime confirms preparation and cancels stale work. RuntimeHost
+after Runtime confirms preparation and cancels stale work. A subsequent
+Get also compares the original catalogue revision: removing or relinking
+an asset makes the prepared native decoder group STALE and requires
+confirmed cancellation, even when authoring and production are unchanged.
+A committed production can legitimately have initial revision zero;
+this state is accepted only when both hosts agree on its exact authority
+identity and revision, with a separate positive preparation generation.
+RuntimeHost
 validates its epoch and the currently committed production authority,
 reserves via the existing global ledger, opens/prerolls native owners,
 and returns only identity/generation/resource count and typed status.
