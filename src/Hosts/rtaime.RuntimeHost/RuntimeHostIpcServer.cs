@@ -663,14 +663,19 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
                 var begin = request.Payload.Deserialize<WireAnalysisBegin>(Wire.JsonOptions)
                     ?? throw new InvalidDataException("Analysis begin request is required.");
                 var started = deck.BeginAnalysis(begin.Request, begin.FileIdentity, begin.Path);
-                return Success(request, request.MessageType + ".response", started);
+                return Success(request, request.MessageType + ".response", started with {
+                    ObservationEndpoint = started.ObservationToken is null ? null : _endpoint + ".analysis"
+                });
             }
             var jobId = request.Payload.GetProperty("jobId").GetString()
                 ?? throw new InvalidDataException("Analysis job identity is required.");
             var observation = request.MessageType.EndsWith(".cancel", StringComparison.Ordinal)
                 ? deck.CancelAnalysis(jobId) : deck.GetAnalysis(jobId);
             observation.Validate();
-            return Success(request, request.MessageType + ".response", observation);
+            // Raw frame bytes use the observations-only pipe, never management envelopes.
+            var management = observation.Kind == MediaAnalysisKind.Frame
+                ? observation with { RgbaPixels = null } : observation;
+            return Success(request, request.MessageType + ".response", management);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidDataException or InvalidOperationException or IOException)
         {
