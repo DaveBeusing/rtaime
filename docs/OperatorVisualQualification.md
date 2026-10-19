@@ -198,6 +198,24 @@ Physical matrix results must be recorded with Windows build, adapter/driver, mon
 
 Windows software-adapter evidence: [Required gates run 38292301980](https://github.com/DaveBeusing/rtaime/actions/runs/38292301980), source `fcc4f0db23c70558e3ce3bc9286ad0403109d659`, SDK 10.0.401. CI's focused qualification passed 34/34, including the real primary/secondary-window lifetime; the complete Operator suite passed 229/229. All three productive control windows reported eight targets created/eight released, three device generations, and successful native BGRA8 red-pixel readback both initially and after injected device restoration. The injected 100/125/150/200% target matrix and exact three-retry exhaustion also passed. The later show-template integration step failed the separate AUX active-confirmation prerequisite; these results do not constitute a complete Required Gates pass. Final candidate status is recorded on the relevant pull request's exact head.
 
+## Cross-feature integration and review limits
+
+The [shared Operator experience qualification](OperatorExperienceIntegrationQualification.md)
+extends the **same** productive `OperatorXamlStartupTests` STA
+Application/Dispatcher with `OperatorExperienceIntegrationQualification`.
+The check retains single ViewModel/monitoring/Inspector/Health owners while
+switching Sequence/legacy timeline, OUTPUTS canvas and AI workspaces,
+and verifies that disconnected editing and CUT remain unauthorized.
+It uses actual compiled WPF controls, but is not a connected sequence
+Preview pixel capture or a human visual sign-off.
+
+Existing 1920×1080–960×540 logical and injected
+100/125/150/200% matrices, five LIVE and twenty owned-window review
+images, resource and focus tests are still required. No existing STA
+deadline, GPU allocation bound or action-authorization assertion is relaxed.
+Physical mixed-monitor DPI, IME/screen reader, contrast/text review and
+native media scan-out remain **UNVERIFIED** without retained direct evidence.
+
 ## Combined workspace regression evidence
 
 `OperatorCombinedVisualQualification.VerifyWindowAsync` runs inside the existing real

@@ -105,6 +105,10 @@ The capability table above describes existing implementation.
 The [design contract](docs/OperatorExperienceDesign.md) defines the concrete LIVE
 composition and compact acceptance; the [roadmap](docs/OperatorExperienceRoadmap.md)
 defines domain ownership/dependencies and the shared integration map.
+The [joint Operator integration qualification](docs/OperatorExperienceIntegrationQualification.md)
+records what the merged capabilities actually prove together, along with
+unverified sequence Preview/Take, physical display, accessibility and release
+evidence. A feature merge does not imply an approved production release.
 Implementation approval is separate from compatibility, security, codec/hardware
 qualification and release acceptance. Current authority, finite resources and
 saved-production/layout compatibility remain binding.

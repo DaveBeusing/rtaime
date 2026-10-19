@@ -17,6 +17,12 @@ Independent analysis/scrubbing, real multitrack sequences/editing, Preview shutt
 are approved **TO IMPLEMENT**. This contract defines executable acceptance targets;
 documentation approval is not feature completion or visual/hardware/release acceptance. The historical design-foundation source was `7bd13506272dec071bccda23beb767da44562fac`; the [current reviewed baseline](OperatorExperienceScope.md#status-vocabulary-and-delivery-ownership) is recorded separately. Implementation must recheck the current master, relevant branches and pull requests before changing anything.
 
+The [shared integration qualification](OperatorExperienceIntegrationQualification.md)
+tracks the concrete merged Operator feature owners, executable real-window and
+connected-host journeys, and remaining actual-output, visual-review and
+physical qualifications. It does not alter this accepted design direction
+or upgrade unverified source/display evidence to an approval.
+
 Precedence is explicit:
 
 1. Approved product scope, architecture, contracts and [repository governance](Governance/RepositoryGovernance.md).

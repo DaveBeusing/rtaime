@@ -18,6 +18,20 @@ do not establish new human/physical acceptance.
 
 Before subsequent implementation, inspect current master, relevant remote branches and all applicable open/closed pull requests; continue usable work instead of duplicating it. Start a new technical branch only from current master when no reusable work exists. Preserve [repository governance](Governance/RepositoryGovernance.md), [versioning](Versioning.md), the existing five Required Gates and subsystem authority. Documentation changes do not allocate a new product version or change layout/production schemas.
 
+## Shared integration status — 2026-10-19
+
+The eleven approved feature dependencies are present on the reviewed master
+`c250f27b091079a19a8d045646d6b46e1930de51`, including the formerly
+independent Sequence Editor, native Shuttle, frame composition and Output
+Canvas/AI workspaces. **Implementation is not joint qualification.**
+The [combined evidence register](OperatorExperienceIntegrationQualification.md)
+separates actual Client/Control/Runtime and WPF test coverage, incomplete
+sequence Preview/Program sink and Take, required final-head gates, human
+visual review, physical mixed-DPI and hardware/long-soak acceptance.
+Source-bound PR #311 first repairs the failing integrated sequence test
+syntax before adding shared journeys and review evidence. The baseline
+Required Gates failure is not a reason to relax test/resource limits.
+
 ## Capability and document ownership
 
 “Existing” below means present in the reviewed repository path/documentation. It does not mean complete visual acceptance, physical support or production readiness. Revalidate the relevant path when implementation begins.

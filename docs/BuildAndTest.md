@@ -452,6 +452,27 @@ dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configura
 
 Required Gates retains existing architecture, failure, integration, visual and packaged lifecycle qualifications. The new real-window assertions run inside the existing STA MainWindow qualification, including compact/injected DPI scales. See [Show checks and activity](ShowPreflightAndActivity.md) for evidence and authority limits.
 
+## Integrated Operator journey qualification
+
+The [shared evidence register](OperatorExperienceIntegrationQualification.md)
+tracks the already merged experience domains and distinguishes native
+analysis/authoring/shuttle staging from a connected sequence Preview/Take.
+After the canonical pinned-SDK Release build, run:
+
+```powershell
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~Operator_experience_import_analyze_multitrack_save_prepare_shuttle_preserves_Program_authority|FullyQualifiedName~SequenceFrameCompositionIntegrationTests"
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests"
+```
+
+The connected journey uses an actual imported local MP4, bounded independent
+RGBA analysis, a persisted four-track Sequence revision, two native decoder
+source offsets and the governed shuttle. It asserts that Program remains
+unchanged and the sequence output is still unavailable. The new
+cross-workspace ownership check runs inside the **existing** real-window
+STA fixture; it does not create another WPF Application or increase its
+lifetime budget. These checks supplement the full solution and five
+Required Gates at the same final SHA, not replace them.
+
 ## Combined Operator visual evidence
 
 The existing `OperatorXamlStartupTests` filter now includes the 40-case rendered
