@@ -51,6 +51,11 @@ public static class OutputCanvasModel
                 Error("canvas.crop", path, "Crop must have positive finite area inside normalized source edges [0,1].");
             if (s.Destination is null || !OutputCanvasGeometry.IsValid(s.Destination))
                 Error("canvas.quad", path, "Destination must be finite, convex, clockwise, nonsingular and within the coordinate bound.");
+            if (s.EdgeBlend is { } blend &&
+                (blend.Curve is not ("linear" or "smoothstep") ||
+                 !EdgeIsValid(blend.Left) || !EdgeIsValid(blend.Top) ||
+                 !EdgeIsValid(blend.Right) || !EdgeIsValid(blend.Bottom)))
+                Error("canvas.edge_blend", path, "Edge blend requires finite normalized widths in [0,0.5] and an accepted curve.");
         }
         if (model.Bindings.Select(b => (b.ProviderId, b.TargetId)).Distinct().Count() != model.Bindings.Length)
             Error("canvas.target_conflict", "bindings", "A provider target may be assigned only once, including disabled bindings.");
@@ -66,6 +71,8 @@ public static class OutputCanvasModel
         }
         return new(model.ConfigurationId, model.EditRevision, issues.ToArray());
     }
+
+    private static bool EdgeIsValid(double value) => double.IsFinite(value) && value >= 0 && value <= 0.5;
 
     public static OutputCanvasConfiguration Apply(OutputCanvasConfiguration current, OutputCanvasSaveRequest request)
     {

@@ -553,6 +553,16 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 		NamedPipeOperatorControlTransport.DecodeExternalShowControl((await ExecuteShowRequestAsync(request => request.AcknowledgeShowControlRecovery = new RecoveryAcknowledgementRequest { Resume = resume }, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 
 
+    public async ValueTask<OutputCanvasActivationResult> GetOutputCanvasEvidenceAsync(
+        CancellationToken cancellationToken = default) =>
+        OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(
+            (await ExecuteShowRequestAsync(r => r.GetOutputCanvasEvidence = new EmptyRequest(), cancellationToken)
+                .ConfigureAwait(false)).PayloadJson.ToStringUtf8());
+    public async ValueTask<OutputCanvasActivationResult> ActivateOutputCanvasAsync(
+        OutputCanvasActivationRequest request, CancellationToken cancellationToken = default) =>
+        OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(
+            (await ExecuteShowRequestAsync(r => r.ActivateOutputCanvas = Raw(request), cancellationToken)
+                .ConfigureAwait(false)).PayloadJson.ToStringUtf8());
     public async ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
         OutputCanvasJson.ReadResponse<OutputCanvasSnapshot>((await ExecuteShowRequestAsync(r => r.GetOutputCanvas = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.ToStringUtf8());
     public async ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>

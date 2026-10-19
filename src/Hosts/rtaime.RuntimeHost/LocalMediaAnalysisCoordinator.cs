@@ -314,7 +314,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             try { source?.Dispose(); }
             catch (Exception)
             {
-                ticket?.Quarantine(source ?? job);
+                ticket?.Quarantine((object?)source ?? job);
                 acknowledged = false;
                 observation = Finished(job, MediaAnalysisState.Unavailable,
                     "Native decoder cleanup was not confirmed. Runtime restart is required.",
@@ -431,7 +431,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         var rate = probe.VideoFormat.FrameRate;
         var last = Math.Max(0, checked((long)decimal.Ceiling(
             (decimal)probe.Duration.Ticks * rate.Numerator /
-            (TimeSpan.TicksPerSecond * (decimal)rate.Denominator)) - 1);
+            (TimeSpan.TicksPerSecond * (decimal)rate.Denominator)) - 1));
         var target = checked((long)decimal.Floor((decimal)ticks * rate.Numerator /
             (TimeSpan.TicksPerSecond * (decimal)rate.Denominator)));
         return Math.Clamp(target, 0, last);

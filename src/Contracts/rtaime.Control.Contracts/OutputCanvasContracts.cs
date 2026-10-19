@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 namespace rtaime.Control.Contracts;
 
@@ -24,8 +25,12 @@ public sealed record OutputCanvasQuad(OutputCanvasPoint TopLeft, OutputCanvasPoi
         new(new(x, y), new(x + width, y), new(x + width, y + height), new(x, y + height));
 }
 public sealed record OutputCanvasInput(string? SourceId = null, string? BusRoleId = null);
+public sealed record OutputCanvasEdgeBlend(double Left, double Top, double Right, double Bottom,
+    string Curve = "smoothstep");
 public sealed record OutputCanvasSurface(Guid SurfaceId, Guid CanvasId, OutputCanvasInput Input,
-    int ZOrder, OutputCanvasCrop Crop, OutputCanvasQuad Destination, bool Enabled = true);
+    int ZOrder, OutputCanvasCrop Crop, OutputCanvasQuad Destination, bool Enabled = true,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    OutputCanvasEdgeBlend? EdgeBlend = null);
 public sealed record OutputCanvasBinding(Guid OutputId, Guid CanvasId, string ProviderId,
     string TargetId, string ProfileId, bool Enabled = true);
 public sealed record OutputCanvasConfiguration(string Version, Guid ConfigurationId, ulong EditRevision,
@@ -53,3 +58,28 @@ public sealed record OutputCanvasSaveRequest(string Version, Guid TransactionId,
     Guid ConfigurationId, ulong ExpectedSavedRevision, OutputCanvasEdit[] Edits);
 public sealed record OutputCanvasSaveResult(bool Saved, ulong SavedRevision,
     OutputCanvasConfiguration Configuration, OutputCanvasValidation Validation, bool Replayed = false);
+
+
+// Activation is an explicit production operation separate from durable Save.
+public sealed record OutputCanvasActivationRequest(
+    Guid ConfigurationId, ulong ExpectedSavedRevision, bool Enabled = true);
+
+// Control binds the saved revision and the currently observed Runtime epoch.
+// A Runtime replacement or execution revision change must reject preparation.
+public sealed record OutputCanvasRuntimeRequest(
+    OutputCanvasConfiguration Configuration,
+    ulong ExpectedExecutionRevision,
+    string ExpectedRuntimeHostInstanceId,
+    bool Enabled = true);
+
+public sealed record OutputCanvasActivationResult(
+    ulong? ActiveRenderRevision,
+    ulong? PendingRenderRevision,
+    string ActivationState,
+    string? FailureCode = null,
+    string? AppliedSourceId = null,
+    string? TargetId = null,
+    int TargetWidth = 0,
+    int TargetHeight = 0,
+    ulong? RuntimeExecutionRevision = null,
+    ulong? LastRenderedSequence = null);

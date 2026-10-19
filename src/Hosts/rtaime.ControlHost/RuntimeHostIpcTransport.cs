@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.IO.Pipes;
 using System.Text.Json;
 using rtaime.Core;
+using rtaime.Control.Contracts;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
@@ -422,6 +423,23 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		lock (_gate) _providers = mapped;
 		return Array.AsReadOnly(mapped);
 	}
+
+
+    public async ValueTask<OutputCanvasActivationResult> ActivateOutputMappingAsync(
+        OutputCanvasRuntimeRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(
+            "runtime.output.mapping.activate", request, cancellationToken).ConfigureAwait(false);
+        return OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(response.Payload.GetRawText());
+    }
+
+    public async ValueTask<OutputCanvasActivationResult> GetOutputMappingSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(
+            "runtime.output.mapping.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+        return OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(response.Payload.GetRawText());
+    }
 
 	public async ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
 	{

@@ -694,6 +694,16 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 	}
 
 
+    public async ValueTask<OutputCanvasActivationResult> GetOutputCanvasEvidenceAsync(
+        CancellationToken cancellationToken = default) =>
+        OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(
+            (await ExchangeAsync("control.output.canvas.evidence.get", new { }, cancellationToken)
+                .ConfigureAwait(false)).Payload.GetRawText());
+    public async ValueTask<OutputCanvasActivationResult> ActivateOutputCanvasAsync(
+        OutputCanvasActivationRequest request, CancellationToken cancellationToken = default) =>
+        OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(
+            (await ExchangeAsync("control.output.canvas.activate", request, cancellationToken)
+                .ConfigureAwait(false)).Payload.GetRawText());
     public async ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
         OutputCanvasJson.ReadResponse<OutputCanvasSnapshot>((await ExchangeAsync("control.output.canvas.get", new { }, cancellationToken).ConfigureAwait(false)).Payload.GetRawText());
     public async ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>

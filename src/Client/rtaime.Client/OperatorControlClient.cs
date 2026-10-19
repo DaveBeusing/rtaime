@@ -1207,6 +1207,14 @@ public interface IOperatorControlTransport
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 
 
+    ValueTask<OutputCanvasActivationResult> GetOutputCanvasEvidenceAsync(
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasActivationResult>(
+            new NotSupportedException("Output mapping evidence is unavailable on this peer."));
+    ValueTask<OutputCanvasActivationResult> ActivateOutputCanvasAsync(
+        OutputCanvasActivationRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasActivationResult>(
+            new NotSupportedException("Output mapping activation is unavailable on this peer."));
     ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OutputCanvasSnapshot>(new NotSupportedException("Output canvas configuration is unavailable on this peer."));
     ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>
@@ -1903,6 +1911,12 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         ObserveOperationAsync("CloseMediaDeckAsync", () => _transport.CloseMediaDeckAsync(cancellationToken));
 
 
+    public ValueTask<OutputCanvasActivationResult> GetOutputCanvasEvidenceAsync(
+        CancellationToken cancellationToken = default) =>
+        _transport.GetOutputCanvasEvidenceAsync(cancellationToken);
+    public ValueTask<OutputCanvasActivationResult> ActivateOutputCanvasAsync(
+        OutputCanvasActivationRequest request, CancellationToken cancellationToken = default) =>
+        _transport.ActivateOutputCanvasAsync(request, cancellationToken);
     public ValueTask<OutputCanvasSnapshot> GetOutputCanvasAsync(CancellationToken cancellationToken = default) =>
         _transport.GetOutputCanvasAsync(cancellationToken);
     public ValueTask<OutputCanvasValidation> ValidateOutputCanvasAsync(OutputCanvasConfiguration draft, CancellationToken cancellationToken = default) =>

@@ -75,7 +75,7 @@ Assert-Condition ($cuda -match 'cuMemcpyDtoH_v2\(ref byte destination') "CUDA P/
 Assert-Condition ($runtime -match 'public sealed class V1ProgramBoundaryResult : IDisposable') "Runtime Program boundaries must own disposable Program readback memory."
 Assert-Condition ($runtime -match 'ReadOnlyMemory<byte> ProgramPixels') "Runtime Program pixels must expose read-only leased memory."
 Assert-Condition ($runtime -match 'ProgramReadbackBufferCapacity\s*=\s*ProgramRecorder\.DefaultQueueCapacity \+ 3') "RuntimeHost readback capacity must cover bounded queue backlog, active recording write, current Program boundary and monitoring ownership."
-Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)' -and $runtime -notmatch '_gpu\.Readback\(output\)') "RuntimeHost Program hot path must use reusable leased readback rather than allocating compatibility readback."
+Assert-Condition ($runtime -match '_gpu\.RentReadback\(presentedOutput\)' -and $runtime -notmatch '_gpu\.Readback\(presentedOutput\)' -and $runtime -match 'var presentedOutput = mappedOutput \?\? output;') "RuntimeHost Program hot path must lease one bounded readback of the post-mapping output or original composite."
 Assert-Condition ($runtime -match 'GpuRecordingPayloadLease\(pixels\.Retain\(\)\)') "Recording handoff must retain Program readback ownership explicitly."
 Assert-Condition ($runtime -match 'readback\.ActiveBuffers != 0') "Runtime shutdown must fail closed if Program readback leases remain active."
 Assert-Condition ($runtimeProcess -match 'using var boundary = runtime\.ProcessNextBoundary\(\)') "Production RuntimeHost loop must dispose each Program boundary deterministically."

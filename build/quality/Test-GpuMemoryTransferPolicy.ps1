@@ -49,7 +49,7 @@ Assert-Condition ($gpu -match '_reusableUploads\.Clear\(\)') "Provider stop/reco
 Assert-Condition ([Regex]::Matches($runtime, 'MaterializeReusable\(_gpu, timing\)').Count -ge 4) "RuntimeHost long-lived compositing layers must opt into reusable uploads."
 Assert-Condition ($runtime -match 'GpuMemoryTransfers\s*=>\s*_gpu\.MemoryTransferStatistics') "RuntimeHost must expose GPU transfer/pool evidence."
 Assert-Condition ($runtimeDiagnostics -match 'gpu\.transfer\.uploadBytes' -and $runtimeDiagnostics -match 'gpu\.transfer\.hostToDeviceBytes' -and $runtimeDiagnostics -match 'gpu\.transfer\.readbackBytes' -and $runtimeDiagnostics -match 'gpu\.uploadReuse\.surfaces' -and $runtimeDiagnostics -match 'gpu\.readback\.active' -and $runtimeDiagnostics -match 'gpu\.monitoringResources\.active') "Runtime support health diagnostics must publish logical/device transfer and pool-pressure evidence."
-Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)' -and $runtime -notmatch '_gpu\.Readback\(output\)') "Program hot path must retain the reusable host-readback path."
+Assert-Condition ($runtime -match '_gpu\.RentReadback\(presentedOutput\)' -and $runtime -notmatch '_gpu\.Readback\(presentedOutput\)' -and $runtime -match 'var presentedOutput = mappedOutput \?\? output;') "Program hot path must retain the reusable host-readback path for mapped and identity output."
 
 foreach ($testName in @(
 	'Static_source_reuses_one_uploaded_surface_across_frame_timings',

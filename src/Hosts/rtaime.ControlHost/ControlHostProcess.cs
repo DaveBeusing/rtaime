@@ -58,6 +58,15 @@ public interface IControlRuntimeTransportSeam
 
 	ValueTask ConnectAsync(CancellationToken cancellationToken = default);
 	ValueTask<IReadOnlyList<ProviderDescriptor>> GetProviderDescriptorsAsync(CancellationToken cancellationToken = default);
+
+    ValueTask<OutputCanvasActivationResult> ActivateOutputMappingAsync(
+        OutputCanvasRuntimeRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasActivationResult>(
+            new NotSupportedException("Runtime output mapping activation is unavailable."));
+    ValueTask<OutputCanvasActivationResult> GetOutputMappingSnapshotAsync(
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OutputCanvasActivationResult>(
+            new NotSupportedException("Runtime output mapping evidence is unavailable."));
 	ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
 	ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaSourceDiscoverySnapshot>(
