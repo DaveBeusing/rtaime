@@ -45,7 +45,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private OutputCanvasTargetChoice? _selectedTarget;
     private string _status = "Connect to ControlHost to read saved canvas configuration.";
     private string _resultDetail = "Local geometry is not Program output.";
-    private bool _busy, _disposed, _rebuilding, _savedConflict, _observing, _awaitingBoundary;
+    private bool _busy, _disposed, _rebuilding, _savedConflict, _observing, _awaitingBoundary, _saveOutcomeUnknown;
     private ulong? _validatedSavedRevision;
     private ulong? _requestedRevision;
     private Guid _pendingSaveTransaction;
@@ -68,8 +68,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ReloadCommand = new AsyncRelayCommand(ReloadAsync, () => _gateway is not null && !_busy);
         DiscardAndReloadCommand = new AsyncRelayCommand(() => ReloadAsync(discardDraft: true), () => _gateway is not null && !_busy);
         ValidateCommand = new AsyncRelayCommand(ValidateAsync, () => CanSubmit);
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => CanSubmit && IsDirty && !_savedConflict);
-        ApplyCommand = new AsyncRelayCommand(ApplyAsync, () => CanSubmit && !IsDirty && !_savedConflict &&
+        SaveCommand = new AsyncRelayCommand(SaveAsync, () => CanSubmit && IsDirty && !_savedConflict && !_saveOutcomeUnknown);
+        ApplyCommand = new AsyncRelayCommand(ApplyAsync, () => CanSubmit && !IsDirty && !_savedConflict && !_awaitingBoundary &&
             _validatedSavedRevision == _session?.Saved.EditRevision);
         DisableCommand = new AsyncRelayCommand(DisableAsync, () => CanSubmit &&
             (_evidence?.ActiveRenderRevision is not null || _awaitingBoundary));
@@ -120,6 +120,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) RaiseCommandState(); } }
     public bool IsDirty => _session?.IsDirty == true;
     public bool HasSavedConflict => _savedConflict;
+    public bool SaveOutcomeUnconfirmed => _saveOutcomeUnknown;
     public bool CanEdit => _session is not null && !_busy;
     public bool CanSubmit => _session is not null && !_busy && _gateway is not null &&
         _owner.IsConnected && !_owner.IsStale && !_owner.IsBusy &&
@@ -137,7 +138,9 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ? $"{evidence.TargetWidth}×{evidence.TargetHeight}" : "UNVERIFIED";
     public string AppliedSource => _evidence?.AppliedSourceId ?? "UNVERIFIED";
     public string RenderedSequence => _evidence?.LastRenderedSequence?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED";
-    public string EditingSafety => CanSubmit ? "CONTROL / RUNTIME AVAILABLE" :
+    public string EditingSafety => _savedConflict ? "SAVED REVISION CHANGED · DISCARD & RELOAD REQUIRED" :
+        _saveOutcomeUnknown ? "SAVE UNCONFIRMED · RELOAD TO RECONCILE" :
+        CanSubmit ? "CONTROL / RUNTIME AVAILABLE" :
         _owner.IsStale ? "STALE AUTHORITY · EDIT DRAFT ONLY" :
         !_owner.IsConnected ? "OFFLINE · EDIT DRAFT ONLY" :
         _owner.IsBusy ? "CONTROL BUSY · EDIT DRAFT ONLY" : "SAFE READ-ONLY · NO APPLY";
@@ -236,7 +239,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         if (_disposed) return;
         if (property is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale))
         {
-            if (_owner.IsConnected && !_owner.IsStale && _session is null)
+            if (_owner.IsConnected && !_owner.IsStale)
                 _ = ReloadAsync();
             if (!_owner.IsConnected || _owner.IsStale)
             {
@@ -259,26 +262,45 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     internal async Task ReloadAsync(bool discardDraft)
     {
         if (_gateway is null || _busy || _disposed) return;
-        if (_session?.IsDirty == true && !discardDraft)
-        {
-            Status = "Unsaved geometry is retained. Use DISCARD & RELOAD to replace the draft.";
-            return;
-        }
         IsBusy = true;
         try
         {
             var snapshot = await _gateway.GetAsync();
             if (_disposed) return;
-            if (_session?.IsDirty == true && !discardDraft)
-                return;
-            _session = new OutputCanvasDraftSession(snapshot.Saved);
-            _savedConflict = false;
-            _validatedSavedRevision = null;
-            _pendingSaveTransaction = Guid.Empty;
-            Rebuild();
+            var retainsDraft = _session is { IsDirty: true } && !discardDraft;
+            if (retainsDraft && _session!.MatchesDraftSave(snapshot.Saved))
+            {
+                _session.ReplaceSaved(snapshot.Saved);
+                _savedConflict = false;
+                _saveOutcomeUnknown = false;
+                _pendingSaveTransaction = Guid.Empty;
+                _validatedSavedRevision = null;
+                Rebuild();
+                Status = "The saved revision now matches the previously unconfirmed local draft. Validate before APPLY.";
+            }
+            else if (retainsDraft)
+            {
+                _savedConflict = _session!.Saved.ConfigurationId != snapshot.Saved.ConfigurationId ||
+                    _session.Saved.EditRevision != snapshot.SavedRevision;
+                _saveOutcomeUnknown = false;
+                _validatedSavedRevision = null;
+                _pendingSaveTransaction = _savedConflict ? Guid.Empty : _pendingSaveTransaction;
+                Status = _savedConflict
+                    ? "Control saved revision changed. Your local draft is preserved but cannot be saved; explicitly DISCARD & RELOAD to review current authority."
+                    : "Saved revision verified; unsaved local geometry preserved. Validate and SAVE explicitly.";
+            }
+            else
+            {
+                _session = new OutputCanvasDraftSession(snapshot.Saved);
+                _savedConflict = false;
+                _saveOutcomeUnknown = false;
+                _validatedSavedRevision = null;
+                _pendingSaveTransaction = Guid.Empty;
+                Rebuild();
+                Status = "Saved canvas loaded. Editing changes only the local geometry draft.";
+            }
             try { SetEvidence(await _gateway.EvidenceAsync()); }
             catch (Exception ex) when (RemoteFailure(ex)) { _evidence = null; PublishEvidence(); }
-            Status = "Saved canvas loaded. Editing changes only the local geometry draft.";
             ResultDetail = $"{snapshot.AvailableTargets.Length} Control-authorized Runtime target(s); hardware qualification is independent.";
             RebuildTargets(snapshot.AvailableTargets);
         }
@@ -303,6 +325,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             if (!validation.IsValid)
             {
                 _validatedSavedRevision = null;
+                if (validation.Issues.Any(issue => issue.Code == "canvas.revision_conflict")) _savedConflict = true;
                 Status = $"Validation rejected {validation.Issues.Length} issue(s). Inspect the affected surface.";
             }
             else
@@ -321,14 +344,18 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
 
     public async Task SaveAsync()
     {
-        if (!CanSubmit || _gateway is null || _session is null || !IsDirty || _savedConflict) return;
+        if (!CanSubmit || _gateway is null || _session is null || !IsDirty || _savedConflict || _saveOutcomeUnknown) return;
         IsBusy = true;
         try
         {
             var validation = await _gateway.ValidateAsync(_session.Draft);
             if (_disposed) return;
             PublishIssues(validation.Issues);
-            if (!validation.IsValid) { Status = "Save blocked by Control validation."; return; }
+            if (!validation.IsValid)
+            {
+                if (validation.Issues.Any(issue => issue.Code == "canvas.revision_conflict")) _savedConflict = true;
+                Status = "Save blocked by Control validation."; return;
+            }
             _pendingSaveTransaction = _pendingSaveTransaction == Guid.Empty ? Guid.NewGuid() : _pendingSaveTransaction;
             var request = _session.CreateSaveRequest(_pendingSaveTransaction);
             var result = await _gateway.SaveAsync(request);
@@ -336,12 +363,15 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             PublishIssues(result.Validation.Issues);
             if (!result.Saved || !result.Validation.IsValid)
             {
+                if (result.Validation.Issues.Any(issue => issue.Code == "canvas.revision_conflict")) _savedConflict = true;
+                _pendingSaveTransaction = Guid.Empty;
                 Status = "Save rejected. Keep or explicitly discard this local draft.";
                 return;
             }
             _session.ReplaceSaved(result.Configuration);
             _validatedSavedRevision = result.SavedRevision;
             _pendingSaveTransaction = Guid.Empty;
+            _saveOutcomeUnknown = false;
             _savedConflict = false;
             _requestedRevision = null;
             Rebuild();
@@ -351,7 +381,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         catch (Exception ex) when (RemoteFailure(ex))
         {
             _validatedSavedRevision = null;
-            Status = "Save outcome unconfirmed. Reconcile saved revision before explicit retry: " + ex.Message;
+            _saveOutcomeUnknown = _pendingSaveTransaction != Guid.Empty;
+            Status = "Save outcome unconfirmed. RELOAD to reconcile before any retry: " + ex.Message;
         }
         finally { IsBusy = false; RaiseAll(); }
     }
@@ -739,8 +770,9 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     {
         _previewQuad = null;
         _validatedSavedRevision = null;
-        _savedConflict = false;
+        // A remote saved-revision conflict cannot be cleared by editing another local field.
         _pendingSaveTransaction = Guid.Empty;
+        _saveOutcomeUnknown = false;
         PublishIssues([]);
         Rebuild(canvasId, surfaceId);
         Status = explanation;
@@ -750,7 +782,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private void RaiseAll()
     {
         foreach (var name in new[] { nameof(IsDirty), nameof(CanEdit), nameof(CanSubmit),
-            nameof(HasSavedConflict), nameof(SavedRevision), nameof(DraftRevision),
+            nameof(HasSavedConflict), nameof(SaveOutcomeUnconfirmed), nameof(SavedRevision), nameof(DraftRevision),
             nameof(DraftSafety), nameof(EditingSafety), nameof(SelectedSurfaceIssue),
             nameof(VisibleSurfaces), nameof(SelectedBlendCurve), nameof(IsSurfaceEnabled) })
             OnPropertyChanged(name);
