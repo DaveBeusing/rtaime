@@ -2134,7 +2134,7 @@ public sealed class GpuProcessingProvider : IDisposable
     }
 }
 
-public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
+public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend, IGpuOutputMappingBackend
 {
     private const int MaxPooledAllocations = 8;
 
@@ -2258,6 +2258,40 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
             catch
             {
                 ReturnBuffer(output);
+                throw;
+            }
+        }
+    }
+
+    public void RenderOutputMapping(
+        SurfaceId outputSurfaceId,
+        VideoFormat format,
+        IReadOnlyList<GpuOutputMappingSurface> surfaces)
+    {
+        lock (_gate)
+        {
+            EnsureRunning();
+            if (_surfaces.ContainsKey(outputSurfaceId))
+                throw new InvalidOperationException("GPU output mapping surface already exists.");
+            if (surfaces.Count == 0 || surfaces.Count > 8)
+                throw new ArgumentException("Output mapping requires one to eight surfaces.", nameof(surfaces));
+
+            var target = RentBuffer(RgbaFrameBuffer.RequiredByteLength(format));
+            try
+            {
+                GpuOutputMappingRaster.Render(
+                    format, target, surfaces,
+                    id =>
+                    {
+                        if (!_surfaces.TryGetValue(id, out var allocation))
+                            throw new InvalidOperationException("Output mapping input surface was retired.");
+                        return allocation.Pixels;
+                    });
+                _surfaces.Add(outputSurfaceId, new Allocation(format, target));
+            }
+            catch
+            {
+                ReturnBuffer(target);
                 throw;
             }
         }
