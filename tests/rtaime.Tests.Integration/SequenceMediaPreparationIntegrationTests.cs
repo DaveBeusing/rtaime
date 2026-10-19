@@ -126,6 +126,23 @@ public sealed class SequenceMediaPreparationIntegrationTests
     }
 
     [Fact]
+    public void Cancelled_sequence_staging_returns_all_preopened_native_reservations()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, hash);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var refused = decks.PrepareSequenceMedia(execution, map, owners, cancelled.Token);
+        Assert.False(refused.Prepared);
+        Assert.Equal("runtime.sequence.prepare_failed", refused.Failure?.Code);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Equal(0, decks.ResourceSnapshot.QuarantinedOwners);
+    }
+
+    [Fact]
     public void Unbound_and_overbudget_sequence_sources_fail_before_native_open()
     {
         if (!OperatingSystem.IsWindows()) return;
