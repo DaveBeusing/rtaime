@@ -80,7 +80,7 @@ Assert-Condition ($performanceTests -match 'p95' -and $performanceTests -match '
 Assert-Condition ($graphicsTests -match 'Bitmap_transform_applies_rotation_anchor_and_crop_deterministically') "Rotation/crop golden integration coverage must remain present."
 Assert-Condition ($graphicsTests -match 'Color_grade_processing_node_executes_before_gpu_composite_and_preserves_alpha') "Color Grade pre-composite parity coverage must remain present."
 
-Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)') "Runtime must retain one post-composite Program readback source."
+Assert-Condition ($runtime -match 'var presentedOutput = mappedOutput \?\? output;' -and $runtime -match '_gpu\.RentReadback\(presentedOutput\)') "Runtime must retain one post-composite or post-mapping Program readback source."
 Assert-Condition ($runtime -match '_monitoringTap\.TryCapture' -and $runtime -match 'new GpuRecordingPayloadLease\(pixels\.Retain\(\)\)') "Monitoring and recording must continue from the same post-composite Program payload."
 
 Assert-Condition ($documentation -match 'fused multi-layer CUDA kernel: not introduced') "Documentation must record the fused-kernel decision."
