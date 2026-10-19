@@ -147,7 +147,8 @@ audio samples at the committed sink, or a live sequence Take.
 `rtaime.sequence-preparation.v1` is a separate, bounded observation and
 resource-staging capability. `SequencePreparationClient` uses the existing
 Named Pipe or authenticated external gRPC path. Additive Control operation
-tags 120-122 are Prepare, preparation Get and preparation Cancel; prior
+tags 120-123 are Prepare, preparation Get, preparation Cancel and read-only
+context discovery; prior
 operation tags 114-119 and saved show format v3 are unchanged. Observer
 role may read current preparation observations; only Operator/Administrator
 may prepare/cancel. Old peers reject the unknown capability explicitly.
