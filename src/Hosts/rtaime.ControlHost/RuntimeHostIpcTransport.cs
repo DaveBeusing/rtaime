@@ -1110,6 +1110,9 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
             "runtime.sequence.shuttle.command" or "runtime.sequence.shuttle.get"
             ? _sequencePreparationRequestGate : _requestGate;
         await gate.WaitAsync(timeout.Token).ConfigureAwait(false);
+        // A validated rejection returned by the bound RuntimeHost does not
+        // indicate a failed transport or invalidate the host's epoch.
+        var correlatedApplicationRejection = false;
 		try
 		{
 			await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -1159,6 +1162,19 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 				var response = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
 				if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal) || !string.Equals(response.CorrelationId, correlationId, StringComparison.Ordinal))
 					throw new InvalidDataException("RuntimeHost response correlation is invalid.");
+                if (string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+                {
+                    // Request/correlation and RuntimeHost handshake were already
+                    // verified. Malformed error payloads still fault the link;
+                    // coherent business denials keep the live IPC binding.
+                    var rejection = response.Payload.Deserialize<WireFailure>(Wire.JsonOptions);
+                    if (rejection is null ||
+                        string.IsNullOrWhiteSpace(rejection.Code) || rejection.Code.Length > 128 ||
+                        string.IsNullOrWhiteSpace(rejection.Message) || rejection.Message.Length > 512)
+                        throw new InvalidDataException("RuntimeHost returned a malformed rejection envelope.");
+                    MarkConnected(response.HostInstanceId);
+                    correlatedApplicationRejection = true;
+                }
 				EnsureNotError(response);
 				MarkConnected(response.HostInstanceId);
 				return response;
@@ -1172,7 +1188,11 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 			}
 			catch
 			{
-				MarkDisconnected();
+                // A business rejection must not force another ControlHost
+                // readiness rebind. Timeouts, damaged envelopes, mismatched
+                // epochs and genuine transport failures still disconnect.
+                if (!correlatedApplicationRejection)
+				    MarkDisconnected();
 				throw;
 			}
 		}
