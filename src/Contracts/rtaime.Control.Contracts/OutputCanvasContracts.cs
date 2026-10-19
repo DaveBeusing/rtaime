@@ -41,7 +41,8 @@ public sealed record OutputCanvasValidation(Guid ConfigurationId, ulong EditRevi
     public bool IsValid => Issues.Length == 0;
 }
 public sealed record OutputCanvasSnapshot(OutputCanvasConfiguration Saved, ulong SavedRevision,
-    ulong? ActiveRenderRevision, OutputCanvasTarget[] AvailableTargets, string ActivationState);
+    ulong? ActiveRenderRevision, OutputCanvasTarget[] AvailableTargets, string ActivationState,
+    OutputCanvasActivationResult? RuntimeEvidence = null);
 
 public enum OutputCanvasEditKind
 {
