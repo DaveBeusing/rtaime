@@ -22,9 +22,11 @@ internal static class OperatorDockingWindowTests
         var aiSurface = Assert.IsType<AIProcessingWorkspaceControl>(owner.FindName("AIProcessingWorkspace"));
         owner.Shell.SelectWorkspace("AI");
         owner.Shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
+        await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Visible, aiSurface.Visibility);
         Assert.Equal(Visibility.Collapsed, dockHost.Visibility);
         owner.Shell.SelectWorkspace("LIVE");
+        await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Collapsed, aiSurface.Visibility);
         Assert.Equal(Visibility.Visible, dockHost.Visibility);
         owner.Shell.SetDocking(OperatorDockLayout.Default);
