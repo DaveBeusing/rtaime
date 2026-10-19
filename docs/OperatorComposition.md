@@ -27,7 +27,7 @@ their models.
 | Viewer | PreviewViewer, ProgramViewer, OperatorMultiviewControl | OperatorComposition.Viewer is the existing OperatorMonitoringViewModel; MediaDeck retains the existing Preview transport |
 | Live | LiveSceneCueControl, LiveControlsControl, ShowControlCueStackControl | OperatorComposition.Live is the existing OperatorViewModel; MainWindow retains Rundown and ShowControl owners |
 | Timeline | MediaTimelineControl | OperatorComposition.Timeline is MediaDeck.Timeline; the existing MainWindow timeline selection/drop bridge remains |
-| Outputs | OutputRoutingHealthControl with OutputCanvasEditorControl and OutputCanvasStageSurface | OperatorComposition.Outputs remains the single OutputRoutingHealthViewModel owner, which owns one draft/evidence editor over the existing OperatorControlClient; no independent authority or polling loop |
+| Outputs | OutputRoutingHealthControl beside one OutputCanvasEditorControl with OutputCanvasStageSurface | OperatorComposition.Outputs remains the single OutputRoutingHealthViewModel owner, which owns one draft/evidence editor over the existing OperatorControlClient; no independent authority or polling loop |
 | Health | HealthCenterControl | OperatorComposition.Health is the existing HealthCenterViewModel |
 | AI | Current governed AI controls in MainWindow / Inspector | OperatorComposition.Ai is the same existing OperatorViewModel and commands; an independent AI workspace is approved future implementation, not a placeholder menu |
 
