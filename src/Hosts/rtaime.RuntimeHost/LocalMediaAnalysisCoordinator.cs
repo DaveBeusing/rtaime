@@ -314,7 +314,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             try { source?.Dispose(); }
             catch (Exception)
             {
-                ticket?.Quarantine(source ?? job);
+                ticket?.Quarantine((object?)source ?? job);
                 acknowledged = false;
                 observation = Finished(job, MediaAnalysisState.Unavailable,
                     "Native decoder cleanup was not confirmed. Runtime restart is required.",
