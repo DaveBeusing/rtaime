@@ -2,6 +2,8 @@
 using rtaime.Client;
 using rtaime.Control;
 using rtaime.Control.Contracts;
+using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Operator;
 using Xunit;
 
@@ -151,9 +153,60 @@ public sealed class SequenceTimelineEditorTests
         Assert.Equal(15 * 4800L, snap);
     }
 
+    [Fact]
+    public async Task New_sequence_and_two_video_two_audio_library_drops_are_saved_without_Program_take()
+    {
+        var backend = new RetainedSequenceTransport(Sequence());
+        var catalogue = new AuthoredAssetCatalog();
+        using var vm = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(backend), catalogue);
+        await vm.RefreshAsync();
+        await vm.CreateAsync();
+        Assert.Equal(4, vm.TrackCount);
+        Assert.Equal(6UL, vm.Snapshot!.AuthoringRevision);
+        Assert.Equal(2, vm.Sequence!.Tracks.Count(t => t.Kind == SequenceMediaKind.Video));
+        Assert.Equal(2, vm.Sequence.Tracks.Count(t => t.Kind == SequenceMediaKind.Audio));
+        Assert.Equal("UNAVAILABLE", vm.Snapshot.PlaybackState);
+        foreach (var track in vm.Sequence.Tracks)
+            await vm.InsertCatalogueAssetAsync(track.TrackId, catalogue.Asset.AssetId.Value.Value);
+        Assert.Equal(4, vm.Sequence!.Clips.Length);
+        Assert.Equal(10UL, vm.Snapshot!.AuthoringRevision);
+        Assert.All(vm.Sequence.Clips, clip => Assert.Equal(catalogue.Asset.FingerprintSha256,
+            clip.Media.FingerprintSha256));
+        Assert.Equal(4, backend.CommittedEdits);
+        Assert.Equal(0, backend.ProductionActions);
+        Assert.Null(vm.Snapshot.ActiveExecutionRevision);
+    }
+
+    private sealed class AuthoredAssetCatalog : IMediaAssetCatalogClient
+    {
+        public MediaAssetDescriptor Asset { get; } = new(
+            MediaAssetId.New(), MediaAssetOriginKind.LocalFile, @"C:\fixtures\multitrack.mp4",
+            "Reference clip", MediaContainerFormat.Mp4, MediaVideoCodec.H264,
+            MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32,
+            TimeSpan.FromSeconds(2), 128_000, new string('A', 64),
+            new UtcTimestamp(DateTimeOffset.UtcNow),
+            new UtcTimestamp(DateTimeOffset.UtcNow), MediaAssetAvailability.Online);
+
+        public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 2, [Asset]));
+        public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(IReadOnlyList<string> sourceLocations,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException());
+        public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(MediaAssetId assetId,
+            string sourceLocation, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException());
+        public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(MediaAssetId assetId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException());
+        public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException());
+    }
+
     private sealed class RetainedSequenceTransport(SequenceDefinition initial) : ISequenceAuthoringTransport
     {
         private SequenceDefinition _saved = initial;
+        private readonly Dictionary<Guid, SequenceDefinition> _additional = [];
         private readonly Stack<SequenceDefinition> _undo = [];
         private readonly Stack<SequenceDefinition> _redo = [];
         private ulong _revision = 5;
@@ -163,11 +216,14 @@ public sealed class SequenceTimelineEditorTests
         public int ProductionActions => 0;
         public ValueTask<SequenceList> ListSequencesAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new SequenceList(_revision,
-                [new(_saved.SequenceId, _saved.Name, _saved.FrameRate,
-                    _saved.Tracks.Length, _saved.Clips.Length)], SequenceContract.Version, "UNAVAILABLE"));
+                _additional.Values.Append(_saved).Select(s =>
+                    new SequenceSummary(s.SequenceId, s.Name, s.FrameRate,
+                        s.Tracks.Length, s.Clips.Length)).ToArray(),
+                SequenceContract.Version, "UNAVAILABLE"));
         public ValueTask<SequenceSnapshot> GetSequenceAsync(Guid sequenceId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new SequenceSnapshot(_revision, _saved,
-                null, "UNAVAILABLE", new(_saved.SequenceId, _revision, [])));
+            ValueTask.FromResult(new SequenceSnapshot(_revision,
+                _additional.TryGetValue(sequenceId, out var saved) ? saved : _saved,
+                null, "UNAVAILABLE", new(sequenceId, _revision, [])));
         public ValueTask<SequenceMutationResult> EditSequenceAsync(SequenceMutationRequest request, CancellationToken cancellationToken = default)
         {
             Attempts++;
@@ -175,13 +231,16 @@ public sealed class SequenceTimelineEditorTests
                 return ValueTask.FromResult(new SequenceMutationResult(false, _revision,
                     request.SequenceId, null,
                     [new("sequence.revision_conflict", "$", "Other authoring revision is active.")]));
-            var next = SequenceEdits.Apply(_saved, request.Edits!);
+            var source = _additional.TryGetValue(request.SequenceId, out var extra) ? extra : _saved;
+            var next = SequenceEdits.Apply(source, request.Edits!);
             var validated = SequenceModel.Validate(next);
             if (!validated.IsValid)
                 return ValueTask.FromResult(new SequenceMutationResult(false, _revision,
                     request.SequenceId, null, validated.Issues));
             _undo.Push(_saved); _redo.Clear();
-            _saved = next; ++_revision; CommittedEdits++;
+            if (_additional.ContainsKey(request.SequenceId)) _additional[request.SequenceId] = next;
+            else _saved = next;
+            ++_revision; CommittedEdits++;
             return ValueTask.FromResult(new SequenceMutationResult(true, _revision,
                 request.SequenceId, _saved, []));
         }
@@ -203,7 +262,16 @@ public sealed class SequenceTimelineEditorTests
             return ValueTask.FromResult(new SequenceMutationResult(true, _revision,
                 request.SequenceId, null, []));
         }
-        public ValueTask<SequenceMutationResult> SaveSequenceAsync(SequenceMutationRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromException<SequenceMutationResult>(new NotSupportedException("Use Edit for the selected saved sequence."));
+        public ValueTask<SequenceMutationResult> SaveSequenceAsync(SequenceMutationRequest request, CancellationToken cancellationToken = default)
+        {
+            if (request.Definition is not { } created || request.ExpectedRevision != _revision ||
+                _additional.ContainsKey(created.SequenceId))
+                return ValueTask.FromResult(new SequenceMutationResult(false, _revision,
+                    request.SequenceId, null, [new("sequence.revision_conflict", "$", "Invalid creation revision.")]));
+            _additional.Add(created.SequenceId, created);
+            ++_revision;
+            return ValueTask.FromResult(new SequenceMutationResult(true, _revision,
+                created.SequenceId, created, []));
+        }
     }
 }
