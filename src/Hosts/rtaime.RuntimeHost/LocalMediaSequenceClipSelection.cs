@@ -76,6 +76,7 @@ public sealed partial class LocalMediaDeckRuntimeService
 
             var count = 0;
             var accepted = false;
+            var framesAcquired = false;
             try
             {
                 for (var index = 0; index < clips.Length; index++)
@@ -161,11 +162,24 @@ public sealed partial class LocalMediaDeckRuntimeService
     
                 if (!TryTakeSequenceFrameSet(sequenceId, authoringRevision, position,
                     ownerRequests[..count], ownerFrames[..count], out failure))
-                {
-                    clipOwnerIndices[..clips.Length].Fill(-1);
                     return false;
+
+                framesAcquired = true;
+                for (var index = 0; index < clips.Length; index++)
+                {
+                    var frame = ownerFrames[clipOwnerIndices[index]];
+                    if (frame is null ||
+                        clips[index].Kind == SequenceMediaKind.Audio &&
+                            (frame.Frame.Audio is null || frame.Frame.AudioPayload.IsEmpty) ||
+                        clips[index].Kind == SequenceMediaKind.Video &&
+                            frame.Frame.RgbaPixels.IsEmpty)
+                    {
+                        failure = new("runtime.sequence.clip_payload_unavailable",
+                            "The prepared native source cannot supply the selected clip's real media payload.");
+                        return false;
+                    }
                 }
-    
+
                 ownerCount = count;
                 failure = null;
                 accepted = true;
@@ -174,7 +188,17 @@ public sealed partial class LocalMediaDeckRuntimeService
             finally
             {
                 if (!accepted)
+                {
+                    if (framesAcquired)
+                    {
+                        for (var index = 0; index < count; index++)
+                        {
+                            ownerFrames[index]?.Dispose();
+                            ownerFrames[index] = null;
+                        }
+                    }
                     clipOwnerIndices[..clips.Length].Fill(-1);
+                }
             }
         }
     }
