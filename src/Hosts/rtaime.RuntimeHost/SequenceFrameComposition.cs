@@ -251,9 +251,7 @@ internal sealed class SequenceFrameComposition
             var layer = videos[index];
             if (layer.ClipId == Guid.Empty || layer.OwnerIndex < 0 ||
                 layer.OwnerIndex >= frames.Length ||
-                (index > 0 && (layer.LayerOrder < videos[index - 1].LayerOrder ||
-                  layer.LayerOrder == videos[index - 1].LayerOrder &&
-                  layer.ClipId.CompareTo(videos[index - 1].ClipId) <= 0)) ||
+                (index > 0 && layer.LayerOrder < videos[index - 1].LayerOrder) ||
                 frames[layer.OwnerIndex]!.Frame.Video.Surface.Format != _format ||
                 frames[layer.OwnerIndex]!.Frame.RgbaPixels.Length !=
                     RgbaFrameBuffer.RequiredByteLength(_format))
