@@ -191,8 +191,6 @@
 				</StackPanel>
 			</Border>
 
-			<local:OutputCanvasEditorControl DataContext="{Binding CanvasEditor}" Margin="0,0,0,14" />
-
 			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 				<StackPanel>
 					<TextBlock Text="SYSTEM HEALTH" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
