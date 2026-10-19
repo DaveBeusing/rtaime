@@ -126,6 +126,28 @@ public sealed class SequenceFrameCompositionIntegrationTests
         Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
     }
 
+    [Theory]
+    [InlineData(4800)]
+    [InlineData(4004)]
+    [InlineData(9600)]
+    public void Sample_exact_linear_audio_crossfades_have_complementary_weights(long durationTicks)
+    {
+        var from = new SequenceAudioCompositionTrack(
+            Guid.NewGuid(), 0, MediaSourceId.New(), 0, durationTicks, FadeIn: false);
+        var to = from with { ClipId = Guid.NewGuid(), FadeIn = true };
+        for (long sampleTick = 0; sampleTick < durationTicks; sampleTick += 5)
+        {
+            var outgoing = SequenceFrameComposition.TransitionWeight(from, sampleTick);
+            var incoming = SequenceFrameComposition.TransitionWeight(to, sampleTick);
+            Assert.Equal(255, (int)outgoing + incoming);
+            if (sampleTick == 0)
+            {
+                Assert.Equal((byte)255, outgoing);
+                Assert.Equal((byte)0, incoming);
+            }
+        }
+    }
+
     [Fact]
     public void Native_generation_replacement_rejects_old_frame_group_without_gpu_or_audio_output()
     {
