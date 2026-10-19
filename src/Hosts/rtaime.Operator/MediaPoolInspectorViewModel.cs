@@ -48,6 +48,18 @@ public sealed record MediaPoolItemViewModel(
     string? PlaybackReadiness = null) : INotifyPropertyChanged
 {
 	public ImageSource? Thumbnail { get; internal set; } = Thumbnail;
+	private ImageSource? _scrubFrame;
+	public ImageSource? DisplayThumbnail => _scrubFrame ?? Thumbnail;
+	public string ScrubPositionLabel { get; private set; } = string.Empty;
+	internal void SetScrubPreview(ImageSource? frame, long? requestedTicks = null)
+	{
+		_scrubFrame = frame;
+		ScrubPositionLabel = requestedTicks is { } ticks
+			? new TimeSpan(ticks).ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture)
+			: string.Empty;
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayThumbnail)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScrubPositionLabel)));
+	}
 	public event PropertyChangedEventHandler? PropertyChanged;
 	// WPF indexes item containers by item hash. Image replacement and binding
 	// subscriptions must not change that hash while the item is in the view.
@@ -57,6 +69,7 @@ public sealed record MediaPoolItemViewModel(
 		if (ReferenceEquals(Thumbnail, image)) return;
 		Thumbnail = image;
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayThumbnail)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PreviewCapabilityLabel)));
 	}
 	public string DurationLabel =>
@@ -80,12 +93,13 @@ public sealed record MediaPoolItemViewModel(
 	public string ReadinessLabel => !IsOnline ? AvailabilityLabel : Kind == MediaPoolItemKind.Clip
         ? $"ONLINE · {PlaybackReadiness ?? (IsReady ? "PREPARED" : "UNVERIFIED · NOT READY")}"
         : IsReady ? "ONLINE · READY" : "ONLINE · NOT READY";
-	public string PreviewCapabilityLabel => MediaLibraryHoverPreview.Capability(this) switch
-	{
-		MediaHoverCapability.Offline => "Offline: hover preview unavailable.",
-		MediaHoverCapability.ExistingThumbnail => "Existing monitoring thumbnail only; independent scrubbing unsupported.",
-		_ => "No independent thumbnail or scrub capability is available."
-	};
+	public string PreviewCapabilityLabel => !IsOnline
+		? "Offline: refresh availability or relink this asset."
+		: MediaLibraryHoverPreview.CanAnalyze(this)
+			? "Independent local frame analysis on hover. Ctrl+Left/Right scrubs without seeking Preview or Program."
+			: Thumbnail is null
+				? "No time-indexed catalogue asset is available."
+				: "Existing monitoring thumbnail; not a time-indexed asset frame.";
 	public bool CanRevealInExplorer => Kind == MediaPoolItemKind.Clip && !string.IsNullOrWhiteSpace(LocalPath);
 }
 
