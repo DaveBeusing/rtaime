@@ -66,6 +66,7 @@ public partial class MainWindow : Window
 			PickGraphicsAsset,
 			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
+        SequenceTimeline = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(controlTransport), client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		Replay = new ReplayViewModel(client, MediaDeck);
@@ -174,6 +175,7 @@ public partial class MainWindow : Window
 		viewModel.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
+        SequenceTimeline = new SequenceTimelineEditorViewModel(null);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		Replay = new ReplayViewModel(client, MediaDeck);
@@ -295,6 +297,7 @@ public partial class MainWindow : Window
 	public ICommand OpenCommandPaletteCommand { get; }
 	public OperatorDockController Docking { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
+    public SequenceTimelineEditorViewModel SequenceTimeline { get; }
 
 	protected override void OnSourceInitialized(EventArgs e)
 	{
@@ -586,6 +589,7 @@ public partial class MainWindow : Window
 			await CommandPalette.FlushAsync();
 			_showReadinessWindow?.Close();
 			ShowReadiness.Dispose();
+            SequenceTimeline.Dispose();
 			CommandPalette.Dispose();
 			Docking.Dispose();
 			await Shell.SaveAsync();

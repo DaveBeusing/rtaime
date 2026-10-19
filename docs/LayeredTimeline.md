@@ -10,6 +10,99 @@
 
 The Operator timeline is a first-class production workspace for frame-accurate media navigation, cue operation and bounded editing. It is an editor/client surface only. Runtime remains the execution authority, and confirmed Media Deck and marker snapshots remain the source of truth for transport, IN/OUT and cue state.
 
+## Saved multitrack sequence editor
+
+The lower Operator workspace now provides two separate, clearly labeled
+presentations: **SEQUENCE EDITOR** for actual saved multitrack authoring, and
+**MEDIA DECK / CUES** for existing real A/B deck transport. SEQUENCE is the
+default lower view; the legacy view remains available without turning its
+reserved V2/A2/A3 rows into fictional sequence tracks. Neither UI becomes
+Runtime authority.
+
+The sequence view reads the actual
+`SequenceAuthoringClient` through the same named-pipe ControlHost
+transport as the Operator. `REFRESH` lists saved sequence IDs, `LOAD`
+retrieves the selected `SequenceSnapshot`, displays current authoring
+revision and validation issues and renders exactly its Video, Audio and
+Graphics track names, kinds, enabled/muted flags, ordered clips and
+catalogue asset identities. The existing authoring model preserves
+transition IDs and typed transition semantics; this UI sends real
+transitions rather than painting unrelated decorations.
+
+`+ NEW` persists a new empty four-track 50/1 sequence (two video and
+two audio tracks routed to the existing `program` bus) through the
+existing versioned Save transaction. Online Media Library clip
+payloads may be dragged onto a matching saved Video/Audio track;
+the editor rereads the authoritative asset catalogue for availability,
+fingerprint and duration, then submits a typed `InsertClip` edit
+at the local edit cursor. ControlHost performs its own independent
+catalogue and optimistic-revision validation before saving. Neither
+drag intent nor an imported clip enables playback or changes
+Program. No graphics assets or file paths are fabricated in the
+media-library import path.
+
+All edits are typed `SequenceMutationRequest` transactions with the
+currently read optimistic library revision. The UI supports select,
+Ctrl-toggle and Shift-range selection; local move/trim preview with mouse
+capture, Escape/capture-loss cancellation; Blade/Split at the rational
+edit cursor; Delete/Ripple; single-clip Copy/Paste with a fresh ID;
+Link/Unlink; Cut/Dissolve/Audio Crossfade; track enabled and mute;
+saved-library Undo/Redo; zoom, Fit, scroll, snap and visible-track
+paging. No edit is committed on pointer move, and failed edits do not
+optimistically update the saved sequence. Rejected revisions and
+source/reference conflicts are surfaced explicitly; retrying is a
+deliberate new decision after reload, not automatic replay.
+
+Authoring time remains `240000` integral ticks per second, with
+rational display and pointer quantization. Selection, cursor, zoom and
+drag are draft-only; backend undo/redo is **not** the legacy local
+cursor history. Editing a saved sequence never seeks Program, changes
+Runtime execution generation or activates a new sequence.
+
+The projection computes only the visible time interval and at most
+16 visible track rows / 256 clip rectangles; the horizontal zoom range
+is 1–64×. A stress test inspects 10,000 synthetic offscreen objects
+without realizing them in WPF. This is a viewport test, **not** an
+increase of the canonical 2,048-clip saved-library cap.
+
+### Source-backed audio waveform observation
+
+For a selected visible audio clip, `PCM` requests an actual native
+waveform through the existing independently admitted
+`IMediaAssetCatalogClient` → ControlHost → Runtime analysis API.
+It maps clip Source IN/OUT and the visible authoring range into exact
+TimeSpan ticks, bounded to one 120-second / 256-bucket request. The
+observed PCM min/max values are rendered independently for every
+reported channel; unavailable/discontinuous buckets leave visible
+gaps rather than producing decorative noise. Optional waveform
+work is cancellable and separately generation-fenced; the UI performs
+no file decode, uses no separate waveform database and does not
+acquire production decoder authority. Requests longer than the
+bounded range are explicitly PARTIAL. Additional fully populated
+multi-clip and multi-resolution coverage remains open.
+
+### Playback boundary
+
+Durable `rtaime.sequence-authoring.v1` List/Get still reports
+`PlaybackState=UNAVAILABLE`, without an active execution revision.
+The existing independent MP4 frame-analysis request is not a
+transport, and the currently available J/K/L handling in legacy
+Media Deck is guarded ordinary-rate control rather than a
+versioned sequence Preview Shuttle. There is **no accepted Preview
+Shuttle contract in master**. Accordingly the saved sequence editor
+does not expose an inactive Play/Take button or claim a confirmed
+Program picture. A real Client→Control→Runtime authorization,
+prepared source and output correlation, decoupled Shuttle semantics,
+and native two-video/two-audio combined Program sink qualification
+are still required for the full editing-to-Program journey.
+
+The older sections below describe **MEDIA DECK / CUES compatibility**
+only. Their reserved six presentation lanes, local cursor history,
+cue trim semantics and Media Deck transport must not be interpreted
+as constraints or authorities of the new saved sequence editor.
+The sequence editor cannot convert legacy local media projections
+into committed sequence clips without an explicit saved edit.
+
 ## Time model
 
 Timeline state is represented in integral frame numbers. Timecode labels are derived from the confirmed media frame rate. Nominal frame-field formatting remains compatible with the admitted local-media envelope through 240 fps. Zoom and scrolling calculate a visible frame range; pointer positions are converted back to frames only at the interaction boundary.

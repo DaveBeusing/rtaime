@@ -68,6 +68,16 @@ public sealed class OperatorKeyboardCommandRegistry
 		ArgumentNullException.ThrowIfNull(args);
 
 		var key = args.Key == Key.System ? args.SystemKey : args.Key;
+        // A focused saved-sequence authoring surface cannot implicitly drive
+        // legacy Preview, Show Control or Program keyboard commands.
+        // Let its own input gestures own DELETE and ESCAPE when appropriate.
+        if (IsSequenceAuthoringFocus(Keyboard.FocusedElement as System.Windows.DependencyObject) &&
+            ((Keyboard.Modifiers == ModifierKeys.None &&
+              key is (Key.Space or Key.J or Key.K or Key.L or Key.S or Key.I or
+                  Key.O or Key.M or Key.Delete or Key.Up or Key.Down or Key.Return or
+                  Key.R or Key.F9 or Key.Escape)) ||
+             (Keyboard.Modifiers == ModifierKeys.Control && key == Key.Return)))
+            return false;
 		// Numeric Escape cancels the current field/gesture before the shell fullscreen command.
 		if (key == Key.Escape && Keyboard.FocusedElement is RtaimeNumericField) return false;
 		if (key == Key.Escape)
@@ -284,6 +294,13 @@ public sealed class OperatorKeyboardCommandRegistry
 			CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 	}
 
+
+    internal static bool IsSequenceAuthoringFocus(System.Windows.DependencyObject? focused)
+    {
+        for (var current = focused; current is not null; current = Parent(current))
+            if (current is SequenceTimelineControl) return true;
+        return false;
+    }
 	private static bool IsTextEntryContext() => IsTextEntryContext(Keyboard.FocusedElement as System.Windows.DependencyObject);
 	public static bool IsTextEntryContext(System.Windows.DependencyObject? focused)
 	{
