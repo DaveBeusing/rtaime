@@ -4,6 +4,7 @@ using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Text.Json;
 using rtaime.Core;
+using rtaime.Control.Contracts;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
@@ -188,6 +189,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.ai_effects.test" => ReadAIEffectsAsync(request, true, cancellationToken),
 				"runtime.ai_showcase.set" => ValueTask.FromResult(SetAIShowcase(request)),
 				"runtime.execution.apply" or "runtime.execution.prepared_media.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
+				"runtime.output.mapping.activate" => ValueTask.FromResult(ActivateOutputMapping(request, runtime)),
+				"runtime.output.mapping.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.output.mapping.snapshot.response", runtime.OutputMappingSnapshot)),
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
 				"runtime.graphics.cg.apply" => ValueTask.FromResult(ApplyProductionCgText(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
@@ -769,6 +772,23 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
         var ticket = request.Payload.GetProperty("ticketId").GetString() ?? throw new InvalidDataException("Ticket is required.");
         _mediaDeckAccessor()?.CancelPreparation(ticket);
         return Success(request, "runtime.media_deck.preload.cancel.response", new { Cancelled = true });
+    }
+
+
+    private WireEnvelope ActivateOutputMapping(WireEnvelope request, V1RuntimeHostService runtime)
+    {
+        var command = OutputCanvasJson.Read<OutputCanvasRuntimeRequest>(request.Payload.GetRawText());
+        if (!string.Equals(command.ExpectedRuntimeHostInstanceId, _hostInstanceId, StringComparison.Ordinal))
+            return Error(request, "mapping.host_epoch_changed",
+                "RuntimeHost identity changed during canvas mapping preparation.");
+        var prepared = runtime.PrepareOutputMapping(command);
+        if (prepared.ActivationState is not ("PREPARED" or "PREPARED_DISABLE"))
+            return Success(request, "runtime.output.mapping.activate.response", prepared);
+        var committed = runtime.CommitOutputMapping(
+            command.Configuration.ConfigurationId, command.Configuration.EditRevision,
+            command.ExpectedExecutionRevision, command.Enabled);
+        AdvanceStateVersion();
+        return Success(request, "runtime.output.mapping.activate.response", committed);
     }
 
 	private WireEnvelope ApplyExecution(WireEnvelope request, V1RuntimeHostService runtime)
