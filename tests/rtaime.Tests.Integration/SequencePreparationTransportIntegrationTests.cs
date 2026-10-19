@@ -162,6 +162,106 @@ public sealed partial class ExternalControlIntegrationTests
     }
 
     [Fact]
+    public async Task Native_preview_shuttle_roundtrips_grpc_Control_and_Runtime_with_no_Program_picture()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var external = fixture.CreateClient();
+        var original = await external.GetSnapshotAsync();
+        var imported = await external.ImportMediaAssetsAsync([asset.Path]);
+        Assert.True(imported.Succeeded);
+        var sequence = PreparedVideoSequence(Assert.Single(imported.Snapshot.Assets));
+        var authoring = new SequenceAuthoringClient(external);
+        var saved = await authoring.SaveAsync(new(SequenceContract.Version,
+            Guid.NewGuid(), 0, sequence.SequenceId, sequence));
+        Assert.True(saved.Saved);
+        var preparation = new SequencePreparationClient(external);
+        var context = await preparation.ContextAsync();
+        var staged = await preparation.PrepareAsync(new(SequencePreparationContract.Version,
+            sequence.SequenceId, saved.AuthoringRevision, context.RuntimeHostInstanceId));
+        Assert.Equal("PREPARED", staged.State);
+        var reference = new SequencePreparationReference(staged.Version,
+            staged.SequenceId, staged.AuthoringRevision, staged.RuntimeHostInstanceId,
+            staged.PreparedExecutionId, staged.Generation);
+        var grpcShuttle = new SequenceShuttleClient(external);
+        var pipeShuttle = new SequenceShuttleClient(
+            new NamedPipeOperatorControlTransport(fixture.ControlEndpoint));
+        var stopped = await grpcShuttle.GetAsync(reference);
+        Assert.Equal("STOPPED", stopped.State);
+        Assert.Equal("UNAVAILABLE", stopped.OutputState);
+        Assert.True(stopped.NativePrepared);
+
+        var cued = await grpcShuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+            reference, stopped.StateRevision, SequenceShuttleAction.Cue, PositionTicks: 4800));
+        Assert.Equal("PAUSED", cued.State);
+        Assert.Equal(4800, cued.PositionTicks);
+        Assert.True(cued.NativePrepared);
+        var throughPipe = await pipeShuttle.GetAsync(reference);
+        Assert.Equal(cued.StateRevision, throughPipe.StateRevision);
+        Assert.Equal(cued.DecodeGeneration, throughPipe.DecodeGeneration);
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await grpcShuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+                reference, stopped.StateRevision, SequenceShuttleAction.Play)));
+
+        var playing = await grpcShuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+            reference, cued.StateRevision, SequenceShuttleAction.Play));
+        Assert.Equal("PLAYING", playing.State);
+        Assert.Equal("UNAVAILABLE", playing.OutputState);
+        Assert.True(playing.NativePrepared);
+        var observed = await grpcShuttle.GetAsync(reference);
+        Assert.Equal(playing.StateRevision, observed.StateRevision);
+        Assert.InRange(observed.PositionTicks, 4800L, sequence.Clips[0].Duration - 1);
+        Assert.Equal("UNAVAILABLE", (await authoring.GetAsync(sequence.SequenceId)).PlaybackState);
+        Assert.Equal(original.Production, (await external.GetSnapshotAsync()).Production);
+        var halted = await pipeShuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+            reference, observed.StateRevision, SequenceShuttleAction.Stop));
+        Assert.Equal("STOPPED", halted.State);
+        Assert.False(halted.NativePrepared);
+        var stillStaged = await preparation.GetAsync(reference);
+        Assert.Equal("PREPARED", stillStaged.State);
+        var canceled = await preparation.CancelAsync(reference);
+        Assert.Equal("CANCELED", canceled.State);
+        await Assert.ThrowsAnyAsync<Exception>(async () => await grpcShuttle.GetAsync(reference));
+        Assert.Equal(original.Production, (await external.GetSnapshotAsync()).Production);
+    }
+
+    [Fact]
+    public async Task Shuttle_denies_stale_saved_sequence_without_replaying_a_Program_mutation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var client = fixture.CreateClient();
+        var original = await client.GetSnapshotAsync();
+        var imported = await client.ImportMediaAssetsAsync([asset.Path]);
+        Assert.True(imported.Succeeded);
+        var sequence = PreparedVideoSequence(Assert.Single(imported.Snapshot.Assets));
+        var authoring = new SequenceAuthoringClient(client);
+        var saved = await authoring.SaveAsync(new(SequenceContract.Version,
+            Guid.NewGuid(), 0, sequence.SequenceId, sequence));
+        Assert.True(saved.Saved);
+        var preparation = new SequencePreparationClient(client);
+        var context = await preparation.ContextAsync();
+        var staged = await preparation.PrepareAsync(new(SequencePreparationContract.Version,
+            sequence.SequenceId, saved.AuthoringRevision, context.RuntimeHostInstanceId));
+        Assert.Equal("PREPARED", staged.State);
+        var reference = new SequencePreparationReference(staged.Version,
+            staged.SequenceId, staged.AuthoringRevision, staged.RuntimeHostInstanceId,
+            staged.PreparedExecutionId, staged.Generation);
+        var revision = await authoring.SaveAsync(new(SequenceContract.Version,
+            Guid.NewGuid(), saved.AuthoringRevision, sequence.SequenceId,
+            sequence with { Name = "Another authored revision" }));
+        Assert.True(revision.Saved);
+        var shuttle = new SequenceShuttleClient(client);
+        await Assert.ThrowsAnyAsync<Exception>(async () => await shuttle.GetAsync(reference));
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await shuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+                reference, 0, SequenceShuttleAction.Play)));
+        Assert.Equal(original.Production, (await client.GetSnapshotAsync()).Production);
+    }
+
+    [Fact]
     public async Task Sequence_preparation_requires_Operator_role_and_does_not_advertise_playback()
     {
         if (!OperatingSystem.IsWindows()) return;
