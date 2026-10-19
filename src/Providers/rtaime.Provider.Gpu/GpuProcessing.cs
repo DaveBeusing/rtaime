@@ -1223,6 +1223,92 @@ public sealed class GpuProcessingProvider : IDisposable
         return frame;
     }
 
+
+    public bool SupportsOutputMapping => _backend is IGpuOutputMappingBackend;
+
+    /// <summary>
+    /// Produces a separately lifetime-tracked mapped frame. Never changes the
+    /// existing Program composite or adopts input ownership. The caller must
+    /// retain input frames until this call completes.
+    /// </summary>
+    public GpuProcessingResult MapOutput(
+        GpuFrame program,
+        IReadOnlyList<GpuOutputMappingInput> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(program);
+        ArgumentNullException.ThrowIfNull(inputs);
+        lock (_gate)
+        {
+            EnsureRunning();
+            var stopwatch = Stopwatch.StartNew();
+            if (_backend is not IGpuOutputMappingBackend backend)
+                return GpuProcessingResult.Rejected(
+                    new Failure("gpu.output_mapping.unsupported",
+                        "The selected GPU backend has no qualified output mapping capability."),
+                    stopwatch.Elapsed, inputs.Count);
+            if (!OwnsFrameUnsafe(program) || program.IsDisposed || inputs.Count is < 1 or > 8)
+                return GpuProcessingResult.Rejected(
+                    new Failure("gpu.output_mapping.invalid", "Program or mapping input capacity is invalid."),
+                    stopwatch.Elapsed, inputs.Count);
+
+            var format = program.Descriptor.Surface.Format;
+            var surfaces = new GpuOutputMappingSurface[inputs.Count];
+            for (var i = 0; i < inputs.Count; i++)
+            {
+                var item = inputs[i];
+                if (item.Frame is null || item.Surface is null ||
+                    item.Frame.IsDisposed || !OwnsFrameUnsafe(item.Frame) ||
+                    item.Frame.SurfaceId != item.Surface.SourceId ||
+                    item.Frame.Descriptor.Surface.Format != item.Surface.SourceFormat)
+                    return GpuProcessingResult.Rejected(
+                        new Failure("gpu.output_mapping.source_stale",
+                            "One or more mapping sources have stale identities or incompatible formats."),
+                        stopwatch.Elapsed, inputs.Count);
+                try { item.Surface.Validate(); }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+                {
+                    return GpuProcessingResult.Rejected(
+                        new Failure("gpu.output_mapping.geometry", ex.Message),
+                        stopwatch.Elapsed, inputs.Count);
+                }
+                surfaces[i] = item.Surface;
+            }
+
+            var ordinal = NextSurfaceOrdinal();
+            var target = new SurfaceId(GpuIdentity.Create("gpu-output-mapping",
+                _backend.Info.Kind.ToString(), program.Descriptor.Timing.SequenceNumber.ToString(),
+                ordinal.ToString()));
+            var mapped = false;
+            try
+            {
+                mapped = true; // release handles even if backend fails after allocation
+                backend.RenderOutputMapping(target, format, surfaces);
+                var descriptor = new SurfaceDescriptor(
+                    target, format, _backend.StorageDomain,
+                    SurfaceOwnership.ProducerOwned,
+                    new SurfaceLifetimeDescriptor(new Generation(ordinal), target.Value),
+                    new OpaqueSurfaceHandle("rtaime.gpu.reference.output-mapping", target.ToString()));
+                var entry = new ActiveSurfaceEntry(descriptor, retainedForReuse: false);
+                var frame = CreateFrameReferenceUnsafe(entry, program.Descriptor.SourceId,
+                    program.Descriptor.Timing);
+                _activeFrames.Add(target, entry);
+                PublishResourceCountsUnsafe();
+                stopwatch.Stop();
+                Observe("gpu.output_mapping.rendered", program.Descriptor.Timing.SequenceNumber, null);
+                return GpuProcessingResult.Success(frame, stopwatch.Elapsed, inputs.Count);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                if (mapped) TryReleaseBackendSurface(target);
+                var failure = new Failure("gpu.output_mapping.render_failed",
+                    "Mapping provider failed: " + ex.GetType().Name);
+                Observe("gpu.output_mapping.failed", program.Descriptor.Timing.SequenceNumber, failure);
+                return GpuProcessingResult.Rejected(failure, stopwatch.Elapsed, inputs.Count);
+            }
+        }
+    }
+
     public GpuProcessingResult Composite(GpuCompositeRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
