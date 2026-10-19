@@ -22,7 +22,7 @@ public sealed partial class MediaPoolInspectorViewModel
         UpdateSelection([item]);
         return true;
     }
-    private readonly MediaLibraryHoverPreview _hoverPreview = new();
+    private readonly MediaLibraryHoverPreview _hoverPreview;
 	private MediaSmartBinStore? _binStore;
 	private MediaSmartBin? _selectedSmartBin;
 	private string _smartBinName = "";
@@ -32,10 +32,12 @@ public sealed partial class MediaPoolInspectorViewModel
 	private string _searchStatus = "AND terms · quotes for phrases · -term to exclude";
 	public string SearchStatus { get => _searchStatus; private set => Set(ref _searchStatus, value); }
 	private string _binStatus = "Smart Bins save filters only.";
-	private string _hoverStatus = "Hover or focus an asset · scrub capability unavailable";
+	private string _hoverStatus = "Hover a clip to scrub · Ctrl+Left/Right for keyboard scrubbing";
 	private ImageSource? _hoverThumbnail;
 	private string? _hoverKey;
 	private MediaPoolItemViewModel? _hoverItem;
+	private double _hoverFraction = -1;
+	private string? _hoverCatalogRevision;
 	private bool _browsingDisposed;
 	private bool _metadataFiltersExpanded;
 	private bool _feedbackVisible;
@@ -215,32 +217,83 @@ public sealed partial class MediaPoolInspectorViewModel
 		{ BinStatus = "Preferences were not saved: " + ex.Message; HoverStatus = BinStatus; SetFeedbackVisible(true); }
 	}
 	public Task FlushSmartBinsAsync() => _binSave;
-	public async Task BeginHoverAsync(MediaPoolItemViewModel item)
+	public async Task BeginHoverAsync(MediaPoolItemViewModel item, double fraction = 0.5)
 	{
-		if (_browsingDisposed) return;
+		if (_browsingDisposed || !double.IsFinite(fraction)) return;
 		if (!HoverPreviewsEnabled || MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
-		{ CancelHover(); HoverStatus = HoverPreviewsEnabled ? "PAUSED · Runtime pressure; no preview work admitted" : "OFF · hover thumbnails disabled"; SetFeedbackVisible(true); return; }
-		if (_hoverKey == item.Key) return;
+		{
+			CancelHover();
+			HoverStatus = HoverPreviewsEnabled ? "PAUSED · Runtime pressure; no preview work admitted" : "OFF · hover previews disabled";
+			SetFeedbackVisible(true);
+			return;
+		}
+		var position = Math.Clamp(fraction, 0, 1);
+		// Avoid a decoder request per mouse pixel; one pending generation always supersedes the previous one.
+		if (_hoverKey == item.Key && Math.Abs(_hoverFraction - position) < 0.025) return;
 		CancelHover();
 		_hoverKey = item.Key;
 		_hoverItem = item;
+		_hoverFraction = position;
+		_hoverCatalogRevision = _catalogSnapshot.Revision.ToString();
 		SetFeedbackVisible(true);
-		var preview = await _hoverPreview.RequestAsync(item);
-		if (_browsingDisposed || _hoverKey != item.Key || preview is null) return;
+		if (_catalogClient is not null && MediaLibraryHoverPreview.CanAnalyze(item))
+		{
+			var requested = MediaLibraryHoverPreview.MapPositionTicks(item.KnownDuration!.Value, position);
+			item.SetScrubPreview(null, requested);
+			HoverStatus = "LOADING · independent asset frame " + new TimeSpan(requested).ToString(@"hh\:mm\:ss\.fff") +
+				" · not Preview or Program";
+		}
+		else
+			HoverStatus = "LOADING · checking available thumbnail";
+		var preview = await _hoverPreview.RequestAsync(item, position);
+		if (_browsingDisposed || _hoverKey != item.Key || _hoverFraction != position || preview is null ||
+			_hoverCatalogRevision != _catalogSnapshot.Revision.ToString()) return;
 		if (!HoverPreviewsEnabled || MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
-		{ CancelHover(); HoverStatus = "PAUSED · Runtime pressure or previews disabled"; SetFeedbackVisible(true); return; }
-		HoverThumbnail = preview.Thumbnail; HoverStatus = preview.Status;
+		{
+			CancelHover();
+			HoverStatus = "PAUSED · Runtime pressure or previews disabled";
+			SetFeedbackVisible(true);
+			return;
+		}
+		var current = _allItems.FirstOrDefault(candidate => candidate.Key == item.Key) ?? item;
+		if (!ReferenceEquals(current, item) && (current.ReferenceId != item.ReferenceId ||
+			current.LocalPath != item.LocalPath || current.KnownDuration != item.KnownDuration ||
+			current.IsOnline != item.IsOnline))
+		{
+			CancelHover();
+			return;
+		}
+		_hoverItem = current;
+		if (preview.RequestedTicks is not null)
+			current.SetScrubPreview(preview.Thumbnail, preview.RequestedTicks);
+		HoverThumbnail = preview.Thumbnail;
+		HoverStatus = preview.Status;
+	}
+	public Task StepHoverAsync(MediaPoolItemViewModel item, int direction)
+	{
+		if (direction is not (-1 or 1) || !MediaLibraryHoverPreview.CanAnalyze(item))
+			return Task.CompletedTask;
+		var position = _hoverKey == item.Key ? _hoverFraction : 0.5;
+		return BeginHoverAsync(item, Math.Clamp(position + direction * 0.05, 0, 1));
 	}
 	public void CancelHover()
 	{
-		_hoverPreview.Cancel(); _hoverKey = null; _hoverItem = null; HoverThumbnail = null;
+		_hoverPreview.Cancel();
+		_hoverItem?.SetScrubPreview(null);
+		_hoverKey = null; _hoverItem = null; _hoverFraction = -1;
+		_hoverCatalogRevision = null;
+		HoverThumbnail = null;
 		SetFeedbackVisible(false);
-		HoverStatus = "Hover or focus an asset · scrub capability unavailable";
+		HoverStatus = "Hover a clip to scrub · Ctrl+Left/Right for keyboard scrubbing";
 	}
 	private void ReconcileHoverPressure()
 	{
 		if (_hoverKey is not null && MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
-		{ CancelHover(); HoverStatus = "PAUSED · Runtime pressure; focus an asset to retry after recovery"; SetFeedbackVisible(true); }
+		{
+			CancelHover();
+			HoverStatus = "PAUSED · Runtime pressure; focus an asset to retry after recovery";
+			SetFeedbackVisible(true);
+		}
 	}
 	private void SetFeedbackVisible(bool value)
 	{
@@ -258,7 +311,8 @@ public sealed partial class MediaPoolInspectorViewModel
 		if (_hoverItem is not { } previous) return;
 		var current = _allItems.FirstOrDefault(item => item.Key == previous.Key);
 		// Monitoring image replacement must not repeatedly cancel the dwell timer.
-		if (current is null || current.LocalPath != previous.LocalPath || current.ReferenceId != previous.ReferenceId ||
+		if (_hoverCatalogRevision != _catalogSnapshot.Revision.ToString() ||
+			current is null || current.LocalPath != previous.LocalPath || current.ReferenceId != previous.ReferenceId ||
 			current.IsOnline != previous.IsOnline || current.KnownDuration != previous.KnownDuration ||
 			MediaLibraryHoverPreview.Capability(current) != MediaLibraryHoverPreview.Capability(previous))
 			CancelHover();
