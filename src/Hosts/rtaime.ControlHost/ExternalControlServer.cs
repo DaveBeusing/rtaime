@@ -549,7 +549,7 @@ internal static class ExternalControlOperationCatalog
 	public static IReadOnlyList<string> All => Capabilities;
 
 	public static ExternalControlRole RequiredRole(string operation) =>
-		operation is "control.sequence.list" or "control.sequence.get" or "control.output.canvas.get" or "control.output.canvas.evidence.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
+		operation is "control.sequence.list" or "control.sequence.get" or "control.sequence.preparation.get" or "control.output.canvas.get" or "control.output.canvas.evidence.get" or "control.output.canvas.validate" or "control.ping" or "control.snapshot.get" or
 			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or "control.media_deck.scoped.snapshot.get" or
 			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
 			"control.production_macro.snapshot.get" or "control.production_macro.get" or "control.production_macro.validate"
