@@ -26,6 +26,10 @@ internal sealed class OutputCanvasDraftSession
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
     public bool IsDirty => !Equivalent(_saved, _draft);
+    public bool MatchesDraftSave(OutputCanvasConfiguration server) =>
+        server is not null && server.Version == _draft.Version &&
+        server.ConfigurationId == _draft.ConfigurationId &&
+        server.EditRevision == _draft.EditRevision && Equivalent(server, _draft);
 
     public static bool IsValidQuad(OutputCanvasQuad? q)
     {
