@@ -271,12 +271,21 @@ public sealed partial class ExternalControlIntegrationTests
         Assert.Contains("control.sequence.prepare", discovered.Capabilities);
         Assert.Contains("control.sequence.preparation.get", discovered.Capabilities);
         Assert.Contains("control.sequence.preparation.context.get", discovered.Capabilities);
-        Assert.DoesNotContain(discovered.Capabilities, c => c.StartsWith("control.sequence.play"));
+        Assert.Contains("control.sequence.shuttle.get", discovered.Capabilities);
+        Assert.Contains("control.sequence.shuttle.command", discovered.Capabilities);
+        Assert.DoesNotContain(discovered.Capabilities, c => c == "control.sequence.play");
         var preparation = new SequencePreparationClient(observer);
         var context = await preparation.ContextAsync();
         var error = await Assert.ThrowsAsync<RpcException>(async () =>
             await preparation.PrepareAsync(new(SequencePreparationContract.Version,
                 Guid.NewGuid(), 1, context.RuntimeHostInstanceId)));
         Assert.Equal(StatusCode.PermissionDenied, error.StatusCode);
+        var owner = new SequencePreparationReference(SequencePreparationContract.Version,
+            Guid.NewGuid(), 1, context.RuntimeHostInstanceId, Guid.NewGuid().ToString("D"), 1);
+        var shuttle = new SequenceShuttleClient(observer);
+        var denied = await Assert.ThrowsAsync<RpcException>(async () =>
+            await shuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+                owner, 0, SequenceShuttleAction.Play)));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
     }
 }
