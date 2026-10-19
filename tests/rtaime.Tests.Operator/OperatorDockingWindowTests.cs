@@ -18,6 +18,18 @@ internal static class OperatorDockingWindowTests
     {
         owner.Shell.SelectWorkspace("LIVE");
         owner.Shell.SetDocking(OperatorDockLayout.Default);
+        var dockHost = Assert.IsType<Grid>(owner.FindName("DockWorkspaceHost"));
+        var aiSurface = Assert.IsType<AIProcessingWorkspaceControl>(owner.FindName("AIProcessingWorkspace"));
+        owner.Shell.SelectWorkspace("AI");
+        owner.Shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
+        await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
+        Assert.Equal(Visibility.Visible, aiSurface.Visibility);
+        Assert.Equal(Visibility.Collapsed, dockHost.Visibility);
+        owner.Shell.SelectWorkspace("LIVE");
+        await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
+        Assert.Equal(Visibility.Collapsed, aiSurface.Visibility);
+        Assert.Equal(Visibility.Visible, dockHost.Visibility);
+        owner.Shell.SetDocking(OperatorDockLayout.Default);
         var identities = owner.Docking.Panels.ToDictionary(p => p.Key, p => p.Value);
         var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
         var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;

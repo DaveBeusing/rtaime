@@ -126,6 +126,7 @@ public sealed partial class OperatorDockController : IDisposable
         {
             _focus = null;
             if (!_owner.Shell.PresentationActive && _hasPresentationRestore) _selected = _presentationSelected;
+            UpdateHostVisibility();
         }
         if (e.PropertyName == nameof(OperatorShellViewModel.Docking))
         {
@@ -166,6 +167,10 @@ public sealed partial class OperatorDockController : IDisposable
         _owner.Shell.SetDocking(_owner.Shell.Docking.SelectTab(group.Id, _selected));
         FocusSelected();
     }
+    private void UpdateHostVisibility() =>
+        _host.Visibility = _owner.Shell.Docking.Enabled && !_owner.Shell.IsAiWorkspace
+            ? Visibility.Visible : Visibility.Collapsed;
+
     private void Rebuild()
     {
         if (_disposed || _rebuilding || !_owner.IsLoaded) return;
@@ -174,7 +179,7 @@ public sealed partial class OperatorDockController : IDisposable
         try
         {
             var desired = _owner.Shell.Docking.Normalize();
-            if (TryUpdateGroups(desired)) { RememberRenderedLayout(desired); return; }
+            if (TryUpdateGroups(desired)) { UpdateHostVisibility(); RememberRenderedLayout(desired); return; }
             _renderedLayout = null;
             var preserved = desired.Enabled ? desired.Floating.Select(p => p.Panel).Where(_floating.ContainsKey).ToHashSet(StringComparer.Ordinal) : [];
             foreach (var pair in _presenters.Where(p => !preserved.Contains(p.Key)).ToArray())
@@ -190,7 +195,7 @@ public sealed partial class OperatorDockController : IDisposable
             }
             _host.Children.Clear(); _groupRoots.Clear(); _host.RowDefinitions.Clear(); _host.ColumnDefinitions.Clear();
             var layout = _owner.Shell.Docking.Normalize();
-            _host.Visibility = layout.Enabled ? Visibility.Visible : Visibility.Collapsed;
+            UpdateHostVisibility();
             if (!layout.Enabled)
             {
                 foreach (var entry in _panels.OrderBy(p => _homes[p.Key].Index))

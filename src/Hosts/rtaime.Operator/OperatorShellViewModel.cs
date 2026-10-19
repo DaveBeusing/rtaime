@@ -509,7 +509,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsHealthWorkspace ? 0 : IsCompactViewport ? CompactPaneWidth("INSPECTOR") : IsRightCollapsed ? 0 : RightPanelWidth * WorkspaceScale);
+		get => new(IsCenterMaximized || IsHealthWorkspace || IsAiWorkspace ? 0 : IsCompactViewport ? CompactPaneWidth("INSPECTOR") : IsRightCollapsed ? 0 : RightPanelWidth * WorkspaceScale);
 		set
 		{
 			if (!IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
@@ -533,7 +533,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	}
 
 	public double LeftSplitterWidth => !HasLeftRegion || IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : 6;
-	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : 6;
+	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace || IsAiWorkspace ? 0 : 6;
 	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 6;
 
 	public bool IsLeftCollapsed
@@ -620,14 +620,15 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility StandardViewerVisibility => IsAiWorkspace || IsMultiviewWorkspace || IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility LiveWorkspaceVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility NonLiveCenterVisibility => IsMultiviewWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility AIWorkspaceVisibility => IsAiWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility NonLiveCenterVisibility => IsAiWorkspace || IsMultiviewWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public bool WorkspacePanelResizeEnabled => true;
 	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SourceBinVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaLibraryLeftVisibility => IsMultiviewWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility LiveSceneCueVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility InspectorVisibility => IsMultiviewWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility InspectorVisibility => IsMultiviewWorkspace || IsAiWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility LiveControlsVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility OutputRoutingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility HealthCenterVisibility => IsHealthWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -953,6 +954,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
 		OnPropertyChanged(nameof(LiveWorkspaceVisibility));
+		OnPropertyChanged(nameof(AIWorkspaceVisibility));
 		OnPropertyChanged(nameof(NonLiveCenterVisibility));
 		OnPropertyChanged(nameof(WorkspacePanelResizeEnabled));
 		OnPropertyChanged(nameof(ProductionControlsVisibility));
