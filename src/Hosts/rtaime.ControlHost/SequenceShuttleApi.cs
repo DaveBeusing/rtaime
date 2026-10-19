@@ -80,6 +80,37 @@ public sealed partial class ControlHostIpcServer
             if (result.Preparation != binding.Reference)
                 return Error(message, "sequence.shuttle.owner_mismatch",
                     "Runtime returned a shuttle observation for another prepared owner.");
+
+            // A saved edit, catalogue relink or production mutation can finish
+            // while the off-Program native workers seek and preroll. Revalidate
+            // after the Runtime response too; otherwise a superseded owner
+            // could appear confirmed despite having lost its Control authority.
+            var after = _controlAccessor();
+            var afterBaseline = after is null ? null : _outputCanvasBaseline ?? after.Specification;
+            var afterSaved = afterBaseline is null ? null :
+                await _showProjectStore.LoadSequencesAsync(afterBaseline, cancellationToken)
+                    .ConfigureAwait(false);
+            var afterCatalogue = await _mediaAssetCatalog.GetSnapshotAsync(
+                refreshAvailability: false, cancellationToken).ConfigureAwait(false);
+            if (after is null || !after.HasAuthoritativeState ||
+                after.State.ProductionId.Value != binding.AuthorityStateId ||
+                after.State.Revision != binding.AuthorityRevision ||
+                afterSaved?.Revision != binding.Reference.AuthoringRevision ||
+                afterCatalogue.Revision != binding.CatalogueRevision ||
+                _runtimeTransport.HostInstanceId != reference.RuntimeHostInstanceId)
+            {
+                // The native owner may already have moved. Do not imply that
+                // cancellation succeeded until Runtime explicitly confirms it.
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var canceled = await _runtimeTransport.CancelSequencePreparationAsync(
+                    binding.Reference, cleanup.Token).ConfigureAwait(false);
+                if (canceled.State != "CANCELED")
+                    return Error(message, "sequence.shuttle.cleanup_unconfirmed",
+                        "Native ownership changed during shuttle preroll and cleanup is not confirmed.");
+                _preparedSequence = null;
+                return Error(message, "sequence.shuttle.authority_changed",
+                    "The saved or committed authority changed during native transport. Prepare again.");
+            }
             return Success(message, message.MessageType + ".response", result);
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or
