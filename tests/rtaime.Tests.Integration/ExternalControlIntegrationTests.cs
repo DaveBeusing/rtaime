@@ -451,7 +451,7 @@ public sealed partial class ExternalControlIntegrationTests
         });
         Assert.DoesNotContain(initial.AvailableTargets, t => t.RoleId is "preview" or "clean-feed");
         Assert.Null(initial.ActiveRenderRevision);
-        Assert.Equal("RENDERER_REQUIRED", initial.ActivationState);
+        Assert.Equal("UNMAPPED", initial.ActivationState);
         var id = Guid.NewGuid(); var surfaceId = Guid.NewGuid();
         var edits = new OutputCanvasEdit[] {
             new(OutputCanvasEditKind.AddCanvas, id, Canvas:new(id,"Stage",1280,720)),
