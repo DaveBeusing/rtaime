@@ -121,6 +121,17 @@
 										FontSize="{DynamicResource OperatorFontSizeCompact}"
 										FontWeight="SemiBold" />
 								</Border>
+								<Border x:Name="ScrubTimeOverlay"
+									HorizontalAlignment="Left" VerticalAlignment="Bottom"
+									Margin="4,0,0,4" Padding="3,1"
+									Background="{StaticResource RtaimeMediaDurationOverlayBrush}"
+									CornerRadius="2" Visibility="Visible" IsHitTestVisible="False">
+									<TextBlock Text="{TemplateBinding ScrubLabel}"
+										Foreground="{DynamicResource OperatorAccentBrush}"
+										FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+										FontSize="{DynamicResource OperatorFontSizeCompact}"
+										FontWeight="SemiBold" />
+								</Border>
 								<Border x:Name="OfflineOverlay"
 									Background="{StaticResource RtaimeMediaOfflineOverlayBrush}"
 									Visibility="Collapsed">
@@ -180,6 +191,12 @@
 					<ControlTemplate.Triggers>
 						<Trigger Property="Duration" Value="">
 							<Setter TargetName="DurationBadge" Property="Visibility" Value="Collapsed" />
+						</Trigger>
+						<Trigger Property="ScrubLabel" Value="">
+							<Setter TargetName="ScrubTimeOverlay" Property="Visibility" Value="Collapsed" />
+						</Trigger>
+						<Trigger Property="ScrubLabel" Value="{x:Null}">
+							<Setter TargetName="ScrubTimeOverlay" Property="Visibility" Value="Collapsed" />
 						</Trigger>
 						<Trigger Property="IsOnline" Value="False">
 							<Setter TargetName="OfflineOverlay" Property="Visibility" Value="Visible" />

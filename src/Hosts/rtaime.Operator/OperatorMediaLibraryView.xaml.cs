@@ -53,10 +53,45 @@ public partial class OperatorMediaLibraryView : UserControl
 		if (MediaPool.RefreshCatalogCommand.CanExecute(null)) MediaPool.RefreshCatalogCommand.Execute(null);
 		e.Handled = true;
 	}
+	private static bool IsInScrubArea(FrameworkElement surface, MouseEventArgs e)
+	{
+		var position = e.GetPosition(surface);
+		return surface is Grid ? position.X is >= 0 and <= 56 && position.Y >= 0 && position.Y <= surface.ActualHeight
+			: position.Y is >= 0 and <= 68 && position.X >= 0 && position.X <= surface.ActualWidth;
+	}
+	private static double PointerScrubFraction(FrameworkElement surface, MouseEventArgs e)
+	{
+		var width = surface is Grid ? Math.Min(56, surface.ActualWidth) : surface.ActualWidth;
+		if (width <= 0) return 0.5;
+		return Math.Clamp(e.GetPosition(surface).X / width, 0, 1);
+	}
 	private async void OnMediaLibraryHover(object sender, MouseEventArgs e)
 	{
-		if (e.LeftButton == MouseButtonState.Released && sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })
-			await MediaPool.BeginHoverAsync(item);
+		if (e.LeftButton == MouseButtonState.Released &&
+			sender is FrameworkElement { DataContext: MediaPoolItemViewModel item } target &&
+			(!MediaLibraryHoverPreview.CanAnalyze(item) || IsInScrubArea(target, e)))
+			await MediaPool.BeginHoverAsync(item,
+				MediaLibraryHoverPreview.CanAnalyze(item) ? PointerScrubFraction(target, e) : 0.5);
+	}
+	private async void OnMediaLibraryScrubMove(object sender, MouseEventArgs e)
+	{
+		if (e.LeftButton != MouseButtonState.Released || !MediaPool.HoverPreviewsEnabled ||
+			sender is not FrameworkElement { DataContext: MediaPoolItemViewModel item } target ||
+			!MediaLibraryHoverPreview.CanAnalyze(item)) return;
+		// The Grid thumbnail occupies the top 68 DIPs; list-row thumbnails use the first 56 DIPs.
+		if (!IsInScrubArea(target, e)) return;
+		await MediaPool.BeginHoverAsync(item, PointerScrubFraction(target, e));
+	}
+	private async void OnMediaLibraryScrubKeyDown(object sender, KeyEventArgs e)
+	{
+		if (Keyboard.Modifiers != ModifierKeys.Control || e.Key is not (Key.Left or Key.Right) ||
+			e.OriginalSource is TextBoxBase) return;
+		var item = (e.OriginalSource as FrameworkElement)?.DataContext as MediaPoolItemViewModel
+			?? MediaPool.SelectedItem;
+		if (item is null || !MediaLibraryHoverPreview.CanAnalyze(item) || !MediaPool.HoverPreviewsEnabled)
+			return;
+		e.Handled = true; // Preserve ordinary arrows for ListBox navigation.
+		await MediaPool.StepHoverAsync(item, e.Key == Key.Right ? 1 : -1);
 	}
 	private async void OnMediaLibraryFocus(object sender, KeyboardFocusChangedEventArgs e)
 	{
@@ -75,12 +110,32 @@ public partial class OperatorMediaLibraryView : UserControl
 	{
 		MediaPool.CancelHover();
 		if (target.ContextMenu is not { } menu) return;
+		var item = target.DataContext as MediaPoolItemViewModel;
+		var multi = MediaPool.HasMultipleSelection;
 		foreach (var entry in menu.Items.OfType<Controls.RtaimeMenuItem>())
 		{
-			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer" or "Prepare selected assets…";
-			entry.IsEnabled = readOnly || !MediaPool.HasMultipleSelection;
-			entry.ToolTip = !readOnly && MediaPool.HasMultipleSelection
-				? "Select one asset for this action. No partial bulk mutation is performed." : null;
+			var action = entry.Header?.ToString();
+			entry.IsEnabled = action switch
+			{
+				"Prepare selected assets…" => true, // The actual Prepare command enforces the bounded eligible selection.
+				"Open in Preview" => !multi && MediaPool.CanDropToPreview(item),
+				"Add to Timeline" => !multi && item is not null && Timeline.CanAcceptMediaPoolDrop(item,
+					item.Kind switch { MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
+						MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
+						MediaPoolItemKind.Graphics => TimelineTrackCategory.Overlay,
+						_ => (TimelineTrackCategory?)null }),
+				"Add Cue at Playhead" => !multi && item?.Kind == MediaPoolItemKind.Clip &&
+					string.Equals(item.ReferenceId, MediaDeck.AssetId, StringComparison.Ordinal),
+				"Reveal in Explorer" => !multi && item?.CanRevealInExplorer == true &&
+					item.LocalPath is { } path && File.Exists(path),
+				"Relink Media…" or "Remove from Library" => !multi && item?.Kind == MediaPoolItemKind.Clip &&
+					Guid.TryParse(item.ReferenceId, out _),
+				"Properties" => !multi && item is not null,
+				_ => !multi
+			};
+			entry.ToolTip = entry.IsEnabled ? null : multi
+				? "This action needs one asset. Review multi-selection with the bounded batch controls."
+				: "Unavailable for this asset or current production context.";
 		}
 	}
 
@@ -110,10 +165,15 @@ public partial class OperatorMediaLibraryView : UserControl
 			? MediaPool.SelectedItems.ToArray()
 			: [item];
 		var payload = new MediaAssetDragPayload(item, selected);
-		DragDrop.DoDragDrop(
-			(DependencyObject)sender,
-			new DataObject(typeof(MediaAssetDragPayload), payload),
-			DragDropEffects.Copy);
+		MediaPool.ShowDragIntent(payload);
+		try
+		{
+			DragDrop.DoDragDrop(
+				(DependencyObject)sender,
+				new DataObject(typeof(MediaAssetDragPayload), payload),
+				DragDropEffects.Copy);
+		}
+		finally { MediaPool.ClearDragIntent(); }
 	}
 
 	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -68,6 +68,10 @@ public class RtaimeMediaTile : ContentControl
 		typeof(RtaimeMediaTile),
 		new FrameworkPropertyMetadata(string.Empty));
 
+	public static readonly DependencyProperty ScrubLabelProperty = DependencyProperty.Register(
+		nameof(ScrubLabel), typeof(string), typeof(RtaimeMediaTile),
+		new FrameworkPropertyMetadata(string.Empty));
+
 	public static readonly DependencyProperty IsOnlineProperty = DependencyProperty.Register(
 		nameof(IsOnline),
 		typeof(bool),
@@ -113,6 +117,12 @@ public class RtaimeMediaTile : ContentControl
 	{
 		get => (string)GetValue(AvailabilityProperty);
 		set => SetValue(AvailabilityProperty, value);
+	}
+
+	public string ScrubLabel
+	{
+		get => (string)GetValue(ScrubLabelProperty);
+		set => SetValue(ScrubLabelProperty, value);
 	}
 
 	public bool IsOnline

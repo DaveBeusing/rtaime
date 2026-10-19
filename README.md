@@ -113,9 +113,7 @@ Hardware and production-readiness claims remain limited to evidence explicitly r
 
 Production-support policy and Stable-readiness governance are source-controlled in [Production Support and Stable Readiness](docs/ProductionSupport.md), with the generated [Support and Compatibility Matrix](docs/SupportCompatibilityMatrix.md) and [Production Deployment Baseline](docs/ProductionDeploymentBaseline.md). The current DEV source remains Stable-readiness `UNVERIFIED`; the readiness verifier does not promote release stage.
 
-The Media Library provides bounded local Smart Bins for existing duration, availability and readiness metadata, with cancelable reuse of monitoring thumbnails. Independent hover scrubbing is currently unavailable and approved TO IMPLEMENT
-through bounded Runtime-owned analysis; filters and hover do not open or seek
-production media. See [Media Library & Asset Browser](docs/MediaLibraryAssetBrowser.md).
+The Media Library provides bounded local Smart Bins for existing duration, availability and readiness metadata. Online catalogue clips with known duration can request independent, time-indexed frames through the bounded Runtime-owned analysis worker, with actual decoded PTS, pointer/keyboard scrub control and explicit cancellation. Other media may reuse monitoring thumbnails, labelled separately; neither hover nor filtering opens or seeks production media. Actual Windows, input/DPI and hardware latency qualification must be reviewed with the current PR gates. See [Media Library & Asset Browser](docs/MediaLibraryAssetBrowser.md).
 
 ## Architecture
 
@@ -425,7 +423,7 @@ The [Media Library](docs/MediaLibraryAssetBrowser.md) supports composable typed 
 
 Show checks now separates Program/AUX availability and recording target evidence, shows submission provenance and explicit response limits, groups notifications by severity, and offers bounded reminder pauses plus the existing support exporter. See [Show checks and activity](docs/ShowPreflightAndActivity.md).
 
-The Media Library adds freely named/renamed local Smart Bins with validated saved expressions and session hover controls that pause under current Runtime pressure. Hover and keyboard focus share existing thumbnails; independent position scrubbing remains unavailable. See [Media Library](docs/MediaLibraryAssetBrowser.md).
+The Media Library adds freely named/renamed local Smart Bins with validated saved expressions and session hover controls that pause under current Runtime pressure. Authorized local catalogue clips now request bounded, independently decoded position frames; the reported actual PTS remains separate from the requested time and from production Preview/Program. Without the local analysis channel, existing monitoring thumbnails remain clearly identified as non-time-indexed. See [Media Library](docs/MediaLibraryAssetBrowser.md).
 
 Local MP4 playback aligns native AAC packets with video sample windows to prevent
 long-playback audio runahead and early exhaustion. The [local playback baseline](docs/ReferenceMediaRegression.md#long-local-file-playback-baseline)

@@ -42,12 +42,17 @@ Before subsequent implementation, inspect current master, relevant remote branch
 
 The following are already foundations, not new projects: commands/shortcut profiles, local draft undo, typed attribute transfer, portable workspace templates, docking, Focus/Cinema, named Smart Bins, read-only show checks and bounded asset preparation. An older overview saying a complete shortcut editor or all undo is absent must be read together with the later owning capability document. This does not imply timeline-wide live undo or unrestricted editing support.
 
-Independent position-based hover scrubbing is currently unavailable, while
-independent analysis/scrubbing, multitrack sequences/editing, Preview shuttle,
-2D canvas/mapping, contextual Inspector extensions and an independent AI workspace
-are approved TO IMPLEMENT. Existing hover/focus reuses monitoring thumbnails
-and must not open or seek a production deck. Missing real contracts are delivery
-work for their domain owners, not reasons to reopen a settled V1 feature decision.
+Independent media analysis now supplies bounded, cancelable Runtime-owned
+read-only frame observations. The Media Library consumes that API for local
+time-position hover and keyboard scrubbing of authorized catalogue clips, while
+preserving source identity and the existing monitoring-thumbnail fallback.
+Scrub admission is lower priority than Program and does not open or seek any
+production deck. Windows build/CI, physical media and accessibility qualification
+remain evidence gates independent of feature implementation.
+Multitrack sequences/editing, Preview shuttle, 2D canvas/mapping, contextual
+Inspector extensions and an independent AI workspace remain approved under the
+same scope record; each owning capability document defines its actual status.
+Missing real contracts are implementation work, not a reason to reopen scope.
 A replacement NLE, 3D stage, arbitrary plugin graphs, new commercial codecs and
 hardware drivers are not implicitly added obligations. See the scope record for
 compatibility, commercial and physical evidence boundaries.

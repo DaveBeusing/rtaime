@@ -108,17 +108,60 @@ Duration comes directly from the immutable catalogue descriptor, never from form
 
 Preferences live separately in `%LOCALAPPDATA%/rtaime/operator-media-bins.json`, version 1. Reads are asynchronous and limited to 64 KiB, names to 128 characters and search to 256. Valid version-1 definitions retain the same schema and query semantics. Invalid search expressions, control characters in names, duplicate names and excess definitions are ignored individually with visible feedback; malformed, oversized, incomplete or future-version documents are rejected with visible feedback. Loading never rewrites the file. Unknown typed metadata still matches neither positive nor negated codec/resolution/FPS terms. Saves are serialized and atomically replace only this presentation file; failures are displayed in the Library footer and retained in the saved-bin tooltip. Shutdown waits for the pending preference save. Catalogue persistence, recovery checkpoints and production state are unaffected.
 
-## Hover thumbnails and capability limits
+## Independent library frame scrubbing
 
-Hovering or keyboard-focusing an asset admits a latest-only preview after 180 ms. **Hover thumbnails** in Filters disables this session's hover/focus previews and immediately cancels pending work and releases the active image. Keyboard focus uses the same admission, image and cancellation rules as the pointer. It shares the existing Operator monitoring image, if present. At most the active image is retained; images are not copied and no asset thumbnail cache, media read, hashing, probe, decoding or control/monitoring request is started.
+For online catalogue Clips with a stable asset ID and known positive duration, the
+Library issues read-only, time-indexed **Frame** analysis through
+`MediaPoolInspectorViewModel` → `IMediaAssetCatalogClient` → ControlHost catalogue
+authority → RuntimeHost's bounded analysis worker. Raw RGBA8 pixels return only through
+the authenticated local analysis observation pipe, not through Program monitoring or
+management IPC. Remote gRPC metadata-only clients cannot display the extracted frame
+until a separately qualified pixel channel exists.
 
-Leaving an item/browser, hiding a browser, changing a filter/catalogue context, starting a drag or closing the window cancels pending admission and clears the image. Generation checks prevent cancelled work from publishing a stale thumbnail.
+Move over the **thumbnail area** of a Grid tile or a List row to map horizontal pointer
+position to the catalogued duration, clamped before the end of the asset. Focus an item
+to preview its current/middle position, then use **Ctrl+Left** or **Ctrl+Right** in either
+browser to move in 5% increments without changing ListBox navigation. A 180-ms latest-only
+dwell/debounce cancels superseded requests. The current tile/List image is replaced by
+a frozen, bounded 320×180 frame only while it is the active scrub target. The original
+monitoring image is never overwritten. The timecode overlay shows requested position;
+the footer separately reports **requested time** and **actual decoded PTS**, or Loading,
+Unavailable, Offline, Unsupported and Stale. A decoded timestamp is not guessed from
+the pointer fraction.
 
-The non-interactive footer overlay preserves the browser viewport and distinguishes **MONITOR THUMBNAIL**, **OFFLINE** and **UNSUPPORTED**. The current *Operator hover UI* still reuses the monitoring image; it does not yet issue independent position-analysis requests. The separately implemented Client/Control/Runtime backend offers bounded, token-authenticated true frame extraction and multilevel audio analysis, but remains under CI/physical qualification and is not automatically enabled in this view. Hover never seeks the production Media Deck and never changes Preview or Program. See [IndependentMediaAnalysis.md](IndependentMediaAnalysis.md).
+**Hover / scrub previews** in Filters is a session-local switch. Disable, leave,
+switch filters/view, change asset selection or catalogue revision, begin a drag,
+receive fresh measured Runtime pressure, disconnect or close the Operator to cancel
+the active request and clear the temporary bitmap. Per-consumer generations, asset ID,
+Runtime epoch and observation fields are checked before display. A returned job ID is
+retained even when the pointer has left, so the canceled job can be explicitly
+cancelled at the Runtime boundary. The client has a 15-second optional presentation
+deadline and a bounded cleanup request; a transport cancellation response does not
+prove native decoder release. Runtime keeps its shared resource reservation until
+actual cleanup.
 
-Admission and publication also check the existing Client snapshot's typed Runtime health. A current Runtime failure or frame time at/over its positive frame budget pauses admission; a pressure observation arriving during the dwell cancels publication. Evidence older than ten seconds or from the future is not treated as measured current pressure. This is optional-presentation admission, never a production-ready claim, and cannot enable an independent decoder. The existing Operator health/property observations trigger cancellation; there is no second poller, metrics history or probing. Recovery does not automatically restart work: focus or hover deliberately to retry.
+Non-catalogue sources can still show a separately labelled **MONITOR THUMBNAIL**,
+which is **not** time-indexed. Offline, missing, unknown-duration and unsupported
+assets never receive a fabricated frame. No media decoder, filesystem crawler,
+fingerprinter, media clock, second cache, or additional monitoring poller runs in
+the Operator. Hover does not call Media Deck open/seek, change Preview/Program routes,
+or perform a Take. Analysis remains optional and lower priority than production;
+see [IndependentMediaAnalysis](IndependentMediaAnalysis.md) for resource admission,
+real decoder coverage, and remote-transport limitations.
 
-The Media Library hover implementation still does not pool, request or display independent extracted frames. Its backend prerequisite now has a distinct Runtime-owned optional worker with a bounded latest-generation queue, shared decoder ledger, quarantine-aware cancellation and a separate observations-only pipe. The corresponding UI activation requires explicit Client integration, pressure admission and mixed-DPI qualification; a monitoring thumbnail must never be relabeled as a true indexed frame. The underlying Windows decoder native open/seek/read remains non-cooperatively cancellable in some failure paths, so a cancellation acknowledgement is only published after cleanup is confirmed.
+Dragging reports the frozen selection size and the primary item effect. Dropping
+the primary item into the existing Timeline creates a local authoring draft;
+dropping onto Preview follows the established explicit deck route. A multi-item
+selection is not silently bulk-added, and no drop implicitly takes Program.
+Selection-specific context menus require one eligible asset for mutating actions,
+Reveal and Properties; explicit bounded batch controls remain available.
+
+**Workflow help:** Import Media → independent Analysis (visual inspection only) →
+Prepare/Retry (representative conditional evidence) → Open in Preview (resident deck
+preparation) → explicit Take/CUT or AUTO. File Availability, time-bound conditional
+verification and resident PREPARED are separate: each preparation evidence row
+shows the current catalogue availability, sample state, observation age, resident-deck
+state and the actual reason. Analysis never upgrades preparation readiness.
 
 ## Performance and authority boundaries
 
@@ -134,9 +177,9 @@ The Operator UI policy gate verifies persistent catalogue projection, bounded/vi
 
 ## Smart Bin and hover qualification
 
-`MediaLibraryBrowsingTests` checks duration boundaries and unknown metadata, independent readiness/availability, bounded preference round-trip and corrupt/future/oversized files, cancellation without replacing valid preferences, 1000 rapid hover requests, existing-image/offline capability handling and a 30,000-record catalogue projected to at most 4096 items. Repeated search and saved-filter restoration assert no production transport calls, catalogue mutations or routing changes. Additional cases cover named save/rename/restart, valid v1 preservation, unsupported query feedback without rewriting, enable/disable cancellation storms, fresh/stale/future pressure and a pressure change during dwell with unchanged Preview/Program and no mutation requests. Hidden selections are pruned.
+`MediaLibraryBrowsingTests` checks duration boundaries and unknown metadata, independent readiness/availability, bounded preference round-trip and corrupt/future/oversized files, cancellation without replacing valid preferences, 1000 rapid hover requests, existing-image/offline capability handling, clamped scrub timestamps, true decoded PTS and RGBA/BGRA transfer, latest-generation cancellation, stale identity rejection and a 30,000-record catalogue projected to at most 4096 items. Repeated search and saved-filter restoration assert no production transport calls, catalogue mutations or routing changes. Additional cases cover named save/rename/restart, valid v1 preservation, unsupported query feedback without rewriting, enable/disable cancellation storms, fresh/stale/future pressure and a pressure change during dwell with unchanged Preview/Program and no mutation requests. Hidden selections are pruned.
 
-The real `OperatorXamlStartupTests` window verifies custom control keyboard focus/accessibility names and scrolls both 4096-item Grid/List views while bounding realized containers. Existing compact-window and source-bound functional/visual checks remain required. Physical keyboard/screen-reader usability, mixed-DPI interaction and hardware Program render/IPC latency under hover/search load remain **UNVERIFIED** until reference-platform execution. Hosted tests do not substitute for those measurements.
+The real `OperatorXamlStartupTests` window verifies custom control keyboard focus/accessibility names and scrolls both 4096-item Grid/List views while bounding realized containers. Existing compact-window and source-bound functional/visual checks remain required. The independent Runtime/Client host-path tests are owned by `IndependentMediaAnalysisIntegrationTests`; Operator regression coverage does not replace them. Physical keyboard/screen-reader usability, mixed-DPI interaction, VFR/audio-only availability and hardware Program render/IPC latency under real analysis load remain **UNVERIFIED** until reference-platform execution. Source-level tests or hosted geometry do not substitute for those measurements.
 
 ## Local recent references and favorites
 

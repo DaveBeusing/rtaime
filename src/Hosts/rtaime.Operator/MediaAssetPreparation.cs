@@ -8,6 +8,8 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
+public sealed record MediaPreparationEvidenceRow(string Summary, string Detail);
+
 public sealed partial class MediaPoolInspectorViewModel
 {
     private CancellationTokenSource? _preparationStop;
@@ -17,6 +19,38 @@ public sealed partial class MediaPoolInspectorViewModel
     private string _preparationStatus = "Select up to 16 catalogue assets. File decks must be closed deliberately. No routing changes.";
     private IReadOnlyList<MediaAssetPreflightObservation> _preflightEvidence = [];
     public IReadOnlyList<MediaAssetPreflightObservation> PreflightEvidence => _preflightEvidence;
+    public IReadOnlyList<MediaPreparationEvidenceRow> PreparationRows
+    {
+        get
+        {
+            var now = DateTimeOffset.UtcNow;
+            return _preflightEvidence.Take(16).Select(evidence =>
+            {
+                var catalog = _catalogSnapshot.Assets.FirstOrDefault(asset =>
+                    string.Equals(asset.AssetId.ToString(), evidence.AssetId, StringComparison.OrdinalIgnoreCase));
+                var availability = catalog?.Availability.ToString().ToUpperInvariant() ?? "CATALOG UNKNOWN";
+                var age = evidence.ObservedAtUtc == default || now < evidence.ObservedAtUtc
+                    ? "AGE UNKNOWN"
+                    : (now - evidence.ObservedAtUtc).TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "s old";
+                var current = evidence.ObservedAtUtc != default && now >= evidence.ObservedAtUtc &&
+                    now - evidence.ObservedAtUtc <= TimeSpan.FromSeconds(10);
+                var conditional = evidence.RepresentativeVerificationPassed && current;
+                var checkState = evidence.Cancelled ? "CANCELED" : evidence.Running
+                    ? "VERIFYING / " + evidence.State.ToString().ToUpperInvariant()
+                    : conditional ? "CONDITIONALLY_READY"
+                    : evidence.State == MediaAssetReadinessState.Unavailable ? "UNAVAILABLE"
+                    : "UNVERIFIED";
+                var resident = _mediaDeck.IsLoaded && !_mediaDeck.HasError &&
+                    string.Equals(_mediaDeck.AssetId, evidence.AssetId, StringComparison.OrdinalIgnoreCase) &&
+                    _mediaDeck.State is "READY" or "PLAYING" or "PAUSED"
+                    ? "RESIDENT PREPARED" : "NOT RESIDENT";
+                return new MediaPreparationEvidenceRow(
+                    (catalog?.DisplayName ?? evidence.AssetId) + " · " + availability + " · " +
+                    checkState + " · " + resident + " · " + age,
+                    evidence.Detail);
+            }).ToArray();
+        }
+    }
     public bool RequirePreparationAudio { get; set; }
     public int PreparationSeekPoints { get; set; } = 3;
     public int PreparationFramesPerPoint { get; set; } = 2;
@@ -31,7 +65,13 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         PrepareAssetsCommand = new AsyncRelayCommand(PrepareSelectedAssetsAsync, CanPrepareAssets);
         CancelPreparationCommand = new AsyncRelayCommand(() => { _preparationStop?.Cancel(); return Task.CompletedTask; }, () => _preparing);
-        ClosePreparationCommand = new AsyncRelayCommand(() => { _preparationVisible = false; OnPropertyChanged(nameof(PreparationVisibility)); return Task.CompletedTask; }, () => !_preparing);
+        ClosePreparationCommand = new AsyncRelayCommand(() =>
+        {
+            _preparationVisible = false;
+            _preparationTimer?.Stop();
+            OnPropertyChanged(nameof(PreparationVisibility));
+            return Task.CompletedTask;
+        }, () => !_preparing);
         PropertyChanged += PreparationContextChanged;
         _operator.PropertyChanged += PreparationOperatorChanged;
         _preparationTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
@@ -40,7 +80,10 @@ public sealed partial class MediaPoolInspectorViewModel
     public void ShowPreparation()
     {
         _preparationVisible = true;
+        ExpirePreparationEvidence(); // Reject expired conditional observations before showing them.
+        _preparationTimer?.Start(); // Presentation-only one-second age updates while the panel is visible.
         OnPropertyChanged(nameof(PreparationVisibility));
+        OnPropertyChanged(nameof(PreparationRows));
         RaisePreparationCommands();
     }
     private HashSet<MediaAssetId>? SelectedPreparationIds()
@@ -70,7 +113,12 @@ public sealed partial class MediaPoolInspectorViewModel
     private void SetPreparationEvidence(IReadOnlyList<MediaAssetPreflightObservation> values)
     {
         _preflightEvidence = values;
-        if (!_preparationDisposed) { OnPropertyChanged(nameof(PreflightEvidence)); Refresh(); }
+        if (!_preparationDisposed)
+        {
+            OnPropertyChanged(nameof(PreflightEvidence));
+            OnPropertyChanged(nameof(PreparationRows));
+            Refresh();
+        }
     }
     private void InvalidatePreparationEvidence(string reason)
     {
@@ -82,6 +130,8 @@ public sealed partial class MediaPoolInspectorViewModel
     private void ExpirePreparationEvidence()
     {
         if (_preparationDisposed) return;
+        if (_preparationVisible && _preflightEvidence.Count > 0)
+            OnPropertyChanged(nameof(PreparationRows)); // Reuse existing one-second UI timer.
         var now = DateTimeOffset.UtcNow;
         if (_preflightEvidence.Any(value => value.RepresentativeVerificationPassed &&
             (now < value.ObservedAtUtc || now - value.ObservedAtUtc > TimeSpan.FromSeconds(10))))
@@ -93,6 +143,7 @@ public sealed partial class MediaPoolInspectorViewModel
         {
             // Catalogue refresh/relink invalidates even an unchanged identity; no reusable positive cache.
             InvalidatePreparationEvidence("Catalogue observation changed. Prepare again.");
+            OnPropertyChanged(nameof(PreparationRows));
             _preparationStop?.Cancel();
         }
         if (args.PropertyName is nameof(SelectionCount) or nameof(IsLoading)) RaisePreparationCommands();

@@ -35,7 +35,7 @@ The four existing experience groups map onto current identifiers without replaci
 | Outputs | OUTPUTS |
 | System & Health | HEALTH, AI, SETTINGS |
 
-The existing governed AI controls are integrated in AI. A 2D canvas/mapping editor remains a separately approved implementation target with real contracts/Runtime sinks; no inactive editor tab is registered.
+The AI workspace reuses governed model/provider approval and the shared Program monitor. OUTPUTS embeds the productive 2D canvas/mapping editor in its existing routing and health presentation. Draft geometry, saved authoring and confirmed Runtime execution remain separate; the stage is not a WPF Program renderer and unsupported physical scan-out is not claimed.
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 

@@ -173,6 +173,48 @@ Source generations, committed output identity, draft-versus-active state and
 provider resource ownership remain mandatory.
 
 
+## Operator canvas editor
+
+OUTPUTS presents one interactive 2D authoring surface without constructing
+another Program compositor. The `OutputCanvasStageSurface` draws only local
+surface contours, independent of Runtime media frames. It fits the logical
+canvas to available WPF DIPs, then applies local pan/zoom and explicitly
+converts pointer coordinates to logical canvas edges. DPI pixel alignment
+is a presentation detail; no rounded screen coordinate is persisted as a
+media-source or device pixel. Mouse wheel zoom holds the logical pixel under
+the pointer. Middle-drag pans; body drag translates, four corner handles
+warp, Alt-drag rotates, Ctrl bypasses snapping and Shift constrains moves.
+Arrow keys move 1 logical pixel (Shift: 10); Home fits the stage. Numerical
+TL/TR/BR/BL, crop and blend values use the same validated authored geometry.
+
+The Editor reads `GetOutputCanvasAsync` and optional Runtime mapping
+evidence. It maintains a finite local 48-step draft history; Undo and Redo
+never perform a TAKE, edit Program or revert a previous live route.
+`ValidateOutputCanvasAsync` checks the proposed next EditRevision before
+`SaveOutputCanvasAsync` sends only the edited canvas/surface/binding records.
+When a bound surface is removed, the finite transaction explicitly unbinds
+the affected output before removal and restores surviving intended bindings.
+ControlHost remains the sole persistency and optimistic-concurrency authority.
+
+The UI shows `SavedRevision`, local next revision, requested/pending mapping
+revision and separately confirmed `ActiveRenderRevision`. Only
+`ActivateOutputCanvasAsync` can request the saved revision; `PENDING_BOUNDARY`
+is not represented as active. The existing Operator health stream triggers
+bounded follow-up evidence reads while activation awaits its Runtime boundary,
+without an independent ticker or global command registry. Target, output
+size, source identity, rendered sequence and failure reasons are taken from
+Runtime; no local editor-preview pixel is labeled a verified output.
+
+Unconfirmed saves are reconciled by reading the authoritative snapshot. A
+matching saved revision/content can close a lost-response transaction;
+different stored revision blocks subsequent editing persistence until the
+operator explicitly discards/reloads. Pending mapping and stale Runtime
+states remain unconfirmed. Saving never activates mapping; disabling mapping
+is also an explicit governed request. Hardware discovery, physical warp/
+blend calibration and unqualified multi-output/HDR operation remain outside
+this UI. Output monitoring and routing, Clean Program, recording, streaming
+and explicit test patterns keep their existing independently authorized paths.
+
 ## Current output renderer and operational semantics
 
 RuntimeHost compiles validated saved canvas geometry into a finite, immutable
