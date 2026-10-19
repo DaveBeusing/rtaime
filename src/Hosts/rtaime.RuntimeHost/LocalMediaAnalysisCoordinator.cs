@@ -13,6 +13,9 @@ public sealed partial class LocalMediaDeckRuntimeService
     private const int AnalysisMaximumCacheEntries = 32;
     private const long AnalysisMaximumCacheBytes = 8L * 1024 * 1024;
     private readonly object _analysisGate = new();
+    private readonly MediaAnalysisDerivedCache _analysisDiskCache = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "rtaime", "media-analysis-cache"));
     private readonly Dictionary<string, AnalysisWork> _analysisJobs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, long> _analysisGenerations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AnalysisWork> _analysisPending = new(StringComparer.Ordinal);
@@ -224,7 +227,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             var cacheKey = string.Join('|', job.Request.AssetId,
                 job.FileIdentity.FingerprintSha256, job.FileIdentity.LengthBytes,
                 job.FileIdentity.LastWriteUtcTicks, MediaAnalysisContract.Version,
-                _format.FrameRate.ToString(), job.Request.Kind, job.Request.PositionTicks,
+                _format.FrameRate.ToString(), "wmf-decoder-v1",
+                job.Request.Kind == MediaAnalysisKind.Frame ? "video-stream-0" : "audio-stream-0",
+                job.Request.Kind, job.Request.PositionTicks,
                 job.Request.EndTicks, job.Request.Width, job.Request.Height, job.Request.Level,
                 job.Request.BucketCount);
             lock (_analysisGate)
@@ -236,6 +241,20 @@ public sealed partial class LocalMediaDeckRuntimeService
                     observation = hit.Result with { JobId = job.Id, AssetId = job.Request.AssetId,
                         ConsumerId = job.Request.ConsumerId, Generation = job.Request.Generation,
                         RuntimeEpoch = job.Epoch, FromCache = true };
+                }
+            }
+            if (observation.State != MediaAnalysisState.Complete)
+            {
+                var persisted = _analysisDiskCache.Read(cacheKey, job.Request);
+                if (persisted is not null)
+                {
+                    observation = persisted with {
+                        JobId = job.Id, AssetId = job.Request.AssetId,
+                        ConsumerId = job.Request.ConsumerId, Generation = job.Request.Generation,
+                        RuntimeEpoch = job.Epoch, FromCache = true,
+                        Detail = "Reused verified, derived media analysis."
+                    };
+                    InsertCache(cacheKey, observation);
                 }
             }
             if (observation.State != MediaAnalysisState.Complete)
@@ -260,7 +279,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                     cancellation.ThrowIfCancellationRequested();
                     VerifyPathIdentity(path, job.FileIdentity);
                     if (observation.State == MediaAnalysisState.Complete)
+                    {
                         InsertCache(cacheKey, observation);
+                        _analysisDiskCache.Write(cacheKey, observation);
+                    }
                 }
             }
         }
@@ -465,7 +487,7 @@ public sealed partial class LocalMediaDeckRuntimeService
 
     private void InsertCache(string key, MediaAnalysisObservation response)
     {
-        var bytes = checked(response.RgbaPixels?.LongLength ?? 0 +
+        var bytes = checked((response.RgbaPixels?.LongLength ?? 0) +
             (long)(response.Waveform?.Length ?? 0) * 128);
         if (bytes > AnalysisMaximumCacheBytes) return;
         lock (_analysisGate)
