@@ -61,6 +61,18 @@ public sealed partial class NamedPipeOperatorControlTransport : ISequencePrepara
 
 public sealed partial class GrpcOperatorControlTransport : ISequencePreparationTransport
 {
+    public async ValueTask<SequencePreparationContext> GetSequencePreparationContextAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var reply = await ExecuteShowRequestAsync(
+            request => request.GetSequencePreparationContext = new EmptyRequest(), cancellationToken)
+            .ConfigureAwait(false);
+        var status = SequenceJson.Read<SequencePreparationContext>(
+            reply.PayloadJson.ToStringUtf8(), 16 * 1024);
+        status.Validate();
+        return status;
+    }
+
     public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
         SequencePreparationRequest request, CancellationToken cancellationToken = default)
     {
