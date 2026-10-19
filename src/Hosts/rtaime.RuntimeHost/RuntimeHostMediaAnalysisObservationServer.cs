@@ -74,8 +74,12 @@ public sealed class RuntimeHostMediaAnalysisObservationServer : IAsyncDisposable
                 }
                 catch (FormatException) { return; }
 
-                var accepted = _deckAccessor()?.TryReadAnalysisFrame(jobId, token,
-                    out var width, out var height, out var rgba) == true;
+                var width = 0;
+                var height = 0;
+                byte[]? rgba = null;
+                var deck = _deckAccessor();
+                var accepted = deck is not null && deck.TryReadAnalysisFrame(jobId, token,
+                    out width, out height, out rgba);
                 var header = new byte[HeaderLength];
                 BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(0, 4), accepted ? 1 : 0);
                 if (accepted && rgba is not null &&
