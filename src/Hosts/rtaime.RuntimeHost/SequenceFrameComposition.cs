@@ -153,11 +153,21 @@ internal sealed class SequenceFrameComposition
                     _sourceBuffers[index] = new(track.LogicalSourceId,
                         _audioScratch[index].AsMemory(0, audioDestination.Length));
                 }
-                audio = _mixer.ProcessBus(AudioBusId.Program,
-                    audioSamplePosition, audioSampleCount,
-                    audioTracks[0].LogicalSourceId,
-                    _sourceBuffers.AsSpan(0, audioTracks.Length),
-                    _mixedAudio.AsSpan(0, audioDestination.Length));
+                try
+                {
+                    audio = _mixer.ProcessBus(AudioBusId.Program,
+                        audioSamplePosition, audioSampleCount,
+                        audioTracks[0].LogicalSourceId,
+                        _sourceBuffers.AsSpan(0, audioTracks.Length),
+                        _mixedAudio.AsSpan(0, audioDestination.Length));
+                }
+                catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+                {
+                    failure = new("runtime.sequence.composition_audio",
+                        "The existing audio bus could not process the prepared PCM window: " +
+                        exception.GetType().Name);
+                    return false;
+                }
             }
             else
                 _mixedAudio.AsSpan(0, audioDestination.Length).Clear();
