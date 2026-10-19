@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using rtaime.Client;
@@ -119,6 +120,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         ? Sequence.Clips.Max(c => checked(c.TimelineStart + c.Duration))
         : SequenceTimelineGeometry.FrameTicks(1, Sequence?.FrameRate ?? new SequenceRate(50, 1));
     public int TrackCount => Sequence?.Tracks.Length ?? 0;
+    public int VisibleTrackCount => _visibleTrackCount;
     public long VisibleStart => _visibleStart;
     public long VisibleEnd => checked(_visibleStart + VisibleSpan);
     public long VisibleSpan => Math.Max(1, checked((long)Math.Ceiling((double)DurationTicks / _zoom)));
