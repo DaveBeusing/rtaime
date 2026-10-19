@@ -36,10 +36,10 @@ public sealed partial class ExternalControlIntegrationTests
         var saved = await authoring.SaveAsync(new(
             SequenceContract.Version, Guid.NewGuid(), 0, sequence.SequenceId, sequence));
         Assert.True(saved.Saved, string.Join("; ", saved.Issues.Select(i => i.Message)));
-        var expectedHost = fixture.Control.RuntimeTransport!.HostInstanceId!;
-        Assert.False(string.IsNullOrWhiteSpace(expectedHost));
-
         var external = new SequencePreparationClient(grpcTransport);
+        var context = await external.ContextAsync();
+        Assert.Equal(saved.AuthoringRevision, context.AuthoringRevision);
+        var expectedHost = context.RuntimeHostInstanceId;
         var local = new SequencePreparationClient(
             new NamedPipeOperatorControlTransport(fixture.ControlEndpoint));
         var admitted = await external.PrepareAsync(new(SequencePreparationContract.Version,
@@ -79,7 +79,9 @@ public sealed partial class ExternalControlIntegrationTests
             SequenceContract.Version, Guid.NewGuid(), 0, sequence.SequenceId, sequence));
         Assert.True(saved.Saved);
         var preparation = new SequencePreparationClient(external);
-        var hostId = fixture.Control.RuntimeTransport!.HostInstanceId!;
+        var context = await preparation.ContextAsync();
+        Assert.Equal(saved.AuthoringRevision, context.AuthoringRevision);
+        var hostId = context.RuntimeHostInstanceId;
         await Assert.ThrowsAnyAsync<Exception>(async () =>
             await preparation.PrepareAsync(new(SequencePreparationContract.Version,
                 sequence.SequenceId, saved.AuthoringRevision, Guid.NewGuid().ToString())));
@@ -114,11 +116,13 @@ public sealed partial class ExternalControlIntegrationTests
         var discovered = await observer.DiscoverAsync();
         Assert.Contains("control.sequence.prepare", discovered.Capabilities);
         Assert.Contains("control.sequence.preparation.get", discovered.Capabilities);
+        Assert.Contains("control.sequence.preparation.context.get", discovered.Capabilities);
         Assert.DoesNotContain(discovered.Capabilities, c => c.StartsWith("control.sequence.play"));
         var preparation = new SequencePreparationClient(observer);
+        var context = await preparation.ContextAsync();
         var error = await Assert.ThrowsAsync<RpcException>(async () =>
             await preparation.PrepareAsync(new(SequencePreparationContract.Version,
-                Guid.NewGuid(), 1, fixture.Control.RuntimeTransport!.HostInstanceId!)));
+                Guid.NewGuid(), 1, context.RuntimeHostInstanceId)));
         Assert.Equal(StatusCode.PermissionDenied, error.StatusCode);
     }
 }
