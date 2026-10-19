@@ -8,6 +8,8 @@ using rtaime.Operator;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
 
+using Xunit;
+
 namespace rtaime.Tests.Operator;
 
 public sealed class OutputCanvasRealHostTests

@@ -3,6 +3,8 @@ using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Operator;
 
+using Xunit;
+
 namespace rtaime.Tests.Operator;
 
 public sealed class OutputCanvasDraftSessionTests
