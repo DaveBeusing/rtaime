@@ -5,6 +5,8 @@ namespace rtaime.Client;
 
 public interface ISequencePreparationTransport
 {
+    ValueTask<SequencePreparationContext> GetSequencePreparationContextAsync(
+        CancellationToken cancellationToken = default);
     ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
         SequencePreparationRequest request, CancellationToken cancellationToken = default);
     ValueTask<SequencePreparationStatus> GetSequencePreparationAsync(
