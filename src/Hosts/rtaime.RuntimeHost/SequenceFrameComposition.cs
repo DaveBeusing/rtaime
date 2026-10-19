@@ -291,7 +291,7 @@ internal sealed class SequenceFrameComposition
         return true;
     }
 
-    private static byte TransitionWeight(SequenceAudioCompositionTrack track, long tick)
+    internal static byte TransitionWeight(SequenceAudioCompositionTrack track, long tick)
     {
         if (track.TransitionDurationTicks == 0 ||
             tick < track.TransitionStartTicks ||
