@@ -56,6 +56,31 @@ explicit one-to-four-owner software profile is rejected without Program
 side effects. Four-owner planning is a software test profile, not physical
 SSD/GPU/decoder-throughput qualification.
 
+## Runtime-boundary position mapping
+
+The non-rendering `SequenceRuntimePositionMap` in the existing
+`rtaime.Runtime` assembly binds an immutable execution position to the
+**already owned Program boundary slot**, with the configured exact
+`FrameRate`, admitted duration and saved sequence revision. It starts
+Stopped and changes only through explicit Play, Pause, Seek, Stop and
+SetLoop requests. None of these operations starts a timer, decoder,
+worker or production mutation.
+
+A Seek/Pause/Resume/Stop reanchor always changes the mapping generation.
+Loop passes have unique monotonically increasing pass identifiers, so
+prepared samples must match both generation and pass after wraparound.
+Position mapping rejects a reversed boundary slot, invalid seek,
+unsupported rate, exhausted time or invalid identity. Paused maps
+retain their source tick; Stopped and finished non-loop playback have
+no active position. Control's compiled windows and the Runtime position
+mapper are cross-compared at 50/1 and 60000/1001 in Unit tests.
+
+**This is a deterministic slot/transport mapping helper, not a
+connected playback session.** The remaining Runtime integration must
+bind actual admitted native media owner tickets, prepared bounded
+queues and Program output to this generation/pass; a mapped tick by
+itself never proves usable decoded frame/audio data.
+
 ## Required productive execution integration
 
 These are **open acceptance obligations**, not simulated features:
@@ -107,7 +132,7 @@ Runtime Program cadence remain unchanged by execution-planning work.
 
 ## Validation boundary
 
-`SequenceExecutionPlanningTests` exercises rational 50/60000:1001 frame
+`SequenceExecutionPlanningTests` and `SequenceRuntimePositionMapTests` exercise rational 50/60000:1001 frame
 and 48-kHz sample mapping, simultaneous videos/audio, precise transition
 edges, source offsets, overbudget/missing asset rejection, black gaps,
 immutability and deterministic fixed-point fade envelopes.
