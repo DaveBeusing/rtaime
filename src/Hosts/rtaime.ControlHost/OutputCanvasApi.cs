@@ -44,7 +44,12 @@ public sealed partial class ControlHostIpcServer
                     return Success(request, request.MessageType + ".response",
                         new OutputCanvasSnapshot(saved, saved.EditRevision,
                             evidence?.ActiveRenderRevision, targets,
-                            evidence?.ActivationState ?? "RENDERER_REQUIRED", evidence));
+                            evidence?.ActivationState ?? "RENDERER_REQUIRED"));
+                case "control.output.canvas.evidence.get":
+                    if (runtime is null)
+                        return Error(request, "canvas.runtime_unavailable", "Live mapping evidence requires a connected RuntimeHost.");
+                    var appliedEvidence = await _runtimeTransport.GetOutputMappingSnapshotAsync(cancellationToken).ConfigureAwait(false);
+                    return Success(request, request.MessageType + ".response", appliedEvidence);
                 case "control.output.canvas.activate":
                     var command = OutputCanvasJson.Read<OutputCanvasActivationRequest>(request.Payload.GetRawText());
                     if (command.ConfigurationId != saved.ConfigurationId ||
