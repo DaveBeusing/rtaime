@@ -25,8 +25,8 @@ The workspace also shows the existing Engine, Control, Runtime, Media and GPU-pr
 
 ## Canvas and mapping authoring
 
-OUTPUTS now incorporates `OutputCanvasEditorControl` inside the existing full
-`OutputRoutingHealthControl`, without changing compact LIVE/EDIT output rows.
+OUTPUTS mounts a single `OutputCanvasEditorControl` adjacent to the existing full
+`OutputRoutingHealthControl` in MainWindow, without changing or eagerly instantiating the editor inside compact LIVE/EDIT output controls.
 Its single `OutputCanvasEditorViewModel` is owned and disposed by
 `OutputRoutingHealthViewModel`. It uses the already authorized
 `OperatorControlClient` rather than adding a renderer, host, management
