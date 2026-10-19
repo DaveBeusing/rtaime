@@ -150,7 +150,7 @@ public sealed partial class ControlHostIpcServer
                 "Cancel the current native sequence preparation before preparing another.");
 
         var control = _controlAccessor();
-        if (control is null || !control.HasAuthoritativeState || control.State.Revision.Value == 0)
+        if (control is null || !control.HasAuthoritativeState)
             return Error(message, "sequence.preparation.authority_unavailable",
                 "ControlHost has no committed production authority.");
         var authority = control.State;
@@ -254,7 +254,10 @@ public sealed partial class ControlHostIpcServer
             RuntimeContractVersion.Current,
             PreparedExecutionId.New(),
             new AuthoritySnapshotReference(authority.ProductionId.Value, authority.Revision),
-            new Generation(authority.Revision.Value), bindings.ToArray());
+            // Revision.Initial is a valid committed production state. Decoder preparation
+            // needs a nonzero independent resource generation, not a higher
+            // production revision or an implicit production mutation.
+            new Generation(authority.Revision.Next().Value), bindings.ToArray());
         var command = new SequenceRuntimePrepareCommand(
             SequencePreparationContract.Version, request.ExpectedRuntimeHostInstanceId,
             request.SequenceId, request.ExpectedAuthoringRevision,
