@@ -107,6 +107,36 @@ public sealed class SequenceMediaPreparationIntegrationTests
     }
 
     [Fact]
+    public void Large_boundary_jump_rejects_stale_native_sequence_samples()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, fingerprint);
+        var ready = decks.PrepareSequenceMedia(execution, map, owners);
+        Assert.True(ready.Prepared, ready.Failure?.Message);
+
+        var playing = map.Play(100);
+        Assert.True(playing.TryMap(100, out var start));
+        var reprerolled = decks.RepositionSequenceMedia(map.SequenceId, 7, start);
+        Assert.True(reprerolled.Prepared, reprerolled.Failure?.Message);
+
+        // The native worker has at most eight queued 50-fps frames. Skipping
+        // directly to frame 19 must not present a frame from that older queue.
+        Assert.True(playing.TryMap(119, out var jumped));
+        Assert.Equal(19 * 4800L, jumped.Tick);
+        Assert.False(decks.TryTakeSequenceMedia(map.SequenceId, 7, owners[0].SourceId,
+            jumped, jumped.Tick, out var stale, out var issue));
+        Assert.Null(stale);
+        Assert.Equal("runtime.sequence.stale_sample", issue?.Code);
+        Assert.Equal(2, decks.ResourceSnapshot.ReservedOwners);
+
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
     public void Tampered_second_source_rolls_back_all_native_owners_without_publishing_a_session()
     {
         if (!OperatingSystem.IsWindows()) return;
