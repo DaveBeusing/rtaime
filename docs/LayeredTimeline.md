@@ -29,6 +29,18 @@ catalogue asset identities. The existing authoring model preserves
 transition IDs and typed transition semantics; this UI sends real
 transitions rather than painting unrelated decorations.
 
+`+ NEW` persists a new empty four-track 50/1 sequence (two video and
+two audio tracks routed to the existing `program` bus) through the
+existing versioned Save transaction. Online Media Library clip
+payloads may be dragged onto a matching saved Video/Audio track;
+the editor rereads the authoritative asset catalogue for availability,
+fingerprint and duration, then submits a typed `InsertClip` edit
+at the local edit cursor. ControlHost performs its own independent
+catalogue and optimistic-revision validation before saving. Neither
+drag intent nor an imported clip enables playback or changes
+Program. No graphics assets or file paths are fabricated in the
+media-library import path.
+
 All edits are typed `SequenceMutationRequest` transactions with the
 currently read optimistic library revision. The UI supports select,
 Ctrl-toggle and Shift-range selection; local move/trim preview with mouse
