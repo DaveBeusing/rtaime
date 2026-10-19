@@ -423,6 +423,23 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return Array.AsReadOnly(mapped);
 	}
 
+
+    public async ValueTask<OutputCanvasActivationResult> ActivateOutputMappingAsync(
+        OutputCanvasRuntimeRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(
+            "runtime.output.mapping.activate", request, cancellationToken).ConfigureAwait(false);
+        return OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(response.Payload.GetRawText());
+    }
+
+    public async ValueTask<OutputCanvasActivationResult> GetOutputMappingSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(
+            "runtime.output.mapping.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+        return OutputCanvasJson.ReadResponse<OutputCanvasActivationResult>(response.Payload.GetRawText());
+    }
+
 	public async ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("runtime.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
