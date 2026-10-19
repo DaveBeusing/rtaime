@@ -102,12 +102,32 @@ public partial class OperatorMediaLibraryView : UserControl
 	{
 		MediaPool.CancelHover();
 		if (target.ContextMenu is not { } menu) return;
+		var item = target.DataContext as MediaPoolItemViewModel;
+		var multi = MediaPool.HasMultipleSelection;
 		foreach (var entry in menu.Items.OfType<Controls.RtaimeMenuItem>())
 		{
-			var readOnly = entry.Header?.ToString() is "Properties" or "Reveal in Explorer" or "Prepare selected assets…";
-			entry.IsEnabled = readOnly || !MediaPool.HasMultipleSelection;
-			entry.ToolTip = !readOnly && MediaPool.HasMultipleSelection
-				? "Select one asset for this action. No partial bulk mutation is performed." : null;
+			var action = entry.Header?.ToString();
+			entry.IsEnabled = action switch
+			{
+				"Prepare selected assets…" => true, // The actual Prepare command enforces the bounded eligible selection.
+				"Open in Preview" => !multi && MediaPool.CanDropToPreview(item),
+				"Add to Timeline" => !multi && item is not null && Timeline.CanAcceptMediaPoolDrop(item,
+					item.Kind switch { MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
+						MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
+						MediaPoolItemKind.Graphics => TimelineTrackCategory.Overlay,
+						_ => (TimelineTrackCategory?)null }),
+				"Add Cue at Playhead" => !multi && item?.Kind == MediaPoolItemKind.Clip &&
+					string.Equals(item.ReferenceId, MediaDeck.AssetId, StringComparison.Ordinal),
+				"Reveal in Explorer" => !multi && item?.CanRevealInExplorer == true &&
+					item.LocalPath is { } path && File.Exists(path),
+				"Relink Media…" or "Remove from Library" => !multi && item?.Kind == MediaPoolItemKind.Clip &&
+					Guid.TryParse(item.ReferenceId, out _),
+				"Properties" => !multi && item is not null,
+				_ => !multi
+			};
+			entry.ToolTip = entry.IsEnabled ? null : multi
+				? "This action needs one asset. Review multi-selection with the bounded batch controls."
+				: "Unavailable for this asset or current production context.";
 		}
 	}
 
@@ -137,10 +157,15 @@ public partial class OperatorMediaLibraryView : UserControl
 			? MediaPool.SelectedItems.ToArray()
 			: [item];
 		var payload = new MediaAssetDragPayload(item, selected);
-		DragDrop.DoDragDrop(
-			(DependencyObject)sender,
-			new DataObject(typeof(MediaAssetDragPayload), payload),
-			DragDropEffects.Copy);
+		MediaPool.ShowDragIntent(payload);
+		try
+		{
+			DragDrop.DoDragDrop(
+				(DependencyObject)sender,
+				new DataObject(typeof(MediaAssetDragPayload), payload),
+				DragDropEffects.Copy);
+		}
+		finally { MediaPool.ClearDragIntent(); }
 	}
 
 	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
