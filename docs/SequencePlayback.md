@@ -202,8 +202,68 @@ media bytes or paths are returned to the Client.
 States `PREPARED`, `REJECTED`, `STALE`, and `CANCELED` describe
 the **native preparation lifecycle only**. In particular, they never
 promote `SequenceList.PlaybackState` or `SequenceSnapshot.PlaybackState`
-from `UNAVAILABLE`. No Play/Pause/Seek/Loop/Take operation is advertised
-yet, because no sequence samples reach a committed output sink.
+from `UNAVAILABLE`. The separately versioned shuttle staging below
+adds cue and native transport intent, but **not** output or Take.
+
+## Authority-fenced native shuttle staging
+
+The optional `rtaime.sequence-shuttle.v1` capability extends the exact
+prepared sequence from `rtaime.sequence-preparation.v1`. It does **not**
+replace authoring or declare an output renderer. The Client uses the existing
+Named Pipe or authenticated external-control gRPC path with additive tags
+124 (observation) and 125 (action). Operator or Administrator may Cue, Play,
+Pause, Stop, Seek, step one rational frame backward/forward and change loop
+intent; Observer may inspect read-only state. All mutating commands include
+the last confirmed shuttle state revision and complete original preparation
+reference. An ambiguous result is observed again, never blindly retried.
+
+ControlHost revalidates current committed production, saved sequence revision,
+catalogue revision and exact RuntimeHost lifetime before forwarding each
+request. Any changed authority invalidates the prepared owner and requires
+explicit new preparation; it cannot adopt a newer editor draft. RuntimeHost
+also checks the current committed production authority. Old Runtime peers
+reject the additive operation rather than treating an unknown command as a
+successful media change. Control rechecks the same authority set **after**
+potentially delayed native preroll too; a newer saved/committed revision
+cannot be acknowledged by an older shuttle command.
+
+The Runtime-owned `SequenceRuntimePositionMap` uses the **existing**
+Program frame sequence as its only time base. Cue/Seek and frame-step use
+integer 240000-tick rational time; Pause/Stop/Loop generation changes
+fence previous native queues. Native seek and preroll use the existing
+bounded `LocalMediaDecodeWorker` owners and the shared resource ledger
+on the management path, never a second timer or synchronous native read
+on Program cadence. A confirmed preroll reanchors the logical sequence
+position to the actual current Runtime Program slot **without changing**
+its native generation. Stopping retains native staging but invalidates
+the previous playback generation until an explicit new preroll. The
+original preparation reference and its generation remain stable until
+Cancel even when individual decoder generations change. If native repreroll
+fails but the former worker pool is **confirmed cleaned**, the Runtime
+retains only a small original-identity cleanup receipt with `CANCELED`
+state. Control can observe or explicitly cancel the receipt and release
+its previous preparation owner before a new Prepare. Failed native
+cleanup remains quarantined and requires supported RuntimeHost recovery.
+Ambiguous commands are never automatically replayed.
+
+`SequenceShuttleObservation` states `STOPPED`, `PAUSED`,
+`PLAYING`, and `ENDED` are **native position/queue management states**,
+not visible video or actual produced audio. `NativePrepared=true` means
+all prepared native queues have evidence for the currently expected
+decoder generation and loop pass. At a loop wrap with no confirmed new
+preroll, `NativePrepared=false` rather than a repeated old frame.
+`OutputState` is always **`UNAVAILABLE`**. There is no committed
+sequence Preview picture, output bus, Program Take, or UI playback
+capability in this stage, and `SequenceList/Get.PlaybackState` remains
+`UNAVAILABLE`. A real compositor/mixer sink must still validate every
+lease after queued work and before presenting any pixel/sample.
+
+Windows integration tests exercise native queue ownership through
+Cue, frame-step, Play and Stop, plus authenticated Client/Control/Runtime
+roundtrips, rejection of older optimistic revisions, changed
+catalogue/authoring authority and unchanged Program state.
+These tests establish authoritative transport *staging*, not a combined
+two-video/two-audio broadcast output.
 
 ## Isolated two-source image and audio composition
 

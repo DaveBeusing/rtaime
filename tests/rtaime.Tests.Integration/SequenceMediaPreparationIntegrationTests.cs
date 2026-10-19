@@ -34,6 +34,129 @@ public sealed class SequenceMediaPreparationIntegrationTests
     }
 
     [Fact]
+    public void Shuttle_uses_real_prepared_native_workers_and_same_Runtime_frame_clock_without_Program_output()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, hash);
+        var staged = decks.PrepareSequenceMedia(execution, map, owners);
+        Assert.True(staged.Prepared, staged.Failure?.Message);
+        var host = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(SequencePreparationContract.Version,
+            map.SequenceId, 7, host, execution.PreparedExecutionId.ToString(), 1);
+        var authority = execution.AuthoritySnapshot;
+        ulong slot = 100;
+        var initial = decks.GetSequenceShuttle(reference, host,
+            authority.StateId, authority.Revision, slot);
+        Assert.Equal("STOPPED", initial.State);
+        Assert.Equal("UNAVAILABLE", initial.OutputState);
+        Assert.True(initial.NativePrepared);
+        Assert.Equal(0UL, initial.StateRevision);
+
+        var cued = decks.ApplySequenceShuttle(new(SequenceShuttleContract.Version,
+            reference, 0, SequenceShuttleAction.Cue, PositionTicks: 5 * 4800),
+            host, authority.StateId, authority.Revision, () => slot);
+        Assert.Equal("PAUSED", cued.State);
+        Assert.Equal(5 * 4800, cued.PositionTicks);
+        Assert.True(cued.NativePrepared);
+        Assert.Equal("PREPARED", decks.GetPreparedSequence(reference, host).State);
+        Assert.Equal(1UL, decks.GetPreparedSequence(reference, host).Generation);
+        Assert.Throws<InvalidOperationException>(() => decks.ApplySequenceShuttle(new(
+            SequenceShuttleContract.Version, reference, 0, SequenceShuttleAction.Play),
+            host, authority.StateId, authority.Revision, () => slot));
+
+        var stepped = decks.ApplySequenceShuttle(new(SequenceShuttleContract.Version,
+            reference, cued.StateRevision, SequenceShuttleAction.StepBackward),
+            host, authority.StateId, authority.Revision, () => slot);
+        Assert.Equal(4 * 4800, stepped.PositionTicks);
+        Assert.True(stepped.DecodeGeneration > cued.DecodeGeneration);
+
+        var playing = decks.ApplySequenceShuttle(new(SequenceShuttleContract.Version,
+            reference, stepped.StateRevision, SequenceShuttleAction.Play),
+            host, authority.StateId, authority.Revision, () => slot);
+        Assert.Equal("PLAYING", playing.State);
+        Assert.Equal(4 * 4800, playing.PositionTicks);
+        slot++;
+        var observed = decks.GetSequenceShuttle(reference, host,
+            authority.StateId, authority.Revision, slot);
+        Assert.Equal(5 * 4800, observed.PositionTicks);
+        Assert.True(observed.NativePrepared);
+        Assert.Equal("UNAVAILABLE", observed.OutputState);
+        Assert.Equal(2, decks.ResourceSnapshot.ReservedOwners);
+
+        var stopped = decks.ApplySequenceShuttle(new(SequenceShuttleContract.Version,
+            reference, observed.StateRevision, SequenceShuttleAction.Stop),
+            host, authority.StateId, authority.Revision, () => slot);
+        Assert.Equal("STOPPED", stopped.State);
+        Assert.False(stopped.NativePrepared);
+        Assert.Equal(2, decks.ResourceSnapshot.ReservedOwners);
+        var closed = decks.CancelPreparedSequence(reference, host);
+        Assert.Equal("CANCELED", closed.State);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Throws<InvalidOperationException>(() =>
+            decks.GetSequenceShuttle(reference, host, authority.StateId, authority.Revision, slot));
+    }
+
+    [Fact]
+    public void Shuttle_rejects_forged_Runtime_authority_and_unloaded_preparation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, hash);
+        Assert.True(decks.PrepareSequenceMedia(execution, map, owners).Prepared);
+        var host = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(SequencePreparationContract.Version,
+            map.SequenceId, 7, host, execution.PreparedExecutionId.ToString(), 1);
+        Assert.Throws<InvalidOperationException>(() => decks.GetSequenceShuttle(
+            reference, host, Identity.New(), execution.AuthoritySnapshot.Revision, 100));
+        Assert.Throws<InvalidOperationException>(() => decks.GetSequenceShuttle(
+            reference with { AuthoringRevision = 8 }, host,
+            execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision, 100));
+        Assert.Throws<InvalidOperationException>(() => decks.GetSequenceShuttle(
+            reference, Guid.NewGuid().ToString("D"),
+            execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision, 100));
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
+    public void Failed_native_reposition_confirmed_cleanup_can_be_observed_and_reprepared()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 1);
+        var (execution, map, owners) = Request(decks, asset.Path, hash, 1);
+        // Explicit internal overflow fault injection: an ordinary authorized
+        // SequenceRuntimePositionMap cannot request such an out-of-range tick.
+        owners[0] = owners[0] with { SourceInTicks = 1 };
+        Assert.True(decks.PrepareSequenceMedia(execution, map, owners).Prepared);
+        var failed = decks.RepositionSequenceMedia(map.SequenceId, 7,
+            new SequenceRuntimePosition(long.MaxValue, 2, 0));
+        Assert.False(failed.Prepared);
+        Assert.Equal("runtime.sequence.reposition_failed", failed.Failure?.Code);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        Assert.Equal(0, decks.ResourceSnapshot.QuarantinedOwners);
+        var host = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(
+            SequencePreparationContract.Version, map.SequenceId, 7,
+            host, execution.PreparedExecutionId.ToString(), 1);
+        var observed = decks.GetPreparedSequence(reference, host);
+        Assert.Equal("CANCELED", observed.State);
+        Assert.Equal(0, observed.DecoderOwners);
+        var canceled = decks.CancelPreparedSequence(reference, host);
+        Assert.Equal("CANCELED", canceled.State);
+        Assert.Throws<InvalidOperationException>(() => decks.GetPreparedSequence(reference, host));
+        Assert.True(decks.PrepareSequenceMedia(execution, map, owners).Prepared);
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
     public void Native_video_and_audio_clips_share_exact_prepared_decoder_owners()
     {
         if (!OperatingSystem.IsWindows()) return;

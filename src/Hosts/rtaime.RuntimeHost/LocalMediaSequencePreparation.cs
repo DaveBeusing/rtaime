@@ -50,6 +50,12 @@ public sealed partial class LocalMediaDeckRuntimeService
 {
     private readonly object _sequenceGate = new();
     private PreparedSequenceMedia? _sequenceOwners;
+    // A confirmed clean native shutdown retains only the original stable owner
+    // identity until ControlHost observes or cancels it, not disposed frame pools.
+    private CleanedSequencePreparation? _sequenceCleanedAfterFault;
+    private sealed record CleanedSequencePreparation(
+        Guid SequenceId, ulong AuthoringRevision,
+        string PreparedExecutionId, ulong InitialGeneration);
     private const long SequenceTicksPerSecond = 240_000;
 
     /// <summary>Native open, fingerprint verification and preroll: management thread only, never a Program boundary.</summary>
@@ -96,10 +102,16 @@ public sealed partial class LocalMediaDeckRuntimeService
                     staged.Add(OpenSequenceOwner(sources[encountered], tickets[encountered], cancellationToken));
                 }
                 var ready = new PreparedSequenceMedia(execution.PreparedExecutionId,
-                    execution.AuthoritySnapshot.Revision.Value, map.SequenceId,
-                    map.AuthoringRevision, map.Generation, 0, staged.ToArray());
+                    execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision.Value,
+                    map.SequenceId, map.AuthoringRevision, map.Generation, map.Generation,
+                    0, staged.ToArray());
                 lock (_sequenceGate)
+                {
                     _sequenceOwners = ready;
+                    _sequenceCleanedAfterFault = null;
+                    _sequenceShuttleMap = map;
+                    _sequenceShuttleRevision = 0;
+                }
                 return new(true, map.SequenceId, map.AuthoringRevision, map.Generation, 0,
                     staged.Count, null);
             }
@@ -261,10 +273,16 @@ public sealed partial class LocalMediaDeckRuntimeService
             catch (Exception exception) when (exception is IOException or OverflowException or InvalidOperationException)
             {
                 var cleanup = CleanupSequenceOwners(original.Owners);
+                var cleaned = cleanup is null && _ledger.Snapshot.QuarantinedOwners == 0;
+                if (cleaned)
+                    lock (_sequenceGate)
+                        _sequenceCleanedAfterFault = new(original.SequenceId,
+                            original.AuthoringRevision, original.PreparedExecution.ToString(),
+                            original.InitialGeneration);
                 return new(false, sequenceId, authoringRevision, next.Generation,
-                    next.LoopPass, 0, new(cleanup is null ? "runtime.sequence.reposition_failed" :
+                    next.LoopPass, 0, new(cleaned ? "runtime.sequence.reposition_failed" :
                     "runtime.sequence.cleanup_quarantined",
-                    cleanup is null ? "Native repreroll failed and the staged owners were closed: " + exception.Message :
+                    cleaned ? "Native repreroll failed and the staged owners were closed: " + exception.Message :
                     "Native repreroll failed; uncertain cleanup was quarantined. Restart RuntimeHost."));
             }
         }
@@ -279,6 +297,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 prepared = _sequenceOwners;
                 _sequenceOwners = null;
+                _sequenceShuttleMap = null;
+                _sequenceShuttleRevision = 0;
             }
             if (prepared is null) return;
             var error = CleanupSequenceOwners(prepared.Owners);
@@ -442,8 +462,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         new(false, map.SequenceId, map.AuthoringRevision, map.Generation, 0, 0, new(code, message));
 
     private sealed record PreparedSequenceMedia(
-        PreparedExecutionId PreparedExecution, ulong AuthorityRevision,
-        Guid SequenceId, ulong AuthoringRevision, ulong Generation, ulong LoopPass,
+        PreparedExecutionId PreparedExecution, Identity AuthorityStateId,
+        ulong AuthorityRevision, Guid SequenceId, ulong AuthoringRevision,
+        ulong InitialGeneration, ulong Generation, ulong LoopPass,
         SequenceMediaDecodeOwner[] Owners);
 
     private sealed class SequenceMediaDecodeOwner(

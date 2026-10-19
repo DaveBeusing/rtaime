@@ -74,6 +74,48 @@ public sealed class SequenceRuntimePositionMap
         return true;
     }
 
+    /// <summary>
+    /// Position a stopped or paused sequence at a specific authored tick without
+    /// changing committed Program. The caller must separately repreroll native
+    /// owners before publishing any preview frame.
+    /// </summary>
+    public SequenceRuntimePositionMap Cue(ulong programSlot, long tick)
+    {
+        if (tick < 0 || tick >= DurationTicks)
+            throw new ArgumentOutOfRangeException(nameof(tick));
+        if (State == SequenceRuntimeTransportState.Playing)
+            throw new InvalidOperationException("Pause a running sequence before cueing it.");
+        return Reanchor(programSlot, tick, SequenceRuntimeTransportState.Paused);
+    }
+
+    /// <summary>One rational Program frame step, not an independent UI clock.</summary>
+    public SequenceRuntimePositionMap Step(ulong programSlot, int direction)
+    {
+        if (direction is not (-1 or 1))
+            throw new ArgumentOutOfRangeException(nameof(direction));
+        if (State == SequenceRuntimeTransportState.Playing)
+            throw new InvalidOperationException("Pause a running sequence before stepping.");
+        var periodNumerator = (Int128)AuthoringTicksPerSecond * ProgramRate.Denominator;
+        var current = (Int128)StartTick * ProgramRate.Numerator / periodNumerator;
+        var next = Math.Max(0L, checked((long)current + direction));
+        var target = (Int128)next * periodNumerator / ProgramRate.Numerator;
+        return Cue(programSlot, target >= DurationTicks ? DurationTicks - 1 : checked((long)target));
+    }
+
+    /// <summary>
+    /// After the existing decoder workers confirm preroll on the management
+    /// lane, reanchor at the *current* Runtime Program slot without changing
+    /// the native sample generation. This method itself proves no decoder
+    /// readiness and must never be used as authorization for an output sink.
+    /// </summary>
+    public SequenceRuntimePositionMap WithConfirmedPrerollAnchor(ulong programSlot)
+    {
+        if (programSlot < AnchorProgramSlot)
+            throw new ArgumentException("The Runtime Program slot cannot move backwards.", nameof(programSlot));
+        return new(SequenceId, AuthoringRevision, ProgramRate, DurationTicks,
+            programSlot, StartTick, Generation, Loop, State);
+    }
+
     public SequenceRuntimePositionMap Play(ulong programSlot)
     {
         if (State == SequenceRuntimeTransportState.Playing)

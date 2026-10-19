@@ -110,4 +110,36 @@ public sealed class SequenceRuntimePositionMapTests
         Assert.Throws<ArgumentException>(() => prepared.Seek(499, 0));
         Assert.Throws<ArgumentException>(() => prepared.Stop(499));
     }
+
+    [Theory]
+    [InlineData(50, 1, 4800)]
+    [InlineData(60000, 1001, 4004)]
+    public void Prepared_native_cue_step_and_clock_reanchor_retain_exact_rational_generation(
+        long numerator, long denominator, long frameTicks)
+    {
+        var map = SequenceRuntimePositionMap.Prepare(SequenceId, 12,
+            new FrameRate(numerator, denominator), frameTicks * 20, 400, 2);
+        var cued = map.Cue(401, 3 * frameTicks);
+        Assert.Equal(SequenceRuntimeTransportState.Paused, cued.State);
+        Assert.Equal(3UL, cued.Generation);
+        Assert.True(cued.TryMap(402, out var held));
+        Assert.Equal(3L * frameTicks, held.Tick);
+        var backward = cued.Step(402, -1);
+        Assert.Equal(2L * frameTicks, backward.StartTick);
+        var forward = backward.Step(403, 1);
+        Assert.Equal(3L * frameTicks, forward.StartTick);
+        var playing = forward.Play(404);
+        Assert.True(playing.TryMap(405, out var frameBeforePreroll));
+        Assert.Equal(4L * frameTicks, frameBeforePreroll.Tick);
+        var confirmed = playing.WithConfirmedPrerollAnchor(420);
+        Assert.Equal(playing.Generation, confirmed.Generation);
+        Assert.Equal(3L * frameTicks, confirmed.StartTick);
+        Assert.True(confirmed.TryMap(420, out var atPreroll));
+        Assert.Equal(3L * frameTicks, atPreroll.Tick);
+        Assert.True(confirmed.TryMap(421, out var next));
+        Assert.Equal(4L * frameTicks, next.Tick);
+        Assert.Throws<InvalidOperationException>(() => playing.Step(406, -1));
+        Assert.Throws<InvalidOperationException>(() => playing.Cue(406, frameTicks));
+        Assert.Throws<ArgumentException>(() => playing.WithConfirmedPrerollAnchor(403));
+    }
 }

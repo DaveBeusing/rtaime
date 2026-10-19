@@ -243,7 +243,7 @@ message ExternalControlRequest {
     JsonPayloadRequest get_media_analysis = 99;
     JsonPayloadRequest cancel_media_analysis = 100;
 
-    // Sequence range 114-145. Native preparation only; no Play/Take operation.
+    // Sequence range 114-145. Native preparation and staged shuttle; no Program Take.
     EmptyRequest list_sequences = 114;
     JsonPayloadRequest get_sequence = 115;
     JsonPayloadRequest save_sequence = 116;
@@ -254,6 +254,8 @@ message ExternalControlRequest {
     JsonPayloadRequest get_sequence_preparation = 121;
     JsonPayloadRequest cancel_sequence_preparation = 122;
     EmptyRequest get_sequence_preparation_context = 123;
+    JsonPayloadRequest get_sequence_shuttle = 124;
+    JsonPayloadRequest apply_sequence_shuttle = 125;
     EmptyRequest get_output_canvas = 146;
     JsonPayloadRequest validate_output_canvas = 147;
     JsonPayloadRequest save_output_canvas = 148;
