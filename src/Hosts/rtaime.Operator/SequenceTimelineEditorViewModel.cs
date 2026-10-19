@@ -472,6 +472,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             SelectedWaveform = presentation;
             WaveformStatus = presentation?.Status ?? "WAVEFORM · no current observation";
             Changed(nameof(SelectedWaveform)); Changed(nameof(WaveformStatus));
+            RefreshViewport();
         }
         catch (OperationCanceledException) { }
     }
@@ -504,7 +505,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         {
             var rows = SequenceTimelineGeometry.Project(definition, VisibleStart, VisibleEnd,
                 FirstTrack, _visibleTrackCount, _viewportWidth);
-            foreach (var row in rows) VisibleRows.Add(row);
+            foreach (var row in rows)
+                VisibleRows.Add(row with { Clips = row.Clips.Select(c => c with {
+                    Selected = _selectedClips.Contains(c.Id),
+                    Waveform = c.Id == SelectedWaveform?.ClipId ? SelectedWaveform : null
+                }).ToArray() });
         }
         Changed(nameof(VisibleStart)); Changed(nameof(VisibleEnd));
         Changed(nameof(VisibleSpan)); Changed(nameof(VisibleRows));
