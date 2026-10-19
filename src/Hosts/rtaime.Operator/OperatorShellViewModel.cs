@@ -620,7 +620,8 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility StandardViewerVisibility => IsAiWorkspace || IsMultiviewWorkspace || IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility LiveWorkspaceVisibility => IsMultiviewWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility NonLiveCenterVisibility => IsMultiviewWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility AIWorkspaceVisibility => IsAiWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility NonLiveCenterVisibility => IsAiWorkspace || IsMultiviewWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public bool WorkspacePanelResizeEnabled => true;
 	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -953,6 +954,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
 		OnPropertyChanged(nameof(LiveWorkspaceVisibility));
+		OnPropertyChanged(nameof(AIWorkspaceVisibility));
 		OnPropertyChanged(nameof(NonLiveCenterVisibility));
 		OnPropertyChanged(nameof(WorkspacePanelResizeEnabled));
 		OnPropertyChanged(nameof(ProductionControlsVisibility));

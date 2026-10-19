@@ -1,0 +1,167 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.AIProcessingWorkspaceControl"
+    x:Name="AIWorkspaceRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:rtaime.Operator"
+    xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+    UseLayoutRounding="True"
+    SnapsToDevicePixels="True"
+    AutomationProperties.Name="Governed AI processing workspace">
+    <Grid Margin="12,8,12,10" ClipToBounds="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource OperatorPanel}" Padding="12,8">
+            <DockPanel LastChildFill="True">
+                <controls:RtaimeStatusBadge DockPanel.Dock="Right"
+                    Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+                    Content="{Binding AIStatus}"
+                    ToolTip="Runtime-reported effect state; acceptance is not executed output." />
+                <StackPanel>
+                    <TextBlock Text="AI PROCESSING" Style="{StaticResource OperatorSectionTitle}" />
+                    <TextBlock Text="Governed reference inference · Program authority remains with Control / Runtime"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="44*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="56*" />
+            </Grid.ColumnDefinitions>
+
+            <controls:RtaimeScrollViewer Grid.Column="0"
+                VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                AutomationProperties.Name="AI capabilities and approval workflow">
+                <StackPanel>
+                    <Border Style="{StaticResource OperatorPanel}" Padding="12" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="INSTALLED CAPABILITIES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
+                            <controls:RtaimeButton Content="REFRESH PROVIDERS"
+                                Command="{Binding AIEffects.RefreshCommand}"
+                                AutomationProperties.Name="Refresh installed AI provider evidence"
+                                ToolTip="Read connected provider descriptors; does not install models or change Program."
+                                Margin="0,0,0,8" />
+                            <controls:RtaimeComboBox ItemsSource="{Binding AIEffects.Capabilities}"
+                                SelectedItem="{Binding AIEffects.Selected, Mode=TwoWay}"
+                                DisplayMemberPath="Label"
+                                AutomationProperties.Name="Select installed AI capability"
+                                Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding AIEffects.Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding AIEffects.Freshness}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                            <TextBlock Text="{Binding AIEffects.Availability}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding AIEffects.CapabilityIdentity}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource OperatorPanel}" Padding="12" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="PROVIDER / MODEL EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="PROVIDER" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.ProviderIdentity}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="ADVERTISED MODEL VERSIONS" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.ModelEvidence}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="EXPECTED INPUT" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.InputContract}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="OUTPUT DESCRIPTOR" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.OutputContract}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="DECLARED RESOURCE REQUIREMENTS" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.ResourceRequirements}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="PACKAGE PROVENANCE" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding AIEffects.Provenance}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,7" />
+                            <TextBlock Text="Advertised requirements are not measured GPU, VRAM or monetary usage. Reference execution is bounded to one request, at most 5 Hz and a 500 ms request deadline; trained-model quality and physical GPU qualification remain unverified."
+                                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource OperatorPanel}" Padding="12" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="TEST / APPROVE / APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding AIEffects.ProgramTarget}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <controls:RtaimeButton Content="TEST · DESCRIPTOR ONLY"
+                                Command="{Binding AIEffects.TestCommand}"
+                                AutomationProperties.Name="Test AI descriptor without modifying Program"
+                                ToolTip="Tests the current committed Program descriptor; not an independent visual preview."
+                                Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding AIEffects.TestStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <controls:RtaimeCheckBox IsChecked="{Binding AIEffects.Approved, Mode=TwoWay}"
+                                IsEnabled="{Binding AIEffects.CanApprove}"
+                                AutomationProperties.Name="Approve tested AI effect for committed Program"
+                                ToolTip="Revision/source-bound opt-in. Refresh and TEST again after Program or Runtime changes."
+                                Margin="0,0,0,8">
+                                <TextBlock Text="I approve this tested effect on Program" TextWrapping="Wrap" />
+                            </controls:RtaimeCheckBox>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <controls:RtaimeButton Grid.Column="0" Content="AI ON"
+                                    Command="{Binding EnableAIShowcaseCommand}"
+                                    AutomationProperties.Name="Request approved AI effect on Program"
+                                    Background="{DynamicResource OperatorAccentSurfaceBrush}"
+                                    BorderBrush="{DynamicResource OperatorAccentBrush}"
+                                    ToolTip="Requests governed activation; monitor Accepted and Executed separately." />
+                                <controls:RtaimeButton Grid.Column="2" Content="AI OFF"
+                                    Command="{Binding DisableAIShowcaseCommand}"
+                                    AutomationProperties.Name="Request AI effect bypass"
+                                    ToolTip="Requests safe bypass; confirm from authoritative Runtime state." />
+                            </Grid>
+                            <TextBlock Text="{Binding AIEffects.NextStep}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </controls:RtaimeScrollViewer>
+
+            <Grid Grid.Column="2" MinWidth="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource OperatorPanel}" Padding="10,7" Margin="0,0,0,6">
+                    <StackPanel>
+                        <TextBlock Text="CURRENT PROGRAM · SHARED MONITORING" Style="{StaticResource OperatorSectionTitle}" />
+                        <TextBlock Text="Live output observation, not an independent AI preview or original/result A/B."
+                            Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <local:ProgramViewer Grid.Row="1"
+                    Frame="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    GpuFrame="{Binding Monitoring.ProgramGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    SourceName="{Binding ProgramSourceName}"
+                    SourceId="{Binding ProgramSourceId}"
+                    Format="{Binding Monitoring.ProgramFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    Diagnostics="{Binding Monitoring.ProgramDiagnostics, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    ProductionFormat="{Binding CurrentFormat}"
+                    ColorSpace="N/A"
+                    State="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    OutputState="{Binding ProgramOutput.ViewerOutputState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    CommitStatus="{Binding CommitStatus}"
+                    TransitionStatus="{Binding TransitionStatus}"
+                    MaximizeCommand="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                    FullscreenCommand="{Binding Shell.FullscreenProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+
+                <controls:RtaimeScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    MaxHeight="174" Margin="0,6,0,0" AutomationProperties.Name="AI execution and fallback evidence">
+                    <Border Style="{StaticResource OperatorPanel}" Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="AUTHORITY / EXECUTION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                            <TextBlock Text="{Binding AIEffects.Execution}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding AIEffects.ResultEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,5" />
+                            <TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding AIEffects.Recovery}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,5" />
+                            <TextBlock Text="A/B IMAGE NOT AVAILABLE · The reference TEST returns metadata only. No original/result pair or separate visual image is provided. Never change Program to simulate a preview."
+                                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </controls:RtaimeScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
