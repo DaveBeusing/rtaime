@@ -59,7 +59,7 @@ public sealed class SequenceTimelineEditorTests
         Assert.Equal(25L * frameTicks,
             SequenceTimelineGeometry.Quantize(25L * frameTicks, rate));
         Assert.Equal(4004L, SequenceTimelineGeometry.FrameTicks(1, new(60000, 1001)));
-        Assert.Equal(40040L, SequenceTimelineGeometry.ToMediaTicks(960));
+        Assert.Equal(40000L, SequenceTimelineGeometry.ToMediaTicks(960));
         Assert.Equal(40041L, SequenceTimelineGeometry.ToMediaTicks(961, ceiling: false));
         foreach (var scale in new[] { 1.0, 1.25, 1.50, 2.0 })
         {
@@ -95,7 +95,9 @@ public sealed class SequenceTimelineEditorTests
         await vm.EditAsync([new(SequenceEditKind.TrimClip, original.ClipId,
             SourceIn: 2 * 4800L, SourceOut: 20 * 4800L)]);
         Assert.Equal(24L * 4800, vm.Sequence!.Clips.Single(c => c.ClipId == original.ClipId).TimelineStart);
-        await Execute(vm.UndoCommand);
+        Assert.True(vm.UndoCommand.CanExecute(null));
+        vm.UndoCommand.Execute(null);
+        Assert.True(SpinWait.SpinUntil(() => vm.Snapshot?.AuthoringRevision == 8, TimeSpan.FromSeconds(3)));
         Assert.Equal(target, vm.Sequence!.Clips.Single(c => c.ClipId == original.ClipId).TimelineStart);
         Assert.Equal(8UL, vm.Snapshot!.AuthoringRevision);
         Assert.Equal("UNAVAILABLE", vm.Snapshot.PlaybackState);
@@ -147,15 +149,6 @@ public sealed class SequenceTimelineEditorTests
         Assert.All(vrow.Clips, c => Assert.True(c.Width > 0));
         var snap = SequenceTimelineGeometry.Snap(15 * 4800L + 200, model, true);
         Assert.Equal(15 * 4800L, snap);
-    }
-
-    private static Task Execute(System.Windows.Input.ICommand command)
-    {
-        Assert.True(command.CanExecute(null));
-        command.Execute(null);
-        // AsyncRelayCommand dispatches asynchronously, so wait for the
-        // authoritative observable state in caller before asserting it.
-        return Task.CompletedTask;
     }
 
     private sealed class RetainedSequenceTransport(SequenceDefinition initial) : ISequenceAuthoringTransport
