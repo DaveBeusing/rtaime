@@ -13,6 +13,9 @@
     Loaded="OnLoaded"
     PreviewKeyDown="OnPreviewKeyDown"
     PreviewMouseWheel="OnMouseWheel"
+    PreviewMouseMove="OnCapturedMouseMove"
+    PreviewMouseLeftButtonUp="OnCapturedMouseUp"
+    LostMouseCapture="OnCapturedMouseCaptureLost"
     SizeChanged="OnViewportSizeChanged">
     <UserControl.Resources>
         <SolidColorBrush x:Key="SequenceVideoBrush" Color="{StaticResource OperatorColorTimeline}" />
@@ -226,10 +229,7 @@
                                                     <Border Width="{Binding Width}" Height="38"
                                                         Style="{StaticResource SequenceClipSurface}" Margin="0,2,0,0"
                                                         ToolTip="{Binding Id}"
-                                                        MouseLeftButtonDown="OnClipMouseDown"
-                                                        MouseMove="OnClipMouseMove"
-                                                        MouseLeftButtonUp="OnClipMouseUp"
-                                                        LostMouseCapture="OnClipCaptureLost">
+                                                        MouseLeftButtonDown="OnClipMouseDown">
                                                         <Grid ClipToBounds="True">
                                                             <TextBlock Text="{Binding AssetId}" Margin="7,1,7,0"
                                                                 FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis"
