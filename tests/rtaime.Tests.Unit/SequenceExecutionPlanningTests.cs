@@ -74,6 +74,7 @@ public sealed class SequenceExecutionPlanningTests
         Assert.Equal(byte.MaxValue, video.Single(v => v.AssetId == MediaA).Opacity);
         Assert.Equal((byte)0, video.Single(v => v.AssetId == MediaB).Opacity);
         Assert.Equal(0, video.Single(v => v.AssetId == MediaB).SourcePositionTicks);
+        Assert.All(samples[..count].ToArray(), sample => Assert.Equal(Hash, sample.FingerprintSha256));
         Assert.True(plan.TrySelectAtFrame(4, samples, out count));
         var atLastOverlap = samples[..count].ToArray();
         Assert.Equal((byte)128, atLastOverlap.Single(v => v.AssetId == MediaA && v.Kind == SequenceMediaKind.Video).Opacity);
@@ -188,6 +189,33 @@ public sealed class SequenceExecutionPlanningTests
             var tooSmall = new SequenceRenderSample[1];
             plan.TrySelectAtFrame(3, tooSmall, out _);
         });
+    }
+
+    [Fact]
+    public void Graphics_track_is_ordered_without_consume_a_native_decoder_owner()
+    {
+        var source = FourOwnerSequence(new(50, 1));
+        var graphics = new SequenceTrack(Guid.NewGuid(), "Key", SequenceMediaKind.Graphics, 10);
+        var graphic = new SequenceClip(Guid.NewGuid(), graphics.TrackId,
+            new(MediaD, SequenceMediaKind.Graphics, Hash), 0, 10 * 4800, 0, 10 * 4800);
+        var composition = source with
+        {
+            Tracks = source.Tracks.Append(graphics).ToArray(),
+            Clips = source.Clips.Append(graphic).ToArray()
+        };
+        var catalog = Catalogue().Append(new SequenceAsset(MediaD, SequenceMediaKind.Graphics,
+            SequenceContract.MaximumTime, Hash)).ToArray();
+        var compilation = SequenceExecutionCompiler.Compile(composition, 9, catalog, ["program"], 4);
+        Assert.True(compilation.Succeeded, string.Join("; ", compilation.Issues.Select(i => i.Message)));
+        var plan = compilation.Plan!;
+        Assert.Equal(4, plan.PeakDecoderOwners);
+        var storage = new SequenceRenderSample[6];
+        Assert.True(plan.TrySelectAtFrame(3, storage, out var count));
+        Assert.Equal(6, count);
+        Assert.Equal(SequenceMediaKind.Graphics, storage[count - 1].Kind);
+        Assert.Equal(10, storage[count - 1].LayerOrder);
+        Assert.Equal(byte.MaxValue, storage[count - 1].Opacity);
+        Assert.Equal(Hash, storage[count - 1].FingerprintSha256);
     }
 
     [Fact]
