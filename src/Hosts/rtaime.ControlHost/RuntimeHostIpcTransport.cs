@@ -1106,7 +1106,8 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(_requestTimeout);
-		var gate = messageType == "runtime.sequence.preparation.prepare"
+		var gate = messageType is "runtime.sequence.preparation.prepare" or
+            "runtime.sequence.shuttle.command" or "runtime.sequence.shuttle.get"
             ? _sequencePreparationRequestGate : _requestGate;
         await gate.WaitAsync(timeout.Token).ConfigureAwait(false);
 		try
