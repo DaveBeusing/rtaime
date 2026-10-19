@@ -113,6 +113,41 @@ public sealed class OutputMappingRuntimeIntegrationTests
         Assert.Equal("UNMAPPED", runtime.OutputMappingSnapshot.ActivationState);
     }
 
+    [Fact]
+    public async Task Unknown_source_and_degenerate_quad_fail_closed_without_changing_program()
+    {
+        await using var fixture = CreateFixture();
+        var runtime = fixture.Runtime;
+        var revision = runtime.Snapshot.Runtime.ExecutionRevision.Value;
+
+        var unknownSource = Configuration(fixture, revision: 12, twoSurfaces: true);
+        unknownSource.Surfaces[1] = unknownSource.Surfaces[1] with
+        {
+            Input = new OutputCanvasInput(SourceId: Guid.NewGuid().ToString())
+        };
+        var rejectedSource = runtime.PrepareOutputMapping(
+            new(unknownSource, revision, "integration-runtime"));
+        Assert.Equal("REJECTED", rejectedSource.ActivationState);
+        Assert.Equal("mapping.prepare_rejected.ArgumentException", rejectedSource.FailureCode);
+
+        var degenerate = Configuration(fixture, revision: 13, twoSurfaces: true);
+        degenerate.Surfaces[0] = degenerate.Surfaces[0] with
+        {
+            Destination = new OutputCanvasQuad(new(0, 0), new(0, 0),
+                new(0, 0), new(0, 0))
+        };
+        var rejectedQuad = runtime.PrepareOutputMapping(
+            new(degenerate, revision, "integration-runtime"));
+        Assert.Equal("REJECTED", rejectedQuad.ActivationState);
+        Assert.Equal("mapping.prepare_rejected.ArgumentException", rejectedQuad.FailureCode);
+
+        using var boundary = runtime.ProcessNextBoundary();
+        AssertPixel(boundary.ProgramPixels.Span, runtime.Format, 240, 540, 32, 72, 196);
+        AssertPixel(boundary.ProgramPixels.Span, runtime.Format, 1500, 540, 32, 72, 196);
+        Assert.Null(runtime.OutputMappingSnapshot.ActiveRenderRevision);
+        Assert.Equal(0, boundary.ActiveGpuSurfacesAfterBoundary);
+    }
+
     private static RuntimeOutputRoleSnapshot ProgramOutput(V1RuntimeHostService runtime) =>
         Assert.Single(runtime.Snapshot.OutputRoles!, o => o.RoleId == "program");
 
