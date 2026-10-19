@@ -1,0 +1,215 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.OutputCanvasEditorControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+    UseLayoutRounding="True" SnapsToDevicePixels="True"
+    AutomationProperties.Name="Output mapping editor and authoritative Runtime evidence">
+    <Border Style="{StaticResource OperatorPanel}" Padding="12">
+        <StackPanel>
+            <DockPanel Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="OUTPUT CANVAS / WARP" Style="{StaticResource OperatorSectionTitle}" />
+                    <TextBlock Text="Local geometry drafting · governed Runtime output" Style="{StaticResource OperatorLabel}" />
+                </StackPanel>
+                <controls:RtaimeStatusBadge DockPanel.Dock="Right"
+                    Content="{Binding ActivationState}"
+                    Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+                    ToolTip="Live state requires Runtime evidence; a save or request is not execution." />
+            </DockPanel>
+
+            <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                BorderBrush="{DynamicResource OperatorBorderBrush}"
+                BorderThickness="1" Padding="8" Margin="0,0,0,9">
+                <StackPanel>
+                    <TextBlock Text="{Binding EditingSafety}" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="{Binding DraftSafety}" Style="{StaticResource OperatorValue}"
+                        TextWrapping="Wrap" Margin="0,3,0,5" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="SAVED REVISION" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding SavedRevision}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
+                            <TextBlock Text="REQUESTED / PENDING" Style="{StaticResource OperatorLabel}" Margin="0,7,0,0" />
+                            <TextBlock Text="{Binding PendingRevision}" Style="{StaticResource OperatorValue}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="ACTIVE RUNTIME REVISION" Style="{StaticResource OperatorLabel}" />
+                            <TextBlock Text="{Binding ActiveRevision}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
+                            <TextBlock Text="SAVED DRAFT NEXT" Style="{StaticResource OperatorLabel}" Margin="0,7,0,0" />
+                            <TextBlock Text="{Binding DraftRevision}" Style="{StaticResource OperatorValue}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding ActivationFailure}" Style="{StaticResource OperatorLabel}"
+                        TextWrapping="Wrap" Margin="0,5,0,0" />
+                </StackPanel>
+            </Border>
+
+            <WrapPanel Margin="0,0,0,7">
+                <controls:RtaimeButton Content="RELOAD" Command="{Binding ReloadCommand}"
+                    IsCompact="True" Margin="0,0,5,4"
+                    ToolTip="Read authoritative saved state without discarding unsaved edits." />
+                <controls:RtaimeButton Content="DISCARD &amp; RELOAD" Command="{Binding DiscardAndReloadCommand}"
+                    IsCompact="True" Margin="0,0,5,4"
+                    ToolTip="Explicitly discard local unsaved geometry and read ControlHost." />
+                <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
+                    IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeButton Content="REDO" Command="{Binding RedoCommand}"
+                    IsCompact="True" Margin="0,0,5,4" />
+            </WrapPanel>
+            <TextBlock Text="CANVAS" Style="{StaticResource OperatorLabel}" Margin="0,2,0,3" />
+            <controls:RtaimeComboBox ItemsSource="{Binding Canvases}"
+                SelectedItem="{Binding SelectedCanvas, Mode=TwoWay}"
+                DisplayMemberPath="Name"
+                AutomationProperties.Name="Select logical output canvas"
+                Margin="0,0,0,7" />
+            <WrapPanel Margin="0,0,0,8">
+                <controls:RtaimeButton Content="ADD CANVAS" Command="{Binding AddCanvasCommand}"
+                    IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeButton Content="REMOVE CANVAS" Command="{Binding RemoveCanvasCommand}"
+                    IsCompact="True" Margin="0,0,5,4"
+                    ToolTip="Remove canvas, owned surfaces and bindings from the local draft only." />
+            </WrapPanel>
+
+            <TextBlock Text="AVAILABLE PROGRAM TARGET" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+            <controls:RtaimeComboBox ItemsSource="{Binding Targets}"
+                SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"
+                DisplayMemberPath="Label"
+                AutomationProperties.Name="Control-authorized Runtime output target"
+                Margin="0,0,0,6" />
+            <controls:RtaimeButton Content="BIND SELECTED CANVAS TO PROGRAM"
+                Command="{Binding BindProgramCommand}" IsCompact="True" Margin="0,0,0,10"
+                ToolTip="Only the confirmed Program target is eligible. Existing other output bindings are retained disabled in this saved draft; no live routing changes." />
+
+            <TextBlock Text="SURFACES / Z-ORDER" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+            <controls:RtaimeComboBox ItemsSource="{Binding Surfaces}"
+                SelectedItem="{Binding SelectedSurface, Mode=TwoWay}"
+                DisplayMemberPath="Label"
+                AutomationProperties.Name="Select a mapping surface"
+                Margin="0,0,0,6" />
+            <WrapPanel Margin="0,0,0,8">
+                <controls:RtaimeButton Content="ADD SURFACE" Command="{Binding AddSurfaceCommand}"
+                    IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeButton Content="REMOVE SURFACE" Command="{Binding RemoveSurfaceCommand}"
+                    IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeCheckBox IsChecked="{Binding IsSurfaceEnabled, Mode=TwoWay}"
+                    IsEnabled="{Binding CanEdit}" Margin="3,4,0,0"
+                    AutomationProperties.Name="Enable selected canvas surface">
+                    <TextBlock Text="Enabled" Style="{StaticResource OperatorLabel}" />
+                </controls:RtaimeCheckBox>
+            </WrapPanel>
+
+            <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+                Background="{DynamicResource OperatorAlternateSurfaceBrush}" Margin="0,0,0,5">
+                <controls:OutputCanvasStageSurface Editor="{Binding}"
+                    Height="285" MinHeight="180"
+                    AutomationProperties.Name="Editable four-corner canvas stage with keyboard nudging and zoom" />
+            </Border>
+            <WrapPanel Margin="0,0,0,5">
+                <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}" IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeButton Content="ZOOM +" Command="{Binding ZoomInCommand}" IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeButton Content="ZOOM −" Command="{Binding ZoomOutCommand}" IsCompact="True" Margin="0,0,5,4" />
+                <controls:RtaimeCheckBox IsChecked="{Binding SnapEnabled, Mode=TwoWay}"
+                    Margin="2,4,8,0"><TextBlock Text="Snap 10" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                <controls:RtaimeCheckBox IsChecked="{Binding ShowGuides, Mode=TwoWay}"
+                    Margin="2,4,0,0"><TextBlock Text="Guides" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+            </WrapPanel>
+            <TextBlock Text="Drag surface to move; drag corner handles to warp/resize; Alt-drag rotates. Middle-drag pans, wheel zooms; arrows nudge 1 px (Shift: 10 px). Ctrl bypasses snapping during gesture. No Program pixel rendering occurs in this editor."
+                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+            <TextBlock Text="SURFACE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+            <controls:RtaimeComboBox ItemsSource="{Binding Inputs}"
+                SelectedItem="{Binding SelectedInput, Mode=TwoWay}"
+                DisplayMemberPath="Label"
+                AutomationProperties.Name="Select actual governed bus or configured source for mapped surface"
+                Margin="0,0,0,8" />
+
+            <TextBlock Text="CORNERS / CROP / EDGE BLEND" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,7" />
+            <ItemsControl ItemsSource="{Binding Fields}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,7,7">
+                            <TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" />
+                            <controls:RtaimeTextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                IsCompact="True" MaxLength="48"
+                                AutomationProperties.Name="{Binding Label}"
+                                ToolTip="Invariant decimal or local decimal separator; APPLY NUMERIC updates only the local canvas draft." />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="BLEND TRANSFER CURVE" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+            <controls:RtaimeComboBox ItemsSource="{Binding BlendCurves}"
+                SelectedItem="{Binding SelectedBlendCurve, Mode=TwoWay}"
+                AutomationProperties.Name="Encoded RGBA blend curve"
+                Margin="0,0,0,7" />
+            <controls:RtaimeButton Content="APPLY NUMERIC TO DRAFT" Command="{Binding ApplyNumericCommand}"
+                IsCompact="True" Margin="0,0,0,9"
+                ToolTip="Rejects invalid or nonconvex quads. Numeric and pointer editing modify local drafts only." />
+
+            <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                BorderBrush="{DynamicResource OperatorBorderBrush}"
+                BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="VALIDATE → SAVE → APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <WrapPanel Margin="0,0,0,7">
+                        <controls:RtaimeButton Content="VALIDATE DRAFT"
+                            Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
+                            ToolTip="Server validates geometry, sources, providers and exact next saved revision." />
+                        <controls:RtaimeButton Content="SAVE"
+                            Command="{Binding SaveCommand}" IsCompact="True" Margin="0,0,5,4"
+                            ToolTip="Authoritative ControlHost transaction; does not change live Program." />
+                        <controls:RtaimeButton Content="APPLY TO PROGRAM"
+                            Command="{Binding ApplyCommand}" IsCompact="True"
+                            Background="{DynamicResource OperatorAccentSurfaceBrush}"
+                            BorderBrush="{DynamicResource OperatorAccentBrush}"
+                            Margin="0,0,5,4"
+                            ToolTip="Explicit Runtime Prepare/Commit request for the saved and validated revision." />
+                        <controls:RtaimeButton Content="DISABLE MAPPING"
+                            Command="{Binding DisableCommand}" IsCompact="True"
+                            ToolTip="Explicitly request identity Program output and observe the next Runtime boundary." />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ResultDetail}" Style="{StaticResource OperatorLabel}"
+                        TextWrapping="Wrap" Margin="0,5,0,0" />
+                </StackPanel>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2,0,3">
+                            <TextBlock Text="{Binding Code}" Style="{StaticResource OperatorLabel}"
+                                Foreground="{DynamicResource OperatorWarningBrush}" />
+                            <TextBlock Text="{Binding Path}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Message}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                BorderBrush="{DynamicResource OperatorBorderBrush}"
+                BorderThickness="1" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="EXECUTION EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <TextBlock Text="{Binding RuntimeOutputTarget}" Style="{StaticResource OperatorValue}"
+                        TextTrimming="CharacterEllipsis" ToolTip="{Binding RuntimeOutputTarget}" />
+                    <TextBlock Text="{Binding RuntimeOutputSize}" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="{Binding AppliedSource}" Style="{StaticResource OperatorLabel}"
+                        TextTrimming="CharacterEllipsis" ToolTip="{Binding AppliedSource}" />
+                    <TextBlock Text="{Binding RenderedSequence}" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="The editor shows geometry, not a mapped pixel preview. Use the existing Program monitor for post-mapping output. Physical scan-out, HDR and calibrated projector blend remain unverified."
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+                    <TextBlock Text="Test patterns must be explicitly selected and enabled in the existing source controls; selecting a canvas never routes a test signal to Program. Configuration import/export requires an authorized transport and is not provided here."
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>
