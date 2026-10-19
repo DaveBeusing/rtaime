@@ -15,7 +15,7 @@ real cross-host path is implemented and qualified.
 
 See [Sequence Authoring](SequenceAuthoring.md), [Local Media File Source](LocalMediaFileSource.md), [Production Rundown](ProductionRundown.md),
 [Operator Experience Scope](OperatorExperienceScope.md) and
-[Runtime Media Resource Admission](RuntimeMediaResourceAdmission.md).
+[Runtime Media Resource Admission](FileDeckCapacityAdmission.md).
 
 ## Compiled authoring-time execution plan
 
