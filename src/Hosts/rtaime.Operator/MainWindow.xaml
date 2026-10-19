@@ -1376,12 +1376,37 @@
 				</Grid.ColumnDefinitions>
 				<local:RundownControl Grid.Column="0" IsConsoleMode="True" />
 				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" />
-				<local:MediaTimelineControl Grid.Column="2"
-                    PreviewPlaybackVisibility="{Binding Shell.ProductionDetailsVisibility, ElementName=RootWindow}"
-					AllowDrop="True"
-					DragOver="OnTimelineDragOver"
-					Drop="OnTimelineDrop"
-					DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+				<Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="29" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="7,0,7,0"
+                        Background="{DynamicResource OperatorTimelineTrackOverlayBrush}">
+                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                            <controls:RtaimeButton Content="SEQUENCE EDITOR"
+                                IsCompact="True" Margin="0,1,6,1"
+                                Click="OnShowSequenceTimeline"
+                                AutomationProperties.Name="Open saved multitrack sequence editor"
+                                ToolTip="Load and edit durable SequenceAuthoring revisions. Not a second playback path."/>
+                            <controls:RtaimeButton Content="MEDIA DECK / CUES"
+                                IsCompact="True" Margin="0,1,6,1"
+                                Click="OnShowMediaTimeline"
+                                AutomationProperties.Name="Open legacy media deck timeline"
+                                ToolTip="Existing A/B deck transport, clip IN/OUT and media cues." />
+                        </StackPanel>
+                        <TextBlock Text="DRAFT EDITS ≠ PROGRAM TAKE" VerticalAlignment="Center"
+                            HorizontalAlignment="Right" Style="{StaticResource OperatorLabel}" />
+                    </DockPanel>
+                    <local:MediaTimelineControl Grid.Row="1"
+                        Visibility="{Binding TimelineMediaVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                        PreviewPlaybackVisibility="{Binding Shell.ProductionDetailsVisibility, ElementName=RootWindow}"
+                        AllowDrop="True" DragOver="OnTimelineDragOver" Drop="OnTimelineDrop"
+                        DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+                    <local:SequenceTimelineControl Grid.Row="1"
+                        Visibility="{Binding TimelineSequenceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                        DataContext="{Binding SequenceTimeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+                </Grid>
 			</Grid>
 		</Border>
 
