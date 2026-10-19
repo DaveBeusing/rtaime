@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.IO;
 using rtaime.Client;
 using rtaime.Control;
 using rtaime.Control.Contracts;
