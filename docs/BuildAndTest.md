@@ -475,7 +475,7 @@ Required Gates at the same final SHA, not replace them.
 
 ## Combined Operator visual evidence
 
-The existing `OperatorXamlStartupTests` filter now includes the 40-case rendered
+The existing `OperatorXamlStartupTests` filter now includes the 50-case rendered
 workspace/viewport matrix, injected scale and bounded dispatcher/resource measurements.
 CI and Quality retain PNG/JSON evidence as documented in
 [Operator visual qualification](OperatorVisualQualification.md#combined-workspace-regression-evidence).
@@ -515,7 +515,7 @@ After the canonical pinned-SDK Release build, run `dotnet test tests/rtaime.Test
 
 Show checks regressions also cover independent Program/AUX evidence, Runtime-proven recording writes, AI sequence/provider gaps, pending-request provenance across reconnect, notification snooze expiry/change/fatal exclusion and bounded severity groups. The existing real MainWindow qualification verifies the shared support-export command binding; no new transport or exporter is introduced. Physical mixed-DPI/IME/screen-reader and GPU evidence remains separately UNVERIFIED.
 
-Smart Bin/hover regressions also verify free names and rename persistence, validation of existing version-1 definitions without rewriting, preview enable/disable cancellation storms and typed Runtime pressure arriving during dwell. The actual MainWindow fixture checks the name field and shared rename command alongside the existing 4096-item Grid/List recycling checks. Independent position scrubbing remains explicitly unavailable until a cancelable preview-only backend request exists; current tests never qualify Program seek as hover isolation.
+Smart Bin/hover regressions also verify free names and rename persistence, validation of existing version-1 definitions without rewriting, preview enable/disable cancellation storms and typed Runtime pressure arriving during dwell. The actual MainWindow fixture checks the name field and shared rename command alongside the existing 4096-item Grid/List recycling checks. Online catalogue asset-position scrubbing uses the existing cancelable independent Media Analysis request; tests distinguish requested/actual frame PTS and never qualify Program seek or sequence Preview/Take as hover isolation.
 
 
 Operator QoL interaction qualification reuses the real `OperatorXamlStartupTests`

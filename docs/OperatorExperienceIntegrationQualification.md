@@ -24,7 +24,7 @@ individual feature merges as an approved software release.
   `rtaime.sequence-shuttle.v1` and output canvas `1.0` are distinct
   capabilities. They do not grant additional production authority.
 
-The first exact-master [Required Gates 39328851264](https://github.com/DaveBeusing/rtaime/actions/runs/39328851264)
+The initial exact-master [Required Gates 39328851264](https://github.com/DaveBeusing/rtaime/actions/runs/39328851264)
 showed Security PASS, CI/Quality/Provider Smoke FAIL and Packaged E2E
 SKIPPED. All three failed managed gates reported a shared C# parsing
 error in `SequenceFrameCompositionIntegrationTests` line 137.
@@ -83,14 +83,14 @@ single Application/Dispatcher lifetime. It asserts:
 This is an executable **real WPF composition** check, but uses a
 disconnected/safe fixture. It does not pretend to have exercised live
 ControlHost state, an actual screenshot review or a Program Take.
-The existing combined STA lifetime, teardown, rendering subscription
+The unchanged combined STA lifetime, teardown, rendering subscription
 and native GPU target checks remain active without a longer deadline.
 
 ## Visual, DPI and accessibility acceptance matrix
 
 | Evidence class | Automated software route | Release/physical status |
 | --- | --- | --- |
-| LIVE/MEDIA/EDIT/SCENES/COMPOSITING/OUTPUTS/AI/HEALTH/SETTINGS presence | Shared productive WPF startup and workflow owner assertions; 40 geometric shell observations plus connected domain-specific tests | **PENDING exact-head Windows checks** |
+| LIVE/MEDIA/EDIT/SCENES/COMPOSITING/OUTPUTS/AI/HEALTH/SETTINGS presence | Shared productive WPF startup and workflow owner assertions; 50 geometric shell observations plus connected domain-specific tests | **PENDING exact-head Windows checks** |
 | 1920×1080 to 960×540 logical viewport | `OperatorCombinedVisualQualification` and `OperatorShellStateQualification` | Real WPF logical layout; manual typography/contrast/content review **UNVERIFIED** |
 | Injected 100/125/150/200% DPI | Existing geometry/visual target tests and actual-scale metadata | Injection is not physical cross-monitor DPI movement |
 | Native Preview/Program monitoring pixels, Fit/Fill/100% | `GpuDrawingSurfaceTests`, `MediaViewportVisualQualityQualificationTests` and real native readback | Monitor delivery may be downsampled; original source fidelity, physical scan-out and mixed-DPI are **UNVERIFIED** |
