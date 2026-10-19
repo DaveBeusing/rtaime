@@ -116,10 +116,16 @@ public sealed partial class ControlHostIpcServer
             var baseline = control is null ? null : _outputCanvasBaseline ?? control.Specification;
             var saved = baseline is null ? null :
                 await _showProjectStore.LoadSequencesAsync(baseline, cancellationToken).ConfigureAwait(false);
+            // A catalogue remove/relink invalidates the prepared native owners even
+            // when the saved sequence itself has not been edited. Do not report
+            // PREPARED for a media identity that Control no longer authorizes.
+            var catalogue = await _mediaAssetCatalog.GetSnapshotAsync(
+                refreshAvailability: false, cancellationToken).ConfigureAwait(false);
             if (control is null || !control.HasAuthoritativeState ||
                 control.State.ProductionId.Value != bound.AuthorityStateId ||
                 control.State.Revision != bound.AuthorityRevision ||
-                saved?.Revision != reference.AuthoringRevision)
+                saved?.Revision != reference.AuthoringRevision ||
+                catalogue.Revision != bound.CatalogueRevision)
             {
                 var cancelled = await _runtimeTransport.CancelSequencePreparationAsync(
                     reference, cancellationToken).ConfigureAwait(false);
