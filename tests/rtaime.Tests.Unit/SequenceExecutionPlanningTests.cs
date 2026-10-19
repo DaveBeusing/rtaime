@@ -63,7 +63,7 @@ public sealed class SequenceExecutionPlanningTests
         Assert.Equal(4, plan.PeakDecoderOwners);
         Assert.Equal(5, plan.MaximumSimultaneousClips);
         Assert.Equal(10 * frameTicks, plan.DurationTicks);
-        Span<SequenceRenderSample> samples = stackalloc SequenceRenderSample[5];
+        var samples = new SequenceRenderSample[5];
         Assert.True(plan.TrySelectAtFrame(3, samples, out var count));
         Assert.Equal(5, count);
         Assert.Equal(3L * frameTicks, plan.TickAtFrame(3));
@@ -180,7 +180,7 @@ public sealed class SequenceExecutionPlanningTests
         source.Tracks[0] = source.Tracks[0] with { Name = "Edited" };
         Assert.Equal(7UL, plan.AuthoringRevision);
         Assert.Equal(before, plan.Windows.Select(w => (w.StartTick, w.EndTick, w.DecoderOwners)).ToArray());
-        Span<SequenceRenderSample> samples = stackalloc SequenceRenderSample[5];
+        var samples = new SequenceRenderSample[5];
         Assert.True(plan.TrySelectAtFrame(0, samples, out var count));
         Assert.Contains(samples[..count].ToArray(), s => s.AssetId == MediaA && s.Kind == SequenceMediaKind.Video);
         Assert.Throws<ArgumentException>(() =>
@@ -200,7 +200,7 @@ public sealed class SequenceExecutionPlanningTests
         source.Clips[3] = source.Clips[3] with { Enabled = false };
         source.Clips[4] = source.Clips[4] with { TimelineStart = 3 * 4800 };
         var plan = Prepare(source);
-        Span<SequenceRenderSample> samples = stackalloc SequenceRenderSample[1];
+        var samples = new SequenceRenderSample[1];
         Assert.True(plan.TrySelectAtTick(0, samples, out var count));
         Assert.Equal(0, count);
         Assert.True(plan.TrySelectAtTick(3 * 4800, samples, out count));
