@@ -35,7 +35,8 @@ public sealed record GpuOutputMappingSurface(
     GpuOutputPoint TopLeft, GpuOutputPoint TopRight,
     GpuOutputPoint BottomRight, GpuOutputPoint BottomLeft,
     GpuOutputEdgeBlend Blend,
-    int ZOrder)
+    int ZOrder,
+    Guid SurfaceIdentity = default)
 {
     public void Validate()
     {
@@ -91,7 +92,7 @@ public static class GpuOutputMappingRaster
         if (surfaces.Count > 8)
             throw new ArgumentException("Output mapping supports at most eight visible surfaces.", nameof(surfaces));
         // Validate all geometry and source allocations before touching the sink.
-        var sorted = surfaces.OrderBy(s => s.ZOrder).ThenBy(s => s.SourceId.ToString(), StringComparer.Ordinal).ToArray();
+        var sorted = surfaces.OrderBy(s => s.ZOrder).ThenBy(s => s.SurfaceIdentity.ToString("N"), StringComparer.Ordinal).ToArray();
         var sources = new ReadOnlyMemory<byte>[sorted.Length];
         var inverses = new InverseHomography[sorted.Length];
         for (var i = 0; i < sorted.Length; i++)
@@ -150,13 +151,7 @@ public static class GpuOutputMappingRaster
                 var topRight = checked((y0 * sourceWidth + x1) * 4);
                 var bottom = checked((y1 * sourceWidth + x0) * 4);
                 var bottomRight = checked((y1 * sourceWidth + x1) * 4);
-                double Sample(int channel)
-                {
-                    var a = source[top + channel] * (1 - fx) + source[topRight + channel] * fx;
-                    var b = source[bottom + channel] * (1 - fx) + source[bottomRight + channel] * fx;
-                    return (a * (1 - fy) + b * fy) / 255.0;
-                }
-                var alpha = Math.Clamp(Sample(3) * coverage, 0, 1);
+                var alpha = Math.Clamp(Sample(source, top, topRight, bottom, bottomRight, fx, fy, 3) * coverage, 0, 1);
                 if (alpha <= 0) continue;
                 var offset = checked((y * targetWidth + x) * 4);
                 var previousAlpha = destination[offset + 3] / 255.0;
@@ -164,12 +159,20 @@ public static class GpuOutputMappingRaster
                 for (var channel = 0; channel < 3; channel++)
                 {
                     var prev = destination[offset + channel] / 255.0;
-                    var blended = (Sample(channel) * alpha + prev * previousAlpha * (1 - alpha)) / newAlpha;
+                    var blended = (Sample(source, top, topRight, bottom, bottomRight, fx, fy, channel) * alpha + prev * previousAlpha * (1 - alpha)) / newAlpha;
                     destination[offset + channel] = (byte)Math.Clamp((int)Math.Round(blended * 255.0), 0, 255);
                 }
                 destination[offset + 3] = (byte)Math.Clamp((int)Math.Round(newAlpha * 255.0), 0, 255);
             }
         }
+    }
+
+    private static double Sample(ReadOnlySpan<byte> source, int top, int topRight,
+        int bottom, int bottomRight, double fx, double fy, int channel)
+    {
+        var a = source[top + channel] * (1 - fx) + source[topRight + channel] * fx;
+        var b = source[bottom + channel] * (1 - fx) + source[bottomRight + channel] * fx;
+        return (a * (1 - fy) + b * fy) / 255.0;
     }
 
     private static double EdgeCoverage(GpuOutputEdgeBlend blend, double u, double v)
