@@ -33,6 +33,13 @@ public sealed partial class GrpcOperatorControlTransport
         if (value.JobId != job.JobId || value.RuntimeEpoch != job.RuntimeEpoch ||
             value.AssetId != job.AssetId || value.Generation != job.Generation)
             throw new InvalidDataException("Media analysis observation is stale.");
+        if (value.Kind == MediaAnalysisKind.Frame && value.State == MediaAnalysisState.Complete &&
+            value.RgbaPixels is null)
+            return value with {
+                State = MediaAnalysisState.Unavailable,
+                Detail = "Raw frames require a local authorized media-observation channel; external gRPC returns metadata only.",
+                ErrorCode = "media.analysis.frame_transport_unavailable"
+            };
         return value;
     }
 
