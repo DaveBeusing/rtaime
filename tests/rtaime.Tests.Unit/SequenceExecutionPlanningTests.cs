@@ -67,8 +67,8 @@ public sealed class SequenceExecutionPlanningTests
         Assert.True(plan.TrySelectAtFrame(3, samples, out var count));
         Assert.Equal(5, count);
         Assert.Equal(3L * frameTicks, plan.TickAtFrame(3));
-        Assert.Equal(2, samples[..count].Count(sample => sample.Kind == SequenceMediaKind.Audio));
-        Assert.Equal(3, samples[..count].Count(sample => sample.Kind == SequenceMediaKind.Video));
+        Assert.Equal(2, samples[..count].ToArray().Count(sample => sample.Kind == SequenceMediaKind.Audio));
+        Assert.Equal(3, samples[..count].ToArray().Count(sample => sample.Kind == SequenceMediaKind.Video));
         var video = samples[..count].ToArray().Where(sample => sample.Kind == SequenceMediaKind.Video).ToArray();
         Assert.Equal(new[] { 1, 1, 2 }, video.Select(v => v.LayerOrder).Order().ToArray());
         Assert.Equal(byte.MaxValue, video.Single(v => v.AssetId == MediaA).Opacity);
@@ -147,7 +147,7 @@ public sealed class SequenceExecutionPlanningTests
         {
             var a = SequenceExecutionPlan.Weight(outgoing, tick);
             var b = SequenceExecutionPlan.Weight(incoming, tick);
-            Assert.Equal(byte.MaxValue, a + b);
+            Assert.Equal(255, (int)a + b);
         }
         Assert.Equal((byte)255, SequenceExecutionPlan.Weight(outgoing, 6 * 4800));
         Assert.Equal((byte)0, SequenceExecutionPlan.Weight(incoming, 6 * 4800));
@@ -185,7 +185,7 @@ public sealed class SequenceExecutionPlanningTests
         Assert.Contains(samples[..count].ToArray(), s => s.AssetId == MediaA && s.Kind == SequenceMediaKind.Video);
         Assert.Throws<ArgumentException>(() =>
         {
-            Span<SequenceRenderSample> tooSmall = stackalloc SequenceRenderSample[1];
+            var tooSmall = new SequenceRenderSample[1];
             plan.TrySelectAtFrame(3, tooSmall, out _);
         });
     }
