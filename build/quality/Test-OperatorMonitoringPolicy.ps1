@@ -85,7 +85,7 @@ Assert-Condition ($runtimeMonitoring -match 'SharedResourceCapability') "Monitor
 Assert-Condition ($runtimeMonitoring -match 'SubscriberAvailabilityChanged') "Shared monitoring resources must react to subscriber disconnect without blocking RuntimeHost."
 
 Assert-Condition ($runtimeService -match '_monitoringTap\.TryCapture') "Committed Runtime frames must feed the monitoring tap."
-Assert-Condition ($runtimeService -match '_gpu\.RentReadback\(output\)') "Program monitoring must derive from the actual post-composite Program output through reusable owned readback memory."
+Assert-Condition ($runtimeService -match 'using var mappedOutput = TryRenderMappedOutput\(output,' -and $runtimeService -match 'var presentedOutput = mappedOutput \?\? output;' -and $runtimeService -match '_gpu\.RentReadback\(presentedOutput\)') "Program monitoring must derive from the actual post-mapping Program output through reusable owned readback memory."
 Assert-Condition ($runtimeMonitoring -match 'GpuReadbackLease program' -and $runtimeMonitoring -match 'program\.Retain\(\)') "Asynchronous Program monitoring must retain explicit readback ownership before the Runtime boundary can release it."
 Assert-Condition ($runtimeIpc -notmatch 'MonitoringFrameWire|MonitoringFrameDescriptor|monitor\.frame') "Management Runtime IPC must not carry monitoring pixel payloads."
 
