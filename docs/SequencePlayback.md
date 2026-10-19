@@ -223,7 +223,9 @@ request. Any changed authority invalidates the prepared owner and requires
 explicit new preparation; it cannot adopt a newer editor draft. RuntimeHost
 also checks the current committed production authority. Old Runtime peers
 reject the additive operation rather than treating an unknown command as a
-successful media change.
+successful media change. Control rechecks the same authority set **after**
+potentially delayed native preroll too; a newer saved/committed revision
+cannot be acknowledged by an older shuttle command.
 
 The Runtime-owned `SequenceRuntimePositionMap` uses the **existing**
 Program frame sequence as its only time base. Cue/Seek and frame-step use
@@ -236,7 +238,13 @@ position to the actual current Runtime Program slot **without changing**
 its native generation. Stopping retains native staging but invalidates
 the previous playback generation until an explicit new preroll. The
 original preparation reference and its generation remain stable until
-Cancel even when individual decoder generations change.
+Cancel even when individual decoder generations change. If native repreroll
+fails but the former worker pool is **confirmed cleaned**, the Runtime
+retains only a small original-identity cleanup receipt with `CANCELED`
+state. Control can observe or explicitly cancel the receipt and release
+its previous preparation owner before a new Prepare. Failed native
+cleanup remains quarantined and requires supported RuntimeHost recovery.
+Ambiguous commands are never automatically replayed.
 
 `SequenceShuttleObservation` states `STOPPED`, `PAUSED`,
 `PLAYING`, and `ENDED` are **native position/queue management states**,
