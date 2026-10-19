@@ -53,10 +53,37 @@ public partial class OperatorMediaLibraryView : UserControl
 		if (MediaPool.RefreshCatalogCommand.CanExecute(null)) MediaPool.RefreshCatalogCommand.Execute(null);
 		e.Handled = true;
 	}
+	private static double PointerScrubFraction(FrameworkElement surface, MouseEventArgs e)
+	{
+		if (surface.ActualWidth <= 0) return 0.5;
+		return Math.Clamp(e.GetPosition(surface).X / surface.ActualWidth, 0, 1);
+	}
 	private async void OnMediaLibraryHover(object sender, MouseEventArgs e)
 	{
-		if (e.LeftButton == MouseButtonState.Released && sender is FrameworkElement { DataContext: MediaPoolItemViewModel item })
-			await MediaPool.BeginHoverAsync(item);
+		if (e.LeftButton == MouseButtonState.Released &&
+			sender is FrameworkElement { DataContext: MediaPoolItemViewModel item } target)
+			await MediaPool.BeginHoverAsync(item,
+				MediaLibraryHoverPreview.CanAnalyze(item) ? PointerScrubFraction(target, e) : 0.5);
+	}
+	private async void OnMediaLibraryScrubMove(object sender, MouseEventArgs e)
+	{
+		if (e.LeftButton != MouseButtonState.Released || !MediaPool.HoverPreviewsEnabled ||
+			sender is not FrameworkElement { DataContext: MediaPoolItemViewModel item } target ||
+			!MediaLibraryHoverPreview.CanAnalyze(item)) return;
+		// Tile thumbnails occupy the first 68 DIPs; buttons and labels do not scrub.
+		if (target is Controls.RtaimeMediaTile && e.GetPosition(target).Y > 68) return;
+		await MediaPool.BeginHoverAsync(item, PointerScrubFraction(target, e));
+	}
+	private async void OnMediaLibraryScrubKeyDown(object sender, KeyEventArgs e)
+	{
+		if (Keyboard.Modifiers != ModifierKeys.Control || e.Key is not (Key.Left or Key.Right) ||
+			e.OriginalSource is TextBoxBase) return;
+		var item = (e.OriginalSource as FrameworkElement)?.DataContext as MediaPoolItemViewModel
+			?? MediaPool.SelectedItem;
+		if (item is null || !MediaLibraryHoverPreview.CanAnalyze(item) || !MediaPool.HoverPreviewsEnabled)
+			return;
+		e.Handled = true; // Preserve ordinary arrows for ListBox navigation.
+		await MediaPool.StepHoverAsync(item, e.Key == Key.Right ? 1 : -1);
 	}
 	private async void OnMediaLibraryFocus(object sender, KeyboardFocusChangedEventArgs e)
 	{
