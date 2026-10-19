@@ -10,7 +10,6 @@ namespace rtaime.Operator;
 
 public partial class SequenceTimelineControl : UserControl
 {
-    private Border? _gestureOwner;
     private bool _gestureActive;
     private bool _initialized;
     private SequenceTimelineEditorViewModel? Editor => DataContext as SequenceTimelineEditorViewModel;
@@ -62,16 +61,14 @@ public partial class SequenceTimelineControl : UserControl
             model.VisibleStart, model.VisibleEnd,
             model.Sequence!.FrameRate);
         if (!model.BeginGesture(clip.Id, kind, pointer)) return;
-        _gestureOwner = border;
-        _gestureActive = border.CaptureMouse();
+        _gestureActive = CaptureMouse();
         if (!_gestureActive) model.CancelGesture();
         e.Handled = true;
     }
 
-    private void OnClipMouseMove(object sender, MouseEventArgs e)
+    private void OnCapturedMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_gestureActive || !ReferenceEquals(sender, _gestureOwner) ||
-            e.LeftButton != MouseButtonState.Pressed ||
+        if (!_gestureActive || e.LeftButton != MouseButtonState.Pressed ||
             Editor is not { HasSequence: true } model)
             return;
         var x = e.GetPosition(SequenceRuler).X;
@@ -83,22 +80,19 @@ public partial class SequenceTimelineControl : UserControl
         e.Handled = true;
     }
 
-    private async void OnClipMouseUp(object sender, MouseButtonEventArgs e)
+    private async void OnCapturedMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_gestureActive || !ReferenceEquals(sender, _gestureOwner)) return;
-        var owner = _gestureOwner;
+        if (!_gestureActive) return;
         _gestureActive = false;
-        _gestureOwner = null;
-        owner?.ReleaseMouseCapture();
+        ReleaseMouseCapture();
         if (Editor is { } model) await model.CompleteGestureAsync();
         e.Handled = true;
     }
 
-    private void OnClipCaptureLost(object sender, MouseEventArgs e)
+    private void OnCapturedMouseCaptureLost(object sender, MouseEventArgs e)
     {
-        if (!_gestureActive || !ReferenceEquals(sender, _gestureOwner)) return;
+        if (!_gestureActive) return;
         _gestureActive = false;
-        _gestureOwner = null;
         Editor?.CancelGesture();
     }
 
@@ -111,8 +105,7 @@ public partial class SequenceTimelineControl : UserControl
         {
             model.CancelGesture();
             _gestureActive = false;
-            _gestureOwner?.ReleaseMouseCapture();
-            _gestureOwner = null;
+            ReleaseMouseCapture();
             e.Handled = true;
             return;
         }
