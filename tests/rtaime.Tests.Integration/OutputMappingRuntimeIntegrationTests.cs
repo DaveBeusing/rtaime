@@ -4,6 +4,7 @@ using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
+using rtaime.Provider.Gpu;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
@@ -148,6 +149,27 @@ public sealed class OutputMappingRuntimeIntegrationTests
         Assert.Equal(0, boundary.ActiveGpuSurfacesAfterBoundary);
     }
 
+    [Fact]
+    public async Task Backend_without_mapping_capability_rejects_activation_and_preserves_program_sink()
+    {
+        await using var fixture = CreateFixture(new BackendWithoutMapping());
+        var runtime = fixture.Runtime;
+        var committedTarget = ProgramOutput(runtime).TargetId;
+        var revision = runtime.Snapshot.Runtime.ExecutionRevision.Value;
+        var configuration = Configuration(fixture, revision: 14, twoSurfaces: true);
+
+        var rejected = runtime.PrepareOutputMapping(
+            new(configuration, revision, "integration-runtime"));
+        Assert.Equal("REJECTED", rejected.ActivationState);
+        Assert.Equal("mapping.prepare_rejected.NotSupportedException", rejected.FailureCode);
+
+        using var boundary = runtime.ProcessNextBoundary();
+        AssertPixel(boundary.ProgramPixels.Span, runtime.Format, 240, 540, 32, 72, 196);
+        Assert.Equal(committedTarget, ProgramOutput(runtime).TargetId);
+        Assert.Null(runtime.OutputMappingSnapshot.ActiveRenderRevision);
+        Assert.Equal(0, boundary.ActiveGpuSurfacesAfterBoundary);
+    }
+
     private static RuntimeOutputRoleSnapshot ProgramOutput(V1RuntimeHostService runtime) =>
         Assert.Single(runtime.Snapshot.OutputRoles!, o => o.RoleId == "program");
 
@@ -189,7 +211,7 @@ public sealed class OutputMappingRuntimeIntegrationTests
         Assert.Equal((byte)255, pixels[at + 3]);
     }
 
-    private static Fixture CreateFixture()
+    private static Fixture CreateFixture(IGpuProcessingBackend? backend = null)
     {
         var productionId = new ProductionId(Identity.New());
         var sourceA = new ProductionSourceId(Identity.New());
@@ -201,7 +223,7 @@ public sealed class OutputMappingRuntimeIntegrationTests
             initialOutputRoles: [ProductionOutputRoleState.Program(sourceA)]);
         var runtime = new V1RuntimeHostService(
             new MediaSourceId(sourceA.Value), new MediaSourceId(sourceB.Value),
-            VideoFormat.Hd1080p50Rgba8, new NullRecordingWriter());
+            VideoFormat.Hd1080p50Rgba8, new NullRecordingWriter(), gpuBackend: backend);
         var initialized = ControlDomainEngine.Initialize(spec);
         Assert.True(initialized.Succeeded);
         var planning = CapabilityPlanningEngine.Plan(spec,
@@ -226,6 +248,24 @@ public sealed class OutputMappingRuntimeIntegrationTests
     {
         private readonly ProviderDescriptor[] _providers = providers.ToArray();
         public IReadOnlyList<ProviderDescriptor> GetProviders() => _providers;
+    }
+
+    private sealed class BackendWithoutMapping : IGpuProcessingBackend
+    {
+        private readonly ManagedReferenceGpuBackend _inner = new();
+        public GpuBackendInfo Info => _inner.Info;
+        public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
+        public void Start() => _inner.Start();
+        public void Stop() => _inner.Stop();
+        public void Allocate(SurfaceId id, VideoFormat format, ReadOnlySpan<byte> pixels) =>
+            _inner.Allocate(id, format, pixels);
+        public void Composite(SurfaceId id, VideoFormat format, GpuCompositeOperation operation) =>
+            _inner.Composite(id, format, operation);
+        public byte[] Readback(SurfaceId id, VideoFormat format) => _inner.Readback(id, format);
+        public void ReadbackInto(SurfaceId id, VideoFormat format, Span<byte> destination) =>
+            _inner.ReadbackInto(id, format, destination);
+        public void Release(SurfaceId id) => _inner.Release(id);
+        public void Dispose() => _inner.Dispose();
     }
 
     private sealed class NullRecordingWriter : IProgramRecordingWriter
