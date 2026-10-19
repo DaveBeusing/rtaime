@@ -320,6 +320,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		if (drain.Status == HostIpcSessionDrainStatus.TimedOut)
 			throw new TimeoutException($"ControlHost IPC did not drain {drain.Snapshot.ActiveSessions} active session(s) within {_sessionDrainTimeout}.");
 
+		await DrainPreparedSequenceAsync().ConfigureAwait(false);
 		if (_productionMacros is not null)
 			await _productionMacros.DisposeAsync().ConfigureAwait(false);
 		if (_rundown is not null)
