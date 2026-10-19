@@ -23,6 +23,46 @@ Program and Aux therefore share the governed output-role state model, while Prev
 
 The workspace also shows the existing Engine, Control, Runtime, Media and GPU-provider health states as a compact system-health surface. The selected-output details expose target, assigned source, resolution, frame rate, pixel format, color-space evidence, recording state and streaming evidence. A field is shown as `UNAVAILABLE` when no authoritative value exists.
 
+## Canvas and mapping authoring
+
+OUTPUTS mounts a single `OutputCanvasEditorControl` adjacent to the existing full
+`OutputRoutingHealthControl` in MainWindow, without changing or eagerly instantiating the editor inside compact LIVE/EDIT output controls.
+Its single `OutputCanvasEditorViewModel` is owned and disposed by
+`OutputRoutingHealthViewModel`. It uses the already authorized
+`OperatorControlClient` rather than adding a renderer, host, management
+poller or parallel output routing path.
+
+The user selects an authored logical canvas and surface, an available
+Control-authorized provider/target, and a source or governed Program/Aux bus.
+The drawing stage shows **geometry only**: four handles, position/scale via
+corner and body drag, Alt-rotate, pan, zoom, guides, snapping, and keyboard
+nudging. The numeric editor controls TL/TR/BR/BL logical edge coordinates,
+normalized source crop and bounded edge-blend widths/curve. Pointer and
+numeric edits enter one local revisioned draft with bounded undo/redo; neither
+the geometry overlay nor save receipt is evidence of live Program pixels.
+Preview and Program monitoring remain separate, respectively before and
+after Runtime mapping.
+
+The workflow is explicit: **Validate** sends the next authored revision to
+ControlHost, **Save** uses a single finite atomic edit transaction, and
+**Apply** requests preparation and frame-boundary activation of that exact
+saved configuration. Saved, local, pending and active revision labels remain
+distinct. Active target, dimensions, source, frame sequence and failure code
+come only from Runtime execution evidence. A successful save without Apply
+does not change Program; a pending Apply remains unconfirmed until Runtime
+reports a completed boundary. Program routing retains CUT/DISSOLVE authority.
+Unsupported or unqualified physical targets cannot be treated as READY
+because they appear in a selectable provider list.
+
+On lost transport replies or stale authorization, the local draft is not
+discarded or replayed into a live route. RELOAD reconciles saved revision
+and retained local changes, blocks conflicting saves and requires deliberate
+discard/reload when authoring has changed elsewhere. An ambiguous durable
+save is never retried without a fresh Get. Existing test-pattern actions
+still require explicit selection and opt-in; mapping never silently routes
+a generator. No unapproved file import/export, device discovery, calibration
+or HDR claim is introduced. See [Output canvas mapping](OutputCanvasMapping.md).
+
 ## Routing
 
 The workspace does not define a routing engine. Program continues to move through the existing Preview-to-Program CUT/DISSOLVE and governed Scene paths; the generic output-role command is deliberately rejected for Program so transition semantics cannot be bypassed. Aux source changes use the governed `RouteOutputRoleCommand` path through Operator/Client, ControlHost planning and Runtime commit.

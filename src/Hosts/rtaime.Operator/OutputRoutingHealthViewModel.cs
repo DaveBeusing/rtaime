@@ -79,6 +79,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			_cleanProgram
 		};
 		SelectedOutput = _program;
+		CanvasEditor = new OutputCanvasEditorViewModel(_control);
 
 		_metrics = new Dictionary<string, PerformanceMetricViewModel>(StringComparer.Ordinal)
 		{
@@ -113,6 +114,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	public OutputCanvasEditorViewModel CanvasEditor { get; }
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
@@ -155,6 +157,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		_disposed = true;
 		_control.PropertyChanged -= ControlPropertyChanged;
 		_programOutput.PropertyChanged -= ProgramOutputPropertyChanged;
+		CanvasEditor.Dispose();
 	}
 
 	private void ControlPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -164,6 +167,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		if (!string.IsNullOrEmpty(e.PropertyName) && !RelevantControlProperties.Contains(e.PropertyName))
 			return;
 
+		CanvasEditor.OnControlChanged(e.PropertyName);
 		Refresh(sampleHistory: string.Equals(e.PropertyName, nameof(OperatorViewModel.HealthObserved), StringComparison.Ordinal));
 	}
 
