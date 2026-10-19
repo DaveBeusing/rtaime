@@ -14,7 +14,7 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
-public sealed class RuntimeHostIpcServer : IAsyncDisposable
+public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
