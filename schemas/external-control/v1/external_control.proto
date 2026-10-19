@@ -249,6 +249,7 @@ message ExternalControlRequest {
     JsonPayloadRequest validate_output_canvas = 147;
     JsonPayloadRequest save_output_canvas = 148;
     JsonPayloadRequest activate_output_canvas = 149;
+    EmptyRequest get_output_canvas_evidence = 150;
   }
 }
 
