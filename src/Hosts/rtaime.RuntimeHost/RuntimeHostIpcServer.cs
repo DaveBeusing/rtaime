@@ -213,6 +213,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.replay.clip.create" => CreateReplayClipAsync(request, runtime, cancellationToken),
 				"runtime.media_asset.preflight.begin" or "runtime.media_asset.preflight.get" or "runtime.media_asset.preflight.cancel" => ValueTask.FromResult(PreflightMediaAsset(request)),
                 "runtime.media.analysis.begin" or "runtime.media.analysis.get" or "runtime.media.analysis.cancel" => ValueTask.FromResult(DispatchMediaAnalysis(request)),
+                "runtime.sequence.preparation.prepare" or "runtime.sequence.preparation.get" or "runtime.sequence.preparation.cancel" => ValueTask.FromResult(DispatchSequencePreparation(request, runtime, cancellationToken)),
                 "runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" or "runtime.media_deck.preload.open" => ValueTask.FromResult(OpenMediaDeck(request)),
