@@ -60,6 +60,7 @@
                     <ColumnDefinition Width="210" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="SEQUENCE" Style="{StaticResource OperatorSectionTitle}"
@@ -75,9 +76,13 @@
                     Command="{Binding RefreshCommand}" IsCompact="True" Margin="0,6,5,6"
                     AutomationProperties.Name="Refresh saved sequence catalogue" />
                 <controls:RtaimeButton Grid.Column="3" Content="LOAD"
-                    Command="{Binding LoadCommand}" IsCompact="True" Margin="0,6,8,6"
+                    Command="{Binding LoadCommand}" IsCompact="True" Margin="0,6,5,6"
                     AutomationProperties.Name="Load selected saved sequence" />
-                <StackPanel Grid.Column="4" Orientation="Vertical"
+                <controls:RtaimeButton Grid.Column="4" Content="+ NEW"
+                    Command="{Binding CreateCommand}" IsCompact="True" Margin="0,6,8,6"
+                    AutomationProperties.Name="Create a saved multitrack sequence" 
+                    ToolTip="Save a new sequence with two video and two audio tracks through ControlHost." />
+                <StackPanel Grid.Column="5" Orientation="Vertical"
                     VerticalAlignment="Center">
                     <TextBlock Text="{Binding SequenceName}" Style="{StaticResource OperatorValue}"
                         TextTrimming="CharacterEllipsis" />
@@ -201,11 +206,13 @@
                                     </Border>
                                     <Border Grid.Column="1" Background="{DynamicResource OperatorTimelineTrackOverlayBrush}"
                                         BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,0,0,1"
-                                        x:Name="SequenceTrackCanvasArea" ClipToBounds="True">
+                                        x:Name="SequenceTrackCanvasArea" ClipToBounds="True"
+                                        AllowDrop="True" DragOver="OnTrackDragOver" Drop="OnTrackDrop"
+                                        ToolTip="Drop an online catalogue video/audio asset onto a saved matching track to create a persisted clip.">
                                         <ItemsControl ItemsSource="{Binding Clips}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
-                                                    <Canvas />
+                                                    <Canvas Height="42" />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemContainerStyle>
