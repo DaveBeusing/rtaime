@@ -53,15 +53,23 @@ public partial class OperatorMediaLibraryView : UserControl
 		if (MediaPool.RefreshCatalogCommand.CanExecute(null)) MediaPool.RefreshCatalogCommand.Execute(null);
 		e.Handled = true;
 	}
+	private static bool IsInScrubArea(FrameworkElement surface, MouseEventArgs e)
+	{
+		var position = e.GetPosition(surface);
+		return surface is Grid ? position.X is >= 0 and <= 56 && position.Y >= 0 && position.Y <= surface.ActualHeight
+			: position.Y is >= 0 and <= 68 && position.X >= 0 && position.X <= surface.ActualWidth;
+	}
 	private static double PointerScrubFraction(FrameworkElement surface, MouseEventArgs e)
 	{
-		if (surface.ActualWidth <= 0) return 0.5;
-		return Math.Clamp(e.GetPosition(surface).X / surface.ActualWidth, 0, 1);
+		var width = surface is Grid ? Math.Min(56, surface.ActualWidth) : surface.ActualWidth;
+		if (width <= 0) return 0.5;
+		return Math.Clamp(e.GetPosition(surface).X / width, 0, 1);
 	}
 	private async void OnMediaLibraryHover(object sender, MouseEventArgs e)
 	{
 		if (e.LeftButton == MouseButtonState.Released &&
-			sender is FrameworkElement { DataContext: MediaPoolItemViewModel item } target)
+			sender is FrameworkElement { DataContext: MediaPoolItemViewModel item } target &&
+			(!MediaLibraryHoverPreview.CanAnalyze(item) || IsInScrubArea(target, e)))
 			await MediaPool.BeginHoverAsync(item,
 				MediaLibraryHoverPreview.CanAnalyze(item) ? PointerScrubFraction(target, e) : 0.5);
 	}
@@ -70,8 +78,8 @@ public partial class OperatorMediaLibraryView : UserControl
 		if (e.LeftButton != MouseButtonState.Released || !MediaPool.HoverPreviewsEnabled ||
 			sender is not FrameworkElement { DataContext: MediaPoolItemViewModel item } target ||
 			!MediaLibraryHoverPreview.CanAnalyze(item)) return;
-		// Tile thumbnails occupy the first 68 DIPs; buttons and labels do not scrub.
-		if (target is Controls.RtaimeMediaTile && e.GetPosition(target).Y > 68) return;
+		// The Grid thumbnail occupies the top 68 DIPs; list-row thumbnails use the first 56 DIPs.
+		if (!IsInScrubArea(target, e)) return;
 		await MediaPool.BeginHoverAsync(item, PointerScrubFraction(target, e));
 	}
 	private async void OnMediaLibraryScrubKeyDown(object sender, KeyEventArgs e)
