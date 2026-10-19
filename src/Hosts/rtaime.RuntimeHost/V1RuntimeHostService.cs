@@ -401,7 +401,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
 /// Program output, Audio Follow Video and failure-isolated recording. It owns execution, never production authority.
 /// </summary>
-public sealed class V1RuntimeHostService : IAsyncDisposable
+public sealed partial class V1RuntimeHostService : IAsyncDisposable
 {
 	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 3;
 	public const int RetainedObservationCapacity = 512;
@@ -1007,6 +1007,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_transition = transition is null ? null : new AnchoredTransition(transition, _nextSequenceNumber);
 			if (compositingStaged)
 				Observe($"compositing.scene.applied:{string.Join(",", preparedExecution.CompositingState!.Layers.Select(layer => layer.LayerId))}");
+			if (_activeOutputMapping is not null || _pendingOutputMapping is not null || _preparedOutputMapping is not null)
+				InvalidateOutputMappingUnsafe("mapping.execution_recommitted");
 			_ndiInputBridge.SynchronizeCommittedBindings(preparedExecution.Bindings);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
@@ -1026,6 +1028,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var boundaryStarted = pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 		lock (_boundaryExecutionGate)
 		{
+			lock (_gate) AdmitOutputMappingBoundaryUnsafe();
 			pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.ExecutionLockWait, _nextSequenceNumber, Stopwatch.GetElapsedTime(boundaryStarted));
 			using var boundaryTiming = pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ServiceBoundaryAttempt, _nextSequenceNumber, boundaryStarted) ?? default;
 			using var executionHold = pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ExecutionLockHold, _nextSequenceNumber) ?? default;
@@ -1152,12 +1155,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						frameA.Timing);
 					gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource) ||
 						(monitoringSources is not null && frameA.SourceId == committedPreviewSource) ||
-						(auxNetworkSource is { } configuredAuxA && frameA.SourceId == configuredAuxA)
+						(auxNetworkSource is { } configuredAuxA && frameA.SourceId == configuredAuxA) ||
+						NeedsMappedSource(frameA.SourceId)
 						? MaterializeInput(frameA, contentA)
 						: null;
 					gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource) ||
 						(monitoringSources is not null && frameB.SourceId == committedPreviewSource) ||
-						(auxNetworkSource is { } configuredAuxB && frameB.SourceId == configuredAuxB)
+						(auxNetworkSource is { } configuredAuxB && frameB.SourceId == configuredAuxB) ||
+						NeedsMappedSource(frameB.SourceId)
 						? MaterializeInput(frameB, contentB)
 						: null;
 					gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
@@ -1170,7 +1175,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					{
 						if (RequiresGpuSourceUnsafe(externalFrame.SourceId, committedSource) ||
 							externalFrame.SourceId == committedPreviewSource ||
-							(auxNetworkSource is { } configuredExternalAux && externalFrame.SourceId == configuredExternalAux))
+							(auxNetworkSource is { } configuredExternalAux && externalFrame.SourceId == configuredExternalAux) ||
+							NeedsMappedSource(externalFrame.SourceId))
 						{
 							gpuFrames.Add(externalFrame.SourceId, MaterializeInput(externalFrame, ResolveInputContent(externalFrame)));
 						}
@@ -1243,13 +1249,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				}
 
 				using var output = composite.Frame!;
+				using var mappedOutput = TryRenderMappedOutput(output, gpuFrames ?? throw new InvalidOperationException("GPU source materialization is missing."));
+				var presentedOutput = mappedOutput ?? output;
 				GpuReadbackLease pixels;
 				using (pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.Readback, sequence) ?? default)
-					pixels = _gpu.RentReadback(output);
+					pixels = _gpu.RentReadback(presentedOutput);
 				try
 				{
 					var probe = ProbeCenter(pixels.Memory.Span, _format);
-					programOutput.WriteFrame(output.Descriptor);
+					programOutput.WriteFrame(presentedOutput.Descriptor);
 					audio = _audio.ProcessBoundary(
 						committedSource,
 						sequence,
@@ -1282,7 +1290,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 									AudioBusSamplesUnsafe(selectedAuxBus, requiredProgramAudioValues)).ToArray();
 					}
 					var videoSyncEvent = avSyncEnabled
-						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
+						? _motionTimingTestSignal.InspectSyncEvent(presentedOutput.Descriptor.Timing)
 						: default;
 					GpuSharedMonitoringResourceLease? previewSharedMonitoringResource = null;
 					GpuSharedMonitoringResourceLease? programSharedMonitoringResource = null;
@@ -1303,7 +1311,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 						try
 						{
-							_gpu.TryExportMonitoringResource(output, out programSharedMonitoringResource);
+							_gpu.TryExportMonitoringResource(presentedOutput, out programSharedMonitoringResource);
 						}
 						catch (Exception exception)
 						{
@@ -1321,7 +1329,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							committedSource,
 							pixels,
 							_format,
-							output.Descriptor.Timing,
+							presentedOutput.Descriptor.Timing,
 							programSharedMonitoringResource,
 							committedPreviewSource,
 							previewSharedMonitoringResource);
@@ -1341,7 +1349,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						{
 							recording = _recordingBridge.TryRecordCommittedProgram(
 								execution,
-								output.Descriptor,
+								presentedOutput.Descriptor,
 								programRecordingAudioBuffer,
 								_recordingPayloadWriter is null
 									? null
@@ -1377,7 +1385,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							replayPayload = new GpuRecordingPayloadLease(pixels.Retain());
 							var replay = _replay.TryCapture(
 								programSinkId,
-								output.Descriptor,
+								presentedOutput.Descriptor,
 								programRecordingAudioBuffer,
 								replayPayload,
 								programRecordingAudioPayload);
@@ -1400,7 +1408,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						var networkOutput = _networkOutputBridge.TrySubmit(
 							"program",
 							pixels.Retain(),
-							output.Descriptor.Timing,
+							presentedOutput.Descriptor.Timing,
 							programAudioBuffer,
 							programAudioPayload);
 						if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
@@ -1436,6 +1444,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					}
 
 					pipelineTiming?.TryObserveStage(RuntimePipelineTimingStage.ConsumerSubmission, sequence, Stopwatch.GetElapsedTime(consumersStarted));
+					mappedOutput?.Dispose();
 					output.Dispose();
 					if (gpuFrames is not null)
 					{
@@ -1477,7 +1486,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					return new V1ProgramBoundaryResult(
 						sequence,
 						committedSource,
-						output.Descriptor,
+						presentedOutput.Descriptor,
 						pixels,
 						probe,
 						audio,
