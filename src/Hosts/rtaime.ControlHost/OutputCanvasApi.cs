@@ -35,8 +35,39 @@ public sealed partial class ControlHostIpcServer
             switch (request.MessageType)
             {
                 case "control.output.canvas.get":
+                    OutputCanvasActivationResult? evidence = null;
+                    if (runtime is not null)
+                    {
+                        try { evidence = await _runtimeTransport.GetOutputMappingSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+                        catch (Exception ex) when (ex is NotSupportedException or IOException or InvalidOperationException or TimeoutException) { }
+                    }
                     return Success(request, request.MessageType + ".response",
-                        new OutputCanvasSnapshot(saved, saved.EditRevision, null, targets, "RENDERER_REQUIRED"));
+                        new OutputCanvasSnapshot(saved, saved.EditRevision,
+                            evidence?.ActiveRenderRevision, targets,
+                            evidence?.ActivationState ?? "RENDERER_REQUIRED", evidence));
+                case "control.output.canvas.activate":
+                    var command = OutputCanvasJson.Read<OutputCanvasActivationRequest>(request.Payload.GetRawText());
+                    if (command.ConfigurationId != saved.ConfigurationId ||
+                        command.ExpectedSavedRevision != saved.EditRevision)
+                        return Error(request, "canvas.revision_conflict",
+                            "Activation requires the exact currently saved canvas configuration revision.");
+                    if (runtime is null || !_runtimeTransport.IsConnected)
+                        return Error(request, "canvas.runtime_unavailable", "RuntimeHost must be connected for mapping activation.");
+                    if (command.Enabled)
+                    {
+                        var qualified = OutputCanvasModel.Validate(saved,
+                            control.Specification.Sources.Select(source => source.SourceId.ToString()).ToArray(),
+                            roles.Select(role => role.RoleId.ToString()).ToArray(), targets);
+                        if (!qualified.IsValid)
+                            return Error(request, "canvas.activation_invalid",
+                                "Saved canvas model or provider capabilities no longer match current production.");
+                    }
+                    var active = await _runtimeTransport.ActivateOutputMappingAsync(
+                        new OutputCanvasRuntimeRequest(saved, runtime.Runtime.ExecutionRevision.Value,
+                            runtime.HostInstanceId, command.Enabled), cancellationToken).ConfigureAwait(false);
+                    if (active.ActivationState == "PENDING_BOUNDARY")
+                        NotifyObservableStateChanged();
+                    return Success(request, request.MessageType + ".response", active);
                 case "control.output.canvas.validate":
                     var draft = OutputCanvasJson.Read<OutputCanvasConfiguration>(request.Payload.GetRawText());
                     var validation = OutputCanvasModel.Validate(draft,
