@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Security.Cryptography;
+using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Runtime;
@@ -30,6 +31,92 @@ public sealed class SequenceMediaPreparationIntegrationTests
         var map = SequenceRuntimePositionMap.Prepare(sequence, 7, FrameRate.Fps50,
             20 * 4800, 100, 1);
         return (execution, map, owners);
+    }
+
+    [Fact]
+    public void Native_video_and_audio_clips_share_exact_prepared_decoder_owners()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, fingerprint);
+        var prepared = decks.PrepareSequenceMedia(execution, map, owners);
+        Assert.True(prepared.Prepared, prepared.Failure?.Message);
+        var playing = map.Play(100);
+        Assert.True(playing.TryMap(100, out var position));
+        Assert.True(decks.RepositionSequenceMedia(map.SequenceId, 7, position).Prepared);
+
+        var clips = new[]
+        {
+            new SequenceClipFrameRequest(Guid.NewGuid(), owners[0].AssetId, fingerprint,
+                SequenceMediaKind.Video, 0, 0, 0),
+            new SequenceClipFrameRequest(Guid.NewGuid(), owners[0].AssetId, fingerprint,
+                SequenceMediaKind.Audio, 0, 0, 0),
+            new SequenceClipFrameRequest(Guid.NewGuid(), owners[1].AssetId, fingerprint,
+                SequenceMediaKind.Video, 0, 0, 0),
+            new SequenceClipFrameRequest(Guid.NewGuid(), owners[1].AssetId, fingerprint,
+                SequenceMediaKind.Audio, 0, 0, 0)
+        };
+        var requests = new SequenceMediaFrameRequest[2];
+        var frameLeases = new SequenceMediaFrameLease?[2];
+        var indices = new int[clips.Length];
+        Assert.True(decks.TryTakeSequenceClipFrameSet(map.SequenceId, 7, position,
+            clips, requests, frameLeases, indices, out var ownerCount, out var issue), issue?.Message);
+        Assert.Equal(2, ownerCount);
+        Assert.Equal(new[] { 0, 0, 1, 1 }, indices);
+        Assert.Equal(owners[0].SourceId, frameLeases[indices[0]]!.Frame.Video.SourceId);
+        Assert.Equal(owners[1].SourceId, frameLeases[indices[2]]!.Frame.Video.SourceId);
+        Assert.False(frameLeases[indices[0]]!.Frame.RgbaPixels.IsEmpty);
+        Assert.False(frameLeases[indices[1]]!.Frame.AudioPayload.IsEmpty);
+        Assert.False(frameLeases[indices[3]]!.Frame.AudioPayload.IsEmpty);
+        Assert.All(frameLeases, frame => Assert.True(decks.IsCurrentSequenceFrame(frame!)));
+
+        foreach (var lease in frameLeases) lease!.Dispose();
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
+    public void Clip_selection_rejects_unbound_or_forged_source_before_consuming_decoder_frames()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2);
+        var (execution, map, owners) = Request(decks, asset.Path, fingerprint);
+        Assert.True(decks.PrepareSequenceMedia(execution, map, owners).Prepared);
+        var playing = map.Play(100);
+        Assert.True(playing.TryMap(100, out var position));
+        Assert.True(decks.RepositionSequenceMedia(map.SequenceId, 7, position).Prepared);
+        var original = new SequenceClipFrameRequest(Guid.NewGuid(), owners[0].AssetId,
+            fingerprint, SequenceMediaKind.Video, 0, 0, 0);
+        var requests = new SequenceMediaFrameRequest[2];
+        var leases = new SequenceMediaFrameLease?[2];
+        var indexes = new int[2];
+
+        Assert.False(decks.TryTakeSequenceClipFrameSet(map.SequenceId, 7, position,
+            new[] { original with { FingerprintSha256 = new string('F', 64) } },
+            requests, leases, indexes, out var rejectedCount, out var mismatch));
+        Assert.Equal("runtime.sequence.clip_selection_unbound", mismatch?.Code);
+        Assert.Equal(0, rejectedCount);
+        Assert.All(leases, frame => Assert.Null(frame));
+
+        Assert.False(decks.TryTakeSequenceClipFrameSet(map.SequenceId, 7, position,
+            new[] { original, original }, requests, leases, indexes,
+            out rejectedCount, out var duplicate));
+        Assert.Equal("runtime.sequence.clip_selection_duplicate", duplicate?.Code);
+        Assert.All(leases, frame => Assert.Null(frame));
+
+        Assert.True(decks.TryTakeSequenceClipFrameSet(map.SequenceId, 7, position,
+            new[] { original }, requests, leases, indexes,
+            out var ownerCount, out var ready), ready?.Message);
+        Assert.Equal(1, ownerCount);
+        Assert.Equal(0, indexes[0]);
+        Assert.True(decks.IsCurrentSequenceFrame(leases[0]!));
+        leases[0]!.Dispose();
+        decks.CloseSequenceMedia();
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
     }
 
     [Fact]
