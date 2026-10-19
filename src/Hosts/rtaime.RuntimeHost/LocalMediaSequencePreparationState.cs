@@ -21,13 +21,13 @@ public sealed partial class LocalMediaDeckRuntimeService
                 prepared.SequenceId != reference.SequenceId ||
                 prepared.AuthoringRevision != reference.AuthoringRevision ||
                 prepared.PreparedExecution.ToString() != reference.PreparedExecutionId ||
-                prepared.Generation != reference.Generation)
+                prepared.InitialGeneration != reference.Generation)
                 throw new InvalidOperationException(
                     "Sequence preparation identity, revision, generation or RuntimeHost lifetime changed.");
             return new SequencePreparationStatus(
                 SequencePreparationContract.Version,
                 prepared.SequenceId, prepared.AuthoringRevision, runtimeHostInstanceId,
-                prepared.PreparedExecution.ToString(), prepared.Generation,
+                prepared.PreparedExecution.ToString(), prepared.InitialGeneration,
                 prepared.Owners.Length, "PREPARED", null,
                 "Native sequence sources are prepared; no Preview/Program playback or Take is authorized.");
         }
