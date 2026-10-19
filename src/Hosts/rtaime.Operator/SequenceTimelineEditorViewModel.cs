@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using rtaime.Client;
@@ -20,8 +21,11 @@ public enum SequenceEditorGestureKind { Move, TrimStart, TrimEnd }
 public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly SequenceAuthoringClient? _authoring;
+    private readonly IMediaAssetCatalogClient? _catalogue;
     private readonly SequenceTimelineWaveformService? _waveforms;
     private SequenceSnapshot? _snapshot;
+    private ulong _libraryRevision;
+    private bool _revisionConflict;
     private SequenceSummary? _selectedSummary;
     private readonly HashSet<Guid> _selectedClips = [];
     private readonly List<Guid> _selectedOrder = [];
@@ -47,8 +51,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         SequenceAuthoringClient? authoring, IMediaAssetCatalogClient? analysis = null)
     {
         _authoring = authoring;
+        _catalogue = analysis;
         if (analysis is not null) _waveforms = new SequenceTimelineWaveformService(analysis);
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !_disposed && !_busy && _authoring is not null);
+        CreateCommand = new AsyncRelayCommand(CreateAsync, () => !_disposed && !_busy && _authoring is not null);
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => CanLoad);
         UndoCommand = new AsyncRelayCommand(() => HistoryAsync(true), () => CanEdit);
         RedoCommand = new AsyncRelayCommand(() => HistoryAsync(false), () => CanEdit);
@@ -74,6 +80,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     }
 
     public ICommand RefreshCommand { get; }
+    public ICommand CreateCommand { get; }
     public ICommand LoadCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
@@ -105,7 +112,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public SequenceDefinition? Sequence => _snapshot?.Sequence;
     public bool HasSequence => Sequence is not null;
     public bool CanLoad => !_disposed && !_busy && _authoring is not null && SelectedSummary is not null;
-    public bool CanEdit => !_disposed && !_busy && _authoring is not null &&
+    public bool CanEdit => !_disposed && !_busy && !_revisionConflict && _authoring is not null &&
         _snapshot?.Validation.IsValid == true;
     public bool CanEditSelection => CanEdit && _selectedClips.Count > 0;
     public string Status { get => _status; private set { _status = value; Changed(); } }
@@ -278,6 +285,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         await ExecuteAsync(async () =>
         {
             var result = await _authoring.ListAsync();
+            _libraryRevision = result.AuthoringRevision;
             if (result.CapabilityVersion != SequenceContract.Version)
                 throw new InvalidDataException("Sequence capability version differs from the accepted contract.");
             Sequences.Clear();
@@ -288,6 +296,90 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                 ? "No saved sequences. Use the governed authoring API to create a sequence."
                 : $"{Sequences.Count} saved sequence(s) · choose one and LOAD.";
             Status = "SEQUENCE CATALOGUE · AUTHENTIC CONTROLHOST";
+        });
+    }
+
+    public async Task CreateAsync()
+    {
+        if (_authoring is null || _disposed || _busy) return;
+        await ExecuteAsync(async () =>
+        {
+            var sequenceId = Guid.NewGuid();
+            var tracks = new[]
+            {
+                new SequenceTrack(Guid.NewGuid(), "V1 Video", SequenceMediaKind.Video, 1),
+                new SequenceTrack(Guid.NewGuid(), "V2 Video", SequenceMediaKind.Video, 2),
+                new SequenceTrack(Guid.NewGuid(), "A1 Audio", SequenceMediaKind.Audio, 3, AudioBusId: "program"),
+                new SequenceTrack(Guid.NewGuid(), "A2 Audio", SequenceMediaKind.Audio, 4, AudioBusId: "program")
+            };
+            var model = new SequenceDefinition(SequenceContract.Version, sequenceId,
+                "Untitled sequence", new SequenceRate(50, 1), tracks, [], []);
+            var result = await _authoring.SaveAsync(new SequenceMutationRequest(
+                SequenceContract.Version, Guid.NewGuid(), _libraryRevision, sequenceId, Definition: model));
+            if (!result.Saved)
+            {
+                Feedback = "REJECTED · " + string.Join("; ",
+                    result.Issues.Take(4).Select(issue => issue.Code + ": " + issue.Message));
+                Status = "AUTHORING CONFLICT · REFRESH CATALOGUE";
+                return;
+            }
+            var summary = new SequenceSummary(sequenceId, model.Name,
+                model.FrameRate, model.Tracks.Length, 0);
+            Sequences.Add(summary);
+            SelectedSummary = summary;
+            await ReadAsync(sequenceId);
+            Feedback = "SAVED · new four-track sequence with no imported media; add catalogue clips to saved tracks.";
+        });
+    }
+
+    /// <summary>
+    /// A library drag supplies only a catalogue asset ID and the saved track ID.
+    /// ControlHost rechecks actual catalogue fingerprint/duration and revision
+    /// before accepting the mutation. No file path or native decoder enters WPF.
+    /// </summary>
+    public async Task InsertCatalogueAssetAsync(Guid trackId, Guid assetId)
+    {
+        if (!CanEdit || Sequence is not { } model || _catalogue is null ||
+            trackId == Guid.Empty || assetId == Guid.Empty) return;
+        var track = model.Tracks.SingleOrDefault(t => t.TrackId == trackId);
+        if (track is null || track.Kind is not (SequenceMediaKind.Video or SequenceMediaKind.Audio))
+        {
+            Feedback = "REJECTED · only real catalogue video/audio may be dropped onto matching saved tracks.";
+            return;
+        }
+        await ExecuteAsync(async () =>
+        {
+            var catalog = await _catalogue.GetMediaAssetCatalogAsync();
+            var asset = catalog.Assets.SingleOrDefault(a => a.AssetId.ToString() == assetId.ToString("D"));
+            if (asset is null || asset.Availability != MediaAssetAvailability.Online ||
+                track.Kind == SequenceMediaKind.Video && asset.VideoFormat.Width == 0 ||
+                track.Kind == SequenceMediaKind.Audio && asset.AudioFormat.SampleRate == 0)
+            {
+                Feedback = "REJECTED · selected catalogue source is missing, offline or incompatible with the track.";
+                return;
+            }
+            var duration = checked((long)((BigInteger)asset.Duration.Ticks *
+                SequenceContract.TicksPerSecond / TimeSpan.TicksPerSecond));
+            var start = SequenceTimelineGeometry.Quantize(EditCursorTick, model.FrameRate);
+            if (duration < 1 || duration > SequenceContract.MaximumTime ||
+                start > SequenceContract.MaximumTime - duration)
+            {
+                Feedback = "REJECTED · source duration or sequence placement exceeds the bounded authoring horizon.";
+                return;
+            }
+            var clip = new SequenceClip(Guid.NewGuid(), trackId,
+                new SequenceMediaReference(assetId, track.Kind, asset.FingerprintSha256),
+                0, duration, start, duration);
+            var revision = _snapshot!.AuthoringRevision;
+            var result = await _authoring!.EditAsync(new SequenceMutationRequest(
+                SequenceContract.Version, Guid.NewGuid(), revision,
+                model.SequenceId, Edits: [new SequenceEdit(SequenceEditKind.InsertClip, clip.ClipId, Clip: clip)]));
+            await ProcessResultAsync(model.SequenceId, result);
+            if (result.Saved)
+            {
+                SelectClip(clip.ClipId);
+                Feedback = $"SAVED · {asset.DisplayName} added to {track.Name} at revision {result.AuthoringRevision}.";
+            }
         });
     }
 
@@ -305,6 +397,8 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             result.Validation.AuthoringRevision != result.AuthoringRevision)
             throw new InvalidDataException("The read sequence does not match the saved authoring revision.");
         _snapshot = result;
+        _libraryRevision = result.AuthoringRevision;
+        _revisionConflict = !result.Validation.IsValid;
         _gesture = null;
         _selectedClips.RemoveWhere(c => result.Sequence.Clips.All(x => x.ClipId != c));
         _selectedOrder.RemoveAll(id => !_selectedClips.Contains(id));
@@ -345,7 +439,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             // Never replay the original edit against a new revision implicitly.
             if (result.Issues.Any(i => i.Code is "sequence.revision_conflict" or
                 "sequence.asset_reference" or "sequence.transaction_conflict"))
+            {
+                _revisionConflict = true;
                 Status = "AUTHORING CONFLICT · RELOAD REQUIRED";
+            }
             return;
         }
         await ReadAsync(selected);
@@ -534,7 +631,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
 
     private void RaiseCommands()
     {
-        foreach (var command in new[] { RefreshCommand, LoadCommand, UndoCommand, RedoCommand,
+        foreach (var command in new[] { RefreshCommand, CreateCommand, LoadCommand, UndoCommand, RedoCommand,
                  DeleteCommand, RippleDeleteCommand, SplitCommand, CopyCommand, PasteCommand, LinkCommand,
                  UnlinkCommand, TransitionCommand, ToggleTrackEnabledCommand, ToggleTrackMuteCommand,
                  WaveformCommand, ZoomInCommand, ZoomOutCommand, FitCommand,
