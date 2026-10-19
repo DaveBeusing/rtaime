@@ -4,9 +4,10 @@
 
 Control owns the versioned, durable authored 2D model in the canonical show project.
 Operator consumers use Client → ControlHost. This backend provides configuration,
-validation and saving; it does not activate a mapping renderer. Existing governed
-Program/Aux execution continues unchanged. Preview and Clean Feed are monitoring,
-never enumerated physical output targets.
+validation, saving and explicit mapping activation. A currently qualified
+managed-reference GPU backend can apply saved surfaces to the existing Program
+output sink. Program/Aux role routing remains authoritative; Preview and Clean
+Feed are monitoring, never enumerated physical output targets.
 
 ## Contract and geometry
 
@@ -28,7 +29,9 @@ Rectangles are represented by their four corners. Inverted, self-intersecting,
 concave, zero/near-zero area, nonfinite and excessive coordinates fail validation.
 Successive edge cross products must exceed 1e-8 square logical pixels.
 Coordinates outside the canvas are allowed within ±16384; the renderer consumer
-must clip to canvas edges and leave uncovered output transparent black.
+must clip to canvas edges. Transparent-black mapping is flattened to opaque
+black for the existing Program output sink, ensuring blend attenuation affects
+actual RGB pixels even if downstream sinks ignore alpha.
 Surfaces composite by ascending ZOrder then ascending SurfaceId (ordinal GUID
 string); disabled surfaces retain identity/configuration but contribute nothing.
 
@@ -55,10 +58,13 @@ using it in an existing production.
 ## Transactions and revision meaning
 
 GetOutputCanvasAsync returns Saved, SavedRevision, AvailableTargets,
-ActiveRenderRevision and ActivationState. ActiveRenderRevision is null and
-ActivationState is RENDERER_REQUIRED until a separately implemented renderer has
-an explicit, qualified Prepare/Commit activation path. Saving never calls Runtime
-Prepare/Commit, changes Program or requires a Take.
+ActiveRenderRevision and ActivationState. ActiveRenderRevision comes from the running RuntimeHost's applied output pass;
+RuntimeEvidence also reports pending revision, last rendered frame sequence,
+source, target and bounded dimensions. On unavailable older Runtime peers the
+activation state remains RENDERER_REQUIRED. Saving never calls Runtime Prepare/
+Commit, changes Program or requires a Take. ActivateOutputCanvasAsync explicitly
+requests activation of the exact SavedRevision; successful acceptance initially
+reports PENDING_BOUNDARY, not applied output.
 
 Clients hold drafts. Draft EditRevision must be the next SavedRevision, with the
 same ConfigurationId. ValidateOutputCanvasAsync returns that identity/revision and
@@ -129,14 +135,15 @@ The existing Named Pipe dispatcher and authenticated TLS gRPC dispatcher expose:
 | control.output.canvas.get | 146 | Observer |
 | control.output.canvas.validate | 147 | Observer |
 | control.output.canvas.save | 148 | Operator |
+| control.output.canvas.activate | 149 | Operator |
 
-Tags 149–161 remain allocated to this domain and unconsumed. Existing tags and
+Tags 150–161 remain allocated to this domain and unconsumed. Existing tags and
 wire/API versions are preserved. Request context, authentication, rate/in-flight
 quotas, frame size, deadline and host replacement/resynchronization remain those
 of the existing transports. Canvas JSON additionally rejects duplicate/unknown
 properties and excessive depth/bytes. Older peers reject unknown operations through
-their existing structured unknown-operation paths. There is no activation endpoint
-and no generic Aux command for changing Program.
+their existing structured unknown-operation paths. The activation endpoint is a governed Program mapping mutation, not a generic
+Aux command or output-routing bypass.
 
 ## Qualification and rendering handoff
 
@@ -160,7 +167,50 @@ The PR records actual exact-source Required Gates evidence. Physical power-loss,
 hardware output and renderer pixel qualification remain separate unverified
 evidence boundaries. Existing hardware/release NO-GO findings remain.
 
-The next functional consumer is the mapping renderer/Prepare-Commit activation,
-then the editor using these real Client methods. Consumers must preserve stable IDs,
-crop/coordinate semantics, expected revision, configured versus active distinction,
-source generation fencing and actual Runtime resource ownership.
+The next functional consumer is the canvas/warp editor using the real Client
+methods, and independent device/profile qualification for physical output.
+Source generations, committed output identity, draft-versus-active state and
+provider resource ownership remain mandatory.
+
+
+## Current output renderer and operational semantics
+
+RuntimeHost compiles validated saved canvas geometry into a finite, immutable
+output-side plan. The plan binds the exact saved EditRevision, current
+RuntimeExecutionRevision and governed Program provider/target identity. ControlHost
+passes the observed RuntimeHost process identity; a replacement during activation
+rejects the operation. Preparation never changes Program. Commit queues the
+prepared plan and the RuntimeHost swaps it only at the next frame boundary,
+where the execution revision and target are checked again. A subsequent execution
+commit invalidates an active mapping and returns to the legacy Program output;
+activation is not silently replayed across changes of execution authority.
+
+The existing composite remains the sole Program compositor. Each eligible
+mapped surface obtains its current committed source or the post-composite Program
+frame; a separate output transform uses one inverse projective homography, one
+bilinear filtered crop and destination clipping. Visible surfaces are composited
+in stable authored z-order. Alpha and overlap use RGBA8 encoded-space source-over.
+Optional EdgeBlend widths (left/top/right/bottom) are normalized values in
+[0,0.5]; curves are "linear" or "smoothstep". The managed reference backend
+flattens the final mapped result over opaque black. No linear-light projector
+compensation, calibrated gamma, 10-bit, HDR or physical display output is claimed.
+
+The runtime mapping capability is currently limited to the **managed-reference
+GPU backend** and **one governed Program output target**, with at most eight
+visible surfaces and a 16 MiB maximum additional mapped framebuffer allocation.
+Canvas authoring limits are larger: saving an authored model does not guarantee
+that it can be activated by the current provider. Other GPU backends and any
+multi-output mapping are rejected explicitly, not emulated or redirected. The
+existing Program output is untouched for an identity pass and when mapping is
+inactive. On mapping failure, RuntimeHost records the failure and falls back
+to the original Program frame; it does not silently claim that warped output
+was delivered. Preview capture remains pre-mapping; Program/output monitoring
+and Program recording/output pixels are post-mapping where the existing consumers
+receive them.
+
+These are functional software paths, not real-time/hardware qualifications:
+the managed reference raster is CPU-executed and not approved for guaranteed
+50/59.94 fps physical scan-out. Pixel parity, Runtime virtual sink, memory
+retention and failure paths need source-bound CI evidence. Hardware projector
+blending, driver capability, physical scan-out, HDR and sustained frame cadence
+remain independently unverified.
