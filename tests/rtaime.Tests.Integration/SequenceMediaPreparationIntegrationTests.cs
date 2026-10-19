@@ -71,6 +71,8 @@ public sealed class SequenceMediaPreparationIntegrationTests
         Assert.False(second.Frame.RgbaPixels.IsEmpty);
         Assert.False(first.Frame.AudioPayload.IsEmpty);
         Assert.False(second.Frame.AudioPayload.IsEmpty);
+        Assert.True(decks.IsCurrentSequenceFrame(first));
+        Assert.True(decks.IsCurrentSequenceFrame(second));
 
         Assert.False(decks.TryTakeSequenceMedia(map.SequenceId, 8, owners[0].SourceId,
             position, 0, out _, out var revisionFault));
@@ -79,9 +81,24 @@ public sealed class SequenceMediaPreparationIntegrationTests
             position, 4800, out _, out var sourceFault));
         Assert.Equal("runtime.sequence.source_mismatch", sourceFault?.Code);
 
+        var sought = playing.Seek(101, 4800);
+        Assert.True(sought.TryMap(101, out var advanced));
+        var updated = decks.RepositionSequenceMedia(map.SequenceId, 7, advanced);
+        Assert.True(updated.Prepared, updated.Failure?.Message);
+        Assert.False(decks.IsCurrentSequenceFrame(first));
+        Assert.False(decks.IsCurrentSequenceFrame(second));
+        Assert.False(decks.TryTakeSequenceMedia(map.SequenceId, 7, owners[0].SourceId,
+            position, 0, out _, out var retired));
+        Assert.Equal("runtime.sequence.stale", retired?.Code);
+        Assert.True(decks.TryTakeSequenceMedia(map.SequenceId, 7, owners[0].SourceId,
+            advanced, 4800, out var newFrame, out var afterSeek), afterSeek?.Message);
+        Assert.True(decks.IsCurrentSequenceFrame(newFrame!));
+        newFrame!.Dispose();
+
         // Shutdown releases joined native workers, but the caller's retained
         // readback leases keep their true old pool charges until Dispose.
         decks.CloseSequenceMedia();
+        Assert.False(decks.IsCurrentSequenceFrame(first));
         Assert.Equal(2, decks.ResourceSnapshot.RetainedPoolOwners);
         first.Dispose();
         Assert.Equal(1, decks.ResourceSnapshot.ReservedOwners);
