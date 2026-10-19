@@ -13,6 +13,8 @@ public interface IGpuOutputMappingBackend
         IReadOnlyList<GpuOutputMappingSurface> surfaces);
 }
 
+public sealed record GpuOutputMappingInput(GpuFrame Frame, GpuOutputMappingSurface Surface);
+
 public enum GpuOutputBlendCurve
 {
     Linear = 1,
