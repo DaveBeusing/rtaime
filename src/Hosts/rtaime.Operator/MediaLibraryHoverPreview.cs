@@ -158,10 +158,9 @@ public sealed class MediaLibraryHoverPreview : IDisposable
         {
             return null;
         }
-        catch (Exception exception) when (exception is IOException or InvalidDataException or
-            InvalidOperationException or ArgumentException or OverflowException or TimeoutException or
-            OperationCanceledException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
+            // Analysis is optional presentation. Transport and pipe faults must not escape into WPF input handlers.
             return Current(generation, token)
                 ? new(item.Key, null, "UNAVAILABLE · isolated media frame could not be read", requestedTicks)
                 : null;
@@ -176,8 +175,7 @@ public sealed class MediaLibraryHoverPreview : IDisposable
                     using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                     await client.CancelMediaAnalysisAsync(job, cleanup.Token);
                 }
-                catch (Exception exception) when (exception is OperationCanceledException or IOException or
-                    InvalidDataException or InvalidOperationException or TimeoutException or NotSupportedException)
+                catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
                     // Runtime retains native admission until actual release; no optimistic cleanup assertion.
                 }
