@@ -174,7 +174,7 @@ Until that evidence exists, fused-kernel performance benefit remains **UNVERIFIE
 
 ## Program consumer parity
 
-RuntimeHost still obtains the final Program payload from the same post-composite `_gpu.RentReadback(output)`.
+RuntimeHost still obtains the one owned Program payload through `_gpu.RentReadback(presentedOutput)`. `presentedOutput` is the original post-composite frame for unmapped or identity output, or the separately owned post-mapping frame after successful optional output mapping. Runtime recording, monitoring and downstream Program consumers share this same selected payload; mapping never creates another Program renderer.
 
 That one owned payload is then used or retained by:
 
