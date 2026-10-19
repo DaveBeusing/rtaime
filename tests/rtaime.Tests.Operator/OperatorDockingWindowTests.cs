@@ -28,6 +28,12 @@ internal static class OperatorDockingWindowTests
         owner.Shell.SelectWorkspace("LIVE");
         await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Collapsed, aiSurface.Visibility);
+        // Workspaces retain independent docking preferences: LIVE was explicitly
+        // disabled before AI enabled its own layout. AI must not leak that state.
+        Assert.False(owner.Shell.Docking.Enabled);
+        Assert.Equal(Visibility.Collapsed, dockHost.Visibility);
+        owner.Shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
+        await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Visible, dockHost.Visibility);
         owner.Shell.SetDocking(OperatorDockLayout.Default);
         var identities = owner.Docking.Panels.ToDictionary(p => p.Key, p => p.Value);
