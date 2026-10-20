@@ -1497,9 +1497,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					output.Dispose();
 					if (gpuFrames is not null)
 					{
-						foreach (var inputFrame in gpuFrames.Values)
-							inputFrame.Dispose();
-						gpuFrames.Clear();
+						ReleaseGpuFrameScratch(gpuFrames);
 						gpuFrames = null;
 					}
 					gpuB = null;
@@ -1556,23 +1554,33 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			}
 			finally
 			{
+				Exception? cleanupFailure = null;
 				if (materializedLayers is not null)
 				{
 					foreach (var materialized in materializedLayers)
-						materialized.Frame.Dispose();
+					{
+						try { materialized.Frame.Dispose(); }
+						catch (Exception exception) { cleanupFailure ??= exception; }
+					}
 				}
 				if (gpuFrames is not null)
 				{
-					try
-					{
-						foreach (var frame in gpuFrames.Values)
-							frame.Dispose();
-					}
-					finally { gpuFrames.Clear(); }
+					try { ReleaseGpuFrameScratch(gpuFrames); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
 				}
-				gpuB?.Dispose();
-				gpuA?.Dispose();
+				if (gpuB is not null)
+				{
+					try { gpuB.Dispose(); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
+				}
+				if (gpuA is not null)
+				{
+					try { gpuA.Dispose(); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
+				}
 				_boundaryFrameScratch.Clear();
+				if (cleanupFailure is not null)
+					System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanupFailure).Throw();
 			}
 		}
 	}
@@ -2745,6 +2753,23 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		if (readback.ActiveBuffers == 0 && sharedMonitoring.ActiveResources == 0)
 			Release(_gpu.Dispose);
 		Release(_hardwareTelemetry.Dispose);
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+	}
+
+	private static void ReleaseGpuFrameScratch(Dictionary<MediaSourceId, GpuFrame> frames)
+	{
+		Exception? failure = null;
+		try
+		{
+			foreach (var frame in frames.Values)
+			{
+				try { frame.Dispose(); }
+				catch (Exception exception) { failure ??= exception; }
+			}
+		}
+		finally { frames.Clear(); }
+
 		if (failure is not null)
 			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
