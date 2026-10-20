@@ -1,126 +1,228 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.Gpu;
 
 namespace rtaime.RuntimeHost;
 
+/// <summary>
+/// Runtime-owned output graph. Every provider session is constructed before the
+/// immutable role/target graph becomes visible to the existing Program boundary.
+/// Failed construction releases all provisional sessions; no partial graph starts
+/// receiving Program frames. This is network transport fan-out, not physical
+/// scan-out qualification or a second output routing authority.
+/// </summary>
 internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 {
-	private readonly IReadOnlyDictionary<string, INetworkOutputSession> _sessions;
-	private readonly IReadOnlyList<ProviderDescriptor> _providerDescriptors;
-	private readonly object _disposeGate = new();
-	private Task? _disposeTask;
+    private sealed record TargetSession(string TargetId, INetworkOutputSession Session);
 
-	public RuntimeNetworkOutputBridge(
-		IReadOnlyList<RuntimeNetworkOutputTarget> targets,
-		IRuntimeNetworkOutputProviderRegistry? providerRegistry = null)
-	{
-		ArgumentNullException.ThrowIfNull(targets);
-		providerRegistry ??= new RuntimeNetworkOutputProviderRegistry();
+    private readonly IReadOnlyDictionary<string, TargetSession> _sessions;
+    private readonly IReadOnlyDictionary<string, TargetSession[]> _roles;
+    private readonly IReadOnlyList<ProviderDescriptor> _providerDescriptors;
+    private readonly object _disposeGate = new();
+    private Task? _disposeTask;
 
-		var sessions = new Dictionary<string, INetworkOutputSession>(StringComparer.OrdinalIgnoreCase);
-		try
-		{
-			foreach (var target in targets)
-			{
-				if (!sessions.TryAdd(target.RoleId, providerRegistry.CreateSession(target)))
-					throw new ArgumentException($"Network output role '{target.RoleId}' is configured more than once.", nameof(targets));
-			}
-		}
-		catch
-		{
-			foreach (var session in sessions.Values)
-				session.DisposeAsync().AsTask().GetAwaiter().GetResult();
-			throw;
-		}
+    public RuntimeNetworkOutputBridge(
+        IReadOnlyList<RuntimeNetworkOutputTarget> targets,
+        IRuntimeNetworkOutputProviderRegistry? providerRegistry = null)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        providerRegistry ??= new RuntimeNetworkOutputProviderRegistry();
 
-		_sessions = sessions;
-		_providerDescriptors = providerRegistry.ProviderDescriptorsFor(targets);
-	}
+        if (targets.Count > 8 || targets.Any(target => target is null) ||
+            targets.Any(target => string.IsNullOrWhiteSpace(target.Configuration.TargetId)) ||
+            targets.Select(target => target.Configuration.TargetId)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Count)
+            throw new ArgumentException(
+                "Output graph requires at most eight uniquely identified provider targets.",
+                nameof(targets));
 
-	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => _providerDescriptors;
-	public bool Enabled => _sessions.Count > 0;
-	public bool HasRole(string roleId) => _sessions.ContainsKey(roleId);
+        var provisional = new Dictionary<string, TargetSession>(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<ProviderDescriptor> descriptors;
+        try
+        {
+            // Construct actual provider sessions before a single role becomes
+            // active. This is a finite reservation; no Program sample is emitted.
+            foreach (var target in targets)
+            {
+                var session = providerRegistry.CreateSession(target);
+                provisional.Add(target.Configuration.TargetId,
+                    new TargetSession(target.Configuration.TargetId, session));
+            }
+            descriptors = providerRegistry.ProviderDescriptorsFor(targets);
+        }
+        catch
+        {
+            foreach (var item in provisional.Values)
+                item.Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            throw;
+        }
 
-	public NetworkOutputEnqueueResult? TrySubmit(
-		string roleId,
-		GpuReadbackLease videoLease,
-		FrameTiming videoTiming,
-		AudioBufferDescriptor audio,
-		ReadOnlyMemory<byte> audioPayload)
-	{
-		if (string.IsNullOrWhiteSpace(roleId))
-			throw new ArgumentException("Output role identity is required.", nameof(roleId));
-		ArgumentNullException.ThrowIfNull(videoLease);
-		ArgumentNullException.ThrowIfNull(audio);
+        _sessions = provisional;
+        _roles = targets.GroupBy(target => target.RoleId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(target => provisional[target.Configuration.TargetId]).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+        _providerDescriptors = descriptors;
+    }
 
-		if (!_sessions.TryGetValue(roleId, out var session))
-		{
-			videoLease.Dispose();
-			return null;
-		}
+    public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => _providerDescriptors;
+    public bool Enabled => _sessions.Count > 0;
+    public bool HasRole(string roleId) => _roles.ContainsKey(roleId);
 
-		var payload = new GpuNetworkOutputPayloadLease(videoLease);
-		try
-		{
-			var networkAudio = audioPayload;
-			if (networkAudio.IsEmpty)
-			{
-				var silenceLength = checked((int)((long)audio.Timing.SampleCount * audio.Format.ChannelCount * sizeof(float)));
-				networkAudio = new byte[silenceLength];
-			}
-			var sample = new NetworkOutputProgramSample(
-				videoTiming.SequenceNumber,
-				videoTiming,
-				audio.Timing,
-				payload,
-				networkAudio);
-			var result = session.TrySubmit(sample);
-			payload = null!;
-			return result;
-		}
-		finally
-		{
-			payload?.Dispose();
-		}
-	}
+    public IReadOnlyList<string> TargetIdsForRole(string roleId) =>
+        _roles.TryGetValue(roleId, out var targets)
+            ? Array.AsReadOnly(targets.Select(target => target.TargetId).ToArray())
+            : Array.Empty<string>();
 
-	public NetworkOutputHealthSnapshot? SnapshotForRole(string roleId) =>
-		_sessions.TryGetValue(roleId, out var session) ? session.Snapshot : null;
+    /// <summary>
+    /// All configured sinks of a governed role receive the same Program slot and
+    /// audio timing. Provider queue failures are reported per target; a transport
+    /// that has already enqueued a frame cannot be rolled back retrospectively.
+    /// </summary>
+    public NetworkOutputEnqueueResult? TrySubmit(
+        string roleId,
+        GpuReadbackLease videoLease,
+        FrameTiming videoTiming,
+        AudioBufferDescriptor audio,
+        ReadOnlyMemory<byte> audioPayload)
+    {
+        if (string.IsNullOrWhiteSpace(roleId))
+            throw new ArgumentException("Output role identity is required.", nameof(roleId));
+        ArgumentNullException.ThrowIfNull(videoLease);
+        ArgumentNullException.ThrowIfNull(audio);
 
-	public IReadOnlyList<NetworkOutputHealthSnapshot> Snapshots =>
-		Array.AsReadOnly(_sessions.Values.Select(session => session.Snapshot).ToArray());
+        if (!_roles.TryGetValue(roleId, out var targets))
+        {
+            videoLease.Dispose();
+            return null;
+        }
 
-	public ValueTask DisposeAsync()
-	{
-		lock (_disposeGate)
-			return new ValueTask(_disposeTask ??= DisposeCoreAsync());
-	}
+        // Retain all readers before submitting to any provider: an immediate
+        // rejection/disposal in one provider cannot invalidate another target.
+        var leases = new GpuReadbackLease?[targets.Length];
+        leases[0] = videoLease;
+        try
+        {
+            for (var i = 1; i < targets.Length; i++)
+                leases[i] = videoLease.Retain();
+        }
+        catch
+        {
+            foreach (var lease in leases)
+                lease?.Dispose();
+            throw;
+        }
 
-	private async Task DisposeCoreAsync()
-	{
-		Exception? failure = null;
-		foreach (var session in _sessions.Values)
-		{
-			try { await session.DisposeAsync().ConfigureAwait(false); }
-			catch (Exception exception) { failure ??= exception; }
-		}
-		if (failure is not null)
-			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
-	}
+        ReadOnlyMemory<byte> networkAudio = audioPayload;
+        try
+        {
+            if (networkAudio.IsEmpty)
+            {
+                var count = checked((int)((long)audio.Timing.SampleCount *
+                    audio.Format.ChannelCount * sizeof(float)));
+                networkAudio = new byte[count];
+            }
+        }
+        catch
+        {
+            foreach (var lease in leases)
+                lease?.Dispose();
+            throw;
+        }
 
-	private sealed class GpuNetworkOutputPayloadLease : INetworkOutputPayloadLease
-	{
-		private GpuReadbackLease? _lease;
+        var dropped = 0;
+        var rejected = 0;
+        string? rejectedTarget = null;
+        for (var i = 0; i < targets.Length; i++)
+        {
+            GpuNetworkOutputPayloadLease? payload = new(leases[i]!);
+            leases[i] = null;
+            try
+            {
+                var sample = new NetworkOutputProgramSample(
+                    videoTiming.SequenceNumber, videoTiming, audio.Timing, payload, networkAudio);
+                var outcome = targets[i].Session.TrySubmit(sample);
+                // Ownership transferred to the provider, including rejected
+                // samples that the provider explicitly disposes.
+                payload = null;
+                if (outcome.Status == NetworkOutputEnqueueStatus.DroppedOldest) dropped++;
+                else if (outcome.Status == NetworkOutputEnqueueStatus.Rejected)
+                {
+                    rejected++;
+                    rejectedTarget ??= targets[i].TargetId;
+                }
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                rejected++;
+                rejectedTarget ??= targets[i].TargetId;
+            }
+            finally
+            {
+                payload?.Dispose();
+            }
+        }
 
-		public GpuNetworkOutputPayloadLease(GpuReadbackLease lease) =>
-			_lease = lease ?? throw new ArgumentNullException(nameof(lease));
+        if (rejected > 0)
+            return NetworkOutputEnqueueResult.Rejected(new Failure(
+                "network.output.partial_target_rejection",
+                $"One or more real provider output sessions rejected the Program sample ({rejected} of {targets.Length}; first: {rejectedTarget}). Other targets remain independently observable."));
+        if (dropped > 0)
+            return NetworkOutputEnqueueResult.AcceptedAfterDroppingOldest(new Failure(
+                "network.output.fanout_backpressure",
+                $"{dropped} of {targets.Length} network targets dropped an old sample under bounded pressure."));
+        return NetworkOutputEnqueueResult.AcceptedSample();
+    }
 
-		public ReadOnlyMemory<byte> Memory =>
-			Volatile.Read(ref _lease)?.Memory ?? throw new ObjectDisposedException(nameof(GpuNetworkOutputPayloadLease));
+    // Preserve the historical single-role projection for existing peers.
+    public NetworkOutputHealthSnapshot? SnapshotForRole(string roleId) =>
+        _roles.TryGetValue(roleId, out var targets) && targets.Length > 0
+            ? targets[0].Session.Snapshot : null;
 
-		public void Dispose() => Interlocked.Exchange(ref _lease, null)?.Dispose();
-	}
+    // New precise per-target telemetry; never collapse independent target health.
+    public IReadOnlyList<NetworkOutputHealthSnapshot> SnapshotsForRole(string roleId) =>
+        _roles.TryGetValue(roleId, out var targets)
+            ? Array.AsReadOnly(targets.Select(target => target.Session.Snapshot).ToArray())
+            : Array.Empty<NetworkOutputHealthSnapshot>();
+
+    public NetworkOutputHealthSnapshot? SnapshotForTarget(string targetId) =>
+        _sessions.TryGetValue(targetId, out var target) ? target.Session.Snapshot : null;
+
+    public IReadOnlyList<NetworkOutputHealthSnapshot> Snapshots =>
+        Array.AsReadOnly(_sessions.Values.Select(session => session.Session.Snapshot).ToArray());
+
+    public ValueTask DisposeAsync()
+    {
+        lock (_disposeGate)
+            return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Exception? failure = null;
+        foreach (var item in _sessions.Values)
+        {
+            try { await item.Session.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception exception) { failure ??= exception; }
+        }
+        if (failure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private sealed class GpuNetworkOutputPayloadLease : INetworkOutputPayloadLease
+    {
+        private GpuReadbackLease? _lease;
+
+        public GpuNetworkOutputPayloadLease(GpuReadbackLease lease) =>
+            _lease = lease ?? throw new ArgumentNullException(nameof(lease));
+
+        public ReadOnlyMemory<byte> Memory =>
+            Volatile.Read(ref _lease)?.Memory ?? throw new ObjectDisposedException(nameof(GpuNetworkOutputPayloadLease));
+
+        public void Dispose() => Interlocked.Exchange(ref _lease, null)?.Dispose();
+    }
 }
