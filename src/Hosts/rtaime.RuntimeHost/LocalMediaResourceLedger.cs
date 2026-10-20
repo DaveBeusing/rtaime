@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Media;
+using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
@@ -32,6 +34,9 @@ public sealed class LocalMediaResourceLedger
     private readonly object _gate = new();
     private readonly Dictionary<Guid, Owner> _owners = [];
     private readonly long _bytesPerOwner;
+    private readonly VideoFormat _format;
+    private RuntimeResourceCapabilityProfile? _admittedProfile;
+    private Func<ProviderDescriptor>? _liveProvider;
     private MediaSourceId? _program;
     private string? _lastRejection;
     private bool _closed;
@@ -60,9 +65,24 @@ public sealed class LocalMediaResourceLedger
     {
     }
 
+    /// <summary>
+    /// Production admission must always use a live, Runtime-owned provider observation.
+    /// Constructing a policy profile from user input is never provider qualification.
+    /// </summary>
+    internal LocalMediaResourceLedger(VideoFormat format, int capacity,
+        RuntimeResourceCapabilityProfile admittedProfile, Func<ProviderDescriptor> liveProvider)
+        : this(format, capacity, admittedProfile)
+    {
+        _liveProvider = liveProvider ?? throw new ArgumentNullException(nameof(liveProvider));
+        if (ObserveProviderRejection(capacity) is { } failure)
+            throw new NotSupportedException("Observed provider cannot admit the decoder profile: " + failure.Code);
+    }
+
     private LocalMediaResourceLedger(VideoFormat format, int capacity, int maximum,
         RuntimeResourceCapabilityProfile? admittedProfile)
     {
+        _format = format;
+        _admittedProfile = admittedProfile;
         if (capacity < 1 || capacity > maximum)
             throw new ArgumentOutOfRangeException(nameof(capacity));
         // Ten video/audio slots plus one known RGBA decoder scratch frame. Native allocations are unknown.
@@ -125,6 +145,11 @@ public sealed class LocalMediaResourceLedger
                 failure = Reject("runtime.media_resources.quarantined", "Native cleanup is uncertain; restart RuntimeHost through its supported lifecycle.");
                 return false;
             }
+            if (ObserveProviderRejection(1) is { } providerFailure)
+            {
+                failure = providerFailure;
+                return false;
+            }
             if (_owners.Count >= Capacity)
             {
                 failure = Reject("runtime.media_resources.capacity", "Decoder/pool reservations are full, including retained old pools. Close an inactive deck and release its consumers before retrying.");
@@ -183,6 +208,11 @@ public sealed class LocalMediaResourceLedger
                     "A sequence group cannot reuse a previously reserved admission intent.");
                 return false;
             }
+            if (ObserveProviderRejection(requested.Count) is { } providerFailure)
+            {
+                failure = providerFailure;
+                return false;
+            }
             if ((long)_owners.Count + requested.Count > Capacity)
             {
                 failure = Reject("runtime.media_resources.capacity",
@@ -207,6 +237,67 @@ public sealed class LocalMediaResourceLedger
             failure = null;
             return true;
         }
+    }
+
+    /// <summary>
+    /// Re-read the provider's current capability/resource inventory for every
+    /// new owner grant. Existing owner leases are never revoked on an observation
+    /// change; only further admission is denied until the source recovers.
+    /// All checks run on the management reservation path, not Program cadence.
+    /// </summary>
+    private Failure? ObserveProviderRejection(int requested)
+    {
+        if (_liveProvider is null) return null; // Isolated synthetic-ledger tests.
+        ProviderDescriptor descriptor;
+        try { descriptor = _liveProvider(); }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return Reject("runtime.media_resources.provider_observation_failed",
+                "The active media provider resource observation failed; no new owner was granted.");
+        }
+
+        if (descriptor is null || _admittedProfile is null ||
+            descriptor.ProviderId.ToString() != _admittedProfile.ProviderId ||
+            descriptor.Availability.State != ProviderAvailabilityState.Available)
+            return Reject("runtime.media_resources.provider_changed",
+                "The currently observed provider is unavailable or differs from the admitted device.");
+
+        bool Supports(string kind) => descriptor.Capabilities.Any(capability =>
+            capability.Kind == kind && capability.SupportsVideoFormat(_format));
+        if (!Supports(LocalMediaCapabilityKinds.Decode) || !Supports(LocalMediaCapabilityKinds.MediaRoute))
+            return Reject("runtime.media_resources.format_changed",
+                "The live provider no longer advertises the exact decoder/route format.");
+
+        long Units(string kind) => descriptor.Resources
+            .Where(resource => resource.Kind == kind && resource.Reservable)
+            .Sum(resource => (long)resource.CapacityUnits);
+        var actualLimit = Math.Min(Units(LocalMediaCapabilityKinds.Decode),
+            Units(LocalMediaCapabilityKinds.MediaRoute));
+        if (_admittedProfile.MaximumDecoderOwners > actualLimit ||
+            (long)_owners.Count + requested > actualLimit)
+            return Reject("runtime.media_resources.live_capacity",
+                "Actual reservable decoder/route units are below the requested or configured capability profile.");
+
+        try
+        {
+            if (checked(_bytesPerOwner * checked(_owners.Count + requested)) > _admittedProfile.ManagedBudgetBytes)
+                return Reject("runtime.media_resources.managed_budget",
+                    "Retained decoder payload reservations exceed the finite managed-memory budget.");
+        }
+        catch (OverflowException)
+        {
+            return Reject("runtime.media_resources.managed_overflow",
+                "Decoder resource requirements exceed finite resource arithmetic.");
+        }
+
+        // This OS observation is a pressure signal, not a native/GPU/SSD budget.
+        // Unknown native, VRAM and storage pressure remain UNVERIFIED in Snapshot.
+        var gc = GC.GetGCMemoryInfo();
+        if (gc.HighMemoryLoadThresholdBytes > 0 &&
+            gc.MemoryLoadBytes >= gc.HighMemoryLoadThresholdBytes)
+            return Reject("runtime.media_resources.host_memory_pressure",
+                "The host is under observed managed-memory pressure; defer new decoder owners.");
+        return null;
     }
 
     private Failure Reject(string code, string message)
