@@ -125,6 +125,16 @@ public sealed class RuntimeSoftwareOutputPublicationTests
             gpu.Readback(original!.Frames["program"]).Take(4).ToArray());
         original.Dispose();
         Assert.Equal(0, published.Snapshot.RetainedOldGenerations);
+        Assert.Equal(1, published.Snapshot.DeferredDisposalGroups);
+        // Releasing a reader does not destroy GPU surfaces on its caller thread.
+        using (var stillCharged = Mapped(gpu, third))
+        {
+            var blocked = published.Stage(epoch, 1, stillCharged);
+            Assert.False(blocked.Succeeded);
+            Assert.Equal("runtime.software_output.reader_pressure", blocked.Code);
+        }
+        Assert.Equal(1, published.DrainRetiredOnManagementThread());
+        Assert.Equal(0, published.Snapshot.DeferredDisposalGroups);
 
         var final = Mapped(gpu, third);
         Assert.True(published.Stage(epoch, 1, final).Succeeded);

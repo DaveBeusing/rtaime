@@ -68,6 +68,10 @@ A single group lease exposes every target from one published sequence, so reader
 cannot observe different target generations within the same acquisition.
 Retired GPU frame groups remain charged while active readers exist; a finite
 old-generation ceiling rejects pressure rather than recycling live surfaces.
+The final reader also defers GPU destruction to the management drain, so reader
+release on a presentation thread cannot unexpectedly destroy mapped surfaces.
+Released generations still consume the finite retirement budget until drained;
+shutdown separately reclaims the last outstanding reader-owned frame.
 Stale or rejected candidates preserve the last published group; cancellation
 releases only staged frames. Closing the owner drains groups without destroying
 frames held by outstanding leases. Integration tests cover successful two-target

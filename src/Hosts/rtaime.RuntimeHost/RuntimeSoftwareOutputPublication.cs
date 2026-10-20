@@ -222,7 +222,10 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
 
     internal void Release(RuntimePublishedOutputGeneration generation)
     {
-        RuntimeMappedOutputFrameSet? retireNow = null;
+        // A reader may release from the render/presentation thread. Defer the
+        // GPU destruction until the management drain, just as boundary commit
+        // defers disposal of an unleased previous generation.
+        RuntimeMappedOutputFrameSet? shutdownRelease = null;
         lock (_gate)
         {
             if (generation.Readers <= 0)
@@ -231,10 +234,15 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
             if (generation.Readers == 0 && generation.Retired)
             {
                 _retired.Remove(generation);
-                retireNow = generation.Frames;
+                if (_closed)
+                    shutdownRelease = generation.Frames;
+                else
+                    _deferredDisposals.Enqueue(generation.Frames);
             }
         }
-        retireNow?.Dispose();
+        // After owner shutdown there is no longer a management drain. Releasing
+        // the final externally retained lease must still reclaim its GPU frames.
+        shutdownRelease?.Dispose();
     }
 
     public void Dispose()
