@@ -288,8 +288,28 @@ public sealed partial class ControlHostIpcServer
             admitted = await _runtimeTransport.PrepareSequenceAsync(command, cancellationToken)
                 .ConfigureAwait(false);
             if (admitted.Version != request.Version)
+            {
+                if (admitted.State == "PREPARED")
+                {
+                    // An incompatible Runtime response may still have reserved
+                    // native workers. Keep its exact owner fenced until the
+                    // Runtime explicitly confirms cleanup.
+                    var mismatchedOwner = new SequencePreparationReference(
+                        admitted.Version, admitted.SequenceId, admitted.AuthoringRevision,
+                        admitted.RuntimeHostInstanceId, admitted.PreparedExecutionId, admitted.Generation);
+                    _preparedSequence = new PreparedSequenceBinding(
+                        mismatchedOwner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var closed = await _runtimeTransport.CancelSequencePreparationAsync(
+                        mismatchedOwner, cleanup.Token).ConfigureAwait(false);
+                    if (closed.State != "CANCELED")
+                        return Error(message, "sequence.preparation.cleanup_unconfirmed",
+                            "Incompatible native preparation remains owned until cleanup is confirmed.");
+                    _preparedSequence = null;
+                }
                 return Error(message, "sequence.preparation.version_mismatch",
                     "RuntimeHost responded with a different negotiated preparation protocol.");
+            }
             if (admitted.State != "PREPARED")
                 return Success(message, message.MessageType + ".response", admitted);
 
@@ -305,40 +325,56 @@ public sealed partial class ControlHostIpcServer
             // current output authorization.
             var latest = await _showProjectStore.LoadSequencesAsync(baseline, cancellationToken)
                 .ConfigureAwait(false);
+            var latestControl = _controlAccessor();
+            var latestRuntime = await _runtimeTransport.GetSnapshotAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var latestCatalogue = await _mediaAssetCatalog.GetSnapshotAsync(
+                refreshAvailability: false, cancellationToken).ConfigureAwait(false);
             if (latest.Revision == library.Revision &&
-                _controlAccessor()?.State.ProductionId.Value == authority.ProductionId.Value &&
-                _controlAccessor()?.State.Revision == authority.Revision &&
+                latestControl is { HasAuthoritativeState: true } &&
+                latestControl.State.ProductionId.Value == authority.ProductionId.Value &&
+                latestControl.State.Revision == authority.Revision &&
+                latestRuntime.AuthorityStateId == authority.ProductionId.Value &&
+                latestRuntime.AuthorityRevision == authority.Revision &&
+                latestRuntime.HostInstanceId == request.ExpectedRuntimeHostInstanceId &&
+                latestCatalogue.Revision == catalog.Revision &&
                 _runtimeTransport.HostInstanceId == request.ExpectedRuntimeHostInstanceId)
                 return Success(message, message.MessageType + ".response", admitted);
 
+            using var staleCleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var closed = await _runtimeTransport.CancelSequencePreparationAsync(
-                reference, CancellationToken.None).ConfigureAwait(false);
+                reference, staleCleanup.Token).ConfigureAwait(false);
             if (closed.State != "CANCELED")
                 return Error(message, "sequence.preparation.cleanup_unconfirmed",
                     "Stale native preparation cleanup was not confirmed.");
             _preparedSequence = null;
             return Success(message, message.MessageType + ".response",
                 closed with { State = "STALE", Detail =
-                    "Sequence, RuntimeHost or committed production changed during preroll." });
+                    "Sequence, catalogue, RuntimeHost or committed production changed during preroll." });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (admitted?.State == "PREPARED")
             {
                 var owner = new SequencePreparationReference(
-                    request.Version, admitted.SequenceId,
+                    admitted.Version, admitted.SequenceId,
                     admitted.AuthoringRevision, admitted.RuntimeHostInstanceId,
                     admitted.PreparedExecutionId, admitted.Generation);
+                // An interrupted response must never free native ownership on
+                // the Control side without an explicit Runtime acknowledgment.
+                _preparedSequence ??= new PreparedSequenceBinding(
+                    owner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 try
                 {
-                    _ = await _runtimeTransport.CancelSequencePreparationAsync(
-                        owner, CancellationToken.None).ConfigureAwait(false);
-                    _preparedSequence = null;
+                    var closed = await _runtimeTransport.CancelSequencePreparationAsync(
+                        owner, cleanup.Token).ConfigureAwait(false);
+                    if (closed.State == "CANCELED") _preparedSequence = null;
                 }
-                catch (Exception)
+                catch (Exception error) when (error is IOException or TimeoutException or
+                    OperationCanceledException or InvalidOperationException or NotSupportedException)
                 {
-                    _preparedSequence ??= new PreparedSequenceBinding(
-                        owner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                    // Leave the uncertain prepared owner fenced for reconciliation.
                 }
             }
             throw;
