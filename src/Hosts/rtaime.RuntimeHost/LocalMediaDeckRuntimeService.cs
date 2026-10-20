@@ -67,7 +67,8 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 
         _ledger = admittedProfile is null
             ? new LocalMediaResourceLedger(outputFormat, maximumDecoders, profile)
-            : new LocalMediaResourceLedger(outputFormat, maximumDecoders, admittedProfile);
+            : new LocalMediaResourceLedger(outputFormat, maximumDecoders, admittedProfile,
+                () => _provider.Descriptor);
         _sourceRegistryLimit = admittedProfile?.MaximumRegisteredSources ??
             (profile == LocalMediaCapacityProfile.OptInFour ? 8 : 2);
         _entries = new Entry[maximumDecoders];
