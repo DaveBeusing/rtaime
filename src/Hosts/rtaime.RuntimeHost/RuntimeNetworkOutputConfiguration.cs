@@ -79,12 +79,9 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 		if (duplicateTargets is not null)
 			throw new ArgumentException($"Network output target '{duplicateTargets.Key}' is configured more than once.", "network-outputs");
 
-		var duplicateRoles = targets
-			.GroupBy(target => target.RoleId, StringComparer.OrdinalIgnoreCase)
-			.FirstOrDefault(group => group.Count() > 1);
-		if (duplicateRoles is not null)
-			throw new ArgumentException($"Network output role '{duplicateRoles.Key}' currently supports one configured network target.", "network-outputs");
-
+		// Several uniquely identified provider targets may follow one Control-owned
+		// Program/Aux role. The actual provider sessions are reserved as one graph.
+		// Runtime source routing remains authoritative; configuration alone cannot TAKE.
 		return Array.AsReadOnly(targets.ToArray());
 	}
 
