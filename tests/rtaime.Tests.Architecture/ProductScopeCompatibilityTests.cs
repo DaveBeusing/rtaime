@@ -70,6 +70,21 @@ public sealed class ProductScopeCompatibilityTests
         Assert.Contains("rtaime.v1.ai.default", host, StringComparison.Ordinal);
     }
 
+
+    [Fact]
+    public void Embedded_operator_help_does_not_reintroduce_historical_feature_gates()
+    {
+        var root = RepositorySnapshot.Load().Root;
+        foreach (var filename in new[] { "MediaLibraryAssetBrowser.md", "OperatorWorkspaces.md" })
+        {
+            var help = File.ReadAllText(Path.Combine(root, "docs", filename));
+            Assert.Contains("(ProductScope.md)", help, StringComparison.Ordinal);
+            Assert.DoesNotContain("post-V1 product expansion", help, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("renewed V1 scope gate", help, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("former V1 functional deferrals", help, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public void Current_product_definition_keeps_scope_separate_from_qualification()
     {
