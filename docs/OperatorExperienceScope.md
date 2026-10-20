@@ -2,7 +2,9 @@
 
 # Operator experience scope and integration baseline
 
-## Accepted product decision — 2026-10-17
+## Accepted Operator decision — 2026-10-17
+
+**Product-wide supersession (2026-10-20):** [Product Scope](ProductScope.md) now authorizes the entire professional media-platform feature space. Historical scope approvals, exclusions and delivery status below remain useful evidence but do not constitute active product-phase feature gates. Published protocol and persistence identities remain compatibility obligations.
 
 The Product Owner authorizes implementation of the complete Operator experience
 design without the former V1 functional ceiling. Independent media analysis and
@@ -81,7 +83,7 @@ record, not a claim that approved work is still permanently deferred.
 | QUALIFIED | The explicitly named test/visual/hardware case passed at an exact source; never infer another category |
 
 Reviewed master: `b5b7520184cdea8160a07495d792d5e13530069b`.
-The current build target is 0.5.40 in Directory.Build.props; pinned SDK is
+At this historical reviewed source the build target was 0.5.40 (the later master target is 0.5.41); pinned SDK is
 10.0.401. Versioning rules remain in [Product versioning](Versioning.md);
 this baseline changes no version, protocol, schema or production source file.
 
@@ -187,8 +189,7 @@ and documentation does not mark them repaired.
 | Capacity proposals requiring another V1 functional inclusion decision | Finite resource-admission evolution is authorized; exact capacities need real contracts and measured evidence, with no automatic four-deck/SSD-support claim |
 | Bootstrap architecture, Media I/O accepted ADR and decoder decisions | Authority, dependencies, compatibility, native ABI, security and hardware/codec evidence remain binding; no blanket repeal |
 
-Review all active scope statements against this record; preserve old V1 names and
-historical source citations. Require logical containment/reachability, English UI,
+Review active product statements against [Product Scope](ProductScope.md); preserve historic citations and versioned compatibility names, not phase-based feature restrictions. Require logical containment/reachability, English UI,
 brand/role labels, actual container allocation and no duplicate transports.
 Use existing UI/governance policy and Windows tests before the complete solution
 and exact-head five Required Gates. Keep current safety/geometry policies active

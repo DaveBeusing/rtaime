@@ -15,7 +15,7 @@ function Assert-Condition {
 $catalogPath = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/ProfessionalRecordingFormats.cs"
 $providersPath = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/RecordingWriterProviders.cs"
 $contractsPath = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/RecordingContracts.cs"
-$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.cs"
 $runtimeIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostIpcServer.cs"
 $controlTransportPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/RuntimeHostIpcTransport.cs"
 $clientPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/OperatorControlClient.cs"

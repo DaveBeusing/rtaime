@@ -216,7 +216,7 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 		if (!double.IsFinite(package.Graphics.PositionX) || package.Graphics.PositionX is < 0 or > 1 ||
 			!double.IsFinite(package.Graphics.PositionY) || package.Graphics.PositionY is < 0 or > 1 ||
 			!double.IsFinite(package.Graphics.Scale) || package.Graphics.Scale is < 0.05 or > 4)
-			throw new InvalidDataException("Demo graphics placement is outside V1 bounds.");
+			throw new InvalidDataException("Demo graphics placement exceeds supported bounds.");
 		if (package.Graphics.InitialVisible)
 			throw new InvalidDataException("AP-56 lower third must start hidden so the AP-55 AI highlight is not falsely presented as simultaneously visible.");
 		if (package.Transition.DissolveFrames < 2)

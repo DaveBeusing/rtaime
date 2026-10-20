@@ -43,7 +43,7 @@ internal sealed class PreparedOutputMappingPlan
     public bool Identity { get; }
 }
 
-public sealed partial class V1RuntimeHostService
+public sealed partial class RuntimeProgramExecutionService
 {
     public const int MaximumMappedOutputSurfaces = 8;
     public const long MaximumMappedOutputBytes = 16L * 1024 * 1024;

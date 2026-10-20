@@ -14,7 +14,7 @@ internal static class GraphicsOverlayAssetLoader
 		if (string.IsNullOrWhiteSpace(path))
 			throw new ArgumentException("Graphics asset path is required.", nameof(path));
 		if (!string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase))
-			throw new NotSupportedException("V1 graphics workflow accepts PNG assets only.");
+			throw new NotSupportedException("This graphics asset loader currently accepts PNG assets only.");
 
 		using var stream = File.OpenRead(path);
 		var decoder = new PngBitmapDecoder(
@@ -28,7 +28,7 @@ internal static class GraphicsOverlayAssetLoader
 		var width = checked((uint)source.PixelWidth);
 		var height = checked((uint)source.PixelHeight);
 		if (width == 0 || height == 0 || width > 384 || height > 384)
-			throw new InvalidDataException("V1 graphics assets must be between 1x1 and 384x384 pixels.");
+			throw new InvalidDataException("Graphics assets must be between 1x1 and 384x384 pixels for this loader.");
 
 		var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
 		var stride = checked(source.PixelWidth * 4);

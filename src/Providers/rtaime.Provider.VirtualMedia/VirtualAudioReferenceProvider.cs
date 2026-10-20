@@ -92,7 +92,7 @@ public sealed class VirtualEmbeddedAudioReferenceProvider
         if (sourceAId == sourceBId)
             throw new ArgumentException("Virtual audio source identities must be distinct.", nameof(sourceBId));
         if (!VirtualMediaReferenceProvider.IsSupportedFormat(videoFormat))
-            throw new ArgumentException("Virtual embedded audio supports only V1 development video formats.", nameof(videoFormat));
+            throw new ArgumentException("Virtual embedded audio currently supports only the qualified reference video formats.", nameof(videoFormat));
 
         VideoFormat = videoFormat;
         AudioFormat = audioFormat ?? AudioFormat.Stereo48kFloat32;

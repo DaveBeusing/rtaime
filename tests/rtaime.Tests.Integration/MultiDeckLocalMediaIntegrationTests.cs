@@ -22,7 +22,7 @@ public sealed class MultiDeckLocalMediaIntegrationTests
             1_000_000_000, 0, 0, false);
         using (var admitted = new LocalMediaDeckRuntimeService(
             VideoFormat.Hd1080p50Rgba8, 4, null,
-            LocalMediaCapacityProfile.DevelopmentFour, qualified))
+            LocalMediaCapacityProfile.OptInFour, qualified))
             Assert.Equal(4, admitted.Resources.Capacity);
 
         var overstated = new RuntimeResourceCapabilityProfile(
@@ -31,7 +31,7 @@ public sealed class MultiDeckLocalMediaIntegrationTests
             1_000_000_000, 0, 0, false, maximumRegisteredSources: 12);
         Assert.Throws<NotSupportedException>(() => new LocalMediaDeckRuntimeService(
             VideoFormat.Hd1080p50Rgba8, 6, null,
-            LocalMediaCapacityProfile.DevelopmentFour, overstated));
+            LocalMediaCapacityProfile.OptInFour, overstated));
         Assert.Throws<NotSupportedException>(() => new LocalMediaDeckRuntimeService(
             VideoFormat.Hd1080p50Rgba8, 2, null,
             LocalMediaCapacityProfile.Conservative,
@@ -322,7 +322,7 @@ public sealed class MultiDeckLocalMediaIntegrationTests
     [Theory]
     [InlineData(1, LocalMediaCapacityProfile.Conservative)]
     [InlineData(2, LocalMediaCapacityProfile.Conservative)]
-    [InlineData(4, LocalMediaCapacityProfile.DevelopmentFour)]
+    [InlineData(4, LocalMediaCapacityProfile.OptInFour)]
     public void Productive_open_close_and_retained_pool_use_one_ledger(int capacity, LocalMediaCapacityProfile profile)
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -375,7 +375,7 @@ public sealed class MultiDeckLocalMediaIntegrationTests
     public void Development_source_identity_registry_is_finite_and_independent_of_concurrent_decoder_capacity()
     {
         using var decks = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 4, null,
-            LocalMediaCapacityProfile.DevelopmentFour);
+            LocalMediaCapacityProfile.OptInFour);
         var sources = Enumerable.Range(0, 9).Select(_ => MediaSourceId.New()).ToArray();
         var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4");
         foreach (var source in sources.Take(8))

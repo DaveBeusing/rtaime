@@ -5,7 +5,7 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
-public enum LocalMediaCapacityProfile { Conservative = 1, DevelopmentFour = 2 }
+public enum LocalMediaCapacityProfile { Conservative = 1, OptInFour = 2 }
 public enum LocalMediaResourcePurpose { Resident = 1, Probe = 2, Preflight = 3, Analysis = 4 }
 
 public sealed record LocalMediaResourceIdentity(
@@ -42,7 +42,7 @@ public sealed class LocalMediaResourceLedger
         LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
         : this(format, capacity,
             Enum.IsDefined(profile)
-                ? (profile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2)
+                ? (profile == LocalMediaCapacityProfile.OptInFour ? 4 : 2)
                 : throw new ArgumentOutOfRangeException(nameof(profile)), null)
     {
     }

@@ -19,7 +19,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly string _endpoint;
-	private readonly Func<V1RuntimeHostService?> _runtimeAccessor;
+	private readonly Func<RuntimeProgramExecutionService?> _runtimeAccessor;
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
 	private readonly Func<RuntimeAIShowcaseService?> _aiShowcaseAccessor;
 	private readonly BoundedRequestCache _requestCache = new(256);
@@ -32,7 +32,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 
 	public RuntimeHostIpcServer(
 		string endpoint,
-		Func<V1RuntimeHostService?> runtimeAccessor,
+		Func<RuntimeProgramExecutionService?> runtimeAccessor,
 		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null,
 		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor = null)
 		: this(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor, null, null)
@@ -41,7 +41,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 
 	internal RuntimeHostIpcServer(
 		string endpoint,
-		Func<V1RuntimeHostService?> runtimeAccessor,
+		Func<RuntimeProgramExecutionService?> runtimeAccessor,
 		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor,
 		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor,
 		Func<NamedPipeServerStream>? pipeFactory,
@@ -259,7 +259,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.ai_showcase.response", ToWire(snapshot));
 	}
 
-	private IReadOnlyList<ProviderDescriptor> ProviderDescriptors(V1RuntimeHostService runtime)
+	private IReadOnlyList<ProviderDescriptor> ProviderDescriptors(RuntimeProgramExecutionService runtime)
 	{
 		var deck = _mediaDeckAccessor();
 		return deck is null
@@ -267,7 +267,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			: runtime.ProviderDescriptors.Concat(new[] { deck.ProviderDescriptor }).ToArray();
 	}
 
-	private WireEnvelope LoadGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope LoadGraphicsOverlay(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
@@ -276,35 +276,35 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope ApplyProductionCgText(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope ApplyProductionCgText(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireProductionCgText>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Production CG text payload is required.");
-		var snapshot = runtime.ApplyProductionCgText(new V1ProductionCgTextDefinition(
+		var snapshot = runtime.ApplyProductionCgText(new ProductionCgTextDefinition(
 			wire.Text,
 			wire.Typeface,
 			wire.FallbackTypeface,
 			wire.FontSizePixels,
-			new V1CgColor(wire.Foreground.Red, wire.Foreground.Green, wire.Foreground.Blue, wire.Foreground.Alpha),
+			new CgColor(wire.Foreground.Red, wire.Foreground.Green, wire.Foreground.Blue, wire.Foreground.Alpha),
 			wire.PositionX,
 			wire.PositionY,
 			wire.BoxWidth,
 			wire.BoxHeight,
-			(V1CgTextAlignment)wire.Alignment,
-			(V1CgAnchor)wire.Anchor,
-			new V1CgPanelStyle(
+			(CgTextAlignment)wire.Alignment,
+			(CgAnchor)wire.Anchor,
+			new CgPanelStyle(
 				wire.Panel.Enabled,
-				new V1CgColor(wire.Panel.Color.Red, wire.Panel.Color.Green, wire.Panel.Color.Blue, wire.Panel.Color.Alpha),
+				new CgColor(wire.Panel.Color.Red, wire.Panel.Color.Green, wire.Panel.Color.Blue, wire.Panel.Color.Alpha),
 				wire.Panel.CornerRadiusPixels,
 				wire.Panel.PaddingPixels),
 			wire.Visible,
-			(V1CgLayer)wire.Layer,
+			(CgLayer)wire.Layer,
 			wire.ZOrder));
 		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope SetGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetGraphicsOverlay(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsOverlayState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay state payload is required.");
@@ -313,14 +313,14 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope ClearGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope ClearGraphicsOverlay(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var snapshot = runtime.ClearGraphicsOverlay();
 		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope SetCompositingLayerState(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetCompositingLayerState(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer state payload is required.");
@@ -329,7 +329,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
-	private WireEnvelope SetCompositingLayerTransform(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetCompositingLayerTransform(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireCompositingLayerTransform>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer transform payload is required.");
@@ -349,7 +349,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
-	private WireEnvelope SetCompositingLayerProcessing(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetCompositingLayerProcessing(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireCompositingLayerProcessing>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer processing payload is required.");
@@ -361,7 +361,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
-	private WireEnvelope ReorderCompositingLayers(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope ReorderCompositingLayers(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer order payload is required.");
@@ -370,14 +370,14 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
-	private WireEnvelope SetBroadcastTestPattern(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetBroadcastTestPattern(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Broadcast test pattern state payload is required.");
 		var sourceId = new MediaSourceId(Identity.Parse(wire.SourceId));
 		var requestedMode = wire.MotionTiming
-			? V1BroadcastTestPatternMode.MotionTiming
-			: V1BroadcastTestPatternMode.Static;
+			? RuntimeBroadcastTestPatternMode.MotionTiming
+			: RuntimeBroadcastTestPatternMode.Static;
 		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled, requestedMode);
 		if (changed)
 			AdvanceStateVersion();
@@ -389,10 +389,10 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				sourceId.ToString(),
 				snapshot.BroadcastTestPatternSources.Contains(sourceId),
 				snapshot.BroadcastTestPatternModes.TryGetValue(sourceId, out var activeMode) &&
-					activeMode == V1BroadcastTestPatternMode.MotionTiming));
+					activeMode == RuntimeBroadcastTestPatternMode.MotionTiming));
 	}
 
-	private WireEnvelope SetAudioInputState(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetAudioInputState(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireAudioInputState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Audio input state payload is required.");
@@ -404,7 +404,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope SetAudioRouting(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetAudioRouting(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireAudioRoutingState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Audio routing state payload is required.");
@@ -419,7 +419,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.audio.routing.response", ToWire(snapshot));
 	}
 
-	private WireEnvelope SetAudioProduction(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetAudioProduction(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireAudioProductionConfiguration>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Audio production configuration payload is required.");
@@ -529,7 +529,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				new WireAudioBellEqualizerBand(equalizer.Mid.Enabled, equalizer.Mid.FrequencyHz, equalizer.Mid.GainDb, equalizer.Mid.Q),
 				new WireAudioShelfEqualizerBand(equalizer.HighShelf.Enabled, equalizer.HighShelf.FrequencyHz, equalizer.HighShelf.GainDb));
 
-	private WireEnvelope SetAudioTestSignal(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetAudioTestSignal(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireAudioTestSignalState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Generated audio test signal payload is required.");
@@ -548,7 +548,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> StartRecordingAsync(
 		WireEnvelope request,
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireRecordingStart>(Wire.JsonOptions)
@@ -572,7 +572,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> StopRecordingAsync(
 		WireEnvelope request,
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		CancellationToken cancellationToken)
 	{
 		var result = await runtime.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
@@ -586,10 +586,10 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 
-	private WireEnvelope ReplaySnapshot(WireEnvelope request, V1RuntimeHostService runtime) =>
+	private WireEnvelope ReplaySnapshot(WireEnvelope request, RuntimeProgramExecutionService runtime) =>
 		Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
 
-	private WireEnvelope MarkReplayIn(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope MarkReplayIn(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireReplayMarkIn>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Replay MARK IN payload is required.");
@@ -598,14 +598,14 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		return Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
 	}
 
-	private WireEnvelope MarkReplayOut(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope MarkReplayOut(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		runtime.MarkReplayOut();
 		AdvanceStateVersion();
 		return Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
 	}
 
-	private WireEnvelope SetReplayRange(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope SetReplayRange(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireReplayRange>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Replay range payload is required.");
@@ -616,7 +616,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> CreateReplayClipAsync(
 		WireEnvelope request,
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireReplayClipCreate>(Wire.JsonOptions)
@@ -812,7 +812,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
     }
 
 
-    private WireEnvelope ActivateOutputMapping(WireEnvelope request, V1RuntimeHostService runtime)
+    private WireEnvelope ActivateOutputMapping(WireEnvelope request, RuntimeProgramExecutionService runtime)
     {
         var command = OutputCanvasJson.Read<OutputCanvasRuntimeRequest>(request.Payload.GetRawText());
         if (!string.Equals(command.ExpectedRuntimeHostInstanceId, _hostInstanceId, StringComparison.Ordinal))
@@ -828,7 +828,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
         return Success(request, "runtime.output.mapping.activate.response", committed);
     }
 
-	private WireEnvelope ApplyExecution(WireEnvelope request, V1RuntimeHostService runtime)
+	private WireEnvelope ApplyExecution(WireEnvelope request, RuntimeProgramExecutionService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireApplyRequest>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime apply payload is required.");
@@ -914,7 +914,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			capability.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray())).ToArray(),
 		provider.Resources.Select(resource => new WireResource(resource.ResourceId.ToString(), resource.ProviderId.ToString(), resource.Kind, resource.CapacityUnits, resource.Reservable)).ToArray());
 
-	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot, VideoFormat format, RuntimeAIShowcaseSnapshot aiShowcase) => new(
+	private WireRuntimeSnapshot ToWire(RuntimeHostSnapshot snapshot, VideoFormat format, RuntimeAIShowcaseSnapshot aiShowcase) => new(
 		snapshot.Runtime.Version.ToString(),
 		snapshot.Runtime.ActiveExecutionId?.ToString(),
 		snapshot.Runtime.ExecutionRevision.Value,
@@ -934,7 +934,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			.Select(sourceId => sourceId.ToString())
 			.ToArray(),
 		snapshot.BroadcastTestPatternModes
-			.Where(pair => pair.Value == V1BroadcastTestPatternMode.MotionTiming)
+			.Where(pair => pair.Value == RuntimeBroadcastTestPatternMode.MotionTiming)
 			.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => pair.Key.ToString())
 			.ToArray(),
@@ -949,7 +949,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
-		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray(),
+		(snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>()).Select(ToWire).ToArray(),
 		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
 
 	private static WireReplaySnapshot ToWire(ReplayBufferSnapshot snapshot) => new(
@@ -976,7 +976,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.RetainedBytes,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
-	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
+	private static WireAvSyncDiagnostics ToWire(RuntimeHostAvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
 		snapshot.State,
 		snapshot.EventId,
@@ -1032,7 +1032,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.LastSuccessfulSendUtc,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
-	private static WireProductionCgTextSnapshot ToWire(V1ProductionCgTextSnapshot snapshot) => new(
+	private static WireProductionCgTextSnapshot ToWire(ProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
 		snapshot.Text,
 		snapshot.Typeface,
@@ -1049,7 +1049,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
 
-	private static WireCompositingLayer ToWire(V1CompositingLayerSnapshot snapshot) => new(
+	private static WireCompositingLayer ToWire(RuntimeHostCompositingLayerSnapshot snapshot) => new(
 		snapshot.LayerId,
 		(int)snapshot.Kind,
 		snapshot.Order,
@@ -1068,7 +1068,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CropBottom,
 		snapshot.ProcessingStack.Select(ToWire).ToArray());
 
-	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
+	private static WireGraphicsOverlay ToWire(RuntimeHostGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
 		snapshot.AssetWidth,
@@ -1078,7 +1078,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.PositionY,
 		snapshot.Scale);
 
-	private static WireAudioInput ToWire(V1AudioInputSnapshot snapshot) => new(
+	private static WireAudioInput ToWire(RuntimeHostAudioInputSnapshot snapshot) => new(
 		snapshot.SourceId.ToString(),
 		snapshot.StreamId.ToString(),
 		snapshot.Gain,
@@ -1094,7 +1094,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.TestSignalFrequencyHz,
 		snapshot.TestSignalPeakLevel);
 
-	private static WireAudioProgram ToWire(V1AudioProgramSnapshot snapshot) => new(
+	private static WireAudioProgram ToWire(RuntimeHostAudioProgramSnapshot snapshot) => new(
 		snapshot.ActiveVideoSourceId.ToString(),
 		snapshot.ActiveStreamId.ToString(),
 		snapshot.Gain,
@@ -1109,7 +1109,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.ActiveAudioSourceId?.ToString());
 
 
-	private static WireAudioProductionSnapshot ToWire(V1AudioProductionSnapshot snapshot) => new(
+	private static WireAudioProductionSnapshot ToWire(RuntimeHostAudioProductionSnapshot snapshot) => new(
 		new WireAudioProductionConfiguration(
 			snapshot.Revision,
 			snapshot.Buses.Select(bus => new WireAudioProductionBus(
@@ -1169,7 +1169,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.LimiterGainReductionDb,
 		snapshot.LimiterHitCount);
 
-	private static WireRecordingSnapshot ToWire(V1RecordingOperatorSnapshot snapshot) => new(
+	private static WireRecordingSnapshot ToWire(RuntimeHostRecordingOperatorSnapshot snapshot) => new(
 		snapshot.State.ToString().ToUpperInvariant(),
 		snapshot.Elapsed.Ticks,
 		snapshot.Destination,
@@ -1211,7 +1211,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		(int)profile.EvidenceState,
 		profile.Evidence);
 
-	private static WireRuntimePerformance ToWire(V1RuntimePerformanceSnapshot snapshot) => new(
+	private static WireRuntimePerformance ToWire(RuntimeHostPerformanceSnapshot snapshot) => new(
 		snapshot.Uptime.Ticks,
 		snapshot.FrameBudget.Ticks,
 		snapshot.LastFrameProcessingTime.Ticks,

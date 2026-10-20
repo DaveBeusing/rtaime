@@ -735,7 +735,7 @@ public sealed class GpuProcessingProvider : IDisposable
     public const int SharedMonitoringResourceCapacity = PublishedMonitoringResourceSetSize * 2;
     public const int ReusableUploadSurfaceCapacity = 16;
 
-    private static readonly VideoFormat[] V1Formats =
+    private static readonly VideoFormat[] QualifiedReferenceFormats =
     {
         VideoFormat.Hd1080p50Rgba8,
         VideoFormat.Hd1080p59_94Rgba8
@@ -1945,7 +1945,7 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         var info = backend.Info;
         var providerId = new ProviderId(GpuIdentity.Create("gpu-provider", info.Kind.ToString(), info.DeviceName));
-        var formats = info.Available ? V1Formats : Array.Empty<VideoFormat>();
+        var formats = info.Available ? QualifiedReferenceFormats : Array.Empty<VideoFormat>();
         var capabilities = info.Available
             ? new List<ProviderCapabilityDescriptor>
             {

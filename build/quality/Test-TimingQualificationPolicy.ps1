@@ -20,7 +20,7 @@ $artifacts = @{
 	Probe = "src/Runtime/rtaime.Runtime/TimingQualification.cs"
 	UnitTests = "tests/rtaime.Tests.Unit/TimingQualificationTests.cs"
 	RuntimeHost = "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
-	RuntimeService = "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+	RuntimeService = "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.cs"
 	NativeAja = "native/Providers/AjaNtv2/rtaime_media_io_aja.cpp"
 	AjaCompatibility = "build/native/Apply-AjaNtv2BuildCompatibility.ps1"
 	MediaIoSlice = "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
@@ -75,9 +75,9 @@ Assert-Condition ($runtimeHost -match 'runtime\.SetTimingHealth\(MapTimingHealth
 Assert-Condition ($runtimeHost -match 'framePeriod\.Ticks / 4') "RuntimeHost must retain the explicit 25-percent jitter baseline."
 Assert-Condition ($runtimeHost -match '2048') "RuntimeHost live timing retention must remain bounded."
 
-Assert-Condition ($runtimeService -match '_timingHealth = V1TimingHealthState\.Recovering') "Runtime timing health must start Recovering rather than claiming Healthy before evidence."
+Assert-Condition ($runtimeService -match '_timingHealth = RuntimeHostTimingHealthState\.Recovering') "Runtime timing health must start Recovering rather than claiming Healthy before evidence."
 Assert-Condition ($runtimeService -match '\s_timingHealth,') "Runtime snapshot must expose measured timing health."
-Assert-Condition ($runtimeService -match 'void SetTimingHealth\(V1TimingHealthState state\)') "Runtime service must expose only an observational timing-health update seam."
+Assert-Condition ($runtimeService -match 'void SetTimingHealth\(RuntimeHostTimingHealthState state\)') "Runtime service must expose only an observational timing-health update seam."
 
 Assert-Condition ($nativeAja -match 'external_reference_locked') "AJA adapter must retain explicit external-reference lock evaluation."
 Assert-Condition ($nativeAja -match 'GetReference\(reference_source\)') "AJA reference state must verify the selected clock source."

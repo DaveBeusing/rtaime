@@ -12,7 +12,7 @@ namespace rtaime.RuntimeHost;
 public sealed partial class RuntimeHostIpcServer
 {
     private WireEnvelope DispatchSequenceShuttle(
-        WireEnvelope message, V1RuntimeHostService runtime, CancellationToken cancellationToken)
+        WireEnvelope message, RuntimeProgramExecutionService runtime, CancellationToken cancellationToken)
     {
         try
         {

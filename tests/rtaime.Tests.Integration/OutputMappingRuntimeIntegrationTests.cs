@@ -192,7 +192,7 @@ public sealed class OutputMappingRuntimeIntegrationTests
         Assert.Null(state.ActiveRenderRevision);
     }
 
-    private static RuntimeOutputRoleSnapshot ProgramOutput(V1RuntimeHostService runtime) =>
+    private static RuntimeOutputRoleSnapshot ProgramOutput(RuntimeProgramExecutionService runtime) =>
         Assert.Single(runtime.Snapshot.OutputRoles!, o => o.RoleId == "program");
 
     private static OutputCanvasConfiguration Configuration(Fixture fixture, ulong revision, bool twoSurfaces)
@@ -243,7 +243,7 @@ public sealed class OutputMappingRuntimeIntegrationTests
             [new(sourceA, "Input A"), new(sourceB, "Input B")],
             new ProductionRoutingState(sourceA, sourceA),
             initialOutputRoles: [ProductionOutputRoleState.Program(sourceA)]);
-        var runtime = new V1RuntimeHostService(
+        var runtime = new RuntimeProgramExecutionService(
             new MediaSourceId(sourceA.Value), new MediaSourceId(sourceB.Value),
             VideoFormat.Hd1080p50Rgba8, new NullRecordingWriter(), gpuBackend: backend);
         var initialized = ControlDomainEngine.Initialize(spec);
@@ -260,7 +260,7 @@ public sealed class OutputMappingRuntimeIntegrationTests
     }
 
     private sealed record Fixture(
-        V1RuntimeHostService Runtime, MediaSourceId SourceA, MediaSourceId SourceB) : IAsyncDisposable
+        RuntimeProgramExecutionService Runtime, MediaSourceId SourceA, MediaSourceId SourceB) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() => Runtime.DisposeAsync();
     }

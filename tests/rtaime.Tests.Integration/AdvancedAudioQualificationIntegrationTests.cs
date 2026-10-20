@@ -120,7 +120,7 @@ public sealed class AdvancedAudioQualificationIntegrationTests
 			await WaitUntilAsync(
 				() => runtime.Runtime?.Snapshot.AudioProduction?.Revision == requested.Revision,
 				timeoutMilliseconds: 10_000);
-			var runtimeAudio = Assert.IsType<V1AudioProductionSnapshot>(runtime.Runtime!.Snapshot.AudioProduction);
+			var runtimeAudio = Assert.IsType<RuntimeHostAudioProductionSnapshot>(runtime.Runtime!.Snapshot.AudioProduction);
 			Assert.Equal(requested.Revision, runtimeAudio.Revision);
 			Assert.Equal(AudioProductionLimits.MaximumBuses, runtimeAudio.Buses.Count);
 			Assert.Equal(2, runtimeAudio.Sources.Count);

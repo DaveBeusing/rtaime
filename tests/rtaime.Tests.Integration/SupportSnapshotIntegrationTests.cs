@@ -52,7 +52,7 @@ public sealed class SupportSnapshotIntegrationTests
             AIEndpoint = $"rtaime.pipeline.ai.{Guid.NewGuid():N}"
         };
         var process = new RuntimeHostProcess(options, runtimeFactory: (configuration, writer) =>
-            new V1RuntimeHostService(configuration.SourceAId, configuration.SourceBId, configuration.Format,
+            new RuntimeProgramExecutionService(configuration.SourceAId, configuration.SourceBId, configuration.Format,
                 writer, new ManagedReferenceGpuBackend()));
         using var stop = new CancellationTokenSource();
         var run = process.RunAsync(stop.Token);

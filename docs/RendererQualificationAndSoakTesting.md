@@ -11,7 +11,7 @@ A green hosted CI run is **not** physical renderer qualification. Physical statu
 This qualification reuses existing product and evidence paths rather than creating another renderer or timing authority:
 
 - `CudaGpuProcessingBackend` remains the hardware compositor.
-- `V1RuntimeHostService` remains the single Program execution/render path.
+- `RuntimeProgramExecutionService` remains the single Program execution/render path.
 - the existing Program readback remains the host payload for recording and other established host consumers.
 - the existing CUDA/D3D11 shared-resource monitoring export remains the GPU presentation path.
 - the existing CUDA reference qualification remains a prerequisite.

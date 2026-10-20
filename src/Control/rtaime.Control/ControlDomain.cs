@@ -135,7 +135,7 @@ public static class ProductionSpecificationValidator
 }
 
 /// <summary>
-/// Pure V1 Control-domain state transition engine. CUT and DISSOLVE use the same
+/// Control-domain state transition engine. CUT and DISSOLVE use the same
 /// validation and authoritative commit path; transition timing remains a Runtime concern.
 /// </summary>
 public static partial class ControlDomainEngine

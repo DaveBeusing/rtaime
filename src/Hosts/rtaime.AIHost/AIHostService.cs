@@ -88,7 +88,7 @@ public sealed class AIHostService : IAsyncDisposable
 	public static AIHostService CreateManagedReference(InferenceRuntimeLimits? limits = null) =>
 		new(new GovernedInferenceRuntime(
 			new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider() },
-			limits ?? InferenceRuntimeLimits.ReferenceV1));
+			limits ?? InferenceRuntimeLimits.ConservativeReference));
 
 	private async Task CompleteDisposeAsync(Task drain)
 	{

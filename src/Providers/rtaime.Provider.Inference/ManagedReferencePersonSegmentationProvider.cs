@@ -106,7 +106,7 @@ public sealed class ManagedReferencePersonSegmentationProvider : IInferenceProvi
             frame.Timing.SequenceNumber,
             request.Request.RequestId.ToString());
 
-        // The normalized region is deterministic reference metadata used only by the V1 visible-effect proof.
+        // The normalized region is deterministic reference metadata used only by the bounded visible-effect reference implementation.
         // It does not represent trained-model accuracy and remains separate from compositor/effect policy.
         var outputs = new[]
         {

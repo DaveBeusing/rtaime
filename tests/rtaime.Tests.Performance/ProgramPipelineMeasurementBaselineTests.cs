@@ -38,14 +38,14 @@ public sealed class ProgramPipelineMeasurementBaselineTests
             var spec = new ProductionSpecification(ControlContractVersion.Current, new ProductionId(Identity.New()),
                 "Program measurement", new[] { new ProductionSourceSpecification(a, "Input A"),
                     new ProductionSourceSpecification(b, "Input B") }, new ProductionRoutingState(b, a));
-            await using var runtime = new V1RuntimeHostService(new MediaSourceId(a.Value), new MediaSourceId(b.Value),
+            await using var runtime = new RuntimeProgramExecutionService(new MediaSourceId(a.Value), new MediaSourceId(b.Value),
                 format, new RecordingWriter(), new ManagedReferenceGpuBackend(), pipelineTimingProbe: probe);
             var state = ControlDomainEngine.Initialize(spec).State!.Authoritative;
             var plan = CapabilityPlanningEngine.Plan(spec, state, new Registry(runtime.ProviderDescriptors));
             Assert.True(plan.Succeeded);
             var sink = plan.Graph!.Nodes.Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId!.Value;
             Assert.True(runtime.ApplyExecution(plan.PreparedExecution!, sink).Committed);
-            runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+            runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
             await using var monitoring = monitoringEnabled
                 ? runtime.MonitoringHub.Subscribe(capacity: 2, requiresCpuFallback: true) : null;
             if (recordingEnabled)

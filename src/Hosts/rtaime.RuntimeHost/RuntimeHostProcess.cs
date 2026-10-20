@@ -93,7 +93,7 @@ public sealed record RuntimeHostProcessOptions(
             LocalMediaProfile = Get(args, environment, "local-media-profile", "RTAIME_LOCAL_MEDIA_PROFILE", "conservative").ToLowerInvariant() switch
             {
                 "conservative" => LocalMediaCapacityProfile.Conservative,
-                "development-four" => LocalMediaCapacityProfile.DevelopmentFour,
+                "opt-in-four" or "development-four" => LocalMediaCapacityProfile.OptInFour,
                 _ => throw new ArgumentException("Unknown local media capacity profile.")
             },
 			MaximumLocalMediaDecoders = ParsePositiveInt(Get(args, environment, "local-media-decoders", "RTAIME_LOCAL_MEDIA_DECODERS", "2"), "local-media-decoders"),
@@ -105,14 +105,14 @@ public sealed record RuntimeHostProcessOptions(
 	public void Validate()
 	{
 		if (!Enum.IsDefined(LocalMediaProfile) || MaximumLocalMediaDecoders < 1 ||
-            MaximumLocalMediaDecoders > (LocalMediaProfile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2))
+            MaximumLocalMediaDecoders > (LocalMediaProfile == LocalMediaCapacityProfile.OptInFour ? 4 : 2))
 			throw new ArgumentOutOfRangeException(nameof(MaximumLocalMediaDecoders));
 		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
 			throw new ArgumentException("Runtime source identities must not be empty.");
 		if (SourceAId == SourceBId)
 			throw new ArgumentException("Runtime source identities must be distinct.");
 		if (Format != VideoFormat.Hd1080p50Rgba8 && Format != VideoFormat.Hd1080p59_94Rgba8)
-			throw new ArgumentException("RuntimeHost V1 supports only 1080p50 RGBA8 and 1080p59.94 RGBA8.", nameof(Format));
+			throw new ArgumentException("The current RuntimeHost media profile supports 1080p50 RGBA8 and 1080p59.94 RGBA8 only.", nameof(Format));
 		if (string.IsNullOrWhiteSpace(ListenEndpoint))
 			throw new ArgumentException("RuntimeHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (string.IsNullOrWhiteSpace(AIEndpoint))
@@ -192,7 +192,7 @@ public sealed record RuntimeHostProcessOptions(
 /// </summary>
 internal delegate RuntimeHostIpcServer RuntimeHostIpcServerFactory(
 	string endpoint,
-	Func<V1RuntimeHostService?> runtimeAccessor,
+	Func<RuntimeProgramExecutionService?> runtimeAccessor,
 	Func<LocalMediaDeckRuntimeService?> mediaDeckAccessor,
 	Func<RuntimeAIShowcaseService?> aiShowcaseAccessor);
 
@@ -201,8 +201,8 @@ public sealed class RuntimeHostProcess
 	private readonly object _gate = new();
 	private readonly RuntimeHostProcessOptions _options;
 	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
-	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
-	private readonly Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
+	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService> _runtimeFactory;
+	private readonly Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
 	private readonly RuntimeHostIpcServerFactory _ipcServerFactory;
 	private readonly TimeSpan _ipcSessionDrainTimeout;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
@@ -215,7 +215,7 @@ public sealed class RuntimeHostProcess
 		"Process has not started.",
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
-	private V1RuntimeHostService? _runtime;
+	private RuntimeProgramExecutionService? _runtime;
 	private LocalMediaDeckRuntimeService? _mediaDeck;
 	private RuntimeMediaIoVerticalSlice? _mediaIo;
 	private RuntimeAIShowcaseService? _aiShowcase;
@@ -224,13 +224,13 @@ public sealed class RuntimeHostProcess
     private RuntimeHostMediaAnalysisObservationServer? _analysisServer;
 	private Task? _mediaLoop;
 	private bool _runtimeDisposed;
-	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
+	private RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
 	public RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
 		Func<IProgramRecordingWriter>? recordingWriterFactory = null,
-		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null,
-		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService>? runtimeFactory = null,
+		Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
 		: this(options, recordingWriterFactory, runtimeFactory, aiShowcaseFactory, null)
 	{
 	}
@@ -238,8 +238,8 @@ public sealed class RuntimeHostProcess
 	internal RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
 		Func<IProgramRecordingWriter>? recordingWriterFactory,
-		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory,
-		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory,
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService>? runtimeFactory,
+		Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory,
 		RuntimeHostIpcServerFactory? ipcServerFactory)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
@@ -297,7 +297,7 @@ public sealed class RuntimeHostProcess
 		get { lock (_gate) return _scheduleStatistics; }
 	}
 
-	public V1RuntimeHostService? Runtime => _runtime;
+	public RuntimeProgramExecutionService? Runtime => _runtime;
 	public LocalMediaDeckRuntimeService? MediaDeck => _mediaDeck;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
@@ -306,7 +306,7 @@ public sealed class RuntimeHostProcess
 	public RuntimeAIShowcaseService? AIShowcase => _aiShowcase;
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
-	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
+	public RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 	public MediaIoVerticalSliceStatistics? MediaIoStatistics => _mediaIo?.Statistics;
 	public MediaIoPortStatus? MediaIoInputAStatus => _mediaIo?.InputAStatus;
 	public MediaIoPortStatus? MediaIoInputBStatus => _mediaIo?.InputBStatus;
@@ -445,7 +445,7 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
-	private static V1RuntimeHostService CreateProductionRuntime(
+	private static RuntimeProgramExecutionService CreateProductionRuntime(
 		RuntimeHostProcessOptions processOptions,
 		IProgramRecordingWriter writer)
 	{
@@ -460,7 +460,7 @@ public sealed class RuntimeHostProcess
 			"replay");
 		var replay = new RuntimeReplayService(replayRoot, processOptions.Format);
 
-		return new V1RuntimeHostService(
+		return new RuntimeProgramExecutionService(
 			processOptions.SourceAId,
 			processOptions.SourceBId,
 			processOptions.Format,
@@ -471,7 +471,7 @@ public sealed class RuntimeHostProcess
 	}
 
 	private async Task RunMediaLoopAsync(
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		LocalMediaDeckRuntimeService mediaDeck,
 		RuntimeMediaIoVerticalSlice? mediaIo,
 		RuntimeAIShowcaseService aiShowcase,
@@ -545,7 +545,7 @@ public sealed class RuntimeHostProcess
 	private static ulong SaturatingAdd(ulong left, ulong right) =>
 		ulong.MaxValue - left < right ? ulong.MaxValue : left + right;
 
-	private void AdmitMediaDeckBoundary(V1RuntimeHostService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
+	private void AdmitMediaDeckBoundary(RuntimeProgramExecutionService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
     {
         mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
         mediaDeck.AdmitBoundary(runtime, programSlot);
@@ -700,13 +700,13 @@ public sealed class RuntimeHostProcess
 			_lifecycle = new RuntimeHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 	}
 
-	private static V1TimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
+	private static RuntimeHostTimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
 	{
-		TimingQualificationState.Recovering => V1TimingHealthState.Recovering,
-		TimingQualificationState.Healthy => V1TimingHealthState.Healthy,
-		TimingQualificationState.Degraded => V1TimingHealthState.Degraded,
-		TimingQualificationState.Unstable => V1TimingHealthState.Unstable,
-		TimingQualificationState.Lost => V1TimingHealthState.Lost,
+		TimingQualificationState.Recovering => RuntimeHostTimingHealthState.Recovering,
+		TimingQualificationState.Healthy => RuntimeHostTimingHealthState.Healthy,
+		TimingQualificationState.Degraded => RuntimeHostTimingHealthState.Degraded,
+		TimingQualificationState.Unstable => RuntimeHostTimingHealthState.Unstable,
+		TimingQualificationState.Lost => RuntimeHostTimingHealthState.Lost,
 		_ => throw new InvalidOperationException($"Unsupported timing qualification state '{state}'.")
 	};
 

@@ -24,7 +24,7 @@ public sealed partial class RuntimeHostIpcServer
         WirePreparedExecution PreparedExecution, WireSequenceOwner[] Sources);
 
     private WireEnvelope DispatchSequencePreparation(
-        WireEnvelope message, V1RuntimeHostService runtime, CancellationToken cancellationToken)
+        WireEnvelope message, RuntimeProgramExecutionService runtime, CancellationToken cancellationToken)
     {
         try
         {

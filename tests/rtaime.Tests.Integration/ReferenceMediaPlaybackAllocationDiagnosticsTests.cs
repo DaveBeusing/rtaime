@@ -55,7 +55,7 @@ public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
         using var controlStop = new CancellationTokenSource();
         using var allocations = new LocalPlaybackAllocationListener();
         var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint },
-            runtimeFactory: replayEnabled ? null : ((options, writer) => new V1RuntimeHostService(
+            runtimeFactory: replayEnabled ? null : ((options, writer) => new RuntimeProgramExecutionService(
                 options.SourceAId, options.SourceBId, options.Format, writer, networkOutputs: options.NetworkOutputs)));
         var control = new ControlHostProcess(ControlHostProcessOptions.Default with {
             ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint, DurabilityRoot = root });

@@ -16,12 +16,13 @@ The canonical workspaces are LIVE, SCENES, MULTIVIEW, MEDIA, EDIT, COMPOSITING, 
 
 The [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, defines the cross-workspace target: a professional media-first Live Operator, dark graphite surfaces, restrained cyan interaction accents, contextual editing and compact operational evidence. A generic infrastructure dashboard is not the primary production surface. This document describes the existing workspace model; the [experience roadmap](OperatorExperienceRoadmap.md) separates present capabilities from proposed refinements and qualification work.
 
-The [scope decision effective 2026-10-17](OperatorExperienceScope.md) supersedes
-former V1 functional deferrals. Independent analysis/scrubbing, multitrack
-sequences/editing, Preview shuttle, 2D canvas/mapping, Inspector extensions and an
-independent AI workspace were approved for implementation. The dedicated AI
-workspace now reuses governed provider evidence and Program monitoring; the other
-workstreams retain their separate delivery status. The original eight workspace
+The [product-wide scope decision effective 2026-10-20](ProductScope.md) removes
+historical product-phase feature ceilings across all subsystems. The original
+[Operator experience decision](OperatorExperienceScope.md) approved independent
+analysis/scrubbing, multitrack sequences/editing, Preview shuttle, 2D
+canvas/mapping, contextual Inspector and a governed processing workspace.
+Their implemented foundations and remaining native Preview/Program sink gaps are
+tracked in [joint integration evidence](OperatorExperienceIntegrationQualification.md). The original eight workspace
 identities remain compatible with additive schema-7 destination registration.
 An additive destination or changed persisted geometry needs migration/tests.
 Current scope approval grants no hardware/format/security/release certification.
@@ -134,9 +135,7 @@ Seeking, IN/OUT, cue operations and take commands retain the existing Media Deck
 
 MEDIA emphasizes preparation: expanded Media Pool, governed NDI discovery/adoption, Preview-focused viewing, Media Deck, metadata/Context Inspector, import/open and IN/OUT/playback-policy preparation. It introduces no second ingest or media-management subsystem.
 
-The Media Library already provides virtualized grid/list browsing, typed search, named Smart Bins, selection-aware context menus, bounded batches and pressure-aware thumbnail reuse. Independent position scrubbing is currently unavailable and approved TO IMPLEMENT
-through bounded Runtime-owned analysis contracts; hover must not open or seek a
-production deck. This is a missing implementation, not a renewed V1 scope gate. See [Media Library](MediaLibraryAssetBrowser.md).
+The Media Library provides virtualized grid/list browsing, typed search, named Smart Bins, selection-aware context menus, bounded batches and pressure-aware thumbnail reuse. For admitted supported local clips it also provides independent time-indexed scrubbing with actual decoded PTS and bounded Runtime-owned analysis; unsupported/unknown sources retain truthful fallback evidence. Hover/scrubbing must never seek or open a production deck. See [Media Library](MediaLibraryAssetBrowser.md).
 
 Explicit asset preparation uses the integrated bounded non-Program verification path. File availability, a current representative conditional observation and actual resident deck readiness remain distinct. Prepare/Retry/Cancel reflect real capability and failure state; an expired observation or catalogue entry must not be presented as resident READY. Preparation does not route Program or change saved production.
 
@@ -208,8 +207,10 @@ Pins are stored in `rtaime/operator-quick-controls.json` below the user's local 
 
 Timeline-local Page Up/Page Down remains in the timeline. J currently steps one Preview frame backwards and L plays at normal rate.
 Both commands require the confirmed Preview source and exclude an on-Program
-source. Reverse/multirate Preview shuttle is approved TO IMPLEMENT; extend real
-rate/direction/cancel semantics through the existing shared registry. Text-entry controls suppress production shortcuts; non-destructive synchronization/view commands retain their allowed scope. Repeat key-down events must not repeat production actions. Buttons and keyboard paths share command availability and authoritative validation.
+source. The native sequence shuttle now has separate rate/direction and cancellation
+contracts; Operator keyboard commands retain their own eligibility/authority rules.
+The native sequence path is not yet proof of connected Preview pixels or Take.
+See [Sequence Playback](SequencePlayback.md) and [integrated evidence](OperatorExperienceIntegrationQualification.md). Text-entry controls suppress production shortcuts; non-destructive synchronization/view commands retain their allowed scope. Repeat key-down events must not repeat production actions. Buttons and keyboard paths share command availability and authoritative validation.
 
 ## Shortcut discoverability
 
@@ -300,9 +301,10 @@ To recover a missing panel, cycle with Ctrl+Shift+N, dock centrally with Ctrl+Al
 
 ## Context Inspector editing
 
-[Context Inspector](ContextInspector.md) owns numeric ranges/units, Alt-drag precision, fine/coarse keys, reset, pinned metadata, mixed summaries, compatible attribute drafts and explicit Apply. [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) add grouped local draft undo and typed transfer. They do not undo confirmed live operations. Compatible multi-object Inspector editing is approved TO IMPLEMENT. Its owning
-backend must provide revision-bound transaction/validation semantics before live
-Apply; current single-context commands must not masquerade as bulk transactions.
+[Context Inspector](ContextInspector.md) owns numeric ranges/units, Alt-drag precision, fine/coarse keys, reset, pinned metadata, mixed summaries, compatible attribute drafts and explicit Apply. [Inspector draft transactions](OperatorCommandsAndShortcuts.md#inspector-draft-undo-and-typed-attribute-transfer) add grouped local draft undo and typed transfer. They do not undo confirmed live operations. Compatible multi-object Inspector edits use explicit sequential per-target review,
+revision-bound validation and visible partial-result handling. They are not one
+atomic batch transaction and must not be presented as one. Confirmed live edits
+cannot be undone through local draft history.
 
 ## Commands and shortcut profiles
 

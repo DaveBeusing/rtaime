@@ -25,7 +25,7 @@ rtaime is built around a simple production principle:
 
 The platform combines video, audio, graphics, recording, outputs, monitoring and governed inference with explicit production authority, transactional Runtime execution, visible health and bounded recovery.
 
-This repository is the controlled development source for rtaime. Existing V1 contract/protocol names retain their compatibility meaning.
+This repository is the controlled development source for the complete [rtaime product scope](docs/ProductScope.md). Historical versioned protocol and persistence identities remain supported compatibility contracts, not product feature ceilings.
 
 ## Why rtaime
 
@@ -69,7 +69,7 @@ rtaime exposes lifecycle and health as part of the operator experience:
 - safe Operator session recovery;
 - evidence-aware release qualification.
 
-## Current product scope
+## Current implemented capabilities
 
 The currently implemented production-shaped software paths include:
 
@@ -90,17 +90,22 @@ The currently implemented production-shaped software paths include:
 | Production integrations | optional IntegrationHost gateway for OSC, Windows MIDI, virtual GPIO/GPI reference control and authenticated Companion-style HTTP/WebSocket feedback |
 | Delivery | release pipeline, offline packaging, update/rollback foundations and qualification evidence |
 
-The planned release target in Directory.Build.props is **0.5.40**; actual build
+The planned release target in Directory.Build.props is **0.5.41**; actual build
 identities and release stages follow [Product versioning](docs/Versioning.md).
 This target does not declare a stable or hardware-qualified release.
 
-### Approved Operator experience delivery
+### Complete product strategy and Operator integration
 
-The [scope decision effective 2026-10-17](docs/OperatorExperienceScope.md)
-supersedes former V1 functional deferrals. Independent media analysis/scrubbing,
-true multitrack sequences/editing, Preview shuttle, 2D canvas/mapping, contextual
-Inspector extensions and an independent AI workspace are approved **TO IMPLEMENT**.
-The capability table above describes existing implementation.
+The [product-wide scope decision effective 2026-10-20](docs/ProductScope.md)
+removes all former product-phase feature ceilings. Product scope is independent
+of available provider/hardware capabilities, actual admission and release qualification.
+The earlier [Operator experience decision](docs/OperatorExperienceScope.md)
+authorized independent media analysis, multitrack sequences, Preview shuttle,
+2D canvas/mapping, contextual Inspector and governed processing workspaces.
+Their integrated foundations are recorded in the current implementation evidence;
+end-to-end sequence Preview/Program sink delivery and physical output remain
+unverified. The table above is a snapshot of supported capabilities, not the
+maximum permitted future product.
 
 The [design contract](docs/OperatorExperienceDesign.md) defines the concrete LIVE
 composition and compact acceptance; the [roadmap](docs/OperatorExperienceRoadmap.md)
@@ -165,7 +170,7 @@ media/compositing path
 
 AIHost does not become Production Authority.
 
-See [V1 End-to-End Proof](docs/V1EndToEndProof.md) and [Bootstrap Architecture](docs/BootstrapArchitecture.md).
+See [historical end-to-end reference evidence](docs/V1EndToEndProof.md) and the [Bootstrap Architecture](docs/BootstrapArchitecture.md); current scope is governed by [Product Scope](docs/ProductScope.md).
 
 ## Product Showcase
 
@@ -229,7 +234,7 @@ The primary managed solution is:
 rtaime.slnx
 ~~~
 
-The V1 reference development platform is Windows x64. The WPF Operator targets net10.0-windows.
+The current reference development platform is Windows x64. The WPF Operator targets net10.0-windows.
 
 ## Build
 
@@ -289,7 +294,7 @@ The AppHost can be published as a self-contained Windows single-file executable:
 dotnet publish src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false --output artifacts/publish/rtaime-win-x64
 ~~~
 
-This does not collapse the V1 architecture into one process. ControlHost, RuntimeHost, AIHost and Operator remain separate executable artifacts internally.
+This does not collapse the platform's multi-process architecture into one process. ControlHost, RuntimeHost, AIHost and Operator remain separate executable artifacts internally.
 
 Single-file publishing is a development/distribution option until the authoritative release evidence explicitly qualifies that artifact shape. Required Gates nevertheless exercise the self-contained AppHost publish and verify that its `rtaime.exe` retains the Windows GUI subsystem and bootstrap diagnostic behavior.
 
@@ -325,7 +330,7 @@ Behavioral, failure and performance suites are documented in [Build, Publish & T
 
 ## Product and marketing
 
-The product message is intentionally tied to architectural proof.
+The product vision covers the full professional media-platform scope; claims about available features, output quality and operational readiness remain tied to verifiable implementation and qualification evidence.
 
 Start with:
 
@@ -333,14 +338,17 @@ Start with:
 - [Product Identity](docs/ProductIdentity.md) — name, pronunciation, slogan, positioning and voice.
 - [Brand Assets](docs/BrandAssets.md) — canonical logo, emblem, app icon, palette and usage.
 - [Product Showcase Scenario](docs/InvestorDemoScenario.md) — deterministic product demonstration.
-- [Operator UI](docs/OperatorUiV1.md) — production workspace and interaction model.
+- [Operator UI historical baseline](docs/OperatorUiV1.md) — original reference workspace and interaction model.
 
 ## Engineering documentation
 
 Core architecture and operation:
 
+- [Product Scope and Capability Admission](docs/ProductScope.md)
+- [Legacy Compatibility and Capability Migration](docs/LegacyCompatibilityAndCapabilityMigration.md)
+
 - [Bootstrap Architecture](docs/BootstrapArchitecture.md)
-- [V1 End-to-End Proof](docs/V1EndToEndProof.md)
+- [Historical end-to-end reference evidence](docs/V1EndToEndProof.md)
 - [Application Startup](docs/ApplicationStartup.md)
 - [Executable Host Lifecycle](docs/ExecutableHostLifecycle.md)
 - [Process Recovery & Supervision](docs/ProcessRecoveryAndSupervision.md)

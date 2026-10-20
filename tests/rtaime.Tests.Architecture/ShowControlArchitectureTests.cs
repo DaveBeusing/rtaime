@@ -13,7 +13,7 @@ public sealed class ShowControlArchitectureTests
 
 		Assert.Contains("ShowControlActionExecutor", coordinator, StringComparison.Ordinal);
 		Assert.Contains("_actionExecutor", coordinator, StringComparison.Ordinal);
-		Assert.DoesNotContain("V1RuntimeHostService", coordinator, StringComparison.Ordinal);
+		Assert.DoesNotContain("RuntimeProgramExecutionService", coordinator, StringComparison.Ordinal);
 		Assert.DoesNotContain("ApplyExecution(", coordinator, StringComparison.Ordinal);
 		Assert.DoesNotContain("Provider.", coordinator, StringComparison.Ordinal);
 
