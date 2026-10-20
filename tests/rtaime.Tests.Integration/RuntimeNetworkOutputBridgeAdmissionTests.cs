@@ -53,13 +53,26 @@ public sealed class RuntimeNetworkOutputBridgeAdmissionTests
         Assert.Equal(1, first.DisposalCount);
     }
 
+    [Fact]
+    public void Failed_third_session_drains_every_owner_even_when_one_cleanup_throws()
+    {
+        var registry = new ObservedRegistry(capacity: 3, failThird: true, failCleanupFirst: true);
+        var failure = Assert.Throws<AggregateException>(() => new RuntimeNetworkOutputBridge(
+            [Target("first"), Target("second"), Target("third")], registry));
+        Assert.Contains(failure.InnerExceptions, error =>
+            error is IOException && error.Message.Contains("cleanup", StringComparison.Ordinal));
+        Assert.Equal(2, registry.Created.Count);
+        Assert.All(registry.Created, session => Assert.Equal(1, session.DisposalCount));
+    }
+
     private static RuntimeNetworkOutputTarget Target(string name) =>
         new("program", new NetworkOutputConfiguration(name,
             NetworkOutputProtocolFamily.Ndi, Format, AudioFormat.Stereo48kFloat32,
             new NdiNetworkOutputSettings(name)));
 
     private sealed class ObservedRegistry(
-        uint capacity, bool available = true, bool supportsFormat = true, bool failSecond = false)
+        uint capacity, bool available = true, bool supportsFormat = true,
+        bool failSecond = false, bool failThird = false, bool failCleanupFirst = false)
         : IRuntimeNetworkOutputProviderRegistry
     {
         private readonly ProviderId _id = ProviderId.New();
@@ -81,15 +94,16 @@ public sealed class RuntimeNetworkOutputBridgeAdmissionTests
 
         public INetworkOutputSession CreateSession(RuntimeNetworkOutputTarget target)
         {
-            if (failSecond && Created.Count > 0)
+            if (failSecond && Created.Count > 0 || failThird && Created.Count > 1)
                 throw new IOException("Observed second provider reservation failed.");
-            var session = new ObservedSession(target.Configuration);
+            var session = new ObservedSession(target.Configuration,
+                failCleanup: failCleanupFirst && Created.Count == 0);
             Created.Add(session);
             return session;
         }
     }
 
-    private sealed class ObservedSession(NetworkOutputConfiguration configuration)
+    private sealed class ObservedSession(NetworkOutputConfiguration configuration, bool failCleanup = false)
         : INetworkOutputSession
     {
         public NetworkOutputConfiguration Configuration => configuration;
@@ -103,6 +117,7 @@ public sealed class RuntimeNetworkOutputBridgeAdmissionTests
         public ValueTask DisposeAsync()
         {
             DisposalCount++;
+            if (failCleanup) throw new IOException("Observed native cleanup failed.");
             return ValueTask.CompletedTask;
         }
     }
