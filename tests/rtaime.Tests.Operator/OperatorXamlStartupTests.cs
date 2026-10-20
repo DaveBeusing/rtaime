@@ -176,14 +176,14 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                             Assert.Same(monitoring, window.Monitoring);
                             Assert.All(observedSurfaces, surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
 
-                            // Separate Input and ContextIdle round-trips bound both interaction
-                            // responsiveness and the completion of deferred layout/binding work.
+                            // Input bounds interaction latency; Loaded drains deferred layout
+                            // without requiring a render-active WPF window to reach idle.
                             var queued = Stopwatch.GetTimestamp();
                             var inputDelayMs = await dispatcher.InvokeAsync(
                                 () => Stopwatch.GetElapsedTime(queued).TotalMilliseconds, DispatcherPriority.Input)
                                 .Task.WaitAsync(TimeSpan.FromSeconds(5));
                             var idleStarted = Stopwatch.GetTimestamp();
-                            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle)
+                            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded)
                                 .Task.WaitAsync(TimeSpan.FromSeconds(5));
                             var idleDelayMs = Stopwatch.GetElapsedTime(idleStarted).TotalMilliseconds;
                             Assert.InRange(inputDelayMs, 0, 5000);
