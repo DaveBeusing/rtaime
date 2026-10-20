@@ -127,6 +127,34 @@ public sealed partial class ExternalControlIntegrationTests
     }
 
     [Fact]
+    public async Task Native_sequence_preparation_rejects_mismatched_saved_cadence_without_changing_Program()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+        await using var external = fixture.CreateClient();
+        var before = await external.GetSnapshotAsync();
+        var imported = await external.ImportMediaAssetsAsync([asset.Path]);
+        Assert.True(imported.Succeeded);
+        var sequence = PreparedVideoSequence(Assert.Single(imported.Snapshot.Assets)) with
+        {
+            FrameRate = new SequenceRate(25, 1)
+        };
+        var authoring = new SequenceAuthoringClient(external);
+        var saved = await authoring.SaveAsync(new(
+            SequenceContract.Version, Guid.NewGuid(), 0, sequence.SequenceId, sequence));
+        Assert.True(saved.Saved, string.Join("; ", saved.Issues.Select(issue => issue.Message)));
+
+        var preparation = new SequencePreparationClient(external);
+        var context = await preparation.ContextAsync();
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await preparation.PrepareAsync(new(SequencePreparationContract.Version,
+                sequence.SequenceId, saved.AuthoringRevision, context.RuntimeHostInstanceId)));
+        Assert.Equal(before.Production, (await external.GetSnapshotAsync()).Production);
+        Assert.Equal("UNAVAILABLE", (await authoring.GetAsync(sequence.SequenceId)).PlaybackState);
+    }
+
+    [Fact]
     public async Task Removing_catalogued_media_invalidates_native_sequence_preparation_without_changing_Program()
     {
         if (!OperatingSystem.IsWindows()) return;
