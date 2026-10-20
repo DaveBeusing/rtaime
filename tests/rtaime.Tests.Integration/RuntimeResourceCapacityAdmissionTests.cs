@@ -94,6 +94,98 @@ public sealed class RuntimeResourceCapacityAdmissionTests
     }
 
     [Fact]
+    public void Distinct_output_targets_do_not_inherit_another_devices_color_or_cadence()
+    {
+        var rec709 = new VideoFormat(1920, 1080, FrameRate.Fps50,
+            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
+        var srgb = new VideoFormat(1920, 1080, FrameRate.Fps50,
+            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.SrgbFullRgba8);
+        var targets = new[]
+        {
+            new RuntimeOutputTargetCapability("program", RuntimeOutputTransportKind.Sdi, [rec709]),
+            new RuntimeOutputTargetCapability("aux-a", RuntimeOutputTransportKind.Ndi, [srgb]),
+            new RuntimeOutputTargetCapability("aux-b", RuntimeOutputTransportKind.Srt, [rec709])
+        };
+        var profile = new RuntimeResourceCapabilityProfile(
+            "provider", "device", null, [rec709, srgb],
+            ["program", "aux-a", "aux-b"], 2, 2, 4,
+            256_000_000, 256_000_000, 0, false,
+            outputCapabilities: targets);
+
+        var planned = RuntimeResourceCapacityAdmission.Evaluate(profile,
+            new(rec709, 0, 0,
+                [new("program", rec709, 1, false), new("aux-a", srgb, 1, false)]));
+        Assert.True(planned.Admitted, planned.Detail);
+
+        var wrongColor = RuntimeResourceCapacityAdmission.Evaluate(profile,
+            new(rec709, 0, 0, [new("program", srgb, 1, false)]));
+        Assert.Equal("runtime.admission.output_unsupported", wrongColor.Code);
+
+        var wrongCadence = new VideoFormat(1920, 1080, FrameRate.Fps59_94,
+            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
+        Assert.Equal("runtime.admission.output_unsupported",
+            RuntimeResourceCapacityAdmission.Evaluate(profile,
+                new(rec709, 0, 0, [new("aux-b", wrongCadence, 1, false)])).Code);
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(profile,
+                new(rec709, 0, 0, [new("program", rec709, 1, true)])).Code);
+
+        Assert.Equal(RuntimeOutputTransportKind.Sdi, profile.OutputCapabilities[0].Transport);
+        Assert.Equal(RuntimeOutputTransportKind.Ndi, profile.OutputCapabilities[1].Transport);
+        Assert.Equal(RuntimeOutputTransportKind.Srt, profile.OutputCapabilities[2].Transport);
+    }
+
+    [Fact]
+    public void Physical_output_is_not_inferred_from_a_profile_wide_hardware_claim()
+    {
+        var knownColor = new VideoFormat(1920, 1080, FrameRate.Fps50,
+            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
+        var profile = new RuntimeResourceCapabilityProfile(
+            "provider", "device", "bound-source-evidence",
+            [knownColor], ["program"], 2, 2, 4,
+            256_000_000, 256_000_000, 256_000_000, true);
+        // Even a historically broad hardwareQualified flag cannot admit an
+        // unspecified physical SDI/NDI/SRT target.
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(profile,
+                new(knownColor, 0, 0, [new("program", knownColor, 1, true)])).Code);
+
+        Assert.Throws<ArgumentException>(() => new RuntimeResourceCapabilityProfile(
+            "provider", "device", null,
+            [knownColor], ["program"], 2, 2, 4,
+            256_000_000, 256_000_000, 0, false,
+            outputCapabilities:
+                [new RuntimeOutputTargetCapability("program", RuntimeOutputTransportKind.Sdi,
+                    [knownColor], "unverified-evidence")]));
+    }
+
+    [Fact]
+    public void Target_profiles_reject_unsupported_formats_and_mutable_external_arrays()
+    {
+        var formats = new[] { Hd, Uhd };
+        var targets = new[]
+        {
+            new RuntimeOutputTargetCapability("program", RuntimeOutputTransportKind.Software, formats)
+        };
+        var profile = new RuntimeResourceCapabilityProfile(
+            "provider", "device", null, formats, ["program"], 2, 2, 4,
+            256_000_000, 256_000_000, 0, false,
+            outputCapabilities: targets);
+        formats[0] = Uhd;
+        targets[0] = new RuntimeOutputTargetCapability("program",
+            RuntimeOutputTransportKind.Software, [Uhd]);
+        Assert.Equal(Hd, profile.OutputCapabilities[0].AdmittedFormats[0]);
+
+        Assert.Throws<ArgumentException>(() => new RuntimeResourceCapabilityProfile(
+            "provider", "device", null, [Hd], ["program"], 2, 2, 4,
+            256_000_000, 256_000_000, 0, false,
+            outputCapabilities:
+                [new RuntimeOutputTargetCapability("program", RuntimeOutputTransportKind.Software, [Uhd])]));
+        Assert.Throws<ArgumentException>(() => new RuntimeOutputTargetCapability(
+            "program", RuntimeOutputTransportKind.Software, [Hd], "physical-evidence-not-allowed"));
+    }
+
+    [Fact]
     public void Profile_snapshots_do_not_follow_mutable_caller_arrays()
     {
         var formats = new[] { Hd, Uhd };
