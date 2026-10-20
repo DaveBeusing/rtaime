@@ -4,6 +4,57 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.RuntimeHost;
 
+/// <summary>Transport-typed, exact-format target admission. This model does not verify hardware evidence.</summary>
+public enum RuntimeOutputTransportKind
+{
+    Software = 1,
+    Sdi = 2,
+    Ndi = 3,
+    Srt = 4
+}
+
+/// <summary>
+/// Per-target format and I/O support. A physical qualification flag is only
+/// accepted after an external evidence verifier checks exact source, driver,
+/// device, output target, cadence and color identity. A descriptor alone cannot
+/// create a real provider output or certify hardware.
+/// </summary>
+public sealed class RuntimeOutputTargetCapability
+{
+    private readonly ReadOnlyCollection<VideoFormat> _formats;
+
+    public RuntimeOutputTargetCapability(
+        string targetId, RuntimeOutputTransportKind transport,
+        IReadOnlyList<VideoFormat> admittedFormats,
+        string? verifiedEvidenceId = null)
+    {
+        if (string.IsNullOrWhiteSpace(targetId))
+            throw new ArgumentException("A nonempty output target ID is required.", nameof(targetId));
+        if (!Enum.IsDefined(transport))
+            throw new ArgumentOutOfRangeException(nameof(transport));
+        ArgumentNullException.ThrowIfNull(admittedFormats);
+        if (admittedFormats.Count == 0 ||
+            admittedFormats.Any(format => format.Width == 0 || format.Height == 0) ||
+            admittedFormats.Distinct().Count() != admittedFormats.Count)
+            throw new ArgumentException("A finite set of distinct exact video formats is required.",
+                nameof(admittedFormats));
+        if (!string.IsNullOrWhiteSpace(verifiedEvidenceId) &&
+            transport == RuntimeOutputTransportKind.Software)
+            throw new ArgumentException("Software targets have no physical device qualification.",
+                nameof(verifiedEvidenceId));
+
+        TargetId = targetId;
+        Transport = transport;
+        _formats = Array.AsReadOnly(admittedFormats.ToArray());
+        VerifiedEvidenceId = verifiedEvidenceId;
+    }
+
+    public string TargetId { get; }
+    public RuntimeOutputTransportKind Transport { get; }
+    public IReadOnlyList<VideoFormat> AdmittedFormats => _formats;
+    public string? VerifiedEvidenceId { get; }
+}
+
 /// <summary>
 /// A finite, provider/device-specific admission envelope. Creating this descriptor
 /// does not certify hardware; the owning provider must establish its evidence.
@@ -13,6 +64,7 @@ public sealed class RuntimeResourceCapabilityProfile
 {
     private readonly ReadOnlyCollection<VideoFormat> _formats;
     private readonly ReadOnlyCollection<string> _targets;
+    private readonly ReadOnlyCollection<RuntimeOutputTargetCapability> _outputCapabilities;
 
     public RuntimeResourceCapabilityProfile(
         string providerId,
@@ -27,7 +79,8 @@ public sealed class RuntimeResourceCapabilityProfile
         long gpuBudgetBytes,
         long nativeBudgetBytes,
         bool hardwareQualified,
-        int maximumRegisteredSources = 8)
+        int maximumRegisteredSources = 8,
+        IReadOnlyList<RuntimeOutputTargetCapability>? outputCapabilities = null)
     {
         if (string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(deviceIdentity))
             throw new ArgumentException("Provider and device identities are required.");
@@ -46,12 +99,28 @@ public sealed class RuntimeResourceCapabilityProfile
         if (hardwareQualified &&
             (string.IsNullOrWhiteSpace(qualificationEvidence) || gpuBudgetBytes == 0 || nativeBudgetBytes == 0))
             throw new ArgumentException("Physical qualification requires source-bound evidence and finite GPU/native budgets.");
+        var qualifiedTargets = outputCapabilities?.ToArray() ??
+            Array.Empty<RuntimeOutputTargetCapability>();
+        if (qualifiedTargets.Any(target => target is null ||
+                !admittedTargets.Contains(target.TargetId, StringComparer.Ordinal) ||
+                target.AdmittedFormats.Any(format => !admittedFormats.Contains(format))) ||
+            qualifiedTargets.Select(target => target.TargetId)
+                .Distinct(StringComparer.Ordinal).Count() != qualifiedTargets.Length)
+            throw new ArgumentException("Target-specific capabilities must be unique and belong to the exact provider format and target sets.",
+                nameof(outputCapabilities));
+        if (qualifiedTargets.Any(target => target.VerifiedEvidenceId is not null) &&
+            (!hardwareQualified || qualifiedTargets.Any(target =>
+                target.VerifiedEvidenceId is not null &&
+                target.VerifiedEvidenceId != qualificationEvidence)))
+            throw new ArgumentException("Physical target evidence must match the verified provider profile binding.",
+                nameof(outputCapabilities));
 
         ProviderId = providerId;
         DeviceIdentity = deviceIdentity;
         QualificationEvidence = qualificationEvidence;
         _formats = Array.AsReadOnly(admittedFormats.Distinct().ToArray());
         _targets = Array.AsReadOnly(admittedTargets.ToArray());
+        _outputCapabilities = Array.AsReadOnly(qualifiedTargets);
         MaximumDecoderOwners = maximumDecoderOwners;
         MaximumSequenceOwners = maximumSequenceOwners;
         MaximumSurfacesPerTarget = maximumSurfacesPerTarget;
@@ -67,6 +136,8 @@ public sealed class RuntimeResourceCapabilityProfile
     public string? QualificationEvidence { get; }
     public IReadOnlyList<VideoFormat> AdmittedFormats => _formats;
     public IReadOnlyList<string> AdmittedTargets => _targets;
+    /// <summary>Optional exact per-target color/cadence and SDI/NDI/SRT/software capability matrix.</summary>
+    public IReadOnlyList<RuntimeOutputTargetCapability> OutputCapabilities => _outputCapabilities;
     public int MaximumDecoderOwners { get; }
     public int MaximumSequenceOwners { get; }
     public int MaximumSurfacesPerTarget { get; }
@@ -128,6 +199,28 @@ public static class RuntimeResourceCapacityAdmission
         if (request.Outputs.Any(output => output.PhysicalOutput) && !profile.HardwareQualified)
             return RuntimeResourceCapacityDecision.Reject("runtime.admission.hardware_unverified",
                 "Physical output requires verified device, driver, format and resource evidence.");
+
+        // The product-wide format set is not a Cartesian promise that every
+        // output target can accept every frame-rate/color/resolution tuple.
+        foreach (var output in request.Outputs)
+        {
+            var target = profile.OutputCapabilities.FirstOrDefault(cap =>
+                string.Equals(cap.TargetId, output.TargetId, StringComparison.Ordinal));
+            if (profile.OutputCapabilities.Count > 0 &&
+                (target is null || !target.AdmittedFormats.Contains(output.Format)))
+                return RuntimeResourceCapacityDecision.Reject("runtime.admission.output_unsupported",
+                    "This output target does not advertise the exact resolution, cadence and color tuple.");
+            if (!output.PhysicalOutput) continue;
+            if (target is null || target.Transport == RuntimeOutputTransportKind.Software ||
+                target.VerifiedEvidenceId is null ||
+                target.VerifiedEvidenceId != profile.QualificationEvidence)
+                return RuntimeResourceCapacityDecision.Reject("runtime.admission.hardware_unverified",
+                    "This exact physical output target lacks accepted source-bound qualification evidence.");
+            if (!output.Format.Color.IsComplete ||
+                output.Format.Color.Authority != ColorMetadataAuthority.Authoritative)
+                return RuntimeResourceCapacityDecision.Reject("runtime.admission.color_unverified",
+                    "Physical output requires an authoritative, complete color description.");
+        }
 
         try
         {
