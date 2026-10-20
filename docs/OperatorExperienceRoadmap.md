@@ -4,7 +4,7 @@
 
 ## Purpose and status
 
-Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. The [scope decision effective 2026-10-17](OperatorExperienceScope.md) makes the
+Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. The later [product-wide scope decision](ProductScope.md) supersedes all historical product-phase feature ceilings; the roadmap is a delivery/evidence plan, not a product feature allowlist. The [scope decision effective 2026-10-17](OperatorExperienceScope.md) makes the
 listed extensions approved implementation work. This roadmap supplies ownership,
 dependencies and acceptance; it grants no hardware/security/release certification
 and does not claim that the target already matches the running application.
@@ -180,5 +180,5 @@ The scope baseline is complete when the accepted extensions are discoverable and
 approved TO IMPLEMENT, concrete visual/interaction acceptance and namespace
 ownership are explicit, current capabilities remain honestly classified and
 subsequent owners can implement real contracts without redoing authority or
-reopening former V1 deferrals. Feature completion and physical/release acceptance
+reopening historical product-phase restrictions. Feature completion and physical/release acceptance
 remain separate evidence decisions.
