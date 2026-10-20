@@ -181,6 +181,19 @@ lifetime. Every distinct asset/source-timeline offset requires a retained
 native owner; staging conservatively rejects a whole sequence needing
 more than four total owners, even if fewer overlap in any one interval.
 
+Native staging currently has no frame-rate conversion stage. Preparation
+rejects any saved sequence whose rational authored cadence differs from the
+committed Runtime Program cadence, rather than incorrectly interpreting
+50-fps and 60000/1001-fps frames as interchangeable. Both native and
+Control-side mappings continue to use the same one Program clock.
+
+After native preroll, Control rechecks the saved authoring revision,
+catalogue revision, committed Control/Runtime authority and exact RuntimeHost
+epoch before acknowledging PREPARED. A changed identity triggers bounded,
+explicit native cancellation. Failed or ambiguous cancellation retains the
+Control owner fence and cannot be reported as cleaned; an interrupted
+response also requires confirmation before releasing the prepared owner.
+
 The staging operation has its own serial Control gate and a separate
 bounded Runtime-IPC request lane: neither the global Control mutation gate
 nor the ordinary Program/control IPC request gate is held during native
