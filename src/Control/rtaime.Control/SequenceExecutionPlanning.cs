@@ -157,9 +157,13 @@ public static class SequenceExecutionCompiler
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(audioBuses);
-        if (decoderOwnerCapacity is < 1 or > 4)
+        // Compile against the requested protocol's finite upper bound. ControlHost
+        // still passes the v1 four-owner limit to historic clients; v2 is not
+        // a grant of hardware/native ownership and Runtime must reserve separately.
+        if (decoderOwnerCapacity < 1 ||
+            decoderOwnerCapacity > SequencePreparationContract.MaximumScalableNativeOwners)
             return Reject("sequence.execution.profile", "decoderOwnerCapacity",
-                "Select an explicit finite Runtime decoder profile (1–4 owners).");
+                "Decoder profile must be finite and within the supported sequence protocol ceiling.");
 
         var validation = SequenceModel.Validate(definition, authoringRevision, assets, audioBuses);
         if (!validation.IsValid) return new(null, validation.Issues);

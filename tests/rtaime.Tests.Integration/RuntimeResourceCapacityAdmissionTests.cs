@@ -38,7 +38,9 @@ public sealed class RuntimeResourceCapacityAdmissionTests
         var profile = Profile(decoders: 6);
         Assert.Equal("runtime.admission.decoder_capacity",
             RuntimeResourceCapacityAdmission.Evaluate(profile, new(Hd, 7, 6, [])).Code);
-        Assert.Equal("runtime.admission.decoder_capacity",
+        // Seven sequence owners cannot fit six requested decoder owners,
+        // regardless of the device capacity; reject malformed demand first.
+        Assert.Equal("runtime.admission.request_invalid",
             RuntimeResourceCapacityAdmission.Evaluate(profile, new(Hd, 6, 7, [])).Code);
         Assert.Equal("runtime.admission.request_invalid",
             RuntimeResourceCapacityAdmission.Evaluate(profile, new(Hd, 2, 3, [])).Code);
