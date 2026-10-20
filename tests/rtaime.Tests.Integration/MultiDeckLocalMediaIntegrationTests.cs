@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Diagnostics;
+using rtaime.Media;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Runtime.Contracts;
@@ -9,6 +10,36 @@ namespace rtaime.Tests.Integration;
 
 public sealed class MultiDeckLocalMediaIntegrationTests
 {
+
+    [Fact]
+    public void Dynamic_profile_cannot_override_actual_provider_decoder_and_route_inventory()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var descriptor = new LocalMediaFileProvider(VideoFormat.Hd1080p50Rgba8).Descriptor;
+        var qualified = new RuntimeResourceCapabilityProfile(
+            descriptor.ProviderId.ToString(), "software.runner", null,
+            [VideoFormat.Hd1080p50Rgba8], [], 4, 4, 8,
+            1_000_000_000, 0, 0, false);
+        using (var admitted = new LocalMediaDeckRuntimeService(
+            VideoFormat.Hd1080p50Rgba8, 4, null,
+            LocalMediaCapacityProfile.DevelopmentFour, qualified))
+            Assert.Equal(4, admitted.Resources.Capacity);
+
+        var overstated = new RuntimeResourceCapabilityProfile(
+            descriptor.ProviderId.ToString(), "software.runner", null,
+            [VideoFormat.Hd1080p50Rgba8], [], 6, 6, 8,
+            1_000_000_000, 0, 0, false, maximumRegisteredSources: 12);
+        Assert.Throws<NotSupportedException>(() => new LocalMediaDeckRuntimeService(
+            VideoFormat.Hd1080p50Rgba8, 6, null,
+            LocalMediaCapacityProfile.DevelopmentFour, overstated));
+        Assert.Throws<NotSupportedException>(() => new LocalMediaDeckRuntimeService(
+            VideoFormat.Hd1080p50Rgba8, 2, null,
+            LocalMediaCapacityProfile.Conservative,
+            new RuntimeResourceCapabilityProfile("another-provider", "software.runner", null,
+                [VideoFormat.Hd1080p50Rgba8], [], 2, 2, 8,
+                1_000_000_000, 0, 0, false)));
+    }
+
     [Fact]
     public void Same_asset_has_independent_source_transport_payloads_and_tally()
     {
