@@ -1306,9 +1306,15 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					var requiredProgramAudioValues = checked((int)(
 						programRecordingAudioBuffer.Timing.SampleCount * programRecordingAudioBuffer.Format.ChannelCount));
 					var recordingBusResult = _lastAudioProductionResults[AudioBusId.Program];
+					// An asynchronous payload snapshot is necessary only for the real
+					// recording payload writer or configured replay consumer. The
+					// authoritative Program output has its own independently owned payload.
+					var captureRecordingAudio = _replay is not null ||
+						(recordingActive && _recordingPayloadWriter is not null);
 					programRecordingAudioPayload =
-						audio.Status == AudioFollowVideoStatus.Underrun &&
-						recordingBusResult.ActiveSourceCount == 0
+						!captureRecordingAudio ||
+						(audio.Status == AudioFollowVideoStatus.Underrun &&
+						 recordingBusResult.ActiveSourceCount == 0)
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
 								AudioBusSamplesUnsafe(AudioBusId.Program, requiredProgramAudioValues)).ToArray();
@@ -1319,7 +1325,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
 								AudioBusSamplesUnsafe(programOutputBusId, requiredProgramAudioValues)).ToArray();
-					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null)
+					// The regular Aux provider consumes the frame descriptor, not an
+					// owned PCM byte array. Only an admitted Aux network route retains audio.
+					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null &&
+						auxNetworkSource is not null)
 					{
 						var auxResult = _lastAudioProductionResults[selectedAuxBus];
 						auxAudioPayload =
