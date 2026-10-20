@@ -269,6 +269,71 @@ public sealed class RuntimeConsumerIsolationTests
     }
 
 
+    [Fact]
+    public async Task One_governed_Program_boundary_submits_identical_frames_and_audio_to_two_real_network_sessions()
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var ndi = new StalledNdiSender(released: true);
+        var srt = new StalledTransport();
+        srt.Release.TrySetResult();
+        var registry = new NetworkRegistry(ndi, srt);
+        var targets = new[]
+        {
+            new RuntimeNetworkOutputTarget("program", new NetworkOutputConfiguration(
+                "program-ndi", NetworkOutputProtocolFamily.Ndi, format,
+                AudioFormat.Stereo48kFloat32, new NdiNetworkOutputSettings("Program fanout"))),
+            new RuntimeNetworkOutputTarget("program", new NetworkOutputConfiguration(
+                "program-srt", new Uri("srt://127.0.0.1:9000/program"),
+                NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller,
+                format, AudioFormat.Stereo48kFloat32, NetworkOutputVideoCodec.H264,
+                NetworkOutputAudioCodec.AacLc, 12_000_000, 192_000, 120))
+        };
+        var writer = new StalledWriter();
+        writer.Release.TrySetResult();
+        writer.FinalizeRelease.TrySetResult();
+        var sourceA = new ProductionSourceId(Identity.New());
+        var sourceB = new ProductionSourceId(Identity.New());
+        var runtime = new RuntimeProgramExecutionService(new MediaSourceId(sourceA.Value),
+            new MediaSourceId(sourceB.Value), format, writer,
+            new ManagedReferenceGpuBackend(), targets, null, null, registry);
+        try
+        {
+            var specification = new ProductionSpecification(ControlContractVersion.Current,
+                new ProductionId(Identity.New()), "Fanout admission",
+                [new ProductionSourceSpecification(sourceA, "A"),
+                 new ProductionSourceSpecification(sourceB, "B")],
+                new ProductionRoutingState(sourceB, sourceA),
+                initialOutputRoles: [ProductionOutputRoleState.Program(sourceA),
+                                     ProductionOutputRoleState.Aux(sourceB)]);
+            var state = ControlDomainEngine.Initialize(specification).State!.Authoritative;
+            var planned = CapabilityPlanningEngine.Plan(specification, state,
+                new Registry(runtime.ProviderDescriptors));
+            Assert.True(planned.Succeeded);
+            var sink = planned.Graph!.Nodes.Single(node =>
+                node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId!.Value;
+            Assert.True(runtime.ApplyExecution(planned.PreparedExecution!, sink).Committed);
+
+            using var first = runtime.ProcessNextBoundary();
+            var snapshots = runtime.NetworkOutputHealthForRole("program");
+            Assert.Equal(2, snapshots.Count);
+            Assert.Equal(2, runtime.NetworkOutputTargetHealth.Count);
+            Assert.Equal(new[] { "program-ndi", "program-srt" },
+                snapshots.Select(snapshot => snapshot.TargetId).ToArray());
+            Assert.All(snapshots, snapshot =>
+            {
+                Assert.Equal(format, snapshot.VideoFormat);
+                Assert.Equal(AudioFormat.Stereo48kFloat32, snapshot.AudioFormat);
+                Assert.Equal(1UL, snapshot.Statistics.AcceptedSamples);
+            });
+            Assert.Equal(1UL, registry.Ndi!.Snapshot.Statistics.AcceptedSamples);
+            Assert.Equal(1UL, registry.Srt!.Snapshot.Statistics.AcceptedSamples);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
