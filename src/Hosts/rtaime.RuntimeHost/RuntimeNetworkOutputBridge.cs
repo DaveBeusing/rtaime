@@ -100,10 +100,18 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                     new TargetSession(target.RoleId, target.Configuration.TargetId, session));
             }
         }
-        catch
+        catch (Exception original)
         {
+            var cleanupFailures = new List<Exception>();
             foreach (var item in provisional.Values)
-                item.Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            {
+                try { item.Session.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+                catch (Exception failure) { cleanupFailures.Add(failure); }
+            }
+            if (cleanupFailures.Count > 0)
+                throw new AggregateException(
+                    "Network output graph reservation failed and provider cleanup was not fully confirmed.",
+                    new[] { original }.Concat(cleanupFailures));
             throw;
         }
 
