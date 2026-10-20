@@ -327,6 +327,15 @@ public sealed class RuntimeConsumerIsolationTests
             });
             Assert.Equal(1UL, registry.Ndi!.Snapshot.Statistics.AcceptedSamples);
             Assert.Equal(1UL, registry.Srt!.Snapshot.Statistics.AcceptedSamples);
+            var evidence = runtime.NetworkOutputTargetEvidence;
+            Assert.Equal(2, evidence.Count);
+            Assert.All(evidence, target =>
+            {
+                Assert.Equal("program", target.RoleId);
+                Assert.Equal(1L, target.EnqueuedVideoFrames);
+                Assert.True(target.EnqueuedAudioSampleFrames > 0);
+                Assert.Equal(1UL, target.ProviderHealth.Statistics.AcceptedSamples);
+            });
         }
         finally
         {
