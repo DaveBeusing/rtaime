@@ -216,6 +216,45 @@ public sealed class LocalMediaResourceLedgerTests
         Assert.Equal(0, ledger.Snapshot.ReservedOwners);
     }
 
+    [Fact]
+    public void Provider_admitted_six_owner_sequence_group_is_all_or_none_and_release_safe()
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var profile = new RuntimeResourceCapabilityProfile(
+            "reference.provider", "software.test", null,
+            [format], [], 8, 8, 8, 1_000_000_000, 0, 0, false);
+        var ledger = new LocalMediaResourceLedger(format, 6, profile);
+        var requests = Enumerable.Range(0, 6)
+            .Select(_ => new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger)))
+            .ToArray();
+        Assert.True(ledger.TryReserveGroup(requests, out var tickets, out var failure),
+            failure?.Message);
+        Assert.Equal(6, tickets.Count);
+        Assert.Equal(6, ledger.Snapshot.ReservedOwners);
+        foreach (var ticket in tickets)
+            ticket.OwnerCompleted();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+        Assert.Equal(0L, ledger.Snapshot.KnownManagedBytes);
+    }
+
+    [Fact]
+    public void Device_profile_cannot_allocate_more_owner_pools_than_verified_managed_budget()
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var profile = new RuntimeResourceCapabilityProfile(
+            "reference.provider", "software.test", null,
+            [format], [], 8, 8, 8, 100_000_000, 0, 0, false);
+        Assert.Throws<ArgumentException>(() =>
+            new LocalMediaResourceLedger(format, 6, profile));
+        var hdOnly = new RuntimeResourceCapabilityProfile(
+            "reference.provider", "software.test", null,
+            [format], [], 8, 8, 8, 1_000_000_000, 0, 0, false);
+        var uhd = new VideoFormat(3840, 2160, FrameRate.Fps50,
+            PixelFormat.Rgba8, ScanMode.Progressive);
+        Assert.Throws<ArgumentException>(() =>
+            new LocalMediaResourceLedger(uhd, 6, hdOnly));
+    }
+
     private static LocalMediaResourceIdentity IdentityFor(LocalMediaResourceLedger ledger) =>
         new(ledger.RuntimeEpoch, MediaSourceId.New(), null, null, null, LocalMediaResourcePurpose.Resident);
 }
