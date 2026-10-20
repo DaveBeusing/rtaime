@@ -190,7 +190,8 @@ public static class RuntimeResourceCapacityAdmission
     public static RuntimeResourceCapacityDecision Evaluate(
         RuntimeResourceCapabilityProfile profile,
         RuntimeResourceCapacityRequest request,
-        IReadOnlyList<RuntimeVerifiedPhysicalOutputCapability>? verifiedPhysicalOutputs = null)
+        IReadOnlyList<RuntimeVerifiedPhysicalOutputCapability>? verifiedPhysicalOutputs = null,
+        DateTimeOffset? nowUtc = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(request);
@@ -198,6 +199,7 @@ public static class RuntimeResourceCapacityAdmission
             request.SequenceOwners > request.DecoderOwners)
             return RuntimeResourceCapacityDecision.Reject("runtime.admission.request_invalid",
                 "Decoder and sequence demands must be nonnegative and sequence owners must fit decoder owners.");
+        var evaluatedAtUtc = (nowUtc ?? DateTimeOffset.UtcNow).ToUniversalTime();
         if (!profile.AdmittedFormats.Contains(request.Format))
             return RuntimeResourceCapacityDecision.Reject("runtime.admission.format_unsupported",
                 "The exact format, color description and cadence are not in the provider's admitted profile.");
@@ -244,7 +246,7 @@ public static class RuntimeResourceCapacityAdmission
             var grants = verifiedPhysicalOutputs?.Where(grant =>
                 string.Equals(grant.TargetId, output.TargetId, StringComparison.Ordinal)).ToArray();
             if (grants is not { Length: 1 } ||
-                grants[0].ValidUntilUtc <= DateTimeOffset.UtcNow ||
+                grants[0].ValidUntilUtc <= evaluatedAtUtc ||
                 grants[0].ProviderId != profile.ProviderId ||
                 grants[0].DeviceIdentity != profile.DeviceIdentity ||
                 grants[0].SourceCommit != profile.ActiveSourceCommit ||

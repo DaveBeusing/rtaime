@@ -78,21 +78,24 @@ public sealed class RuntimePhysicalOutputEvidenceTests
         Assert.Equal("runtime.admission.hardware_unverified",
             RuntimeResourceCapacityAdmission.Evaluate(Profile(), Candidate()).Code);
         var admitted = RuntimeResourceCapacityAdmission.Evaluate(Profile(), Candidate(),
-            [verified.Capability!]);
+            [verified.Capability!], nowUtc: Now);
         Assert.True(admitted.Admitted, admitted.Detail);
         Assert.Equal(1920L * 1080 * 4 * 2, admitted.RequiredNativeBytes);
         Assert.Equal("runtime.admission.hardware_unverified",
             RuntimeResourceCapacityAdmission.Evaluate(
                 Profile(sourceCommit: new string('b', 40)),
-                Candidate(), [verified.Capability!]).Code);
+                Candidate(), [verified.Capability!], nowUtc: Now).Code);
         Assert.Equal("runtime.admission.hardware_unverified",
             RuntimeResourceCapacityAdmission.Evaluate(
                 Profile(driverIdentity: "driver.25"),
-                Candidate(), [verified.Capability!]).Code);
+                Candidate(), [verified.Capability!], nowUtc: Now).Code);
 
         Assert.Equal("runtime.admission.native_budget",
             RuntimeResourceCapacityAdmission.Evaluate(Profile(nativeBudget: 1),
-                Candidate(), [verified.Capability!]).Code);
+                Candidate(), [verified.Capability!], nowUtc: Now).Code);
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(Profile(), Candidate(),
+                [verified.Capability!], nowUtc: Now.AddDays(31)).Code);
     }
 
     [Fact]
@@ -139,13 +142,13 @@ public sealed class RuntimePhysicalOutputEvidenceTests
 
         Assert.Equal("runtime.admission.hardware_unverified",
             RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
-                [firstVerified.Capability!]).Code);
+                [firstVerified.Capability!], nowUtc: Now).Code);
         Assert.Equal("runtime.admission.hardware_unverified",
             RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
-                [firstVerified.Capability!, firstVerified.Capability!]).Code);
+                [firstVerified.Capability!, firstVerified.Capability!], nowUtc: Now).Code);
 
         var decision = RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
-            [firstVerified.Capability!, secondVerified.Capability!]);
+            [firstVerified.Capability!, secondVerified.Capability!], nowUtc: Now);
         Assert.True(decision.Admitted, decision.Detail);
         Assert.Equal(2L * 1920 * 1080 * 4 * 2, decision.RequiredNativeBytes);
         Assert.Equal(2L * 1920 * 1080 * 4 * 2, decision.RequiredGpuBytes);
