@@ -55,6 +55,32 @@ An execution apply that arrives while a boundary is running waits at `_boundaryE
 
 Ordinary frame-affecting control mutations synchronize only with `_boundaryCaptureGate`: a mutation that wins the capture point is part of the current boundary; one that arrives after capture becomes visible to the next boundary. Read-only snapshots continue to use `_gate` and do not wait for GPU uploads, composite, readback, Program output or recording work.
 
+## Bounded cadence scratch and immutable handoff
+
+The committed Program boundary owns reusable `_boundaryFrameScratch` and
+`_boundaryGpuScratch` maps. Only the existing single-writer
+`_boundaryExecutionGate` may use them; the current source registry admits
+at most `AudioProductionLimits.MaximumSources` entries and the maps are
+initialized for that explicit bound. Each boundary repopulates the frame map
+with source-bound descriptors. Input GPU frames transfer ownership into the
+GPU map only after successful insertion.
+
+The maps are temporary lookup tables, **not** cross-boundary frame caches or
+resource pools. The Aux writer, transition resolver and output-mapping composer
+consume them synchronously before they are cleared. GPU inputs are disposed
+on completion or failure; partial external-materialization failures also release
+their newly created frame. Committed Program output, monitoring, recording,
+replay and network consumers continue to retain their independently owned
+descriptors, readback leases and copied audio payloads. No consumer may retain
+the mutable lookup maps.
+
+Route cardinality (exactly one committed Program sink binding and one Preview
+route) is checked by a direct scan of the immutable prepared execution. A
+new committed execution automatically uses its current bindings at the next
+boundary; no stale routing cache or second Program clock is introduced.
+No synchronization, timestamp, execution revision or publication semantics
+change as a consequence of the scratch reuse.
+
 ## Output evidence publication
 
 Virtual Program/Aux outputs can receive their provider frame before the RuntimeHost boundary state is finally published. Output-role snapshot construction ignores evidence whose frame sequence is not older than `NextSequenceNumber`.
