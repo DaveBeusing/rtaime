@@ -24,7 +24,10 @@ public sealed record RuntimeSoftwareOutputPublicationResult(
 public sealed record RuntimeSoftwareOutputPublicationSnapshot(
     ulong? ActiveExecutionRevision, ulong? ActiveProgramSequence,
     int ActiveTargets, bool HasPreparedGroup, int RetainedOldGenerations,
-    int ActiveReaders, int RetainedReaders, bool Closed);
+    int ActiveReaders, int RetainedReaders, bool Closed)
+{
+    public int DeferredDisposalGroups { get; init; }
+}
 
 /// <summary>
 /// A bounded lease on one complete multi-target frame generation. Consumers
@@ -63,7 +66,8 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
     private readonly object _gate = new();
     private readonly Guid _runtimeEpoch;
     private readonly int _maximumRetainedOldGenerations;
-    private readonly List<RuntimePublishedOutputGeneration> _retired = [];
+    private readonly List<RuntimePublishedOutputGeneration> _retired;
+    private readonly Queue<RuntimeMappedOutputFrameSet> _deferredDisposals;
     private RuntimeMappedOutputFrameSet? _prepared;
     private ulong _preparedRevision;
     private RuntimePublishedOutputGeneration? _active;
@@ -78,6 +82,8 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
             throw new ArgumentOutOfRangeException(nameof(maximumRetainedOldGenerations));
         _runtimeEpoch = runtimeEpoch;
         _maximumRetainedOldGenerations = maximumRetainedOldGenerations;
+        _retired = new(maximumRetainedOldGenerations);
+        _deferredDisposals = new(maximumRetainedOldGenerations);
     }
 
     public RuntimeSoftwareOutputPublicationSnapshot Snapshot
@@ -86,8 +92,9 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
         {
             lock (_gate)
                 return new(_active?.ExecutionRevision, _active?.ProgramSequence,
-                    _active?.Frames.Frames.Count ?? 0, _prepared is not null, _retired.Count,
-                    _active?.Readers ?? 0, _retired.Sum(x => x.Readers), _closed);
+                    _active?.Frames.TargetCount ?? 0, _prepared is not null, _retired.Count,
+                    _active?.Readers ?? 0, _retired.Sum(x => x.Readers), _closed)
+                { DeferredDisposalGroups = _deferredDisposals.Count };
         }
     }
 
@@ -102,7 +109,7 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
         // Validate outside the lock. A disposed or empty group cannot be staged.
         try
         {
-            if (frames.Frames.Count == 0)
+            if (frames.TargetCount == 0)
                 return Rejected("runtime.software_output.empty",
                     "At least one mapped target frame must be prepared.");
         }
@@ -118,9 +125,9 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
                 return Rejected("runtime.software_output.epoch_changed", "The RuntimeHost epoch has changed.");
             if (_prepared is not null)
                 return Rejected("runtime.software_output.busy", "Cancel or commit the existing staged frame set.");
-            if (_retired.Count >= _maximumRetainedOldGenerations)
+            if (_retired.Count + _deferredDisposals.Count >= _maximumRetainedOldGenerations)
                 return Rejected("runtime.software_output.reader_pressure",
-                    "Old frame generations still have readers; release them before preparing more frames.");
+                    "Retained or not-yet-drained old frames block further preparation.");
             _prepared = frames;
             _preparedRevision = expectedExecutionRevision;
             return new(true, "runtime.software_output.prepared",
@@ -135,8 +142,6 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
     public RuntimeSoftwareOutputPublicationResult CommitAtBoundary(
         Guid runtimeEpoch, ulong currentExecutionRevision, ulong programSequence)
     {
-        RuntimeMappedOutputFrameSet? retireNow = null;
-        RuntimeSoftwareOutputPublicationResult result;
         lock (_gate)
         {
             if (_closed) return Rejected("runtime.software_output.closed", "Output publication is closed.");
@@ -149,38 +154,46 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
                     "The committed execution revision or monotonic Program slot changed.");
             // All mapped target frames must be from the same exact Program slot;
             // publishing old source pixels under a newer boundary is forbidden.
-            try
-            {
-                if (_prepared.Frames.Values.Any(frame => frame.IsDisposed ||
-                    frame.Descriptor.Timing.SequenceNumber != programSequence))
-                    return Rejected("runtime.software_output.frame_slot_changed",
-                        "One or more mapped target frames do not match the committed Program slot.");
-            }
-            catch (ObjectDisposedException)
-            {
-                return Rejected("runtime.software_output.disposed_group",
-                    "A staged frame group was disposed before boundary commit.");
-            }
-            if (_active is { Readers: > 0 } &&
-                _retired.Count >= _maximumRetainedOldGenerations)
+            if (!_prepared.MatchesProgramSlot(programSequence))
+                return Rejected("runtime.software_output.frame_slot_changed",
+                    "One or more mapped target frames do not match the committed Program slot.");
+            if (_active is not null &&
+                _retired.Count + _deferredDisposals.Count >= _maximumRetainedOldGenerations)
                 return Rejected("runtime.software_output.reader_pressure",
-                    "An earlier frame generation must drain before a new group can commit.");
+                    "A prior frame generation must drain before another group can commit.");
 
             var next = new RuntimePublishedOutputGeneration(_prepared, _preparedRevision, programSequence);
             _prepared = null;
             if (_active is { } previous)
             {
                 previous.Retired = true;
-                if (previous.Readers == 0) retireNow = previous.Frames;
+                if (previous.Readers == 0) _deferredDisposals.Enqueue(previous.Frames);
                 else _retired.Add(previous);
             }
             _active = next;
             _lastSequence = programSequence;
-            result = new(true, "runtime.software_output.published",
+            return new(true, "runtime.software_output.published",
                 "All software targets switched at one committed Program boundary.", programSequence);
         }
-        retireNow?.Dispose();
-        return result;
+    }
+
+    /// <summary>
+    /// Drain old GPU frames on a management/cleanup thread, never from the
+    /// real-time Program boundary. New staging fails closed while this finite
+    /// disposal queue is full.
+    /// </summary>
+    public int DrainRetiredOnManagementThread()
+    {
+        List<RuntimeMappedOutputFrameSet> ready;
+        lock (_gate)
+        {
+            ready = new(_deferredDisposals.Count);
+            while (_deferredDisposals.TryDequeue(out var group))
+                ready.Add(group);
+        }
+        foreach (var group in ready)
+            group.Dispose();
+        return ready.Count;
     }
 
     public bool TryAcquire(out RuntimeSoftwareOutputPublicationLease? lease)
@@ -233,6 +246,8 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
             _closed = true;
             if (_prepared is { } pending) dispose.Add(pending);
             _prepared = null;
+            while (_deferredDisposals.TryDequeue(out var old))
+                dispose.Add(old);
             if (_active is { } active)
             {
                 active.Retired = true;

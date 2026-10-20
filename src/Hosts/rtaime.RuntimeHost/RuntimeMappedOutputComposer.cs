@@ -28,6 +28,22 @@ public sealed class RuntimeMappedOutputFrameSet : IDisposable
         }
     }
 
+    /// <summary>
+    /// Allocation-free precommit check on the existing Program boundary.
+    /// A mixed or disposed generation must never be published to target readers.
+    /// </summary>
+    internal bool MatchesProgramSlot(ulong sequenceNumber)
+    {
+        var frames = _frames;
+        if (frames is null || frames.Count == 0) return false;
+        foreach (var frame in frames.Values)
+            if (frame.IsDisposed || frame.Descriptor.Timing.SequenceNumber != sequenceNumber)
+                return false;
+        return true;
+    }
+
+    internal int TargetCount => _frames?.Count ?? 0;
+
     public void Dispose()
     {
         var frames = Interlocked.Exchange(ref _frames, null);
