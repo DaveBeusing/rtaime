@@ -23,7 +23,7 @@ Every signed PASS must bind:
 - UTC qualification and expiration dates, with a bounded validity interval;
 - successfully qualified physical scan-out, color accuracy, frame cadence, audio/video synchronization, controlled recovery and long-soak stability.
 
-Malformed/duplicate fields, unsigned or altered bytes, unknown contracts, incomplete color metadata, non-PASS evidence, stale dates and changed runtime identities fail closed. Existing schema version 1.0 describes *currently representable* RGBA8 formats only. It does not silently add P010, RGBA16F, HDR metadata signaling, matrix conversion or frame-rate conversion. Those need separate real provider formats, conversion, pipeline qualification and compatibility decisions before they can appear as admitted tuples.
+Malformed/duplicate/missing required fields, blank or oversized device/driver/provider identities, unsigned or altered bytes, unknown contracts, incomplete color metadata, non-PASS evidence, stale dates and changed runtime identities fail closed. Signature validity never substitutes for the complete required evidence schema. Existing schema version 1.0 describes *currently representable* RGBA8 formats only. It does not silently add P010, RGBA16F, HDR metadata signaling, matrix conversion or frame-rate conversion. Those need separate real provider formats, conversion, pipeline qualification and compatibility decisions before they can appear as admitted tuples.
 
 ## Admission and authority
 

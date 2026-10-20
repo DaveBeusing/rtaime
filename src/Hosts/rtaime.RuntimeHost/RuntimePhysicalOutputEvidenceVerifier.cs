@@ -120,6 +120,15 @@ public sealed record RuntimePhysicalOutputVerificationResult(
 public static class RuntimePhysicalOutputEvidenceVerifier
 {
     private const int MaximumPayloadBytes = 16 * 1024;
+    // All positional record members are required. System.Text.Json otherwise
+    // silently supplies defaults for missing fields even in a signed payload.
+    private static readonly string[] RequiredEvidenceFields =
+        typeof(RuntimePhysicalOutputEvidence).GetProperties()
+            .Select(property => property.Name).ToArray();
+
+    private static bool HasBoundedIdentity(string? identity, int maximumLength) =>
+        !string.IsNullOrWhiteSpace(identity) && identity.Length <= maximumLength;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
@@ -168,6 +177,9 @@ public static class RuntimePhysicalOutputEvidenceVerifier
             foreach (var property in json.RootElement.EnumerateObject())
                 if (!members.Add(property.Name))
                     return Deny("runtime.qualification.duplicate_field");
+            if (members.Count != RequiredEvidenceFields.Length ||
+                RequiredEvidenceFields.Any(field => !members.Contains(field)))
+                return Deny("runtime.qualification.schema_invalid");
             evidence = json.RootElement.Deserialize<RuntimePhysicalOutputEvidence>(JsonOptions);
         }
         catch (Exception error) when (error is JsonException or NotSupportedException)
@@ -176,9 +188,13 @@ public static class RuntimePhysicalOutputEvidenceVerifier
         }
         if (evidence is null || evidence.SchemaVersion != "1.0" ||
             evidence.QualificationStatus != "PASS" ||
-            string.IsNullOrWhiteSpace(evidence.EvidenceId) ||
-            string.IsNullOrWhiteSpace(evidence.ProviderSdkIdentity) ||
-            string.IsNullOrWhiteSpace(evidence.FirmwareIdentity) ||
+            !HasBoundedIdentity(evidence.EvidenceId, 256) ||
+            !HasBoundedIdentity(evidence.ProviderId, 128) ||
+            !HasBoundedIdentity(evidence.DeviceIdentity, 256) ||
+            !HasBoundedIdentity(evidence.DriverIdentity, 256) ||
+            !HasBoundedIdentity(evidence.ProviderSdkIdentity, 256) ||
+            !HasBoundedIdentity(evidence.FirmwareIdentity, 256) ||
+            !HasBoundedIdentity(evidence.TargetId, 128) ||
             !Regex.IsMatch(evidence.SourceCommit ?? "", "^[0-9a-f]{40}$",
                 RegexOptions.CultureInvariant) ||
             evidence.Transport is RuntimeOutputTransportKind.Software ||

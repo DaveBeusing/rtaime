@@ -143,6 +143,57 @@ public sealed class RuntimePhysicalOutputEvidenceTests
             Verify(Observed(), Now.AddDays(31)).Code);
     }
 
+    [Theory]
+    [InlineData("ProviderId")]
+    [InlineData("DeviceIdentity")]
+    [InlineData("DriverIdentity")]
+    [InlineData("ProviderSdkIdentity")]
+    [InlineData("FirmwareIdentity")]
+    [InlineData("TargetId")]
+    [InlineData("FrameCadencePassed")]
+    public void Signed_but_incomplete_hardware_evidence_is_rejected_before_admission(string missing)
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var fields = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            JsonSerializer.Serialize(Evidence()))!;
+        Assert.True(fields.Remove(missing));
+        var payload = JsonSerializer.SerializeToUtf8Bytes(fields);
+        var signature = signer.SignData(payload, HashAlgorithmName.SHA256,
+            DSASignatureFormat.Rfc3279DerSequence);
+        var result = RuntimePhysicalOutputEvidenceVerifier.Verify(
+            payload, signature, signer.ExportSubjectPublicKeyInfo(), Observed(), Now);
+        Assert.Equal("runtime.qualification.schema_invalid", result.Code);
+        Assert.Null(result.Capability);
+    }
+
+    [Fact]
+    public void Signed_blank_or_excessively_long_device_identifiers_do_not_establish_support()
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        foreach (var candidate in new[]
+        {
+            Evidence() with { DeviceIdentity = " " },
+            Evidence() with { DriverIdentity = "" },
+            Evidence() with { ProviderId = "" },
+            Evidence() with { TargetId = "" },
+            Evidence() with { EvidenceId = new string('x', 257) }
+        })
+        {
+            var signed = Sign(signer, candidate);
+            var observed = Observed() with
+            {
+                ProviderId = candidate.ProviderId,
+                DeviceIdentity = candidate.DeviceIdentity,
+                DriverIdentity = candidate.DriverIdentity,
+                TargetId = candidate.TargetId
+            };
+            var result = RuntimePhysicalOutputEvidenceVerifier.Verify(
+                signed.Payload, signed.Signature, signed.PublicKey, observed, Now);
+            Assert.Equal("runtime.qualification.incomplete_evidence", result.Code);
+            Assert.Null(result.Capability);
+        }
+    }
+
     [Fact]
     public void Signed_failures_incomplete_color_or_resource_limits_never_promote_support()
     {
