@@ -33,6 +33,27 @@ Malformed/duplicate/missing required fields, blank or oversized device/driver/pr
 
 For successful activation, a dedicated provider must still reserve every sink under ControlHost-owned authoritative revisions, activate all targets at the existing Runtime Program boundary, preserve the previous committed output if any preparation fails, and report measured per-target frames/audio, queue headroom, device health and recovery. The current `RuntimeSoftwareOutputPublication` is an in-process multi-target software primitive; it does not perform native scan-out.
 
+## Qualification enrollment status — 2026-10-20
+
+**NO APPROVED PUBLIC QUALIFICATION KEY IS ENROLLED BY THIS CHANGE. NO PHYSICAL OUTPUT PROFILE IS QUALIFIED.** Signing a synthetic test payload with an ephemeral developer key is only unit-test evidence. The repository has no Product Owner–approved public signing-key identity or source-bound physical-device qualification grant to enroll here; private signing keys must never be committed. Runtime admission requires explicitly trusted key material from the controlled qualification-policy boundary, not a user-supplied arbitrary public key. Until independently approved enrollment exists, no target receives production physical output permission.
+
+The existing self-hosted Windows physical qualification workflows and immutable evidence
+bindings remain the only accepted path for CUDA device/driver, professional
+Media I/O/SDI, native SDK, real output scan-out, exact color/cadence,
+synchronized audio, reference SSD throughput, long soak, timing and recovery.
+The 2026-10-20 [ten-minute SSD playback run](https://github.com/DaveBeusing/rtaime/actions/runs/39499344840)
+at source `a66992004a9b5f6b3c836961aa0b7983d7c9a6d7` reported **FAIL**
+for the 1080p59.94 reference case: 1,966 missed slots and a retained
+timing/observer P95 of 937 ms; cleanup reported PASS. It cannot be used as
+physical approval or inherited by a later commit. This source change does
+not resolve that physical reference-platform performance failure.
+
+The current implemented multi-target SRT/NDI bridge is a finite software/network
+sink allocation and frame fan-out on the existing Program cadence. It has no
+approved physical target transaction, device scan-out measurement or validated
+multi-port atomicity. The required physical qualification and public-key
+enrollment are explicitly **BLOCKED / UNVERIFIED**, not silently passed.
+
 ## Qualification workflow
 
 1. Execute the existing real reference-platform CUDA, professional Media I/O, timing/latency and recovery/soak suites on the designated self-hosted Windows hardware. Verify the resulting immutable bindings against the exact source SHA using the canonical qualification verifier. Treat missing evidence as `UNVERIFIED`.
