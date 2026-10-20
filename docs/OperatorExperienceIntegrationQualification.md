@@ -65,9 +65,12 @@ readback alone does **not** qualify the complete Program sink.
 ## One productive Window and ownership
 
 `OperatorExperienceIntegrationQualification.VerifyWindowAsync`
-executes inside the existing
-`OperatorXamlStartupTests.Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA`
-single Application/Dispatcher lifetime. It asserts:
+executes inside the independent **Visual** real-window qualification process
+of `OperatorXamlStartupTests.Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA`.
+That process retains one Application/Dispatcher lifetime and shared Owner identities
+for its complete visual/sequence/output/health journey. Other composition, interaction,
+docking and GPU qualifications execute in their own WPF testhost processes to avoid
+the previous single-fixture cumulative deadline failure. It asserts:
 
 - The one retained Operator ViewModel, media selection, monitoring, Inspector,
   output evidence, Timeline and Health owners are shared by the composed
@@ -100,7 +103,8 @@ and native GPU target checks remain active without a longer deadline.
 
 CI and Quality may retain
 `rtaime-operator-visual-<job>-<run>-<attempt>` with
-`combined-ui.json`, `interaction-ui.json` and five shell/twenty
+`combined-ui.json`, per-group `interaction-ui-<group>.json` records,
+fail-closed aggregate `interaction-ui.json`, and five shell/twenty
 owned-window PNG captures. Every actual image requires a human review.
 D3DImage video pixels may be absent in WPF capture. Retain exact source,
 runner, Windows build, adapter/driver and actual/injected DPI before a
