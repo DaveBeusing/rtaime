@@ -1,6 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -117,8 +116,6 @@ public sealed class RuntimePhysicalOutputEvidenceTests
             Verify(Observed() with { SourceCommit = new string('b', 40) }, Now).Code);
         Assert.Equal("runtime.qualification.device_or_format_changed",
             Verify(Observed() with {
-                Format = QualifiedFormat with { }
-            } with {
                 Format = new VideoFormat(1920, 1080, FrameRate.Fps59_94,
                     PixelFormat.Rgba8, ScanMode.Progressive,
                     ColorDescription.Rec709FullRgba8)
