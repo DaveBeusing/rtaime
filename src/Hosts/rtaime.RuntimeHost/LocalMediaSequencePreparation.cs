@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Diagnostics;
 using System.Security.Cryptography;
+using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
@@ -55,7 +56,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     private CleanedSequencePreparation? _sequenceCleanedAfterFault;
     private sealed record CleanedSequencePreparation(
         Guid SequenceId, ulong AuthoringRevision,
-        string PreparedExecutionId, ulong InitialGeneration);
+        string PreparedExecutionId, ulong InitialGeneration, string ProtocolVersion);
     private const long SequenceTicksPerSecond = 240_000;
 
     /// <summary>Native open, fingerprint verification and preroll: management thread only, never a Program boundary.</summary>
@@ -63,11 +64,15 @@ public sealed partial class LocalMediaDeckRuntimeService
         PreparedExecutionContract execution,
         SequenceRuntimePositionMap map,
         IReadOnlyList<SequenceMediaOwnerRequest> sources,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string protocolVersion = SequencePreparationContract.Version)
     {
         ArgumentNullException.ThrowIfNull(execution);
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(sources);
+        if (!SequencePreparationContract.IsSupportedVersion(protocolVersion) ||
+            sources.Count > SequencePreparationContract.MaximumOwnersForVersion(protocolVersion))
+            throw new ArgumentException("The requested sequence owner set exceeds its protocol envelope.", nameof(sources));
         lock (_management)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -104,7 +109,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 var ready = new PreparedSequenceMedia(execution.PreparedExecutionId,
                     execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision.Value,
                     map.SequenceId, map.AuthoringRevision, map.Generation, map.Generation,
-                    0, staged.ToArray());
+                    0, staged.ToArray(), protocolVersion);
                 lock (_sequenceGate)
                 {
                     _sequenceOwners = ready;
@@ -278,7 +283,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     lock (_sequenceGate)
                         _sequenceCleanedAfterFault = new(original.SequenceId,
                             original.AuthoringRevision, original.PreparedExecution.ToString(),
-                            original.InitialGeneration);
+                            original.InitialGeneration, original.ProtocolVersion);
                 return new(false, sequenceId, authoringRevision, next.Generation,
                     next.LoopPass, 0, new(cleaned ? "runtime.sequence.reposition_failed" :
                     "runtime.sequence.cleanup_quarantined",
@@ -465,7 +470,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         PreparedExecutionId PreparedExecution, Identity AuthorityStateId,
         ulong AuthorityRevision, Guid SequenceId, ulong AuthoringRevision,
         ulong InitialGeneration, ulong Generation, ulong LoopPass,
-        SequenceMediaDecodeOwner[] Owners);
+        SequenceMediaDecodeOwner[] Owners, string ProtocolVersion = SequencePreparationContract.Version);
 
     private sealed class SequenceMediaDecodeOwner(
         SequenceMediaOwnerRequest request, FileStream identityGuard,
