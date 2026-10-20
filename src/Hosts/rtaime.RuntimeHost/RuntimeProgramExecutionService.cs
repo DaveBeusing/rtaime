@@ -1106,19 +1106,34 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
 						var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
 						programSinkId = programSink;
-						var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
-							?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
-						committedSource = programBinding.MediaSourceId
+						// Keep the exact committed binding cardinalities while avoiding a
+						// captured predicate and preview array on every Program boundary.
+						MediaSourceId? programSource = null;
+						MediaSourceId? previewSource = null;
+						var programBindingCount = 0;
+						var previewBindingCount = 0;
+						foreach (var binding in execution.PreparedExecution.Bindings)
+						{
+							if (binding.MediaSinkId == programSink)
+							{
+								programBindingCount++;
+								programSource = binding.MediaSourceId;
+							}
+							if (binding.OutputRoleId is null &&
+							binding.MediaSourceId is { } sourceId &&
+							binding.MediaSinkId is not null)
+							{
+								previewBindingCount++;
+								previewSource = sourceId;
+							}
+						}
+						if (programBindingCount != 1)
+							throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
+						committedSource = programSource
 							?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
-						var previewBindings = execution.PreparedExecution.Bindings
-							.Where(binding =>
-								binding.OutputRoleId is null &&
-								binding.MediaSourceId is not null &&
-								binding.MediaSinkId is not null)
-							.ToArray();
-						if (previewBindings.Length != 1)
+						if (previewBindingCount != 1)
 							throw new InvalidOperationException("Committed execution must contain exactly one Preview route binding.");
-						committedPreviewSource = previewBindings[0].MediaSourceId!.Value;
+						committedPreviewSource = previewSource!.Value;
 						programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
 						routedAudioSource = _audio.ResolveAudioSource(committedSource);
 						avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
