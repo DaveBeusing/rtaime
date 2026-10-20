@@ -377,6 +377,65 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 		}
 	}
 
+
+    [Fact]
+    public void Clean_shutdown_evidence_is_pending_until_persisted_and_marked_clean()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "rtaime-session-qualification", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "session.json");
+        try
+        {
+            Assert.False(SessionClosedCleanly(path));
+            File.WriteAllText(path, "{");
+            Assert.False(SessionClosedCleanly(path));
+            File.WriteAllText(path, "{\"CleanShutdown\":false}");
+            Assert.False(SessionClosedCleanly(path));
+            File.WriteAllText(path, "{\"CleanShutdown\":true}");
+            Assert.True(SessionClosedCleanly(path));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void Independent_startup_evidence_requires_all_current_session_groups_and_fails_closed()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-qualification", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var aggregate = Path.Combine(root, "interaction-ui.json");
+        void Publish(string group, bool fail = false) =>
+            WriteQualificationEvidenceAtRoot(root, group, [], [], fail
+                ? [new InvalidOperationException("Injected phase failure.")]
+                : [], timedOut: false);
+        string Status()
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(aggregate));
+            return document.RootElement.GetProperty("status").GetString()!;
+        }
+        try
+        {
+            Publish("Composition");
+            Assert.Equal("INCOMPLETE", Status());
+            using (var document = JsonDocument.Parse(File.ReadAllText(aggregate)))
+                Assert.Contains(document.RootElement.GetProperty("missingGroups").EnumerateArray(),
+                    missing => missing.GetString() == "Visual");
+            foreach (var group in QualificationGroups.Where(group => group != "Composition"))
+                Publish(group);
+            Assert.Equal("PASS", Status());
+            Publish("Docking", fail: true);
+            Assert.Equal("FAILED", Status());
+            Publish("Docking");
+            Assert.Equal("PASS", Status());
+
+            // A previous test process cannot satisfy the active process's matrix.
+            File.WriteAllText(Path.Combine(root, "interaction-ui-visual.json"),
+                "{\"session\":\"stale-qualification\"}");
+            Publish("Composition");
+            Assert.Equal("INCOMPLETE", Status());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
 	[Fact]
 	public async Task Windows_Operator_executable_shows_its_real_window_and_exits_cleanly()
 	{
@@ -548,7 +607,13 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
     {
         var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
         if (string.IsNullOrWhiteSpace(evidenceRoot)) return;
+        WriteQualificationEvidenceAtRoot(evidenceRoot, group, phases, surfaces, failures, timedOut);
+    }
 
+    private static void WriteQualificationEvidenceAtRoot(
+        string evidenceRoot, string group, List<object> phases, OperatorDrawingSurface[] surfaces,
+        List<Exception> failures, bool timedOut)
+    {
         lock (QualificationEvidenceLock)
         {
             Directory.CreateDirectory(evidenceRoot);
