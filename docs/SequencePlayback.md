@@ -233,6 +233,16 @@ the caller. **This is an internal decoder-to-compositor input boundary,
 not committed Preview or Program output.** Graphics still require their
 authoritative output/compositor connection, and the current isolated
 reference GPU/PCM composer has not been made a Program sink.
+Authored media gaps with zero selected native owners are now composed as
+black GPU frames and exact 48-kHz silent sample windows through the existing
+AudioProductionEngine; this remains non-authoritative without the output hook.
+
+External-control native preparation uses a dedicated, bounded single-attempt
+gRPC request deadline (at least 45 seconds, or a longer configured client
+limit) instead of the ordinary five-second interaction deadline. Lost
+preparation responses are **not automatically retried** because native
+resource staging is not safely replayable. This does not change the
+deadline for ordinary control mutations.
 
 States `PREPARED`, `REJECTED`, `STALE`, and `CANCELED` describe
 the **native preparation lifecycle only**. In particular, they never
