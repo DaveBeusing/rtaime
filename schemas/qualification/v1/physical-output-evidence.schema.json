@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rtaime.local/schemas/qualification/v1/physical-output-evidence.schema.json",
+  "$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "title": "rtaime signed physical output qualification evidence 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "SchemaVersion",
+    "QualificationStatus",
+    "EvidenceId",
+    "SourceCommit",
+    "ProviderId",
+    "DeviceIdentity",
+    "DriverIdentity",
+    "TargetId",
+    "Transport",
+    "Width",
+    "Height",
+    "FrameRateNumerator",
+    "FrameRateDenominator",
+    "PixelFormat",
+    "ScanMode",
+    "Primaries",
+    "Transfer",
+    "Matrix",
+    "Range",
+    "BitDepth",
+    "Alpha",
+    "Authority",
+    "ManagedBudgetBytes",
+    "GpuBudgetBytes",
+    "NativeBudgetBytes",
+    "MaximumSurfaces",
+    "QualifiedAtUtc",
+    "ValidUntilUtc",
+    "ScanoutPassed",
+    "ColorAccuracyPassed",
+    "FrameCadencePassed",
+    "AudioVideoSyncPassed",
+    "RecoveryPassed",
+    "LongSoakPassed"
+  ],
+  "properties": {
+    "SchemaVersion": {
+      "const": "1.0"
+    },
+    "QualificationStatus": {
+      "const": "PASS"
+    },
+    "EvidenceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "SourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "ProviderId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "DeviceIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "DriverIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "TargetId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "Transport": {
+      "enum": [
+        2,
+        3,
+        4
+      ]
+    },
+    "Width": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "Height": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "FrameRateNumerator": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "FrameRateDenominator": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "PixelFormat": {
+      "const": 1
+    },
+    "ScanMode": {
+      "const": 1
+    },
+    "Primaries": {
+      "enum": [
+        1
+      ]
+    },
+    "Transfer": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "Matrix": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "Range": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "BitDepth": {
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 32
+    },
+    "Alpha": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "Authority": {
+      "const": 1
+    },
+    "ManagedBudgetBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "GpuBudgetBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "NativeBudgetBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "MaximumSurfaces": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "QualifiedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ValidUntilUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ScanoutPassed": {
+      "const": true
+    },
+    "ColorAccuracyPassed": {
+      "const": true
+    },
+    "FrameCadencePassed": {
+      "const": true
+    },
+    "AudioVideoSyncPassed": {
+      "const": true
+    },
+    "RecoveryPassed": {
+      "const": true
+    },
+    "LongSoakPassed": {
+      "const": true
+    }
+  }
+}
