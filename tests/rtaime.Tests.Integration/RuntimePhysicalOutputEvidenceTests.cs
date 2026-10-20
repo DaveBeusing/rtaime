@@ -34,14 +34,19 @@ public sealed class RuntimePhysicalOutputEvidenceTests
         Source, "provider.sdi", "board.001", "driver.24.1",
         "connector.1", RuntimeOutputTransportKind.Sdi, QualifiedFormat);
 
-    private static RuntimeResourceCapabilityProfile Profile(long nativeBudget = 256_000_000) =>
+    private static RuntimeResourceCapabilityProfile Profile(
+        long nativeBudget = 256_000_000,
+        string? sourceCommit = null,
+        string? driverIdentity = null) =>
         new("provider.sdi", "board.001", "fixture-signed-qualification",
             [QualifiedFormat], ["connector.1"], 2, 2, 4,
             256_000_000, 256_000_000, nativeBudget, true,
             outputCapabilities:
                 [new RuntimeOutputTargetCapability("connector.1",
                     RuntimeOutputTransportKind.Sdi, [QualifiedFormat],
-                    "fixture-signed-qualification")]);
+                    "fixture-signed-qualification")],
+            activeSourceCommit: sourceCommit ?? Source,
+            activeDriverIdentity: driverIdentity ?? "driver.24.1");
 
     private static RuntimeResourceCapacityRequest Candidate() =>
         new(QualifiedFormat, 0, 0,
@@ -74,6 +79,14 @@ public sealed class RuntimePhysicalOutputEvidenceTests
             [verified.Capability!]);
         Assert.True(admitted.Admitted, admitted.Detail);
         Assert.Equal(1920L * 1080 * 4 * 2, admitted.RequiredNativeBytes);
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(
+                Profile(sourceCommit: new string('b', 40)),
+                Candidate(), [verified.Capability!]).Code);
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(
+                Profile(driverIdentity: "driver.25"),
+                Candidate(), [verified.Capability!]).Code);
 
         Assert.Equal("runtime.admission.native_budget",
             RuntimeResourceCapacityAdmission.Evaluate(Profile(nativeBudget: 1),
