@@ -314,6 +314,53 @@ public sealed class LocalMediaResourceLedgerTests
         Assert.Equal(0, ledger.Snapshot.ReservedOwners);
     }
 
+    [Fact]
+    public void Live_provider_loss_mid_sequence_group_rolls_back_every_provisional_ticket()
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var providerId = ProviderId.New();
+        ProviderDescriptor Observe(bool available) => new(
+            ProviderContractVersion.Current, providerId, "Observed decoder",
+            available
+                ? new ProviderAvailability(ProviderAvailabilityState.Available)
+                : new ProviderAvailability(ProviderAvailabilityState.Unavailable,
+                    new Failure("device.disconnected", "Provider became unavailable.")),
+            [new ProviderCapabilityDescriptor(CapabilityId.New(), LocalMediaCapabilityKinds.Decode, [format]),
+             new ProviderCapabilityDescriptor(CapabilityId.New(), LocalMediaCapabilityKinds.MediaRoute, [format])],
+            [new ProviderResourceDescriptor(ProviderResourceId.New(), providerId,
+                LocalMediaCapabilityKinds.Decode, 3U, true),
+             new ProviderResourceDescriptor(ProviderResourceId.New(), providerId,
+                LocalMediaCapabilityKinds.MediaRoute, 3U, true)]);
+
+        // Constructor observes once; group preflight observes once; each
+        // provisional owner must be re-admitted against a fresh live snapshot.
+        var observations = 0;
+        var profile = new RuntimeResourceCapabilityProfile(
+            providerId.ToString(), "live-device", null, [format], [],
+            3, 3, 8, 1_000_000_000, 0, 0, false);
+        var ledger = new LocalMediaResourceLedger(format, 3, profile,
+            () => Observe(++observations < 4), () => false);
+        var group = Enumerable.Range(0, 2)
+            .Select(_ => new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger)))
+            .ToArray();
+
+        Assert.False(ledger.TryReserveGroup(group, out var tickets, out var rejected));
+        Assert.Empty(tickets);
+        Assert.Equal("runtime.media_resources.provider_changed", rejected?.Code);
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+        Assert.Equal(0, ledger.Snapshot.RetainedPoolOwners);
+        Assert.Equal(0L, ledger.Snapshot.KnownManagedBytes);
+
+        // The failure is fail-closed for the candidate, not a permanent
+        // corruption of ledger ownership or the committed Program.
+        observations = 0;
+        Assert.True(ledger.TryReserveGroup(group, out var admitted, out var failure),
+            failure?.Message);
+        Assert.Equal(2, admitted.Count);
+        foreach (var ticket in admitted) ticket.OwnerCompleted();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
+    }
+
     private static LocalMediaResourceIdentity IdentityFor(LocalMediaResourceLedger ledger) =>
         new(ledger.RuntimeEpoch, MediaSourceId.New(), null, null, null, LocalMediaResourcePurpose.Resident);
 }
