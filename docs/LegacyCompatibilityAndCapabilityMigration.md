@@ -3,16 +3,17 @@
 # Legacy Compatibility and Capability Migration
 
 **Decision effective:** 2026-10-20 · [canonical product scope](ProductScope.md)  
-**Read baseline:** `master` `e61ebf3313cc170999e4ff1c245407049d8ca477`  
+**Original inventory baseline:** `master` `e61ebf3313cc170999e4ff1c245407049d8ca477`  
+**Current integrated master baseline:** `cbbee8721a94ade6df771e0c2b9a92785d3a0256` (synchronized into this branch; refresh at each subsequent integration).  
 **Repository source of truth:** `DaveBeusing/rtaime`; refresh the full SHA and PR inventory before every write.  
-**State:** INVENTORIED / MIGRATION IN PROGRESS. This document does not certify a completed rename, new hardware capability, green CI or compatibility migration.
+**State:** PARTIALLY IMPLEMENTED / QUALIFICATION PENDING. The targeted internal Program execution rename and initial product-facing documentation cleanup are committed; public/serialized compatibility changes and provider-dependent scaling are not completed. No hardware support or green CI is inferred.
 
 ## Repository and quality preflight (2026-10-20)
 
-- Default/integration branch: `master`, full SHA above; 1,227 tracked blobs in the recursive tree snapshot.
-- Active non-master remote branches: none. Open pull requests: none.
+- Default/integration branch at original preflight: `master` `e61ebf3313cc170999e4ff1c245407049d8ca477`, with 1,227 tracked blobs in that recursive tree snapshot. The current branch is synchronized to the later master identified above.
+- At the original preflight, active non-master remote branches: none; open pull requests: none. The active integration branch is now `docs/product-scope-capability-migration` (do not treat the old preflight as a current PR inventory).
 - Recent feature PRs #292–#311 in the inspected batch are closed and merged. In particular, sequence preview shuttle (#310), sequence composition (#309), canvas editor (#303), mapping renderer (#301) and combined Operator qualification (#311) are integrated. No parallel shared-runtime PR was present at inspection time.
-- `Directory.Build.props` contains `VersionPrefix=0.5.40`; the project does not bump PATCH per commit. SDK `10.0.401` is pinned; `net10.0-windows` Operator remains a Windows WPF host.
+- At the original baseline `Directory.Build.props` contained `VersionPrefix=0.5.40`; current master and the synchronized branch use `0.5.41`. The project does not bump PATCH per commit. SDK `10.0.401` is pinned; `net10.0-windows` Operator remains a Windows WPF host.
 - On `master` Required Gates run [39335581204](https://github.com/DaveBeusing/rtaime/actions/runs/39335581204), `Quality`, `Security`, `Provider Smoke` and `Packaged E2E` passed, **CI failed**, and the separate release-readiness assessment failed. CI built successfully but the real WPF `OperatorXamlStartupTests.Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA` timed out on the Windows runner. Release-readiness was correctly `FAIL / NO-GO`. This is pre-existing, NOT a passing or newly fixed result.
 
 ## Reproduce the inventory
@@ -98,17 +99,19 @@ Each path is a **confirmed entry point**, not a claim that all matches in all 1,
 
 ## Implementation status / resumption
 
-| Item | Status at initial inventory |
+This register distinguishes work committed on the active branch from older inventory and runner evidence. Actual merge readiness still requires the final-head Windows gates and compatibility checks.
+
+| Item | Current verified implementation status |
 | --- | --- |
 | Full-product strategy authority | APPROVED (2026-10-20) |
-| Initial GitHub branch/PR collision inspection | COMPLETED for baseline SHA |
-| Source/compatibility/cap inventory | INITIAL CLASSIFICATION; deeper per-symbol audit needed before bulk rename |
+| Initial GitHub branch/PR collision inspection | COMPLETED for original baseline and refreshed through current master; recheck before further shared edits |
+| Source/compatibility/cap inventory | INITIAL CLASSIFICATION with path/owner/risk, historic contract boundaries and capacity-gate owners; exhaustive per-symbol and user-facing-resource audit still pending |
 | Canonical product scope | DOCUMENTED in `docs/ProductScope.md` |
-| Internal runtime/CG/AI renames | NOT STARTED |
-| Wire/persistence/endpoint migration | NOT AUTHORIZED; legacy preserved |
+| Internal runtime/CG/AI renames | `RuntimeProgramExecutionService` and `ProgramBoundaryResult` renamed with callsites and quality paths; private GPU format-array field neutralized. Runtime snapshot/CG/inference names require compatibility exposure review before migration |
+| Wire/persistence/endpoint migration | NOT AUTHORIZED; legacy protocol, Show, Source, named-pipe and Protobuf identities retained. New architecture tests guard sampled stable identities; exhaustive round-trip coverage remains an acceptance requirement |
 | Dynamic scaling beyond currently validated resource profiles | NOT IMPLEMENTED |
 | Physical high-resolution, CUDA, SDI/HDR, sequence actual sink | UNVERIFIED / as qualified in owning source |
-| Baseline CI | FAILED: Windows WPF Operator startup test timeout |
-| Baseline release-readiness | FAIL / NO-GO, consistent with failed CI |
+| Baseline CI | Original master run 39335581204 failed due to Windows WPF Operator startup timeout; no successful current-branch CI result claimed |
+| Baseline release-readiness | Original master NO-GO; current-branch release gates and physical support remain UNVERIFIED until exact-head evidence |
 
-**Resume:** refresh `master` SHA/PRs and source matches; complete a narrowly scoped first migration within its owning subsystem without touching versioned legacy IDs, add compatibility/resource regressions, fix locally attributable gate failures, then integrate serial shared docs/rename work. The next action is **a targeted source/contract inventory and enforceable legacy guard followed by a coherent Runtime internal rename in its own exclusive integration slot**. No unexecuted test or hardware qualification is represented as passed.
+**Resume:** refresh `master` SHA, open/closed PRs and any new source overlaps. Continue versioned compatibility contract classification and provider/profile admission work with domain owners; do not broaden real resource limits without reservation and failure evidence. Inspect the new `ProductScopeCompatibilityTests` with existing Architecture/Contract/Integration/Operator suites on the exact branch head, repair actual failures, and record five Required Gates before merge. The targeted Program internal rename, initial architecture guard and shared scope documentation are committed; remaining public DTO/CG/inference migrations and hardware support are **not complete**. No unexecuted test or hardware qualification is represented as passed.
