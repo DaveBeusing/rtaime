@@ -168,7 +168,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                         target = activePhase = qualificationGroup + "/" + name;
                         var started = Stopwatch.GetTimestamp();
                         var status = "FAILED";
-                        Console.WriteLine($"OPERATOR PHASE BEGIN [${qualificationGroup}] ${name}");
+                        Console.WriteLine($"OPERATOR PHASE BEGIN [{qualificationGroup}] {name}");
                         try
                         {
                             await execute();
@@ -205,7 +205,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                                     name, status, group = qualificationGroup,
                                     elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds
                                 });
-                            Console.WriteLine($"OPERATOR PHASE ${status} [${qualificationGroup}] ${name}; ${Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms");
+                            Console.WriteLine($"OPERATOR PHASE {status} [{qualificationGroup}] {name}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms");
                         }
                     }
 
@@ -301,7 +301,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 						if (window is not null)
                         {
                             target = activePhase = qualificationGroup + "/MainWindow teardown";
-                            Console.WriteLine($"OPERATOR TEARDOWN BEGIN [${qualificationGroup}]");
+                            Console.WriteLine($"OPERATOR TEARDOWN BEGIN [{qualificationGroup}]");
                             observedSurfaces = observedSurfaces
                                 .Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>())
                                 .Concat(window.Docking.FloatingWindows.Values
@@ -323,7 +323,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                             Assert.Empty(window.Docking.FloatingWindows);
                             Assert.Equal(0, window.InspectorView.InspectorSubscriptionCount);
                             Assert.All(observedSurfaces, surface => Assert.Equal(0, surface.RenderingSubscriptionBalance));
-                            Console.WriteLine($"OPERATOR TEARDOWN PASS [${qualificationGroup}]");
+                            Console.WriteLine($"OPERATOR TEARDOWN PASS [{qualificationGroup}]");
 						}
 						else if (owner is not null)
 						{
@@ -362,9 +362,9 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
         catch (TimeoutException exception)
         {
             fixtureDeadline.Cancel();
-            output.WriteLine($"Operator qualification '${qualificationGroup}' reached the 45-second fixture bound during '${activePhase}'.");
+            output.WriteLine($"Operator qualification '{qualificationGroup}' reached the 45-second fixture bound during '{activePhase}'.");
             await CaptureQualificationStacksAsync();
-            throw new TimeoutException($"Operator '${qualificationGroup}' exceeded its fixture bound during '${activePhase}'.", exception);
+            throw new TimeoutException($"Operator '{qualificationGroup}' exceeded its fixture bound during '{activePhase}'.", exception);
         }
 		finally
 		{
@@ -617,7 +617,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
         lock (QualificationEvidenceLock)
         {
             Directory.CreateDirectory(evidenceRoot);
-            var groupFile = Path.Combine(evidenceRoot, $"interaction-ui-${group.ToLowerInvariant()}.json");
+            var groupFile = Path.Combine(evidenceRoot, $"interaction-ui-{group.ToLowerInvariant()}.json");
             WriteJsonAtomically(groupFile, new
             {
                 session = QualificationSessionId,
@@ -638,7 +638,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
             var groups = new List<JsonElement>();
             foreach (var name in QualificationGroups)
             {
-                var path = Path.Combine(evidenceRoot, $"interaction-ui-${name.ToLowerInvariant()}.json");
+                var path = Path.Combine(evidenceRoot, $"interaction-ui-{name.ToLowerInvariant()}.json");
                 if (!File.Exists(path)) continue;
                 using var document = JsonDocument.Parse(File.ReadAllText(path));
                 if (document.RootElement.GetProperty("session").GetString() == QualificationSessionId)
