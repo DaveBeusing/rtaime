@@ -109,7 +109,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		var definition = LowerThird("STACKED CG");
 		fixture.Runtime.ApplyProductionCgText(definition);
 
-		var layers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+		var layers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>();
 		var bitmap = Assert.Single(layers, layer => layer.LayerId == RuntimeProgramExecutionService.BitmapGraphicsLayerId);
 		var cg = Assert.Single(layers, layer => layer.LayerId == RuntimeProgramExecutionService.ProductionCgLayerId);
 		Assert.True(bitmap.Visible);
@@ -132,7 +132,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.Equal(0.25, transformed.PositionX, 6);
 		Assert.Equal(0.20, transformed.PositionY, 6);
 		Assert.Equal(1.5, transformed.Scale, 6);
-		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>();
 		var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == RuntimeProgramExecutionService.BitmapGraphicsLayerId);
 		Assert.Equal(0.25, transformedBitmap.PositionX, 6);
 		Assert.Equal(0.20, transformedBitmap.PositionY, 6);

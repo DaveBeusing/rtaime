@@ -23,6 +23,10 @@ public sealed class ProductScopeCompatibilityTests
         Assert.Matches(@"\bclass\s+RuntimeProgramExecutionService\b", source);
         Assert.Matches(@"\bclass\s+ProgramBoundaryResult\b", source);
         Assert.Contains("public sealed record RuntimeHostSnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("public sealed record RuntimeHostGraphicsOverlaySnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("public sealed record RuntimeHostCompositingLayerSnapshot", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("public sealed record RuntimeGraphicsOverlaySnapshot", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("public sealed record RuntimeCompositingLayerSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("v1-layer-source", source, StringComparison.Ordinal);
         Assert.DoesNotMatch(@"\b(?:enum|record|class|struct)\s+V1[A-Za-z0-9_]+", source);
 

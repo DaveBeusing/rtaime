@@ -949,7 +949,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
-		(snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>()).Select(ToWire).ToArray(),
+		(snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>()).Select(ToWire).ToArray(),
 		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
 
 	private static WireReplaySnapshot ToWire(ReplayBufferSnapshot snapshot) => new(
@@ -1049,7 +1049,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
 
-	private static WireCompositingLayer ToWire(RuntimeCompositingLayerSnapshot snapshot) => new(
+	private static WireCompositingLayer ToWire(RuntimeHostCompositingLayerSnapshot snapshot) => new(
 		snapshot.LayerId,
 		(int)snapshot.Kind,
 		snapshot.Order,
@@ -1068,7 +1068,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CropBottom,
 		snapshot.ProcessingStack.Select(ToWire).ToArray());
 
-	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
+	private static WireGraphicsOverlay ToWire(RuntimeHostGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
 		snapshot.AssetWidth,

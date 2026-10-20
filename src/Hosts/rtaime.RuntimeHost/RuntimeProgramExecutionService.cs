@@ -135,7 +135,7 @@ public sealed class ProgramBoundaryResult : IDisposable
 		Volatile.Read(ref _programPixels) ?? throw new ObjectDisposedException(nameof(ProgramBoundaryResult));
 }
 
-public sealed record RuntimeGraphicsOverlaySnapshot(
+public sealed record RuntimeHostGraphicsOverlaySnapshot(
 	bool AssetLoaded,
 	string? AssetName,
 	uint AssetWidth,
@@ -152,11 +152,11 @@ public enum RuntimeCompositingLayerKind
 	ProductionCg = 3
 }
 
-public sealed record RuntimeCompositingLayerSnapshot
+public sealed record RuntimeHostCompositingLayerSnapshot
 {
 	private readonly ReadOnlyCollection<PreparedCompositingProcessingNodeState> _processingStack;
 
-	public RuntimeCompositingLayerSnapshot(
+	public RuntimeHostCompositingLayerSnapshot(
 		string layerId,
 		RuntimeCompositingLayerKind kind,
 		int order,
@@ -382,7 +382,7 @@ public sealed record RuntimeHostSnapshot(
 	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
 	IReadOnlyDictionary<MediaSourceId, RuntimeBroadcastTestPatternMode> BroadcastTestPatternModes,
 	RuntimeVisualLayerMode VisualLayerMode,
-	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
+	RuntimeHostGraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, RuntimeHostAudioInputSnapshot> AudioInputs,
 	RuntimeHostAudioProgramSnapshot AudioProgram,
 	AudioFollowVideoStatistics Audio,
@@ -393,7 +393,7 @@ public sealed record RuntimeHostSnapshot(
 	RuntimeHostAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
-	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null,
+	IReadOnlyList<RuntimeHostCompositingLayerSnapshot>? CompositingLayers = null,
 	RuntimeHostAudioProductionSnapshot? AudioProduction = null,
 	ReplayBufferSnapshot? Replay = null);
 
@@ -1529,7 +1529,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public RuntimeGraphicsOverlaySnapshot LoadGraphicsOverlay(
+	public RuntimeHostGraphicsOverlaySnapshot LoadGraphicsOverlay(
 		string assetName,
 		uint width,
 		uint height,
@@ -1565,7 +1565,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public RuntimeGraphicsOverlaySnapshot ApplyProductionCgText(ProductionCgTextDefinition definition)
+	public RuntimeHostGraphicsOverlaySnapshot ApplyProductionCgText(ProductionCgTextDefinition definition)
 	{
 		ArgumentNullException.ThrowIfNull(definition);
 		if (definition.BoxWidth > _format.Width || definition.BoxHeight > _format.Height)
@@ -1619,7 +1619,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public RuntimeGraphicsOverlaySnapshot SetGraphicsOverlay(
+	public RuntimeHostGraphicsOverlaySnapshot SetGraphicsOverlay(
 		bool visible,
 		double positionX,
 		double positionY,
@@ -1663,7 +1663,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public RuntimeGraphicsOverlaySnapshot ClearGraphicsOverlay()
+	public RuntimeHostGraphicsOverlaySnapshot ClearGraphicsOverlay()
 	{
 		lock (_boundaryCaptureGate)
 		lock (_gate)
@@ -1713,7 +1713,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerState(
+	public IReadOnlyList<RuntimeHostCompositingLayerSnapshot> SetCompositingLayerState(
 		string layerId,
 		bool visible,
 		byte opacity)
@@ -1750,7 +1750,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerTransform(
+	public IReadOnlyList<RuntimeHostCompositingLayerSnapshot> SetCompositingLayerTransform(
 		string layerId,
 		double positionX,
 		double positionY,
@@ -1836,7 +1836,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerProcessingNode(
+	public IReadOnlyList<RuntimeHostCompositingLayerSnapshot> SetCompositingLayerProcessingNode(
 		string layerId,
 		PreparedCompositingProcessingNodeState? processingNode) =>
 		SetCompositingLayerProcessingStack(
@@ -1845,7 +1845,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				? Array.Empty<PreparedCompositingProcessingNodeState>()
 				: new[] { processingNode });
 
-	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerProcessingStack(
+	public IReadOnlyList<RuntimeHostCompositingLayerSnapshot> SetCompositingLayerProcessingStack(
 		string layerId,
 		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack)
 	{
@@ -1899,7 +1899,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<RuntimeCompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
+	public IReadOnlyList<RuntimeHostCompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
 	{
 		ArgumentNullException.ThrowIfNull(orderedLayerIds);
 		lock (_boundaryCaptureGate)
@@ -3449,11 +3449,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	private RuntimeGraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe()
+	private RuntimeHostGraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe()
 	{
 		if (_operatorGraphicsAsset is not null)
 		{
-			return new RuntimeGraphicsOverlaySnapshot(
+			return new RuntimeHostGraphicsOverlaySnapshot(
 				true,
 				_operatorGraphicsAssetName,
 				_operatorGraphicsAssetWidth,
@@ -3464,7 +3464,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				_operatorGraphicsScale);
 		}
 
-		return new RuntimeGraphicsOverlaySnapshot(
+		return new RuntimeHostGraphicsOverlaySnapshot(
 			_productionCgAsset is not null,
 			_productionCgAsset is null ? null : "production-cg-text",
 			_productionCgAssetWidth,
@@ -3475,7 +3475,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			1.0);
 	}
 
-	private RuntimeGraphicsOverlaySnapshot ProductionCgOverlaySnapshotUnsafe() => new(
+	private RuntimeHostGraphicsOverlaySnapshot ProductionCgOverlaySnapshotUnsafe() => new(
 		_productionCgAsset is not null,
 		_productionCgAsset is null ? null : "production-cg-text",
 		_productionCgAssetWidth,
@@ -3485,14 +3485,14 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		_productionCgPositionY,
 		1.0);
 
-	private IReadOnlyList<RuntimeCompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
+	private IReadOnlyList<RuntimeHostCompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
 	{
-		var snapshots = new List<RuntimeCompositingLayerSnapshot>(3);
+		var snapshots = new List<RuntimeHostCompositingLayerSnapshot>(3);
 		// Dynamic visual state is a Runtime-local observational effect (for example the AI showcase)
 		// and must not be promoted into Control's authoritative compositing resource set.
 		if (_visualLayerMode == RuntimeVisualLayerMode.Static)
 		{
-			snapshots.Add(new RuntimeCompositingLayerSnapshot(
+			snapshots.Add(new RuntimeHostCompositingLayerSnapshot(
 				LegacyVisualLayerId,
 				RuntimeCompositingLayerKind.LegacyVisual,
 				_legacyVisualLayerOrder,
@@ -3505,7 +3505,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 		if (_operatorGraphicsAsset is not null)
 		{
-			snapshots.Add(new RuntimeCompositingLayerSnapshot(
+			snapshots.Add(new RuntimeHostCompositingLayerSnapshot(
 				BitmapGraphicsLayerId,
 				RuntimeCompositingLayerKind.BitmapGraphics,
 				_operatorGraphicsLayerOrder,
@@ -3526,7 +3526,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 		if (_productionCgAsset is not null)
 		{
-			snapshots.Add(new RuntimeCompositingLayerSnapshot(
+			snapshots.Add(new RuntimeHostCompositingLayerSnapshot(
 				ProductionCgLayerId,
 				RuntimeCompositingLayerKind.ProductionCg,
 				_productionCgLayerOrder,

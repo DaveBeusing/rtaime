@@ -41,7 +41,7 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime!.Snapshot.Runtime.Status);
 		Assert.Equal(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
 		Assert.DoesNotContain(
-			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>(),
+			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>(),
 			layer => layer.LayerId == RuntimeProgramExecutionService.LegacyVisualLayerId);
 
 		var alternatePreview = initial.Sources
