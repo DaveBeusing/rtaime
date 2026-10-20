@@ -218,6 +218,10 @@ public sealed partial class ControlHostIpcServer
         if (!compiled.Succeeded)
             return Error(message, "sequence.preparation.invalid",
                 "Saved sequence is unavailable or exceeds native decoder admission; inspect sequence validation.");
+        if (!SequenceExecutionCompiler.IsRuntimeCadenceCompatible(
+                compiled.Plan!.FrameRate, runtime.Format.FrameRate))
+            return Error(message, "sequence.preparation.frame_rate_mismatch",
+                "The saved sequence rate does not match the committed Runtime Program cadence; frame-rate conversion is not admitted.");
 
         // Conservatively stage every distinct native source/offset. The peak
         // interval bound alone cannot guarantee enough simultaneously retained
