@@ -391,7 +391,7 @@ public sealed record V1RuntimeHostSnapshot(
 	V1RuntimePerformanceSnapshot Performance,
 	int ActiveGpuSurfaces,
 	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
-	V1ProductionCgTextSnapshot? ProductionCgText = null,
+	ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
 	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null,
 	V1AudioProductionSnapshot? AudioProduction = null,
@@ -516,8 +516,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private int _productionCgLayerOrder = 2;
 	private int _legacyVisualLayerOrder;
 	private byte _legacyVisualLayerOpacity = byte.MaxValue;
-	private V1ProductionCgTextDefinition? _productionCgDefinition;
-	private V1ProductionCgTextSnapshot _productionCgText = V1ProductionCgTextSnapshot.Empty;
+	private ProductionCgTextDefinition? _productionCgDefinition;
+	private ProductionCgTextSnapshot _productionCgText = ProductionCgTextSnapshot.Empty;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private TimeSpan _lastFrameProcessingTime;
 	private TimeSpan _lastCompositionDuration;
@@ -1565,7 +1565,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1GraphicsOverlaySnapshot ApplyProductionCgText(V1ProductionCgTextDefinition definition)
+	public V1GraphicsOverlaySnapshot ApplyProductionCgText(ProductionCgTextDefinition definition)
 	{
 		ArgumentNullException.ThrowIfNull(definition);
 		if (definition.BoxWidth > _format.Width || definition.BoxHeight > _format.Height)
@@ -1596,7 +1596,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				_productionCgCropBottom = 0;
 				_productionCgProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 				_productionCgDefinition = definition;
-				_productionCgText = new V1ProductionCgTextSnapshot(
+				_productionCgText = new ProductionCgTextSnapshot(
 					true,
 					definition.Text,
 					definition.Typeface.Trim(),
@@ -1703,7 +1703,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			_productionCgProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 			_productionCgOpacity = byte.MaxValue;
 			_productionCgDefinition = null;
-			_productionCgText = V1ProductionCgTextSnapshot.Empty;
+			_productionCgText = ProductionCgTextSnapshot.Empty;
 			_productionCgLayerScratch.AsSpan().Clear();
 			_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
 			_productionCgLayer.Update(_productionCgLayerBuffer);
@@ -3796,7 +3796,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private static byte ClampByte(double value) =>
 		(byte)Math.Clamp((int)Math.Round(value, MidpointRounding.AwayFromZero), 0, 255);
 
-	private (int X, int Y) ResolveProductionCgOrigin(V1ProductionCgTextDefinition definition)
+	private (int X, int Y) ResolveProductionCgOrigin(ProductionCgTextDefinition definition)
 	{
 		var anchorX = checked((int)Math.Round(definition.PositionX * Math.Max(0, _format.Width - 1)));
 		var anchorY = checked((int)Math.Round(definition.PositionY * Math.Max(0, _format.Height - 1)));
@@ -3804,16 +3804,16 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		var height = checked((int)definition.BoxHeight);
 		var x = definition.Anchor switch
 		{
-			V1CgAnchor.TopLeft or V1CgAnchor.CenterLeft or V1CgAnchor.BottomLeft => anchorX,
-			V1CgAnchor.TopCenter or V1CgAnchor.Center or V1CgAnchor.BottomCenter => anchorX - (width / 2),
-			V1CgAnchor.TopRight or V1CgAnchor.CenterRight or V1CgAnchor.BottomRight => anchorX - width,
+			CgAnchor.TopLeft or CgAnchor.CenterLeft or CgAnchor.BottomLeft => anchorX,
+			CgAnchor.TopCenter or CgAnchor.Center or CgAnchor.BottomCenter => anchorX - (width / 2),
+			CgAnchor.TopRight or CgAnchor.CenterRight or CgAnchor.BottomRight => anchorX - width,
 			_ => throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor is invalid.")
 		};
 		var y = definition.Anchor switch
 		{
-			V1CgAnchor.TopLeft or V1CgAnchor.TopCenter or V1CgAnchor.TopRight => anchorY,
-			V1CgAnchor.CenterLeft or V1CgAnchor.Center or V1CgAnchor.CenterRight => anchorY - (height / 2),
-			V1CgAnchor.BottomLeft or V1CgAnchor.BottomCenter or V1CgAnchor.BottomRight => anchorY - height,
+			CgAnchor.TopLeft or CgAnchor.TopCenter or CgAnchor.TopRight => anchorY,
+			CgAnchor.CenterLeft or CgAnchor.Center or CgAnchor.CenterRight => anchorY - (height / 2),
+			CgAnchor.BottomLeft or CgAnchor.BottomCenter or CgAnchor.BottomRight => anchorY - height,
 			_ => throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor is invalid.")
 		};
 

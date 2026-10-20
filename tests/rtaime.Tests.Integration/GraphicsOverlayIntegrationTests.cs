@@ -14,6 +14,18 @@ namespace rtaime.Tests.Integration;
 
 public sealed class GraphicsOverlayIntegrationTests
 {
+    [Fact]
+    public void Production_CG_runtime_enum_migration_preserves_existing_wire_numeric_values()
+    {
+        Assert.Equal(1, (int)CgTextAlignment.Left);
+        Assert.Equal(2, (int)CgTextAlignment.Center);
+        Assert.Equal(3, (int)CgTextAlignment.Right);
+        Assert.Equal(1, (int)CgAnchor.TopLeft);
+        Assert.Equal(5, (int)CgAnchor.Center);
+        Assert.Equal(9, (int)CgAnchor.BottomRight);
+        Assert.Equal(1, (int)CgLayer.ProgramGraphics);
+    }
+
 	[Fact]
 	public async Task Graphics_overlay_preserves_alpha_position_scale_visibility_and_survives_dissolve()
 	{
@@ -826,21 +838,21 @@ public sealed class GraphicsOverlayIntegrationTests
         Assert.All(runtimeAudio.Values, input => Assert.Equal(0.375, input.Gain));
     }
 
-	private static V1ProductionCgTextDefinition LowerThird(string text) => new(
+	private static ProductionCgTextDefinition LowerThird(string text) => new(
 		text,
 		"Segoe UI",
 		"Arial",
 		48,
-		new V1CgColor(255, 255, 255, 255),
+		new CgColor(255, 255, 255, 255),
 		0.05,
 		0.90,
 		640,
 		120,
-		V1CgTextAlignment.Left,
-		V1CgAnchor.BottomLeft,
-		new V1CgPanelStyle(true, new V1CgColor(18, 23, 32, 224), 12, 24),
+		CgTextAlignment.Left,
+		CgAnchor.BottomLeft,
+		new CgPanelStyle(true, new CgColor(18, 23, 32, 224), 12, 24),
 		true,
-		V1CgLayer.ProgramGraphics,
+		CgLayer.ProgramGraphics,
 		0);
 
 	private static ControlCommandMetadata Metadata(Fixture fixture) =>

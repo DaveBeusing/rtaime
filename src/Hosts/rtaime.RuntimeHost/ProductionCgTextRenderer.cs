@@ -11,14 +11,14 @@ using DrawingPixelFormat = System.Drawing.Imaging.PixelFormat;
 
 namespace rtaime.RuntimeHost;
 
-public enum V1CgTextAlignment
+public enum CgTextAlignment
 {
 	Left = 1,
 	Center = 2,
 	Right = 3
 }
 
-public enum V1CgAnchor
+public enum CgAnchor
 {
 	TopLeft = 1,
 	TopCenter = 2,
@@ -31,37 +31,37 @@ public enum V1CgAnchor
 	BottomRight = 9
 }
 
-public enum V1CgLayer
+public enum CgLayer
 {
 	ProgramGraphics = 1
 }
 
-public readonly record struct V1CgColor(byte Red, byte Green, byte Blue, byte Alpha);
+public readonly record struct CgColor(byte Red, byte Green, byte Blue, byte Alpha);
 
-public sealed record V1CgPanelStyle(
+public sealed record CgPanelStyle(
 	bool Enabled,
-	V1CgColor Color,
+	CgColor Color,
 	float CornerRadiusPixels,
 	uint PaddingPixels);
 
-public sealed record V1ProductionCgTextDefinition(
+public sealed record ProductionCgTextDefinition(
 	string Text,
 	string Typeface,
 	string? FallbackTypeface,
 	float FontSizePixels,
-	V1CgColor Foreground,
+	CgColor Foreground,
 	double PositionX,
 	double PositionY,
 	uint BoxWidth,
 	uint BoxHeight,
-	V1CgTextAlignment Alignment,
-	V1CgAnchor Anchor,
-	V1CgPanelStyle Panel,
+	CgTextAlignment Alignment,
+	CgAnchor Anchor,
+	CgPanelStyle Panel,
 	bool Visible,
-	V1CgLayer Layer,
+	CgLayer Layer,
 	int ZOrder);
 
-public sealed record V1ProductionCgTextSnapshot(
+public sealed record ProductionCgTextSnapshot(
 	bool Active,
 	string? Text,
 	string? Typeface,
@@ -69,16 +69,16 @@ public sealed record V1ProductionCgTextSnapshot(
 	float FontSizePixels,
 	uint BoxWidth,
 	uint BoxHeight,
-	V1CgTextAlignment Alignment,
-	V1CgAnchor Anchor,
+	CgTextAlignment Alignment,
+	CgAnchor Anchor,
 	bool PanelEnabled,
 	bool Visible,
-	V1CgLayer Layer,
+	CgLayer Layer,
 	int ZOrder,
 	bool CacheHit,
 	TimeSpan RenderDuration)
 {
-	public static V1ProductionCgTextSnapshot Empty { get; } = new(
+	public static ProductionCgTextSnapshot Empty { get; } = new(
 		false,
 		null,
 		null,
@@ -86,11 +86,11 @@ public sealed record V1ProductionCgTextSnapshot(
 		0,
 		0,
 		0,
-		V1CgTextAlignment.Left,
-		V1CgAnchor.TopLeft,
+		CgTextAlignment.Left,
+		CgAnchor.TopLeft,
 		false,
 		false,
-		V1CgLayer.ProgramGraphics,
+		CgLayer.ProgramGraphics,
 		0,
 		false,
 		TimeSpan.Zero);
@@ -120,7 +120,7 @@ internal sealed class ProductionCgTextRenderer
 		}
 	}
 
-	public ProductionCgRenderResult Render(V1ProductionCgTextDefinition definition)
+	public ProductionCgRenderResult Render(ProductionCgTextDefinition definition)
 	{
 		ArgumentNullException.ThrowIfNull(definition);
 		Validate(definition);
@@ -182,7 +182,7 @@ internal sealed class ProductionCgTextRenderer
 			duration);
 	}
 
-	private static void Validate(V1ProductionCgTextDefinition definition)
+	private static void Validate(ProductionCgTextDefinition definition)
 	{
 		if (string.IsNullOrWhiteSpace(definition.Text))
 			throw new ArgumentException("Production CG text content is required.", nameof(definition));
@@ -204,7 +204,7 @@ internal sealed class ProductionCgTextRenderer
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG text alignment is invalid.");
 		if (!Enum.IsDefined(definition.Anchor))
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor is invalid.");
-		if (definition.Layer != V1CgLayer.ProgramGraphics || definition.ZOrder != 0)
+		if (definition.Layer != CgLayer.ProgramGraphics || definition.ZOrder != 0)
 			throw new NotSupportedException("The qualified Production CG path supports only the Program Graphics layer at Z-order 0.");
 		if (!float.IsFinite(definition.Panel.CornerRadiusPixels) || definition.Panel.CornerRadiusPixels is < 0 or > 64)
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG panel corner radius must be between 0 and 64 pixels.");
@@ -213,7 +213,7 @@ internal sealed class ProductionCgTextRenderer
 	}
 
 	[SupportedOSPlatform("windows")]
-	private static RenderedSurface RenderWindows(V1ProductionCgTextDefinition definition)
+	private static RenderedSurface RenderWindows(ProductionCgTextDefinition definition)
 	{
 		using var installedFonts = new InstalledFontCollection();
 		var family = ResolveTypeface(installedFonts, definition.Typeface, definition.FallbackTypeface);
@@ -254,9 +254,9 @@ internal sealed class ProductionCgTextRenderer
 		{
 			Alignment = definition.Alignment switch
 			{
-				V1CgTextAlignment.Left => StringAlignment.Near,
-				V1CgTextAlignment.Center => StringAlignment.Center,
-				V1CgTextAlignment.Right => StringAlignment.Far,
+				CgTextAlignment.Left => StringAlignment.Near,
+				CgTextAlignment.Center => StringAlignment.Center,
+				CgTextAlignment.Right => StringAlignment.Far,
 				_ => throw new InvalidOperationException("Unsupported Production CG alignment.")
 			},
 			LineAlignment = StringAlignment.Center,
@@ -333,7 +333,7 @@ internal sealed class ProductionCgTextRenderer
 		}
 	}
 
-	private static Color ToDrawingColor(V1CgColor color) =>
+	private static Color ToDrawingColor(CgColor color) =>
 		Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
 
 	[SupportedOSPlatform("windows")]
@@ -358,13 +358,13 @@ internal sealed class ProductionCgTextRenderer
 		string Typeface,
 		string? FallbackTypeface,
 		float FontSizePixels,
-		V1CgColor Foreground,
+		CgColor Foreground,
 		uint BoxWidth,
 		uint BoxHeight,
-		V1CgTextAlignment Alignment,
-		V1CgPanelStyle Panel)
+		CgTextAlignment Alignment,
+		CgPanelStyle Panel)
 	{
-		public static CgRenderKey From(V1ProductionCgTextDefinition definition) => new(
+		public static CgRenderKey From(ProductionCgTextDefinition definition) => new(
 			definition.Text,
 			definition.Typeface.Trim(),
 			string.IsNullOrWhiteSpace(definition.FallbackTypeface) ? null : definition.FallbackTypeface.Trim(),

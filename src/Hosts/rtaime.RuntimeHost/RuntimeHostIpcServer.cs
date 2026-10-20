@@ -280,25 +280,25 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 	{
 		var wire = request.Payload.Deserialize<WireProductionCgText>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Production CG text payload is required.");
-		var snapshot = runtime.ApplyProductionCgText(new V1ProductionCgTextDefinition(
+		var snapshot = runtime.ApplyProductionCgText(new ProductionCgTextDefinition(
 			wire.Text,
 			wire.Typeface,
 			wire.FallbackTypeface,
 			wire.FontSizePixels,
-			new V1CgColor(wire.Foreground.Red, wire.Foreground.Green, wire.Foreground.Blue, wire.Foreground.Alpha),
+			new CgColor(wire.Foreground.Red, wire.Foreground.Green, wire.Foreground.Blue, wire.Foreground.Alpha),
 			wire.PositionX,
 			wire.PositionY,
 			wire.BoxWidth,
 			wire.BoxHeight,
-			(V1CgTextAlignment)wire.Alignment,
-			(V1CgAnchor)wire.Anchor,
-			new V1CgPanelStyle(
+			(CgTextAlignment)wire.Alignment,
+			(CgAnchor)wire.Anchor,
+			new CgPanelStyle(
 				wire.Panel.Enabled,
-				new V1CgColor(wire.Panel.Color.Red, wire.Panel.Color.Green, wire.Panel.Color.Blue, wire.Panel.Color.Alpha),
+				new CgColor(wire.Panel.Color.Red, wire.Panel.Color.Green, wire.Panel.Color.Blue, wire.Panel.Color.Alpha),
 				wire.Panel.CornerRadiusPixels,
 				wire.Panel.PaddingPixels),
 			wire.Visible,
-			(V1CgLayer)wire.Layer,
+			(CgLayer)wire.Layer,
 			wire.ZOrder));
 		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
@@ -1032,7 +1032,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.LastSuccessfulSendUtc,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
-	private static WireProductionCgTextSnapshot ToWire(V1ProductionCgTextSnapshot snapshot) => new(
+	private static WireProductionCgTextSnapshot ToWire(ProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
 		snapshot.Text,
 		snapshot.Typeface,
