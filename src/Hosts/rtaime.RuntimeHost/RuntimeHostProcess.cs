@@ -93,7 +93,7 @@ public sealed record RuntimeHostProcessOptions(
             LocalMediaProfile = Get(args, environment, "local-media-profile", "RTAIME_LOCAL_MEDIA_PROFILE", "conservative").ToLowerInvariant() switch
             {
                 "conservative" => LocalMediaCapacityProfile.Conservative,
-                "development-four" => LocalMediaCapacityProfile.DevelopmentFour,
+                "opt-in-four" or "development-four" => LocalMediaCapacityProfile.OptInFour,
                 _ => throw new ArgumentException("Unknown local media capacity profile.")
             },
 			MaximumLocalMediaDecoders = ParsePositiveInt(Get(args, environment, "local-media-decoders", "RTAIME_LOCAL_MEDIA_DECODERS", "2"), "local-media-decoders"),
@@ -105,7 +105,7 @@ public sealed record RuntimeHostProcessOptions(
 	public void Validate()
 	{
 		if (!Enum.IsDefined(LocalMediaProfile) || MaximumLocalMediaDecoders < 1 ||
-            MaximumLocalMediaDecoders > (LocalMediaProfile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2))
+            MaximumLocalMediaDecoders > (LocalMediaProfile == LocalMediaCapacityProfile.OptInFour ? 4 : 2))
 			throw new ArgumentOutOfRangeException(nameof(MaximumLocalMediaDecoders));
 		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
 			throw new ArgumentException("Runtime source identities must not be empty.");

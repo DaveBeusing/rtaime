@@ -72,7 +72,7 @@ Each path is a **confirmed entry point**, not a claim that all matches in all 1,
 
 | Source / current behavior | Type and migration owner | Target acceptance / rejection |
 | --- | --- | --- |
-| `LocalMediaResourceLedger` / `RuntimeHostProcessOptions`: 1–2 conservative owners; explicit `development-four` up to 4 | `CAPABILITY_GATE` + `VALIDATED_RESOURCE_BOUND` · RuntimeHost | Profile-resolved number of native decoder/pool owners; atomic group reservation, measured per-owner budget, cleanup quarantine, native pressure and no Program eviction. No arbitrary unlimited owner count |
+| `LocalMediaResourceLedger` / `RuntimeHostProcessOptions`: 1–2 conservative owners; `opt-in-four` up to 4 (`development-four` compatibility input) | `CAPABILITY_GATE` + `VALIDATED_RESOURCE_BOUND` · RuntimeHost | Profile-resolved number of native decoder/pool owners; atomic group reservation, measured per-owner budget, cleanup quarantine, native pressure and no Program eviction. No arbitrary unlimited owner count |
 | `LocalMediaDeckRuntimeService`: configured/bounded source registry (documented up to 8) | `CAPABILITY_GATE` · RuntimeHost | Dynamic authoritative Source IDs and bounded registry keyed to validated owner/provider capacity; legacy A/B remains readable |
 | `SequencePreparationContract.MaximumNativeOwners=4` | `COMPATIBILITY_ONLY` version / `CAPABILITY_GATE` capacity · Control/Runtime | Negotiate new capacity separately from the old serialized version; old contracts remain bounded and round-trippable |
 | `OutputCanvasContract`: 16 canvases, 128 surfaces, 32 bindings, 256 ops, dimension 16384, logical pixels 67,108,864 and JSON 262,144 bytes | `VALIDATED_RESOURCE_BOUND` until provenance established · Control | Differentiate authoring/document transport limits from mapped physical resource limits and profile support; avoid blanket raising old wire limits |
@@ -106,6 +106,10 @@ The product-neutral host/service terminology is now applied to the **implementat
 **Remaining domain owners:** Provider/Runtime admission for more decoder sessions and native sequence owners; Output role/mapping allocation across additional targets/surfaces and frame/VRAM budgets; per-format high-resolution, color, SDR/HDR, NDI/SDI and hardware qualification. Migrate old contract versions only with explicit version negotiation, fixtures, read/write tests and approved breaking-change policy. These remain `CAPABILITY_GATE`, `VALIDATED_RESOURCE_BOUND` or `HARDWARE_UNVERIFIED` rather than purportedly completed scale features.
 
 **Qualification:** A final-head Windows Release build, full test run, five Required Gates, compatibility round trips and physical target evidence must be recorded separately. A successful naming refactor does not qualify additional capacities, sequence Program output or external hardware.
+
+### File decoder profile terminology and compatibility
+
+The finite opt-in four-owner software profile is now named `LocalMediaCapacityProfile.OptInFour` and selected by `--local-media-profile=opt-in-four` (or the matching environment value). Legacy `development-four` remains an **input alias** so existing scripts and deployments continue to parse, with regression coverage proving the same enum value and maximum owner count. Default `conservative` stays at up to two owners. No new capacity is advertised: beyond-profile rejection, reservation ownership, quarantine, preflight pressure and Program safety are unchanged. The next capacity expansion must be backed by measured RAM/native/GPU/SSD profiles and correct group preflight/commit/rollback.
 
 ## Implementation status / resumption
 

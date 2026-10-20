@@ -33,7 +33,7 @@ public sealed class ProductScopeCompatibilityTests
     {
         var root = RepositorySnapshot.Load().Root;
         var sourceRoot = Path.Combine(root, "src");
-        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult", "ReferenceV1", "V1Formats", "V1RuntimeHostSnapshot", "V1VisualLayerMode", "V1AudioProductionSnapshot", "V1ProductionCgTextDefinition" };
+        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult", "ReferenceV1", "V1Formats", "V1RuntimeHostSnapshot", "V1VisualLayerMode", "V1AudioProductionSnapshot", "V1ProductionCgTextDefinition", "DevelopmentFour" };
         var violations = new List<string>();
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))

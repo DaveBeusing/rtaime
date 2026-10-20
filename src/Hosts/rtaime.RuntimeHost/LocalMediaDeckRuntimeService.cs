@@ -80,7 +80,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             throw new InvalidOperationException(failure!.Value.Message);
         session.AttachResources(ticket!);
     }
-    internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.DevelopmentFour;
+    internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.OptInFour;
 
     public void AdmitBoundary(RuntimeProgramExecutionService runtime, ulong programSlot)
     {
@@ -100,7 +100,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     internal LocalMediaResourceLedger ResourceLedger => _ledger;
     private bool SourceAllowed(MediaSourceId source) =>
         _allowedSources is not null ? _allowedSources.Contains(source) :
-        _knownSources.Count < (_profile == LocalMediaCapacityProfile.DevelopmentFour ? 8 : 2) || _knownSources.Contains(source);
+        _knownSources.Count < (_profile == LocalMediaCapacityProfile.OptInFour ? 8 : 2) || _knownSources.Contains(source);
 
     public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;

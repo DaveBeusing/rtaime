@@ -29,7 +29,7 @@ public sealed class ProductionIpcIntegrationTests
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
         var options = RuntimeHostProcessOptions.Default with {
             ListenEndpoint = Endpoint("media-resources"), MaximumLocalMediaDecoders = 4,
-            LocalMediaProfile = LocalMediaCapacityProfile.DevelopmentFour };
+            LocalMediaProfile = LocalMediaCapacityProfile.OptInFour };
         using var stop = new CancellationTokenSource();
         var process = new RuntimeHostProcess(options);
         var run = process.RunAsync(stop.Token);

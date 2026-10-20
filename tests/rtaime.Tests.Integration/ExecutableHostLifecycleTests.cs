@@ -21,9 +21,15 @@ public sealed class ExecutableHostLifecycleTests
         Assert.Throws<ArgumentOutOfRangeException>(() => (RuntimeHostProcessOptions.Default with { MaximumLocalMediaDecoders = 4 }).Validate());
         var options = RuntimeHostProcessOptions.Load(
             ["--local-media-profile=development-four", "--local-media-decoders=4"], _ => null);
-        Assert.Equal(LocalMediaCapacityProfile.DevelopmentFour, options.LocalMediaProfile);
+        Assert.Equal(LocalMediaCapacityProfile.OptInFour, options.LocalMediaProfile);
         Assert.Equal(4, options.MaximumLocalMediaDecoders);
         options.Validate();
+        var canonical = RuntimeHostProcessOptions.Load(
+            ["--local-media-profile=opt-in-four", "--local-media-decoders=4"], _ => null);
+        Assert.Equal(LocalMediaCapacityProfile.OptInFour, canonical.LocalMediaProfile);
+        Assert.Equal(2, (int)canonical.LocalMediaProfile);
+        Assert.Equal(options.MaximumLocalMediaDecoders, canonical.MaximumLocalMediaDecoders);
+        canonical.Validate();
         Assert.Throws<ArgumentOutOfRangeException>(() => (options with { MaximumLocalMediaDecoders = 5 }).Validate());
     }
 

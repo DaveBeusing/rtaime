@@ -11,7 +11,7 @@ public sealed class LocalMediaResourceLedgerTests
     [Theory]
     [InlineData(1, LocalMediaCapacityProfile.Conservative)]
     [InlineData(2, LocalMediaCapacityProfile.Conservative)]
-    [InlineData(4, LocalMediaCapacityProfile.DevelopmentFour)]
+    [InlineData(4, LocalMediaCapacityProfile.OptInFour)]
     public void Concurrent_intents_never_exceed_profile_or_release_twice(int capacity, LocalMediaCapacityProfile profile)
     {
         var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, capacity, profile);
@@ -115,7 +115,7 @@ public sealed class LocalMediaResourceLedgerTests
     public void Four_decoders_require_the_explicit_development_profile()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 5, LocalMediaCapacityProfile.DevelopmentFour));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 5, LocalMediaCapacityProfile.OptInFour));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class LocalMediaResourceLedgerTests
     public void Sequence_group_is_atomic_and_cannot_displace_Program_or_retained_pools()
     {
         var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
-            LocalMediaCapacityProfile.DevelopmentFour);
+            LocalMediaCapacityProfile.OptInFour);
         var program = IdentityFor(ledger);
         Assert.True(ledger.TryReserve(Guid.NewGuid(), program, out var committed, out _));
         committed!.RetainPoolLease();
@@ -184,7 +184,7 @@ public sealed class LocalMediaResourceLedgerTests
     public void Sequence_group_rollback_does_not_charge_partial_admissions_or_weaken_optional_exclusion()
     {
         var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
-            LocalMediaCapacityProfile.DevelopmentFour);
+            LocalMediaCapacityProfile.OptInFour);
         var optional = IdentityFor(ledger) with { Purpose = LocalMediaResourcePurpose.Analysis };
         Assert.True(ledger.TryReserve(Guid.NewGuid(), optional, out var occupied, out _));
         var group = Enumerable.Range(0, 3).Select(_ =>
@@ -204,7 +204,7 @@ public sealed class LocalMediaResourceLedgerTests
     public void Sequence_group_rejects_stale_identity_without_retaining_any_reserved_part()
     {
         var ledger = new LocalMediaResourceLedger(VideoFormat.Hd1080p50Rgba8, 4,
-            LocalMediaCapacityProfile.DevelopmentFour);
+            LocalMediaCapacityProfile.OptInFour);
         var ids = new[]
         {
             new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger)),
