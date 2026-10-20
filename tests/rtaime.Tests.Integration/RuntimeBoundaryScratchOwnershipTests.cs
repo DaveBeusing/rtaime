@@ -21,7 +21,7 @@ public sealed class RuntimeBoundaryScratchOwnershipTests
     [InlineData(true)]
     public async Task Program_and_Aux_reuse_bounded_frame_maps_without_retaining_a_consumer_lease(bool use5994)
     {
-        await using var runtime = CreateRuntime(use5994);
+        await using var runtime = await CreateRuntimeAsync(use5994);
         var frames = FrameScratch(runtime);
         var gpu = GpuScratch(runtime);
         Assert.Empty(frames);
@@ -73,7 +73,7 @@ public sealed class RuntimeBoundaryScratchOwnershipTests
     [Fact]
     public async Task Invalid_layer_after_source_upload_releases_scratch_and_allows_a_clean_retry()
     {
-        await using var runtime = CreateRuntime(use5994: false);
+        await using var runtime = await CreateRuntimeAsync(use5994: false);
         var frames = FrameScratch(runtime);
         var gpu = GpuScratch(runtime);
         var visualModeField = typeof(RuntimeProgramExecutionService)
@@ -108,7 +108,7 @@ public sealed class RuntimeBoundaryScratchOwnershipTests
             typeof(RuntimeProgramExecutionService).GetField("_boundaryGpuScratch",
                 BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(runtime));
 
-    private static RuntimeProgramExecutionService CreateRuntime(bool use5994)
+    private static async ValueTask<RuntimeProgramExecutionService> CreateRuntimeAsync(bool use5994)
     {
         var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var sourceA = new ProductionSourceId(Identity.New());
@@ -143,7 +143,7 @@ public sealed class RuntimeBoundaryScratchOwnershipTests
         }
         catch
         {
-            runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await runtime.DisposeAsync();
             throw;
         }
     }
