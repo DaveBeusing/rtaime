@@ -149,6 +149,44 @@ public sealed class SequenceFrameCompositionIntegrationTests
     }
 
     [Fact]
+    public void Authored_black_gap_materializes_real_gpu_black_and_exact_silent_pcm_without_native_owners()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var decks = new LocalMediaDeckRuntimeService(Format, 2);
+        var backend = new ManagedReferenceGpuBackend();
+        using var gpu = new GpuProcessingProvider(backend);
+        gpu.Start();
+        var logicalA = MediaSourceId.New();
+        var logicalB = MediaSourceId.New();
+        var composer = new SequenceFrameComposition(gpu, Mixer(logicalA, logicalB),
+            Format, MediaSourceId.New(), maximumVideoLayers: 2, maximumAudioTracks: 2);
+        var pcm = Enumerable.Repeat(0.4f, 1920).ToArray();
+        var success = composer.TryCompose(decks, Guid.NewGuid(), 7,
+            new SequenceRuntimePosition(0, 1, 0),
+            ReadOnlySpan<SequenceMediaFrameLease?>.Empty,
+            ReadOnlySpan<SequenceVideoCompositionLayer>.Empty,
+            ReadOnlySpan<SequenceAudioCompositionTrack>.Empty,
+            new FrameTiming(100, 0, new Timebase(1, 50)),
+            0, 960, pcm, out var video, out var audio, out var failure);
+        Assert.True(success, failure?.Message);
+        using (video)
+        {
+            Assert.NotNull(video);
+            var rgba = gpu.Readback(video);
+            Assert.Equal(RgbaFrameBuffer.RequiredByteLength(Format), rgba.Length);
+            Assert.Equal((byte)0, rgba[0]);
+            Assert.Equal((byte)0, rgba[1]);
+            Assert.Equal((byte)0, rgba[2]);
+            Assert.Equal((byte)255, rgba[3]);
+        }
+        Assert.NotNull(audio);
+        Assert.Equal(0, audio.Value.ActiveSourceCount);
+        Assert.All(pcm, sample => Assert.Equal(0f, sample));
+        Assert.Equal(0, backend.ActiveAllocationCount);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
+    [Fact]
     public void Native_generation_replacement_rejects_old_frame_group_without_gpu_or_audio_output()
     {
         if (!OperatingSystem.IsWindows()) return;
