@@ -21,6 +21,8 @@ public sealed record RuntimePhysicalOutputEvidence(
     string ProviderId,
     string DeviceIdentity,
     string DriverIdentity,
+    string ProviderSdkIdentity,
+    string FirmwareIdentity,
     string TargetId,
     RuntimeOutputTransportKind Transport,
     uint Width,
@@ -58,6 +60,8 @@ public sealed record RuntimePhysicalOutputObservation(
     string ProviderId,
     string DeviceIdentity,
     string DriverIdentity,
+    string ProviderSdkIdentity,
+    string FirmwareIdentity,
     string TargetId,
     RuntimeOutputTransportKind Transport,
     VideoFormat Format);
@@ -74,6 +78,8 @@ public sealed class RuntimeVerifiedPhysicalOutputCapability
         ProviderId = evidence.ProviderId;
         DeviceIdentity = evidence.DeviceIdentity;
         DriverIdentity = evidence.DriverIdentity;
+        ProviderSdkIdentity = evidence.ProviderSdkIdentity;
+        FirmwareIdentity = evidence.FirmwareIdentity;
         TargetId = evidence.TargetId;
         Transport = evidence.Transport;
         Format = format;
@@ -89,6 +95,8 @@ public sealed class RuntimeVerifiedPhysicalOutputCapability
     public string ProviderId { get; }
     public string DeviceIdentity { get; }
     public string DriverIdentity { get; }
+    public string ProviderSdkIdentity { get; }
+    public string FirmwareIdentity { get; }
     public string TargetId { get; }
     public RuntimeOutputTransportKind Transport { get; }
     public VideoFormat Format { get; }
@@ -169,6 +177,8 @@ public static class RuntimePhysicalOutputEvidenceVerifier
         if (evidence is null || evidence.SchemaVersion != "1.0" ||
             evidence.QualificationStatus != "PASS" ||
             string.IsNullOrWhiteSpace(evidence.EvidenceId) ||
+            string.IsNullOrWhiteSpace(evidence.ProviderSdkIdentity) ||
+            string.IsNullOrWhiteSpace(evidence.FirmwareIdentity) ||
             !Regex.IsMatch(evidence.SourceCommit ?? "", "^[0-9a-f]{40}$",
                 RegexOptions.CultureInvariant) ||
             evidence.Transport is RuntimeOutputTransportKind.Software ||
@@ -210,6 +220,8 @@ public static class RuntimePhysicalOutputEvidenceVerifier
             !string.Equals(evidence.ProviderId, observed.ProviderId, StringComparison.Ordinal) ||
             !string.Equals(evidence.DeviceIdentity, observed.DeviceIdentity, StringComparison.Ordinal) ||
             !string.Equals(evidence.DriverIdentity, observed.DriverIdentity, StringComparison.Ordinal) ||
+            !string.Equals(evidence.ProviderSdkIdentity, observed.ProviderSdkIdentity, StringComparison.Ordinal) ||
+            !string.Equals(evidence.FirmwareIdentity, observed.FirmwareIdentity, StringComparison.Ordinal) ||
             !string.Equals(evidence.TargetId, observed.TargetId, StringComparison.Ordinal) ||
             evidence.Transport != observed.Transport || format != observed.Format)
             return Deny("runtime.qualification.device_or_format_changed");

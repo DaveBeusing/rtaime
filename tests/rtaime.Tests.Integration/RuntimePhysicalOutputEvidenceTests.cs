@@ -17,7 +17,7 @@ public sealed class RuntimePhysicalOutputEvidenceTests
 
     private static RuntimePhysicalOutputEvidence Evidence() => new(
         "1.0", "PASS", "fixture-signed-qualification", Source,
-        "provider.sdi", "board.001", "driver.24.1", "connector.1",
+        "provider.sdi", "board.001", "driver.24.1", "sdk.4.2", "firmware.8.1", "connector.1",
         RuntimeOutputTransportKind.Sdi,
         QualifiedFormat.Width, QualifiedFormat.Height,
         QualifiedFormat.FrameRate.Numerator, QualifiedFormat.FrameRate.Denominator,
@@ -31,7 +31,7 @@ public sealed class RuntimePhysicalOutputEvidenceTests
         true, true, true, true, true, true);
 
     private static RuntimePhysicalOutputObservation Observed() => new(
-        Source, "provider.sdi", "board.001", "driver.24.1",
+        Source, "provider.sdi", "board.001", "driver.24.1", "sdk.4.2", "firmware.8.1",
         "connector.1", RuntimeOutputTransportKind.Sdi, QualifiedFormat);
 
     private static RuntimeResourceCapabilityProfile Profile(
@@ -46,7 +46,9 @@ public sealed class RuntimePhysicalOutputEvidenceTests
                     RuntimeOutputTransportKind.Sdi, [QualifiedFormat],
                     "fixture-signed-qualification")],
             activeSourceCommit: sourceCommit ?? Source,
-            activeDriverIdentity: driverIdentity ?? "driver.24.1");
+            activeDriverIdentity: driverIdentity ?? "driver.24.1",
+            activeProviderSdkIdentity: "sdk.4.2",
+            activeFirmwareIdentity: "firmware.8.1");
 
     private static RuntimeResourceCapacityRequest Candidate() =>
         new(QualifiedFormat, 0, 0,
@@ -123,6 +125,10 @@ public sealed class RuntimePhysicalOutputEvidenceTests
 
         Assert.Equal("runtime.qualification.device_or_format_changed",
             Verify(Observed() with { DriverIdentity = "driver.25" }, Now).Code);
+        Assert.Equal("runtime.qualification.device_or_format_changed",
+            Verify(Observed() with { ProviderSdkIdentity = "sdk.4.3" }, Now).Code);
+        Assert.Equal("runtime.qualification.device_or_format_changed",
+            Verify(Observed() with { FirmwareIdentity = "firmware.8.2" }, Now).Code);
         Assert.Equal("runtime.qualification.device_or_format_changed",
             Verify(Observed() with { TargetId = "connector.2" }, Now).Code);
         Assert.Equal("runtime.qualification.device_or_format_changed",

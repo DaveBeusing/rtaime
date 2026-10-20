@@ -96,6 +96,10 @@ True professional output requires physical driver/SDK/display evidence and
 measurements on the identified reference platform, with `HARDWARE UNVERIFIED`
 until recorded separately.
 
+## Signed physical target qualification
+
+The exact per-target hardware proof and runtime gate are specified in [Hardware-qualified output profiles](HardwareQualifiedOutputProfiles.md). A self-asserted `hardwareQualified` flag or matching evidence ID is not accepted as physical permission. Every qualified target requires an independently verified ECDSA P-256 signed artifact, current source/device/driver/SDK/firmware identity, exact color/cadence format, finite measured budgets, and passing output scan-out, color, cadence, synchronization, recovery and soak evidence. Absent physical evidence remains `UNVERIFIED`, even when software tests are green.
+
 ## Validation and evidence
 
 Run the focused contract and integration suites after a Release build:

@@ -82,7 +82,9 @@ public sealed class RuntimeResourceCapabilityProfile
         int maximumRegisteredSources = 8,
         IReadOnlyList<RuntimeOutputTargetCapability>? outputCapabilities = null,
         string? activeSourceCommit = null,
-        string? activeDriverIdentity = null)
+        string? activeDriverIdentity = null,
+        string? activeProviderSdkIdentity = null,
+        string? activeFirmwareIdentity = null)
     {
         if (string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(deviceIdentity))
             throw new ArgumentException("Provider and device identities are required.");
@@ -122,6 +124,8 @@ public sealed class RuntimeResourceCapabilityProfile
         QualificationEvidence = qualificationEvidence;
         ActiveSourceCommit = activeSourceCommit;
         ActiveDriverIdentity = activeDriverIdentity;
+        ActiveProviderSdkIdentity = activeProviderSdkIdentity;
+        ActiveFirmwareIdentity = activeFirmwareIdentity;
         _formats = Array.AsReadOnly(admittedFormats.Distinct().ToArray());
         _targets = Array.AsReadOnly(admittedTargets.ToArray());
         _outputCapabilities = Array.AsReadOnly(qualifiedTargets);
@@ -142,6 +146,8 @@ public sealed class RuntimeResourceCapabilityProfile
     public string? ActiveSourceCommit { get; }
     /// <summary>Observed provider driver identity, not user-authored metadata.</summary>
     public string? ActiveDriverIdentity { get; }
+    public string? ActiveProviderSdkIdentity { get; }
+    public string? ActiveFirmwareIdentity { get; }
     public IReadOnlyList<VideoFormat> AdmittedFormats => _formats;
     public IReadOnlyList<string> AdmittedTargets => _targets;
     /// <summary>Optional exact per-target color/cadence and SDI/NDI/SRT/software capability matrix.</summary>
@@ -242,6 +248,8 @@ public static class RuntimeResourceCapacityAdmission
                 grants[0].DeviceIdentity != profile.DeviceIdentity ||
                 grants[0].SourceCommit != profile.ActiveSourceCommit ||
                 grants[0].DriverIdentity != profile.ActiveDriverIdentity ||
+                grants[0].ProviderSdkIdentity != profile.ActiveProviderSdkIdentity ||
+                grants[0].FirmwareIdentity != profile.ActiveFirmwareIdentity ||
                 grants[0].EvidenceId != profile.QualificationEvidence ||
                 grants[0].EvidenceId != target.VerifiedEvidenceId ||
                 grants[0].Transport != target.Transport ||

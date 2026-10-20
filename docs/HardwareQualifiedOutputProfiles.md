@@ -17,7 +17,7 @@ The UTF-8 JSON bytes are signed with ECDSA P-256 / SHA-256 using a DER-encoded s
 Every signed PASS must bind:
 
 - the exact 40-character source commit and the current running binary identity;
-- provider ID, concrete device ID, observed driver identity and physical output target;
+- provider ID, concrete device ID, observed driver, pinned provider SDK, firmware identity and physical output target;
 - transport family (SDI, NDI or SRT) and the precise `VideoFormat`: resolution, rational cadence, pixel/scan format, primaries, transfer, matrix, nominal range, bit depth, alpha interpretation and authoritative metadata;
 - finite measured managed/GPU/native budgets and maximum visible surfaces;
 - UTC qualification and expiration dates, with a bounded validity interval;

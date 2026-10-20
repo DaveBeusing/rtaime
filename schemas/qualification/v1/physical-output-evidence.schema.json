@@ -13,6 +13,8 @@
     "ProviderId",
     "DeviceIdentity",
     "DriverIdentity",
+    "ProviderSdkIdentity",
+    "FirmwareIdentity",
     "TargetId",
     "Transport",
     "Width",
@@ -188,6 +190,16 @@
     },
     "LongSoakPassed": {
       "const": true
+    },
+    "ProviderSdkIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "FirmwareIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
     }
   }
 }
