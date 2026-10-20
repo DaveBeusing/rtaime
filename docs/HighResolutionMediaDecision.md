@@ -1,24 +1,24 @@
 # High-resolution Program admission decision
 
-Status: **PROPOSED / IMPLEMENTATION BLOCKED**. Inventory baseline: `e86c7f46dfc61bb40871af393e8f19105290ef1e`.
-This is a design and regression boundary, not an accepted output-format approval.
+Status: **PRODUCT SCOPE APPROVED / PROFILE IMPLEMENTATION AND QUALIFICATION BLOCKED**. Inventory baseline: `e86c7f46dfc61bb40871af393e8f19105290ef1e`.
+The accepted [product-wide scope decision](ProductScope.md) includes UHD and higher-resolution support as product capabilities; it supersedes any historical requirement to re-approve them as features. This document remains a design and regression boundary, not evidence that an output format or device is implemented or qualified.
 
 ## Decision and approval record
 
 Keep the production format set at 1920×1080 progressive RGBA8, 50/1 and
 60000/1001. Consider 3840×2160 SDR one profile at a time only after the
-prerequisites and approvals below. 25/1 is also a new Program cadence;
+implementation, admission and qualification prerequisites below. 25/1 is also a new Program cadence;
 accepting 25-fps input into the existing 50-fps Program does not provide it.
 
 | Required record | Current evidence | Implementation consequence |
 | --- | --- | --- |
-| Product Owner approval for each 2160p25, 2160p50, 2160p59.94 Program profile | No accepted approval found in the inspected scope/decision documents | All three profiles BLOCKED |
+| Profile-specific implementation and admission review (not a further product-scope vote) | No complete end-to-end profile validation found in the inspected evidence | All three profiles remain UNSUPPORTED until qualified |
 | Exact GPU, driver, host, storage, codec and output-device compatibility approval | No profile-specific approval/evidence established | No new provider capability or hardware claim |
 | Physically demonstrated HD stability under the intended mixed workload | Not established by hosted software runs | Physical prerequisite UNVERIFIED |
 | Measured GPU-resident/transfer budget and accepted adoption decision | [GPU evaluation](GpuResidentMediaEvaluation.md) remains NO-GO | No new decode backend or unmeasured UHD fallback |
 | Separate native 10-bit/HDR/alpha scope | No accepted approval | Design only; no P010/RGB10/HDR/Fill-Key implementation |
 
-An approval must identify approver/date, source revision, precise rate/color/alpha
+A profile qualification record must identify reviewer/date, source revision, precise rate/color/alpha
 tuple, required and excluded consumers, machine/driver/device identities, codec
 dependencies, latency/resource limits, fallback policy and retained physical
 evidence. A merge, general UHD input envelope, native V210 I/O enum or Main10
@@ -38,7 +38,7 @@ in this foundation.
 2. Add one approved UHD SDR profile end to end. Reuse the authoritative Program
    renderer, rational schedule and existing provider negotiation. Reject a
    required consumer that cannot accept the exact tuple before live activation.
-   This alternative is blocked by the records above.
+   This alternative remains unavailable pending implementation and the evidence above.
 3. Adopt UHD plus 10-bit/HDR in one change. Rejected: independently unqualified
    color, codec, surface-layout and device risks would obscure failures.
 
@@ -66,7 +66,7 @@ until the end-to-end slice and persistence/old-peer behavior are agreed.
 
 Completed scope: source-derived inventory, arithmetic resource sizing, approval
 record, future compatibility matrix, separate color/alpha design and executable
-HD/UHD admission regressions. No production-format introduction is authorized.
+HD/UHD admission regressions. No additional production format has been implemented or qualified by this document.
 No measured before/after performance improvement is claimed.
 
 Remaining dependencies: accepted profile scope; qualified physical HD baseline;
