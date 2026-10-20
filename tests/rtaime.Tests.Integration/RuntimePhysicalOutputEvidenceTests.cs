@@ -153,7 +153,9 @@ public sealed class RuntimePhysicalOutputEvidenceTests
             Evidence() with { LongSoakPassed = false },
             Evidence() with { GpuBudgetBytes = 0 },
             Evidence() with { Authority = ColorMetadataAuthority.Missing },
-            Evidence() with { MaximumSurfaces = 0 }
+            Evidence() with { MaximumSurfaces = 0 },
+            Evidence() with { BitDepth = 10 },
+            Evidence() with { Matrix = ColorMatrix.Rec709 }
         })
         {
             var signed = Sign(signer, candidate);

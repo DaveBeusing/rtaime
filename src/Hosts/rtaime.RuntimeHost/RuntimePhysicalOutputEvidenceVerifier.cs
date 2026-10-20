@@ -212,6 +212,13 @@ public static class RuntimePhysicalOutputEvidenceVerifier
         {
             return Deny("runtime.qualification.format_invalid");
         }
+        // The current production pixel contract is RGBA8. A signed profile
+        // cannot claim native 10-bit, HDR/P010 or unimplemented color conversion.
+        if (format.PixelFormat != PixelFormat.Rgba8 ||
+            format.ScanMode != ScanMode.Progressive ||
+            format.Color.BitDepth != 8 ||
+            format.Color.Matrix != ColorMatrix.IdentityRgb)
+            return Deny("runtime.qualification.pixel_pipeline_unsupported");
         if (!format.Color.IsComplete ||
             format.Color.Authority != ColorMetadataAuthority.Authoritative)
             return Deny("runtime.qualification.color_unverified");

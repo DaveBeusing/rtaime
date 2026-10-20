@@ -123,10 +123,7 @@
       ]
     },
     "Matrix": {
-      "enum": [
-        1,
-        2
-      ]
+      "const": 1
     },
     "Range": {
       "enum": [
@@ -135,9 +132,7 @@
       ]
     },
     "BitDepth": {
-      "type": "integer",
-      "minimum": 8,
-      "maximum": 32
+      "const": 8
     },
     "Alpha": {
       "enum": [
