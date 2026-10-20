@@ -16,12 +16,12 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
 {
     private readonly object _gate = new();
     private readonly NdiNetworkOutputProvider _provider;
-    private readonly V1RuntimeHostService _runtime;
+    private readonly RuntimeProgramExecutionService _runtime;
     private readonly NdiDiscoveryService _discovery;
     private readonly Dictionary<MediaSourceId, SessionState> _sessions = [];
     private bool _disposed;
 
-    public RuntimeNdiInputBridge(NdiNetworkOutputProvider provider, V1RuntimeHostService runtime)
+    public RuntimeNdiInputBridge(NdiNetworkOutputProvider provider, RuntimeProgramExecutionService runtime)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));

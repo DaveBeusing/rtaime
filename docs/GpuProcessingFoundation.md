@@ -94,7 +94,7 @@ The reference backend performs RGBA processing in managed memory and is used to 
 
 `CudaGpuProcessingBackend` is the hardware-accelerated implementation candidate for the Windows V1 reference platform.
 
-The executable RuntimeHost now performs fail-closed CUDA capability detection during composition. When CUDA is available and reports hardware acceleration, the production RuntimeHost selects `CudaGpuProcessingBackend`. Environments without CUDA continue with `ManagedReferenceGpuBackend`, whose provider availability remains explicitly `Degraded`; that fallback is functional evidence only and must never be presented as production GPU qualification. Direct `V1RuntimeHostService` construction keeps the managed reference default so deterministic tests remain hardware-independent.
+The executable RuntimeHost now performs fail-closed CUDA capability detection during composition. When CUDA is available and reports hardware acceleration, the production RuntimeHost selects `CudaGpuProcessingBackend`. Environments without CUDA continue with `ManagedReferenceGpuBackend`, whose provider availability remains explicitly `Degraded`; that fallback is functional evidence only and must never be presented as production GPU qualification. Direct `RuntimeProgramExecutionService` construction keeps the managed reference default so deterministic tests remain hardware-independent.
 
 Capability detection is fail-closed:
 

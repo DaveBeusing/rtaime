@@ -75,11 +75,11 @@ internal sealed record CompositingRollbackState(
 	int BitmapGraphicsLayerOrder,
 	int ProductionCgLayerOrder);
 
-public sealed class V1ProgramBoundaryResult : IDisposable
+public sealed class ProgramBoundaryResult : IDisposable
 {
 	private GpuReadbackLease? _programPixels;
 
-	internal V1ProgramBoundaryResult(
+	internal ProgramBoundaryResult(
 		ulong sequenceNumber,
 		MediaSourceId committedProgramSourceId,
 		FrameDescriptor programFrame,
@@ -132,7 +132,7 @@ public sealed class V1ProgramBoundaryResult : IDisposable
 	}
 
 	private GpuReadbackLease ProgramPixelsLease =>
-		Volatile.Read(ref _programPixels) ?? throw new ObjectDisposedException(nameof(V1ProgramBoundaryResult));
+		Volatile.Read(ref _programPixels) ?? throw new ObjectDisposedException(nameof(ProgramBoundaryResult));
 }
 
 public sealed record V1GraphicsOverlaySnapshot(
@@ -401,7 +401,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
 /// Program output, Audio Follow Video and failure-isolated recording. It owns execution, never production authority.
 /// </summary>
-public sealed partial class V1RuntimeHostService : IAsyncDisposable
+public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 {
 	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 3;
 	public const int RetainedObservationCapacity = 512;
@@ -536,7 +536,7 @@ public sealed partial class V1RuntimeHostService : IAsyncDisposable
 	private bool _disposed;
 	private Task? _disposeTask;
 
-	public V1RuntimeHostService(
+	public RuntimeProgramExecutionService(
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
 		VideoFormat format,
@@ -550,7 +550,7 @@ public sealed partial class V1RuntimeHostService : IAsyncDisposable
 	{
 	}
 
-	internal V1RuntimeHostService(
+	internal RuntimeProgramExecutionService(
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
 		VideoFormat format,
@@ -1022,7 +1022,7 @@ public sealed partial class V1RuntimeHostService : IAsyncDisposable
 	public void EnablePipelineTiming(RuntimeTimingQualificationProbe probe) =>
 		Interlocked.Exchange(ref _pipelineTiming, probe ?? throw new ArgumentNullException(nameof(probe)));
 
-	public V1ProgramBoundaryResult ProcessNextBoundary()
+	public ProgramBoundaryResult ProcessNextBoundary()
 	{
 		var pipelineTiming = Volatile.Read(ref _pipelineTiming);
 		var boundaryStarted = pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
@@ -1483,7 +1483,7 @@ public sealed partial class V1RuntimeHostService : IAsyncDisposable
 						Observe($"program.frame:{sequence}:{committedSource}");
 					}
 
-					return new V1ProgramBoundaryResult(
+					return new ProgramBoundaryResult(
 						sequence,
 						committedSource,
 						presentedOutput.Descriptor,

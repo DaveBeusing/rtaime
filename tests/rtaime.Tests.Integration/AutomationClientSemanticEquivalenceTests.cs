@@ -31,7 +31,7 @@ public sealed class AutomationClientSemanticEquivalenceTests
 			},
 			new ProductionRoutingState(sourceA, sourceA));
 
-		await using var runtime = new V1RuntimeHostService(
+		await using var runtime = new RuntimeProgramExecutionService(
 			new MediaSourceId(sourceA.Value),
 			new MediaSourceId(sourceB.Value),
 			VideoFormat.Hd1080p50Rgba8,
@@ -84,12 +84,12 @@ public sealed class AutomationClientSemanticEquivalenceTests
 	private sealed class HeadlessControlTransport : IOperatorControlTransport
 	{
 		private readonly ControlHostService _control;
-		private readonly V1RuntimeHostService _runtime;
+		private readonly RuntimeProgramExecutionService _runtime;
 		private readonly ProductionSpecification _specification;
 
 		public HeadlessControlTransport(
 			ControlHostService control,
-			V1RuntimeHostService runtime,
+			RuntimeProgramExecutionService runtime,
 			ProductionSpecification specification)
 		{
 			_control = control;

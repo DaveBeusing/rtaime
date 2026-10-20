@@ -82,7 +82,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 {
 	private static readonly TimeSpan MinimumInferenceInterval = TimeSpan.FromMilliseconds(200);
 	private readonly object _gate = new();
-	private readonly V1RuntimeHostService _runtime;
+	private readonly RuntimeProgramExecutionService _runtime;
 	private readonly IRuntimeAIHostTransport _transport;
 	private readonly Stopwatch _clock = Stopwatch.StartNew();
 	private readonly CancellationTokenSource _stop = new();
@@ -96,7 +96,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 	private FrameDescriptor? _lastProgramFrame;
 	private bool _testActive;
 
-	public RuntimeAIShowcaseService(V1RuntimeHostService runtime, IRuntimeAIHostTransport transport)
+	public RuntimeAIShowcaseService(RuntimeProgramExecutionService runtime, IRuntimeAIHostTransport transport)
 	{
 		_runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 		_transport = transport ?? throw new ArgumentNullException(nameof(transport));

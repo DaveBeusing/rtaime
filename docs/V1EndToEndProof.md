@@ -138,7 +138,7 @@ Virtual timing preserves the exact rational timebases already established by Vir
 
 ## Program GPU composition
 
-`V1RuntimeHostService` composes the existing managed reference GPU provider with:
+`RuntimeProgramExecutionService` composes the existing managed reference GPU provider with:
 
 - two deterministic video background inputs,
 - CUT,

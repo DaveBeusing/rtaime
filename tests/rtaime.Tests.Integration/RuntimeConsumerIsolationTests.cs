@@ -57,7 +57,7 @@ public sealed class RuntimeConsumerIsolationTests
         var b = new ProductionSourceId(Identity.New());
         var mediaA = new MediaSourceId(a.Value);
         var mediaB = new MediaSourceId(b.Value);
-        var runtime = new V1RuntimeHostService(mediaA, mediaB, format, recordingWriter,
+        var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, recordingWriter,
             new ManagedReferenceGpuBackend(), targets, replay, probe, network);
         var ai = new RuntimeAIShowcaseService(runtime, aiTransport);
         RuntimeMonitoringSubscription? monitor = null;
@@ -286,7 +286,7 @@ public sealed class RuntimeConsumerIsolationTests
         var writer = new StalledWriter();
         writer.Release.TrySetResult();
         writer.FinalizeRelease.TrySetResult();
-        var runtime = throughRuntime ? new V1RuntimeHostService(MediaSourceId.New(), MediaSourceId.New(),
+        var runtime = throughRuntime ? new RuntimeProgramExecutionService(MediaSourceId.New(), MediaSourceId.New(),
             format, writer, new ManagedReferenceGpuBackend(), targets, null, null, registry) : null;
         var bridge = throughRuntime ? null : new RuntimeNetworkOutputBridge(targets, registry);
         async Task DisposeAsync()

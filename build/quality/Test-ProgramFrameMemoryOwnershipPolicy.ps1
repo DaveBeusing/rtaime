@@ -18,7 +18,7 @@ function Assert-Condition {
 
 $gpuPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/GpuProcessing.cs"
 $cudaPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaGpuProcessingBackend.cs"
-$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.cs"
 $runtimeProcessPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $monitoringPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeMonitoring.cs"
 $mediaIoPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
@@ -72,7 +72,7 @@ Assert-Condition ($gpu -match 'RentReadback\(GpuFrame frame\)' -and $gpu -match 
 Assert-Condition ($cuda -match 'public void ReadbackInto' -and $cuda -match 'cuMemcpyDtoH_v2\(\s*ref destinationReference') "CUDA readback must copy directly into caller-supplied host memory."
 Assert-Condition ($cuda -match 'cuMemcpyDtoH_v2\(ref byte destination') "CUDA P/Invoke must use a call-lifetime managed by-reference rather than requiring a fresh managed array."
 
-Assert-Condition ($runtime -match 'public sealed class V1ProgramBoundaryResult : IDisposable') "Runtime Program boundaries must own disposable Program readback memory."
+Assert-Condition ($runtime -match 'public sealed class ProgramBoundaryResult : IDisposable') "Runtime Program boundaries must own disposable Program readback memory."
 Assert-Condition ($runtime -match 'ReadOnlyMemory<byte> ProgramPixels') "Runtime Program pixels must expose read-only leased memory."
 Assert-Condition ($runtime -match 'ProgramReadbackBufferCapacity\s*=\s*ProgramRecorder\.DefaultQueueCapacity \+ 3') "RuntimeHost readback capacity must cover bounded queue backlog, active recording write, current Program boundary and monitoring ownership."
 Assert-Condition ($runtime -match '_gpu\.RentReadback\(presentedOutput\)' -and $runtime -notmatch '_gpu\.Readback\(presentedOutput\)' -and $runtime -match 'var presentedOutput = mappedOutput \?\? output;') "RuntimeHost Program hot path must lease one bounded readback of the post-mapping output or original composite."

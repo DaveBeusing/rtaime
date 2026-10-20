@@ -21,7 +21,7 @@ public sealed class AudioMixerRealHostTests
         using var controlStop = new CancellationTokenSource();
         var options = RuntimeHostProcessOptions.Default;
         // Real Runtime engine and IPC; explicit boundaries isolate DSP/authoring correctness from scheduler qualification.
-        await using var runtime = new V1RuntimeHostService(options.SourceAId, options.SourceBId, options.Format, new NullRecordingWriter());
+        await using var runtime = new RuntimeProgramExecutionService(options.SourceAId, options.SourceBId, options.Format, new NullRecordingWriter());
         await using var runtimeIpc = new RuntimeHostIpcServer("rtaime.mixer.runtime." + suffix, () => runtime);
         await runtimeIpc.StartAsync();
         var control = new ControlHostProcess(ControlHostProcessOptions.Default with {

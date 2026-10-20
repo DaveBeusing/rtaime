@@ -192,7 +192,7 @@ public sealed record RuntimeHostProcessOptions(
 /// </summary>
 internal delegate RuntimeHostIpcServer RuntimeHostIpcServerFactory(
 	string endpoint,
-	Func<V1RuntimeHostService?> runtimeAccessor,
+	Func<RuntimeProgramExecutionService?> runtimeAccessor,
 	Func<LocalMediaDeckRuntimeService?> mediaDeckAccessor,
 	Func<RuntimeAIShowcaseService?> aiShowcaseAccessor);
 
@@ -201,8 +201,8 @@ public sealed class RuntimeHostProcess
 	private readonly object _gate = new();
 	private readonly RuntimeHostProcessOptions _options;
 	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
-	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
-	private readonly Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
+	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService> _runtimeFactory;
+	private readonly Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
 	private readonly RuntimeHostIpcServerFactory _ipcServerFactory;
 	private readonly TimeSpan _ipcSessionDrainTimeout;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
@@ -215,7 +215,7 @@ public sealed class RuntimeHostProcess
 		"Process has not started.",
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
-	private V1RuntimeHostService? _runtime;
+	private RuntimeProgramExecutionService? _runtime;
 	private LocalMediaDeckRuntimeService? _mediaDeck;
 	private RuntimeMediaIoVerticalSlice? _mediaIo;
 	private RuntimeAIShowcaseService? _aiShowcase;
@@ -229,8 +229,8 @@ public sealed class RuntimeHostProcess
 	public RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
 		Func<IProgramRecordingWriter>? recordingWriterFactory = null,
-		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null,
-		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService>? runtimeFactory = null,
+		Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
 		: this(options, recordingWriterFactory, runtimeFactory, aiShowcaseFactory, null)
 	{
 	}
@@ -238,8 +238,8 @@ public sealed class RuntimeHostProcess
 	internal RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
 		Func<IProgramRecordingWriter>? recordingWriterFactory,
-		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory,
-		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory,
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, RuntimeProgramExecutionService>? runtimeFactory,
+		Func<RuntimeProgramExecutionService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory,
 		RuntimeHostIpcServerFactory? ipcServerFactory)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
@@ -297,7 +297,7 @@ public sealed class RuntimeHostProcess
 		get { lock (_gate) return _scheduleStatistics; }
 	}
 
-	public V1RuntimeHostService? Runtime => _runtime;
+	public RuntimeProgramExecutionService? Runtime => _runtime;
 	public LocalMediaDeckRuntimeService? MediaDeck => _mediaDeck;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
@@ -445,7 +445,7 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
-	private static V1RuntimeHostService CreateProductionRuntime(
+	private static RuntimeProgramExecutionService CreateProductionRuntime(
 		RuntimeHostProcessOptions processOptions,
 		IProgramRecordingWriter writer)
 	{
@@ -460,7 +460,7 @@ public sealed class RuntimeHostProcess
 			"replay");
 		var replay = new RuntimeReplayService(replayRoot, processOptions.Format);
 
-		return new V1RuntimeHostService(
+		return new RuntimeProgramExecutionService(
 			processOptions.SourceAId,
 			processOptions.SourceBId,
 			processOptions.Format,
@@ -471,7 +471,7 @@ public sealed class RuntimeHostProcess
 	}
 
 	private async Task RunMediaLoopAsync(
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		LocalMediaDeckRuntimeService mediaDeck,
 		RuntimeMediaIoVerticalSlice? mediaIo,
 		RuntimeAIShowcaseService aiShowcase,
@@ -545,7 +545,7 @@ public sealed class RuntimeHostProcess
 	private static ulong SaturatingAdd(ulong left, ulong right) =>
 		ulong.MaxValue - left < right ? ulong.MaxValue : left + right;
 
-	private void AdmitMediaDeckBoundary(V1RuntimeHostService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
+	private void AdmitMediaDeckBoundary(RuntimeProgramExecutionService runtime, LocalMediaDeckRuntimeService mediaDeck, ulong programSlot)
     {
         mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
         mediaDeck.AdmitBoundary(runtime, programSlot);

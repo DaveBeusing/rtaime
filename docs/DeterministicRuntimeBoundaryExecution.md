@@ -30,7 +30,7 @@ The local-media provider retains its reusable decode/output storage. Boundary sy
 
 ## Runtime state capture and publication
 
-`V1RuntimeHostService` uses two distinct synchronization responsibilities:
+`RuntimeProgramExecutionService` uses two distinct synchronization responsibilities:
 
 - `_boundaryExecutionGate` provides single-writer boundary execution and serializes committed execution replacement between Program boundaries.
 - `_boundaryCaptureGate` serializes frame-affecting control/configuration mutations against the finite boundary-capture phase without blocking them for the later composite/readback/output phase.

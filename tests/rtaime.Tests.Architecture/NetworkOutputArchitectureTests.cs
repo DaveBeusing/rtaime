@@ -86,7 +86,7 @@ public sealed class NetworkOutputArchitectureTests
 	{
 		var root = FindRepositoryRoot();
 		var controlHost = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.ControlHost", "ControlHostIpcServer.cs"));
-		var runtimeService = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "V1RuntimeHostService.cs"));
+		var runtimeService = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "RuntimeProgramExecutionService.cs"));
 
 		Assert.DoesNotContain("NativeSrtTransport", controlHost, StringComparison.Ordinal);
 		Assert.DoesNotContain("WindowsMediaFoundationSrtEncoder", controlHost, StringComparison.Ordinal);

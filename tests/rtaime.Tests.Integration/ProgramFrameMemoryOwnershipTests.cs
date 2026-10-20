@@ -31,7 +31,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 		}
 
 		var statistics = fixture.Runtime.ProgramReadbackPoolStatistics;
-		Assert.Equal(V1RuntimeHostService.ProgramReadbackBufferCapacity, statistics.Capacity);
+		Assert.Equal(RuntimeProgramExecutionService.ProgramReadbackBufferCapacity, statistics.Capacity);
 		Assert.Equal(1, statistics.AllocatedBuffers);
 		Assert.Equal(1, statistics.AvailableBuffers);
 		Assert.Equal(96UL, statistics.TotalRents);
@@ -145,7 +145,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 			Assert.InRange(
 				fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
 				0,
-				V1RuntimeHostService.ProgramReadbackBufferCapacity);
+				RuntimeProgramExecutionService.ProgramReadbackBufferCapacity);
 
 			if (index == boundaryCount / 3)
 			{
@@ -170,9 +170,9 @@ public sealed class ProgramFrameMemoryOwnershipTests
 		var snapshot = fixture.Runtime.Snapshot;
 		Assert.Equal((ulong)boundaryCount, snapshot.NextSequenceNumber);
 		Assert.Equal(0, snapshot.ActiveGpuSurfaces);
-		Assert.True(fixture.Runtime.RecentObservations(int.MaxValue).Count <= V1RuntimeHostService.RetainedObservationCapacity);
+		Assert.True(fixture.Runtime.RecentObservations(int.MaxValue).Count <= RuntimeProgramExecutionService.RetainedObservationCapacity);
 		Assert.Equal(0, fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
-		Assert.True(fixture.Runtime.ProgramReadbackPoolStatistics.AllocatedBuffers <= V1RuntimeHostService.ProgramReadbackBufferCapacity);
+		Assert.True(fixture.Runtime.ProgramReadbackPoolStatistics.AllocatedBuffers <= RuntimeProgramExecutionService.ProgramReadbackBufferCapacity);
 		Assert.True(measuredBoundaryCount > 0);
 		var averageAllocatedBytesPerBoundary = measuredAllocatedBytes / measuredBoundaryCount;
 		var fullFrameBytes = RgbaFrameBuffer.RequiredByteLength(VideoFormat.Hd1080p50Rgba8);
@@ -207,7 +207,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 				ProductionOutputRoleState.Aux(sourceB)
 			});
 
-		var runtime = new V1RuntimeHostService(mediaA, mediaB, format, writer);
+		var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, writer);
 		var journal = new BoundedProductionJournal(64);
 		var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
 		var staged = control.Initialize();
@@ -233,7 +233,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 		public Fixture(
 			VideoFormat format,
 			MediaSourceId mediaSourceA,
-			V1RuntimeHostService runtime,
+			RuntimeProgramExecutionService runtime,
 			BoundedProductionJournal journal)
 		{
 			Format = format;
@@ -244,7 +244,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 
 		public VideoFormat Format { get; }
 		public MediaSourceId MediaSourceA { get; }
-		public V1RuntimeHostService Runtime { get; }
+		public RuntimeProgramExecutionService Runtime { get; }
 		public BoundedProductionJournal Journal { get; }
 
 		public async ValueTask DisposeAsync()

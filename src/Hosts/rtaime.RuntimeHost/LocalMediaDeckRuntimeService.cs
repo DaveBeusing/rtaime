@@ -82,7 +82,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     }
     internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.DevelopmentFour;
 
-    public void AdmitBoundary(V1RuntimeHostService runtime, ulong programSlot)
+    public void AdmitBoundary(RuntimeProgramExecutionService runtime, ulong programSlot)
     {
         lock (_gate)
         {
@@ -305,7 +305,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
         catch (ObjectDisposedException) { boundary = null; return MediaDeckRuntimeSnapshot.Unloaded; }
     }
 
-    public void AdmitBoundary(V1RuntimeHostService runtime, MediaSourceId source, ulong programSlot)
+    public void AdmitBoundary(RuntimeProgramExecutionService runtime, MediaSourceId source, ulong programSlot)
     {
         // Publication is fenced against slot replacement. All work here is bounded queue admission/copy.
         lock (_gate)

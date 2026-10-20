@@ -179,7 +179,7 @@ public sealed class V1EndToEndProofTests
     }
 
     private static void ApplyReferenceSegmentationEffect(
-        V1RuntimeHostService runtime,
+        RuntimeProgramExecutionService runtime,
         GovernedInferenceExecutionResult result)
     {
         var region = result.Result.Outputs.Single(output => output.Name == "mask.region.normalized").Value;
@@ -199,7 +199,7 @@ public sealed class V1EndToEndProofTests
             CollectingRecordingWriter writer,
             BoundedProductionJournal journal,
             ControlHostService control,
-            V1RuntimeHostService runtime,
+            RuntimeProgramExecutionService runtime,
             AIHostService ai,
             OperatorControlClient client)
         {
@@ -222,7 +222,7 @@ public sealed class V1EndToEndProofTests
         public CollectingRecordingWriter Writer { get; }
         public BoundedProductionJournal Journal { get; }
         public ControlHostService Control { get; }
-        public V1RuntimeHostService Runtime { get; }
+        public RuntimeProgramExecutionService Runtime { get; }
         public AIHostService AI { get; }
         public OperatorControlClient Client { get; }
 
@@ -245,7 +245,7 @@ public sealed class V1EndToEndProofTests
                 new ProductionRoutingState(sourceA, sourceA));
 
             var writer = new CollectingRecordingWriter();
-            var runtime = new V1RuntimeHostService(mediaA, mediaB, format, writer);
+            var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, writer);
             var journal = new BoundedProductionJournal(256);
             var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
             var ai = AIHostService.CreateManagedReference();
@@ -267,13 +267,13 @@ public sealed class V1EndToEndProofTests
     private sealed class InProcessOperatorTransport : IOperatorControlTransport
     {
         private readonly ControlHostService _control;
-        private readonly V1RuntimeHostService _runtime;
+        private readonly RuntimeProgramExecutionService _runtime;
         private readonly AIHostService _ai;
         private readonly ProductionSpecification _specification;
 
         public InProcessOperatorTransport(
             ControlHostService control,
-            V1RuntimeHostService runtime,
+            RuntimeProgramExecutionService runtime,
             AIHostService ai,
             ProductionSpecification specification)
         {

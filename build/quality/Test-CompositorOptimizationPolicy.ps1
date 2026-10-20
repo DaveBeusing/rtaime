@@ -18,7 +18,7 @@ function Assert-Condition {
 
 $gpuPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/GpuProcessing.cs"
 $cudaPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaGpuProcessingBackend.cs"
-$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.cs"
 $unitTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/GpuCompositorOptimizationTests.cs"
 $performanceTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/GpuCompositorPerformanceProfileTests.cs"
 $graphicsTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/GraphicsOverlayIntegrationTests.cs"

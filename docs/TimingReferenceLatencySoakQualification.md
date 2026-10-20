@@ -40,7 +40,7 @@ The probe does not stop execution, change routing, mutate desired state or creat
 
 RuntimeHost owns the live scheduler evidence because one epoch-based rational schedule is the single V1 production cadence boundary. Local media-deck admission no longer runs from an independent production timer: one coherent deck video/audio result is admitted immediately before the Program boundary driven by that cadence. The process creates one `RuntimeTimingQualificationProbe` from the active V1 frame rate, records the scheduler observation time plus the actual committed-boundary processing duration, and maps the resulting state into `V1RuntimeHostSnapshot.TimingHealth`.
 
-`V1RuntimeHostService` therefore starts timing health as `Recovering`; it is no longer hardcoded to `Healthy`. Only measured scheduler observations can move it to `Healthy`, `Degraded`, `Unstable` or `Lost`.
+`RuntimeProgramExecutionService` therefore starts timing health as `Recovering`; it is no longer hardcoded to `Healthy`. Only measured scheduler observations can move it to `Healthy`, `Degraded`, `Unstable` or `Lost`.
 
 The numeric management-IPC representation is anchored by the shared `RuntimeTimingHealthState` Runtime contract. RuntimeHost derives its V1 timing-health values from that contract, and ControlHost validates and projects the same contract values by semantic name rather than by an independent numeric ordering. This prevents a wire-value mismatch from inverting `Healthy` and `Degraded` evidence.
 

@@ -362,7 +362,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         var period = TimeSpan.FromSeconds((double)format.FrameRate.Denominator / format.FrameRate.Numerator);
         var pipeline = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(period,
             TimeSpan.FromTicks(period.Ticks / 4), period, 65_536));
-        await using var runtime = new V1RuntimeHostService(
+        await using var runtime = new RuntimeProgramExecutionService(
             mediaA,
             mediaB,
             format,
@@ -628,7 +628,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         var gpuTiming = BuildGpuTiming(timingCollector.Snapshot());
         var runtimeDroppedFrames = finalSnapshot.Performance.DroppedFrames;
-        var deviceFaultObservations = runtime.RecentObservations(V1RuntimeHostService.RetainedObservationCapacity)
+        var deviceFaultObservations = runtime.RecentObservations(RuntimeProgramExecutionService.RetainedObservationCapacity)
             .Where(observation =>
                 observation.Contains("gpu.", StringComparison.OrdinalIgnoreCase) &&
                 (observation.Contains("failed", StringComparison.OrdinalIgnoreCase) ||

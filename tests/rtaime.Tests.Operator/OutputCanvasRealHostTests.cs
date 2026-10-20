@@ -20,7 +20,7 @@ public sealed class OutputCanvasRealHostTests
         var root=Path.Combine(Path.GetTempPath(),"rtaime-canvas-editor-"+suffix);
         var options=RuntimeHostProcessOptions.Default;
         using var stop=new CancellationTokenSource();
-        await using var runtime=new V1RuntimeHostService(options.SourceAId,options.SourceBId,
+        await using var runtime=new RuntimeProgramExecutionService(options.SourceAId,options.SourceBId,
             options.Format,new NullRecordingWriter());
         await using var runtimeIpc=new RuntimeHostIpcServer("rtaime.canvas.editor.runtime."+suffix,()=>runtime);
         await runtimeIpc.StartAsync();

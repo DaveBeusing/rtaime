@@ -42,7 +42,7 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.Equal(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
 		Assert.DoesNotContain(
 			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>(),
-			layer => layer.LayerId == V1RuntimeHostService.LegacyVisualLayerId);
+			layer => layer.LayerId == RuntimeProgramExecutionService.LegacyVisualLayerId);
 
 		var alternatePreview = initial.Sources
 			.First(source => !string.Equals(

@@ -253,7 +253,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 			MediaSourceId sourceB,
 			BoundedProductionJournal journal,
 			ControlHostService control,
-			V1RuntimeHostService runtime)
+			RuntimeProgramExecutionService runtime)
 		{
 			SourceA = sourceA;
 			SourceB = sourceB;
@@ -266,7 +266,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		public MediaSourceId SourceB { get; }
 		public BoundedProductionJournal Journal { get; }
 		public ControlHostService Control { get; }
-		public V1RuntimeHostService Runtime { get; }
+		public RuntimeProgramExecutionService Runtime { get; }
 
 		public static ValueTask<Fixture> CreateAsync()
 		{
@@ -285,7 +285,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 				},
 				new ProductionRoutingState(productionSourceB, productionSourceA));
 
-			var runtime = new V1RuntimeHostService(
+			var runtime = new RuntimeProgramExecutionService(
 				sourceA,
 				sourceB,
 				VideoFormat.Hd1080p50Rgba8,

@@ -34,7 +34,7 @@ last reference returns host buffer to bounded readback pool
 
 A buffer is eligible for reuse only after the last GpuReadbackLease reference is released. A later frame therefore cannot mutate storage that monitoring, recording or another retained boundary still reads.
 
-V1ProgramBoundaryResult owns the primary Program readback lease and is disposable. Production callers must dispose it deterministically. RuntimeHostProcess scopes every processed boundary with using.
+ProgramBoundaryResult owns the primary Program readback lease and is disposable. Production callers must dispose it deterministically. RuntimeHostProcess scopes every processed boundary with using.
 
 ## Bounded readback pool
 
@@ -48,7 +48,7 @@ The pool:
 - never grows beyond its configured capacity;
 - fails closed if every reusable buffer is still leased.
 
-The generic provider default is four readback buffers. V1RuntimeHostService configures the Program pool to ProgramRecorder.DefaultQueueCapacity + 3. The current recording queue capacity is 64, so the V1 bound is 67 buffers. The extra headroom covers one sample actively owned by the recording writer, the current Program boundary, and one independent monitoring sample while the recording queue may retain its already bounded backlog.
+The generic provider default is four readback buffers. RuntimeProgramExecutionService configures the Program pool to ProgramRecorder.DefaultQueueCapacity + 3. The current recording queue capacity is 64, so the V1 bound is 67 buffers. The extra headroom covers one sample actively owned by the recording writer, the current Program boundary, and one independent monitoring sample while the recording queue may retain its already bounded backlog.
 
 The capacity is an upper bound, not an eager reservation. Normal steady-state execution typically allocates one or a small number of full-frame buffers and then reuses them.
 
@@ -113,11 +113,11 @@ Reference and Media Foundation writers release staged leases on every one of tho
 
 ### Boundary callers
 
-A V1ProgramBoundaryResult must not be used after disposal. Accessing Program pixels after disposal fails rather than exposing memory that may already have been reused.
+A ProgramBoundaryResult must not be used after disposal. Accessing Program pixels after disposal fails rather than exposing memory that may already have been reused.
 
 ## Shutdown and failure behavior
 
-Runtime shutdown drains/disposes monitoring and recording before GPU shutdown. V1RuntimeHostService then verifies that both the Program readback pool has zero active buffers and the shared monitoring resource set has zero active leases before disposing GPU resources.
+Runtime shutdown drains/disposes monitoring and recording before GPU shutdown. RuntimeProgramExecutionService then verifies that both the Program readback pool has zero active buffers and the shared monitoring resource set has zero active leases before disposing GPU resources.
 
 GPU readback exceptions return the rented host buffer before the exception escapes. Recording staging/enqueue failure paths discard transferred payload ownership. Monitoring replacement and cancellation paths release retained leases.
 

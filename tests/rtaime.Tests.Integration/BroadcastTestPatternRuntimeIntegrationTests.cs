@@ -198,7 +198,7 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 			MediaSourceId mediaSourceB,
 			VideoFormat format,
 			BoundedProductionJournal journal,
-			V1RuntimeHostService runtime)
+			RuntimeProgramExecutionService runtime)
 		{
 			MediaSourceA = mediaSourceA;
 			MediaSourceB = mediaSourceB;
@@ -211,7 +211,7 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 		public MediaSourceId MediaSourceB { get; }
 		public VideoFormat Format { get; }
 		public BoundedProductionJournal Journal { get; }
-		public V1RuntimeHostService Runtime { get; }
+		public RuntimeProgramExecutionService Runtime { get; }
 
 		public static ValueTask<Fixture> CreateAsync()
 		{
@@ -231,7 +231,7 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 				},
 				new ProductionRoutingState(sourceA, sourceA));
 
-			var runtime = new V1RuntimeHostService(mediaA, mediaB, format, new CollectingRecordingWriter());
+			var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, new CollectingRecordingWriter());
 			var journal = new BoundedProductionJournal(64);
 			var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
 			var fixture = new Fixture(mediaA, mediaB, format, journal, runtime);

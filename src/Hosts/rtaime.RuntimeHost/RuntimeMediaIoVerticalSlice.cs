@@ -13,14 +13,14 @@ namespace rtaime.RuntimeHost;
 /// </summary>
 internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 {
-	private readonly V1RuntimeHostService _runtime;
+	private readonly RuntimeProgramExecutionService _runtime;
 	private readonly MediaIoVerticalSlice _mediaIo;
 	private ulong? _sourceASequence;
 	private ulong? _sourceBSequence;
 	private bool _disposed;
 
 	public RuntimeMediaIoVerticalSlice(
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		IMediaIoProviderAdapter adapter,
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
@@ -48,7 +48,7 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 		ApplyLatest(_mediaIo.LatestB, ref _sourceBSequence);
 	}
 
-	public void SubmitProgram(V1ProgramBoundaryResult boundary)
+	public void SubmitProgram(ProgramBoundaryResult boundary)
 	{
 		ArgumentNullException.ThrowIfNull(boundary);
 		ThrowIfDisposed();
