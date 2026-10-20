@@ -22,6 +22,10 @@ public sealed class ProductScopeCompatibilityTests
         var source = File.ReadAllText(servicePath);
         Assert.Matches(@"\bclass\s+RuntimeProgramExecutionService\b", source);
         Assert.Matches(@"\bclass\s+ProgramBoundaryResult\b", source);
+        Assert.Contains("public sealed record RuntimeHostSnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("v1-layer-source", source, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\b(?:enum|record|class|struct)\s+V1[A-Za-z0-9_]+", source);
+
     }
 
     [Fact]
@@ -29,7 +33,7 @@ public sealed class ProductScopeCompatibilityTests
     {
         var root = RepositorySnapshot.Load().Root;
         var sourceRoot = Path.Combine(root, "src");
-        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult", "ReferenceV1", "V1Formats" };
+        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult", "ReferenceV1", "V1Formats", "V1RuntimeHostSnapshot", "V1VisualLayerMode", "V1AudioProductionSnapshot", "V1ProductionCgTextDefinition" };
         var violations = new List<string>();
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))

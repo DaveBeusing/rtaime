@@ -274,10 +274,10 @@ public sealed class ProductionIpcIntegrationTests
 			Assert.Equal("—", source.MediaState);
 			Assert.Null(source.Remaining);
 		});
-		runtime.Runtime!.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Lost);
+		runtime.Runtime!.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), RuntimeInputSignalState.Lost);
 		var lostSignal = await client.SynchronizeAsync();
 		Assert.Equal("LOST", lostSignal.Sources.Single(source => source.Id == sourceB.Id).Health);
-		runtime.Runtime.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Valid);
+		runtime.Runtime.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), RuntimeInputSignalState.Valid);
 		await client.SynchronizeAsync();
 
 		var revisionBeforeAudio = client.Snapshot!.Production.Revision;
@@ -793,7 +793,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, secondRuntime.Runtime!.Snapshot.Runtime.Status);
 		await WaitUntilAsync(() =>
 			secondRuntime.Runtime.Snapshot.AudioProduction?.Revision == restoredAudioConfiguration.Revision);
-		var restoredAudio = Assert.IsType<V1AudioProductionSnapshot>(secondRuntime.Runtime.Snapshot.AudioProduction);
+		var restoredAudio = Assert.IsType<RuntimeHostAudioProductionSnapshot>(secondRuntime.Runtime.Snapshot.AudioProduction);
 		Assert.Equal(0.6, restoredAudio.ProgramMasterGain, 6);
 		var recoveredDynamics = Assert.IsType<AudioBusDynamicsConfiguration>(Assert.Single(restoredAudio.Buses).Dynamics);
 		Assert.Equal(-16, recoveredDynamics.Compressor.ThresholdDbFs);

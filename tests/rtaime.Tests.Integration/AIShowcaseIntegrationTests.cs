@@ -39,9 +39,9 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.True(running.Confidence >= 0.90);
 		Assert.True(running.EffectVisible);
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime!.Snapshot.Runtime.Status);
-		Assert.Equal(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
+		Assert.Equal(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
 		Assert.DoesNotContain(
-			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>(),
+			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>(),
 			layer => layer.LayerId == RuntimeProgramExecutionService.LegacyVisualLayerId);
 
 		var alternatePreview = initial.Sources
@@ -55,7 +55,7 @@ public sealed class AIShowcaseIntegrationTests
 		await client.SetAIShowcaseEnabledAsync(false);
 		var disabled = await WaitForAIAsync(client, snapshot => !snapshot.Enabled && snapshot.Status == RuntimeAIShowcaseStates.Disabled);
 		Assert.False(disabled.EffectVisible);
-		Assert.NotEqual(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
+		Assert.NotEqual(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime.Snapshot.Runtime.Status);
 	}
 
@@ -79,7 +79,7 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.False(unavailable.EffectVisible);
 		Assert.Equal(0U, unavailable.PersonRegionCount);
 		Assert.NotNull(unavailable.Failure);
-		Assert.NotEqual(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
+		Assert.NotEqual(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime.Snapshot.Runtime.Status);
 		var before = fixture.Runtime.Runtime.Snapshot.NextSequenceNumber;
 		await Task.Delay(100);
@@ -106,7 +106,7 @@ public sealed class AIShowcaseIntegrationTests
 
 		Assert.False(timedOut.EffectVisible);
 		Assert.NotNull(timedOut.Failure);
-		Assert.NotEqual(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
+		Assert.NotEqual(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime.Snapshot.Runtime.Status);
 		var before = fixture.Runtime.Runtime.Snapshot.NextSequenceNumber;
 		await Task.Delay(100);
@@ -132,7 +132,7 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.Equal(before.Production.Revision, after.Production.Revision);
 		Assert.Equal(before.Production.Routing, after.Production.Routing);
 		Assert.False(after.AIShowcase.Enabled);
-		Assert.NotEqual(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
+		Assert.NotEqual(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
 	}
 
 	[Fact]
@@ -184,9 +184,9 @@ public sealed class AIShowcaseIntegrationTests
 	{
 		await using var fixture = await ProcessFixture.StartAsync();
 		await SynchronizeWithRetryAsync(fixture.Client);
-		fixture.Runtime.Runtime!.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
+		fixture.Runtime.Runtime!.SetVisualLayerMode(RuntimeVisualLayerMode.Dynamic);
 		await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Client.SetAIShowcaseEnabledAsync(true));
-		Assert.Equal(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
+		Assert.Equal(RuntimeVisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
 		Assert.False((await fixture.Client.SynchronizeAsync()).AIShowcase.Enabled);
 	}
 

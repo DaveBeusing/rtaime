@@ -45,7 +45,7 @@ public sealed class ProgramPipelineMeasurementBaselineTests
             Assert.True(plan.Succeeded);
             var sink = plan.Graph!.Nodes.Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId!.Value;
             Assert.True(runtime.ApplyExecution(plan.PreparedExecution!, sink).Committed);
-            runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+            runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
             await using var monitoring = monitoringEnabled
                 ? runtime.MonitoringHub.Subscribe(capacity: 2, requiresCpuFallback: true) : null;
             if (recordingEnabled)

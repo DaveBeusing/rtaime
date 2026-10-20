@@ -376,8 +376,8 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			?? throw new InvalidDataException("Broadcast test pattern state payload is required.");
 		var sourceId = new MediaSourceId(Identity.Parse(wire.SourceId));
 		var requestedMode = wire.MotionTiming
-			? V1BroadcastTestPatternMode.MotionTiming
-			: V1BroadcastTestPatternMode.Static;
+			? RuntimeBroadcastTestPatternMode.MotionTiming
+			: RuntimeBroadcastTestPatternMode.Static;
 		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled, requestedMode);
 		if (changed)
 			AdvanceStateVersion();
@@ -389,7 +389,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				sourceId.ToString(),
 				snapshot.BroadcastTestPatternSources.Contains(sourceId),
 				snapshot.BroadcastTestPatternModes.TryGetValue(sourceId, out var activeMode) &&
-					activeMode == V1BroadcastTestPatternMode.MotionTiming));
+					activeMode == RuntimeBroadcastTestPatternMode.MotionTiming));
 	}
 
 	private WireEnvelope SetAudioInputState(WireEnvelope request, RuntimeProgramExecutionService runtime)
@@ -914,7 +914,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			capability.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray())).ToArray(),
 		provider.Resources.Select(resource => new WireResource(resource.ResourceId.ToString(), resource.ProviderId.ToString(), resource.Kind, resource.CapacityUnits, resource.Reservable)).ToArray());
 
-	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot, VideoFormat format, RuntimeAIShowcaseSnapshot aiShowcase) => new(
+	private WireRuntimeSnapshot ToWire(RuntimeHostSnapshot snapshot, VideoFormat format, RuntimeAIShowcaseSnapshot aiShowcase) => new(
 		snapshot.Runtime.Version.ToString(),
 		snapshot.Runtime.ActiveExecutionId?.ToString(),
 		snapshot.Runtime.ExecutionRevision.Value,
@@ -934,7 +934,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 			.Select(sourceId => sourceId.ToString())
 			.ToArray(),
 		snapshot.BroadcastTestPatternModes
-			.Where(pair => pair.Value == V1BroadcastTestPatternMode.MotionTiming)
+			.Where(pair => pair.Value == RuntimeBroadcastTestPatternMode.MotionTiming)
 			.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => pair.Key.ToString())
 			.ToArray(),
@@ -949,7 +949,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
-		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray(),
+		(snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>()).Select(ToWire).ToArray(),
 		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
 
 	private static WireReplaySnapshot ToWire(ReplayBufferSnapshot snapshot) => new(
@@ -976,7 +976,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.RetainedBytes,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
-	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
+	private static WireAvSyncDiagnostics ToWire(RuntimeHostAvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
 		snapshot.State,
 		snapshot.EventId,
@@ -1049,7 +1049,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
 
-	private static WireCompositingLayer ToWire(V1CompositingLayerSnapshot snapshot) => new(
+	private static WireCompositingLayer ToWire(RuntimeCompositingLayerSnapshot snapshot) => new(
 		snapshot.LayerId,
 		(int)snapshot.Kind,
 		snapshot.Order,
@@ -1068,7 +1068,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.CropBottom,
 		snapshot.ProcessingStack.Select(ToWire).ToArray());
 
-	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
+	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
 		snapshot.AssetWidth,
@@ -1078,7 +1078,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.PositionY,
 		snapshot.Scale);
 
-	private static WireAudioInput ToWire(V1AudioInputSnapshot snapshot) => new(
+	private static WireAudioInput ToWire(RuntimeHostAudioInputSnapshot snapshot) => new(
 		snapshot.SourceId.ToString(),
 		snapshot.StreamId.ToString(),
 		snapshot.Gain,
@@ -1094,7 +1094,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.TestSignalFrequencyHz,
 		snapshot.TestSignalPeakLevel);
 
-	private static WireAudioProgram ToWire(V1AudioProgramSnapshot snapshot) => new(
+	private static WireAudioProgram ToWire(RuntimeHostAudioProgramSnapshot snapshot) => new(
 		snapshot.ActiveVideoSourceId.ToString(),
 		snapshot.ActiveStreamId.ToString(),
 		snapshot.Gain,
@@ -1109,7 +1109,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.ActiveAudioSourceId?.ToString());
 
 
-	private static WireAudioProductionSnapshot ToWire(V1AudioProductionSnapshot snapshot) => new(
+	private static WireAudioProductionSnapshot ToWire(RuntimeHostAudioProductionSnapshot snapshot) => new(
 		new WireAudioProductionConfiguration(
 			snapshot.Revision,
 			snapshot.Buses.Select(bus => new WireAudioProductionBus(
@@ -1169,7 +1169,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.LimiterGainReductionDb,
 		snapshot.LimiterHitCount);
 
-	private static WireRecordingSnapshot ToWire(V1RecordingOperatorSnapshot snapshot) => new(
+	private static WireRecordingSnapshot ToWire(RuntimeHostRecordingOperatorSnapshot snapshot) => new(
 		snapshot.State.ToString().ToUpperInvariant(),
 		snapshot.Elapsed.Ticks,
 		snapshot.Destination,
@@ -1211,7 +1211,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		(int)profile.EvidenceState,
 		profile.Evidence);
 
-	private static WireRuntimePerformance ToWire(V1RuntimePerformanceSnapshot snapshot) => new(
+	private static WireRuntimePerformance ToWire(RuntimeHostPerformanceSnapshot snapshot) => new(
 		snapshot.Uptime.Ticks,
 		snapshot.FrameBudget.Ticks,
 		snapshot.LastFrameProcessingTime.Ticks,

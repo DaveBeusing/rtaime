@@ -129,8 +129,8 @@ public sealed class ProgramFrameMemoryOwnershipTests
 			{
 				fixture.Runtime.SetVisualLayerMode(
 					(index / 16) % 2 == 0
-						? V1VisualLayerMode.Static
-						: V1VisualLayerMode.Disabled);
+						? RuntimeVisualLayerMode.Static
+						: RuntimeVisualLayerMode.Disabled);
 			}
 
 			var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();

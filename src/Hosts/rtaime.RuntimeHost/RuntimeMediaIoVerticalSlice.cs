@@ -104,12 +104,12 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 		appliedSequence = capture.CaptureSequence;
 	}
 
-	private static V1InputSignalState MapSignal(MediaIoSignalState state) => state switch
+	private static RuntimeInputSignalState MapSignal(MediaIoSignalState state) => state switch
 	{
-		MediaIoSignalState.Locked => V1InputSignalState.Valid,
-		MediaIoSignalState.Unstable => V1InputSignalState.Unstable,
-		MediaIoSignalState.Lost or MediaIoSignalState.Faulted => V1InputSignalState.Lost,
-		_ => V1InputSignalState.Recovering
+		MediaIoSignalState.Locked => RuntimeInputSignalState.Valid,
+		MediaIoSignalState.Unstable => RuntimeInputSignalState.Unstable,
+		MediaIoSignalState.Lost or MediaIoSignalState.Faulted => RuntimeInputSignalState.Lost,
+		_ => RuntimeInputSignalState.Recovering
 	};
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);

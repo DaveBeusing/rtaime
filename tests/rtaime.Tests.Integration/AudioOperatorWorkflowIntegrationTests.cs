@@ -33,7 +33,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		Assert.Equal(checked((int)(gained.Audio.SampleCount * 2U * sizeof(float))), gained.ProgramAudioPayload.Length);
 		Assert.Equal(0.20f, ReadFloat(gained.ProgramAudioPayload, 0), 5);
 		Assert.Equal(-0.10f, ReadFloat(gained.ProgramAudioPayload, 1), 5);
-		Assert.Equal(V1AudioHealthState.Healthy, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Healthy, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		fixture.Runtime.SetAudioInputState(fixture.SourceA, AudioGain.Unity, muted: true);
 		fixture.Runtime.SetExternalAudioInput(fixture.SourceA, sourceASamples);
@@ -43,7 +43,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		Assert.All(
 			Enumerable.Range(0, muted.ProgramAudioPayload.Length / sizeof(float)),
 			index => Assert.Equal(0f, ReadFloat(muted.ProgramAudioPayload, index)));
-		Assert.Equal(V1AudioHealthState.Muted, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Muted, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		fixture.Runtime.SetAudioInputState(fixture.SourceA, new AudioGain(4), muted: false);
 		fixture.Runtime.SetExternalAudioInput(fixture.SourceA, sourceASamples);
@@ -53,20 +53,20 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		Assert.Equal(0.8, clipping.Audio.RightPeakLevel, 5);
 		Assert.Equal(1f, ReadFloat(clipping.ProgramAudioPayload, 0));
 		Assert.Equal(-0.8f, ReadFloat(clipping.ProgramAudioPayload, 1), 5);
-		Assert.Equal(V1AudioHealthState.Clipping, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Clipping, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		fixture.Runtime.SetAudioInputState(fixture.SourceA, AudioGain.Unity, muted: false);
 		fixture.Runtime.SetExternalAudioMeter(fixture.SourceA, 0, 0, available: true);
 		using var silence = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(silence.Audio.Emitted);
 		Assert.Equal(0, silence.Audio.PeakLevel);
-		Assert.Equal(V1AudioHealthState.Silence, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Silence, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		fixture.Runtime.SetExternalAudioMeter(fixture.SourceA, 0, 0, available: false);
 		using var underrun = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(AudioFollowVideoStatus.Underrun, underrun.Audio.Status);
 		Assert.Empty(underrun.ProgramAudioPayload);
-		Assert.Equal(V1AudioHealthState.Underrun, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Underrun, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		Commit(
 			fixture.Control.SelectPreview(new SelectPreviewCommand(Metadata(fixture), new ProductionSourceId(fixture.SourceB.Value))),
@@ -133,7 +133,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		Assert.True(configured.TestSignalEnabled);
 		Assert.Equal(GeneratedAudioTestSignalMode.Tone, configured.TestSignalMode);
 		Assert.Equal("ALL", configured.TestSignalActiveChannel);
-		Assert.Equal(V1AudioHealthState.Healthy, configured.Health);
+		Assert.Equal(RuntimeAudioHealthState.Healthy, configured.Health);
 
 		using var generated = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(generated.Audio.Emitted);
@@ -146,7 +146,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 				.Max(),
 			0.249f,
 			0.251f);
-		Assert.Equal(V1AudioHealthState.Healthy, fixture.Runtime.Snapshot.AudioProgram.Health);
+		Assert.Equal(RuntimeAudioHealthState.Healthy, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		var disabled = fixture.Runtime.SetGeneratedAudioTestSignal(fixture.SourceA, false);
 		Assert.False(disabled.TestSignalEnabled);
@@ -186,14 +186,14 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 	{
 		await using var fixture = await Fixture.CreateAsync();
 
-		fixture.Runtime.SetInputSignalState(fixture.SourceA, V1InputSignalState.Lost);
+		fixture.Runtime.SetInputSignalState(fixture.SourceA, RuntimeInputSignalState.Lost);
 		var configured = fixture.Runtime.SetGeneratedAudioTestSignal(
 			fixture.SourceA,
 			true,
 			GeneratedAudioTestSignalMode.Silence);
 
 		Assert.True(configured.TestSignalEnabled);
-		Assert.Equal(V1AudioHealthState.Silence, configured.Health);
+		Assert.Equal(RuntimeAudioHealthState.Silence, configured.Health);
 
 		using var boundary = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(boundary.Audio.Emitted);
@@ -204,7 +204,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 
 		var disabled = fixture.Runtime.SetGeneratedAudioTestSignal(fixture.SourceA, false);
 		Assert.False(disabled.TestSignalEnabled);
-		Assert.Equal(V1AudioHealthState.Error, disabled.Health);
+		Assert.Equal(RuntimeAudioHealthState.Error, disabled.Health);
 	}
 
 	private static float[] StereoSamples(int frames, float left, float right)

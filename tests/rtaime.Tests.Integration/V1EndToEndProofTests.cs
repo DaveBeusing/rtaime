@@ -59,12 +59,12 @@ public sealed class V1EndToEndProofTests
         Assert.Equal(harness.SourceBMediaId, cutFrame.Audio.VideoSourceId);
         Assert.NotEqual(beforeCut.PixelProbe, cutFrame.PixelProbe);
 
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
         using var staticLayerFrame = harness.Runtime.ProcessNextBoundary();
-        Assert.Equal(V1VisualLayerMode.Static, staticLayerFrame.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Static, staticLayerFrame.VisualLayerMode);
         Assert.NotEqual(cutFrame.PixelProbe, staticLayerFrame.PixelProbe);
 
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Disabled);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Disabled);
         var previewBack = await harness.Client.SelectPreviewAsync(harness.SourceAProductionId.ToString());
         Assert.True(previewBack.Accepted);
         var dissolve = await harness.Client.DissolvePreviewAsync(3);
@@ -97,7 +97,7 @@ public sealed class V1EndToEndProofTests
         ApplyReferenceSegmentationEffect(harness.Runtime, aiResult);
 
         using var aiVisible = harness.Runtime.ProcessNextBoundary();
-        Assert.Equal(V1VisualLayerMode.Dynamic, aiVisible.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Dynamic, aiVisible.VisualLayerMode);
         Assert.NotEqual(cleanForAI.PixelProbe, aiVisible.PixelProbe);
 
         var unavailableAI = new AIHostService(new GovernedInferenceRuntime(
@@ -110,12 +110,12 @@ public sealed class V1EndToEndProofTests
             Duration.FromTimeSpan(TimeSpan.FromMilliseconds(100)),
             0.9);
         Assert.False(fallback.Usable);
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Disabled);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Disabled);
 
         using var cleanFallback = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(harness.SourceAMediaId, cleanFallback.CommittedProgramSourceId);
         Assert.True(cleanFallback.Audio.Emitted);
-        Assert.Equal(V1VisualLayerMode.Disabled, cleanFallback.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Disabled, cleanFallback.VisualLayerMode);
 
         var recordingStop = await harness.Runtime.StopRecordingAsync();
         Assert.Equal(RecordingStopStatus.Stopped, recordingStop.Status);
@@ -150,7 +150,7 @@ public sealed class V1EndToEndProofTests
         using var healthy = harness.Runtime.ProcessNextBoundary();
         Assert.NotEqual(new ProgramPixelProbe(0, 0, 0, 255), healthy.PixelProbe);
 
-        harness.Runtime.SetInputSignalState(harness.SourceAMediaId, V1InputSignalState.Lost);
+        harness.Runtime.SetInputSignalState(harness.SourceAMediaId, RuntimeInputSignalState.Lost);
         using var fallback = harness.Runtime.ProcessNextBoundary();
 
         Assert.Equal(harness.SourceAMediaId, fallback.CommittedProgramSourceId);
@@ -186,7 +186,7 @@ public sealed class V1EndToEndProofTests
         var parts = region.Split(',').Select(value => double.Parse(value, CultureInfo.InvariantCulture)).ToArray();
         Assert.Equal(4, parts.Length);
         runtime.UpdateDynamicLayerRegion(parts[0], parts[1], parts[2], parts[3]);
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Dynamic);
     }
 
     private sealed class V1Harness : IAsyncDisposable
@@ -308,7 +308,7 @@ public sealed class V1EndToEndProofTests
                 inputStatus,
                 _ai.Snapshot.State.ToString(),
                 runtime.Recording.State.ToString(),
-                runtime.VisualLayerMode != V1VisualLayerMode.Disabled,
+                runtime.VisualLayerMode != RuntimeVisualLayerMode.Disabled,
                 runtime.Audio.LastPeakLevel));
         }
 

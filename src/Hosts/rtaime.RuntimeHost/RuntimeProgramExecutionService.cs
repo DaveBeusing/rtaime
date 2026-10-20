@@ -19,14 +19,14 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
-public enum V1VisualLayerMode
+public enum RuntimeVisualLayerMode
 {
 	Disabled = 1,
 	Static = 2,
 	Dynamic = 3
 }
 
-public enum V1InputSignalState
+public enum RuntimeInputSignalState
 {
 	Valid = 1,
 	Unstable = 2,
@@ -34,13 +34,13 @@ public enum V1InputSignalState
 	Recovering = 4
 }
 
-public enum V1BroadcastTestPatternMode
+public enum RuntimeBroadcastTestPatternMode
 {
 	Static = 1,
 	MotionTiming = 2
 }
 
-public enum V1TimingHealthState
+public enum RuntimeHostTimingHealthState
 {
 	Healthy = (int)RuntimeTimingHealthState.Healthy,
 	Degraded = (int)RuntimeTimingHealthState.Degraded,
@@ -49,7 +49,7 @@ public enum V1TimingHealthState
 	Recovering = (int)RuntimeTimingHealthState.Recovering
 }
 
-public enum V1AudioHealthState
+public enum RuntimeAudioHealthState
 {
 	Healthy = 1,
 	Muted = 2,
@@ -91,7 +91,7 @@ public sealed class ProgramBoundaryResult : IDisposable
 		RecordingEnqueueResult? recording,
 		RuntimeProgramTransitionKind? transitionKind,
 		byte blendWeight,
-		V1VisualLayerMode visualLayerMode,
+		RuntimeVisualLayerMode visualLayerMode,
 		int activeGpuSurfacesAfterBoundary)
 	{
 		SequenceNumber = sequenceNumber;
@@ -120,7 +120,7 @@ public sealed class ProgramBoundaryResult : IDisposable
 	public RecordingEnqueueResult? Recording { get; }
 	public RuntimeProgramTransitionKind? TransitionKind { get; }
 	public byte BlendWeight { get; }
-	public V1VisualLayerMode VisualLayerMode { get; }
+	public RuntimeVisualLayerMode VisualLayerMode { get; }
 	public int ActiveGpuSurfacesAfterBoundary { get; }
 	public bool IsDisposed => Volatile.Read(ref _programPixels) is null;
 
@@ -135,7 +135,7 @@ public sealed class ProgramBoundaryResult : IDisposable
 		Volatile.Read(ref _programPixels) ?? throw new ObjectDisposedException(nameof(ProgramBoundaryResult));
 }
 
-public sealed record V1GraphicsOverlaySnapshot(
+public sealed record RuntimeGraphicsOverlaySnapshot(
 	bool AssetLoaded,
 	string? AssetName,
 	uint AssetWidth,
@@ -145,20 +145,20 @@ public sealed record V1GraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
-public enum V1CompositingLayerKind
+public enum RuntimeCompositingLayerKind
 {
 	LegacyVisual = 1,
 	BitmapGraphics = 2,
 	ProductionCg = 3
 }
 
-public sealed record V1CompositingLayerSnapshot
+public sealed record RuntimeCompositingLayerSnapshot
 {
 	private readonly ReadOnlyCollection<PreparedCompositingProcessingNodeState> _processingStack;
 
-	public V1CompositingLayerSnapshot(
+	public RuntimeCompositingLayerSnapshot(
 		string layerId,
-		V1CompositingLayerKind kind,
+		RuntimeCompositingLayerKind kind,
 		int order,
 		bool visible,
 		byte opacity,
@@ -209,7 +209,7 @@ public sealed record V1CompositingLayerSnapshot
 	}
 
 	public string LayerId { get; }
-	public V1CompositingLayerKind Kind { get; }
+	public RuntimeCompositingLayerKind Kind { get; }
 	public int Order { get; }
 	public bool Visible { get; }
 	public byte Opacity { get; }
@@ -228,7 +228,7 @@ public sealed record V1CompositingLayerSnapshot
 	public PreparedCompositingProcessingNodeState? ProcessingNode => _processingStack.Count == 0 ? null : _processingStack[0];
 }
 
-public sealed record V1AudioInputSnapshot(
+public sealed record RuntimeHostAudioInputSnapshot(
 	MediaSourceId SourceId,
 	AudioStreamId StreamId,
 	double Gain,
@@ -237,14 +237,14 @@ public sealed record V1AudioInputSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	V1AudioHealthState Health,
+	RuntimeAudioHealthState Health,
 	bool TestSignalEnabled = false,
 	GeneratedAudioTestSignalMode? TestSignalMode = null,
 	string? TestSignalActiveChannel = null,
 	double? TestSignalFrequencyHz = null,
 	double? TestSignalPeakLevel = null);
 
-public sealed record V1AudioProgramSnapshot(
+public sealed record RuntimeHostAudioProgramSnapshot(
 	MediaSourceId ActiveVideoSourceId,
 	AudioStreamId ActiveStreamId,
 	double Gain,
@@ -253,12 +253,12 @@ public sealed record V1AudioProgramSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	V1AudioHealthState Health,
+	RuntimeAudioHealthState Health,
 	AudioRoutingMode RoutingMode = AudioRoutingMode.FollowVideo,
 	ulong RoutingRevision = 0,
 	MediaSourceId? ActiveAudioSourceId = null);
 
-public sealed record V1AudioProductionBusSnapshot(
+public sealed record RuntimeHostAudioProductionBusSnapshot(
 	string BusId,
 	double MasterGain,
 	bool Muted,
@@ -275,7 +275,7 @@ public sealed record V1AudioProductionBusSnapshot(
 	ulong LimiterHitCount = 0,
 	AudioBusDynamicsConfiguration? Dynamics = null);
 
-public sealed record V1AudioProductionSourceSnapshot(
+public sealed record RuntimeHostAudioProductionSourceSnapshot(
 	MediaSourceId SourceId,
 	double Gain,
 	bool Muted,
@@ -283,7 +283,7 @@ public sealed record V1AudioProductionSourceSnapshot(
 	IReadOnlyList<string> BusAssignments,
 	AudioSourceEqualizerConfiguration? Equalizer = null);
 
-public sealed record V1AudioCrossfadeSnapshot(
+public sealed record RuntimeHostAudioCrossfadeSnapshot(
 	string BusId,
 	MediaSourceId FromSourceId,
 	MediaSourceId ToSourceId,
@@ -291,7 +291,7 @@ public sealed record V1AudioCrossfadeSnapshot(
 	uint DurationSamples,
 	AudioCrossfadeLaw Law);
 
-public sealed record V1AudioDuckingSnapshot(
+public sealed record RuntimeHostAudioDuckingSnapshot(
 	string BusId,
 	bool Enabled,
 	MediaSourceId SidechainSourceId,
@@ -302,15 +302,15 @@ public sealed record V1AudioDuckingSnapshot(
 	uint HoldSamples,
 	uint ReleaseSamples);
 
-public sealed record V1AudioProductionSnapshot(
+public sealed record RuntimeHostAudioProductionSnapshot(
 	ulong Revision,
-	IReadOnlyList<V1AudioProductionBusSnapshot> Buses,
+	IReadOnlyList<RuntimeHostAudioProductionBusSnapshot> Buses,
 	double ProgramMasterGain,
 	bool ProgramMuted,
 	AudioClipStrategy ClipStrategy,
-	IReadOnlyList<V1AudioProductionSourceSnapshot> Sources,
-	V1AudioCrossfadeSnapshot? Crossfade,
-	V1AudioDuckingSnapshot? Ducking,
+	IReadOnlyList<RuntimeHostAudioProductionSourceSnapshot> Sources,
+	RuntimeHostAudioCrossfadeSnapshot? Crossfade,
+	RuntimeHostAudioDuckingSnapshot? Ducking,
 	double LeftPeak,
 	double RightPeak,
 	double PreClipPeak,
@@ -327,7 +327,7 @@ public sealed record V1AudioProductionSnapshot(
 	double LimiterGainReductionDb = 0,
 	ulong LimiterHitCount = 0);
 
-public sealed record V1RecordingOperatorSnapshot(
+public sealed record RuntimeHostRecordingOperatorSnapshot(
 	RecordingLifecycleState State,
 	TimeSpan Elapsed,
 	string? Destination,
@@ -340,7 +340,7 @@ public sealed record V1RecordingOperatorSnapshot(
 	RecordingProfileId? DefaultProfileId = null,
 	IReadOnlyList<RecordingProfileDescriptor>? Profiles = null);
 
-public sealed record V1RuntimePerformanceSnapshot(
+public sealed record RuntimeHostPerformanceSnapshot(
 	TimeSpan Uptime,
 	TimeSpan FrameBudget,
 	TimeSpan LastFrameProcessingTime,
@@ -362,7 +362,7 @@ public sealed record V1RuntimePerformanceSnapshot(
 	TimeSpan LastCompositionDuration = default,
 	int ActiveCompositingLayerCount = 0);
 
-public sealed record V1AvSyncDiagnosticsSnapshot(
+public sealed record RuntimeHostAvSyncDiagnosticsSnapshot(
 	bool Enabled,
 	string State,
 	ulong? EventId,
@@ -374,27 +374,27 @@ public sealed record V1AvSyncDiagnosticsSnapshot(
 	double? DriftFromBaselineMilliseconds,
 	string Detail);
 
-public sealed record V1RuntimeHostSnapshot(
+public sealed record RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
-	V1TimingHealthState TimingHealth,
-	IReadOnlyDictionary<MediaSourceId, V1InputSignalState> InputSignals,
+	RuntimeHostTimingHealthState TimingHealth,
+	IReadOnlyDictionary<MediaSourceId, RuntimeInputSignalState> InputSignals,
 	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
-	IReadOnlyDictionary<MediaSourceId, V1BroadcastTestPatternMode> BroadcastTestPatternModes,
-	V1VisualLayerMode VisualLayerMode,
-	V1GraphicsOverlaySnapshot GraphicsOverlay,
-	IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputs,
-	V1AudioProgramSnapshot AudioProgram,
+	IReadOnlyDictionary<MediaSourceId, RuntimeBroadcastTestPatternMode> BroadcastTestPatternModes,
+	RuntimeVisualLayerMode VisualLayerMode,
+	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
+	IReadOnlyDictionary<MediaSourceId, RuntimeHostAudioInputSnapshot> AudioInputs,
+	RuntimeHostAudioProgramSnapshot AudioProgram,
 	AudioFollowVideoStatistics Audio,
 	RecordingSnapshot Recording,
-	V1RecordingOperatorSnapshot RecordingOperator,
-	V1RuntimePerformanceSnapshot Performance,
+	RuntimeHostRecordingOperatorSnapshot RecordingOperator,
+	RuntimeHostPerformanceSnapshot Performance,
 	int ActiveGpuSurfaces,
-	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
+	RuntimeHostAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
-	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null,
-	V1AudioProductionSnapshot? AudioProduction = null,
+	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null,
+	RuntimeHostAudioProductionSnapshot? AudioProduction = null,
 	ReplayBufferSnapshot? Replay = null);
 
 /// <summary>
@@ -443,8 +443,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly AvSyncEventTimeline _avSyncTimeline = new();
 	private readonly AvSyncDiagnosticsTracker _avSyncDiagnostics = new();
 	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
-	private readonly Dictionary<MediaSourceId, V1BroadcastTestPatternMode> _broadcastTestPatternModes = [];
-	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
+	private readonly Dictionary<MediaSourceId, RuntimeBroadcastTestPatternMode> _broadcastTestPatternModes = [];
+	private readonly Dictionary<MediaSourceId, RuntimeInputSignalState> _inputSignals;
 	private readonly Dictionary<MediaSourceId, MediaFramePipeline> _externalSourcePipelines = [];
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
@@ -479,7 +479,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private Failure? _auxFailure;
 	private VirtualOutputFrame? _confirmedAuxFrame;
 	private AnchoredTransition? _transition;
-	private V1VisualLayerMode _visualLayerMode = V1VisualLayerMode.Disabled;
+	private RuntimeVisualLayerMode _visualLayerMode = RuntimeVisualLayerMode.Disabled;
 	private byte[]? _operatorGraphicsAsset;
 	private string? _operatorGraphicsAssetName;
 	private uint _operatorGraphicsAssetWidth;
@@ -518,7 +518,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private byte _legacyVisualLayerOpacity = byte.MaxValue;
 	private ProductionCgTextDefinition? _productionCgDefinition;
 	private ProductionCgTextSnapshot _productionCgText = ProductionCgTextSnapshot.Empty;
-	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
+	private RuntimeHostTimingHealthState _timingHealth = RuntimeHostTimingHealthState.Recovering;
 	private TimeSpan _lastFrameProcessingTime;
 	private TimeSpan _lastCompositionDuration;
 	private int _lastCompositingLayerCount;
@@ -616,10 +616,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		_motionTimingTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
 		var syncAudioSampleRate = _audioStreams.Values.Select(stream => stream.Format.SampleRate).Distinct().Single();
 		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format, syncAudioSampleRate, _avSyncTimeline);
-		_inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
+		_inputSignals = new Dictionary<MediaSourceId, RuntimeInputSignalState>
 		{
-			[sourceAId] = V1InputSignalState.Valid,
-			[sourceBId] = V1InputSignalState.Valid
+			[sourceAId] = RuntimeInputSignalState.Valid,
+			[sourceBId] = RuntimeInputSignalState.Valid
 		};
 
 		_staticLayer = new StaticRgbaSource(
@@ -797,25 +797,25 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1RuntimeHostSnapshot Snapshot
+	public RuntimeHostSnapshot Snapshot
 	{
 		get
 		{
 			var hardware = _hardwareTelemetry.Sample();
 			lock (_gate)
 			{
-				return new V1RuntimeHostSnapshot(
+				return new RuntimeHostSnapshot(
 					_runtime.State,
 					_nextSequenceNumber,
 					_timingHealth,
-					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(
+					new ReadOnlyDictionary<MediaSourceId, RuntimeInputSignalState>(
 						_inputSignals.ToDictionary(
 							pair => pair.Key,
-							pair => _broadcastTestPatternSources.Contains(pair.Key) ? V1InputSignalState.Valid : pair.Value)),
+							pair => _broadcastTestPatternSources.Contains(pair.Key) ? RuntimeInputSignalState.Valid : pair.Value)),
 					Array.AsReadOnly(_broadcastTestPatternSources.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal).ToArray()),
-					new ReadOnlyDictionary<MediaSourceId, V1BroadcastTestPatternMode>(
+					new ReadOnlyDictionary<MediaSourceId, RuntimeBroadcastTestPatternMode>(
 						_broadcastTestPatternModes.ToDictionary(pair => pair.Key, pair => pair.Value)),
-					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
+					_operatorGraphicsVisible ? RuntimeVisualLayerMode.Static : _visualLayerMode,
 					GraphicsOverlaySnapshotUnsafe(),
 					AudioInputSnapshotsUnsafe(),
 					AudioProgramSnapshotUnsafe(),
@@ -1068,7 +1068,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				AudioStereoMeter measuredAudio;
 				AudioBufferDescriptor? afvBuffer;
 				AvSyncAudioEventObservation? audioSyncEvent;
-				V1VisualLayerMode visualLayerMode;
+				RuntimeVisualLayerMode visualLayerMode;
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
 				bool recordingActive;
 				Failure? auxFailure;
@@ -1213,7 +1213,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 							auxAudioBuffer = CreateAudioBusBuffer(sequence, auxOutputBusId.Value);
 						}
 						visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
-							? V1VisualLayerMode.Static
+							? RuntimeVisualLayerMode.Static
 							: _visualLayerMode;
 						recordingActive = _recorder.Snapshot.State == RecordingLifecycleState.Recording;
 					}
@@ -1517,9 +1517,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public void SetVisualLayerMode(V1VisualLayerMode mode)
+	public void SetVisualLayerMode(RuntimeVisualLayerMode mode)
 	{
-		if (!Enum.IsDefined(typeof(V1VisualLayerMode), mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+		if (!Enum.IsDefined(typeof(RuntimeVisualLayerMode), mode)) throw new ArgumentOutOfRangeException(nameof(mode));
 		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
@@ -1529,7 +1529,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1GraphicsOverlaySnapshot LoadGraphicsOverlay(
+	public RuntimeGraphicsOverlaySnapshot LoadGraphicsOverlay(
 		string assetName,
 		uint width,
 		uint height,
@@ -1565,7 +1565,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1GraphicsOverlaySnapshot ApplyProductionCgText(ProductionCgTextDefinition definition)
+	public RuntimeGraphicsOverlaySnapshot ApplyProductionCgText(ProductionCgTextDefinition definition)
 	{
 		ArgumentNullException.ThrowIfNull(definition);
 		if (definition.BoxWidth > _format.Width || definition.BoxHeight > _format.Height)
@@ -1619,7 +1619,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1GraphicsOverlaySnapshot SetGraphicsOverlay(
+	public RuntimeGraphicsOverlaySnapshot SetGraphicsOverlay(
 		bool visible,
 		double positionX,
 		double positionY,
@@ -1663,7 +1663,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1GraphicsOverlaySnapshot ClearGraphicsOverlay()
+	public RuntimeGraphicsOverlaySnapshot ClearGraphicsOverlay()
 	{
 		lock (_boundaryCaptureGate)
 		lock (_gate)
@@ -1713,7 +1713,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerState(
+	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerState(
 		string layerId,
 		bool visible,
 		byte opacity)
@@ -1750,7 +1750,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerTransform(
+	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerTransform(
 		string layerId,
 		double positionX,
 		double positionY,
@@ -1836,7 +1836,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerProcessingNode(
+	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerProcessingNode(
 		string layerId,
 		PreparedCompositingProcessingNodeState? processingNode) =>
 		SetCompositingLayerProcessingStack(
@@ -1845,7 +1845,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				? Array.Empty<PreparedCompositingProcessingNodeState>()
 				: new[] { processingNode });
 
-	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerProcessingStack(
+	public IReadOnlyList<RuntimeCompositingLayerSnapshot> SetCompositingLayerProcessingStack(
 		string layerId,
 		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack)
 	{
@@ -1899,7 +1899,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<V1CompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
+	public IReadOnlyList<RuntimeCompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
 	{
 		ArgumentNullException.ThrowIfNull(orderedLayerIds);
 		lock (_boundaryCaptureGate)
@@ -2123,9 +2123,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			Observe($"compositing.scene.applied:{string.Join(",", state.Layers.Select(layer => layer.LayerId))}");
 	}
 
-	public void SetTimingHealth(V1TimingHealthState state)
+	public void SetTimingHealth(RuntimeHostTimingHealthState state)
 	{
-		if (!Enum.IsDefined(typeof(V1TimingHealthState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+		if (!Enum.IsDefined(typeof(RuntimeHostTimingHealthState), state)) throw new ArgumentOutOfRangeException(nameof(state));
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -2193,7 +2193,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1AudioInputSnapshot SetAudioInputState(MediaSourceId sourceId, AudioGain gain, bool muted)
+	public RuntimeHostAudioInputSnapshot SetAudioInputState(MediaSourceId sourceId, AudioGain gain, bool muted)
 	{
 		lock (_boundaryCaptureGate)
 		lock (_gate)
@@ -2230,7 +2230,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1AudioProductionSnapshot SetAudioProductionConfiguration(AudioProductionConfiguration configuration)
+	public RuntimeHostAudioProductionSnapshot SetAudioProductionConfiguration(AudioProductionConfiguration configuration)
 	{
 		ArgumentNullException.ThrowIfNull(configuration);
 		lock (_boundaryCaptureGate)
@@ -2264,7 +2264,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1AudioProgramSnapshot SetAudioRouting(AudioRoutingMode mode, MediaSourceId? breakawaySourceId = null)
+	public RuntimeHostAudioProgramSnapshot SetAudioRouting(AudioRoutingMode mode, MediaSourceId? breakawaySourceId = null)
 	{
 		lock (_boundaryCaptureGate)
 		lock (_gate)
@@ -2277,7 +2277,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public V1AudioInputSnapshot SetGeneratedAudioTestSignal(
+	public RuntimeHostAudioInputSnapshot SetGeneratedAudioTestSignal(
 		MediaSourceId sourceId,
 		bool enabled,
 		GeneratedAudioTestSignalMode mode = GeneratedAudioTestSignalMode.Tone,
@@ -2382,9 +2382,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public void SetInputSignalState(MediaSourceId sourceId, V1InputSignalState state)
+	public void SetInputSignalState(MediaSourceId sourceId, RuntimeInputSignalState state)
 	{
-		if (!Enum.IsDefined(typeof(V1InputSignalState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+		if (!Enum.IsDefined(typeof(RuntimeInputSignalState), state)) throw new ArgumentOutOfRangeException(nameof(state));
 		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
@@ -2399,9 +2399,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	public bool SetBroadcastTestPattern(
 		MediaSourceId sourceId,
 		bool enabled,
-		V1BroadcastTestPatternMode mode = V1BroadcastTestPatternMode.Static)
+		RuntimeBroadcastTestPatternMode mode = RuntimeBroadcastTestPatternMode.Static)
 	{
-		if (!Enum.IsDefined(typeof(V1BroadcastTestPatternMode), mode))
+		if (!Enum.IsDefined(typeof(RuntimeBroadcastTestPatternMode), mode))
 			throw new ArgumentOutOfRangeException(nameof(mode));
 
 		lock (_boundaryCaptureGate)
@@ -2459,7 +2459,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				referenceStream.TimingDomainId);
 
 			_backgrounds.Add(sourceId, RgbaFrameBuffer.Solid(_format, 0, 0, 0));
-			_inputSignals.Add(sourceId, V1InputSignalState.Recovering);
+			_inputSignals.Add(sourceId, RuntimeInputSignalState.Recovering);
 			_externalSourcePipelines.Add(sourceId, CreatePipeline());
 			_audioStreams.Add(sourceId, stream);
 			_audioMeters.Add(sourceId, new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: true));
@@ -2469,7 +2469,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public void SetExternalInputContent(MediaSourceId sourceId, RgbaFrameBuffer content, V1InputSignalState state = V1InputSignalState.Valid)
+	public void SetExternalInputContent(MediaSourceId sourceId, RgbaFrameBuffer content, RuntimeInputSignalState state = RuntimeInputSignalState.Valid)
 	{
 		ArgumentNullException.ThrowIfNull(content);
 		if (content.Format != _format)
@@ -2477,11 +2477,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		SetExternalInputContent(sourceId, content.Pixels.Span, state);
 	}
 
-	public void SetExternalInputContent(MediaSourceId sourceId, ReadOnlySpan<byte> rgbaPixels, V1InputSignalState state = V1InputSignalState.Valid)
+	public void SetExternalInputContent(MediaSourceId sourceId, ReadOnlySpan<byte> rgbaPixels, RuntimeInputSignalState state = RuntimeInputSignalState.Valid)
 	{
 		if (rgbaPixels.Length != RgbaFrameBuffer.RequiredByteLength(_format))
 			throw new ArgumentException("External input payload must match the RuntimeHost video format.", nameof(rgbaPixels));
-		if (!Enum.IsDefined(typeof(V1InputSignalState), state))
+		if (!Enum.IsDefined(typeof(RuntimeInputSignalState), state))
 			throw new ArgumentOutOfRangeException(nameof(state));
 
 		lock (_boundaryCaptureGate)
@@ -2906,8 +2906,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		{
 			var mode = _broadcastTestPatternModes.TryGetValue(frame.SourceId, out var configuredMode)
 				? configuredMode
-				: V1BroadcastTestPatternMode.Static;
-			if (mode == V1BroadcastTestPatternMode.MotionTiming)
+				: RuntimeBroadcastTestPatternMode.Static;
+			if (mode == RuntimeBroadcastTestPatternMode.MotionTiming)
 			{
 				var region = _motionTimingTestSignal.Render(frame.Timing);
 				_motionTimingTestPattern.CopyRegionFrom(
@@ -2923,7 +2923,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 
 		var state = _inputSignals[frame.SourceId];
-		if (state != V1InputSignalState.Lost)
+		if (state != RuntimeInputSignalState.Lost)
 			return _backgrounds[frame.SourceId];
 
 		Observe($"input.fallback.black:{frame.SourceId}:{frame.Timing.SequenceNumber}");
@@ -2939,10 +2939,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			frame.Timing,
 			new Generation(frame.Timing.SequenceNumber),
 			_broadcastTestPatternSources.Contains(frame.SourceId)
-				? _broadcastTestPatternModes.TryGetValue(frame.SourceId, out var mode) && mode == V1BroadcastTestPatternMode.MotionTiming
+				? _broadcastTestPatternModes.TryGetValue(frame.SourceId, out var mode) && mode == RuntimeBroadcastTestPatternMode.MotionTiming
 					? "internal-test-pattern-motion"
 					: "internal-test-pattern"
-				: state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
+				: state == RuntimeInputSignalState.Lost ? "input-fallback" : "runtime-input");
 	}
 
 	private IReadOnlyList<MaterializedCompositingLayer> MaterializeLayers(FrameTiming timing)
@@ -2950,12 +2950,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		var layers = new List<MaterializedCompositingLayer>(3);
 		try
 		{
-			if (_visualLayerMode != V1VisualLayerMode.Disabled)
+			if (_visualLayerMode != RuntimeVisualLayerMode.Disabled)
 			{
 				var frame = _visualLayerMode switch
 				{
-					V1VisualLayerMode.Static => _staticLayer.MaterializeReusable(_gpu, timing),
-					V1VisualLayerMode.Dynamic => _dynamicLayer.MaterializeReusable(_gpu, timing),
+					RuntimeVisualLayerMode.Static => _staticLayer.MaterializeReusable(_gpu, timing),
+					RuntimeVisualLayerMode.Dynamic => _dynamicLayer.MaterializeReusable(_gpu, timing),
 					_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
 				};
 				layers.Add(new MaterializedCompositingLayer(
@@ -3000,11 +3000,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe(SystemHardwareTelemetrySnapshot hardware)
+	private RuntimeHostPerformanceSnapshot PerformanceSnapshotUnsafe(SystemHardwareTelemetrySnapshot hardware)
 	{
 		var backend = _gpu.BackendInfo;
 		var frameBudget = TimeSpan.FromSeconds(_format.FrameRate.Denominator / (double)_format.FrameRate.Numerator);
-		return new V1RuntimePerformanceSnapshot(
+		return new RuntimeHostPerformanceSnapshot(
 			_uptimeClock.Elapsed,
 			frameBudget,
 			_lastFrameProcessingTime,
@@ -3027,7 +3027,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			_lastCompositingLayerCount);
 	}
 
-	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()
+	private RuntimeHostRecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()
 	{
 		var snapshot = _recorder.Snapshot;
 		var elapsed = TimeSpan.Zero;
@@ -3038,7 +3038,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 
 		var profileCatalog = _recordingProfileCatalogProvider?.ProfileCatalog;
-		return new V1RecordingOperatorSnapshot(
+		return new RuntimeHostRecordingOperatorSnapshot(
 			snapshot.State,
 			elapsed,
 			_recordingDestination,
@@ -3088,11 +3088,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		return profile;
 	}
 
-	private IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputSnapshotsUnsafe() =>
-		new ReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot>(
+	private IReadOnlyDictionary<MediaSourceId, RuntimeHostAudioInputSnapshot> AudioInputSnapshotsUnsafe() =>
+		new ReadOnlyDictionary<MediaSourceId, RuntimeHostAudioInputSnapshot>(
 			_audioStreams.Keys.ToDictionary(sourceId => sourceId, AudioInputSnapshotUnsafe));
 
-	private V1AudioInputSnapshot AudioInputSnapshotUnsafe(MediaSourceId sourceId)
+	private RuntimeHostAudioInputSnapshot AudioInputSnapshotUnsafe(MediaSourceId sourceId)
 	{
 		var stream = _audioStreams[sourceId];
 		var state = _audio.GetInputState(stream.StreamId);
@@ -3119,18 +3119,18 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		var right = Math.Min(1, rightUnclamped);
 		var clipping = !state.Muted && (leftUnclamped >= 1 || rightUnclamped >= 1);
 		var sourceAvailable = hasTestSignal ||
-			(_inputSignals.TryGetValue(sourceId, out var signal) && signal != V1InputSignalState.Lost);
+			(_inputSignals.TryGetValue(sourceId, out var signal) && signal != RuntimeInputSignalState.Lost);
 		var health = !sourceAvailable || !available
-			? V1AudioHealthState.Error
+			? RuntimeAudioHealthState.Error
 			: state.Muted
-				? V1AudioHealthState.Muted
+				? RuntimeAudioHealthState.Muted
 				: clipping
-					? V1AudioHealthState.Clipping
+					? RuntimeAudioHealthState.Clipping
 					: Math.Max(left, right) <= 0.000001
-						? V1AudioHealthState.Silence
-						: V1AudioHealthState.Healthy;
+						? RuntimeAudioHealthState.Silence
+						: RuntimeAudioHealthState.Healthy;
 
-		return new V1AudioInputSnapshot(
+		return new RuntimeHostAudioInputSnapshot(
 			sourceId,
 			stream.StreamId,
 			state.Gain.Linear,
@@ -3147,12 +3147,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			testSignal?.Configuration.PeakLevel);
 	}
 
-	private V1AvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
+	private RuntimeHostAvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
 	{
 		var activeSource = _lastAudioResult?.VideoSourceId ?? _audio.ActiveVideoSourceId;
 		if (_audio.RoutingState.Mode != AudioRoutingMode.FollowVideo)
 		{
-			return new V1AvSyncDiagnosticsSnapshot(
+			return new RuntimeHostAvSyncDiagnosticsSnapshot(
 				false,
 				"UNAVAILABLE",
 				null,
@@ -3166,7 +3166,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 		if (!IsAvSyncDiagnosticsEnabledUnsafe(activeSource))
 		{
-			return new V1AvSyncDiagnosticsSnapshot(
+			return new RuntimeHostAvSyncDiagnosticsSnapshot(
 				false,
 				"UNAVAILABLE",
 				null,
@@ -3180,7 +3180,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 
 		var snapshot = _avSyncDiagnostics.Snapshot;
-		return new V1AvSyncDiagnosticsSnapshot(
+		return new RuntimeHostAvSyncDiagnosticsSnapshot(
 			true,
 			snapshot.State.ToString().ToUpperInvariant(),
 			snapshot.EventId,
@@ -3202,7 +3202,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private bool IsAvSyncDiagnosticsEnabledUnsafe(MediaSourceId sourceId) =>
 		_broadcastTestPatternSources.Contains(sourceId) &&
 		_broadcastTestPatternModes.TryGetValue(sourceId, out var patternMode) &&
-		patternMode == V1BroadcastTestPatternMode.MotionTiming &&
+		patternMode == RuntimeBroadcastTestPatternMode.MotionTiming &&
 		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
 		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
 
@@ -3257,7 +3257,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			? samples.AsSpan(0, requiredValues)
 			: throw new InvalidOperationException($"Configured output audio bus '{busId}' has no Runtime mix buffer.");
 
-	private V1AudioProductionSnapshot AudioProductionSnapshotUnsafe()
+	private RuntimeHostAudioProductionSnapshot AudioProductionSnapshotUnsafe()
 	{
 		var configuration = _audioProduction.Configuration;
 		var program = configuration.GetBus(AudioBusId.Program);
@@ -3265,7 +3265,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			.Select(bus =>
 			{
 				_lastAudioProductionResults.TryGetValue(bus.BusId, out var result);
-				return new V1AudioProductionBusSnapshot(
+				return new RuntimeHostAudioProductionBusSnapshot(
 					bus.BusId.Value,
 					bus.MasterGain,
 					bus.Muted,
@@ -3284,7 +3284,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			})
 			.ToArray();
 		var sources = configuration.Sources
-			.Select(source => new V1AudioProductionSourceSnapshot(
+			.Select(source => new RuntimeHostAudioProductionSourceSnapshot(
 				source.SourceId,
 				source.Gain,
 				source.Muted,
@@ -3293,7 +3293,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				source.Equalizer))
 			.ToArray();
 		var crossfade = configuration.Crossfade is { } activeCrossfade
-			? new V1AudioCrossfadeSnapshot(
+			? new RuntimeHostAudioCrossfadeSnapshot(
 				activeCrossfade.BusId.Value,
 				activeCrossfade.FromSourceId,
 				activeCrossfade.ToSourceId,
@@ -3302,7 +3302,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				activeCrossfade.Law)
 			: null;
 		var ducking = configuration.Ducking is { } activeDucking
-			? new V1AudioDuckingSnapshot(
+			? new RuntimeHostAudioDuckingSnapshot(
 				activeDucking.BusId.Value,
 				activeDucking.Enabled,
 				activeDucking.SidechainSourceId,
@@ -3314,7 +3314,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				activeDucking.ReleaseSamples)
 			: null;
 		var result = _lastAudioProductionResult;
-		return new V1AudioProductionSnapshot(
+		return new RuntimeHostAudioProductionSnapshot(
 			configuration.Revision,
 			Array.AsReadOnly(buses),
 			program.MasterGain,
@@ -3356,7 +3356,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
+	private RuntimeHostAudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
 		var activeSource = _lastAudioResult?.VideoSourceId ?? _audio.ActiveVideoSourceId;
 		var routing = _audio.RoutingState;
@@ -3367,7 +3367,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			result.RoutingRevision != routing.Revision ||
 			result.AudioSourceId != routedAudioSource)
 		{
-			return new V1AudioProgramSnapshot(
+			return new RuntimeHostAudioProgramSnapshot(
 				activeSource,
 				routedStream,
 				routedState.Gain.Linear,
@@ -3376,7 +3376,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				0,
 				0,
 				false,
-				routedState.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence,
+				routedState.Muted ? RuntimeAudioHealthState.Muted : RuntimeAudioHealthState.Silence,
 				routing.Mode,
 				routing.Revision,
 				routedAudioSource);
@@ -3388,15 +3388,15 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		var mixMuted = programBus.Muted || IsProgramMixMuted(audioProduction, routedAudioSource);
 		var health = result.Status switch
 		{
-			AudioFollowVideoStatus.Underrun => V1AudioHealthState.Underrun,
-			not AudioFollowVideoStatus.Emitted => V1AudioHealthState.Error,
-			_ when mixMuted => V1AudioHealthState.Muted,
-			_ when mix.MissingSourceCount > 0 => V1AudioHealthState.Error,
-			_ when mix.Clipping => V1AudioHealthState.Clipping,
-			_ when mix.MasterPeak <= 0.000001 => V1AudioHealthState.Silence,
-			_ => V1AudioHealthState.Healthy
+			AudioFollowVideoStatus.Underrun => RuntimeAudioHealthState.Underrun,
+			not AudioFollowVideoStatus.Emitted => RuntimeAudioHealthState.Error,
+			_ when mixMuted => RuntimeAudioHealthState.Muted,
+			_ when mix.MissingSourceCount > 0 => RuntimeAudioHealthState.Error,
+			_ when mix.Clipping => RuntimeAudioHealthState.Clipping,
+			_ when mix.MasterPeak <= 0.000001 => RuntimeAudioHealthState.Silence,
+			_ => RuntimeAudioHealthState.Healthy
 		};
-		return new V1AudioProgramSnapshot(
+		return new RuntimeHostAudioProgramSnapshot(
 			result.VideoSourceId,
 			result.StreamId ?? routedStream,
 			result.Gain.Linear,
@@ -3449,11 +3449,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	private V1GraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe()
+	private RuntimeGraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe()
 	{
 		if (_operatorGraphicsAsset is not null)
 		{
-			return new V1GraphicsOverlaySnapshot(
+			return new RuntimeGraphicsOverlaySnapshot(
 				true,
 				_operatorGraphicsAssetName,
 				_operatorGraphicsAssetWidth,
@@ -3464,7 +3464,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				_operatorGraphicsScale);
 		}
 
-		return new V1GraphicsOverlaySnapshot(
+		return new RuntimeGraphicsOverlaySnapshot(
 			_productionCgAsset is not null,
 			_productionCgAsset is null ? null : "production-cg-text",
 			_productionCgAssetWidth,
@@ -3475,7 +3475,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			1.0);
 	}
 
-	private V1GraphicsOverlaySnapshot ProductionCgOverlaySnapshotUnsafe() => new(
+	private RuntimeGraphicsOverlaySnapshot ProductionCgOverlaySnapshotUnsafe() => new(
 		_productionCgAsset is not null,
 		_productionCgAsset is null ? null : "production-cg-text",
 		_productionCgAssetWidth,
@@ -3485,16 +3485,16 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		_productionCgPositionY,
 		1.0);
 
-	private IReadOnlyList<V1CompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
+	private IReadOnlyList<RuntimeCompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
 	{
-		var snapshots = new List<V1CompositingLayerSnapshot>(3);
+		var snapshots = new List<RuntimeCompositingLayerSnapshot>(3);
 		// Dynamic visual state is a Runtime-local observational effect (for example the AI showcase)
 		// and must not be promoted into Control's authoritative compositing resource set.
-		if (_visualLayerMode == V1VisualLayerMode.Static)
+		if (_visualLayerMode == RuntimeVisualLayerMode.Static)
 		{
-			snapshots.Add(new V1CompositingLayerSnapshot(
+			snapshots.Add(new RuntimeCompositingLayerSnapshot(
 				LegacyVisualLayerId,
-				V1CompositingLayerKind.LegacyVisual,
+				RuntimeCompositingLayerKind.LegacyVisual,
 				_legacyVisualLayerOrder,
 				true,
 				_legacyVisualLayerOpacity,
@@ -3505,9 +3505,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 		if (_operatorGraphicsAsset is not null)
 		{
-			snapshots.Add(new V1CompositingLayerSnapshot(
+			snapshots.Add(new RuntimeCompositingLayerSnapshot(
 				BitmapGraphicsLayerId,
-				V1CompositingLayerKind.BitmapGraphics,
+				RuntimeCompositingLayerKind.BitmapGraphics,
 				_operatorGraphicsLayerOrder,
 				_operatorGraphicsVisible,
 				_operatorGraphicsOpacity,
@@ -3526,9 +3526,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 		if (_productionCgAsset is not null)
 		{
-			snapshots.Add(new V1CompositingLayerSnapshot(
+			snapshots.Add(new RuntimeCompositingLayerSnapshot(
 				ProductionCgLayerId,
-				V1CompositingLayerKind.ProductionCg,
+				RuntimeCompositingLayerKind.ProductionCg,
 				_productionCgLayerOrder,
 				_productionCgText.Visible,
 				_productionCgOpacity,
@@ -3911,7 +3911,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				else
 				{
 					var signalAvailable = !_inputSignals.TryGetValue(sourceId, out var signal) ||
-						signal != V1InputSignalState.Lost;
+						signal != RuntimeInputSignalState.Lost;
 					if (!signalAvailable)
 					{
 						destination.Clear();

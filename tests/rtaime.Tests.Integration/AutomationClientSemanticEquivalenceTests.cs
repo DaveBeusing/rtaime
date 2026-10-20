@@ -119,7 +119,7 @@ public sealed class AutomationClientSemanticEquivalenceTests
 				"Valid",
 				"Optional",
 				runtime.Recording.State.ToString(),
-				runtime.VisualLayerMode != V1VisualLayerMode.Disabled,
+				runtime.VisualLayerMode != RuntimeVisualLayerMode.Disabled,
 				runtime.Audio.LastPeakLevel));
 		}
 

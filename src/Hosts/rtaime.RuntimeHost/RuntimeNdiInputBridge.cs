@@ -119,7 +119,7 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
                     if (sample.Kind == NdiInputMediaKind.Video)
                     {
                         var video = sample.Video!;
-                        _runtime.SetExternalInputContent(sourceId, video.RgbaPixels.Span, V1InputSignalState.Valid);
+                        _runtime.SetExternalInputContent(sourceId, video.RgbaPixels.Span, RuntimeInputSignalState.Valid);
                     }
                     else
                     {
@@ -134,8 +134,8 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
                     _runtime.SetInputSignalState(
                         sourceId,
                         health.Lifecycle is MediaInputLifecycleState.Lost or MediaInputLifecycleState.Faulted
-                            ? V1InputSignalState.Lost
-                            : V1InputSignalState.Recovering);
+                            ? RuntimeInputSignalState.Lost
+                            : RuntimeInputSignalState.Recovering);
                     if (health.Lifecycle is MediaInputLifecycleState.Lost or MediaInputLifecycleState.Faulted)
                         _runtime.ClearExternalAudioMeter(sourceId);
                 }
@@ -170,7 +170,7 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
         try
         {
             _runtime.RegisterExternalSource(sourceId);
-            _runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
+            _runtime.SetInputSignalState(sourceId, RuntimeInputSignalState.Lost);
             _runtime.ClearExternalAudioMeter(sourceId);
         }
         catch

@@ -91,7 +91,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 	private TimeSpan _lastApplied = TimeSpan.MinValue;
 	private Task? _inFlight;
 	private ulong _generation;
-	private V1VisualLayerMode _previousVisualMode = V1VisualLayerMode.Disabled;
+	private RuntimeVisualLayerMode _previousVisualMode = RuntimeVisualLayerMode.Disabled;
 	private bool _disposed;
 	private FrameDescriptor? _lastProgramFrame;
 	private bool _testActive;
@@ -166,7 +166,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				return _snapshot;
 			}
 
-			if (_runtime.Snapshot.VisualLayerMode == V1VisualLayerMode.Dynamic)
+			if (_runtime.Snapshot.VisualLayerMode == RuntimeVisualLayerMode.Dynamic)
 				throw new InvalidOperationException("The dynamic visual layer is already in use. Bypass it before activating the AI reference effect.");
 			_previousVisualMode = _runtime.Snapshot.VisualLayerMode;
 			_snapshot = RuntimeAIShowcaseSnapshot.Disabled with
@@ -313,7 +313,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 			}
 
 			_runtime.UpdateDynamicLayerRegion(result.Left, result.Top, result.Right, result.Bottom);
-			_runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
+			_runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Dynamic);
 			var appliedSequence = _runtime.Snapshot.NextSequenceNumber;
 			_lastApplied = _clock.Elapsed;
 			_snapshot = new RuntimeAIShowcaseSnapshot(
@@ -349,7 +349,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 
 	private void RestoreVisualModeUnsafe()
 	{
-		if (_runtime.Snapshot.VisualLayerMode == V1VisualLayerMode.Dynamic)
+		if (_runtime.Snapshot.VisualLayerMode == RuntimeVisualLayerMode.Dynamic)
 			_runtime.SetVisualLayerMode(_previousVisualMode);
 	}
 

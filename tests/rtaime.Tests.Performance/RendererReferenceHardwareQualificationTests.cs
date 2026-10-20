@@ -382,7 +382,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         if (!runtime.ApplyExecution(initialPlan.PreparedExecution!, programSink).Committed)
             throw new InvalidOperationException("Initial renderer qualification execution did not commit.");
 
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
         var overlay = new byte[64 * 64 * 4];
         for (var offset = 0; offset < overlay.Length; offset += 4)
         {
@@ -538,7 +538,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                     if (!applied.Committed) throw new InvalidOperationException("Renderer qualification transition did not commit.");
                     programOnB = !programOnB;
                     transitionApplied = true;
-                    runtime.SetVisualLayerMode(transitions % 3 == 0 ? V1VisualLayerMode.Disabled : V1VisualLayerMode.Static);
+                    runtime.SetVisualLayerMode(transitions % 3 == 0 ? RuntimeVisualLayerMode.Disabled : RuntimeVisualLayerMode.Static);
                     runtime.SetGraphicsOverlay(transitions % 3 == 2, .15, .12, 1);
                 }
                 if (boundaryIndex % recordingPeriod == 0)

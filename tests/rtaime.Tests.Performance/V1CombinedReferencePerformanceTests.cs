@@ -49,7 +49,7 @@ public sealed class V1CombinedReferencePerformanceTests
             new RecordingSessionId(Identity.Parse("92000000-0000-0000-0000-000000000001")),
             new RecordingOutputId(Identity.Parse("92000000-0000-0000-0000-000000000002")));
         Assert.True(recording.Succeeded);
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
 
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider() },

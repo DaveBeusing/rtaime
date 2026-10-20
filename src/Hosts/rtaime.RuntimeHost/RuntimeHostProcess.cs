@@ -224,7 +224,7 @@ public sealed class RuntimeHostProcess
     private RuntimeHostMediaAnalysisObservationServer? _analysisServer;
 	private Task? _mediaLoop;
 	private bool _runtimeDisposed;
-	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
+	private RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
 	public RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
@@ -306,7 +306,7 @@ public sealed class RuntimeHostProcess
 	public RuntimeAIShowcaseService? AIShowcase => _aiShowcase;
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
-	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
+	public RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 	public MediaIoVerticalSliceStatistics? MediaIoStatistics => _mediaIo?.Statistics;
 	public MediaIoPortStatus? MediaIoInputAStatus => _mediaIo?.InputAStatus;
 	public MediaIoPortStatus? MediaIoInputBStatus => _mediaIo?.InputBStatus;
@@ -700,13 +700,13 @@ public sealed class RuntimeHostProcess
 			_lifecycle = new RuntimeHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 	}
 
-	private static V1TimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
+	private static RuntimeHostTimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
 	{
-		TimingQualificationState.Recovering => V1TimingHealthState.Recovering,
-		TimingQualificationState.Healthy => V1TimingHealthState.Healthy,
-		TimingQualificationState.Degraded => V1TimingHealthState.Degraded,
-		TimingQualificationState.Unstable => V1TimingHealthState.Unstable,
-		TimingQualificationState.Lost => V1TimingHealthState.Lost,
+		TimingQualificationState.Recovering => RuntimeHostTimingHealthState.Recovering,
+		TimingQualificationState.Healthy => RuntimeHostTimingHealthState.Healthy,
+		TimingQualificationState.Degraded => RuntimeHostTimingHealthState.Degraded,
+		TimingQualificationState.Unstable => RuntimeHostTimingHealthState.Unstable,
+		TimingQualificationState.Lost => RuntimeHostTimingHealthState.Lost,
 		_ => throw new InvalidOperationException($"Unsupported timing qualification state '{state}'.")
 	};
 

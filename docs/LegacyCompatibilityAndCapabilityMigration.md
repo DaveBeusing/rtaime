@@ -97,6 +97,16 @@ Each path is a **confirmed entry point**, not a claim that all matches in all 1,
 - **Visual and hardware:** correctly sized/clear monitoring frame plus mixed DPI; physical color/HDR/SDI/NDI/device latency, long soak, SSD/GPU/RAM/VRAM/GC measurements with exact source/runner evidence.
 - **Windows and CI:** `./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release` then focused architecture/contracts/integration/Operator/failure suites, `dotnet test rtaime.slnx --configuration Release --no-build -m:1` and the five Required Gates. Run after the last commit and inspect the exact head; always report actual failures.
 
+## Domain naming migration checkpoint — 2026-10-20
+
+The product-neutral host/service terminology is now applied to the **implementation-owned** RuntimeHost snapshot family, signal/audio/compositing states, Production CG in-process records and inference default profile. Updates cover owning `src/`, affected host call sites, targeted tests, path/text-dependent quality policies and current technical documentation. C# type names change; **wire field names and numeric enum values do not**. Live `WireRuntimeSnapshot`, `WireProductionCgText`, `WireInputSignal`, `WireAudio*` payload shapes and serialized string status values remain the interoperability boundary. The existing integration suites exercise the same host mutations and serialization paths; a new runtime enum regression explicitly pins CG, signal, visual, test pattern and audio numeric values. AI budget regression retains 100 compute units, 512 MiB VRAM, two concurrent requests and 30 requests/second, with no additional capacity claim.
+
+**Compatibility exclusions:** Published `schemas/**/v1/` JSON/Proto/SQL assets, `rtaime.v1.*` named-pipe endpoints, stable deterministic `v1-layer-source` source identities, saved Shows, historical fixtures, numeric operations and old wire paths remain intentionally unchanged. No wire adapter rewrite, schema bump, source-ID churn, new renderer, new cadence, extra GPU/CPU budget or upgraded physical device support was authorized.
+
+**Remaining domain owners:** Provider/Runtime admission for more decoder sessions and native sequence owners; Output role/mapping allocation across additional targets/surfaces and frame/VRAM budgets; per-format high-resolution, color, SDR/HDR, NDI/SDI and hardware qualification. Migrate old contract versions only with explicit version negotiation, fixtures, read/write tests and approved breaking-change policy. These remain `CAPABILITY_GATE`, `VALIDATED_RESOURCE_BOUND` or `HARDWARE_UNVERIFIED` rather than purportedly completed scale features.
+
+**Qualification:** A final-head Windows Release build, full test run, five Required Gates, compatibility round trips and physical target evidence must be recorded separately. A successful naming refactor does not qualify additional capacities, sequence Program output or external hardware.
+
 ## Implementation status / resumption
 
 This register distinguishes work committed on the active branch from older inventory and runner evidence. Actual merge readiness still requires the final-head Windows gates and compatibility checks.
@@ -107,7 +117,7 @@ This register distinguishes work committed on the active branch from older inven
 | Initial GitHub branch/PR collision inspection | COMPLETED for original baseline and refreshed through current master; recheck before further shared edits |
 | Source/compatibility/cap inventory | INITIAL CLASSIFICATION with path/owner/risk, historic contract boundaries and capacity-gate owners; exhaustive per-symbol and user-facing-resource audit still pending |
 | Canonical product scope | DOCUMENTED in `docs/ProductScope.md` |
-| Internal runtime/CG/AI renames | `RuntimeProgramExecutionService` and `ProgramBoundaryResult` renamed with callsites and quality paths; private GPU format-array field neutralized. Runtime snapshot/CG/inference names require compatibility exposure review before migration |
+| Internal runtime/CG/AI renames | COMPLETED for implementation-owned Program execution, readback boundary, RuntimeHost snapshot/enums, Production CG models, inference conservative profile and private GPU format table. Numeric semantics, existing wire DTOs and compatibility endpoints remain unchanged; see checkpoints below |
 | Wire/persistence/endpoint migration | NOT AUTHORIZED; legacy protocol, Show, Source, named-pipe and Protobuf identities retained. New architecture tests guard sampled stable identities; exhaustive round-trip coverage remains an acceptance requirement |
 | Dynamic scaling beyond currently validated resource profiles | NOT IMPLEMENTED |
 | Physical high-resolution, CUDA, SDI/HDR, sequence actual sink | UNVERIFIED / as qualified in owning source |

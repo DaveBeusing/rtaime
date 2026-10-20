@@ -91,7 +91,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             foreach (var source in _pendingInputClears)
             {
                 runtime.ClearExternalAudioMeter(source);
-                runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
             }
             _pendingInputClears.Clear();
         }
@@ -316,7 +316,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                 if (entry is not null || _pendingInputClears.Remove(source))
                 {
                     runtime.ClearExternalAudioMeter(source);
-                    runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                    runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
                 }
                 return;
             }
@@ -331,12 +331,12 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                     runtime.SetExternalAudioMeter(source, 0, 0, available: false);
                 entry.PublishedGeneration = generation;
                 runtime.SetExternalInputContent(source, boundary.RgbaPixels.Span,
-                    boundary.Video.Surface.Format == runtime.Format ? V1InputSignalState.Valid : V1InputSignalState.Unstable);
+                    boundary.Video.Surface.Format == runtime.Format ? RuntimeInputSignalState.Valid : RuntimeInputSignalState.Unstable);
                 entry.NeedsPublication = false;
             }
             if (entry.NeedsPublication || snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
                 boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
-                runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
             if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
                 runtime.SetExternalAudioInput(source, boundary.AudioPayload.Span, available: true);
             else

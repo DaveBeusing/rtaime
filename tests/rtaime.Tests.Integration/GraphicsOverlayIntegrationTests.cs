@@ -15,6 +15,22 @@ namespace rtaime.Tests.Integration;
 public sealed class GraphicsOverlayIntegrationTests
 {
     [Fact]
+    public void Runtime_signal_and_visual_state_enums_keep_existing_wire_numeric_values()
+    {
+        Assert.Equal(1, (int)RuntimeVisualLayerMode.Disabled);
+        Assert.Equal(2, (int)RuntimeVisualLayerMode.Static);
+        Assert.Equal(3, (int)RuntimeVisualLayerMode.Dynamic);
+        Assert.Equal(1, (int)RuntimeInputSignalState.Valid);
+        Assert.Equal(2, (int)RuntimeInputSignalState.Unstable);
+        Assert.Equal(3, (int)RuntimeInputSignalState.Lost);
+        Assert.Equal(4, (int)RuntimeInputSignalState.Recovering);
+        Assert.Equal(1, (int)RuntimeBroadcastTestPatternMode.Static);
+        Assert.Equal(2, (int)RuntimeBroadcastTestPatternMode.MotionTiming);
+        Assert.Equal(1, (int)RuntimeAudioHealthState.Healthy);
+        Assert.Equal(6, (int)RuntimeAudioHealthState.Error);
+    }
+
+    [Fact]
     public void Production_CG_runtime_enum_migration_preserves_existing_wire_numeric_values()
     {
         Assert.Equal(1, (int)CgTextAlignment.Left);
@@ -45,7 +61,7 @@ public sealed class GraphicsOverlayIntegrationTests
 
 		fixture.Runtime.SetGraphicsOverlay(true, 0.0, 0.0, 1.0);
 		using var visible = fixture.Runtime.ProcessNextBoundary();
-		Assert.Equal(V1VisualLayerMode.Static, visible.VisualLayerMode);
+		Assert.Equal(RuntimeVisualLayerMode.Static, visible.VisualLayerMode);
 		AssertPixel(visible.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
 		var blended = Pixel(visible.ProgramPixels, fixture.Format, 1, 0);
 		var baselineBlended = Pixel(baseline.ProgramPixels, fixture.Format, 1, 0);
@@ -93,7 +109,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		var definition = LowerThird("STACKED CG");
 		fixture.Runtime.ApplyProductionCgText(definition);
 
-		var layers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>();
+		var layers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
 		var bitmap = Assert.Single(layers, layer => layer.LayerId == RuntimeProgramExecutionService.BitmapGraphicsLayerId);
 		var cg = Assert.Single(layers, layer => layer.LayerId == RuntimeProgramExecutionService.ProductionCgLayerId);
 		Assert.True(bitmap.Visible);
@@ -116,7 +132,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.Equal(0.25, transformed.PositionX, 6);
 		Assert.Equal(0.20, transformed.PositionY, 6);
 		Assert.Equal(1.5, transformed.Scale, 6);
-		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>();
+		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
 		var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == RuntimeProgramExecutionService.BitmapGraphicsLayerId);
 		Assert.Equal(0.25, transformedBitmap.PositionX, 6);
 		Assert.Equal(0.20, transformedBitmap.PositionY, 6);

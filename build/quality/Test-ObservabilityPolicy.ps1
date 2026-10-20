@@ -135,7 +135,7 @@ Assert-Condition ($runtime -match 'recording\.Statistics') "RuntimeHost support 
 Assert-Condition ($runtime -match 'snapshot\.Performance') "RuntimeHost support snapshots must reuse the live performance snapshot."
 Assert-Condition ($runtime -match 'runtime\.droppedFrames') "Runtime support diagnostics must include the bounded dropped-frame counter."
 Assert-Condition ($runtime -match 'gpu\.utilizationPercent' -and $runtime -match 'UNVERIFIED') "GPU utilization diagnostics must remain UNVERIFIED when no measured value exists."
-Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "RuntimeHost must expose a bounded runtime performance snapshot."
+Assert-Condition ($runtimeService -match 'RuntimeHostPerformanceSnapshot') "RuntimeHost must expose a bounded runtime performance snapshot."
 Assert-Condition ($runtimeService -match 'RetainedObservationCapacity\s*=\s*512' -and $runtimeService -match 'BoundedDiagnosticHistory<string>') "RuntimeHost observation retention must remain explicitly bounded."
 Assert-Condition ($runtime -match 'RecentObservations\(RetainedSupportEvents\)' -and $runtime -notmatch 'Observations\.TakeLast') "Runtime support snapshots must request only the bounded newest observation subset."
 Assert-Condition ($virtualMedia -match 'RetainedFrameCapacity\s*=\s*128' -and $virtualMedia -match 'BoundedDiagnosticHistory<VirtualOutputFrame>' -and $virtualMedia -match 'OverwrittenFrameCount') "Virtual Program/Aux output history must remain fixed-capacity with overwrite accounting."

@@ -22,8 +22,8 @@ public sealed class RuntimeMemoryBoundednessTests
 		{
 			runtime.SetTimingHealth(
 				index % 2 == 0
-					? V1TimingHealthState.Healthy
-					: V1TimingHealthState.Degraded);
+					? RuntimeHostTimingHealthState.Healthy
+					: RuntimeHostTimingHealthState.Degraded);
 		}
 
 		Assert.Equal(RuntimeProgramExecutionService.RetainedObservationCapacity, runtime.Observations.Count);

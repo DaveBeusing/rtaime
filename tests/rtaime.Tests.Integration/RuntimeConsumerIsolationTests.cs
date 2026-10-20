@@ -82,7 +82,7 @@ public sealed class RuntimeConsumerIsolationTests
         {
             Assert.True(runtime.ApplyExecution(prepared, sink).Committed);
             runtime.SetExternalInputContent(mediaA, sourcePixels);
-            runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+            runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
             runtime.LoadGraphicsOverlay("Isolation graphic", 1, 1, new byte[] { 200, 10, 20, 160 });
             runtime.SetGraphicsOverlay(true, .25, .25, 1);
             runtime.SetAudioProductionConfiguration(new AudioProductionConfiguration(1,
