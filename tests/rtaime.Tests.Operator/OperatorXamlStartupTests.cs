@@ -29,13 +29,25 @@ public sealed class OperatorApplicationCollection
 [Collection("Operator application")]
 public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 {
-	[Fact]
-	public async Task Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA()
-	{
+    private static readonly string[] QualificationGroups = ["Composition", "Visual", "Controls", "Docking", "Gpu"];
+    private static readonly string QualificationSessionId = Guid.NewGuid().ToString("N");
+    private static readonly object QualificationEvidenceLock = new();
+
+    [Theory]
+    [InlineData("Composition")]
+    [InlineData("Visual")]
+    [InlineData("Controls")]
+    [InlineData("Docking")]
+    [InlineData("Gpu")]
+    public async Task Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA(string qualificationGroup)
+    {
+        Assert.Contains(qualificationGroup, QualificationGroups);
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-xaml-startup", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(root);
 		var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 		var diagnostics = new ConcurrentQueue<string>();
+        using var fixtureDeadline = new CancellationTokenSource();
+        var activePhase = "Application resources";
 		var thread = new Thread(() =>
 		{
 			var dispatcher = Dispatcher.CurrentDispatcher;
@@ -78,11 +90,13 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
 
-					target = "GPU descriptor boundary";
-					GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
-
-					target = "ProductionMacroControl";
-					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
+					if (qualificationGroup == "Composition")
+                    {
+                        target = activePhase = "GPU descriptor boundary";
+                        GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
+                        target = activePhase = "ProductionMacroControl";
+                        await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
+                    }
 
 					// Load both productive BAML views independently: MainWindow's outer line 1
 					// cannot identify which nested view supplied an invalid panel child.
@@ -143,72 +157,138 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 						throw;
 					}
 					Console.WriteLine("CONTENT RENDERED PASS [MainWindow]");
-					await OperatorControlDesignSystemQualification.VerifyAsync(window, dispatcher);
-					Assert.True(window.IsLoaded && window.IsVisible);
 
-                    // Workspace pane/viewer assertions run in every row of the existing 40-case matrix below.
+                    Assert.True(window.IsLoaded && window.IsVisible);
                     observedSurfaces = VisualDescendants(window).OfType<OperatorDrawingSurface>().ToArray();
                     var identity = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
                     var monitoring = window.Monitoring;
+
                     async Task Qualify(string name, Func<Task> execute)
                     {
-                        target = name;
+                        target = activePhase = qualificationGroup + "/" + name;
                         var started = Stopwatch.GetTimestamp();
                         var status = "FAILED";
+                        Console.WriteLine($"OPERATOR PHASE BEGIN [${qualificationGroup}] ${name}");
                         try
                         {
                             await execute();
                             Assert.Equal(identity, (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
                             Assert.Same(monitoring, window.Monitoring);
                             Assert.All(observedSurfaces, surface => Assert.InRange(surface.RenderingSubscriptionBalance, 0, 1));
-                            var posted = Stopwatch.GetTimestamp();
-                            var queueMilliseconds = await dispatcher.InvokeAsync(
-                                () => Stopwatch.GetElapsedTime(posted).TotalMilliseconds, DispatcherPriority.Input)
+
+                            // Separate Input and ContextIdle round-trips bound both interaction
+                            // responsiveness and the completion of deferred layout/binding work.
+                            var queued = Stopwatch.GetTimestamp();
+                            var inputDelayMs = await dispatcher.InvokeAsync(
+                                () => Stopwatch.GetElapsedTime(queued).TotalMilliseconds, DispatcherPriority.Input)
                                 .Task.WaitAsync(TimeSpan.FromSeconds(5));
-                            Assert.InRange(queueMilliseconds, 0, 5000);
+                            var idleStarted = Stopwatch.GetTimestamp();
+                            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle)
+                                .Task.WaitAsync(TimeSpan.FromSeconds(5));
+                            var idleDelayMs = Stopwatch.GetElapsedTime(idleStarted).TotalMilliseconds;
+                            Assert.InRange(inputDelayMs, 0, 5000);
+                            Assert.InRange(idleDelayMs, 0, 5000);
                             status = "PASS";
-                            interactionPhases.Add(new { name, status, elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds,
-                                dispatcherMilliseconds = queueMilliseconds,
-                                renderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance) });
+                            interactionPhases.Add(new
+                            {
+                                name, status, group = qualificationGroup,
+                                elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                                dispatcherMilliseconds = inputDelayMs, dispatcherIdleMilliseconds = idleDelayMs,
+                                renderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance)
+                            });
                         }
                         finally
                         {
-                            if (status != "PASS") interactionPhases.Add(new { name, status,
-                                elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds });
+                            if (status != "PASS")
+                                interactionPhases.Add(new
+                                {
+                                    name, status, group = qualificationGroup,
+                                    elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds
+                                });
+                            Console.WriteLine($"OPERATOR PHASE ${status} [${qualificationGroup}] ${name}; ${Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms");
                         }
                     }
-                    await Qualify("Combined layouts and QoL focus transitions", async () =>
+
+                    switch (qualificationGroup)
                     {
-                        await OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher);
-                        // Hidden templates may realize more native surfaces in the matrix; retain every instance for teardown.
-                        observedSurfaces = observedSurfaces.Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>()).Distinct().ToArray();
-                    });
-                    await Qualify("Integrated sequence, Outputs, AI and Health ownership", () =>
-                        OperatorExperienceIntegrationQualification.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Library smart bins, menus and virtualization", () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Timeline draft ergonomics", () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Live console actions and focus", () => LiveConsoleWindowQualification.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Inspector precision", () => InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Compositing layer and Inspector editing", () => CompositingWorkspaceQualification.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Output canvas geometry and authorized presentation", () => OutputCanvasWorkspaceQualification.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Inspector draft undo and transfer", () => InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Docking, focus, cinema and templates", () => OperatorDockingWindowTests.VerifyAsync(window, dispatcher));
-                    await Qualify("Palette and shortcut editing", () => OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Recent, favorites and help", () => OperatorLibraryTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("Preflight, activity and notifications", () => ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher));
-                    await Qualify("GPU surface lifetime", () => GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher));
-					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-					EventHandler rendering = (_, _) => resumedRender.TrySetResult();
-					CompositionTarget.Rendering += rendering;
-					try
-					{
-						window.InvalidateVisual();
-						await resumedRender.Task.WaitAsync(TimeSpan.FromSeconds(10));
-					}
-					finally { CompositionTarget.Rendering -= rendering; }
-					Assert.True(window.IsLoaded && window.IsVisible);
-					Console.WriteLine("GPU PRIMARY WINDOW PASS: productive MainWindow continues rendering after secondary surface teardown.");
-					Assert.DoesNotContain(diagnostics, entry => entry.StartsWith("FIRST CHANCE", StringComparison.Ordinal));
+                        case "Composition":
+                            await Qualify("Custom design controls and startup workspace topology", async () =>
+                            {
+                                await OperatorControlDesignSystemQualification.VerifyAsync(window, dispatcher);
+                                var originalWorkspace = window.Shell.SelectedWorkspace;
+                                foreach (var workspace in OperatorWorkspaceNames.All)
+                                {
+                                    window.Shell.SelectWorkspace(workspace);
+                                    await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded)
+                                        .Task.WaitAsync(TimeSpan.FromSeconds(5));
+                                    Assert.True(window.IsLoaded && window.IsVisible);
+                                }
+                                window.Shell.SelectWorkspace(originalWorkspace);
+                                await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded)
+                                    .Task.WaitAsync(TimeSpan.FromSeconds(5));
+                            });
+                            break;
+
+                        case "Visual":
+                            await Qualify("Combined layouts and QoL focus transitions", async () =>
+                            {
+                                await OperatorCombinedVisualQualification.VerifyWindowAsync(window, dispatcher);
+                                observedSurfaces = observedSurfaces
+                                    .Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>())
+                                    .Distinct().ToArray();
+                            });
+                            await Qualify("Integrated sequence, Outputs, AI and Health ownership",
+                                () => OperatorExperienceIntegrationQualification.VerifyWindowAsync(window, dispatcher));
+                            break;
+
+                        case "Controls":
+                            await Qualify("Library smart bins, menus and virtualization",
+                                () => MediaLibraryBrowsingTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Timeline draft ergonomics",
+                                () => TimelineErgonomicsTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Live console actions and focus",
+                                () => LiveConsoleWindowQualification.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Inspector precision",
+                                () => InspectorPrecisionTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Compositing layer and Inspector editing",
+                                () => CompositingWorkspaceQualification.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Output canvas geometry and authorized presentation",
+                                () => OutputCanvasWorkspaceQualification.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Inspector draft undo and transfer",
+                                () => InspectorDraftTransactionTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Palette and shortcut editing",
+                                () => OperatorCommandPaletteTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Recent, favorites and help",
+                                () => OperatorLibraryTests.VerifyWindowAsync(window, dispatcher));
+                            await Qualify("Preflight, activity and notifications",
+                                () => ShowReadinessOperatorTests.VerifyWindowAsync(window, dispatcher));
+                            break;
+
+                        case "Docking":
+                            await Qualify("Docking, focus, cinema and templates",
+                                () => OperatorDockingWindowTests.VerifyAsync(window, dispatcher));
+                            break;
+
+                        case "Gpu":
+                            await Qualify("GPU surface lifetime",
+                                () => GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher));
+                            await Qualify("Primary render after secondary GPU teardown", async () =>
+                            {
+                                var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                                EventHandler rendering = (_, _) => resumedRender.TrySetResult();
+                                CompositionTarget.Rendering += rendering;
+                                try
+                                {
+                                    window.InvalidateVisual();
+                                    await resumedRender.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                                }
+                                finally { CompositionTarget.Rendering -= rendering; }
+                                Assert.True(window.IsLoaded && window.IsVisible);
+                                Console.WriteLine("GPU PRIMARY WINDOW PASS: productive MainWindow continues rendering after secondary surface teardown.");
+                            });
+                            break;
+                    }
+                    Assert.DoesNotContain(diagnostics, entry => entry.StartsWith("FIRST CHANCE", StringComparison.Ordinal));
 				}
 				catch (Exception exception)
 				{
@@ -219,8 +299,14 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 					try
 					{
 						if (window is not null)
-						{
-							target = "MainWindow teardown";
+                        {
+                            target = activePhase = qualificationGroup + "/MainWindow teardown";
+                            Console.WriteLine($"OPERATOR TEARDOWN BEGIN [${qualificationGroup}]");
+                            observedSurfaces = observedSurfaces
+                                .Concat(VisualDescendants(window).OfType<OperatorDrawingSurface>())
+                                .Concat(window.Docking.FloatingWindows.Values
+                                    .SelectMany(floating => VisualDescendants(floating).OfType<OperatorDrawingSurface>()))
+                                .Distinct().ToArray();
 							var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 							window.Closed += (_, _) => closed.TrySetResult();
 							window.Close();
@@ -237,6 +323,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                             Assert.Empty(window.Docking.FloatingWindows);
                             Assert.Equal(0, window.InspectorView.InspectorSubscriptionCount);
                             Assert.All(observedSurfaces, surface => Assert.Equal(0, surface.RenderingSubscriptionBalance));
+                            Console.WriteLine($"OPERATOR TEARDOWN PASS [${qualificationGroup}]");
 						}
 						else if (owner is not null)
 						{
@@ -245,23 +332,10 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 						app?.Shutdown();
 					}
 					catch (Exception exception) { failures.Add(exception); }
-	                try
+                try
                 {
-                    var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
-                    if (!string.IsNullOrWhiteSpace(evidenceRoot))
-                    {
-                        Directory.CreateDirectory(evidenceRoot);
-                        File.WriteAllText(Path.Combine(evidenceRoot, "interaction-ui.json"), JsonSerializer.Serialize(new
-                        {
-                            sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
-                            sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
-                            status = failures.Count == 0 ? "PASS" : "FAILED",
-                            scope = "Disconnected real WPF; Input queue delay and event subscription balance; physical touch, mixed-monitor DPI and connected production latency UNVERIFIED",
-                            phases = interactionPhases,
-                            finalRenderingSubscriptions = observedSurfaces.Sum(surface => surface.RenderingSubscriptionBalance),
-                            failures = failures.Select(failure => failure.ToString()).ToArray()
-                        }, new JsonSerializerOptions { WriteIndented = true }));
-                    }
+                    WriteQualificationEvidence(qualificationGroup, interactionPhases, observedSurfaces,
+                        failures, fixtureDeadline.IsCancellationRequested);
                 }
                 catch (Exception exception) { failures.Add(exception); }
                     dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
@@ -285,11 +359,13 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 		{
 			await completed.Task.WaitAsync(TimeSpan.FromSeconds(45));
 		}
-		catch (TimeoutException)
-		{
-			await CaptureQualificationStacksAsync();
-			throw;
-		}
+        catch (TimeoutException exception)
+        {
+            fixtureDeadline.Cancel();
+            output.WriteLine($"Operator qualification '${qualificationGroup}' reached the 45-second fixture bound during '${activePhase}'.");
+            await CaptureQualificationStacksAsync();
+            throw new TimeoutException($"Operator '${qualificationGroup}' exceeded its fixture bound during '${activePhase}'.", exception);
+        }
 		finally
 		{
 			var joined = thread.Join(TimeSpan.FromSeconds(5));
@@ -465,11 +541,92 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 		}
 	}
 
-	private static bool SessionClosedCleanly(string path)
-	{
-		using var document = JsonDocument.Parse(File.ReadAllText(path));
-		return document.RootElement.GetProperty("CleanShutdown").GetBoolean();
-	}
+
+    private static void WriteQualificationEvidence(
+        string group, List<object> phases, OperatorDrawingSurface[] surfaces,
+        List<Exception> failures, bool timedOut)
+    {
+        var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
+        if (string.IsNullOrWhiteSpace(evidenceRoot)) return;
+
+        lock (QualificationEvidenceLock)
+        {
+            Directory.CreateDirectory(evidenceRoot);
+            var groupFile = Path.Combine(evidenceRoot, $"interaction-ui-${group.ToLowerInvariant()}.json");
+            WriteJsonAtomically(groupFile, new
+            {
+                session = QualificationSessionId,
+                processId = Environment.ProcessId,
+                group,
+                sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                status = failures.Count == 0 && !timedOut ? "PASS" : "FAILED",
+                scope = "Disconnected real WPF; Input and idle queue responsiveness; physical hardware and production latency UNVERIFIED",
+                phases,
+                finalRenderingSubscriptions = surfaces.Sum(surface => surface.RenderingSubscriptionBalance),
+                failures = failures.Select(failure => failure.ToString())
+                    .Concat(timedOut ? ["The 45-second fixture deadline elapsed."] : Array.Empty<string>()).ToArray()
+            });
+
+            // A complete PASS requires all independent journeys to finish in the
+            // same test process. Stale evidence from earlier CI steps is ignored.
+            var groups = new List<JsonElement>();
+            foreach (var name in QualificationGroups)
+            {
+                var path = Path.Combine(evidenceRoot, $"interaction-ui-${name.ToLowerInvariant()}.json");
+                if (!File.Exists(path)) continue;
+                using var document = JsonDocument.Parse(File.ReadAllText(path));
+                if (document.RootElement.GetProperty("session").GetString() == QualificationSessionId)
+                    groups.Add(document.RootElement.Clone());
+            }
+            var missingGroups = QualificationGroups.Where(name =>
+                !groups.Any(item => item.GetProperty("group").GetString() == name)).ToArray();
+            var anyFailure = groups.Any(item => item.GetProperty("status").GetString() != "PASS");
+            WriteJsonAtomically(Path.Combine(evidenceRoot, "interaction-ui.json"), new
+            {
+                session = QualificationSessionId,
+                sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
+                sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
+                status = anyFailure ? "FAILED" : missingGroups.Length == 0 ? "PASS" : "INCOMPLETE",
+                scope = "Five real isolated STA XAML, visual, interactions, docking and GPU journeys; physical hardware and connected production latency UNVERIFIED",
+                missingGroups,
+                groups,
+                phases = groups.SelectMany(item => item.GetProperty("phases").EnumerateArray().Select(phase => phase.Clone())).ToArray(),
+                finalRenderingSubscriptions = groups.Sum(item => item.GetProperty("finalRenderingSubscriptions").GetInt32()),
+                failures = groups.SelectMany(item => item.GetProperty("failures").EnumerateArray().Select(failure => failure.GetString())).ToArray()
+            });
+        }
+    }
+
+    private static void WriteJsonAtomically(string path, object value)
+    {
+        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+        }
+    }
+
+    private static bool SessionClosedCleanly(string path)
+    {
+        // A missing or transient partial persistence file is pending until the
+        // existing teardown deadline, not an immediate assertion failure.
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.TryGetProperty("CleanShutdown", out var clean) &&
+                clean.ValueKind == JsonValueKind.True;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+        catch (JsonException) { return false; }
+    }
 
 	private static IEnumerable<DependencyObject> VisualDescendants(DependencyObject root)
 	{
