@@ -212,6 +212,28 @@ and returns only identity/generation/resource count and typed status.
 Get/Cancel are fenced by that exact identity and epoch. No original
 media bytes or paths are returned to the Client.
 
+Control now transmits an additive, bounded
+`rtaime.sequence-execution-snapshot.v1` alongside native preparation:
+exact source IDs, saved authoring revision, rational cadence, contiguous
+compiled slices, clip/source offsets, fingerprints, layer order and
+transition/bus metadata. The Runtime validates that every active decoded
+clip matches the admitted native source, fingerprint and time offset
+*before* opening decoders. The finite transport budget is 256 KiB,
+256 time slices, 32 clips per slice and 2,048 total slice-clip references;
+a larger show is rejected without a native reservation instead of
+silently dropping clips or exceeding management IPC capacity.
+
+The retained snapshot can now select genuine leased Video/Audio clip
+sets for an exact existing Runtime Program slot and current shuttle
+generation. Synchronized audio/video clips sharing one native asset and
+time offset share a decoder lease. Black/silent gaps select zero native
+owners. Stopped, stale-generation or invalid native frames cannot
+escape the selection seam; acquired leases are explicitly owned by
+the caller. **This is an internal decoder-to-compositor input boundary,
+not committed Preview or Program output.** Graphics still require their
+authoritative output/compositor connection, and the current isolated
+reference GPU/PCM composer has not been made a Program sink.
+
 States `PREPARED`, `REJECTED`, `STALE`, and `CANCELED` describe
 the **native preparation lifecycle only**. In particular, they never
 promote `SequenceList.PlaybackState` or `SequenceSnapshot.PlaybackState`
