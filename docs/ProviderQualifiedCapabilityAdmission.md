@@ -59,6 +59,25 @@ target releases earlier new frames while leaving the source Program frame unchan
 Regression cases verify different target pixels, deterministic lease disposal,
 unknown targets, malformed quads and mid-group failure rollback.
 
+The `RuntimeSoftwareOutputPublication` now provides a bounded software
+publication owner for the already-mapped target groups. It stages one candidate
+without changing visible output, checks the originating RuntimeHost epoch,
+authoritative execution revision and monotonic Program frame slot, and swaps all
+target frames atomically in one call made by the owning Program boundary.
+A single group lease exposes every target from one published sequence, so readers
+cannot observe different target generations within the same acquisition.
+Retired GPU frame groups remain charged while active readers exist; a finite
+old-generation ceiling rejects pressure rather than recycling live surfaces.
+Stale or rejected candidates preserve the last published group; cancellation
+releases only staged frames. Closing the owner drains groups without destroying
+frames held by outstanding leases. Integration tests cover successful two-target
+pixels, revision/epoch rejection, retained lease pressure and shutdown.
+
+This is an **in-process software publication primitive**, not a new Program
+scheduler, external output-routing authority or physical scan-out provider.
+A caller must still use the existing Program boundary and Control-approved route;
+the current legacy Runtime mapping path does not invoke this owner yet.
+
 This **does not** yet activate multiple governed output sinks. The current
 `V1RuntimeHostService.OutputMapping` still commits only the single authorised
 Program mapping and the existing Aux/NDI/SRT routes keep their current contracts.
@@ -96,8 +115,11 @@ or release readiness.
 
 - Bind real provider capability/resource descriptors and measured/native pressure
   into the RuntimeHost capacity profile, without trusting arbitrary CLI claims.
-- Add an authoritative multi-output preparation transaction, per-target GPU/sink
-  leases, format conversion and strict boundary commit/rollback.
+- Connect the existing Program boundary to the software group's staged/
+  committed publication with Control-owned route/revision authorization; expand
+  to multiple native provider sinks only with real atomic reservation, per-target
+  submit/rollback and measured output cadence. The in-process software owner is
+  not physical sink admission.
 - Establish a device-, driver-, output-, cadence- and color-specific qualification
   matrix (including UHD, HDR and professional I/O) with source-bound physical evidence.
 - Maintain v1 readers and rollback while versioned peers opt in to additional
