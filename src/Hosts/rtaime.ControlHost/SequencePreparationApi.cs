@@ -276,11 +276,39 @@ public sealed partial class ControlHostIpcServer
             // needs a nonzero independent resource generation, not a higher
             // production revision or an implicit production mutation.
             new Generation(authority.Revision.Next().Value), bindings.ToArray());
+        // The immutable execution slices are compiled from the same saved
+        // revision and are bound to precisely those ephemeral native SourceIds
+        // for which Runtime will reserve real decoder tickets. A slot can never
+        // supply a client-invented file path or an unadmitted owner.
+        var nativeSourceIds = owners.Select((owner, index) => new
+        {
+            Key = (owner.AssetId, Offset: checked(owner.SourceIn - owner.TimelineStart)),
+            SourceId = remoteOwners[index].SourceId.ToString()
+        }).ToDictionary(owner => owner.Key, owner => owner.SourceId);
+        var slices = compiled.Plan.Windows.Select(window => new SequenceExecutionSlice(
+            window.StartTick, window.EndTick,
+            window.Clips.Select(clip => new SequenceExecutionClip(
+                clip.ClipId, clip.AssetId, clip.FingerprintSha256, clip.Kind,
+                clip.Kind == SequenceMediaKind.Graphics ? null : nativeSourceIds[
+                    (clip.AssetId, checked(clip.SourceIn - clip.TimelineStart))],
+                clip.LayerOrder, clip.AudioBusId, clip.SourceIn, clip.TimelineStart,
+                clip.TransitionKind, clip.TransitionStart, clip.TransitionDuration,
+                clip.FadeIn)).ToArray())).ToArray();
+        var snapshot = new SequenceExecutionSnapshot(
+            SequenceExecutionSnapshotContract.Version, request.SequenceId,
+            request.ExpectedAuthoringRevision, compiled.Plan.FrameRate,
+            compiled.Plan.DurationTicks, slices);
+        try { snapshot.Validate(); }
+        catch (InvalidDataException)
+        {
+            return Error(message, "sequence.preparation.snapshot_capacity",
+                "Saved sequence exceeds the bounded execution-snapshot capacity; no native resources were reserved.");
+        }
         var command = new SequenceRuntimePrepareCommand(
             request.Version, request.ExpectedRuntimeHostInstanceId,
             request.SequenceId, request.ExpectedAuthoringRevision,
             compiled.Plan.DurationTicks, runtime.Format.FrameRate,
-            execution, remoteOwners);
+            execution, remoteOwners, snapshot);
 
         SequencePreparationStatus? admitted = null;
         try
