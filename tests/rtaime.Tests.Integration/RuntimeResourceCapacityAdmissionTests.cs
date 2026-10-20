@@ -100,6 +100,8 @@ public sealed class RuntimeResourceCapacityAdmissionTests
             PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
         var srgb = new VideoFormat(1920, 1080, FrameRate.Fps50,
             PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.SrgbFullRgba8);
+        var wrongCadence = new VideoFormat(1920, 1080, FrameRate.Fps59_94,
+            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
         var targets = new[]
         {
             new RuntimeOutputTargetCapability("program", RuntimeOutputTransportKind.Sdi, [rec709]),
@@ -107,7 +109,7 @@ public sealed class RuntimeResourceCapacityAdmissionTests
             new RuntimeOutputTargetCapability("aux-b", RuntimeOutputTransportKind.Srt, [rec709])
         };
         var profile = new RuntimeResourceCapabilityProfile(
-            "provider", "device", null, [rec709, srgb],
+            "provider", "device", null, [rec709, srgb, wrongCadence],
             ["program", "aux-a", "aux-b"], 2, 2, 4,
             256_000_000, 256_000_000, 0, false,
             outputCapabilities: targets);
@@ -121,8 +123,6 @@ public sealed class RuntimeResourceCapacityAdmissionTests
             new(rec709, 0, 0, [new("program", srgb, 1, false)]));
         Assert.Equal("runtime.admission.output_unsupported", wrongColor.Code);
 
-        var wrongCadence = new VideoFormat(1920, 1080, FrameRate.Fps59_94,
-            PixelFormat.Rgba8, ScanMode.Progressive, ColorDescription.Rec709FullRgba8);
         Assert.Equal("runtime.admission.output_unsupported",
             RuntimeResourceCapacityAdmission.Evaluate(profile,
                 new(rec709, 0, 0, [new("aux-b", wrongCadence, 1, false)])).Code);
