@@ -41,7 +41,10 @@ public sealed record InferenceRuntimeLimits
     public uint MaxConcurrentRequests { get; }
     public uint MaxInferenceRatePerSecond { get; }
 
-    public static InferenceRuntimeLimits ReferenceV1 => new(100, 512UL * 1024 * 1024, 2, 30);
+    public static InferenceRuntimeLimits ConservativeReference => new(100, 512UL * 1024 * 1024, 2, 30);
+
+    [Obsolete("Use ConservativeReference. Retained during the source migration.")]
+    public static InferenceRuntimeLimits ReferenceV1 => ConservativeReference;
 }
 
 public sealed record AIExecutionObservation(
