@@ -284,7 +284,7 @@ Local `dotnet build` and `dotnet test` runs are necessary developer validation, 
 
 See:
 
-- [RepositoryGovernance.md](RepositoryGovernance.md)
+- [RepositoryGovernance.md](Governance/RepositoryGovernance.md)
 - [ReleasePipelineAndChannels.md](ReleasePipelineAndChannels.md)
 - [ReleaseEvidence.md](ReleaseEvidence.md)
 - [QualificationEvidenceProvenance.md](QualificationEvidenceProvenance.md)
