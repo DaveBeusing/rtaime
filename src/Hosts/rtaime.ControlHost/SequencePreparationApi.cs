@@ -300,9 +300,9 @@ public sealed partial class ControlHostIpcServer
                     _preparedSequence = new PreparedSequenceBinding(
                         mismatchedOwner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
                     using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var closed = await _runtimeTransport.CancelSequencePreparationAsync(
+                    var incompatibleCleanup = await _runtimeTransport.CancelSequencePreparationAsync(
                         mismatchedOwner, cleanup.Token).ConfigureAwait(false);
-                    if (closed.State != "CANCELED")
+                    if (incompatibleCleanup.State != "CANCELED")
                         return Error(message, "sequence.preparation.cleanup_unconfirmed",
                             "Incompatible native preparation remains owned until cleanup is confirmed.");
                     _preparedSequence = null;
