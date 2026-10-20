@@ -18,8 +18,16 @@ budgets. Planning includes the existing 11 RGBA-frame-equivalent decoder payload
 bounded audio buffers, plus output-frame and GPU staging estimates. The runtime ledger
 refuses an owner count or managed-memory requirement outside the admitted envelope.
 Actual owner tickets, retained pool leases, all-or-none group rollback and quarantine
-remain owned by the existing `LocalMediaResourceLedger`. It does not turn unknown
-native/VRAM/storage allocations into zero evidence.
+remain owned by the existing `LocalMediaResourceLedger`. When an admitted profile
+is used by `LocalMediaDeckRuntimeService`, each **new** single/group reservation
+rechecks the Runtime-owned provider's current availability, exact decode/route
+formats and reservable units, existing retained owner count, finite managed
+allocation budget and observed host GC memory pressure. Unavailable/shrinking
+provider inventory or uncertain pressure rejects new requests without revoking
+the committed Program or previously retained leases. Default conservative and
+opt-in-four profiles stay bounded by their established owner accounting; the
+provider descriptor remains a capability upper bound, not proof of a physical
+GPU/SSD/native memory reservation. Unknown native/VRAM/storage remains UNKNOWN.
 
 The default RuntimeHost startup continues to use its current conservative and explicit
 four-owner profiles. No new production host CLI setting promotes unmeasured native
@@ -82,15 +90,27 @@ scheduler, external output-routing authority or physical scan-out provider.
 A caller must still use the existing Program boundary and Control-approved route;
 the current legacy Runtime mapping path does not invoke this owner yet.
 
-This **does not** yet activate multiple governed output sinks. The current
-`V1RuntimeHostService.OutputMapping` still commits only the single authorised
-Program mapping and the existing Aux/NDI/SRT routes keep their current contracts.
-The software frame group is a reusable mapping execution primitive, not a
-transactionally activated multi-output provider or physical scan-out claim.
-Binding it to working outputs requires the owning output/provider path to reserve
-real sink resources, commit all targets on the Program boundary, report per-target
-evidence, keep the old Program unchanged on failure, and qualify pixels/audio and
-frame cadence.
+The existing Runtime Program boundary now also sends the already-authorized
+Program/Aux role frames and audio to **multiple distinct SRT/NDI provider
+sessions** attached to that role. The startup output graph checks the observed
+provider's exact formats and reserved slot count before creating any sink. All
+target sessions must construct successfully; a mid-group construction failure
+closes prior candidate sessions without changing Program. Frames are retained
+independently per target and each session reports actual provider health plus
+per-target admitted video and audio sample counters. Provider send failures
+remain observational rather than changing authoritative routing.
+
+This is **not** transactional hot-reconfiguration of physical output devices:
+the configured network target graph is established at Runtime startup, not
+reactivated from a new ControlHost-issued output graph revision. Independent
+provider queues can diverge on post-commit transport failure; an already sent
+packet cannot be atomically rolled back. The existing
+`RuntimeProgramExecutionService.OutputMapping` still commits only one governed
+Program canvas binding. The software mapped-frame publication primitive does
+not automatically become the native SDI/NDI output plane. Complete per-target
+hardware scan-out, per-device timing, measured SSD/native/GPU pressure,
+control-authorized hot-swap and rollback of a *new* live output graph remain
+required before hardware-qualified multi-output activation can be claimed.
 
 Similarly, the platform's `VideoFormat` only defines currently implemented RGBA8
 pixel format and progressive scanning. This profile model distinguishes exact
@@ -121,13 +141,15 @@ or release readiness.
 
 ## Follow-on integration
 
-- Bind real provider capability/resource descriptors and measured/native pressure
-  into the RuntimeHost capacity profile, without trusting arbitrary CLI claims.
-- Connect the existing Program boundary to the software group's staged/
-  committed publication with Control-owned route/revision authorization; expand
-  to multiple native provider sinks only with real atomic reservation, per-target
-  submit/rollback and measured output cadence. The in-process software owner is
-  not physical sink admission.
+- Extend the current per-reservation live decode/route and host-memory checks
+  with measured native-decoder, VRAM, SSD and device/driver pressure telemetry
+  before enabling higher physical owner counts; current provider inventory
+  still describes an upper bound rather than a measured resource pressure stream.
+- Complete ControlHost-revisioned live output graph prepare/commit/rollback
+  and an actual SDI/NDI physical sink activation path. Multiple current NDI/SRT
+  network sessions now use the existing Program cadence, but the software-frame
+  owner and on-disk output canvas still need integrated multi-target authority,
+  remote status negotiation and physical output validation.
 - Establish a device-, driver-, output-, cadence- and color-specific qualification
   matrix (including UHD, HDR and professional I/O) with source-bound physical evidence.
 - Maintain v1 readers and rollback while versioned peers opt in to additional
