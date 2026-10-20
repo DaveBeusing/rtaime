@@ -158,6 +158,8 @@ public sealed record RuntimeResourceCapacityRequest(
 public sealed record RuntimeResourceCapacityDecision(
     bool Admitted, string Code, string Detail, long RequiredManagedBytes, long RequiredGpuBytes)
 {
+    public long RequiredNativeBytes { get; init; }
+
     public static RuntimeResourceCapacityDecision Reject(string code, string detail) =>
         new(false, code, detail, 0, 0);
 }
@@ -170,7 +172,9 @@ public sealed record RuntimeResourceCapacityDecision(
 public static class RuntimeResourceCapacityAdmission
 {
     public static RuntimeResourceCapacityDecision Evaluate(
-        RuntimeResourceCapabilityProfile profile, RuntimeResourceCapacityRequest request)
+        RuntimeResourceCapabilityProfile profile,
+        RuntimeResourceCapacityRequest request,
+        IReadOnlyList<RuntimeVerifiedPhysicalOutputCapability>? verifiedPhysicalOutputs = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(request);
@@ -220,6 +224,21 @@ public static class RuntimeResourceCapacityAdmission
                 output.Format.Color.Authority != ColorMetadataAuthority.Authoritative)
                 return RuntimeResourceCapacityDecision.Reject("runtime.admission.color_unverified",
                     "Physical output requires an authoritative, complete color description.");
+            // A profile flag and matching evidence IDs are assertions, not proof.
+            // Physical admission needs a verifier-minted, unexpired exact-source grant.
+            var grants = verifiedPhysicalOutputs?.Where(grant =>
+                string.Equals(grant.TargetId, output.TargetId, StringComparison.Ordinal)).ToArray();
+            if (grants is not { Length: 1 } ||
+                grants[0].ValidUntilUtc <= DateTimeOffset.UtcNow ||
+                grants[0].ProviderId != profile.ProviderId ||
+                grants[0].DeviceIdentity != profile.DeviceIdentity ||
+                grants[0].EvidenceId != profile.QualificationEvidence ||
+                grants[0].EvidenceId != target.VerifiedEvidenceId ||
+                grants[0].Transport != target.Transport ||
+                grants[0].Format != output.Format ||
+                output.VisibleSurfaces > grants[0].MaximumSurfaces)
+                return RuntimeResourceCapacityDecision.Reject("runtime.admission.hardware_unverified",
+                    "A current signed qualification grant is required for this exact physical target and format.");
         }
 
         try
@@ -229,9 +248,21 @@ public static class RuntimeResourceCapacityAdmission
             var frameBytes = checked((long)request.Format.Width * request.Format.Height * 4L);
             var decoderBytes = checked(request.DecoderOwners * checked(frameBytes * 11L + 10L * 32_768));
             long outputBytes = 0;
+            long nativeBytes = 0;
             foreach (var output in request.Outputs)
-                outputBytes = checked(outputBytes +
-                    checked((long)output.Format.Width * output.Format.Height * 4L));
+            {
+                var perTargetBytes = checked((long)output.Format.Width * output.Format.Height * 4L);
+                outputBytes = checked(outputBytes + perTargetBytes);
+                if (!output.PhysicalOutput) continue;
+                var reservedNative = checked(perTargetBytes * 2L);
+                nativeBytes = checked(nativeBytes + reservedNative);
+                var grant = verifiedPhysicalOutputs!.Single(g => g.TargetId == output.TargetId);
+                if (perTargetBytes > grant.ManagedBudgetBytes ||
+                    reservedNative > grant.NativeBudgetBytes ||
+                    reservedNative > grant.GpuBudgetBytes)
+                    return RuntimeResourceCapacityDecision.Reject("runtime.admission.qualified_target_budget",
+                        "The measured per-target memory budgets cannot admit this physical output.");
+            }
             var managedBytes = checked(decoderBytes + outputBytes);
             var gpuBytes = checked(outputBytes * 2L);
             if (managedBytes > profile.ManagedBudgetBytes)
@@ -240,9 +271,13 @@ public static class RuntimeResourceCapacityAdmission
             if (gpuBytes > profile.GpuBudgetBytes)
                 return RuntimeResourceCapacityDecision.Reject("runtime.admission.gpu_budget",
                     "The candidate exceeds the measured GPU output-surface budget.");
+            if (nativeBytes > profile.NativeBudgetBytes)
+                return RuntimeResourceCapacityDecision.Reject("runtime.admission.native_budget",
+                    "The candidate exceeds the finite native output-surface reservation budget.");
             return new(true, "runtime.admission.admitted",
-                "The declared finite resource envelope admits this candidate; actual provider reservation and commit remain required.",
-                managedBytes, gpuBytes);
+                "The finite verified capacity envelope admits this candidate; actual provider reservation, commit and physical output remain required.",
+                managedBytes, gpuBytes)
+            { RequiredNativeBytes = nativeBytes };
         }
         catch (OverflowException)
         {
