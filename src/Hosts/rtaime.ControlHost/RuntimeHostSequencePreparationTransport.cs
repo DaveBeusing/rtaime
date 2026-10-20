@@ -18,7 +18,8 @@ public sealed record SequenceRuntimeSource(
 public sealed record SequenceRuntimePrepareCommand(
     string Version, string ExpectedRuntimeHostInstanceId, Guid SequenceId,
     ulong AuthoringRevision, long DurationTicks, FrameRate ProgramRate,
-    PreparedExecutionContract PreparedExecution, IReadOnlyList<SequenceRuntimeSource> Sources);
+    PreparedExecutionContract PreparedExecution, IReadOnlyList<SequenceRuntimeSource> Sources,
+    SequenceExecutionSnapshot? ExecutionSnapshot = null);
 
 public sealed partial class NamedPipeRuntimeHostTransport
 {
@@ -29,6 +30,7 @@ public sealed partial class NamedPipeRuntimeHostTransport
             command.Sources is null || command.Sources.Count < 1 ||
             command.Sources.Count > SequencePreparationContract.MaximumOwnersForVersion(command.Version))
             throw new InvalidDataException("Sequence preparation requires a versioned bounded native owner set.");
+        command.ExecutionSnapshot?.Validate();
         var response = await ExchangeAsync("runtime.sequence.preparation.prepare", new
         {
             command.Version,
@@ -38,6 +40,7 @@ public sealed partial class NamedPipeRuntimeHostTransport
             command.DurationTicks,
             ProgramFrameRate = command.ProgramRate.ToString(),
             PreparedExecution = ToWire(command.PreparedExecution),
+            command.ExecutionSnapshot,
             Sources = command.Sources.Select(owner => new
             {
                 SourceId = owner.SourceId.ToString(),
