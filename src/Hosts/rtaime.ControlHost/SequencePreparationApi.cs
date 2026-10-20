@@ -214,7 +214,7 @@ public sealed partial class ControlHostIpcServer
         }
         var audioBuses = project.AudioProduction?.Buses.Select(x => x.BusId.Value).ToArray() ?? ["program"];
         var compiled = SequenceExecutionCompiler.Compile(definition, library.Revision,
-            assets, audioBuses, SequencePreparationContract.MaximumNativeOwners);
+            assets, audioBuses, SequencePreparationContract.MaximumOwnersForVersion(request.Version));
         if (!compiled.Succeeded)
             return Error(message, "sequence.preparation.invalid",
                 "Saved sequence is unavailable or exceeds native decoder admission; inspect sequence validation.");
@@ -227,7 +227,7 @@ public sealed partial class ControlHostIpcServer
             .GroupBy(c => (c.AssetId, Offset: checked(c.SourceIn - c.TimelineStart)))
             .OrderBy(g => g.Key.AssetId).ThenBy(g => g.Key.Offset)
             .Select(g => g.First()).ToArray();
-        if (owners.Length is < 1 or > SequencePreparationContract.MaximumNativeOwners)
+        if (owners.Length < 1 || owners.Length > SequencePreparationContract.MaximumOwnersForVersion(request.Version))
             return Error(message, "sequence.preparation.owner_capacity",
                 "Sequence requires more simultaneously retained native owners than this bounded profile admits.");
 
@@ -273,7 +273,7 @@ public sealed partial class ControlHostIpcServer
             // production revision or an implicit production mutation.
             new Generation(authority.Revision.Next().Value), bindings.ToArray());
         var command = new SequenceRuntimePrepareCommand(
-            SequencePreparationContract.Version, request.ExpectedRuntimeHostInstanceId,
+            request.Version, request.ExpectedRuntimeHostInstanceId,
             request.SequenceId, request.ExpectedAuthoringRevision,
             compiled.Plan.DurationTicks, runtime.Format.FrameRate,
             execution, remoteOwners);
@@ -283,11 +283,14 @@ public sealed partial class ControlHostIpcServer
         {
             admitted = await _runtimeTransport.PrepareSequenceAsync(command, cancellationToken)
                 .ConfigureAwait(false);
+            if (admitted.Version != request.Version)
+                return Error(message, "sequence.preparation.version_mismatch",
+                    "RuntimeHost responded with a different negotiated preparation protocol.");
             if (admitted.State != "PREPARED")
                 return Success(message, message.MessageType + ".response", admitted);
 
             var reference = new SequencePreparationReference(
-                SequencePreparationContract.Version, admitted.SequenceId,
+                request.Version, admitted.SequenceId,
                 admitted.AuthoringRevision, admitted.RuntimeHostInstanceId,
                 admitted.PreparedExecutionId, admitted.Generation);
             _preparedSequence = new PreparedSequenceBinding(
@@ -319,7 +322,7 @@ public sealed partial class ControlHostIpcServer
             if (admitted?.State == "PREPARED")
             {
                 var owner = new SequencePreparationReference(
-                    SequencePreparationContract.Version, admitted.SequenceId,
+                    request.Version, admitted.SequenceId,
                     admitted.AuthoringRevision, admitted.RuntimeHostInstanceId,
                     admitted.PreparedExecutionId, admitted.Generation);
                 try
