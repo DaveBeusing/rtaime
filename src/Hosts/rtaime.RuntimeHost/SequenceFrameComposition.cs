@@ -97,7 +97,8 @@ internal sealed class SequenceFrameComposition
         failure = null;
         audioDestination.Clear();
         if (sequenceId == Guid.Empty || authoringRevision == 0 ||
-            nativeFrames.Length is < 1 or > 4 ||
+            nativeFrames.Length > 4 ||
+            (nativeFrames.Length == 0 && (videoLayers.Length != 0 || audioTracks.Length != 0)) ||
             videoLayers.Length > _videoScratch.Length ||
             audioTracks.Length > _audioScratch.Length ||
             audioSampleCount == 0 || audioSampleCount > MaximumAudioSamples ||
@@ -170,7 +171,25 @@ internal sealed class SequenceFrameComposition
                 }
             }
             else
-                _mixedAudio.AsSpan(0, audioDestination.Length).Clear();
+            {
+                // A fully black/silent authored interval is a real Program-clock
+                // window, not a decoder underrun. Keep the established audio
+                // production dynamics and sample clock advancing with silence.
+                try
+                {
+                    audio = _mixer.ProcessBus(AudioBusId.Program,
+                        audioSamplePosition, audioSampleCount, _outputSource,
+                        ReadOnlySpan<AudioProductionSourceBuffer>.Empty,
+                        _mixedAudio.AsSpan(0, audioDestination.Length));
+                }
+                catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+                {
+                    failure = new("runtime.sequence.composition_audio",
+                        "The existing audio bus could not process the silent sequence interval: " +
+                        exception.GetType().Name);
+                    return false;
+                }
+            }
 
             // Every GPU surface is temporary and disposed on rejection.
             // A failing or stopped GPU provider never publishes a partial output.
