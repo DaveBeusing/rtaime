@@ -38,9 +38,10 @@ public sealed class RuntimeOutputTargetCapability
             admittedFormats.Distinct().Count() != admittedFormats.Count)
             throw new ArgumentException("A finite set of distinct exact video formats is required.",
                 nameof(admittedFormats));
-        if (!string.IsNullOrWhiteSpace(verifiedEvidenceId) &&
-            transport == RuntimeOutputTransportKind.Software)
-            throw new ArgumentException("Software targets have no physical device qualification.",
+        if (verifiedEvidenceId is not null &&
+            (string.IsNullOrWhiteSpace(verifiedEvidenceId) ||
+             transport == RuntimeOutputTransportKind.Software))
+            throw new ArgumentException("Physical qualification evidence must be nonempty and cannot describe a software target.",
                 nameof(verifiedEvidenceId));
 
         TargetId = targetId;
@@ -112,11 +113,12 @@ public sealed class RuntimeResourceCapabilityProfile
                 .Distinct(StringComparer.Ordinal).Count() != qualifiedTargets.Length)
             throw new ArgumentException("Target-specific capabilities must be unique and belong to the exact provider format and target sets.",
                 nameof(outputCapabilities));
-        if (qualifiedTargets.Any(target => target.VerifiedEvidenceId is not null) &&
-            (!hardwareQualified || qualifiedTargets.Any(target =>
-                target.VerifiedEvidenceId is not null &&
-                target.VerifiedEvidenceId != qualificationEvidence)))
-            throw new ArgumentException("Physical target evidence must match the verified provider profile binding.",
+        // One provider may have several independently qualified physical ports.
+        // The profile-level evidence label is not a per-target security credential:
+        // each port's own verifier-issued grant must match its declared target ID.
+        if (!hardwareQualified &&
+            qualifiedTargets.Any(target => target.VerifiedEvidenceId is not null))
+            throw new ArgumentException("Physical target evidence requires an enabled, finite hardware profile.",
                 nameof(outputCapabilities));
 
         ProviderId = providerId;
@@ -230,8 +232,7 @@ public static class RuntimeResourceCapacityAdmission
                     "This output target does not advertise the exact resolution, cadence and color tuple.");
             if (!output.PhysicalOutput) continue;
             if (target is null || target.Transport == RuntimeOutputTransportKind.Software ||
-                target.VerifiedEvidenceId is null ||
-                target.VerifiedEvidenceId != profile.QualificationEvidence)
+                target.VerifiedEvidenceId is null)
                 return RuntimeResourceCapacityDecision.Reject("runtime.admission.hardware_unverified",
                     "This exact physical output target lacks accepted source-bound qualification evidence.");
             if (!output.Format.Color.IsComplete ||
@@ -250,7 +251,6 @@ public static class RuntimeResourceCapacityAdmission
                 grants[0].DriverIdentity != profile.ActiveDriverIdentity ||
                 grants[0].ProviderSdkIdentity != profile.ActiveProviderSdkIdentity ||
                 grants[0].FirmwareIdentity != profile.ActiveFirmwareIdentity ||
-                grants[0].EvidenceId != profile.QualificationEvidence ||
                 grants[0].EvidenceId != target.VerifiedEvidenceId ||
                 grants[0].Transport != target.Transport ||
                 grants[0].Format != output.Format ||

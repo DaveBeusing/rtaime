@@ -96,6 +96,62 @@ public sealed class RuntimePhysicalOutputEvidenceTests
     }
 
     [Fact]
+    public void Two_physical_ports_require_independent_signed_grants_with_distinct_evidence_ids()
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var first = Evidence();
+        var second = Evidence() with
+        {
+            EvidenceId = "fixture-signed-second-port",
+            TargetId = "connector.2"
+        };
+        var firstSigned = Sign(signer, first);
+        var secondSigned = Sign(signer, second);
+        var firstVerified = RuntimePhysicalOutputEvidenceVerifier.Verify(
+            firstSigned.Payload, firstSigned.Signature, firstSigned.PublicKey,
+            Observed(), Now);
+        var secondVerified = RuntimePhysicalOutputEvidenceVerifier.Verify(
+            secondSigned.Payload, secondSigned.Signature, secondSigned.PublicKey,
+            Observed() with { TargetId = "connector.2" }, Now);
+        Assert.True(firstVerified.Accepted, firstVerified.Code);
+        Assert.True(secondVerified.Accepted, secondVerified.Code);
+
+        var profile = new RuntimeResourceCapabilityProfile(
+            "provider.sdi", "board.001", "qualification-suite.2026-10-20",
+            [QualifiedFormat], ["connector.1", "connector.2"], 2, 2, 4,
+            256_000_000, 256_000_000, 256_000_000, true,
+            outputCapabilities:
+            [
+                new RuntimeOutputTargetCapability("connector.1",
+                    RuntimeOutputTransportKind.Sdi, [QualifiedFormat], first.EvidenceId),
+                new RuntimeOutputTargetCapability("connector.2",
+                    RuntimeOutputTransportKind.Sdi, [QualifiedFormat], second.EvidenceId)
+            ],
+            activeSourceCommit: Source,
+            activeDriverIdentity: "driver.24.1",
+            activeProviderSdkIdentity: "sdk.4.2",
+            activeFirmwareIdentity: "firmware.8.1");
+        var candidate = new RuntimeResourceCapacityRequest(QualifiedFormat, 0, 0,
+        [
+            new RuntimeOutputCapacityRequest("connector.1", QualifiedFormat, 2, true),
+            new RuntimeOutputCapacityRequest("connector.2", QualifiedFormat, 2, true)
+        ]);
+
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
+                [firstVerified.Capability!]).Code);
+        Assert.Equal("runtime.admission.hardware_unverified",
+            RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
+                [firstVerified.Capability!, firstVerified.Capability!]).Code);
+
+        var decision = RuntimeResourceCapacityAdmission.Evaluate(profile, candidate,
+            [firstVerified.Capability!, secondVerified.Capability!]);
+        Assert.True(decision.Admitted, decision.Detail);
+        Assert.Equal(2L * 1920 * 1080 * 4 * 2, decision.RequiredNativeBytes);
+        Assert.Equal(2L * 1920 * 1080 * 4 * 2, decision.RequiredGpuBytes);
+    }
+
+    [Fact]
     public void Invalid_signature_untrusted_key_and_modified_evidence_are_rejected()
     {
         using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
