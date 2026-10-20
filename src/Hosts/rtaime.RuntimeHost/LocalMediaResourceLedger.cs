@@ -37,6 +37,7 @@ public sealed class LocalMediaResourceLedger
     private readonly VideoFormat _format;
     private RuntimeResourceCapabilityProfile? _admittedProfile;
     private Func<ProviderDescriptor>? _liveProvider;
+    private Func<bool>? _hostMemoryPressure;
     private MediaSourceId? _program;
     private string? _lastRejection;
     private bool _closed;
@@ -70,10 +71,12 @@ public sealed class LocalMediaResourceLedger
     /// Constructing a policy profile from user input is never provider qualification.
     /// </summary>
     internal LocalMediaResourceLedger(VideoFormat format, int capacity,
-        RuntimeResourceCapabilityProfile admittedProfile, Func<ProviderDescriptor> liveProvider)
+        RuntimeResourceCapabilityProfile admittedProfile, Func<ProviderDescriptor> liveProvider,
+        Func<bool>? hostMemoryPressure = null)
         : this(format, capacity, admittedProfile)
     {
         _liveProvider = liveProvider ?? throw new ArgumentNullException(nameof(liveProvider));
+        _hostMemoryPressure = hostMemoryPressure ?? CurrentManagedMemoryPressure;
         if (ObserveProviderRejection(capacity) is { } failure)
             throw new NotSupportedException("Observed provider cannot admit the decoder profile: " + failure.Code);
     }
@@ -292,12 +295,25 @@ public sealed class LocalMediaResourceLedger
 
         // This OS observation is a pressure signal, not a native/GPU/SSD budget.
         // Unknown native, VRAM and storage pressure remain UNVERIFIED in Snapshot.
-        var gc = GC.GetGCMemoryInfo();
-        if (gc.HighMemoryLoadThresholdBytes > 0 &&
-            gc.MemoryLoadBytes >= gc.HighMemoryLoadThresholdBytes)
-            return Reject("runtime.media_resources.host_memory_pressure",
-                "The host is under observed managed-memory pressure; defer new decoder owners.");
+        try
+        {
+            if (_hostMemoryPressure?.Invoke() == true)
+                return Reject("runtime.media_resources.host_memory_pressure",
+                    "The host is under observed managed-memory pressure; defer new decoder owners.");
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return Reject("runtime.media_resources.pressure_observation_failed",
+                "Resource pressure could not be observed reliably; no new owner was granted.");
+        }
         return null;
+    }
+
+    private static bool CurrentManagedMemoryPressure()
+    {
+        var gc = GC.GetGCMemoryInfo();
+        return gc.HighMemoryLoadThresholdBytes > 0 &&
+            gc.MemoryLoadBytes >= gc.HighMemoryLoadThresholdBytes;
     }
 
     private Failure Reject(string code, string message)
