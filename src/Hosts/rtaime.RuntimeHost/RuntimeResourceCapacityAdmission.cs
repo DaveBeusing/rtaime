@@ -26,7 +26,8 @@ public sealed class RuntimeResourceCapabilityProfile
         long managedBudgetBytes,
         long gpuBudgetBytes,
         long nativeBudgetBytes,
-        bool hardwareQualified)
+        bool hardwareQualified,
+        int maximumRegisteredSources = 8)
     {
         if (string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(deviceIdentity))
             throw new ArgumentException("Provider and device identities are required.");
@@ -36,6 +37,7 @@ public sealed class RuntimeResourceCapabilityProfile
             throw new ArgumentException("At least one valid admitted format is required.", nameof(admittedFormats));
         if (maximumDecoderOwners < 1 || maximumSequenceOwners < 1 ||
             maximumSequenceOwners > maximumDecoderOwners || maximumSurfacesPerTarget < 1 ||
+            maximumRegisteredSources < maximumDecoderOwners || maximumRegisteredSources > 1024 ||
             managedBudgetBytes < 1 || gpuBudgetBytes < 0 || nativeBudgetBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maximumDecoderOwners), "Resource capacities must be finite and internally consistent.");
         if (admittedTargets.Any(string.IsNullOrWhiteSpace) ||
@@ -53,6 +55,7 @@ public sealed class RuntimeResourceCapabilityProfile
         MaximumDecoderOwners = maximumDecoderOwners;
         MaximumSequenceOwners = maximumSequenceOwners;
         MaximumSurfacesPerTarget = maximumSurfacesPerTarget;
+        MaximumRegisteredSources = maximumRegisteredSources;
         ManagedBudgetBytes = managedBudgetBytes;
         GpuBudgetBytes = gpuBudgetBytes;
         NativeBudgetBytes = nativeBudgetBytes;
@@ -67,6 +70,7 @@ public sealed class RuntimeResourceCapabilityProfile
     public int MaximumDecoderOwners { get; }
     public int MaximumSequenceOwners { get; }
     public int MaximumSurfacesPerTarget { get; }
+    public int MaximumRegisteredSources { get; }
     public long ManagedBudgetBytes { get; }
     public long GpuBudgetBytes { get; }
     public long NativeBudgetBytes { get; }
