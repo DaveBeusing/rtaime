@@ -475,11 +475,18 @@ Required Gates at the same final SHA, not replace them.
 
 ## Combined Operator visual evidence
 
-The existing `OperatorXamlStartupTests` filter now includes the 50-case rendered
-workspace/viewport matrix, injected scale and bounded dispatcher/resource measurements.
-CI and Quality retain PNG/JSON evidence as documented in
-[Operator visual qualification](OperatorVisualQualification.md#combined-workspace-regression-evidence).
-The original 45-second STA deadline and all existing interaction/GPU checks remain.
+The existing `OperatorXamlStartupTests` filter now invokes five independent real-WPF
+testhost groups (Composition, Visual, Controls, Docking and GPU) rather than
+accumulating unrelated journeys inside one 45-second window/dispatcher budget.
+The Visual group still runs the complete fifty-case rendered workspace/viewport matrix,
+injected scaling and integrated Operator-owner checks; the remaining interaction,
+native GPU, docking and composed-control assertions are preserved in their own groups.
+Each group retains the **unchanged 45-second STA deadline**, bounded Input/Loaded
+dispatcher probes and actual async window/session/resource teardown. The parent
+qualification fails if any group is missing, failed or has stale evidence. CI and
+Quality retain the atomic aggregate `interaction-ui.json`, individual
+`interaction-ui-<group>.json` and existing PNG/`combined-ui.json` evidence as
+documented in [Operator visual qualification](OperatorVisualQualification.md#combined-workspace-regression-evidence).
 Run `OperatorCombinedVisualQualification` to exercise the geometry evaluator's
 negative regression; the complete Operator suite includes it automatically.
 Physical monitor movement and human image review remain separate evidence obligations.
