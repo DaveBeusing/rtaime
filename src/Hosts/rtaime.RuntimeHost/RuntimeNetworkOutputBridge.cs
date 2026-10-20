@@ -62,8 +62,33 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                 "Output graph requires at most eight uniquely identified provider targets.",
                 nameof(targets));
 
+        // Snapshot the actual provider inventory before creating any sink. The
+        // production registry returns a descriptor per distinct protocol in this
+        // order; synthetic test registries may deliberately advertise none.
+        var protocols = targets.Select(target => target.Configuration.Protocol).Distinct().ToArray();
+        var descriptors = providerRegistry.ProviderDescriptorsFor(targets);
+        if (descriptors.Count > 0)
+        {
+            if (descriptors.Count != protocols.Length)
+                throw new NotSupportedException("Provider output inventory does not cover the exact requested transport set.");
+            for (var i = 0; i < protocols.Length; i++)
+            {
+                var descriptor = descriptors[i];
+                var requested = targets.Where(target => target.Configuration.Protocol == protocols[i]).ToArray();
+                if (descriptor is null || descriptor.Availability.State != ProviderAvailabilityState.Available ||
+                    requested.Any(target => !descriptor.Capabilities.Any(capability =>
+                        capability.Kind == NetworkOutputCapabilityKinds.Output &&
+                        capability.SupportsVideoFormat(target.Configuration.VideoFormat))))
+                    throw new NotSupportedException("A live network output provider is unavailable or does not support the requested format.");
+                var capacity = descriptor.Resources
+                    .Where(resource => resource.Kind == NetworkOutputCapabilityKinds.Output && resource.Reservable)
+                    .Sum(resource => (long)resource.CapacityUnits);
+                if (requested.LongLength > capacity)
+                    throw new NotSupportedException("The observed network output provider has insufficient real reservable target slots.");
+            }
+        }
+
         var provisional = new Dictionary<string, TargetSession>(StringComparer.OrdinalIgnoreCase);
-        IReadOnlyList<ProviderDescriptor> descriptors;
         try
         {
             // Construct actual provider sessions before a single role becomes
@@ -74,7 +99,6 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                 provisional.Add(target.Configuration.TargetId,
                     new TargetSession(target.RoleId, target.Configuration.TargetId, session));
             }
-            descriptors = providerRegistry.ProviderDescriptorsFor(targets);
         }
         catch
         {
