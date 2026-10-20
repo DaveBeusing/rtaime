@@ -29,7 +29,7 @@ public sealed class ProductScopeCompatibilityTests
     {
         var root = RepositorySnapshot.Load().Root;
         var sourceRoot = Path.Combine(root, "src");
-        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult" };
+        var retired = new[] { "V1RuntimeHostService", "V1ProgramBoundaryResult", "ReferenceV1", "V1Formats" };
         var violations = new List<string>();
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))

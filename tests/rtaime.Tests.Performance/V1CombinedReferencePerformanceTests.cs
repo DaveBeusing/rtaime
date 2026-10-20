@@ -53,7 +53,7 @@ public sealed class V1CombinedReferencePerformanceTests
 
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider() },
-            InferenceRuntimeLimits.ReferenceV1);
+            InferenceRuntimeLimits.ConservativeReference);
         var samples = new List<double>();
         var outputSequences = new List<ulong>();
 

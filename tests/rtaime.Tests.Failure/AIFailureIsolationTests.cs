@@ -25,7 +25,7 @@ public sealed class AIFailureIsolationTests
             forcedFailure: new rtaime.Core.Failure("ai.provider.reference.model_failure", "Simulated model execution failure."));
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { failingProvider },
-            InferenceRuntimeLimits.ReferenceV1);
+            InferenceRuntimeLimits.ConservativeReference);
         var frame0 = virtualMedia.SourceA.GenerateFrame(0);
 
         var aiResult = await ai.ExecuteAsync(Request(frame0));

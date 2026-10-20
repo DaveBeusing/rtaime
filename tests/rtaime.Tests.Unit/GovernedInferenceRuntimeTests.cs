@@ -208,7 +208,7 @@ public sealed class GovernedInferenceRuntimeTests
     }
 
     private static GovernedInferenceRuntime Runtime(IInferenceProvider provider) =>
-        new(new[] { provider }, InferenceRuntimeLimits.ReferenceV1, new FixedClock(Now));
+        new(new[] { provider }, InferenceRuntimeLimits.ConservativeReference, new FixedClock(Now));
 
     private static GovernedInferenceExecutionRequest Request(
         ulong sequence,

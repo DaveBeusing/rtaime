@@ -102,7 +102,7 @@ public sealed class V1EndToEndProofTests
 
         var unavailableAI = new AIHostService(new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider(InferenceProviderState.Unavailable) },
-            InferenceRuntimeLimits.ReferenceV1));
+            InferenceRuntimeLimits.ConservativeReference));
         var unavailable = await unavailableAI.ExecuteAsync(CreateInferenceRequest(aiVisible.ProgramFrame));
         var fallback = AIResultUsePolicy.Evaluate(
             unavailable,

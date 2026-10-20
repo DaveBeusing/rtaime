@@ -43,8 +43,6 @@ public sealed record InferenceRuntimeLimits
 
     public static InferenceRuntimeLimits ConservativeReference => new(100, 512UL * 1024 * 1024, 2, 30);
 
-    [Obsolete("Use ConservativeReference. Retained during the source migration.")]
-    public static InferenceRuntimeLimits ReferenceV1 => ConservativeReference;
 }
 
 public sealed record AIExecutionObservation(
