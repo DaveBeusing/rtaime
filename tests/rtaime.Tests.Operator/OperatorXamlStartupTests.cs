@@ -30,17 +30,21 @@ public sealed class OperatorApplicationCollection
 public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 {
     private static readonly string[] QualificationGroups = ["Composition", "Visual", "Controls", "Docking", "Gpu"];
-    private static readonly string QualificationSessionId = Guid.NewGuid().ToString("N");
+    private const string QualificationGroupVariable = "RTAIME_OPERATOR_STARTUP_QUALIFICATION_GROUP";
+    private const string QualificationSessionVariable = "RTAIME_OPERATOR_STARTUP_QUALIFICATION_SESSION";
+    private static readonly string QualificationSessionId =
+        Environment.GetEnvironmentVariable(QualificationSessionVariable) ?? Guid.NewGuid().ToString("N");
     private static readonly object QualificationEvidenceLock = new();
 
-    [Theory]
-    [InlineData("Composition")]
-    [InlineData("Visual")]
-    [InlineData("Controls")]
-    [InlineData("Docking")]
-    [InlineData("Gpu")]
-    public async Task Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA(string qualificationGroup)
+    [Fact]
+    public async Task Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA()
     {
+        var qualificationGroup = Environment.GetEnvironmentVariable(QualificationGroupVariable);
+        if (qualificationGroup is null)
+        {
+            await RunIsolatedStartupGroupsAsync();
+            return;
+        }
         Assert.Contains(qualificationGroup, QualificationGroups);
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-xaml-startup", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(root);
@@ -377,6 +381,89 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 		}
 	}
 
+
+
+    private async Task RunIsolatedStartupGroupsAsync()
+    {
+        // WPF only permits one Application per process. Launch each qualification
+        // in its own testhost, following the existing shell-state qualification.
+        // The 45-second real STA bound remains unchanged within each child.
+        var failures = new List<Exception>();
+        foreach (var group in QualificationGroups)
+        {
+            var start = new ProcessStartInfo("dotnet")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            start.ArgumentList.Add("vstest");
+            start.ArgumentList.Add(typeof(OperatorXamlStartupTests).Assembly.Location);
+            start.ArgumentList.Add("--TestCaseFilter:FullyQualifiedName=rtaime.Tests.Operator.OperatorXamlStartupTests." +
+                nameof(Real_MainWindow_and_viewers_load_render_all_workspaces_and_close_on_STA));
+            start.ArgumentList.Add("--logger:console;verbosity=detailed");
+            start.Environment[QualificationGroupVariable] = group;
+            start.Environment[QualificationSessionVariable] = QualificationSessionId;
+
+            using var process = Process.Start(start)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                // The process-level watchdog includes bounded vstest bootstrap,
+                // while the real window/dispatcher itself still has a 45s limit.
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
+                var report = await stdout;
+                var errors = await stderr;
+                Assert.True(process.ExitCode == 0 &&
+                    report.Contains($"OPERATOR TEARDOWN PASS [{group}]", StringComparison.Ordinal),
+                    $"Real Operator STA group '{group}' failed. Exit={process.ExitCode}{Environment.NewLine}{report}{Environment.NewLine}{errors}");
+                output.WriteLine($"OPERATOR GROUP PASS [{group}]");
+            }
+            catch (Exception exception)
+            {
+                failures.Add(new InvalidOperationException($"Operator qualification group '{group}' failed.", exception));
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                // Keep every phase's log in the parent workflow artifact/log,
+                // including failures before the real MainWindow was constructed.
+                try
+                {
+                    await Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(5));
+                    Console.WriteLine(await stdout);
+                    Console.WriteLine(await stderr);
+                }
+                catch (TimeoutException) { Console.WriteLine($"Operator group '{group}' diagnostic pipes did not close."); }
+            }
+        }
+
+        var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_OPERATOR_VISUAL_EVIDENCE");
+        if (!string.IsNullOrWhiteSpace(evidenceRoot))
+        {
+            var aggregate = Path.Combine(evidenceRoot, "interaction-ui.json");
+            if (!File.Exists(aggregate))
+                failures.Add(new InvalidOperationException("Real Operator qualification emitted no aggregate evidence."));
+            else
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(aggregate));
+                if (document.RootElement.GetProperty("status").GetString() != "PASS" ||
+                    document.RootElement.GetProperty("session").GetString() != QualificationSessionId)
+                    failures.Add(new InvalidOperationException(
+                        "Real Operator qualification evidence is missing, stale, failed or incomplete."));
+            }
+        }
+        Assert.True(failures.Count == 0,
+            "Real Operator startup groups did not fully qualify:" + Environment.NewLine +
+            string.Join(Environment.NewLine, failures));
+    }
 
     [Fact]
     public void Clean_shutdown_evidence_is_pending_until_persisted_and_marked_clean()
