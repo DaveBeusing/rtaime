@@ -77,8 +77,17 @@ public sealed partial class GrpcOperatorControlTransport : ISequencePreparationT
         SequencePreparationRequest request, CancellationToken cancellationToken = default)
     {
         request.Validate();
-        var reply = await ExecuteShowRequestAsync(r => r.PrepareSequence = Raw(request), cancellationToken)
-            .ConfigureAwait(false);
+        // Native source fingerprint verification and bounded decoder preroll
+        // run on the management lane and can outlast ordinary control RPCs.
+        // A lost response must not replay a non-idempotent preparation.
+        EnsureSnapshotNotRequired();
+        var rpcRequest = Request();
+        rpcRequest.PrepareSequence = Raw(request);
+        var timeout = _options.RequestTimeout > TimeSpan.FromSeconds(45)
+            ? _options.RequestTimeout : TimeSpan.FromSeconds(45);
+        var reply = await _client.ExecuteAsync(rpcRequest, Headers(),
+            DateTime.UtcNow + timeout, cancellationToken).ResponseAsync.ConfigureAwait(false);
+        ValidateReply(rpcRequest, reply, snapshot: false);
         var status = SequenceJson.Read<SequencePreparationStatus>(reply.PayloadJson.ToStringUtf8(), 16 * 1024);
         status.Validate();
         if (status.SequenceId != request.SequenceId ||
