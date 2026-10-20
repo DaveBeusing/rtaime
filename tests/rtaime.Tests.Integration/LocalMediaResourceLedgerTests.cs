@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Media;
+using rtaime.Provider.Contracts;
 using rtaime.RuntimeHost;
 using Xunit;
 
@@ -253,6 +255,63 @@ public sealed class LocalMediaResourceLedgerTests
             PixelFormat.Rgba8, ScanMode.Progressive);
         Assert.Throws<ArgumentException>(() =>
             new LocalMediaResourceLedger(uhd, 6, hdOnly));
+    }
+
+    [Fact]
+    public void Live_provider_inventory_and_pressure_are_rechecked_inside_atomic_native_reservations()
+    {
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var providerId = ProviderId.New();
+        ProviderDescriptor MakeProvider(int slots, bool available = true) => new(
+            ProviderContractVersion.Current, providerId, "Observed decoder",
+            available
+                ? new ProviderAvailability(ProviderAvailabilityState.Available)
+                : new ProviderAvailability(ProviderAvailabilityState.Unavailable,
+                    new Failure("device.disconnected", "The native device disconnected.")),
+            [new ProviderCapabilityDescriptor(CapabilityId.New(), LocalMediaCapabilityKinds.Decode, [format]),
+             new ProviderCapabilityDescriptor(CapabilityId.New(), LocalMediaCapabilityKinds.MediaRoute, [format])],
+            [new ProviderResourceDescriptor(ProviderResourceId.New(), providerId,
+                 LocalMediaCapabilityKinds.Decode, (uint)slots, true),
+             new ProviderResourceDescriptor(ProviderResourceId.New(), providerId,
+                 LocalMediaCapabilityKinds.MediaRoute, (uint)slots, true)]);
+        var current = MakeProvider(4);
+        var underPressure = false;
+        var profile = new RuntimeResourceCapabilityProfile(providerId.ToString(),
+            "device.observed", null, [format], [], 4, 4, 8, 1_000_000_000, 0, 0, false);
+        var ledger = new LocalMediaResourceLedger(format, 4, profile,
+            () => current, () => underPressure);
+        Assert.True(ledger.TryReserve(Guid.NewGuid(), IdentityFor(ledger),
+            out var retained, out _));
+        Assert.NotNull(retained);
+
+        current = MakeProvider(1);
+        Assert.False(ledger.TryReserve(Guid.NewGuid(), IdentityFor(ledger),
+            out _, out var reduced));
+        Assert.Equal("runtime.media_resources.live_capacity", reduced?.Code);
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+
+        current = MakeProvider(4);
+        underPressure = true;
+        var rejectedGroup = Enumerable.Range(0, 3).Select(_ =>
+            new LocalMediaResourceRequest(Guid.NewGuid(), IdentityFor(ledger))).ToArray();
+        Assert.False(ledger.TryReserveGroup(rejectedGroup, out var none, out var pressure));
+        Assert.Empty(none);
+        Assert.Equal("runtime.media_resources.host_memory_pressure", pressure?.Code);
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+
+        underPressure = false;
+        Assert.True(ledger.TryReserveGroup(rejectedGroup, out var tickets, out var failure),
+            failure?.Message);
+        Assert.Equal(4, ledger.Snapshot.ReservedOwners);
+        foreach (var ticket in tickets) ticket.OwnerCompleted();
+        Assert.Equal(1, ledger.Snapshot.ReservedOwners);
+
+        current = MakeProvider(4, available: false);
+        Assert.False(ledger.TryReserve(Guid.NewGuid(), IdentityFor(ledger),
+            out _, out var disconnected));
+        Assert.Equal("runtime.media_resources.provider_changed", disconnected?.Code);
+        retained!.OwnerCompleted();
+        Assert.Equal(0, ledger.Snapshot.ReservedOwners);
     }
 
     private static LocalMediaResourceIdentity IdentityFor(LocalMediaResourceLedger ledger) =>
