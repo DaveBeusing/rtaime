@@ -51,14 +51,23 @@ unknown target IDs, unsupported colors/cadence/resolutions, oversized surface gr
 and exceeding managed or GPU budgets fail before allocation. Physical targets fail
 closed unless source-bound hardware evidence and finite native/GPU budgets are available.
 
-This **does not** yet activate multiple mapped output sinks. The current
-`V1RuntimeHostService.OutputMapping` still renders only the single authorised Program
-mapping and the existing Aux/NDI/SRT routes keep their current contracts. Turning a
-multi-target plan into working outputs requires the owning output/provider path to
-reserve actual hardware/video sink resources, commit all targets on the Program
-boundary, report per-target evidence, keep old Program unchanged on failure, and
-qualify end-to-end pixels/audio and frame cadence. The admission model can be reused
-by that integration; its success does not imply output support.
+The `RuntimeMappedOutputComposer` can now produce **multiple independent RGBA8
+software GPU mapped frames** from the same retained Program frame and declared
+target list. Every target geometry and capacity is validated before mapping. Each
+successful mapped target is retained in one disposable group; a later failed GPU
+target releases earlier new frames while leaving the source Program frame unchanged.
+Regression cases verify different target pixels, deterministic lease disposal,
+unknown targets, malformed quads and mid-group failure rollback.
+
+This **does not** yet activate multiple governed output sinks. The current
+`V1RuntimeHostService.OutputMapping` still commits only the single authorised
+Program mapping and the existing Aux/NDI/SRT routes keep their current contracts.
+The software frame group is a reusable mapping execution primitive, not a
+transactionally activated multi-output provider or physical scan-out claim.
+Binding it to working outputs requires the owning output/provider path to reserve
+real sink resources, commit all targets on the Program boundary, report per-target
+evidence, keep the old Program unchanged on failure, and qualify pixels/audio and
+frame cadence.
 
 Similarly, the platform's `VideoFormat` only defines currently implemented RGBA8
 pixel format and progressive scanning. This profile model distinguishes exact
@@ -74,7 +83,7 @@ Run the focused contract and integration suites after a Release build:
 
 ```powershell
 dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj -c Release --no-build --filter "FullyQualifiedName~SequencePreparationContractTests"
-dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj -c Release --no-build --filter "FullyQualifiedName~RuntimeResourceCapacityAdmissionTests|FullyQualifiedName~LocalMediaResourceLedgerTests|FullyQualifiedName~Real_native_sequence_prepare_get_cancel"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj -c Release --no-build --filter "FullyQualifiedName~RuntimeResourceCapacityAdmissionTests|FullyQualifiedName~RuntimeMappedOutputComposerTests|FullyQualifiedName~LocalMediaResourceLedgerTests|FullyQualifiedName~Real_native_sequence_prepare_get_cancel"
 dotnet test rtaime.slnx --configuration Release --no-build -m:1
 ```
 
