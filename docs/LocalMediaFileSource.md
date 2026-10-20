@@ -360,14 +360,14 @@ finite bit/iteration limits. No decoded sample processing or Program work is add
 
 ## Bounded A/B sessions
 
-The V1 two-deck scope was approved on 2026-10-17. RuntimeHost accepts local files
-only for its two configured production source identities. The source-keyed registry
-retains at most two session owners; `--local-media-decoders=1|2` /
-`RTAIME_LOCAL_MEDIA_DECODERS` defaults to two. Invalid values fail startup.
-Provider descriptors retain two route and four decode resource descriptors; these
-are planning inventory, not a claim of four simultaneous file sessions. Actual
-admission is the configured registry limit. ControlHost prepares distinct route
-and decode resources for each production source.
+The conservative RuntimeHost profile retains one or two resident decoder owners
+(default two) and the original configured A/B identities. A separate explicit
+`opt-in-four` profile admits up to four finite owner reservations and the existing
+bounded additional source registry, subject to all-or-none reservation, retained
+pool ownership and quarantine. The legacy `development-four` input alias remains
+accepted for compatibility. Provider descriptors expose the existing route/decode
+resource inventory, not a physical four-deck support promise. Actual admission
+is the configured finite owner ledger and authoritative prepared source binding.
 
 Each session reuses the existing asynchronous decoder, ten leased payload slots,
 eight queued frames and generation fencing. Two 1080p RGBA sessions reserve
@@ -482,8 +482,8 @@ worker/native cleanup and final frame-lease release. Failed cleanup quarantines
 the owner and requires the supported host restart path.
 
 The default remains one/two A/B decoders. Explicit
-`--local-media-profile=development-four --local-media-decoders=4` enables the
-finite four-owner software development profile, including additional prepared
+`--local-media-profile=opt-in-four --local-media-decoders=4` enables the
+finite four-owner opt-in software profile, including additional prepared
 sources through the existing Runtime IPC/registry. This is not physical
 four-deck, codec, GPU or SSD qualification. Native/GPU/storage budgets remain
 UNKNOWN and support diagnostics report the actual shared reservations and

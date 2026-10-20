@@ -34,7 +34,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 				new ProductionRoutingState(sourceA, sourceA));
 
 			var writer = new ReferenceRecordingPayloadWriter(root, maximumPayloadBytes: 1);
-			await using var runtime = new V1RuntimeHostService(
+			await using var runtime = new RuntimeProgramExecutionService(
 				new MediaSourceId(sourceA.Value),
 				new MediaSourceId(sourceB.Value),
 				VideoFormat.Hd1080p50Rgba8,
@@ -72,7 +72,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 		}
 	}
 
-	private static void CommitInitialization(ControlHostService control, V1RuntimeHostService runtime)
+	private static void CommitInitialization(ControlHostService control, RuntimeProgramExecutionService runtime)
 	{
 		var staged = control.Initialize();
 		Assert.True(staged.Accepted, staged.Failure?.ToString());

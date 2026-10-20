@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $decoderPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/WindowsMediaFoundationLocalMediaDecoder.cs"
 $bufferPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/GpuProcessing.cs"
-$runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.cs"
 $runtimeProcessPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $controlIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostIpcServer.cs"
 $operatorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
@@ -88,7 +88,7 @@ Assert-Condition ($worker -match 'frame.RgbaPixels.Span.CopyTo' -and $worker -ma
 Assert-Condition ($worker -match 'generation != _generation' -and $worker -match 'previous.Cancel') "Seek/stop cancellation must fence stale generations."
 Assert-Condition ($callback -match 'ReadSample\(stream, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero\)' -and $callback -match 'OnFlush') "MF asynchronous reads require null output pointers and acknowledged cancellation."
 $registry = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckRuntimeService.cs") -Raw
-Assert-Condition ($registry -match 'using var boundary = admitted' -and $registry -match 'V1InputSignalState.Lost' -and $runtimeProcess -match 'mediaDeck.AdmitBoundary') "Runtime must retain admission ownership and explicitly fall back on starvation."
+Assert-Condition ($registry -match 'using var boundary = admitted' -and $registry -match 'RuntimeInputSignalState.Lost' -and $runtimeProcess -match 'mediaDeck.AdmitBoundary') "Runtime must retain admission ownership and explicitly fall back on starvation."
 
 Write-Host "Sustained local-media playback policy verification PASS"
 Write-Host "Video decode: Media Foundation RGB32"

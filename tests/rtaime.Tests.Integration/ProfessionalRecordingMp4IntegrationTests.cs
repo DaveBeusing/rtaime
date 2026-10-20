@@ -300,7 +300,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 	}
 
 	private static async Task WaitForRecordingBacklogAsync(
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		ulong maximumBacklog)
 	{
 		for (var attempt = 0; attempt < 1_000; attempt++)
@@ -342,13 +342,13 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 	{
 		private readonly BoundedProductionJournal _journal;
 
-		private RuntimeFixture(V1RuntimeHostService runtime, BoundedProductionJournal journal)
+		private RuntimeFixture(RuntimeProgramExecutionService runtime, BoundedProductionJournal journal)
 		{
 			Runtime = runtime;
 			_journal = journal;
 		}
 
-		public V1RuntimeHostService Runtime { get; }
+		public RuntimeProgramExecutionService Runtime { get; }
 
 		public static async ValueTask<RuntimeFixture> CreateAsync(
 			VideoFormat format,
@@ -367,7 +367,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 				},
 				new ProductionRoutingState(sourceA, sourceA));
 
-			var runtime = new V1RuntimeHostService(
+			var runtime = new RuntimeProgramExecutionService(
 				new MediaSourceId(sourceA.Value),
 				new MediaSourceId(sourceB.Value),
 				format,

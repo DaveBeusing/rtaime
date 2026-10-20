@@ -46,7 +46,7 @@ public sealed record AIHostProcessOptions(
 	TimeSpan ShutdownTimeout)
 {
 	public static AIHostProcessOptions Default => new(
-		InferenceRuntimeLimits.ReferenceV1,
+		InferenceRuntimeLimits.ConservativeReference,
 		"rtaime.v1.ai.default",
 		TimeSpan.FromSeconds(10));
 

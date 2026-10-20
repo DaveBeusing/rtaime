@@ -40,7 +40,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 		Assert.Equal(expectedSdkRevision, adapter.Metadata.SdkRevision);
 		Assert.False(string.IsNullOrWhiteSpace(adapter.Metadata.DriverVersion));
 
-		await using var telemetryRuntime = new V1RuntimeHostService(
+		await using var telemetryRuntime = new RuntimeProgramExecutionService(
 			sourceA,
 			sourceB,
 			format,

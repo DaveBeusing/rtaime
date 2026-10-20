@@ -14,7 +14,7 @@ All rights reserved.
 
 The Operator Media Library is a persistent, production-usable catalogue for explicitly imported local media assets. Catalogue identity survives application and ControlHost restart, while the Operator remains a presentation and interaction surface only.
 
-This capability is a deliberate post-V1 product expansion. It does not retroactively change the documented V1 software-closure or hardware-qualification claims.
+Independent Media Library browsing and time-indexed analysis belong to the approved [product scope](ProductScope.md). Current implementation evidence does not retroactively broaden historical software tests or hardware qualification.
 
 Runtime remains authoritative for decoder capability and media execution. ControlHost owns catalogue mutation and persistence orchestration. The Client carries bounded catalogue metadata. The Operator owns only local selection, filtering and interaction state.
 

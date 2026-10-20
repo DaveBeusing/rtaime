@@ -8,6 +8,8 @@
 
 ## Scope
 
+**Historical engineering record:** the initial proof-stage language below records bootstrap provenance, not the current product feature ceiling. The accepted [Product Scope](ProductScope.md) supersedes all such scope restrictions while retaining the dependency, process-boundary, toolchain and compatibility decisions unless separately revised.
+
 This document records the mechanical repository baseline for the initial rtaime V1 solution bootstrap. It does not replace the binding architecture context, accepted ADRs, V1 product definition, technology baseline, subsystem architecture, project/dependency map, or project reference map.
 
 Change classification: `ARCHITECTURE`.

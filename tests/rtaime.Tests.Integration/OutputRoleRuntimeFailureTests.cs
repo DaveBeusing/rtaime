@@ -36,7 +36,7 @@ public sealed class OutputRoleRuntimeFailureTests
 				ProductionOutputRoleState.Aux(sourceB)
 			});
 
-		await using var runtime = new V1RuntimeHostService(
+		await using var runtime = new RuntimeProgramExecutionService(
 			new MediaSourceId(sourceA.Value),
 			new MediaSourceId(sourceB.Value),
 			VideoFormat.Hd1080p50Rgba8,

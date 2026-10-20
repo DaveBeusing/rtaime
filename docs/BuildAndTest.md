@@ -11,7 +11,7 @@ david.beusing@gmail.com
 
 ## Purpose
 
-This document is the canonical developer entry point for building, publishing and testing **rtaime — Real Time AI Media Engine**.
+This document is the canonical developer entry point for building, publishing and testing **rtaime — Real Time AI Media Engine**. Product scope and support claims follow [Product Scope](ProductScope.md); published versioned protocol/Show identities are retained for compatibility.
 
 **Production-grade real-time AI media platform.**
 
@@ -27,7 +27,7 @@ The repository pins the .NET SDK in `global.json`:
 .NET SDK 10.0.401
 ```
 
-The V1 reference development platform is Windows x64. The WPF Operator targets `net10.0-windows`; platform-neutral libraries and non-UI hosts, including the optional `rtaime.IntegrationHost`, target `net10.0`.
+The current reference development platform is Windows x64. The WPF Operator targets `net10.0-windows`; platform-neutral libraries and non-UI hosts, including the optional `rtaime.IntegrationHost`, target `net10.0`.
 
 Verify the SDK:
 
@@ -83,7 +83,7 @@ dotnet build rtaime.slnx --configuration Release --no-restore
 
 On Windows, a running .NET executable locks assemblies loaded from its output directory. Building the same configuration while AppHost, Operator or a supervised host is still running can therefore produce `MSB3026`, followed by `MSB3027`/`MSB3021` after the copy retry limit is exhausted. Use the canonical developer build entry point instead of manually killing arbitrary system processes.
 
-The normal build is framework-dependent and preserves the multi-process V1 topology behind one product entry point:
+The normal build is framework-dependent and preserves the multi-process production topology behind one product entry point:
 
 ```text
 rtaime.exe / AppHost
@@ -117,7 +117,7 @@ For automation that needs deterministic terminal output, redirect stdout/stderr 
 
 ### Architecture boundary
 
-rtaime V1 is intentionally a multi-process system. The canonical `rtaime.exe` AppHost may be published as one self-contained executable, but ControlHost, RuntimeHost, AIHost and Operator remain separate process artifacts. Single-file publishing does not create a monolithic runtime.
+rtaime is intentionally a multi-process system. The canonical `rtaime.exe` AppHost may be published as one self-contained executable, but ControlHost, RuntimeHost, AIHost and Operator remain separate process artifacts. Single-file publishing does not create a monolithic runtime.
 
 A future all-in-one process would be a separate architecture decision and is not implied by the commands below.
 
@@ -202,7 +202,7 @@ dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
 
 ### Release qualification boundary
 
-These commands are developer/distribution build options. The authoritative V1 release pipeline currently produces and qualifies the framework-dependent offline bundle documented in [ReleasePackagingAndOfflineDeployment.md](ReleasePackagingAndOfflineDeployment.md).
+These commands are developer/distribution build options. The authoritative product release pipeline currently produces and qualifies the framework-dependent offline bundle documented in [ReleasePackagingAndOfflineDeployment.md](ReleasePackagingAndOfflineDeployment.md).
 
 A self-contained/single-file artifact must not be represented as an officially qualified release artifact until the release pipeline, integrity inventory, offline preflight and release evidence explicitly cover that artifact shape.
 
@@ -284,7 +284,7 @@ Local `dotnet build` and `dotnet test` runs are necessary developer validation, 
 
 See:
 
-- [RepositoryGovernance.md](RepositoryGovernance.md)
+- [RepositoryGovernance.md](Governance/RepositoryGovernance.md)
 - [ReleasePipelineAndChannels.md](ReleasePipelineAndChannels.md)
 - [ReleaseEvidence.md](ReleaseEvidence.md)
 - [QualificationEvidenceProvenance.md](QualificationEvidenceProvenance.md)

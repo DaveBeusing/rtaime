@@ -80,9 +80,9 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             throw new InvalidOperationException(failure!.Value.Message);
         session.AttachResources(ticket!);
     }
-    internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.DevelopmentFour;
+    internal bool AllowsAdditionalSources => _profile == LocalMediaCapacityProfile.OptInFour;
 
-    public void AdmitBoundary(V1RuntimeHostService runtime, ulong programSlot)
+    public void AdmitBoundary(RuntimeProgramExecutionService runtime, ulong programSlot)
     {
         lock (_gate)
         {
@@ -91,7 +91,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
             foreach (var source in _pendingInputClears)
             {
                 runtime.ClearExternalAudioMeter(source);
-                runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
             }
             _pendingInputClears.Clear();
         }
@@ -100,7 +100,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     internal LocalMediaResourceLedger ResourceLedger => _ledger;
     private bool SourceAllowed(MediaSourceId source) =>
         _allowedSources is not null ? _allowedSources.Contains(source) :
-        _knownSources.Count < (_profile == LocalMediaCapacityProfile.DevelopmentFour ? 8 : 2) || _knownSources.Contains(source);
+        _knownSources.Count < (_profile == LocalMediaCapacityProfile.OptInFour ? 8 : 2) || _knownSources.Contains(source);
 
     public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
@@ -305,7 +305,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
         catch (ObjectDisposedException) { boundary = null; return MediaDeckRuntimeSnapshot.Unloaded; }
     }
 
-    public void AdmitBoundary(V1RuntimeHostService runtime, MediaSourceId source, ulong programSlot)
+    public void AdmitBoundary(RuntimeProgramExecutionService runtime, MediaSourceId source, ulong programSlot)
     {
         // Publication is fenced against slot replacement. All work here is bounded queue admission/copy.
         lock (_gate)
@@ -316,7 +316,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                 if (entry is not null || _pendingInputClears.Remove(source))
                 {
                     runtime.ClearExternalAudioMeter(source);
-                    runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                    runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
                 }
                 return;
             }
@@ -331,12 +331,12 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
                     runtime.SetExternalAudioMeter(source, 0, 0, available: false);
                 entry.PublishedGeneration = generation;
                 runtime.SetExternalInputContent(source, boundary.RgbaPixels.Span,
-                    boundary.Video.Surface.Format == runtime.Format ? V1InputSignalState.Valid : V1InputSignalState.Unstable);
+                    boundary.Video.Surface.Format == runtime.Format ? RuntimeInputSignalState.Valid : RuntimeInputSignalState.Unstable);
                 entry.NeedsPublication = false;
             }
             if (entry.NeedsPublication || snapshot.State is MediaDeckState.Loading or MediaDeckState.Error ||
                 boundary?.Status == LocalMediaRuntimeBoundaryStatus.Buffering)
-                runtime.SetInputSignalState(source, V1InputSignalState.Lost);
+                runtime.SetInputSignalState(source, RuntimeInputSignalState.Lost);
             if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
                 runtime.SetExternalAudioInput(source, boundary.AudioPayload.Span, available: true);
             else

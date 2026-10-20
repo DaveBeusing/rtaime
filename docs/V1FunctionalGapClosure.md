@@ -51,7 +51,7 @@ A competing headless client cannot commit a mutation against an obsolete revisio
 
 The stable `RecordingProgramSample` contract remains descriptor-only. Bulk video/audio bytes are not added to normal Media, Runtime or cross-process contracts.
 
-V1 Functional Gap Closure adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `V1RuntimeHostService` detects that capability at composition time and supplies media payload only while recording is active. Program video is transferred as an owned `IProgramRecordingPayloadLease`; the asynchronous writer must dispose that lease after write, discard, abort, or cleanup. This keeps the stable descriptor contracts unchanged while preventing recording from observing a readback buffer after it has been returned for reuse.
+V1 Functional Gap Closure adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `RuntimeProgramExecutionService` detects that capability at composition time and supplies media payload only while recording is active. Program video is transferred as an owned `IProgramRecordingPayloadLease`; the asynchronous writer must dispose that lease after write, discard, abort, or cleanup. This keeps the stable descriptor contracts unchanged while preventing recording from observing a readback buffer after it has been returned for reuse.
 
 The software-only reference path persists:
 
@@ -112,7 +112,7 @@ A storage-exhausted recording transitions to `Failed`; no apparently valid final
 - 1920x1080p50 RGBA8;
 - 1920x1080p59.94 RGBA8.
 
-For each format the test compares the persisted video payload byte-for-byte with `V1ProgramBoundaryResult.ProgramPixels`, validates the exact frame-rate/timebase metadata, validates the AFV sample window and verifies persisted Float32 audio payload.
+For each format the test compares the persisted video payload byte-for-byte with `ProgramBoundaryResult.ProgramPixels`, validates the exact frame-rate/timebase metadata, validates the AFV sample window and verifies persisted Float32 audio payload.
 
 ## V1 functional audit
 

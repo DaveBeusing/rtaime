@@ -30,7 +30,7 @@ public sealed class ReferenceRecordingPayloadTests
 			var sourceB = new ProductionSourceId(Identity.Parse("7b000000-0000-0000-0000-00000000000b"));
 			var specification = CreateSpecification(sourceA, sourceB);
 			var writer = new ReferenceRecordingPayloadWriter(root);
-			await using var runtime = new V1RuntimeHostService(
+			await using var runtime = new RuntimeProgramExecutionService(
 				new MediaSourceId(sourceA.Value),
 				new MediaSourceId(sourceB.Value),
 				format,
@@ -110,7 +110,7 @@ public sealed class ReferenceRecordingPayloadTests
 			var mediaB = new MediaSourceId(sourceB.Value);
 			var specification = CreateSpecification(sourceA, sourceB);
 			var writer = new ReferenceRecordingPayloadWriter(root);
-			await using var runtime = new V1RuntimeHostService(mediaA, mediaB, VideoFormat.Hd1080p50Rgba8, writer);
+			await using var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, VideoFormat.Hd1080p50Rgba8, writer);
 			await using var journal = new BoundedProductionJournal(64);
 			var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
 			CommitInitialization(control, runtime);
@@ -191,7 +191,7 @@ public sealed class ReferenceRecordingPayloadTests
 			},
 			new ProductionRoutingState(sourceA, sourceA));
 
-	private static void CommitInitialization(ControlHostService control, V1RuntimeHostService runtime)
+	private static void CommitInitialization(ControlHostService control, RuntimeProgramExecutionService runtime)
 	{
 		var staged = control.Initialize();
 		Assert.True(staged.Accepted, staged.Failure?.ToString());

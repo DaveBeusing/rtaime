@@ -5,7 +5,7 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
-public enum LocalMediaCapacityProfile { Conservative = 1, DevelopmentFour = 2 }
+public enum LocalMediaCapacityProfile { Conservative = 1, OptInFour = 2 }
 public enum LocalMediaResourcePurpose { Resident = 1, Probe = 2, Preflight = 3, Analysis = 4 }
 
 public sealed record LocalMediaResourceIdentity(
@@ -40,7 +40,7 @@ public sealed class LocalMediaResourceLedger
     public int Capacity { get; }
     public LocalMediaResourceLedger(VideoFormat format, int capacity, LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
     {
-        if (!Enum.IsDefined(profile) || capacity < 1 || capacity > (profile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2))
+        if (!Enum.IsDefined(profile) || capacity < 1 || capacity > (profile == LocalMediaCapacityProfile.OptInFour ? 4 : 2))
             throw new ArgumentOutOfRangeException(nameof(capacity));
         Capacity = capacity;
         // Ten video/audio slots plus one known RGBA decoder scratch frame. Native allocations are unknown.

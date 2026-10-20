@@ -28,7 +28,7 @@ public sealed class AIAdmissionPolicyTests
     {
         var runtime = new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider(InferenceProviderState.Degraded) },
-            InferenceRuntimeLimits.ReferenceV1);
+            InferenceRuntimeLimits.ConservativeReference);
 
         var result = await runtime.ExecuteAsync(Request(maxRate: 25));
 

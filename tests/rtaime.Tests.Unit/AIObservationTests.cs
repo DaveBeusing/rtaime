@@ -13,7 +13,7 @@ public sealed class AIObservationTests
     {
         var runtime = new GovernedInferenceRuntime(
             Array.Empty<IInferenceProvider>(),
-            InferenceRuntimeLimits.ReferenceV1);
+            InferenceRuntimeLimits.ConservativeReference);
         var frame = new FrameDescriptor(
             MediaContractVersion.Current,
             MediaSourceId.New(),

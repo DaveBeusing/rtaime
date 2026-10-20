@@ -8,19 +8,19 @@ using rtaime.Provider.Gpu;
 namespace rtaime.RuntimeHost;
 
 /// <summary>
-/// Non-authoritative RuntimeHost bridge between physical Media I/O and the existing V1 execution/compositor.
+/// Non-authoritative RuntimeHost bridge between physical Media I/O and the existing Program execution/compositor.
 /// It changes only current media working content; production routing and transition authority remain unchanged.
 /// </summary>
 internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 {
-	private readonly V1RuntimeHostService _runtime;
+	private readonly RuntimeProgramExecutionService _runtime;
 	private readonly MediaIoVerticalSlice _mediaIo;
 	private ulong? _sourceASequence;
 	private ulong? _sourceBSequence;
 	private bool _disposed;
 
 	public RuntimeMediaIoVerticalSlice(
-		V1RuntimeHostService runtime,
+		RuntimeProgramExecutionService runtime,
 		IMediaIoProviderAdapter adapter,
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
@@ -48,7 +48,7 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 		ApplyLatest(_mediaIo.LatestB, ref _sourceBSequence);
 	}
 
-	public void SubmitProgram(V1ProgramBoundaryResult boundary)
+	public void SubmitProgram(ProgramBoundaryResult boundary)
 	{
 		ArgumentNullException.ThrowIfNull(boundary);
 		ThrowIfDisposed();
@@ -104,12 +104,12 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 		appliedSequence = capture.CaptureSequence;
 	}
 
-	private static V1InputSignalState MapSignal(MediaIoSignalState state) => state switch
+	private static RuntimeInputSignalState MapSignal(MediaIoSignalState state) => state switch
 	{
-		MediaIoSignalState.Locked => V1InputSignalState.Valid,
-		MediaIoSignalState.Unstable => V1InputSignalState.Unstable,
-		MediaIoSignalState.Lost or MediaIoSignalState.Faulted => V1InputSignalState.Lost,
-		_ => V1InputSignalState.Recovering
+		MediaIoSignalState.Locked => RuntimeInputSignalState.Valid,
+		MediaIoSignalState.Unstable => RuntimeInputSignalState.Unstable,
+		MediaIoSignalState.Lost or MediaIoSignalState.Faulted => RuntimeInputSignalState.Lost,
+		_ => RuntimeInputSignalState.Recovering
 	};
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);

@@ -887,7 +887,7 @@
 														<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
 														<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
 													</Grid>
-													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
+													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not implemented in this Inspector. Existing effects can be edited through supported processing controls." />
 												</StackPanel>
 											</StackPanel>
 										</Border>

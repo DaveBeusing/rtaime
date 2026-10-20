@@ -8,7 +8,7 @@ using rtaime.Runtime.Contracts;
 namespace rtaime.ControlHost;
 
 /// <summary>
-/// Authoritative ControlHost composition for the bounded V1 local media decks.
+/// Authoritative ControlHost composition for the admitted local media decks.
 /// Runtime owns decode/transport; ControlHost owns source authorization and marker persistence.
 /// </summary>
 public sealed class MediaDeckControlService

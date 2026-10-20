@@ -79,7 +79,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.InRange(
 				runtime.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
 				0,
-				V1RuntimeHostService.ProgramReadbackBufferCapacity);
+				RuntimeProgramExecutionService.ProgramReadbackBufferCapacity);
 
 			var secondPath = await RecordOneAsync(client, runtime, destination, "ap53-program-02");
 			var second = ReferenceRecordingPayloadReader.Read(secondPath);
@@ -90,7 +90,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.InRange(
 				runtime.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
 				0,
-				V1RuntimeHostService.ProgramReadbackBufferCapacity);
+				RuntimeProgramExecutionService.ProgramReadbackBufferCapacity);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot!.Production.Revision);
 		}
 		finally

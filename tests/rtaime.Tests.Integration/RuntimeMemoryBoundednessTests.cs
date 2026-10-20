@@ -11,22 +11,22 @@ public sealed class RuntimeMemoryBoundednessTests
 	[Fact]
 	public async Task RuntimeHost_observations_and_recent_snapshot_cost_remain_bounded()
 	{
-		await using var runtime = new V1RuntimeHostService(
+		await using var runtime = new RuntimeProgramExecutionService(
 			MediaSourceId.New(),
 			MediaSourceId.New(),
 			VideoFormat.Hd1080p50Rgba8,
 			new NoopRecordingWriter());
 
-		var writes = V1RuntimeHostService.RetainedObservationCapacity + 64;
+		var writes = RuntimeProgramExecutionService.RetainedObservationCapacity + 64;
 		for (var index = 0; index < writes; index++)
 		{
 			runtime.SetTimingHealth(
 				index % 2 == 0
-					? V1TimingHealthState.Healthy
-					: V1TimingHealthState.Degraded);
+					? RuntimeHostTimingHealthState.Healthy
+					: RuntimeHostTimingHealthState.Degraded);
 		}
 
-		Assert.Equal(V1RuntimeHostService.RetainedObservationCapacity, runtime.Observations.Count);
+		Assert.Equal(RuntimeProgramExecutionService.RetainedObservationCapacity, runtime.Observations.Count);
 		Assert.True(runtime.OverwrittenObservationCount > 0);
 		Assert.Equal(64, runtime.RecentObservations(64).Count);
 		Assert.Equal("timing.health:Degraded", runtime.Observations[^1]);

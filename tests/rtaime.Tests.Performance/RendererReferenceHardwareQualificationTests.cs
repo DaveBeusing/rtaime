@@ -362,7 +362,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         var period = TimeSpan.FromSeconds((double)format.FrameRate.Denominator / format.FrameRate.Numerator);
         var pipeline = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(period,
             TimeSpan.FromTicks(period.Ticks / 4), period, 65_536));
-        await using var runtime = new V1RuntimeHostService(
+        await using var runtime = new RuntimeProgramExecutionService(
             mediaA,
             mediaB,
             format,
@@ -382,7 +382,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         if (!runtime.ApplyExecution(initialPlan.PreparedExecution!, programSink).Committed)
             throw new InvalidOperationException("Initial renderer qualification execution did not commit.");
 
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
         var overlay = new byte[64 * 64 * 4];
         for (var offset = 0; offset < overlay.Length; offset += 4)
         {
@@ -538,7 +538,7 @@ public sealed class RendererReferenceHardwareQualificationTests
                     if (!applied.Committed) throw new InvalidOperationException("Renderer qualification transition did not commit.");
                     programOnB = !programOnB;
                     transitionApplied = true;
-                    runtime.SetVisualLayerMode(transitions % 3 == 0 ? V1VisualLayerMode.Disabled : V1VisualLayerMode.Static);
+                    runtime.SetVisualLayerMode(transitions % 3 == 0 ? RuntimeVisualLayerMode.Disabled : RuntimeVisualLayerMode.Static);
                     runtime.SetGraphicsOverlay(transitions % 3 == 2, .15, .12, 1);
                 }
                 if (boundaryIndex % recordingPeriod == 0)
@@ -628,7 +628,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
         var gpuTiming = BuildGpuTiming(timingCollector.Snapshot());
         var runtimeDroppedFrames = finalSnapshot.Performance.DroppedFrames;
-        var deviceFaultObservations = runtime.RecentObservations(V1RuntimeHostService.RetainedObservationCapacity)
+        var deviceFaultObservations = runtime.RecentObservations(RuntimeProgramExecutionService.RetainedObservationCapacity)
             .Where(observation =>
                 observation.Contains("gpu.", StringComparison.OrdinalIgnoreCase) &&
                 (observation.Contains("failed", StringComparison.OrdinalIgnoreCase) ||

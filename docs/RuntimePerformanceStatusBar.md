@@ -33,7 +33,7 @@ All values reuse existing Runtime and Control observations.
 
 CPU, RAM, GPU and VRAM originate in `SystemHardwareTelemetry`. Hardware sampling remains cached at the Runtime management boundary. The Operator never performs local hardware discovery.
 
-Frame processing time and the active frame budget originate in the existing `V1RuntimePerformanceSnapshot`.
+Frame processing time and the active frame budget originate in the existing `RuntimeHostPerformanceSnapshot`.
 
 Dropped-frame evidence continues to use `RuntimeFrameDropCounter`, combining cumulative skipped rational scheduler slots with cumulative native-output backpressure/rejection evidence.
 

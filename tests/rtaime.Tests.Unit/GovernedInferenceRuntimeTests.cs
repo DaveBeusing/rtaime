@@ -9,6 +9,16 @@ namespace rtaime.Tests.Unit;
 [Collection("Blocking consumer lifecycle")]
 public sealed class GovernedInferenceRuntimeTests
 {
+    [Fact]
+    public void Conservative_reference_profile_keeps_existing_finite_budgets()
+    {
+        var limits = InferenceRuntimeLimits.ConservativeReference;
+        Assert.Equal(100U, limits.ComputeUnits);
+        Assert.Equal(512UL * 1024 * 1024, limits.VramBytes);
+        Assert.Equal(2U, limits.MaxConcurrentRequests);
+        Assert.Equal(30U, limits.MaxInferenceRatePerSecond);
+    }
+
     private static readonly UtcTimestamp Now = new(new DateTimeOffset(2026, 9, 15, 18, 0, 0, TimeSpan.Zero));
 
     [Fact]
@@ -198,7 +208,7 @@ public sealed class GovernedInferenceRuntimeTests
     }
 
     private static GovernedInferenceRuntime Runtime(IInferenceProvider provider) =>
-        new(new[] { provider }, InferenceRuntimeLimits.ReferenceV1, new FixedClock(Now));
+        new(new[] { provider }, InferenceRuntimeLimits.ConservativeReference, new FixedClock(Now));
 
     private static GovernedInferenceExecutionRequest Request(
         ulong sequence,

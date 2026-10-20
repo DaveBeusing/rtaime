@@ -4,7 +4,7 @@ using System.Text;
 namespace rtaime.Recording;
 
 /// <summary>
-/// Local, orderly-finalized recording artifact writer for the V1 architectural proof.
+/// Local, orderly-finalized recording artifact writer for the reference recording path.
 /// It persists Program sample identity/timing and opaque media-handle references, not decoded bulk media.
 /// A future qualified encoder backend can implement IProgramRecordingWriter without changing ProgramRecorder.
 /// </summary>

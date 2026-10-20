@@ -51,12 +51,12 @@ RuntimeHost restart lifecycle; cancellation is never proof of native release.
 | Profile | Decoder/pool owner capacity | Source policy |
 | --- | --- | --- |
 | conservative (default) | 1 or 2; default 2 | Existing distinct A/B identities and legacy known-source fence |
-| development-four (explicit opt-in) | 1 through 4 | Prepared authoritative source bindings; additional sources registered through the existing Runtime registry |
+| opt-in-four (explicit opt-in) | 1 through 4 | Prepared authoritative source bindings; additional sources registered through the existing Runtime registry |
 
-Select the development profile with
-`--local-media-profile=development-four --local-media-decoders=4`, or
-`RTAIME_LOCAL_MEDIA_PROFILE=development-four` and
-`RTAIME_LOCAL_MEDIA_DECODERS=4`. Four without the explicit profile is rejected.
+Select the finite opt-in profile with
+`--local-media-profile=opt-in-four --local-media-decoders=4`, or
+`RTAIME_LOCAL_MEDIA_PROFILE=opt-in-four` and
+`RTAIME_LOCAL_MEDIA_DECODERS=4`. The former `development-four` spelling remains accepted only as a compatibility input. Four without the explicit profile is rejected; neither spelling certifies four simultaneous physical/native decoder sessions.
 The existing source registry remains bounded to eight sources. The local provider
 exposes four stable route/decode descriptors; Control selects them from the
 authoritative configured source order, including third/fourth slots. Existing

@@ -178,7 +178,7 @@ public sealed class RuntimeOutputBindingHealthTests
 			new ProductionRoutingState(sourceA, sourceA),
 			initialOutputRoles: outputRoles);
 
-		var runtime = new V1RuntimeHostService(
+		var runtime = new RuntimeProgramExecutionService(
 			new MediaSourceId(sourceA.Value),
 			new MediaSourceId(sourceB.Value),
 			VideoFormat.Hd1080p50Rgba8,
@@ -219,10 +219,10 @@ public sealed class RuntimeOutputBindingHealthTests
 			prepared.CompositingState);
 	}
 
-	private static RuntimeOutputRoleSnapshot ProgramRole(V1RuntimeHostService runtime) =>
+	private static RuntimeOutputRoleSnapshot ProgramRole(RuntimeProgramExecutionService runtime) =>
 		Assert.Single(runtime.Snapshot.OutputRoles!, role => role.RoleId == "program");
 
-	private static RuntimeOutputRoleSnapshot AuxRole(V1RuntimeHostService runtime) =>
+	private static RuntimeOutputRoleSnapshot AuxRole(RuntimeProgramExecutionService runtime) =>
 		Assert.Single(runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux");
 
 	private static void AssertCommitted(RuntimeHostApplyResult result)
@@ -248,7 +248,7 @@ public sealed class RuntimeOutputBindingHealthTests
 	}
 
 	private sealed record Fixture(
-		V1RuntimeHostService Runtime,
+		RuntimeProgramExecutionService Runtime,
 		PreparedExecutionContract Prepared) : IAsyncDisposable
 	{
 		public ValueTask DisposeAsync() => Runtime.DisposeAsync();

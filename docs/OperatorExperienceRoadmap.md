@@ -4,7 +4,7 @@
 
 ## Purpose and status
 
-Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. The [scope decision effective 2026-10-17](OperatorExperienceScope.md) makes the
+Turn the [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, into dependency-ordered improvements of the existing Operator. The later [product-wide scope decision](ProductScope.md) supersedes all historical product-phase feature ceilings; the roadmap is a delivery/evidence plan, not a product feature allowlist. The [scope decision effective 2026-10-17](OperatorExperienceScope.md) makes the
 listed extensions approved implementation work. This roadmap supplies ownership,
 dependencies and acceptance; it grants no hardware/security/release certification
 and does not claim that the target already matches the running application.
@@ -122,7 +122,7 @@ Acceptance: no visible stock-control inconsistency in the changed surfaces; sele
 
 Depends on shared shell geometry. Extend the existing monitor presentation rather than adding a renderer. Confirm aspect-safe Fit, explicit Fill cropping, physical-pixel inspection, resize settling and truthful source/delivered/target metadata. Preserve channel/ROI availability rules and the explicit GPU/WPF fallback. Do not promise original-resolution detail from a sampled stream.
 
-Acceptance: pointer and ROI coordinates remain stable across fractional DPI, zoom and pan; resize settles without per-frame target churn; retained/detached monitor identities and final resource counts remain bounded; monitoring pressure cannot delay Program. Independent analysis/full-resolution inspection is approved TO IMPLEMENT; its real bounded backend contract and qualified delivery metadata must precede UI claims.
+Acceptance: pointer and ROI coordinates remain stable across fractional DPI, zoom and pan; resize settles without per-frame target churn; retained/detached monitor identities and final resource counts remain bounded; monitoring pressure cannot delay Program. Bounded independent analysis/scrubbing now has source-backed implementation for supported local clips. Original-resolution Preview/Program inspection, physical scan-out and cross-device fidelity require separate delivered-frame, resource and hardware qualification before any UI support claim.
 
 ### Consolidate preparation and live-operation journeys
 
@@ -180,5 +180,5 @@ The scope baseline is complete when the accepted extensions are discoverable and
 approved TO IMPLEMENT, concrete visual/interaction acceptance and namespace
 ownership are explicit, current capabilities remain honestly classified and
 subsequent owners can implement real contracts without redoing authority or
-reopening former V1 deferrals. Feature completion and physical/release acceptance
+reopening historical product-phase restrictions. Feature completion and physical/release acceptance
 remain separate evidence decisions.

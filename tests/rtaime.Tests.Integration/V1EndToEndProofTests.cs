@@ -59,12 +59,12 @@ public sealed class V1EndToEndProofTests
         Assert.Equal(harness.SourceBMediaId, cutFrame.Audio.VideoSourceId);
         Assert.NotEqual(beforeCut.PixelProbe, cutFrame.PixelProbe);
 
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
         using var staticLayerFrame = harness.Runtime.ProcessNextBoundary();
-        Assert.Equal(V1VisualLayerMode.Static, staticLayerFrame.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Static, staticLayerFrame.VisualLayerMode);
         Assert.NotEqual(cutFrame.PixelProbe, staticLayerFrame.PixelProbe);
 
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Disabled);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Disabled);
         var previewBack = await harness.Client.SelectPreviewAsync(harness.SourceAProductionId.ToString());
         Assert.True(previewBack.Accepted);
         var dissolve = await harness.Client.DissolvePreviewAsync(3);
@@ -97,12 +97,12 @@ public sealed class V1EndToEndProofTests
         ApplyReferenceSegmentationEffect(harness.Runtime, aiResult);
 
         using var aiVisible = harness.Runtime.ProcessNextBoundary();
-        Assert.Equal(V1VisualLayerMode.Dynamic, aiVisible.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Dynamic, aiVisible.VisualLayerMode);
         Assert.NotEqual(cleanForAI.PixelProbe, aiVisible.PixelProbe);
 
         var unavailableAI = new AIHostService(new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider(InferenceProviderState.Unavailable) },
-            InferenceRuntimeLimits.ReferenceV1));
+            InferenceRuntimeLimits.ConservativeReference));
         var unavailable = await unavailableAI.ExecuteAsync(CreateInferenceRequest(aiVisible.ProgramFrame));
         var fallback = AIResultUsePolicy.Evaluate(
             unavailable,
@@ -110,12 +110,12 @@ public sealed class V1EndToEndProofTests
             Duration.FromTimeSpan(TimeSpan.FromMilliseconds(100)),
             0.9);
         Assert.False(fallback.Usable);
-        harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Disabled);
+        harness.Runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Disabled);
 
         using var cleanFallback = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(harness.SourceAMediaId, cleanFallback.CommittedProgramSourceId);
         Assert.True(cleanFallback.Audio.Emitted);
-        Assert.Equal(V1VisualLayerMode.Disabled, cleanFallback.VisualLayerMode);
+        Assert.Equal(RuntimeVisualLayerMode.Disabled, cleanFallback.VisualLayerMode);
 
         var recordingStop = await harness.Runtime.StopRecordingAsync();
         Assert.Equal(RecordingStopStatus.Stopped, recordingStop.Status);
@@ -150,7 +150,7 @@ public sealed class V1EndToEndProofTests
         using var healthy = harness.Runtime.ProcessNextBoundary();
         Assert.NotEqual(new ProgramPixelProbe(0, 0, 0, 255), healthy.PixelProbe);
 
-        harness.Runtime.SetInputSignalState(harness.SourceAMediaId, V1InputSignalState.Lost);
+        harness.Runtime.SetInputSignalState(harness.SourceAMediaId, RuntimeInputSignalState.Lost);
         using var fallback = harness.Runtime.ProcessNextBoundary();
 
         Assert.Equal(harness.SourceAMediaId, fallback.CommittedProgramSourceId);
@@ -179,14 +179,14 @@ public sealed class V1EndToEndProofTests
     }
 
     private static void ApplyReferenceSegmentationEffect(
-        V1RuntimeHostService runtime,
+        RuntimeProgramExecutionService runtime,
         GovernedInferenceExecutionResult result)
     {
         var region = result.Result.Outputs.Single(output => output.Name == "mask.region.normalized").Value;
         var parts = region.Split(',').Select(value => double.Parse(value, CultureInfo.InvariantCulture)).ToArray();
         Assert.Equal(4, parts.Length);
         runtime.UpdateDynamicLayerRegion(parts[0], parts[1], parts[2], parts[3]);
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Dynamic);
     }
 
     private sealed class V1Harness : IAsyncDisposable
@@ -199,7 +199,7 @@ public sealed class V1EndToEndProofTests
             CollectingRecordingWriter writer,
             BoundedProductionJournal journal,
             ControlHostService control,
-            V1RuntimeHostService runtime,
+            RuntimeProgramExecutionService runtime,
             AIHostService ai,
             OperatorControlClient client)
         {
@@ -222,7 +222,7 @@ public sealed class V1EndToEndProofTests
         public CollectingRecordingWriter Writer { get; }
         public BoundedProductionJournal Journal { get; }
         public ControlHostService Control { get; }
-        public V1RuntimeHostService Runtime { get; }
+        public RuntimeProgramExecutionService Runtime { get; }
         public AIHostService AI { get; }
         public OperatorControlClient Client { get; }
 
@@ -245,7 +245,7 @@ public sealed class V1EndToEndProofTests
                 new ProductionRoutingState(sourceA, sourceA));
 
             var writer = new CollectingRecordingWriter();
-            var runtime = new V1RuntimeHostService(mediaA, mediaB, format, writer);
+            var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, writer);
             var journal = new BoundedProductionJournal(256);
             var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
             var ai = AIHostService.CreateManagedReference();
@@ -267,13 +267,13 @@ public sealed class V1EndToEndProofTests
     private sealed class InProcessOperatorTransport : IOperatorControlTransport
     {
         private readonly ControlHostService _control;
-        private readonly V1RuntimeHostService _runtime;
+        private readonly RuntimeProgramExecutionService _runtime;
         private readonly AIHostService _ai;
         private readonly ProductionSpecification _specification;
 
         public InProcessOperatorTransport(
             ControlHostService control,
-            V1RuntimeHostService runtime,
+            RuntimeProgramExecutionService runtime,
             AIHostService ai,
             ProductionSpecification specification)
         {
@@ -308,7 +308,7 @@ public sealed class V1EndToEndProofTests
                 inputStatus,
                 _ai.Snapshot.State.ToString(),
                 runtime.Recording.State.ToString(),
-                runtime.VisualLayerMode != V1VisualLayerMode.Disabled,
+                runtime.VisualLayerMode != RuntimeVisualLayerMode.Disabled,
                 runtime.Audio.LastPeakLevel));
         }
 

@@ -37,7 +37,7 @@ public sealed class V1CombinedReferencePerformanceTests
             new ProductionRoutingState(sourceB, sourceA));
 
         var writer = new CountingWriter();
-        await using var runtime = new V1RuntimeHostService(mediaA, mediaB, format, writer);
+        await using var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, writer);
         var providerRegistry = new ProviderRegistry(runtime.ProviderDescriptors);
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
         var initialPlan = CapabilityPlanningEngine.Plan(specification, initialState, providerRegistry);
@@ -49,11 +49,11 @@ public sealed class V1CombinedReferencePerformanceTests
             new RecordingSessionId(Identity.Parse("92000000-0000-0000-0000-000000000001")),
             new RecordingOutputId(Identity.Parse("92000000-0000-0000-0000-000000000002")));
         Assert.True(recording.Succeeded);
-        runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+        runtime.SetVisualLayerMode(RuntimeVisualLayerMode.Static);
 
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider() },
-            InferenceRuntimeLimits.ReferenceV1);
+            InferenceRuntimeLimits.ConservativeReference);
         var samples = new List<double>();
         var outputSequences = new List<ulong>();
 
@@ -140,7 +140,7 @@ public sealed class V1CombinedReferencePerformanceTests
             },
             new ProductionRoutingState(sourceB, sourceA));
 
-        await using var runtime = new V1RuntimeHostService(mediaA, mediaB, format, new CountingWriter());
+        await using var runtime = new RuntimeProgramExecutionService(mediaA, mediaB, format, new CountingWriter());
         var providerRegistry = new ProviderRegistry(runtime.ProviderDescriptors);
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
         var initialPlan = CapabilityPlanningEngine.Plan(specification, initialState, providerRegistry);
@@ -156,7 +156,7 @@ public sealed class V1CombinedReferencePerformanceTests
         runtime.SetGraphicsOverlay(true, 0, 0, 1);
         var processingStack = CreateProcessingQualificationStack(processingScenario);
         runtime.SetCompositingLayerProcessingStack(
-            V1RuntimeHostService.BitmapGraphicsLayerId,
+            RuntimeProgramExecutionService.BitmapGraphicsLayerId,
             processingStack);
 
         const int mutationsPerBatch = 4;
@@ -166,7 +166,7 @@ public sealed class V1CombinedReferencePerformanceTests
             for (var index = 0; index < mutationsPerBatch; index++)
             {
                 runtime.SetCompositingLayerTransform(
-                    V1RuntimeHostService.BitmapGraphicsLayerId,
+                    RuntimeProgramExecutionService.BitmapGraphicsLayerId,
                     0,
                     0,
                     1,
@@ -192,7 +192,7 @@ public sealed class V1CombinedReferencePerformanceTests
         Assert.NotNull(runtime.Snapshot.CompositingLayers);
         var bitmapLayer = Assert.Single(
             runtime.Snapshot.CompositingLayers!,
-            layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+            layer => layer.LayerId == RuntimeProgramExecutionService.BitmapGraphicsLayerId);
         Assert.Equal(-2.5, bitmapLayer.RotationDegrees, 6);
         Assert.Equal(processingStack.Length, bitmapLayer.ProcessingStack.Count);
         Assert.Equal(processingStack.Select(node => node.NodeId), bitmapLayer.ProcessingStack.Select(node => node.NodeId));

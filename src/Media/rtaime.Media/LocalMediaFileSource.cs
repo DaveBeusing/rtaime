@@ -213,7 +213,7 @@ public sealed class LocalMediaFileProvider
 			? new ProviderAvailability(ProviderAvailabilityState.Available)
 			: new ProviderAvailability(
 				ProviderAvailabilityState.Unavailable,
-				new Failure("media.file.platform_unsupported", "The V1 local media provider requires Windows Media Foundation."));
+				new Failure("media.file.platform_unsupported", "The local media provider requires Windows Media Foundation."));
 
 		var capabilities = new[]
 		{
@@ -281,7 +281,7 @@ public sealed class LocalMediaFileProvider
         if (probe is null)
             return LocalMediaOpenResult.Rejected("media.file.container_unsupported", "Local input requires a qualified MP4 or QuickTime MOV container.");
 		if (!OperatingSystem.IsWindows())
-			return LocalMediaOpenResult.Rejected("media.file.platform_unsupported", "The V1 local media provider requires Windows Media Foundation.");
+			return LocalMediaOpenResult.Rejected("media.file.platform_unsupported", "The local media provider requires Windows Media Foundation.");
 
 		try
 		{

@@ -203,7 +203,7 @@ public static class LogicalProductionGraphValidator
             {
                 issues.Add(new ValidationIssue(
                     "planning.graph.self_edge",
-                    "Logical graph self-edges are not valid in the V1 planning graph.",
+                    "Logical graph self-edges are not valid in the execution planning graph.",
                     "graph.edges"));
             }
         }
