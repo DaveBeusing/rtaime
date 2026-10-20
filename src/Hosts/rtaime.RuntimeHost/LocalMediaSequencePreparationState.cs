@@ -21,9 +21,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                 cleaned.AuthoringRevision == reference.AuthoringRevision &&
                 cleaned.PreparedExecutionId == reference.PreparedExecutionId &&
                 cleaned.InitialGeneration == reference.Generation &&
+                cleaned.ProtocolVersion == reference.Version &&
                 reference.RuntimeHostInstanceId == runtimeHostInstanceId)
                 return new SequencePreparationStatus(
-                    SequencePreparationContract.Version, reference.SequenceId,
+                    reference.Version, reference.SequenceId,
                     reference.AuthoringRevision, runtimeHostInstanceId,
                     reference.PreparedExecutionId, reference.Generation,
                     0, "CANCELED", "runtime.sequence.reposition_failed",
@@ -33,11 +34,12 @@ public sealed partial class LocalMediaDeckRuntimeService
                 prepared.SequenceId != reference.SequenceId ||
                 prepared.AuthoringRevision != reference.AuthoringRevision ||
                 prepared.PreparedExecution.ToString() != reference.PreparedExecutionId ||
-                prepared.InitialGeneration != reference.Generation)
+                prepared.InitialGeneration != reference.Generation ||
+                prepared.ProtocolVersion != reference.Version)
                 throw new InvalidOperationException(
                     "Sequence preparation identity, revision, generation or RuntimeHost lifetime changed.");
             return new SequencePreparationStatus(
-                SequencePreparationContract.Version,
+                reference.Version,
                 prepared.SequenceId, prepared.AuthoringRevision, runtimeHostInstanceId,
                 prepared.PreparedExecution.ToString(), prepared.InitialGeneration,
                 prepared.Owners.Length, "PREPARED", null,
@@ -63,7 +65,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             CloseSequenceMedia();
             return new SequencePreparationStatus(
-                SequencePreparationContract.Version,
+                reference.Version,
                 reference.SequenceId, reference.AuthoringRevision,
                 runtimeHostInstanceId, reference.PreparedExecutionId, reference.Generation,
                 0, "CANCELED", null,
