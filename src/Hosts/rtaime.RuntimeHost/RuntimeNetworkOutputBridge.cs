@@ -7,6 +7,10 @@ using rtaime.Provider.Gpu;
 
 namespace rtaime.RuntimeHost;
 
+public sealed record RuntimeNetworkOutputTargetEvidence(
+    string RoleId, string TargetId, NetworkOutputHealthSnapshot ProviderHealth,
+    long EnqueuedVideoFrames, long EnqueuedAudioSampleFrames);
+
 /// <summary>
 /// Runtime-owned output graph. Every provider session is constructed before the
 /// immutable role/target graph becomes visible to the existing Program boundary.
@@ -16,7 +20,26 @@ namespace rtaime.RuntimeHost;
 /// </summary>
 internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 {
-    private sealed record TargetSession(string TargetId, INetworkOutputSession Session);
+    private sealed class TargetSession(string roleId, string targetId, INetworkOutputSession session)
+    {
+        private long _enqueuedVideoFrames;
+        private long _enqueuedAudioSampleFrames;
+
+        public string RoleId { get; } = roleId;
+        public string TargetId { get; } = targetId;
+        public INetworkOutputSession Session { get; } = session;
+
+        public void ObserveEnqueued(long audioSampleFrames)
+        {
+            Interlocked.Increment(ref _enqueuedVideoFrames);
+            Interlocked.Add(ref _enqueuedAudioSampleFrames, audioSampleFrames);
+        }
+
+        public RuntimeNetworkOutputTargetEvidence Evidence => new(
+            RoleId, TargetId, Session.Snapshot,
+            Interlocked.Read(ref _enqueuedVideoFrames),
+            Interlocked.Read(ref _enqueuedAudioSampleFrames));
+    }
 
     private readonly IReadOnlyDictionary<string, TargetSession> _sessions;
     private readonly IReadOnlyDictionary<string, TargetSession[]> _roles;
@@ -49,7 +72,7 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
             {
                 var session = providerRegistry.CreateSession(target);
                 provisional.Add(target.Configuration.TargetId,
-                    new TargetSession(target.Configuration.TargetId, session));
+                    new TargetSession(target.RoleId, target.Configuration.TargetId, session));
             }
             descriptors = providerRegistry.ProviderDescriptorsFor(targets);
         }
@@ -150,7 +173,9 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                 // samples that the provider explicitly disposes.
                 payload = null;
                 if (outcome.Status == NetworkOutputEnqueueStatus.DroppedOldest) dropped++;
-                else if (outcome.Status == NetworkOutputEnqueueStatus.Rejected)
+                if (outcome.Accepted)
+                    targets[i].ObserveEnqueued(audio.Timing.SampleCount);
+                else
                 {
                     rejected++;
                     rejectedTarget ??= targets[i].TargetId;
@@ -188,6 +213,12 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
         _roles.TryGetValue(roleId, out var targets)
             ? Array.AsReadOnly(targets.Select(target => target.Session.Snapshot).ToArray())
             : Array.Empty<NetworkOutputHealthSnapshot>();
+
+    /// <summary>Accepted Program frames and audio samples per actual provider sink.
+    /// Sent-frame and fault counts remain the provider's measured snapshot.
+    /// </summary>
+    public IReadOnlyList<RuntimeNetworkOutputTargetEvidence> TargetEvidence =>
+        Array.AsReadOnly(_sessions.Values.Select(session => session.Evidence).ToArray());
 
     public NetworkOutputHealthSnapshot? SnapshotForTarget(string targetId) =>
         _sessions.TryGetValue(targetId, out var target) ? target.Session.Snapshot : null;
