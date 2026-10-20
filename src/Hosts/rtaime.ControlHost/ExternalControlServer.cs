@@ -673,7 +673,13 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		var (operation, payload) = MapRequest(request);
 		_security.Authorize(principal, operation);
 		using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-		operationTimeout.CancelAfter(_options.RequestTimeout);
+		// Native sequence preparation verifies and prerolls real decoder owners.
+		// Do not apply the ordinary low-latency command timeout to this one
+		// bounded, serialized management operation; all other RPCs keep it.
+		var requestTimeout = operation == "control.sequence.prepare" &&
+			_options.RequestTimeout < TimeSpan.FromSeconds(45)
+				? TimeSpan.FromSeconds(45) : _options.RequestTimeout;
+		operationTimeout.CancelAfter(requestTimeout);
 		var operationToken = operationTimeout.Token;
 		try
 		{
