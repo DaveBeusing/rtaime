@@ -149,7 +149,7 @@ public sealed class NetworkOutputConfigurationIntegrationTests
 	}
 
 	[Fact]
-	public void Duplicate_output_role_is_rejected_across_protocols()
+	public void One_authoritative_role_can_fan_out_to_distinct_provider_targets()
 	{
 		const string json = """
 		[
@@ -168,8 +168,12 @@ public sealed class NetworkOutputConfigurationIntegrationTests
 		]
 		""";
 
-		var exception = Assert.Throws<ArgumentException>(() => Load(json));
-		Assert.Contains("currently supports one configured network target", exception.Message, StringComparison.Ordinal);
+		var outputs = Load(json);
+		Assert.Equal(2, outputs.Count);
+		Assert.All(outputs, output => Assert.Equal("program", output.RoleId));
+		Assert.Equal(2, outputs.Select(output => output.Configuration.TargetId).Distinct().Count());
+		Assert.Contains(outputs, output => output.Configuration.Protocol == NetworkOutputProtocolFamily.Ndi);
+		Assert.Contains(outputs, output => output.Configuration.Protocol == NetworkOutputProtocolFamily.Srt);
 	}
 
 	private static IReadOnlyList<RuntimeNetworkOutputTarget> Load(string json) =>

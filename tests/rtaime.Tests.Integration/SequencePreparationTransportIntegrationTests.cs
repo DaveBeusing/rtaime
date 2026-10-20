@@ -32,8 +32,10 @@ public sealed partial class ExternalControlIntegrationTests
         Assert.True(result.State.Revision.Value > 0);
     }
 
-    [Fact]
-    public async Task Real_native_sequence_prepare_get_cancel_roundtrips_client_Control_and_Runtime_without_Program_mutation()
+    [Theory]
+    [InlineData(SequencePreparationContract.Version)]
+    [InlineData(SequencePreparationContract.ScalableVersion)]
+    public async Task Real_native_sequence_prepare_get_cancel_roundtrips_client_Control_and_Runtime_without_Program_mutation(string preparationVersion)
     {
         if (!OperatingSystem.IsWindows()) return;
         using var asset = LocalMediaTestAsset.ExtractReference1080p50();
@@ -57,8 +59,9 @@ public sealed partial class ExternalControlIntegrationTests
         var expectedHost = context.RuntimeHostInstanceId;
         var local = new SequencePreparationClient(
             new NamedPipeOperatorControlTransport(fixture.ControlEndpoint));
-        var admitted = await external.PrepareAsync(new(SequencePreparationContract.Version,
+        var admitted = await external.PrepareAsync(new(preparationVersion,
             sequence.SequenceId, saved.AuthoringRevision, expectedHost));
+        Assert.Equal(preparationVersion, admitted.Version);
         Assert.Equal("PREPARED", admitted.State);
         Assert.Equal(1, admitted.DecoderOwners);
         var reference = new SequencePreparationReference(admitted.Version,

@@ -8,9 +8,23 @@ namespace rtaime.Control.Contracts;
 /// </summary>
 public static class SequencePreparationContract
 {
+    // Historical readers retain the original finite four-owner identity.
     public const string Version = "rtaime.sequence-preparation.v1";
     public const int MaximumNativeOwners = 4;
+    // Explicit opt-in contract. This is a protocol safety ceiling, not provider capacity.
+    public const string ScalableVersion = "rtaime.sequence-preparation.v2";
+    public const int MaximumScalableNativeOwners = 64;
     public const int MaximumDetailLength = 512;
+
+    public static bool IsSupportedVersion(string? version) =>
+        version is Version or ScalableVersion;
+
+    public static int MaximumOwnersForVersion(string version) => version switch
+    {
+        Version => MaximumNativeOwners,
+        ScalableVersion => MaximumScalableNativeOwners,
+        _ => throw new NotSupportedException("Unsupported sequence preparation protocol version.")
+    };
 }
 
 /// <summary>
@@ -23,7 +37,7 @@ public sealed record SequencePreparationRequest(
 {
     public void Validate()
     {
-        if (Version != SequencePreparationContract.Version ||
+        if (!SequencePreparationContract.IsSupportedVersion(Version) ||
             SequenceId == Guid.Empty || ExpectedAuthoringRevision == 0 ||
             !Guid.TryParse(ExpectedRuntimeHostInstanceId, out var epoch) || epoch == Guid.Empty)
             throw new ArgumentException("Sequence preparation requires a saved revision and current RuntimeHost identity.");
@@ -40,7 +54,7 @@ public sealed record SequencePreparationReference(
 {
     public void Validate()
     {
-        if (Version != SequencePreparationContract.Version || SequenceId == Guid.Empty ||
+        if (!SequencePreparationContract.IsSupportedVersion(Version) || SequenceId == Guid.Empty ||
             AuthoringRevision == 0 || Generation == 0 ||
             !Guid.TryParse(RuntimeHostInstanceId, out var runtime) || runtime == Guid.Empty ||
             !Guid.TryParse(PreparedExecutionId, out var prepared) || prepared == Guid.Empty)
@@ -59,10 +73,10 @@ public sealed record SequencePreparationStatus(
 {
     public void Validate()
     {
-        if (Version != SequencePreparationContract.Version || SequenceId == Guid.Empty ||
+        if (!SequencePreparationContract.IsSupportedVersion(Version) || SequenceId == Guid.Empty ||
             AuthoringRevision == 0 || Generation == 0 ||
             !Guid.TryParse(RuntimeHostInstanceId, out var runtime) || runtime == Guid.Empty ||
-            DecoderOwners is < 0 or > SequencePreparationContract.MaximumNativeOwners ||
+            DecoderOwners < 0 || DecoderOwners > SequencePreparationContract.MaximumOwnersForVersion(Version) ||
             State is not ("PREPARED" or "CANCELED" or "REJECTED" or "STALE") ||
             Detail is null || Detail.Length > SequencePreparationContract.MaximumDetailLength ||
             ErrorCode is { Length: > 128 } ||
@@ -79,7 +93,7 @@ public sealed record SequencePreparationContext(
 {
     public void Validate()
     {
-        if (Version != SequencePreparationContract.Version ||
+        if (!SequencePreparationContract.IsSupportedVersion(Version) ||
             !Guid.TryParse(RuntimeHostInstanceId, out var runtime) || runtime == Guid.Empty)
             throw new InvalidDataException("Sequence preparation context is stale or unavailable.");
     }

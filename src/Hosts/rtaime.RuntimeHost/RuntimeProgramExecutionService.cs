@@ -662,6 +662,19 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				: MonitoringSharedResourceCapabilityState.Unavailable);
 	}
 
+	/// <summary>
+	/// Current independent SRT/NDI provider observations for every configured target.
+	/// These are transport sessions, not physical device qualification or saved routes.
+	/// </summary>
+	public IReadOnlyList<NetworkOutputHealthSnapshot> NetworkOutputTargetHealth =>
+		_networkOutputBridge.Snapshots;
+
+	public IReadOnlyList<RuntimeNetworkOutputTargetEvidence> NetworkOutputTargetEvidence =>
+		_networkOutputBridge.TargetEvidence;
+
+	public IReadOnlyList<NetworkOutputHealthSnapshot> NetworkOutputHealthForRole(string roleId) =>
+		_networkOutputBridge.SnapshotsForRole(roleId);
+
 	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors
 	{
 		get

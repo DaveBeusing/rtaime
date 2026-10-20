@@ -27,6 +27,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     private readonly VideoFormat _format;
     private readonly LocalMediaResourceLedger _ledger;
     private readonly LocalMediaCapacityProfile _profile;
+    private readonly int _sourceRegistryLimit;
     private readonly LocalMediaFileProvider _provider;
     private readonly MediaSourceId[]? _allowedSources;
     private readonly HashSet<MediaSourceId> _knownSources = [];
@@ -39,17 +40,44 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
 
     public LocalMediaDeckRuntimeService() : this(VideoFormat.Hd1080p50Rgba8) { }
     public LocalMediaDeckRuntimeService(VideoFormat outputFormat, int maximumDecoders = 2,
-        MediaSourceId[]? allowedSources = null, LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
+        MediaSourceId[]? allowedSources = null,
+        LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative,
+        RuntimeResourceCapabilityProfile? admittedProfile = null)
     {
-        _ledger = new LocalMediaResourceLedger(outputFormat, maximumDecoders, profile);
         _profile = profile;
         _format = outputFormat;
         _provider = new LocalMediaFileProvider(outputFormat);
+
+        if (admittedProfile is not null)
+        {
+            var descriptor = _provider.Descriptor;
+            var decodeUnits = descriptor.Resources
+                .Where(resource => resource.Kind == LocalMediaCapabilityKinds.Decode && resource.Reservable)
+                .Sum(resource => (long)resource.CapacityUnits);
+            var routeUnits = descriptor.Resources
+                .Where(resource => resource.Kind == LocalMediaCapabilityKinds.MediaRoute && resource.Reservable)
+                .Sum(resource => (long)resource.CapacityUnits);
+            if (profile == LocalMediaCapacityProfile.Conservative && maximumDecoders > 2 ||
+                descriptor.Availability.State != ProviderAvailabilityState.Available ||
+                admittedProfile.ProviderId != descriptor.ProviderId.ToString() ||
+                maximumDecoders > Math.Min(decodeUnits, routeUnits))
+                throw new NotSupportedException(
+                    "The actual local media provider does not advertise enough available, reservable decoder and route capacity.");
+        }
+
+        _ledger = admittedProfile is null
+            ? new LocalMediaResourceLedger(outputFormat, maximumDecoders, profile)
+            : new LocalMediaResourceLedger(outputFormat, maximumDecoders, admittedProfile,
+                () => _provider.Descriptor);
+        _sourceRegistryLimit = admittedProfile?.MaximumRegisteredSources ??
+            (profile == LocalMediaCapacityProfile.OptInFour ? 8 : 2);
         _entries = new Entry[maximumDecoders];
         _allowedSources = allowedSources?.ToArray();
-        if (_allowedSources is not null && (_allowedSources.Length < 1 || _allowedSources.Length > 8 ||
+        if (_allowedSources is not null && (_allowedSources.Length < 1 ||
+            _allowedSources.Length > _sourceRegistryLimit ||
             profile == LocalMediaCapacityProfile.Conservative && _allowedSources.Length != 2 ||
-            _allowedSources.Any(source => source.Value.IsEmpty) || _allowedSources.Distinct().Count() != _allowedSources.Length))
+            _allowedSources.Any(source => source.Value.IsEmpty) ||
+            _allowedSources.Distinct().Count() != _allowedSources.Length))
             throw new ArgumentException("Supply distinct configured source identities within the selected profile.", nameof(allowedSources));
     }
     internal LocalMediaDeckRuntimeService(LocalMediaFileProvider provider, LocalMediaRuntimeSession session)
@@ -100,7 +128,7 @@ public sealed partial class LocalMediaDeckRuntimeService : IDisposable
     internal LocalMediaResourceLedger ResourceLedger => _ledger;
     private bool SourceAllowed(MediaSourceId source) =>
         _allowedSources is not null ? _allowedSources.Contains(source) :
-        _knownSources.Count < (_profile == LocalMediaCapacityProfile.OptInFour ? 8 : 2) || _knownSources.Contains(source);
+        _knownSources.Count < _sourceRegistryLimit || _knownSources.Contains(source);
 
     public LocalMediaDecodeSnapshot? GetDecodeSnapshot(MediaSourceId source) => Find(source)?.Deck.DecodeSnapshot;
     public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;

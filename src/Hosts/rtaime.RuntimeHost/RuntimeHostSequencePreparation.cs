@@ -36,10 +36,10 @@ public sealed partial class RuntimeHostIpcServer
             {
                 var wire = message.Payload.Deserialize<WireSequencePrepare>(Wire.JsonOptions)
                     ?? throw new InvalidDataException("Sequence preparation payload is missing.");
-                if (wire.Version != SequencePreparationContract.Version ||
+                if (!SequencePreparationContract.IsSupportedVersion(wire.Version) ||
                     wire.SequenceId == Guid.Empty || wire.AuthoringRevision == 0 ||
                     wire.ExpectedRuntimeHostInstanceId != _hostInstanceId ||
-                    wire.Sources is null || wire.Sources.Length is < 1 or > SequencePreparationContract.MaximumNativeOwners ||
+                    wire.Sources is null || (wire.Sources.Length < 1 || wire.Sources.Length > SequencePreparationContract.MaximumOwnersForVersion(wire.Version) || wire.Sources.Length > deck.ResourceSnapshot.Capacity) ||
                     wire.DurationTicks is <= 0 or > SequenceContract.MaximumTime)
                     throw new InvalidDataException("Unsupported, stale or unbounded sequence preparation request.");
 
@@ -60,12 +60,12 @@ public sealed partial class RuntimeHostIpcServer
                     new MediaAssetId(Identity.Parse(source.AssetId)),
                     source.LocalPath, source.FingerprintSha256,
                     source.SourceInTicks, source.TimelineStartTicks)).ToArray();
-                var preparation = deck.PrepareSequenceMedia(execution, map, sources, cancellationToken);
+                var preparation = deck.PrepareSequenceMedia(execution, map, sources, cancellationToken, wire.Version);
                 if (!preparation.Prepared)
                 {
                     var error = preparation.Failure;
                     var rejected = new SequencePreparationStatus(
-                        SequencePreparationContract.Version, wire.SequenceId,
+                        wire.Version, wire.SequenceId,
                         wire.AuthoringRevision, _hostInstanceId,
                         execution.PreparedExecutionId.ToString(), execution.PlanGeneration.Value,
                         0, "REJECTED", error?.Code,
@@ -73,7 +73,7 @@ public sealed partial class RuntimeHostIpcServer
                     return Success(message, message.MessageType + ".response", rejected);
                 }
                 var reference = new SequencePreparationReference(
-                    SequencePreparationContract.Version, wire.SequenceId,
+                    wire.Version, wire.SequenceId,
                     wire.AuthoringRevision, _hostInstanceId, execution.PreparedExecutionId.ToString(),
                     execution.PlanGeneration.Value);
                 var status = deck.GetPreparedSequence(reference, _hostInstanceId);

@@ -25,8 +25,9 @@ public sealed partial class NamedPipeRuntimeHostTransport
     public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
         SequenceRuntimePrepareCommand command, CancellationToken cancellationToken = default)
     {
-        if (command.Version != SequencePreparationContract.Version ||
-            command.Sources is null || command.Sources.Count is < 1 or > SequencePreparationContract.MaximumNativeOwners)
+        if (!SequencePreparationContract.IsSupportedVersion(command.Version) ||
+            command.Sources is null || command.Sources.Count < 1 ||
+            command.Sources.Count > SequencePreparationContract.MaximumOwnersForVersion(command.Version))
             throw new InvalidDataException("Sequence preparation requires a versioned bounded native owner set.");
         var response = await ExchangeAsync("runtime.sequence.preparation.prepare", new
         {

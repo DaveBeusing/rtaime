@@ -48,6 +48,36 @@ public sealed class SequencePreparationContractTests
     }
 
     [Fact]
+    public void Scalable_preparation_requires_opt_in_without_reinterpreting_legacy_four_owner_wire()
+    {
+        Assert.Equal(4, SequencePreparationContract.MaximumOwnersForVersion(SequencePreparationContract.Version));
+        Assert.Equal(64, SequencePreparationContract.MaximumOwnersForVersion(SequencePreparationContract.ScalableVersion));
+        Assert.False(SequencePreparationContract.IsSupportedVersion("rtaime.sequence-preparation.v3"));
+
+        var legacy = new SequencePreparationStatus(
+            SequencePreparationContract.Version, Saved, 7, Host, Prepared,
+            11, 5, "PREPARED", null, "Not admissible under legacy protocol.");
+        Assert.Throws<InvalidDataException>(legacy.Validate);
+
+        var scalable = legacy with
+        {
+            Version = SequencePreparationContract.ScalableVersion,
+            Detail = "Five owners are staged within the negotiated provider capacity."
+        };
+        scalable.Validate();
+        Assert.Throws<InvalidDataException>(() => (scalable with { DecoderOwners = 65 }).Validate());
+        Assert.Throws<InvalidDataException>(() => (scalable with { State = "PLAYING" }).Validate());
+
+        var request = new SequencePreparationRequest(SequencePreparationContract.ScalableVersion, Saved, 7, Host);
+        request.Validate();
+        var reference = new SequencePreparationReference(
+            SequencePreparationContract.ScalableVersion, Saved, 7, Host, Prepared, 11);
+        reference.Validate();
+        Assert.Throws<ArgumentException>(() => (reference with { Version = "v3" }).Validate());
+        Assert.Throws<NotSupportedException>(() => SequencePreparationContract.MaximumOwnersForVersion("v3"));
+    }
+
+    [Fact]
     public void Strict_transport_parser_rejects_unrecognized_and_duplicate_fields()
     {
         var request = new SequencePreparationRequest(SequencePreparationContract.Version, Saved, 7, Host);

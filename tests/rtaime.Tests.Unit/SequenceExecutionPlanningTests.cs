@@ -178,6 +178,21 @@ public sealed class SequenceExecutionPlanningTests
     }
 
     [Fact]
+    public void Versioned_sequence_planning_accepts_finite_extended_ceiling_without_bypassing_owner_admission()
+    {
+        var sequence = FourOwnerSequence(new(50, 1));
+        var available = SequenceExecutionCompiler.Compile(sequence, 7, Catalogue(), ["program"], 8);
+        Assert.True(available.Succeeded,
+            string.Join("; ", available.Issues.Select(x => x.Message)));
+        Assert.Equal(4, available.Plan!.PeakDecoderOwners);
+
+        var impossible = SequenceExecutionCompiler.Compile(sequence, 7, Catalogue(), ["program"],
+            SequencePreparationContract.MaximumScalableNativeOwners + 1);
+        Assert.Null(impossible.Plan);
+        Assert.Contains(impossible.Issues, x => x.Code == "sequence.execution.profile");
+    }
+
+    [Fact]
     public void Missing_or_relinked_assets_and_underbudget_profiles_fail_closed()
     {
         var source = FourOwnerSequence(new(50, 1));

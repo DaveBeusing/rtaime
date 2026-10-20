@@ -100,9 +100,17 @@ Network output is associated with an existing governed Program or Aux role ident
 
 Provider failure does not mutate authoritative routing and does not create a replacement source. ControlHost state remains authoritative while Runtime reports observational provider/output evidence.
 
-Program and Aux may use different network-output providers. Each role currently admits at most one configured network-output target.
+Program and Aux may use different network-output providers. Multiple uniquely identified NDI/SRT network sinks can now follow the **same** already-governed role. The Runtime graph admits at most eight configured targets, but each provider's observed reservable output slots and exact format are checked before creating any session (currently at most two per NDI or SRT provider descriptor). Configuration alone never changes Program routing.
 
 The Operator consumes synchronized Runtime evidence and must not infer LIVE state from configuration or operator intent.
+
+## Multi-target provider admission and evidence
+
+The Runtime network bridge prepares the **complete startup network-sink graph** before any provider is offered a Program sample. Provider availability, exact format and actual reservable target-slot inventory are checked first. Session creation is all-or-none: a failed later construction closes the earlier candidate sessions. A successful graph consumes only the existing Program/Aux role and the one committed Runtime media boundary. Video readback leases are retained once per target before fan-out; each configured target receives the same Program frame sequence and final role audio timing.
+
+Each target now exposes its own `NetworkOutputHealthSnapshot` and accepted video/audio submission counters through `RuntimeProgramExecutionService.NetworkOutputTargetEvidence`. Accepted submissions must not be confused with actual sent packets: provider `SentSamples`, failure, drop and connection observations remain separate. Existing legacy `SnapshotForRole` continues to expose the first role target for wire compatibility; the additional targets are exposed only in the new in-process per-target interface until versioned remote projection is integrated.
+
+**Atomicity boundary:** Startup allocation of sink *sessions* is all-or-none. Live network send queues are independent, so post-activation transport rejection on one target cannot retract a sample already accepted by another, and does not roll back authoritative Program. In-flight runtime reconfiguration, transactionally swapping an entire graph from a ControlHost-approved new output revision, native SDI scan-out and physical multi-port timing are not yet implemented or qualified.
 
 ## Media boundary
 
