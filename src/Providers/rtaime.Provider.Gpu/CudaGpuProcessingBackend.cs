@@ -70,7 +70,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
         if (!OperatingSystem.IsWindows())
         {
             return Unavailable(
-                "CUDA Driver backend is currently implemented for the Windows V1 reference platform only.");
+                "CUDA Driver backend is currently implemented for the Windows reference environment only.");
         }
 
         try

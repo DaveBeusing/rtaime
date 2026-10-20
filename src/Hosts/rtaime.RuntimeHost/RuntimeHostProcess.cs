@@ -112,7 +112,7 @@ public sealed record RuntimeHostProcessOptions(
 		if (SourceAId == SourceBId)
 			throw new ArgumentException("Runtime source identities must be distinct.");
 		if (Format != VideoFormat.Hd1080p50Rgba8 && Format != VideoFormat.Hd1080p59_94Rgba8)
-			throw new ArgumentException("RuntimeHost V1 supports only 1080p50 RGBA8 and 1080p59.94 RGBA8.", nameof(Format));
+			throw new ArgumentException("The current RuntimeHost media profile supports 1080p50 RGBA8 and 1080p59.94 RGBA8 only.", nameof(Format));
 		if (string.IsNullOrWhiteSpace(ListenEndpoint))
 			throw new ArgumentException("RuntimeHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (string.IsNullOrWhiteSpace(AIEndpoint))

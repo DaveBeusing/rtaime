@@ -71,14 +71,14 @@ public static class ProductionOutputRoleValidator
 		{
 			issues.Add(new ValidationIssue(
 				"control.output_roles.aux_cardinality",
-				"V1 supports at most one governed Aux output role.",
+				"The current output-role policy supports at most one governed Aux output role.",
 				pathPrefix));
 		}
 		else if (auxRoles.Length == 1 && auxRoles[0].RoleId != OutputRoleIds.Aux)
 		{
 			issues.Add(new ValidationIssue(
 				"control.output_roles.aux_identity",
-				"The V1 Aux output role must use the stable 'aux' role identity.",
+				"The Aux output role must use the stable 'aux' role identity.",
 				$"{pathPrefix}.aux"));
 		}
 
@@ -96,28 +96,28 @@ public static class ProductionOutputRoleValidator
 			{
 				issues.Add(new ValidationIssue(
 					"control.output_roles.disabled_unsupported",
-					$"Configured V1 output role '{role.RoleId}' must be enabled.",
+					$"Configured output role '{role.RoleId}' must be enabled.",
 					$"{pathPrefix}.{role.RoleId}.enabled"));
 			}
 			if (!string.Equals(role.ProviderSelector, "auto", StringComparison.OrdinalIgnoreCase))
 			{
 				issues.Add(new ValidationIssue(
 					"control.output_roles.provider_selector_unsupported",
-					$"Output role '{role.RoleId}' uses unsupported provider selector '{role.ProviderSelector}'. V1 supports only deterministic automatic provider admission.",
+					$"Output role '{role.RoleId}' uses unsupported provider selector '{role.ProviderSelector}'. This output-role policy currently supports deterministic automatic provider admission only.",
 					$"{pathPrefix}.{role.RoleId}.providerSelector"));
 			}
 			if (!string.Equals(role.FormatPolicy, "production", StringComparison.OrdinalIgnoreCase))
 			{
 				issues.Add(new ValidationIssue(
 					"control.output_roles.format_policy_unsupported",
-					$"Output role '{role.RoleId}' uses unsupported format policy '{role.FormatPolicy}'. V1 output roles inherit the production format.",
+					$"Output role '{role.RoleId}' uses unsupported format policy '{role.FormatPolicy}'. Output roles currently inherit the production format.",
 					$"{pathPrefix}.{role.RoleId}.formatPolicy"));
 			}
 			if (!string.Equals(role.TimingPolicy, "production", StringComparison.OrdinalIgnoreCase))
 			{
 				issues.Add(new ValidationIssue(
 					"control.output_roles.timing_policy_unsupported",
-					$"Output role '{role.RoleId}' uses unsupported timing policy '{role.TimingPolicy}'. V1 output roles inherit production timing.",
+					$"Output role '{role.RoleId}' uses unsupported timing policy '{role.TimingPolicy}'. Output roles currently inherit production timing.",
 					$"{pathPrefix}.{role.RoleId}.timingPolicy"));
 			}
 		}

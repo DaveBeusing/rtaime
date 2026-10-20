@@ -17,7 +17,7 @@ public sealed class VirtualTimingProvider
     public VirtualTimingProvider(VideoFormat format)
     {
         if (!VirtualMediaReferenceProvider.IsSupportedFormat(format))
-            throw new ArgumentException("Virtual timing supports only the V1 development formats 1080p50 and 1080p59.94.", nameof(format));
+            throw new ArgumentException("Virtual timing currently supports 1080p50 and 1080p59.94.", nameof(format));
 
         Format = format;
         FrameTimebase = new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator);
@@ -174,7 +174,7 @@ public sealed class VirtualMediaReferenceProvider
         if (sourceAId == sourceBId)
             throw new ArgumentException("Virtual source identities must be distinct.", nameof(sourceBId));
         if (!IsSupportedFormat(format))
-            throw new ArgumentException("Virtual media supports only the V1 development formats 1080p50 and 1080p59.94.", nameof(format));
+            throw new ArgumentException("Virtual media currently supports 1080p50 and 1080p59.94.", nameof(format));
 
         Format = format;
         Timing = new VirtualTimingProvider(format);

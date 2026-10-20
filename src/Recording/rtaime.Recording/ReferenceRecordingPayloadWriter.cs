@@ -59,7 +59,7 @@ public sealed record ReferenceRecordingPayloadArtifact(
 	string PayloadSha256);
 
 /// <summary>
-/// Deterministic, software-only V1 reference container. It is deliberately uncompressed and is evidence for the
+/// Deterministic, software-only reference container. It is deliberately uncompressed and is evidence for the
 /// Recording payload path only; it is not a professional codec/container qualification.
 /// </summary>
 public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWriter, IConfigurableProgramRecordingWriter

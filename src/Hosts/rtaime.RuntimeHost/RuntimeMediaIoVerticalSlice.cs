@@ -8,7 +8,7 @@ using rtaime.Provider.Gpu;
 namespace rtaime.RuntimeHost;
 
 /// <summary>
-/// Non-authoritative RuntimeHost bridge between physical Media I/O and the existing V1 execution/compositor.
+/// Non-authoritative RuntimeHost bridge between physical Media I/O and the existing Program execution/compositor.
 /// It changes only current media working content; production routing and transition authority remain unchanged.
 /// </summary>
 internal sealed class RuntimeMediaIoVerticalSlice : IDisposable

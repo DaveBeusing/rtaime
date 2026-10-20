@@ -20,7 +20,7 @@ internal sealed record SystemHardwareTelemetrySnapshot(
 	string GpuTelemetryEvidence);
 
 /// <summary>
-/// Bounded management-plane hardware telemetry for the Windows V1 reference runtime.
+/// Bounded management-plane hardware telemetry for the Windows RuntimeHost.
 /// Sampling is cached and never runs on the Program frame hot path.
 /// </summary>
 internal sealed class SystemHardwareTelemetry : IDisposable
