@@ -111,6 +111,10 @@ The product-neutral host/service terminology is now applied to the **implementat
 
 The finite opt-in four-owner software profile is now named `LocalMediaCapacityProfile.OptInFour` and selected by `--local-media-profile=opt-in-four` (or the matching environment value). Legacy `development-four` remains an **input alias** so existing scripts and deployments continue to parse, with regression coverage proving the same enum value and maximum owner count. Default `conservative` stays at up to two owners. No new capacity is advertised: beyond-profile rejection, reservation ownership, quarantine, preflight pressure and Program safety are unchanged. The next capacity expansion must be backed by measured RAM/native/GPU/SSD profiles and correct group preflight/commit/rollback.
 
+### User-facing status and validation text
+
+The active Media/Control/Runtime/Provider validation messages, newly created default production display name and Operator Inspector/Timeline tooltips now describe the **actual supported profile or unavailable operation**, not a historical product stage. This wording change does not alter existing saved production names, Source IDs, message codes, resource limits, default endpoint identities or application service authority. A new architecture test guards the specific phase-gate messages; older persisted labels are not rewritten as a side effect.
+
 ## Implementation status / resumption
 
 This register distinguishes work committed on the active branch from older inventory and runner evidence. Actual merge readiness still requires the final-head Windows gates and compatibility checks.

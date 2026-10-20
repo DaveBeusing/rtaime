@@ -410,7 +410,7 @@ public sealed record ControlHostProcessOptions(
 		new ProductionId(Identity.Parse("70000000-0000-0000-0000-000000000001")),
 		new ProductionSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
 		new ProductionSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000b")),
-		"rtaime V1 Production",
+		"rtaime Production",
 		1024,
 		"rtaime.v1.control.default",
 		"rtaime.v1.runtime.default",

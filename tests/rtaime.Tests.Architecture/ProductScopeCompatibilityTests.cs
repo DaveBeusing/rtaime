@@ -80,6 +80,22 @@ public sealed class ProductScopeCompatibilityTests
 
 
     [Fact]
+    public void Active_operator_tooltips_and_source_errors_use_product_neutral_language()
+    {
+        var root = RepositorySnapshot.Load().Root;
+        static string Read(string root, string path) =>
+            File.ReadAllText(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
+
+        Assert.DoesNotContain("V1 Audio Follow Video", Read(root, "src/Media/rtaime.Media/AudioFollowVideo.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("in the V1 planning graph", Read(root, "src/Control/rtaime.Control/ExecutionPlanning.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("rtaime V1 Production", Read(root, "src/Hosts/rtaime.ControlHost/ControlHostProcess.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("V1 source limit", Read(root, "src/Hosts/rtaime.ControlHost/ShowProjectPersistenceStore.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("V1 development video formats", Read(root, "src/Providers/rtaime.Provider.VirtualMedia/VirtualAudioReferenceProvider.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("current V1 contract", Read(root, "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"), StringComparison.Ordinal);
+        Assert.DoesNotContain("current V1 processing capability", Read(root, "src/Hosts/rtaime.Operator/OperatorInspectorControl.xaml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Embedded_operator_help_does_not_reintroduce_historical_feature_gates()
     {
         var root = RepositorySnapshot.Load().Root;

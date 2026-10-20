@@ -2436,7 +2436,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	}
 
 	/// <summary>
-	/// Replaces the current V1 working-frame content for one logical input without changing runtime authority or
+	/// Replaces the current working-frame content for one logical input without changing runtime authority or
 	/// timing. Physical Media I/O uses this seam after copying an adapter lease into the bounded runtime frame.
 	/// </summary>
 	public void RegisterExternalSource(MediaSourceId sourceId)
@@ -2586,7 +2586,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			new RecordingStartRequest(
 				RecordingContractVersion.Current,
 				sessionId,
-				new RecordingOutputDescriptor(outputId, sink, fileName ?? "V1 Program"),
+				new RecordingOutputDescriptor(outputId, sink, fileName ?? "Program"),
 				resolvedProfile?.ProfileId),
 			cancellationToken).ConfigureAwait(false);
 		lock (_gate)
@@ -4081,7 +4081,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		if (!result.Emitted)
 			return Array.Empty<byte>();
 		if (descriptor.Format.SampleFormat != AudioSampleFormat.Float32)
-			throw new InvalidOperationException("V1 reference recording payload supports Float32 audio only.");
+			throw new InvalidOperationException("The current reference recording payload supports Float32 audio only.");
 
 		var channelCount = checked((int)descriptor.Format.ChannelCount);
 		var sampleCount = checked((int)descriptor.Timing.SampleCount);

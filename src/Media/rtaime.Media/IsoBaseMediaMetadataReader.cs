@@ -141,7 +141,7 @@ internal static class IsoBaseMediaMetadataReader
                 if (!brandValidated) throw new LocalMediaProbeException("media.file.container_unqualified",
                     "A qualified ftyp brand must precede moov; legacy QuickTime without ftyp is not admitted.");
 				if (header.PayloadLength <= 0 || header.PayloadLength > MaximumMoovSize || header.PayloadLength > int.MaxValue)
-					throw new InvalidDataException("MP4 moov box size is outside the supported V1 probe limit.");
+					throw new InvalidDataException("MP4 moov box size is outside the supported metadata probe limit.");
 
 				var payload = new byte[checked((int)header.PayloadLength)];
 				stream.ReadExactly(payload);

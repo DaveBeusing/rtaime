@@ -209,7 +209,7 @@ public sealed partial class ShowProjectPersistenceStore
 				throw new InvalidOperationException($"Production source '{source.SourceId}' is already present in the authoritative source catalog.");
 			}
 			if (baseline.Sources.Count + adopted.Count >= AudioProductionLimits.MaximumSources)
-				throw new InvalidOperationException($"Production source catalog cannot exceed {AudioProductionLimits.MaximumSources} sources in V1.");
+				throw new InvalidOperationException($"Production source catalog cannot exceed {AudioProductionLimits.MaximumSources} sources in the current persisted production profile.");
 
 			adopted.Add(source);
 			var effectiveSourceId = new MediaSourceId(source.SourceId.Value);
@@ -881,7 +881,7 @@ public sealed partial class ShowProjectPersistenceStore
 		IReadOnlyList<ProductionSourceSpecification> adoptedSources)
 	{
 		if (adoptedSources.Count > AudioProductionLimits.MaximumSources - baseline.Sources.Count)
-			throw new InvalidDataException($"Durable adopted source catalog exceeds the V1 source limit of {AudioProductionLimits.MaximumSources}.");
+			throw new InvalidDataException($"Durable adopted source catalog exceeds the current validated source limit of {AudioProductionLimits.MaximumSources}.");
 		if (adoptedSources.Any(source => source.ProviderBinding is null))
 			throw new InvalidDataException("Every durable adopted source requires an explicit provider binding.");
 		if (adoptedSources.Select(source => source.SourceId).Distinct().Count() != adoptedSources.Count)

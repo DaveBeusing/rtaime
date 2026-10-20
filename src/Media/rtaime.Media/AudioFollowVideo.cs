@@ -211,15 +211,15 @@ public sealed class AudioFollowVideoEngine
             if (!streamIds.Add(stream.StreamId))
                 throw new ArgumentException("Audio stream identities must be unique.", nameof(streams));
             if (!videoSourceIds.Add(stream.FollowedVideoSourceId))
-                throw new ArgumentException("Each video source may have only one FOLLOW_VIDEO audio stream in V1.", nameof(streams));
+                throw new ArgumentException("Each video source may have only one admitted FOLLOW_VIDEO audio stream.", nameof(streams));
         }
 
         var referenceFormat = streams[0].Format;
         var referenceTimingDomain = streams[0].TimingDomainId;
         if (streams.Any(stream => stream.Format != referenceFormat))
-            throw new ArgumentException("V1 Audio Follow Video requires a common audio format across followed inputs.", nameof(streams));
+            throw new ArgumentException("Audio Follow Video currently requires a common audio format across followed inputs.", nameof(streams));
         if (streams.Any(stream => stream.TimingDomainId != referenceTimingDomain))
-            throw new ArgumentException("V1 Audio Follow Video requires a common timing domain across followed inputs.", nameof(streams));
+            throw new ArgumentException("Audio Follow Video currently requires a common timing domain across followed inputs.", nameof(streams));
 
         _videoFrameRate = videoFrameRate;
         _streamByVideoSource = streams.ToDictionary(stream => stream.FollowedVideoSourceId);
