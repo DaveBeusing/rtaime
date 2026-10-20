@@ -89,6 +89,22 @@ public sealed class SequenceExecutionPlanningTests
         Assert.Equal(0, count);
     }
 
+    [Theory]
+    [InlineData(50, 1, 50, 1, true)]
+    [InlineData(60000, 1001, 60000, 1001, true)]
+    [InlineData(60000, 1001, 50, 1, false)]
+    [InlineData(50, 1, 60000, 1001, false)]
+    [InlineData(50, 1, 25, 1, false)]
+    [InlineData(0, 1, 50, 1, false)]
+    public void Sequence_preparation_cannot_silently_retime_saved_media_on_Program_clock(
+        int sequenceNumerator, int sequenceDenominator,
+        int runtimeNumerator, int runtimeDenominator, bool expected)
+    {
+        Assert.Equal(expected, SequenceExecutionCompiler.IsRuntimeCadenceCompatible(
+            new(sequenceNumerator, sequenceDenominator),
+            new FrameRate(runtimeNumerator, runtimeDenominator)));
+    }
+
     [Fact]
     public void Rational_framerate_to_48k_sample_windows_does_not_accumulate_rounding()
     {
