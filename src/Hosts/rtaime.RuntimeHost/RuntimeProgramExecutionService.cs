@@ -413,6 +413,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly object _boundaryExecutionGate = new();
 	private RuntimeTimingQualificationProbe? _pipelineTiming;
 	private readonly object _boundaryCaptureGate = new();
+	// Only the _boundaryExecutionGate owner touches these bounded, short-lived maps.
+	// Consumers retain independent descriptors, audio snapshots or readback leases.
+	private readonly Dictionary<MediaSourceId, FrameDescriptor> _boundaryFrameScratch = new(AudioProductionLimits.MaximumSources);
+	private readonly Dictionary<MediaSourceId, GpuFrame> _boundaryGpuScratch = new(AudioProductionLimits.MaximumSources);
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
@@ -1047,6 +1051,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			using var executionHold = pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ExecutionLockHold, _nextSequenceNumber) ?? default;
 			GpuFrame? gpuA = null;
 			GpuFrame? gpuB = null;
+			Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
 			GpuFrame? previewMonitoringFrame = null;
 			IReadOnlyList<MaterializedCompositingLayer>? materializedLayers = null;
 			try
@@ -1087,8 +1092,6 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				Failure? auxFailure;
 				MediaSourceId? auxNetworkSource = null;
 				FrameDescriptor? auxNetworkFrame = null;
-				Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
-
 				var captureStarted = pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 				lock (_boundaryCaptureGate)
 				{
@@ -1137,11 +1140,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 
 					frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
 					frameB = ProcessTimedInput(_virtualMedia.SourceB, _sourceBPipeline, sequence);
-					var frames = new Dictionary<MediaSourceId, FrameDescriptor>
-					{
-						[frameA.SourceId] = frameA,
-						[frameB.SourceId] = frameB
-					};
+					var frames = _boundaryFrameScratch;
+					frames.Clear();
+					frames.Add(frameA.SourceId, frameA);
+					frames.Add(frameB.SourceId, frameB);
 					foreach (var external in _externalSourcePipelines)
 						frames[external.Key] = ProcessExternalTimedInput(external.Key, external.Value, sequence);
 					auxFailure = WriteAuxFrame(execution.PreparedExecution, frames);
@@ -1178,20 +1180,30 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						NeedsMappedSource(frameB.SourceId)
 						? MaterializeInput(frameB, contentB)
 						: null;
-					gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+					gpuFrames = _boundaryGpuScratch;
+					gpuFrames.Clear();
 					if (gpuA is not null)
-						gpuFrames.Add(frameA.SourceId, gpuA);
-					if (gpuB is not null)
-						gpuFrames.Add(frameB.SourceId, gpuB);
-					foreach (var externalFrame in frames.Values.Where(frame =>
-						frame.SourceId != frameA.SourceId && frame.SourceId != frameB.SourceId))
 					{
+						gpuFrames.Add(frameA.SourceId, gpuA);
+						gpuA = null; // ownership passed to the boundary map
+					}
+					if (gpuB is not null)
+					{
+						gpuFrames.Add(frameB.SourceId, gpuB);
+						gpuB = null;
+					}
+					foreach (var externalFrame in frames.Values)
+					{
+						if (externalFrame.SourceId == frameA.SourceId || externalFrame.SourceId == frameB.SourceId)
+							continue;
 						if (RequiresGpuSourceUnsafe(externalFrame.SourceId, committedSource) ||
 							externalFrame.SourceId == committedPreviewSource ||
 							(auxNetworkSource is { } configuredExternalAux && externalFrame.SourceId == configuredExternalAux) ||
 							NeedsMappedSource(externalFrame.SourceId))
 						{
-							gpuFrames.Add(externalFrame.SourceId, MaterializeInput(externalFrame, ResolveInputContent(externalFrame)));
+							var externalGpuFrame = MaterializeInput(externalFrame, ResolveInputContent(externalFrame));
+							try { gpuFrames.Add(externalFrame.SourceId, externalGpuFrame); }
+							catch { externalGpuFrame.Dispose(); throw; }
 						}
 					}
 					if (monitoringSources is not null)
@@ -1463,6 +1475,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					{
 						foreach (var inputFrame in gpuFrames.Values)
 							inputFrame.Dispose();
+						gpuFrames.Clear();
 						gpuFrames = null;
 					}
 					gpuB = null;
@@ -1524,8 +1537,18 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					foreach (var materialized in materializedLayers)
 						materialized.Frame.Dispose();
 				}
+				if (gpuFrames is not null)
+				{
+					try
+					{
+						foreach (var frame in gpuFrames.Values)
+							frame.Dispose();
+					}
+					finally { gpuFrames.Clear(); }
+				}
 				gpuB?.Dispose();
 				gpuA?.Dispose();
+				_boundaryFrameScratch.Clear();
 			}
 		}
 	}
