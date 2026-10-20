@@ -31,7 +31,7 @@ public sealed class AIFallbackBehaviorTests
         var unavailableProvider = new ManagedReferencePersonSegmentationProvider(InferenceProviderState.Unavailable);
         var unavailableHost = new AIHostService(new GovernedInferenceRuntime(
             new IInferenceProvider[] { unavailableProvider },
-            InferenceRuntimeLimits.ReferenceV1));
+            InferenceRuntimeLimits.ConservativeReference));
         var unavailableResult = await unavailableHost.ExecuteAsync(Request(firstFrame));
         var fallback = AIResultUsePolicy.Evaluate(
             unavailableResult,

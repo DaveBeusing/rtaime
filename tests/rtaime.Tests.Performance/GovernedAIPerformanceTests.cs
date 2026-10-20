@@ -22,7 +22,7 @@ public sealed class GovernedAIPerformanceTests
         var now = new UtcTimestamp(new DateTimeOffset(2026, 9, 15, 18, 30, 0, TimeSpan.Zero));
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { new ManagedReferencePersonSegmentationProvider() },
-            InferenceRuntimeLimits.ReferenceV1,
+            InferenceRuntimeLimits.ConservativeReference,
             new FixedClock(now));
 
         var inferenceCount = 0UL;
