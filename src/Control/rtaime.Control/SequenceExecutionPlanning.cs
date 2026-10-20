@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Collections.ObjectModel;
 using rtaime.Control.Contracts;
+using rtaime.Core;
 
 namespace rtaime.Control;
 
@@ -150,6 +151,17 @@ public sealed record SequenceExecutionCompilation(SequenceExecutionPlan? Plan, S
 /// </summary>
 public static class SequenceExecutionCompiler
 {
+    /// <summary>
+    /// Native sequence preparation currently consumes the existing Program
+    /// frame slots one-for-one. Fractionally equivalent rational rates are
+    /// accepted; implicit frame skipping, duplication or a second clock is not.
+    /// </summary>
+    public static bool IsRuntimeCadenceCompatible(SequenceRate authoredRate, FrameRate programRate) =>
+        authoredRate.Numerator > 0 && authoredRate.Denominator > 0 &&
+        programRate.Numerator > 0 && programRate.Denominator > 0 &&
+        (Int128)authoredRate.Numerator * programRate.Denominator ==
+        (Int128)programRate.Numerator * authoredRate.Denominator;
+
     public static SequenceExecutionCompilation Compile(SequenceDefinition definition, ulong authoringRevision,
         IReadOnlyCollection<SequenceAsset> assets, IReadOnlyCollection<string> audioBuses,
         int decoderOwnerCapacity)
