@@ -77,16 +77,24 @@ public sealed class RuntimeSoftwareOutputPublicationTests
         Assert.True(published.Stage(epoch, 6, Mapped(gpu, first)).Succeeded);
         Assert.True(published.CommitAtBoundary(epoch, 6, 3).Succeeded);
         using var second = Program(gpu, 4, 160);
+        using var rejectedGroup = Mapped(gpu, second);
         Assert.Equal("runtime.software_output.epoch_changed",
-            published.Stage(Guid.NewGuid(), 7, MappedAndDisposeOnRejection(gpu, second, published, Guid.NewGuid(), 7)).Code);
-    }
+            published.Stage(Guid.NewGuid(), 7, rejectedGroup).Code);
 
-    private static RuntimeMappedOutputFrameSet MappedAndDisposeOnRejection(
-        GpuProcessingProvider gpu, GpuFrame program,
-        RuntimeSoftwareOutputPublication publication, Guid invalidEpoch, ulong revision)
-    {
-        // Build an independent group; its caller retains ownership unless a stage succeeds.
-        return Mapped(gpu, program);
+        var candidate = Mapped(gpu, second);
+        Assert.True(published.Stage(epoch, 7, candidate).Succeeded);
+        Assert.Equal("runtime.software_output.stale_boundary",
+            published.CommitAtBoundary(epoch, 6, 4).Code);
+        Assert.Equal("runtime.software_output.stale_boundary",
+            published.CommitAtBoundary(epoch, 7, 3).Code);
+        Assert.Equal(3UL, published.Snapshot.ActiveProgramSequence);
+        Assert.True(published.TryAcquire(out var existing));
+        using (existing!)
+            Assert.Equal(new byte[] { 80, 40, 60, 255 },
+                gpu.Readback(existing.Frames["program"]).Take(4).ToArray());
+        Assert.True(published.CancelPrepared());
+        Assert.False(published.Snapshot.HasPreparedGroup);
+        Assert.Equal(3UL, published.Snapshot.ActiveProgramSequence);
     }
 
     [Fact]

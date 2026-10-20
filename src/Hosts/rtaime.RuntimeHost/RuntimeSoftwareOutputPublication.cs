@@ -147,6 +147,20 @@ public sealed class RuntimeSoftwareOutputPublication : IDisposable
             if (currentExecutionRevision != _preparedRevision || programSequence <= _lastSequence)
                 return Rejected("runtime.software_output.stale_boundary",
                     "The committed execution revision or monotonic Program slot changed.");
+            // All mapped target frames must be from the same exact Program slot;
+            // publishing old source pixels under a newer boundary is forbidden.
+            try
+            {
+                if (_prepared.Frames.Values.Any(frame => frame.IsDisposed ||
+                    frame.Descriptor.Timing.SequenceNumber != programSequence))
+                    return Rejected("runtime.software_output.frame_slot_changed",
+                        "One or more mapped target frames do not match the committed Program slot.");
+            }
+            catch (ObjectDisposedException)
+            {
+                return Rejected("runtime.software_output.disposed_group",
+                    "A staged frame group was disposed before boundary commit.");
+            }
             if (_active is { Readers: > 0 } &&
                 _retired.Count >= _maximumRetainedOldGenerations)
                 return Rejected("runtime.software_output.reader_pressure",
