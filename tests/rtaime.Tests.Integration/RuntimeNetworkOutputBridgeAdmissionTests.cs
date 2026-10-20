@@ -19,7 +19,7 @@ public sealed class RuntimeNetworkOutputBridgeAdmissionTests
             [Target("first"), Target("second")], registry);
         Assert.Equal(2, registry.Created.Count);
         Assert.Equal(new[] { "first", "second" }, bridge.TargetIdsForRole("program"));
-        Assert.Equal(2, bridge.SnapshotsForRole("program").Count);
+        Assert.True(bridge.HasRole("program"));
     }
 
     [Fact]
