@@ -65,7 +65,8 @@ public sealed partial class LocalMediaDeckRuntimeService
         SequenceRuntimePositionMap map,
         IReadOnlyList<SequenceMediaOwnerRequest> sources,
         CancellationToken cancellationToken = default,
-        string protocolVersion = SequencePreparationContract.Version)
+        string protocolVersion = SequencePreparationContract.Version,
+        SequenceExecutionSnapshot? executionSnapshot = null)
     {
         ArgumentNullException.ThrowIfNull(execution);
         ArgumentNullException.ThrowIfNull(map);
@@ -85,6 +86,11 @@ public sealed partial class LocalMediaDeckRuntimeService
             var error = ValidateSequencePreparation(execution, map, sources);
             if (error is { } problem)
                 return RejectSequence(map, problem.Code, problem.Message);
+            // Source-planning validation happens before any native reservation.
+            // Legacy preparation callers may omit the snapshot; such owners
+            // continue to be staging-only and cannot present sequence output.
+            if (executionSnapshot is not null)
+                SequenceNativeExecutionSnapshot.Validate(executionSnapshot, map, sources);
 
             var requests = sources.Select(source => new LocalMediaResourceRequest(Guid.NewGuid(),
                 new(_ledger.RuntimeEpoch, source.SourceId, execution.PreparedExecutionId,
@@ -109,7 +115,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 var ready = new PreparedSequenceMedia(execution.PreparedExecutionId,
                     execution.AuthoritySnapshot.StateId, execution.AuthoritySnapshot.Revision.Value,
                     map.SequenceId, map.AuthoringRevision, map.Generation, map.Generation,
-                    0, staged.ToArray(), protocolVersion);
+                    0, staged.ToArray(), protocolVersion, executionSnapshot);
                 lock (_sequenceGate)
                 {
                     _sequenceOwners = ready;
@@ -470,7 +476,8 @@ public sealed partial class LocalMediaDeckRuntimeService
         PreparedExecutionId PreparedExecution, Identity AuthorityStateId,
         ulong AuthorityRevision, Guid SequenceId, ulong AuthoringRevision,
         ulong InitialGeneration, ulong Generation, ulong LoopPass,
-        SequenceMediaDecodeOwner[] Owners, string ProtocolVersion = SequencePreparationContract.Version);
+        SequenceMediaDecodeOwner[] Owners, string ProtocolVersion = SequencePreparationContract.Version,
+        SequenceExecutionSnapshot? ExecutionSnapshot = null);
 
     private sealed class SequenceMediaDecodeOwner(
         SequenceMediaOwnerRequest request, FileStream identityGuard,
