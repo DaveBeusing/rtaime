@@ -669,6 +669,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	public IReadOnlyList<NetworkOutputHealthSnapshot> NetworkOutputTargetHealth =>
 		_networkOutputBridge.Snapshots;
 
+	public IReadOnlyList<RuntimeNetworkOutputTargetEvidence> NetworkOutputTargetEvidence =>
+		_networkOutputBridge.TargetEvidence;
+
 	public IReadOnlyList<NetworkOutputHealthSnapshot> NetworkOutputHealthForRole(string roleId) =>
 		_networkOutputBridge.SnapshotsForRole(roleId);
 
