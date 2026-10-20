@@ -398,7 +398,7 @@ public sealed record V1RuntimeHostSnapshot(
 	ReplayBufferSnapshot? Replay = null);
 
 /// <summary>
-/// Windows V1 reference composition root for committed execution, timed media, GPU composition,
+/// Windows Runtime composition root for committed execution, timed media, GPU composition,
 /// Program output, Audio Follow Video and failure-isolated recording. It owns execution, never production authority.
 /// </summary>
 public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
@@ -1538,7 +1538,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		if (string.IsNullOrWhiteSpace(assetName))
 			throw new ArgumentException("Graphics asset name is required.", nameof(assetName));
 		if (width == 0 || height == 0 || width > 384 || height > 384)
-			throw new ArgumentOutOfRangeException(nameof(width), "V1 graphics assets must be between 1x1 and 384x384 pixels.");
+			throw new ArgumentOutOfRangeException(nameof(width), "Graphics assets must be between 1x1 and 384x384 pixels.");
 		var expected = checked((int)((ulong)width * height * 4UL));
 		if (rgbaPixels.Length != expected)
 			throw new ArgumentException($"Graphics RGBA payload requires exactly '{expected}' bytes.", nameof(rgbaPixels));
