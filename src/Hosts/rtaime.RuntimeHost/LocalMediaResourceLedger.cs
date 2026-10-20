@@ -38,14 +38,48 @@ public sealed class LocalMediaResourceLedger
     internal void CloseAdmission() { lock (_gate) _closed = true; }
     public string RuntimeEpoch { get; } = Guid.NewGuid().ToString("N");
     public int Capacity { get; }
-    public LocalMediaResourceLedger(VideoFormat format, int capacity, LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
+    public LocalMediaResourceLedger(VideoFormat format, int capacity,
+        LocalMediaCapacityProfile profile = LocalMediaCapacityProfile.Conservative)
+        : this(format, capacity,
+            Enum.IsDefined(profile)
+                ? (profile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2)
+                : throw new ArgumentOutOfRangeException(nameof(profile)), null)
     {
-        if (!Enum.IsDefined(profile) || capacity < 1 || capacity > (profile == LocalMediaCapacityProfile.DevelopmentFour ? 4 : 2))
+    }
+
+    /// <summary>
+    /// Admit a provider-qualified finite profile without rewriting the historic
+    /// conservative and opt-in-four decoder semantics. Profile selection is a
+    /// host/provider decision; management input alone cannot establish hardware evidence.
+    /// </summary>
+    public LocalMediaResourceLedger(VideoFormat format, int capacity,
+        RuntimeResourceCapabilityProfile admittedProfile)
+        : this(format, capacity,
+            admittedProfile?.MaximumDecoderOwners ?? throw new ArgumentNullException(nameof(admittedProfile)),
+            admittedProfile)
+    {
+    }
+
+    private LocalMediaResourceLedger(VideoFormat format, int capacity, int maximum,
+        RuntimeResourceCapabilityProfile? admittedProfile)
+    {
+        if (capacity < 1 || capacity > maximum)
             throw new ArgumentOutOfRangeException(nameof(capacity));
-        Capacity = capacity;
         // Ten video/audio slots plus one known RGBA decoder scratch frame. Native allocations are unknown.
         _bytesPerOwner = checked((long)format.Width * format.Height * 4 * 11 + 10 * 32_768L);
-        _ = checked(_bytesPerOwner * capacity); // Validate the entire finite profile before any grant.
+        var retainedPoolBudget = checked(_bytesPerOwner * capacity);
+        if (admittedProfile is not null)
+        {
+            var candidate = new RuntimeResourceCapacityRequest(format, capacity,
+                Math.Min(capacity, admittedProfile.MaximumSequenceOwners),
+                Array.Empty<RuntimeOutputCapacityRequest>());
+            var decision = RuntimeResourceCapacityAdmission.Evaluate(admittedProfile, candidate);
+            if (!decision.Admitted || retainedPoolBudget > admittedProfile.ManagedBudgetBytes)
+                throw new ArgumentException(
+                    "Decoder owners are not admitted by this provider/device profile: " + decision.Code,
+                    nameof(admittedProfile));
+        }
+        Capacity = capacity;
     }
 
     public LocalMediaResourceSnapshot Snapshot
