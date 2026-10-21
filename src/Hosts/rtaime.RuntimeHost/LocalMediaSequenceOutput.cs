@@ -35,6 +35,9 @@ public sealed partial class LocalMediaDeckRuntimeService
                 snapshot.Slices.Any(slice =>
                     slice.Clips.Count(clip => clip.Kind == SequenceMediaKind.Video) > MaximumSequenceOutputVideoLayers ||
                     slice.Clips.Count(clip => clip.Kind == SequenceMediaKind.Audio) > MaximumSequenceOutputAudioTracks ||
+                    slice.Clips.Where(clip => clip.NativeSourceId is not null)
+                        .Select(clip => clip.NativeSourceId).Distinct().Count() >
+                        SequencePreparationContract.MaximumNativeOwners ||
                     slice.Clips.Any(clip => clip.Kind == SequenceMediaKind.Graphics)))
                 throw new NotSupportedException(
                     "The admitted native playout supports at most eight video and eight audio layers; graphics require an output asset binding.");
@@ -111,15 +114,23 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             if (!runtime.IsCommittedSequencePreviewSource(previewSource))
                 throw new InvalidOperationException(
-                    "Sequence output may only replace the exact dedicated committed Preview source, never Program.");
+                    "Sequence output may only replace the exact committed Preview source, never Program.");
+            if (GetSnapshot(previewSource).IsLoaded)
+                throw new InvalidOperationException(
+                    "Sequence output cannot overwrite an already loaded native media deck.");
             var session = new SequenceOutputSession(reference, previewSource, snapshot, runtime)
             {
                 AuthorityRevision = authorityRevision.Value
             };
             lock (_sequenceOutputGate)
             {
-                if (_sequenceOutput is { } current && current.Reference != reference)
-                    throw new InvalidOperationException("Cancel the prior sequence playout before activating another owner.");
+                if (_sequenceOutput is { } current)
+                {
+                    if (current.Reference != reference || current.SourceId != previewSource)
+                        throw new InvalidOperationException(
+                            "Cancel the prior sequence playout before activating another owner.");
+                    return; // Exact observed activation is idempotent.
+                }
                 _sequenceOutput = session;
             }
         }
