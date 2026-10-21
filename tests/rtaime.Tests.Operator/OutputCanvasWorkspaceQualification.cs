@@ -39,7 +39,7 @@ internal static class OutputCanvasWorkspaceQualification
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.False(window.OutputHealth.IsCanvasMode);
             Assert.False(window.OutputHealth.CanvasEditor.IsWorkspaceVisible);
-            Assert.False(editor.IsVisible);
+            Assert.False(Assert.Single(Descendants<OutputCanvasStageSurface>(editor)).IsVisible);
 
             var savedRevision = window.OutputHealth.CanvasEditor.SavedRevision;
             var wasDirty = window.OutputHealth.CanvasEditor.IsDirty;
