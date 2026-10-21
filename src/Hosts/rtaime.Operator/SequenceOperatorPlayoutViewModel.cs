@@ -20,7 +20,8 @@ public sealed record SequenceOperatorAuthority(
     {
         var current = owner.Client?.Snapshot;
         return new(owner.IsConnected && current is not null, owner.IsStale, owner.IsBusy,
-            owner.IsProductionReady && owner.ProgramSafety != OperatorProgramSafetyStates.Blocked,
+            string.Equals(owner.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase) &&
+                owner.ProgramSafety != OperatorProgramSafetyStates.Blocked,
             current?.Production.Routing.PreviewSourceId.ToString() ?? string.Empty,
             current?.Production.Routing.ProgramSourceId.ToString() ?? string.Empty,
             current?.Production.Revision.Value ?? 0);
@@ -152,6 +153,7 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
         if (_reference is not null || _editor.Snapshot is not { Validation.IsValid: true } snapshot ||
             !_editor.CanEdit || !_authority().CanStage || _authoring is null || _preparation is null) return;
         Status = "PREPARING";
+        var previewAtRequest = _authority();
         var saved = await _authoring.GetAsync(snapshot.Sequence.SequenceId, ct);
         if (!saved.Validation.IsValid || saved.Sequence.SequenceId != snapshot.Sequence.SequenceId ||
             saved.AuthoringRevision != snapshot.AuthoringRevision)
@@ -176,10 +178,20 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
             result.RuntimeHostInstanceId, result.PreparedExecutionId, result.Generation);
         _reference.Validate();
         _shuttle = await _shuttleClient!.GetAsync(_reference, ct);
-        _source = _authority().PreviewSourceId;
-        _revision = _authority().Revision;
+        _source = previewAtRequest.PreviewSourceId;
+        _revision = previewAtRequest.Revision;
         _activated = false; _armed = false; _submitted = false; _take = null; _output = null;
-        Status = "PREPARED · NO OUTPUT"; Detail = result.Detail;
+        if (!CurrentPreview)
+        {
+            // Keep the admitted owner visible for explicit RELEASE; never
+            // silently rebind a prepared reader to a different live source.
+            Status = "STALE";
+            Detail = "Preview route or authority changed during native preparation. RELEASE and prepare again.";
+        }
+        else
+        {
+            Status = "PREPARED · NO OUTPUT"; Detail = result.Detail;
+        }
         NotifyEvidence();
     });
 
