@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Runtime.CompilerServices;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Provider.Gpu;
@@ -49,12 +50,12 @@ public sealed record GpuOutputMappingSurface(
             CropX < 0 || CropY < 0 || CropWidth <= 0 || CropHeight <= 0 ||
             CropX + CropWidth > 1 || CropY + CropHeight > 1)
             throw new ArgumentException("Invalid normalized source crop.");
-        var points = new[] { TopLeft, TopRight, BottomRight, BottomLeft };
-        for (var i = 0; i < points.Length; i++)
+        // Avoid a temporary point array on every qualified Program boundary.
+        for (var i = 0; i < 4; i++)
         {
-            var a = points[i];
-            var b = points[(i + 1) % 4];
-            var c = points[(i + 2) % 4];
+            var a = Corner(i);
+            var b = Corner((i + 1) & 3);
+            var c = Corner((i + 2) & 3);
             if (!double.IsFinite(a.X) || !double.IsFinite(a.Y) ||
                 Math.Abs(a.X) > 16384 || Math.Abs(a.Y) > 16384 ||
                 (b.X - a.X) * (c.Y - b.Y) - (b.Y - a.Y) * (c.X - b.X) <= 1e-8)
@@ -66,6 +67,11 @@ public sealed record GpuOutputMappingSurface(
             !ValidWidth(Blend.Top) || !ValidWidth(Blend.Bottom))
             throw new ArgumentException("Invalid output edge blend.");
     }
+
+    private GpuOutputPoint Corner(int index) => index switch
+    {
+        0 => TopLeft, 1 => TopRight, 2 => BottomRight, _ => BottomLeft
+    };
 
     private static bool ValidWidth(double width) =>
         double.IsFinite(width) && width >= 0 && width <= 0.5;
@@ -94,25 +100,41 @@ public static class GpuOutputMappingRaster
             throw new ArgumentException("Output mapping target length is incorrect.", nameof(destination));
         if (surfaces.Count > 8)
             throw new ArgumentException("Output mapping supports at most eight visible surfaces.", nameof(surfaces));
-        // Validate all geometry and source allocations before touching the sink.
-        var sorted = surfaces.OrderBy(s => s.ZOrder).ThenBy(s => s.SurfaceIdentity.ToString("N"), StringComparer.Ordinal).ToArray();
-        var sources = new ReadOnlyMemory<byte>[sorted.Length];
-        var inverses = new InverseHomography[sorted.Length];
-        for (var i = 0; i < sorted.Length; i++)
+        // A bounded insertion-sort and inline source references avoid the
+        // per-frame LINQ sort, formatted GUID strings and temporary arrays.
+        // Validate the entire frame before touching destination: failures
+        // must never publish a partially mapped Program image.
+        Span<int> order = stackalloc int[8];
+        for (var i = 0; i < surfaces.Count; i++)
         {
-            sorted[i].Validate();
-            sources[i] = resolveSource(sorted[i].SourceId);
-            if (sources[i].Length != RgbaFrameBuffer.RequiredByteLength(sorted[i].SourceFormat))
+            var surface = surfaces[i];
+            surface.Validate();
+            var position = i;
+            while (position > 0 && CompareOrder(surfaces[order[position - 1]], surface) > 0)
+            {
+                order[position] = order[position - 1];
+                position--;
+            }
+            order[position] = i;
+        }
+
+        var sources = new ResolvedSources();
+        Span<InverseHomography> inverses = stackalloc InverseHomography[8];
+        for (var i = 0; i < surfaces.Count; i++)
+        {
+            var surface = surfaces[order[i]];
+            sources[i] = resolveSource(surface.SourceId);
+            if (sources[i].Length != RgbaFrameBuffer.RequiredByteLength(surface.SourceFormat))
                 throw new ArgumentException("Output mapping source allocation does not match its format.");
-            inverses[i] = InverseHomography.Create(sorted[i]);
+            inverses[i] = InverseHomography.Create(surface);
         }
 
         destination.Clear(); // uncovered pixels have transparent-black semantics
         var targetWidth = checked((int)format.Width);
         var targetHeight = checked((int)format.Height);
-        for (var layer = 0; layer < sorted.Length; layer++)
+        for (var layer = 0; layer < surfaces.Count; layer++)
         {
-            var surface = sorted[layer];
+            var surface = surfaces[order[layer]];
             var inverse = inverses[layer];
             var source = sources[layer].Span;
             var sourceWidth = checked((int)surface.SourceFormat.Width);
@@ -125,6 +147,11 @@ public static class GpuOutputMappingRaster
                 Math.Min(surface.BottomRight.Y, surface.BottomLeft.Y))), 0, targetHeight);
             var maxY = Math.Clamp((int)Math.Ceiling(Math.Max(Math.Max(surface.TopLeft.Y, surface.TopRight.Y),
                 Math.Max(surface.BottomRight.Y, surface.BottomLeft.Y))), 0, targetHeight);
+            // Crop tap bounds are layer invariants, not per-pixel work.
+            var cropMinX = Math.Clamp((int)Math.Ceiling(surface.CropX * sourceWidth - 0.5), 0, sourceWidth - 1);
+            var cropMaxX = Math.Clamp((int)Math.Floor((surface.CropX + surface.CropWidth) * sourceWidth - 0.5), cropMinX, sourceWidth - 1);
+            var cropMinY = Math.Clamp((int)Math.Ceiling(surface.CropY * sourceHeight - 0.5), 0, sourceHeight - 1);
+            var cropMaxY = Math.Clamp((int)Math.Floor((surface.CropY + surface.CropHeight) * sourceHeight - 0.5), cropMinY, sourceHeight - 1);
             for (var y = minY; y < maxY; y++)
             for (var x = minX; x < maxX; x++)
             {
@@ -138,10 +165,7 @@ public static class GpuOutputMappingRaster
                 // pixel centres. Clamp bilinear taps inside the cropped region.
                 var srcX = (surface.CropX + u * surface.CropWidth) * sourceWidth - 0.5;
                 var srcY = (surface.CropY + v * surface.CropHeight) * sourceHeight - 0.5;
-                var cropMinX = Math.Clamp((int)Math.Ceiling(surface.CropX * sourceWidth - 0.5), 0, sourceWidth - 1);
-                var cropMaxX = Math.Clamp((int)Math.Floor((surface.CropX + surface.CropWidth) * sourceWidth - 0.5), cropMinX, sourceWidth - 1);
-                var cropMinY = Math.Clamp((int)Math.Ceiling(surface.CropY * sourceHeight - 0.5), 0, sourceHeight - 1);
-                var cropMaxY = Math.Clamp((int)Math.Floor((surface.CropY + surface.CropHeight) * sourceHeight - 0.5), cropMinY, sourceHeight - 1);
+
                 srcX = Math.Clamp(srcX, cropMinX, cropMaxX);
                 srcY = Math.Clamp(srcY, cropMinY, cropMaxY);
                 var x0 = (int)Math.Floor(srcX);
@@ -184,6 +208,20 @@ public static class GpuOutputMappingRaster
                 destination[offset + 3] = 255;
             }
         }
+    }
+
+    private static int CompareOrder(GpuOutputMappingSurface left, GpuOutputMappingSurface right)
+    {
+        var comparison = left.ZOrder.CompareTo(right.ZOrder);
+        // Guid's unsigned component ordering equals ordinal comparison of
+        // the canonical N-format hex bytes, without formatting allocations.
+        return comparison != 0 ? comparison : left.SurfaceIdentity.CompareTo(right.SurfaceIdentity);
+    }
+
+    [InlineArray(8)]
+    private struct ResolvedSources
+    {
+        private ReadOnlyMemory<byte> _first;
     }
 
     private static double Sample(ReadOnlySpan<byte> source, int top, int topRight,

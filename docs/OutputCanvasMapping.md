@@ -250,6 +250,50 @@ was delivered. Preview capture remains pre-mapping; Program/output monitoring
 and Program recording/output pixels are post-mapping where the existing consumers
 receive them.
 
+### Bounded mapping preparation and frame ownership
+
+The managed reference raster validates every surface, crop, source byte extent and
+inverse homography before clearing or writing the destination. Its per-boundary
+z-order sort now uses at most eight stack-local indices; source memory references
+use a fixed inline value buffer, and inverse homographies use bounded stack
+storage. Crop tap bounds are calculated once per surface, not once per destination
+pixel. Canonical GUID identity ordering preserves the same deterministic
+z-order tie-break. The backend reuses its source resolver delegate rather than
+constructing a new captured delegate per mapped frame. These adjustments
+remove temporary mapping-preparation allocations without creating another
+Program framebuffer, changing encoded RGBA8 math or removing the existing
+separately owned mapped output surface.
+
+A mapped input must also carry the **same Program sequence number** as the
+frame being mapped; the provider rejects a retained previous-boundary frame
+with `gpu.output_mapping.sequence_stale` before mapping allocation. The full
+timestamp/timebase need not match a different input's native clock, so the
+check is specifically the committed Program slot. Source identity, provider
+ownership, disposal and video format remain independently checked. Partial
+render failure releases the newly allocated mapping surface; if that release
+fails it remains explicitly tracked for retry at shutdown rather than being
+considered free. A returned mapped frame owns its output surface until the
+last frame reference releases it. Monitoring and recording can retain the
+**same** existing readback lease after the mapped surface itself is retired.
+
+The CUDA backend still does **not** implement `IGpuOutputMappingBackend`.
+In addition to the missing native implementation, the provider-level
+capability gate deliberately admits only `ManagedReference`: merely adding
+the interface to a hardware backend cannot accidentally turn on unqualified
+warp/blend. The public GPU provider also rejects any RGBA8 mapped output
+above the same 16-MiB additional framebuffer bound enforced by Runtime,
+before allocating a second full-frame mapping surface. This is defense in
+depth against direct provider clients, not an expanded format envelope.
+Hardware compositing/monitoring capabilities cannot advertise warp/blend
+or trigger CPU readback-and-reupload as a fallback. An unsupported mapping
+request is rejected at the existing runtime preparation boundary; legacy
+Program output remains authoritative. The software qualification uses the
+real `OutputMappingGpuTests`, `OutputMappingSurfaceOwnershipTests` and
+`OutputMappingRuntimeIntegrationTests`, plus a separately labeled
+bounded `OutputMappingSoftwarePerformanceTests` P50/P95/P99/GC observation
+at 50 and 59.94 fps. This is **not** 1080p CUDA output or physical scan-out
+qualification.
+
 These are functional software paths, not real-time/hardware qualifications:
 the managed reference raster is CPU-executed and not approved for guaranteed
 50/59.94 fps physical scan-out. Pixel parity, Runtime virtual sink, memory
