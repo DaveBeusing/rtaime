@@ -45,6 +45,23 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     private long _requestGeneration;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public SequenceOperatorPlayoutViewModel Playout { get; private set; } = null!;
+
+    public void AttachPlayout(SequenceOperatorPlayoutViewModel playout)
+    {
+        ArgumentNullException.ThrowIfNull(playout);
+        Playout?.Dispose();
+        Playout = playout;
+        Changed(nameof(Playout));
+    }
+
+    public bool PlayoutToolbarVisible
+    {
+        get => _playoutToolbarVisible;
+        set { if (_playoutToolbarVisible == value) return; _playoutToolbarVisible = value; Changed(); }
+    }
+    private bool _playoutToolbarVisible;
+
     public ObservableCollection<SequenceSummary> Sequences { get; } = [];
     public ObservableCollection<SequenceEditorRow> VisibleRows { get; } = [];
     public SequenceTimelineEditorViewModel(
@@ -52,6 +69,8 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         _authoring = authoring;
         _catalogue = analysis;
+        Playout = new SequenceOperatorPlayoutViewModel(this, null, null, null, null,
+            () => new SequenceOperatorAuthority(false, true, false, false, "", "", 0));
         if (analysis is not null) _waveforms = new SequenceTimelineWaveformService(analysis);
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !_disposed && !_busy && _authoring is not null);
         CreateCommand = new AsyncRelayCommand(CreateAsync, () => !_disposed && !_busy && _authoring is not null);
@@ -737,6 +756,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         if (_disposed) return;
         _disposed = true;
+        Playout.Dispose();
         _waveforms?.Dispose();
         _gesture = null;
         _selectedClips.Clear(); _selectedOrder.Clear();
