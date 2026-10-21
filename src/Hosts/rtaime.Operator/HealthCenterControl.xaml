@@ -69,18 +69,18 @@
 						MaxWidth="780" />
 					<WrapPanel Margin="0,9,0,0" KeyboardNavigation.TabNavigation="Continue">
 						<controls:RtaimeButton Content="SHOW CHECKS" IsCompact="True"
-							Command="{Binding OpenShowChecksCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Command="{Binding OpenShowChecksCommand, ElementName=RootWindow}"
 							Margin="0,0,5,4" AutomationProperties.Name="Open show preflight and active notification review" />
 						<controls:RtaimeButton Content="PROCESSING · AI" IsCompact="True"
-							Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Command="{Binding Shell.SelectWorkspaceCommand, ElementName=RootWindow}"
 							CommandParameter="AI" Margin="0,0,5,4"
 							AutomationProperties.Name="Open governed AI Processing workspace" />
 						<controls:RtaimeButton Content="PREFERENCES · SETTINGS" IsCompact="True"
-							Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Command="{Binding Shell.SelectWorkspaceCommand, ElementName=RootWindow}"
 							CommandParameter="SETTINGS" Margin="0,0,5,4"
 							AutomationProperties.Name="Open system preferences workspace" />
 						<controls:RtaimeButton Content="ADVANCED TOOLS · COMMANDS" IsCompact="True"
-							Command="{Binding OpenCommandPaletteCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Command="{Binding OpenCommandPaletteCommand, ElementName=RootWindow}"
 							Margin="0,0,5,4" AutomationProperties.Name="Open searchable advanced commands and workspace tools" />
 					</WrapPanel>
 				</StackPanel>
@@ -388,7 +388,7 @@
 								<TextBlock Text="TECHNICAL EVIDENCE · OBSERVATION ONLY"
 									Style="{StaticResource OperatorLabel}" Margin="0,0,0,6" />
 								<TextBlock Text="{Binding SelectedSubsystem.TechnicalDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-								<TextBlock Text="{Binding ProductBuildIdentity, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								<TextBlock Text="{Binding ProductBuildIdentity, ElementName=RootWindow}"
 									Style="{StaticResource OperatorLabel}" Margin="0,7,0,0"
 									AutomationProperties.Name="Operator product version and build identity" />
 							</StackPanel>

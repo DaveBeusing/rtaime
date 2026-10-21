@@ -65,7 +65,14 @@ public sealed class HealthCenterSurfaceTests
 			Assert.Contains(elements, element => element.Name.LocalName == "RtaimeButton" &&
 				element.Attribute("Command")?.Value?.Contains(command, StringComparison.Ordinal) == true);
 		Assert.Contains(elements, element =>
-			element.Attribute("AutomationProperties.Name")?.Value == "Operator product version and build identity");
+			element.Attribute("AutomationProperties.Name")?.Value == "Operator product version and build identity" &&
+			element.Attribute("Text")?.Value == "{Binding ProductBuildIdentity, ElementName=RootWindow}");
+		// RootWindow is explicitly registered to the real MainWindow inside detached
+		// OperatorPanelWindow; all links must retain command ownership while floating.
+		foreach (var action in new[] { "OpenShowChecksCommand", "OpenCommandPaletteCommand", "Shell.SelectWorkspaceCommand" })
+			Assert.Contains(elements, element => element.Name.LocalName == "RtaimeButton" &&
+				element.Attribute("Command")?.Value == "{Binding " + action + ", ElementName=RootWindow}");
+
 	}
 
 }
