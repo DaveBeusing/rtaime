@@ -102,9 +102,27 @@
                 </StackPanel>
             </Grid>
 
-            <controls:RtaimeScrollViewer Grid.Row="1"
-                HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                Background="{DynamicResource OperatorTimelineTrackOverlayBrush}">
+            <DockPanel Grid.Row="1" Background="{DynamicResource OperatorTimelineTrackOverlayBrush}"
+                LastChildFill="True">
+                <controls:RtaimeToggleButton DockPanel.Dock="Left" Content="PLAYOUT"
+                    IsChecked="{Binding PlayoutToolbarVisible, Mode=TwoWay}"
+                    IsCompact="True" MinWidth="72" Margin="7,3,6,3"
+                    ToolTip="Switch between saved-sequence editing and explicit native Preview/Program playout. No automatic Take."
+                    AutomationProperties.Name="Show native sequence playout commands" />
+                <Grid>
+                    <controls:RtaimeScrollViewer
+                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                        Background="{DynamicResource OperatorTimelineTrackOverlayBrush}">
+                        <controls:RtaimeScrollViewer.Style>
+                            <Style TargetType="{x:Type controls:RtaimeScrollViewer}"
+                                BasedOn="{StaticResource {x:Type controls:RtaimeScrollViewer}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PlayoutToolbarVisible}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </controls:RtaimeScrollViewer.Style>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="7,2">
                     <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
                         IsCompact="True" Margin="0,0,4,0" ToolTip="Undo persisted sequence transaction (ControlHost)." />
@@ -133,7 +151,54 @@
                     <controls:RtaimeButton Content="PCM" Command="{Binding WaveformCommand}"
                         IsCompact="True" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
                 </StackPanel>
-            </controls:RtaimeScrollViewer>
+                    </controls:RtaimeScrollViewer>
+                    <DockPanel LastChildFill="True">
+                        <DockPanel.Style>
+                            <Style TargetType="DockPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PlayoutToolbarVisible}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DockPanel.Style>
+                        <controls:RtaimeButton DockPanel.Dock="Right" Content="TAKE"
+                            Command="{Binding Playout.TakeCommand}" IsCompact="True"
+                            MinWidth="53" Margin="3,3,7,3"
+                            ToolTip="Commit the one armed, source/revision-fenced Program transaction. Never automatic."
+                            AutomationProperties.Name="Take confirmed native sequence to Program" />
+                        <controls:RtaimeButton DockPanel.Dock="Right" Content="ARM"
+                            Command="{Binding Playout.ArmCommand}" IsCompact="True"
+                            MinWidth="48" Margin="3,3"
+                            ToolTip="Arm one Take transaction only after real Preview output was observed."
+                            AutomationProperties.Name="Arm native sequence Take" />
+                        <controls:RtaimeScrollViewer HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Disabled">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,1">
+                                <controls:RtaimeButton Content="PREPARE" Command="{Binding Playout.PrepareCommand}"
+                                    IsCompact="True" Margin="0,2,4,2" ToolTip="Admit the exact saved revision and current RuntimeHost epoch." />
+                                <controls:RtaimeButton Content="RELEASE" Command="{Binding Playout.CancelCommand}"
+                                    IsCompact="True" Margin="0,2,6,2" ToolTip="Explicitly cancel the resident preparation without changing Program." />
+                                <controls:RtaimeButton Content="PREVIEW" Command="{Binding Playout.ActivatePreviewCommand}"
+                                    IsCompact="True" Margin="0,2,4,2" ToolTip="Bind the prepared native source to the existing confirmed Preview route." />
+                                <controls:RtaimeButton Content="OBSERVE" Command="{Binding Playout.ObserveCommand}"
+                                    IsCompact="True" Margin="0,2,6,2" ToolTip="Read genuine output evidence. Native PLAYING alone is not Preview-ready." />
+                                <controls:RtaimeButton Content="CUE" Command="{Binding Playout.CueCommand}"
+                                    IsCompact="True" Margin="0,2,3,2" ToolTip="Explicitly cue the native shuttle to the LOCAL edit cursor; editing alone never seeks." />
+                                <controls:RtaimeButton Content="PLAY" Command="{Binding Playout.PlayCommand}"
+                                    IsCompact="True" Margin="0,2,3,2" ToolTip="Play admitted native shuttle. Use OBSERVE to verify actual Preview frames." />
+                                <controls:RtaimeButton Content="PAUSE" Command="{Binding Playout.PauseCommand}"
+                                    IsCompact="True" Margin="0,2,3,2" />
+                                <controls:RtaimeButton Content="STOP" Command="{Binding Playout.StopCommand}"
+                                    IsCompact="True" Margin="0,2,6,2" />
+                                <controls:RtaimeButton Content="RECOVER TAKE" Command="{Binding Playout.RecoverCommand}"
+                                    IsCompact="True" Margin="0,2,5,2" ToolTip="Only confirm the original ambiguous Take if the exact Program successor is already committed." />
+                            </StackPanel>
+                        </controls:RtaimeScrollViewer>
+                    </DockPanel>
+                </Grid>
+            </DockPanel>
 
             <Grid Grid.Row="2" Margin="7,2,7,0">
                 <Grid.ColumnDefinitions>
@@ -144,11 +209,17 @@
                 <TextBlock Text="{Binding Feedback}" Style="{StaticResource OperatorLabel}"
                     TextTrimming="CharacterEllipsis" ToolTip="{Binding Feedback}"
                     VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="{Binding GestureLabel}" Style="{StaticResource OperatorLabel}"
-                    TextTrimming="CharacterEllipsis" ToolTip="{Binding GestureLabel}"
-                    VerticalAlignment="Center" Margin="8,0,0,0" />
-                <TextBlock Grid.Column="2" Text="{Binding PlaybackLabel}" VerticalAlignment="Center"
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                    <TextBlock Text="{Binding GestureLabel}" Style="{StaticResource OperatorLabel}"
+                        TextTrimming="CharacterEllipsis" ToolTip="{Binding GestureLabel}" />
+                    <TextBlock Text="{Binding Playout.NativeOwner}" FontSize="{StaticResource OperatorFontSizeMicro}"
+                        Foreground="{DynamicResource OperatorSecondaryTextBrush}" TextTrimming="CharacterEllipsis"
+                        ToolTip="{Binding Playout.OutputEvidence}" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding Playout.Status}" VerticalAlignment="Center"
                     Foreground="{DynamicResource OperatorWarningBrush}"
+                    ToolTip="{Binding Playout.Detail}"
+                    AutomationProperties.Name="Observed native sequence output state"
                     FontWeight="SemiBold" Margin="10,0,0,0"/>
             </Grid>
 
