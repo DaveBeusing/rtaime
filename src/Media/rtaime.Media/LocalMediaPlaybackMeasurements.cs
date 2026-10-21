@@ -92,6 +92,7 @@ public readonly record struct LocalMediaPlaybackMeasurements(
 
     // Diagnostic-only software stages; unset fields explicitly mean UNMEASURED.
     // These do not enter any versioned media or control transport contract.
+    public bool CopyDiagnosticsEnabled { get; init; }
     public LocalMediaDecodeCopyMeasurements DecoderCopies { get; init; }
     public LocalMediaCopyMeasurements WorkerSlotVideoCopy { get; init; }
     public LocalMediaCopyMeasurements WorkerSlotAudioCopy { get; init; }
