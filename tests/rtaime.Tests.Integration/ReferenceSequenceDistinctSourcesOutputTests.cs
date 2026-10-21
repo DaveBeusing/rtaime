@@ -163,12 +163,13 @@ public sealed class ReferenceSequenceDistinctSourcesOutputTests
             var admitted = Assert.IsType<ControlHostExecutionPackage>(cut.Execution);
             Assert.Equal(command, decks.RequireArmedSequenceTake(
                 admitted.PreparedExecution, admitted.ProgramTransition));
-            var confirmed = runtime.ApplyArmedSequenceTake(
-                admitted.PreparedExecution, admitted.ProgramSinkId,
-                admitted.ProgramTransition,
-                () => decks.AuthorizeSequenceProgram(reference, mediaB,
-                    authority.ProductionId.Value, before,
-                    admitted.PreparedExecution.AuthoritySnapshot.Revision, runtime));
+            var confirmed = decks.CommitArmedSequenceTake(command, admitted.PreparedExecution,
+                () => runtime.ApplyArmedSequenceTake(
+                    admitted.PreparedExecution, admitted.ProgramSinkId,
+                    admitted.ProgramTransition,
+                    () => decks.AuthorizeSequenceProgram(reference, mediaB,
+                        authority.ProductionId.Value, before,
+                        admitted.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
             Assert.True(confirmed.Committed, confirmed.Commit?.Failure?.Message);
             Assert.True(control.ConfirmRuntimeCommit(
                 admitted.PreparedExecution.PreparedExecutionId, confirmed.Commit!).Committed);
