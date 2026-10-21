@@ -54,3 +54,110 @@ jobs:
           name: rtaime-managed-allocation-gc-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/qualification/managed-allocation-gc/
           if-no-files-found: error
+
+  software-reference:
+    name: Windows same-runner reference and repeat
+    if: github.event_name == 'pull_request'
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact pull-request base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: comparison-baseline
+          persist-credentials: false
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: comparison-candidate
+          persist-credentials: false
+      - name: Setup pinned .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: comparison-candidate/global.json
+      - name: Capture source-bound same-runner software comparison and repeat
+        shell: pwsh
+        run: |
+          $baseSha = '${{ github.event.pull_request.base.sha }}'
+          $headSha = '${{ github.event.pull_request.head.sha }}'
+          if ($baseSha -cnotmatch '^[0-9a-f]{40}$' -or $headSha -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'Source identity must be two complete lowercase commit SHAs.'
+          }
+          $base = Join-Path $env:GITHUB_WORKSPACE 'comparison-baseline'
+          $head = Join-Path $env:GITHUB_WORKSPACE 'comparison-candidate'
+          $destination = Join-Path $env:GITHUB_WORKSPACE 'comparison-evidence'
+          foreach ($source in @(@{ root = $base; sha = $baseSha }, @{ root = $head; sha = $headSha })) {
+            $actual = (& git -C $source.root rev-parse HEAD).Trim().ToLowerInvariant()
+            if ($LASTEXITCODE -ne 0 -or $actual -cne $source.sha) {
+              throw "Checkout is not at the claimed full SHA: $($source.root)"
+            }
+          }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $baselineDescriptor = Join-Path $base 'qualification/performance/managed-allocation-gc.json'
+          $headDescriptor = Join-Path $head 'qualification/performance/managed-allocation-gc.json'
+          $compatible = (Get-FileHash -LiteralPath $baselineDescriptor -Algorithm SHA256).Hash -ceq
+            (Get-FileHash -LiteralPath $headDescriptor -Algorithm SHA256).Hash
+          $baselineManifest = $null
+          if ($compatible) {
+            Push-Location $base
+            try {
+              & ./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 -Profile smoke -OutputRoot (Join-Path $destination 'baseline-smoke')
+              if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'Baseline smoke was not qualified.' }
+            } finally { Pop-Location }
+            $found = @(Get-ChildItem -LiteralPath (Join-Path $destination 'baseline-smoke') -Filter manifest.json -File -Recurse)
+            if ($found.Count -ne 1) { throw 'Expected exactly one source-bound baseline manifest.' }
+            $baselineManifest = $found[0].FullName
+          } else {
+            Write-Host 'COMPARABILITY UNVERIFIED: the baseline and candidate profile descriptors differ; no cross-version numerical comparison is permitted.'
+          }
+          Push-Location $head
+          try {
+            $arguments = @{
+              Profile = 'smoke'
+              OutputRoot = (Join-Path $destination 'candidate-smoke')
+            }
+            if ($baselineManifest) { $arguments.BaselineEvidencePath = $baselineManifest }
+            & ./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 @arguments
+            if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'Candidate smoke was not qualified.' }
+            & ./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 -Profile repeat -OutputRoot (Join-Path $destination 'candidate-repeat')
+            if ($LASTEXITCODE -ne 0 -or -not $?) { throw 'Candidate three-testhost repeat was not qualified.' }
+          } finally { Pop-Location }
+          $smoke = @(Get-ChildItem -LiteralPath (Join-Path $destination 'candidate-smoke') -Filter manifest.json -File -Recurse)
+          $repeat = @(Get-ChildItem -LiteralPath (Join-Path $destination 'candidate-repeat') -Filter manifest.json -File -Recurse)
+          if ($smoke.Count -ne 1 -or $repeat.Count -ne 1) {
+            throw 'Candidate smoke and repeat must each publish one verified manifest.'
+          }
+          $comparison = Get-Content -LiteralPath (Join-Path $smoke[0].DirectoryName 'comparison.json') -Raw | ConvertFrom-Json
+          if ([string]$comparison.status -cne 'UNVERIFIED') {
+            throw 'Unapproved managed numerical comparisons must remain UNVERIFIED.'
+          }
+          if ($compatible) {
+            if ([string]$comparison.reason -cne 'NO_APPROVED_MANAGED_REGRESSION_THRESHOLD' -or
+                [string]$comparison.baselineCommit -cne $baseSha -or
+                [string]$comparison.sourceCommit -cne $headSha -or
+                @($comparison.deltas).Count -ne 16) {
+              throw 'Source-bound same-runner comparison did not validate its complete 16-case matrix.'
+            }
+          } elseif ([string]$comparison.reason -cne 'NO_APPROVED_BASELINE') {
+            throw 'Incomparable descriptors must not fabricate a numerical baseline.'
+          }
+          $repeated = Get-Content -LiteralPath $repeat[0].FullName -Raw | ConvertFrom-Json
+          if ([string]$repeated.sourceCommit -cne $headSha -or
+              [string]$repeated.profile -cne 'repeat' -or
+              @($repeated.runs).Count -ne 3 -or
+              [string]$repeated.nativeDecoder.status -cne 'PASSED_ASSERTION_ONLY') {
+            throw 'Repeat does not contain three passed producer testhosts and the isolated native assertions.'
+          }
+          Write-Host "Same-runner comparison: $($comparison.status)/$($comparison.reason); 16 software cases when comparable."
+          Write-Host "Candidate repeat: three separately launched producer testhosts at $headSha."
+          Write-Host 'Native A/B SSD, full ETW object allocation coverage, physical CUDA/SDI and WPF output P99 remain UNVERIFIED.'
+      - name: Retain baseline and candidate raw reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-managed-gc-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: comparison-evidence/
+          if-no-files-found: warn
+

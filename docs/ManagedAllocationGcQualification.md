@@ -110,9 +110,13 @@ a committed or accepted performance budget.
 
 A previous **verified**, same-format, same-profile, same-runner artifact
 may be provided with `-BaselineEvidencePath`. The verifier checks
-the complete baseline, its source/build SHA and every retained raw
-artifact hash, then emits per-scenario P99, producer-thread
-bytes/frame and approximate process-byte deltas to `comparison.json`.
+the complete baseline, its source/build SHA, the exact producer/guard
+test identities within each passing TRX and every retained raw artifact
+hash, then emits per-scenario P99, producer-thread bytes/frame,
+approximate process bytes/frame and GC-pause deltas to `comparison.json`.
+The per-frame allocation results are not interchangeable with a process
+allocation inventory. Absolute thread/process byte deltas are emitted
+even for a zero-allocation baseline, where relative percentages are null.
 A missing baseline is `UNVERIFIED/NO_APPROVED_BASELINE`. Two otherwise
 comparable software profiles without an approved numerical threshold
 remain `UNVERIFIED/NO_APPROVED_MANAGED_REGRESSION_THRESHOLD`;
@@ -141,6 +145,94 @@ or nonmonotonic latency, inconsistent bytes/frame denominators,
 live readback/monitoring leases, queue overcapacity, and false claims
 of complete GC events or hardware qualification.
 
+## Source-bound same-runner reference comparison
+
+The dedicated path-scoped Windows workflow preserves its original,
+unchanged `Windows software producer smoke` job. On qualifying pull
+requests, a **separate** `Windows same-runner reference and repeat` job
+checks out the exact event `pull_request.base.sha` and
+`pull_request.head.sha` into isolated directories on **one** Windows
+x64 `windows-2025` runner. It first confirms both full checkout SHAs
+and the profile descriptor SHA-256. Only when descriptors are
+byte-identical does it:
+
+1. Execute the existing `smoke` producer from the PR-base commit,
+   capturing its own verified manifest, raw JSON, testhost TRX and
+   hashes in a separate non-overwritten baseline directory.
+2. Execute the same `smoke` profile from the PR-head commit on the
+   **same runner**, passing the verified baseline manifest to
+   `-BaselineEvidencePath`.
+3. Execute `repeat` from the PR head: three independent producer
+   testhosts plus the already-owned isolated native reader/worker
+   assertions, with their own verified manifest and raw/TRX artifacts.
+4. Validate both candidate manifests, the 16 rate/mask comparison
+   entries, source identities, separate processes and `repeat` native
+   assertion status. Archive baseline and candidate data even if
+   qualification fails, but only name a manifest successful when the
+   producer and verifier actually completed.
+
+This is an **exact-PR-base vs exact-PR-head** software comparison, not
+an assumption that a previously retained artifact from a different
+GitHub-hosted VM is physically comparable. Running on one job VM
+avoids confusing two identically named `windows-2025` runner *images*
+with the same actual machine. It does **not** assert that two
+different GitHub Actions jobs or separate hosted workflow runs use
+the same CPU/VM. Baseline and candidate are compared by source SHA,
+profile hash, runner ID, machine name, Windows version, processor ID,
+architecture, processor count, formats, and consumer masks; raw
+artifacts and TRX are verified independently on both sides. If the
+descriptor changed, the baseline comparison is **UNVERIFIED** rather
+than silently comparing different workloads; candidate `smoke` and
+`repeat` still run as independent qualifications.
+
+The comparison JSON records baseline/head SHAs, the runner/profile
+identity, per-scenario P99 and allocation bytes per boundary, absolute
+and percentage deltas (where the denominator is nonzero), and observed
+GC-pause deltas. Its result remains
+`UNVERIFIED/NO_APPROVED_MANAGED_REGRESSION_THRESHOLD` without a
+separately authorized, descriptor-/runner-bound policy. A successful
+job therefore proves comparable **measurement integrity**, not that
+the P99 or byte growth meets an unapproved target. Each run retains
+its own actual event timestamp, testhost PID and source identity;
+repeatability is limited to the tested run and runner.
+
+The existing verifier's negative fixtures now also reject a
+passing TRX substituted from an unrelated test, a missing producer
+or scalar-guard test identity, a missing TRX, an invalid testhost PID,
+a nonexistent baseline, an approved-policy claim without a baseline,
+and an allocation increase that exceeds the **fixture-only**
+zero-growth policy. These negative fixtures are discarded immediately
+and are **not** actual measurements or accepted performance budgets.
+
+For a qualified *persistent* Windows reference machine, perform
+`smoke` and `repeat` against each exact source checkout in succession
+on the same identified host. Carry forward the first `manifest.json`
+to the second source using `-BaselineEvidencePath`; retain both source
+trees, manifest/JSON/TRX hashes and runner inventory. GitHub-hosted
+reference comparisons are not a substitute for a permanent hardware
+performance baseline.
+
+## Production subsystem decision and physical dependency matrix
+
+| Subsystem | Accepted current software scope | Missing evidence and responsible qualification |
+| --- | --- | --- |
+| Runtime Program / GC | 50 and 59.94 fps × 8 consumer masks, 12 measured boundaries per case, strict manifest/TRX and P99/bytes/GC counters | Same-runner reference/head comparison reports deltas only; a managed regression budget needs explicit policy approval, and longer sustained producer load needs independent profiling |
+| Native decoder / SSD | `repeat` invokes the preexisting isolated H.264/AAC decoder and worker assertions | Actual simultaneous two-deck SSD throughput, A/B switching and sustained read latency require [SSD playback qualification](../.github/workflows/ssd-playback-qualification.yml) on self-hosted `rtaime-ssd` |
+| GPU transfer / VRAM | Managed-reference logical readback and zero retained lease assertions | CUDA device, driver, real HtoD/DtoH, fences and reference GPU performance require [CUDA reference qualification](../.github/workflows/cuda-reference-qualification.yml) on self-hosted `rtaime-cuda-reference` |
+| Professional output / AV sync | Software output assertions and independent renderer/recording factor tests, not physical sinks | AJA/SDI and independent output require [Media I/O qualification](../.github/workflows/media-io-reference-qualification.yml); clock/latency/soak require [Timing reference qualification](../.github/workflows/timing-reference-qualification.yml), both on self-hosted `rtaime-media-io-reference` |
+| Operator WPF / viewer | Separate Windows real-WPF visual/Dispatcher qualification and scalar HUD allocation guard | P99 for a simultaneous Program viewer + runtime/monitoring workload and real monitor hotplug are not captured by this producer; separate [GPU viewer qualification](OperatorGpuViewerShutdownQualification.md) does not promote them to this measurement scope |
+| Replay / network / multitrack transitions | Independent existing feature and correctness guards only | No combined 0/2/8-layer × CUT/DISSOLVE × consumer-mask and actual replay/network sink producer exists in this profile; retain `UNVERIFIED` rather than filling cases with synthetic timing |
+| Complete GC allocation attribution | Gen0/1/2 counters, pause deltas and last-GC heap/LOH/POH snapshots | Full source-correlated EventPipe/ETW object allocation stacks, long-running collection coverage and attribution remain `UNVERIFIED`; isolated EventListener samples cannot stand in for complete events |
+
+The self-hosted workflows above are **existing opt-in hardware routes**, not
+automatically executed by a hosted PR job. The dedicated runner label
+alone does not prove the physical device is currently available.
+Only completed evidence with device/runner identities, exact candidate
+source SHA, independent sink/clock metrics and verified raw artifacts can
+change an individual hardware domain from `UNVERIFIED`. An inaccessible
+runner, missing signal or unqualified physical component remains
+`BLOCKED/UNVERIFIED`, never a software-simulated PASS.
+
 ## Evidence limits and release acceptance
 
 A green hosted test only verifies its own named software case and
@@ -165,8 +257,12 @@ source-bound raw reports, TRXs, comparison and manifest as Actions artifacts.
 It checks out the exact PR head and does not change the five Required Gates.
 An absent, skipped, queued or failed hosted run is not qualification PASS;
 read the exact commit, run, job and immutable evidence before accepting it.
-The longer `repeat` profile, a comparable before/after run on one controlled
-physical machine, full ETW coverage, hardware latency and future mandatory
-gate integration remain separately scheduled and **UNVERIFIED**.
+The companion PR job executes the opt-in `repeat` profile and same-job
+before/after software comparison without changing the original `smoke`
+gate. Their outcome must be taken from that **exact final-head** run,
+not presumed from workflow configuration. An independent repeat
+on a persistent reference workstation, full ETW coverage, hardware
+latency and future mandatory gate integration remain separately
+**UNVERIFIED** without the requisite source-bound equipment evidence.
 Broader native/replay/network/Operator cross-products still require their
 own verified producers and clear ownership.

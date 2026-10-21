@@ -58,12 +58,26 @@ function Read-BoundArtifact {
 }
 
 function Verify-Trx {
-    param([string]$Path, [int]$MinimumExecuted = 1)
+    param(
+        [string]$Path,
+        [int]$MinimumExecuted = 1,
+        [string[]]$RequiredTestNames = @()
+    )
     [xml]$trx = Get-Content -LiteralPath $Path -Raw
     $counts = $trx.TestRun.ResultSummary.Counters
     Require ([int]$counts.executed -ge $MinimumExecuted -and
         [int]$counts.passed -eq [int]$counts.executed -and
         [int]$counts.failed -eq 0 -and [int]$counts.notExecuted -eq 0) "Test process did not pass all expected tests: $Path"
+    # Passing counters alone are insufficient: another passing test's TRX
+    # must never qualify the original source producer or required guards.
+    $results = @($trx.SelectNodes("//*[local-name()='UnitTestResult']"))
+    Require ($results.Count -eq [int]$counts.executed) "TRX results do not reconcile with executed test count: $Path"
+    foreach ($expected in $RequiredTestNames) {
+        $matched = @($results | Where-Object {
+            [string]$_.testName -like "*$expected*" -and [string]$_.outcome -ceq "Passed"
+        })
+        Require ($matched.Count -ge 1) "Required passing test '$expected' is missing from TRX: $Path"
+    }
 }
 
 $descriptor = Read-BoundedJson $DescriptorPath
@@ -141,7 +155,7 @@ function Verify-Evidence {
         $null = Finite $producer.lastGcFragmentedBytes "last GC fragmentation"
 
         $trxPath = Read-BoundArtifact $root $run.trx ".trx"
-        Verify-Trx $trxPath
+        Verify-Trx $trxPath 1 @("Capture_existing_Program_producer_for_exact_source_profile")
         Require (@($run.rateReports).Count -eq 2) "Exactly two format reports are required."
         for ($formatIndex = 0; $formatIndex -lt 2; $formatIndex++) {
             $expectedFormat = @("1080p50", "1080p59.94")[$formatIndex]
@@ -219,14 +233,21 @@ function Verify-Evidence {
     }
     Require ($scenarioResults.Count -eq (16 * [int]$selected[0].repetitions)) "The complete rate/consumer workload matrix was not observed."
     if ([string]$manifest.scalarGuard.status -ceq "PASSED") {
-        Verify-Trx (Read-BoundArtifact $root $manifest.scalarGuard.trx ".trx") 1
+        Verify-Trx (Read-BoundArtifact $root $manifest.scalarGuard.trx ".trx") 1 @("RuntimePerformanceStatusBarPerformanceTests")
     } else { throw "The scalar UI telemetry guard is not qualified." }
     if ([string]$manifest.compositorGuard.status -ceq "PASSED") {
-        Verify-Trx (Read-BoundArtifact $root $manifest.compositorGuard.trx ".trx") 1
+        Verify-Trx (Read-BoundArtifact $root $manifest.compositorGuard.trx ".trx") 1 @(
+            "GpuCompositorPerformanceProfileTests",
+            "OutputMappingSoftwarePerformanceTests",
+            "Combined_reference_workload_remains_bounded_and_reports_tail_metrics"
+        )
     } else { throw "Compositor factor regressions are missing." }
     if ([bool]$selected[0].includeNativeDiagnostic) {
         Require ([string]$manifest.nativeDecoder.status -ceq "PASSED_ASSERTION_ONLY") "Native diagnostic test was required but missing."
-        Verify-Trx (Read-BoundArtifact $root $manifest.nativeDecoder.trx ".trx") 2
+        Verify-Trx (Read-BoundArtifact $root $manifest.nativeDecoder.trx ".trx") 2 @(
+            "Native_decoder_copy_stages_report_source_bound_allocations_and_runtime_input_copy",
+            "Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames"
+        )
         $nativeLogPath = Read-BoundArtifact $root $manifest.nativeDecoder.log ".txt"
         Require ((Get-Item -LiteralPath $nativeLogPath).Length -gt 0) "The qualified native diagnostic log is empty."
         Require ([string]$manifest.nativeDecoder.producerScope -ceq
@@ -248,6 +269,9 @@ $comparison = [ordered]@{
     status = "UNVERIFIED"
     reason = "NO_APPROVED_BASELINE"
     baselineCommit = $null
+    runnerId = [string]$candidate.manifest.runner.runnerId
+    profile = [string]$candidate.manifest.profile
+    comparisonScope = "SAME_IDENTIFIED_WINDOWS_RUNNER_MANAGED_REFERENCE_SOFTWARE"
     approvedPolicySha256 = $null
     deltas = @()
 }
@@ -284,8 +308,13 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineEvidencePath)) {
             threadByteDeltaPercent = if ($prior.threadBytesPerFrame -eq 0) { $null } else {
                 100 * ($entry.threadBytesPerFrame - $prior.threadBytesPerFrame) / $prior.threadBytesPerFrame
             }
+            threadByteDeltaAbsolute = $entry.threadBytesPerFrame - $prior.threadBytesPerFrame
             baselineProcessBytesPerFrame = $prior.processBytesPerFrame
             currentProcessBytesPerFrame = $entry.processBytesPerFrame
+            approximateProcessByteDeltaAbsolute = $entry.processBytesPerFrame - $prior.processBytesPerFrame
+            baselineGcPauseMilliseconds = $prior.gcPauseMilliseconds
+            currentGcPauseMilliseconds = $entry.gcPauseMilliseconds
+            gcPauseDeltaMilliseconds = $entry.gcPauseMilliseconds - $prior.gcPauseMilliseconds
         })
     }
     $comparison.deltas = $deltas.ToArray()

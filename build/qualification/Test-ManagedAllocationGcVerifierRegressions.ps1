@@ -62,8 +62,14 @@ try {
     $result = Get-Content -LiteralPath $goodCompare -Raw | ConvertFrom-Json
     if ([string]$result.status -ne "UNVERIFIED" -or
         [string]$result.reason -ne "NO_APPROVED_MANAGED_REGRESSION_THRESHOLD" -or
-        @($result.deltas).Count -ne 16) {
-        throw "Comparable but unapproved numerical evidence cannot be promoted to PASS."
+        @($result.deltas).Count -ne 16 -or
+        @($result.deltas | Where-Object {
+            [double]$_.threadByteDeltaAbsolute -ne 0 -or
+            [double]$_.approximateProcessByteDeltaAbsolute -ne 0 -or
+            [double]$_.gcPauseDeltaMilliseconds -ne 0 -or
+            [double]$_.p99DeltaPercent -ne 0
+        }).Count -ne 0) {
+        throw "Comparable self-baseline must produce zero deltas and remain UNVERIFIED without approved numerical policy."
     }
 
     Check-Fails "source-mismatch" {
@@ -74,6 +80,9 @@ try {
         param($m, $root)
         $m.runner.runnerId = "another-approved-machine"
     } $EvidencePath ""
+    Check-Fails "missing-baseline" {
+        param($m, $root)
+    } (Join-Path $temporary "nonexistent-baseline/manifest.json") ""
     Check-Fails "gc-no-events" {
         param($m, $root)
         $m.eventSampleCompleteness = "PASS"
@@ -102,6 +111,41 @@ try {
         [xml]$result = Get-Content -LiteralPath $path -Raw
         $result.TestRun.ResultSummary.Counters.failed = "1"
         $result.Save($path)
+        $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } "" ""
+    Check-Fails "wrong-passing-test" {
+        param($m, $root)
+        $reference = $m.runs[0].trx
+        $path = Join-Path $root $reference.path
+        [xml]$result = Get-Content -LiteralPath $path -Raw
+        $entry = $result.SelectSingleNode("//*[local-name()='UnitTestResult']")
+        if ($null -eq $entry) { throw "The source TRX lacks the actual test result." }
+        $entry.SetAttribute("testName", "Unrelated.Passing_Test")
+        $result.Save($path)
+        $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } "" ""
+    Check-Fails "missing-passing-test" {
+        param($m, $root)
+        $reference = $m.scalarGuard.trx
+        $path = Join-Path $root $reference.path
+        [xml]$result = Get-Content -LiteralPath $path -Raw
+        foreach ($entry in @($result.SelectNodes("//*[local-name()='UnitTestResult']"))) {
+            $entry.SetAttribute("testName", "Unrelated.Passing_Test")
+        }
+        $result.Save($path)
+        $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } "" ""
+    Check-Fails "missing-trx" {
+        param($m, $root)
+        Remove-Item -LiteralPath (Join-Path $root $m.runs[0].trx.path)
+    } "" ""
+    Check-Fails "invalid-testhost" {
+        param($m, $root)
+        $reference = $m.runs[0].producer
+        $path = Join-Path $root $reference.path
+        $data = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $data.testhostProcessId = 0
+        Write-Json $path $data
         $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     } "" ""
     Check-Fails "unverified-lease-owner" {
@@ -157,6 +201,21 @@ try {
         Write-Json $path $data
         $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     } $EvidencePath $policyPath
+    Check-Fails "over-approved-thread-allocations" {
+        param($m, $root)
+        $reference = $m.runs[0].rateReports[0]
+        $path = Join-Path $root $reference.path
+        $data = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $data.profiles[0].allocation.measuredThreadBytes =
+            [double]$data.profiles[0].allocation.measuredThreadBytes + 12
+        $data.profiles[0].allocation.measuredThreadBytesPerBoundary =
+            [double]$data.profiles[0].allocation.measuredThreadBytes / 12
+        Write-Json $path $data
+        $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } $EvidencePath $policyPath
+    Check-Fails "policy-without-baseline" {
+        param($m, $root)
+    } "" $policyPath
 
     Write-Host "Managed allocation/GC verifier negative regressions PASS; no synthetic profile becomes accepted evidence."
 }
