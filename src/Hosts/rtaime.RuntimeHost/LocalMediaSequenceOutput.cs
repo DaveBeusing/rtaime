@@ -70,6 +70,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             new SequenceAudioCompositionTrack[MaximumSequenceOutputAudioTracks];
         internal float[] Pcm { get; } = new float[SequenceFrameComposition.MaximumAudioSamples * 2];
         internal ulong LastPublishedSlot { get; set; } = ulong.MaxValue;
+        internal ulong? LastPreviewSlot { get; set; }
+        internal ulong? LastProgramSlot { get; set; }
         internal ulong PublishedBoundaries { get; set; }
         internal ulong FailedBoundaries { get; set; }
         internal string OutputState { get; set; } = "UNAVAILABLE";
@@ -215,7 +217,7 @@ public sealed partial class LocalMediaDeckRuntimeService
 
                 session.LastPublishedSlot = programSlot;
                 session.PublishedBoundaries++;
-                session.OutputState = "PRESENTED";
+                session.OutputState = session.ProgramAuthorized ? "TAKE_COMMITTED" : "PREVIEW_READY";
                 session.FailureCode = null;
                 return (true, session.OutputState, null, programSlot);
             }
@@ -237,6 +239,115 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.Frames[index] = null;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// A confirmed ControlHost production commit may promote the *same*
+    /// prepared native owner into Program. No implicit take or new decoder
+    /// reservation occurs. A stale or reordered revision is refused.
+    /// </summary>
+    internal void AuthorizeSequenceProgram(
+        SequencePreparationReference reference,
+        MediaSourceId sequenceSource,
+        Identity stateId,
+        Revision previousRevision,
+        Revision committedRevision,
+        RuntimeProgramExecutionService runtime)
+    {
+        reference.Validate();
+        if (committedRevision.Value != checked(previousRevision.Value + 1) ||
+            runtime.CommittedProgramSourceId != sequenceSource)
+            throw new InvalidOperationException("Sequence Take has no exact committed Program successor.");
+
+        lock (_management)
+        {
+            lock (_sequenceOutputGate)
+            {
+                var session = _sequenceOutput;
+                if (session is null || session.Reference != reference ||
+                    session.SourceId != sequenceSource ||
+                    session.AuthorityRevision != previousRevision.Value ||
+                    session.ProgramAuthorized)
+                    throw new InvalidOperationException("Sequence Take owner was changed or already consumed.");
+                lock (_sequenceGate)
+                {
+                    var prepared = _sequenceOwners;
+                    if (prepared is null || prepared.PreparedExecution.ToString() != reference.PreparedExecutionId ||
+                        prepared.SequenceId != reference.SequenceId ||
+                        prepared.AuthoringRevision != reference.AuthoringRevision ||
+                        prepared.AuthorityStateId != stateId ||
+                        prepared.AuthorityRevision != previousRevision.Value)
+                        throw new InvalidOperationException("Sequence Take cannot rebind an unrelated native owner.");
+                    _sequenceOwners = prepared with { AuthorityRevision = committedRevision.Value };
+                }
+                session.AuthorityRevision = committedRevision.Value;
+                session.ProgramAuthorized = true;
+                session.OutputState = "TAKE_COMMITTED";
+                session.FailureCode = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Only an actual completed ProgramBoundaryResult containing provider
+    /// readback pixels and an emitted PCM payload can confirm this Take.
+    /// </summary>
+    internal void ObserveSequenceProgramBoundary(ProgramBoundaryResult boundary)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.LastPublishedSlot != boundary.SequenceNumber)
+                return;
+            if (session.ProgramAuthorized)
+            {
+                if (boundary.CommittedProgramSourceId == session.SourceId &&
+                    boundary.ProgramFrame.SourceId == session.SourceId &&
+                    boundary.ProgramPixels.Length > 0 &&
+                    boundary.ProgramAudioPayload.Length > 0)
+                {
+                    session.LastProgramSlot = boundary.SequenceNumber;
+                    session.OutputState = "PROGRAM_CONFIRMED";
+                    session.FailureCode = null;
+                }
+                else
+                {
+                    session.OutputState = "FAILED";
+                    session.FailureCode = "runtime.sequence.program_sink_unconfirmed";
+                }
+            }
+            else if (session.OutputState == "PREVIEW_READY")
+                session.LastPreviewSlot = boundary.SequenceNumber;
+        }
+    }
+
+    internal SequenceOutputObservation GetSequenceOutput(
+        SequencePreparationReference reference,
+        string runtimeHostInstanceId)
+    {
+        reference.Validate();
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != reference ||
+                reference.RuntimeHostInstanceId != runtimeHostInstanceId)
+                throw new InvalidOperationException("No matching authoritative sequence output session exists.");
+            var result = new SequenceOutputObservation(
+                SequenceOutputContract.Version, reference, session.SourceId.ToString(),
+                session.OutputState, session.PublishedBoundaries, session.FailedBoundaries,
+                session.LastPublishedSlot == ulong.MaxValue ? null : session.LastPublishedSlot,
+                session.LastProgramSlot, session.AuthorityRevision, session.FailureCode,
+                session.OutputState switch
+                {
+                    "PROGRAM_CONFIRMED" => "Committed Program frame and PCM payload were observed at the existing output sink.",
+                    "PREVIEW_READY" => "Decoded sequence pixels and PCM reached the current Preview source through the existing compositor.",
+                    "TAKE_COMMITTED" => "Control committed Program routing; real sink frame/audio confirmation is pending.",
+                    _ => "Sequence output is not fully qualified for the current Program or Preview boundary."
+                });
+            result.Validate();
+            return result;
         }
     }
 
