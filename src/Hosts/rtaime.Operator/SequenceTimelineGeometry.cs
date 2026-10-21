@@ -63,13 +63,40 @@ public static class SequenceTimelineGeometry
         var remaining = MaximumRealizedClips;
         foreach (var track in selected)
         {
-            var visible = new List<SequenceEditorClip>();
-            foreach (var clip in definition.Clips.Where(c => c.TrackId == track.TrackId)
-                .OrderBy(c => c.TimelineStart).ThenBy(c => c.ClipId))
+            // Choose only the earliest visible clips for this track. A large
+            // catalogue can have thousands of overlapping authored clips, but
+            // the Operator must never allocate or realize all of them per resize.
+            var candidates = new List<SequenceClip>(Math.Min(remaining, 32));
+            if (remaining > 0)
+            {
+                foreach (var clip in definition.Clips)
+                {
+                    if (clip.TrackId != track.TrackId ||
+                        clip.TimelineStart >= endTick || ClipEnd(clip) <= fromTick)
+                        continue;
+
+                    var low = 0;
+                    var high = candidates.Count;
+                    while (low < high)
+                    {
+                        var middle = low + (high - low) / 2;
+                        var other = candidates[middle];
+                        var order = clip.TimelineStart.CompareTo(other.TimelineStart);
+                        if (order == 0) order = clip.ClipId.CompareTo(other.ClipId);
+                        if (order >= 0) low = middle + 1;
+                        else high = middle;
+                    }
+                    if (low >= remaining) continue;
+                    candidates.Insert(low, clip);
+                    if (candidates.Count > remaining)
+                        candidates.RemoveAt(remaining);
+                }
+            }
+
+            var visible = new List<SequenceEditorClip>(candidates.Count);
+            foreach (var clip in candidates)
             {
                 var end = ClipEnd(clip);
-                if (clip.TimelineStart >= endTick || end <= fromTick) continue;
-                if (remaining == 0) break;
                 var displayStart = Math.Max(fromTick, clip.TimelineStart);
                 var displayEnd = Math.Min(endTick, end);
                 var left = Pixel(displayStart, fromTick, endTick, width);
@@ -78,8 +105,8 @@ public static class SequenceTimelineGeometry
                     clip.Media.AssetId, track.Kind, clip.TimelineStart, end,
                     clip.SourceIn, clip.SourceOut, clip.Enabled && track.Enabled,
                     clip.Muted || track.Muted, left, Math.Max(1.0, right - left)));
-                remaining--;
             }
+            remaining -= visible.Count;
             result.Add(new(track.TrackId, track.Name, track.Kind, track.Enabled,
                 track.Muted, track.LayerOrder, visible));
         }
@@ -94,20 +121,32 @@ public static class SequenceTimelineGeometry
         var nearest = tick;
         var distance = threshold + 1;
         // Zero and end are real edges; transitions are saved clip-domain data.
-        foreach (var candidate in definition.Clips.SelectMany(c =>
-                 new[] { c.TimelineStart, ClipEnd(c) })
-                 .Concat(definition.Transitions.SelectMany(t =>
-                     new[] { t.Start, checked(t.Start + t.Duration) }))
-                 .Append(0))
+        // Test candidates in place, without per-edge arrays or LINQ iterators
+        // while the pointer moves during an interactive edit.
+        foreach (var clip in definition.Clips)
         {
-            var diff = Math.Abs(candidate - tick);
-            if (diff > threshold || diff > distance ||
-                diff == distance && candidate >= nearest)
-                continue;
-            nearest = candidate;
-            distance = diff;
+            ConsiderSnapCandidate(clip.TimelineStart, tick, threshold, ref nearest, ref distance);
+            ConsiderSnapCandidate(ClipEnd(clip), tick, threshold, ref nearest, ref distance);
         }
+        foreach (var transition in definition.Transitions)
+        {
+            ConsiderSnapCandidate(transition.Start, tick, threshold, ref nearest, ref distance);
+            ConsiderSnapCandidate(checked(transition.Start + transition.Duration),
+                tick, threshold, ref nearest, ref distance);
+        }
+        ConsiderSnapCandidate(0, tick, threshold, ref nearest, ref distance);
         return nearest;
+    }
+
+    private static void ConsiderSnapCandidate(long candidate, long tick, long threshold,
+        ref long nearest, ref long distance)
+    {
+        var diff = Math.Abs(candidate - tick);
+        if (diff > threshold || diff > distance ||
+            (diff == distance && candidate >= nearest))
+            return;
+        nearest = candidate;
+        distance = diff;
     }
 
     public static long ToMediaTicks(long authoringTick, bool ceiling = false)
