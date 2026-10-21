@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.Core;
 using rtaime.Operator;
 using Xunit;
 
@@ -83,6 +84,134 @@ public sealed class LiveConsoleTests
         Assert.Equal("Confirmed next", model.NextCue);
         Assert.Contains("Confirmed opening", model.LiveActionDetail);
         Assert.False(model.CanEditAuthoring);
+    }
+
+    [Fact]
+    public async Task Rundown_now_next_and_local_selection_remain_distinct_during_hold_follow_and_recovery()
+    {
+        var transport = new ReadOnlyTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var model = new RundownViewModel(client, owner, pool);
+        var a = new RundownHoldItem(RundownItemId.New(), "Opening hold", 25);
+        var b = new RundownHoldItem(RundownItemId.New(), "Next hold", 50);
+        var rundown = new RundownDefinition(RundownContractVersion.Current, RundownId.New(), "Live", [a, b]);
+        var prepared = RundownExecutionSnapshot.Idle with
+        {
+            RundownId = rundown.RundownId, CurrentItemId = a.ItemId, PreparedItemId = b.ItemId,
+            NextItemId = b.ItemId, SelectedItemId = b.ItemId, State = RundownExecutionState.Prepared,
+            Revision = 1
+        };
+        model.ApplyConfirmedObservation(new(rundown, prepared, 1));
+        Assert.Equal("Opening hold", model.NowItemName);
+        Assert.Equal("Next hold", model.NextItemName);
+        Assert.Contains("PREPARED", model.NextItemStatus);
+        Assert.Contains("NOT PROGRAM", model.NextItemStatus);
+        model.SelectedItem = model.Items[0];
+        Assert.Equal("Opening hold", model.SelectedItemName);
+        Assert.Equal("Next hold", model.NextItemName);
+        Assert.Equal(0, transport.Mutations);
+
+        var follow = prepared with
+        {
+            State = RundownExecutionState.Executing, CurrentItemId = b.ItemId,
+            PendingNextItemId = a.ItemId, AutoAdvanceArmed = true, Revision = 2
+        };
+        model.ApplyConfirmedObservation(new(rundown, follow, 1));
+        Assert.Equal("Next hold", model.NowItemName);
+        Assert.Equal("Opening hold", model.NextItemName);
+        Assert.Contains("AUTO FOLLOW ARMED", model.NextItemStatus);
+
+        var held = follow with
+        {
+            State = RundownExecutionState.Held, AutoAdvanceArmed = false,
+            PendingNextItemId = null, Revision = 3
+        };
+        model.ApplyConfirmedObservation(new(rundown, held, 1));
+        Assert.Contains("HOLD", model.NowItemStatus);
+        Assert.Contains("FOLLOW DISARMED", model.NextItemStatus);
+        model.ApplyConfirmedObservation(new(rundown, held with
+        {
+            State = RundownExecutionState.RecoveryRequired,
+            RequiresAcknowledgement = true, Revision = 4
+        }, 1));
+        Assert.Contains("RECOVERY", model.NextItemStatus);
+        Assert.False(model.GoCommand.CanExecute(null));
+        Assert.Equal(0, transport.Mutations);
+    }
+
+    [Fact]
+    public async Task Rundown_media_next_ready_remains_host_qualified_and_expiry_requires_reprepare()
+    {
+        var transport = new ReadOnlyTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var model = new RundownViewModel(client, owner, pool);
+        var clip = new RundownMediaItem(RundownItemId.New(), "Studio clip",
+            Identity.New(), ProductionSourceId.New(), RundownTransition.Cut);
+        var rundown = new RundownDefinition(RundownContractVersion.Current, RundownId.New(), "Live", [clip]);
+        var prepared = RundownExecutionSnapshot.Idle with
+        {
+            RundownId = rundown.RundownId, State = RundownExecutionState.Prepared,
+            PreparedItemId = clip.ItemId, NextItemId = clip.ItemId, Revision = 8,
+            PreparedMediaState = "NEXT_READY",
+            PreparedMediaExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1)
+        };
+        model.ApplyConfirmedObservation(new(rundown, prepared, 1));
+        Assert.Contains("HOST NEXT_READY", model.NextItemStatus);
+        Assert.Contains("RECHECK AT GO", model.Items[0].Readiness);
+        Assert.Contains("ASSET UNVERIFIED", model.Items[0].Readiness);
+        Assert.DoesNotContain("PROGRAM CONFIRMED", model.NextItemStatus);
+
+        model.ApplyConfirmedObservation(new(rundown, prepared with
+        {
+            PreparedMediaExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1), Revision = 9
+        }, 1));
+        Assert.Contains("EXPIRED", model.NextItemStatus);
+        Assert.Contains("PREPARE AGAIN", model.Items[0].Readiness);
+        Assert.Equal(0, transport.Mutations);
+
+        await model.RefreshAsync(); // Explicit refresh fails: old Program evidence cannot remain actionable.
+        Assert.Equal("UNVERIFIED", model.State);
+        Assert.Equal("UNVERIFIED", model.NextItemName);
+        Assert.Contains("SYNC REQUIRED", model.NextItemStatus);
+        Assert.False(model.GoCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Show_control_run_target_is_confirmed_and_never_the_unsaved_selected_editor_cue()
+    {
+        var transport = new ReadOnlyTransport();
+        var model = new ShowControlViewModel(new OperatorControlClient(transport));
+        var first = new ShowControlCue(ShowControlCueId.New(), "First",
+            [new ShowControlAction(ShowControlActionId.New(), ShowControlActionKind.Cut)]);
+        var second = new ShowControlCue(ShowControlCueId.New(), "Second",
+            [new ShowControlAction(ShowControlActionId.New(), ShowControlActionKind.StopRecording)]);
+        var list = new ShowControlCueList(ShowControlContractVersion.Current,
+            ShowControlCueListId.New(), "Live", [first, second]);
+        var idle = new ShowControlWorkspaceSnapshot([list], list.CueListId,
+            ShowControlExecutionSnapshot.Idle);
+        model.ApplyConfirmedSnapshot(idle);
+        model.SelectedCue = model.SelectedCueList!.Cues[1];
+        model.SelectedCue.Name = "Local unsaved rename";
+        var armed = idle.Execution with
+        {
+            ExecutionId = ShowControlExecutionId.New(), CueListId = list.CueListId,
+            State = ShowControlExecutionState.Armed, CueIndex = 0, ActionIndex = 0,
+            CurrentCueId = first.CueId, CurrentActionId = first.Actions[0].ActionId,
+            ExecutionRevision = 1
+        };
+        model.ApplyLiveObservation(new([list], list.CueListId, armed));
+        Assert.Equal("First", model.CurrentCue);
+        Assert.Equal("Local unsaved rename", model.LocalCueSelection);
+        Assert.Contains("ARMED", model.CueRunStatus);
+        Assert.Contains("NOT ARMED", model.NextCueStatus);
+        Assert.Equal("Second", model.NextCue);
+        Assert.Equal(0, transport.Mutations);
     }
 
     private sealed class ReadOnlyTransport : IOperatorControlTransport
