@@ -239,6 +239,10 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
             Assert.Equal((byte)0, degraded.ProgramPixels.Span[0]);
             Assert.Equal((byte)0, degraded.ProgramPixels.Span[1]);
             Assert.Equal((byte)0, degraded.ProgramPixels.Span[2]);
+            // Even a later same-slot callback from the legitimate Runtime
+            // cannot revive a sink that has already failed closed.
+            decks.ObserveSequenceProgramBoundary(degraded);
+            Assert.Equal("FAILED", decks.GetSequenceOutput(reference, host).OutputState);
         }
 
         // A subsequent ordinary committed Preview mutation must not keep
