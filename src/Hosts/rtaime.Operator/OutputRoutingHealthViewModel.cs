@@ -59,6 +59,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
 	private OutputStatusViewModel? _selectedOutput;
 	private bool _disposed;
+	private bool _isCanvasMode;
+	private bool _showTechnicalDetails;
 
 	public OutputRoutingHealthViewModel(
 		OperatorViewModel control,
@@ -80,6 +82,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		};
 		SelectedOutput = _program;
 		CanvasEditor = new OutputCanvasEditorViewModel(_control);
+		ShowRoutingModeCommand = new AsyncRelayCommand(() => { SelectCanvasMode(false); return Task.CompletedTask; });
+		ShowCanvasModeCommand = new AsyncRelayCommand(() => { SelectCanvasMode(true); return Task.CompletedTask; });
+		ToggleTechnicalDetailsCommand = new AsyncRelayCommand(() =>
+		{
+			ShowTechnicalDetails = !ShowTechnicalDetails;
+			return Task.CompletedTask;
+		});
 
 		_metrics = new Dictionary<string, PerformanceMetricViewModel>(StringComparer.Ordinal)
 		{
@@ -115,6 +124,23 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public OutputCanvasEditorViewModel CanvasEditor { get; }
+	public ICommand ShowRoutingModeCommand { get; }
+	public ICommand ShowCanvasModeCommand { get; }
+	public ICommand ToggleTechnicalDetailsCommand { get; }
+	public bool IsCanvasMode => _isCanvasMode;
+	public bool IsRoutingMode => !_isCanvasMode;
+	public bool ShowTechnicalDetails
+	{
+		get => _showTechnicalDetails;
+		set => Set(ref _showTechnicalDetails, value);
+	}
+
+	private void SelectCanvasMode(bool canvas)
+	{
+		if (!Set(ref _isCanvasMode, canvas)) return;
+		CanvasEditor.SetWorkspaceVisible(canvas);
+		OnPropertyChanged(nameof(IsRoutingMode));
+	}
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
@@ -184,10 +210,6 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var format = ParseFormat(_control.CurrentFormat);
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
 		var performanceEvidence = ResolvePerformanceEvidence(runtimeEvidence);
-		var runtimeStatus = ToOperatorStatus(runtimeEvidence);
-		var runtimeDetail = runtimeEvidence == "PASS"
-			? "Program routing reflects the authoritative Runtime state."
-			: _control.EngineHealthDetail;
 
 		UpdateSystemHealth("engine", _control.EngineHealth);
 		UpdateSystemHealth("control", _control.ControlHealth);
@@ -199,16 +221,24 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var programRole = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "program", StringComparison.Ordinal));
 		var programNetwork = programRole?.NetworkOutput;
+		var programEvidence = RoleEvidence(programRole, _control.IsConnected, _control.IsStale, runtimeEvidence);
+		var programTarget = programRole is null
+			? Unavailable
+			: FormatRoleTarget(programRole);
+		var programDetail = programRole is null
+			? "No authoritative Program target is available. Program monitoring does not establish a physical output."
+			: FormatRoleDetail(programRole);
 		_program.Update(
-			target: "Runtime Program",
+			target: programTarget,
 			assignedSource: FormatSource(_control.ProgramSourceName, _control.ProgramSourceId),
-			resolution: format.Resolution,
-			frameRate: format.FrameRate,
-			pixelFormat: format.PixelFormat,
+			resolution: programRole is { Width: > 0, Height: > 0 } confirmedFormat
+				? $"{confirmedFormat.Width}×{confirmedFormat.Height}" : format.Resolution,
+			frameRate: NormalizeAvailability(programRole?.FrameRate ?? format.FrameRate),
+			pixelFormat: NormalizeAvailability(programRole?.PixelFormat ?? format.PixelFormat),
 			colorSpace: Unavailable,
-			status: runtimeStatus,
-			evidenceState: runtimeEvidence,
-			detail: AppendNetworkDetail(runtimeDetail, programNetwork),
+			status: ToOperatorStatus(programEvidence),
+			evidenceState: programEvidence,
+			detail: AppendNetworkDetail(programDetail, programNetwork),
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
 			streamingStatus: ResolveStreamingStatus(programNetwork),
 			streamingTarget: programNetwork?.SafeTargetIdentity ?? Unavailable,
@@ -218,16 +248,19 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingDrops: FormatNetworkDrops(programNetwork),
 			streamingReconnects: programNetwork?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
 
+		var previewEvidence = !_control.IsConnected || _control.IsStale
+			? "UNVERIFIED" : NormalizeEvidence(_control.ControlHealth);
 		_preview.Update(
-			target: "Control Preview",
+			target: "Control Preview · monitoring only",
 			assignedSource: FormatSource(_control.PreviewSourceName, _control.PreviewSourceId),
-			resolution: format.Resolution,
-			frameRate: format.FrameRate,
-			pixelFormat: format.PixelFormat,
+			// The Program output format cannot certify a distinct Preview source.
+			resolution: Unavailable,
+			frameRate: Unavailable,
+			pixelFormat: Unavailable,
 			colorSpace: Unavailable,
-			status: runtimeStatus,
-			evidenceState: runtimeEvidence,
-			detail: "Preview role reflects the authoritative Control routing snapshot.",
+			status: ToOperatorStatus(previewEvidence),
+			evidenceState: previewEvidence,
+			detail: "Preview is the authoritative Control monitoring selection, not a physical output or Program transmission.",
 			recordingStatus: Unavailable,
 			streamingStatus: Unavailable,
 			streamingTarget: Unavailable,
@@ -264,16 +297,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		{
 			var source = _control.Sources.FirstOrDefault(candidate =>
 				string.Equals(candidate.Id, aux.SourceId, StringComparison.Ordinal));
-			var evidence = NormalizeEvidence(aux.HealthState);
+			var evidence = RoleEvidence(aux, _control.IsConnected, _control.IsStale, runtimeEvidence);
 			var resolution = aux.Width is { } width && aux.Height is { } height
 				? $"{width}×{height}"
 				: Unavailable;
-			var target = aux.AuthoritativeActive
-				? $"{aux.ProviderId} · {aux.TargetId}"
-				: $"{aux.TargetId} · {aux.ProviderId}";
-			var detail = aux.Error is null
-				? aux.Evidence
-				: $"{aux.Evidence} {aux.Error.Value.Code}: {aux.Error.Value.Message}";
+			var target = FormatRoleTarget(aux);
+			var detail = FormatRoleDetail(aux);
 			_aux.Update(
 				target: target,
 				assignedSource: FormatSource(source?.Name ?? aux.SourceId, aux.SourceId),
@@ -433,6 +462,33 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		OnPropertyChanged(nameof(AccessState));
 		OnPropertyChanged(nameof(AccessEvidenceState));
 		OnPropertyChanged(nameof(AccessDetail));
+	}
+
+	// An authorized role is not a physical scan-out qualification. Missing,
+	// inactive, stale and disconnected roles must never inherit global Runtime PASS.
+	internal static string RoleEvidence(
+		OperatorOutputRoleDescriptor? role,
+		bool connected,
+		bool stale,
+		string runtimeEvidence)
+	{
+		if (!connected || stale || role is null)
+			return "UNVERIFIED";
+		if (role.HealthState == "FAIL" || runtimeEvidence == "FAIL")
+			return "FAIL";
+		return role.AuthoritativeActive && role.HealthState == "PASS" &&
+			runtimeEvidence == "PASS" ? "PASS" : "UNVERIFIED";
+	}
+
+	private static string FormatRoleTarget(OperatorOutputRoleDescriptor role) =>
+		$"{role.ProviderId} · {role.TargetId}" +
+		(role.AuthoritativeActive ? " · AUTHORITATIVE" : " · NOT ACTIVE");
+
+	private static string FormatRoleDetail(OperatorOutputRoleDescriptor role)
+	{
+		var failure = role.Error is { } error ? $" {error.Code}: {error.Message}" : string.Empty;
+		return $"{role.RoleKind} · {role.LifecycleState} · {role.Evidence}." +
+			$" Authoritative active: {role.AuthoritativeActive}. Physical scan-out UNVERIFIED.{failure}";
 	}
 
 	private static readonly TimeSpan SendFreshnessLimit = TimeSpan.FromSeconds(5);
@@ -836,6 +892,23 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	public string StreamingQueue { get => _streamingQueue; private set => Set(ref _streamingQueue, value); }
 	public string StreamingDrops { get => _streamingDrops; private set => Set(ref _streamingDrops, value); }
 	public string StreamingReconnects { get => _streamingReconnects; private set => Set(ref _streamingReconnects, value); }
+	public string OutputKind => Id switch
+	{
+		"program" => "GOVERNED PROGRAM ROLE · PHYSICAL SCAN-OUT UNVERIFIED",
+		"aux" => "GOVERNED AUX ROLE · PHYSICAL SCAN-OUT UNVERIFIED",
+		"preview" => "CONTROL PREVIEW · MONITOR ONLY, NOT A DEVICE SEND",
+		_ => "LOCAL CLEAN FEED · NOT A PHYSICAL PROGRAM OUTPUT"
+	};
+	public string DeliveryEvidence => Id switch
+	{
+		"preview" => "CONTROL PREVIEW · NO PHYSICAL SEND",
+		"clean-program" => $"LOCAL DISPLAY {EvidenceState} · NO PHYSICAL SEND CONFIRMATION",
+		_ when EvidenceState == "FAIL" => "ROLE FAULTED · CHECK TARGET AND PROVIDER",
+		_ when EvidenceState != "PASS" => "OUTPUT ROUTE UNVERIFIED · CHECK RUNTIME EVIDENCE",
+		_ when StreamingStatus == "LIVE" => "NETWORK SEND LIVE · RUNTIME OBSERVED, NOT SCAN-OUT",
+		_ when StreamingProvider == "UNAVAILABLE" => "RUNTIME ROLE CONFIRMED · NETWORK SEND NOT CONFIGURED",
+		_ => $"RUNTIME ROLE CONFIRMED · NETWORK SEND {StreamingStatus}"
+	};
 
 	internal void Update(
 		string target,
@@ -873,6 +946,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		StreamingQueue = streamingQueue;
 		StreamingDrops = streamingDrops;
 		StreamingReconnects = streamingReconnects;
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DeliveryEvidence)));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

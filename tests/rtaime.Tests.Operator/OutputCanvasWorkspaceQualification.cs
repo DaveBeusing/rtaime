@@ -15,6 +15,7 @@ internal static class OutputCanvasWorkspaceQualification
     internal static async Task VerifyWindowAsync(MainWindow window, Dispatcher dispatcher)
     {
         var previous = window.Shell.SelectedWorkspace;
+        var previousCanvasMode = window.OutputHealth.IsCanvasMode;
         var selectedCompactDetails = false;
         try
         {
@@ -34,10 +35,30 @@ internal static class OutputCanvasWorkspaceQualification
 
             var editors = Descendants<OutputCanvasEditorControl>(window).ToArray();
             var editor = Assert.Single(editors);
+            window.OutputHealth.ShowRoutingModeCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.False(window.OutputHealth.IsCanvasMode);
+            Assert.False(window.OutputHealth.CanvasEditor.IsWorkspaceVisible);
+            Assert.False(Assert.Single(Descendants<OutputCanvasStageSurface>(editor)).IsVisible);
+
+            var savedRevision = window.OutputHealth.CanvasEditor.SavedRevision;
+            var wasDirty = window.OutputHealth.CanvasEditor.IsDirty;
+            window.OutputHealth.ShowCanvasModeCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.True(window.OutputHealth.IsCanvasMode);
+            Assert.True(window.OutputHealth.CanvasEditor.IsWorkspaceVisible);
+            Assert.Equal(savedRevision, window.OutputHealth.CanvasEditor.SavedRevision);
+            Assert.Equal(wasDirty, window.OutputHealth.CanvasEditor.IsDirty);
             Assert.Same(window.OutputHealth.CanvasEditor, editor.DataContext);
             Assert.Equal(Visibility.Visible, editor.Visibility);
 
             var stage = Assert.Single(Descendants<OutputCanvasStageSurface>(editor));
+            // In compact OUTPUTS the editor lives inside the existing scrolling
+            // details region. Its stage must be scrolled into the actual viewport
+            // before asserting native layout dimensions.
+            stage.BringIntoView();
+            window.UpdateLayout();
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.Same(window.OutputHealth.CanvasEditor, stage.Editor);
             Assert.True(stage.Focusable);
             Assert.True(stage.ActualWidth > 100,
@@ -55,6 +76,10 @@ internal static class OutputCanvasWorkspaceQualification
         }
         finally
         {
+            if (previousCanvasMode)
+                window.OutputHealth.ShowCanvasModeCommand.Execute(null);
+            else
+                window.OutputHealth.ShowRoutingModeCommand.Execute(null);
             if (selectedCompactDetails)
                 window.Shell.SelectCompactAuxiliaryCommand.Execute("PRIMARY");
             window.Shell.SelectWorkspace(previous);

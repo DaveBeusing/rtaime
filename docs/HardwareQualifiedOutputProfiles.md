@@ -54,6 +54,13 @@ approved physical target transaction, device scan-out measurement or validated
 multi-port atomicity. The required physical qualification and public-key
 enrollment are explicitly **BLOCKED / UNVERIFIED**, not silently passed.
 
+## Operator availability versus physical proof
+
+OUTPUTS presents the existing Control-authorized canvas target catalog and the Runtime-observed Program/Aux role identities. An available target entry is **authorization to author/validate**, not a physical-device capability grant. A role health PASS confirms only its existing Runtime role contract; a recent network send confirms transmission within the current transport freshness window, not a calibrated monitor or SDI connector's scan-out. The Operator's target selection and status summaries explicitly retain **PHYSICAL SCAN-OUT UNVERIFIED** where no enrolled, validated physical qualification grant is available.
+
+A missing or stale role, unbound provider/target, unavailable device, unsupported/unknown output format or unsuccessful mapping activation remains unavailable/UNVERIFIED or FAIL according to its authoritative evidence. Draft, validated, saved, accepted-for-boundary and measured-active mapping revisions stay distinct. Displaying or editing a target does not create, install or enable any new commercial driver or format capability.
+
+
 ## Qualification workflow
 
 1. Execute the existing real reference-platform CUDA, professional Media I/O, timing/latency and recovery/soak suites on the designated self-hosted Windows hardware. Verify the resulting immutable bindings against the exact source SHA using the canonical qualification verifier. Treat missing evidence as `UNVERIFIED`.

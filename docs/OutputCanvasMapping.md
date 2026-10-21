@@ -1,6 +1,15 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
 # Output canvas configuration and mapping
+## Operator OUTPUTS workflow and confirmation
+
+The single OUTPUTS workspace provides **ROUTING / SIGNAL** and **CANVAS / MAPPING** modes; switching modes changes presentation only. The canvas editor keeps the same durable-saved configuration, one local draft, undo/redo and existing authority/client transport across these changes. Its initial visibility is contextual; neither showing the editor nor selecting a target changes Program.
+
+Canvas actions are explicitly ordered: **VALIDATE DRAFT** must succeed at the current local edit before **SAVE** becomes available; after a successful Control-host save, **VALIDATE SAVED** must succeed for the authoritative saved revision before **REQUEST RUNTIME APPLY** can be issued. SAVE remains non-executing. A successful Apply reply reporting `PENDING_BOUNDARY` remains unconfirmed until Runtime returns `ACTIVE` with the matching saved render revision; a target may still be UNMAPPED, FAILED or missing. Changed local geometry invalidates validation. Conflicted saved revisions or lost-save replies block retries until reconciliation. An ambiguous Apply or Disable reply blocks further local edits and activation commands until Runtime confirms the *intended* terminal state: ACTIVE at the exact requested saved revision for Apply, or UNMAPPED with no active revision for Disable. A retained older UNMAPPED/ACTIVE observation is not sufficient and must not unlock a retry. If exact correlation is unavailable, the outcome remains UNKNOWN and requires an explicit operational reconciliation; it is never guessed to be FAILED or COMPLETED. No optimistic Program update or implicit retry is made.
+
+The target selector lists only Control-authorized targets and exposes role, provider, target identity, profile and declared geometry. That authorization alone does **not** demonstrate device/driver compatibility, professional media-I/O or physical scan-out; absent evidence remains UNVERIFIED. Numerical warp, crop and edge-blend controls are behind **ADVANCED GEOMETRY / BLEND**, while the geometry stage and source/target binding remain accessible. Hiding numerical controls does not modify a draft or add another geometry render loop.
+
+
 
 Control owns the versioned, durable authored 2D model in the canonical show project.
 Operator consumers use Client → ControlHost. This backend provides configuration,

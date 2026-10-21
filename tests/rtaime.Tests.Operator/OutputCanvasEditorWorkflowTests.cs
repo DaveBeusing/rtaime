@@ -30,7 +30,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         editor.AddSurfaceCommand.Execute(null);
         Assert.True(editor.IsDirty);
         Assert.Equal("1", editor.DraftRevision);
+        Assert.False(editor.SaveCommand.CanExecute(null));
         await editor.ValidateAsync();
+        Assert.True(editor.IsDraftValidated);
+        Assert.True(editor.SaveCommand.CanExecute(null));
         Assert.Equal(0, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
         await editor.SaveAsync();
@@ -39,8 +42,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         Assert.Equal("1", editor.SavedRevision);
         Assert.Equal("UNVERIFIED", editor.ActiveRevision);
         Assert.False(editor.IsDirty);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
 
         await editor.ValidateAsync();
+        Assert.True(editor.ApplyCommand.CanExecute(null));
         await editor.ApplyAsync();
         Assert.Equal(1, gateway.Applies);
         Assert.Equal("PENDING_BOUNDARY", editor.ActivationState);
@@ -49,6 +54,7 @@ public sealed class OutputCanvasEditorWorkflowTests
         await editor.ObserveBoundaryAsync();
         Assert.Equal("ACTIVE", editor.ActivationState);
         Assert.Equal("1", editor.ActiveRevision);
+        Assert.True(editor.IsActiveMappingConfirmed);
         Assert.Equal("virtual-program", editor.RuntimeOutputTarget);
         Assert.Equal("1920×1080", editor.RuntimeOutputSize);
 
@@ -93,10 +99,17 @@ public sealed class OutputCanvasEditorWorkflowTests
         using var editor = new OutputCanvasEditorViewModel(owner, gateway);
         await editor.ReloadAsync();
         editor.NudgeSelected(4, 5);
+        Assert.False(editor.SaveCommand.CanExecute(null));
+        await editor.ValidateAsync();
         await editor.SaveAsync();
         Assert.True(editor.IsDirty);
         Assert.True(editor.SaveOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
         Assert.False(editor.SaveCommand.CanExecute(null));
+        var retained = editor.Fields.First(field => field.Key == "tlx").Value;
+        editor.NudgeSelected(9, 0);
+        Assert.Equal(retained, editor.Fields.First(field => field.Key == "tlx").Value);
+        Assert.True(editor.SaveOutcomeUnconfirmed);
         Assert.Equal(1, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
 
@@ -126,11 +139,125 @@ public sealed class OutputCanvasEditorWorkflowTests
 
         gateway.RejectWith = "canvas.target_unsupported";
         editor.NudgeSelected(2, 0);
+        await editor.ValidateAsync();
+        Assert.False(editor.SaveCommand.CanExecute(null));
         await editor.SaveAsync();
         Assert.True(editor.IsDirty);
         Assert.NotEmpty(editor.Issues);
         Assert.Equal(0, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Lost_apply_reply_fences_retry_until_runtime_confirms_exact_saved_revision()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway { DropApplyResponse = true };
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        Assert.True(editor.ApplyCommand.CanExecute(null));
+        await editor.ApplyAsync();
+        Assert.Equal(1, gateway.Applies);
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
+        Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.False(editor.DisableCommand.CanExecute(null));
+        Assert.Contains("UNKNOWN", editor.WorkflowStage);
+
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.Equal(1, gateway.Applies);
+
+        // An old UNMAPPED observation cannot prove that uncertain APPLY was rejected.
+        gateway.ReturnStaleUnmapped = true;
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
+        gateway.ReturnStaleUnmapped = false;
+        gateway.ConfirmMapping();
+        await editor.ObserveBoundaryAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.True(editor.IsActiveMappingConfirmed);
+        Assert.Equal(1, gateway.Applies);
+        Assert.Equal("RUNTIME CONFIRMED · ACTIVE MAPPING", editor.WorkflowStage);
+    }
+
+    [Fact]
+    public async Task Lost_disable_reply_does_not_authorize_retry_from_a_retained_active_snapshot()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.ConfirmMapping();
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.IsActiveMappingConfirmed);
+
+        gateway.DropDisableResponse = true;
+        await editor.DisableAsync();
+        Assert.Equal(2, gateway.Applies);
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.DisableCommand.CanExecute(null));
+
+        gateway.ReturnStaleActive = true;
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.Equal(2, gateway.Applies);
+
+        gateway.ReturnStaleActive = false;
+        gateway.ConfirmDisable();
+        await editor.ObserveBoundaryAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.Equal("UNMAPPED", editor.ActivationState);
+        Assert.Equal("UNVERIFIED", editor.ActiveRevision);
+        Assert.Equal(2, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Draft_revalidation_is_invalidated_by_a_followup_local_surface_edit()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        editor.NudgeSelected(2, 0);
+        await editor.ValidateAsync();
+        Assert.True(editor.SaveCommand.CanExecute(null));
+        editor.NudgeSelected(3, 0);
+        Assert.False(editor.IsDraftValidated);
+        Assert.False(editor.SaveCommand.CanExecute(null));
+        Assert.Equal(0, gateway.Saves);
+        Assert.Equal(0, gateway.Applies);
+    }
+
+    [Fact]
+    public void Output_role_evidence_never_inherits_global_Runtime_PASS_for_missing_inactive_or_stale_targets()
+    {
+        OperatorOutputRoleDescriptor Role(bool active, string health, Failure? failure = null) =>
+            new("program", "PROGRAM", Source.ToString(), "virtual-program", "reference",
+                1920, 1080, "50", "RGBA8", "FRAME_BOUNDARY", "CONNECTED",
+                active, health, "Runtime Program target observation", failure);
+
+        var healthy = Role(true, "PASS");
+        Assert.Equal("PASS", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(null, true, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, false, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, true, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, false, "UNVERIFIED"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(Role(false, "PASS"), true, false, "PASS"));
+        Assert.Equal("FAIL", OutputRoutingHealthViewModel.RoleEvidence(
+            Role(true, "FAIL", new Failure("output.writer_unavailable", "Target writer unavailable.")),
+            true, false, "PASS"));
+
+        Assert.Contains("MONITOR ONLY", new OutputStatusViewModel("preview", "PREVIEW").OutputKind);
+        Assert.Contains("NOT A PHYSICAL", new OutputStatusViewModel("clean-program", "CLEAN FEED").OutputKind);
+        Assert.Contains("UNVERIFIED", new OutputStatusViewModel("aux", "AUX").DeliveryEvidence);
     }
 
     private static OperatorViewModel ReadyOwner()
@@ -158,6 +285,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         public int Applies { get; private set; }
         public string? RejectWith { get; set; }
         public bool DropSaveResponse { get; set; }
+        public bool DropApplyResponse { get; set; }
+        public bool DropDisableResponse { get; set; }
+        public bool ReturnStaleUnmapped { get; set; }
+        public bool ReturnStaleActive { get; set; }
 
         public ValueTask<OutputCanvasSnapshot> GetAsync(CancellationToken token = default) =>
             ValueTask.FromResult(new OutputCanvasSnapshot(Stored,Stored.EditRevision,
@@ -166,7 +297,8 @@ public sealed class OutputCanvasEditorWorkflowTests
                     "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
 
         public ValueTask<OutputCanvasActivationResult> EvidenceAsync(CancellationToken token = default) =>
-            ValueTask.FromResult(_runtime);
+            ValueTask.FromResult(ReturnStaleUnmapped ? new OutputCanvasActivationResult(null,null,"UNMAPPED") :
+                ReturnStaleActive ? new OutputCanvasActivationResult(Stored.EditRevision,null,"ACTIVE") : _runtime);
 
         public ValueTask<OutputCanvasValidation> ValidateAsync(OutputCanvasConfiguration draft,
             CancellationToken token = default)
@@ -199,6 +331,10 @@ public sealed class OutputCanvasEditorWorkflowTests
             Assert.Equal(Stored.EditRevision,request.ExpectedSavedRevision);
             _runtime = _runtime with { ActivationState="PENDING_BOUNDARY",
                 PendingRenderRevision=request.Enabled?Stored.EditRevision:null, FailureCode=null };
+            if (request.Enabled && DropApplyResponse)
+                throw new TimeoutException("Apply response lost after Runtime accepted the request.");
+            if (!request.Enabled && DropDisableResponse)
+                throw new TimeoutException("Disable response lost after Runtime accepted the request.");
             return ValueTask.FromResult(_runtime);
         }
 
