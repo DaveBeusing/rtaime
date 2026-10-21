@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 using rtaime.Core;
@@ -32,6 +33,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private bool _autoPlayOnProgram = true;
 	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
 	private bool _playbackPolicyDirty;
+    private bool _playbackOptionsExpanded;
 	private string? _localPath;
     private readonly Dictionary<MediaSourceId, string> _deckPaths = [];
 
@@ -67,6 +69,12 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		DeleteCueCommand = new AsyncRelayCommand(DeleteCueAsync, () => SelectedCue is not null && !IsBusy);
 		JumpCueCommand = new AsyncRelayCommand(JumpCueAsync, () => SelectedCue is not null && CanSeek);
 		ApplyPlaybackPolicyCommand = new AsyncRelayCommand(ApplyPlaybackPolicyAsync, () => IsLoaded && !IsBusy);
+        TogglePlaybackOptionsCommand = new AsyncRelayCommand(() =>
+        {
+            _playbackOptionsExpanded = !_playbackOptionsExpanded;
+            OnPropertyChanged(nameof(PlaybackOptionsVisibility));
+            return Task.CompletedTask;
+        });
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -96,6 +104,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public ICommand DeleteCueCommand { get; }
 	public ICommand JumpCueCommand { get; }
 	public ICommand ApplyPlaybackPolicyCommand { get; }
+    public ICommand TogglePlaybackOptionsCommand { get; }
+    public Visibility PlaybackOptionsVisibility => _playbackOptionsExpanded
+        ? Visibility.Visible : Visibility.Collapsed;
 
 	public string State => _snapshot.State.ToString().ToUpperInvariant();
 	public bool IsLoaded => _snapshot.IsLoaded;
