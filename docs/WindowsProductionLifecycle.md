@@ -227,6 +227,13 @@ remains adopt-only, and ControlHost continues to own any RuntimeHost/
 AIHost descendants. This is application process ownership enforcement,
 not a substitute for Windows Service Control Manager recovery testing.
 
+When writing the owned ControlHost stop sentinel fails due to denied or
+unavailable storage, AppHost still attempts emergency cleanup of its
+tracked process. Shutdown evidence records `status = FAIL`, the
+`stopSignalFailure` exception type, and any forced termination; the
+original stop failure remains available as a shutdown diagnostic. It
+never turns a failed graceful request into PASS or kills an adopted host.
+
 ## Update and maintenance
 
 Production service updates use:
