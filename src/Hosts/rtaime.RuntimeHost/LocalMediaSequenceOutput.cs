@@ -244,8 +244,13 @@ public sealed partial class LocalMediaDeckRuntimeService
 
                 session.LastPublishedSlot = programSlot;
                 session.PublishedBoundaries++;
+                // A previously observed physical ProgramBoundaryResult
+                // remains source-bound evidence while the next composed
+                // input travels through the same sink. Do not erase that
+                // real confirmation on every 20 ms Preview/Program ingress;
+                // buffering, stale authority and failure still invalidate it.
                 session.OutputState = session.ProgramAuthorized
-                    ? "TAKE_COMMITTED"
+                    ? session.LastProgramSlot is null ? "TAKE_COMMITTED" : "PROGRAM_CONFIRMED"
                     : session.ArmedTake is not null ? "TAKE_PENDING" : "PREVIEW_READY";
                 session.FailureCode = null;
                 return (true, session.OutputState, null, programSlot);
