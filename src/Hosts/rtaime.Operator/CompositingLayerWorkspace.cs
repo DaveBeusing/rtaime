@@ -186,7 +186,7 @@ public sealed partial class CompositingGraphViewModel
         DiscardOrderDraftCommand = new CompositingGraphCommand(_ => { _orderDraft = null; SynchronizeLayers(); });
     }
     private bool CanApplyLayerDraft() => LayerDraftInputsValid && CanEditSelectedLayer() &&
-        SelectedLayerRow is { HasStateDraft: true, StateConflict: false };
+        SelectedLayerRow is { IsDraftCurrent: true };
     private bool CanApplyOrderDraft() => _operator.CanManageCompositingLayers() && _orderDraft is not null &&
         _orderDraft.Count == _operator.CompositingLayers.Count &&
         _orderDraft.ToHashSet(StringComparer.Ordinal).SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId));
@@ -223,7 +223,8 @@ public sealed partial class CompositingGraphViewModel
         var ordered = _operator.CompositingLayers.OrderBy(layer =>
             _orderDraft is not null && _orderDraft.Contains(layer.LayerId) ? _orderDraft.IndexOf(layer.LayerId) : layer.Order).ToArray();
         foreach (var layer in ordered)
-            Nodes.FirstOrDefault(node => node.Id == "layer:" + layer.LayerId)?.ObserveLayer(layer);
+            Nodes.FirstOrDefault(node => node.Id == "layer:" + layer.LayerId)?.ObserveLayer(
+                layer, _operator.Client?.Snapshot?.Production.Revision.Value ?? 0);
         Reconcile(Layers, ordered.Select(layer => Nodes.First(node => node.Id == "layer:" + layer.LayerId)).ToArray());
         if (SelectedLayerCount > 1)
         {
