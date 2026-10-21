@@ -277,7 +277,14 @@ last frame reference releases it. Monitoring and recording can retain the
 **same** existing readback lease after the mapped surface itself is retired.
 
 The CUDA backend still does **not** implement `IGpuOutputMappingBackend`.
-Its unrelated compositing/monitoring capabilities cannot advertise warp/blend
+In addition to the missing native implementation, the provider-level
+capability gate deliberately admits only `ManagedReference`: merely adding
+the interface to a hardware backend cannot accidentally turn on unqualified
+warp/blend. The public GPU provider also rejects any RGBA8 mapped output
+above the same 16-MiB additional framebuffer bound enforced by Runtime,
+before allocating a second full-frame mapping surface. This is defense in
+depth against direct provider clients, not an expanded format envelope.
+Hardware compositing/monitoring capabilities cannot advertise warp/blend
 or trigger CPU readback-and-reupload as a fallback. An unsupported mapping
 request is rejected at the existing runtime preparation boundary; legacy
 Program output remains authoritative. The software qualification uses the
