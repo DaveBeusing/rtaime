@@ -216,6 +216,65 @@ try {
         & ./build/qualification/Test-ManagedAllocationGcVerifierRegressions.ps1 -EvidencePath $manifestPath -ExpectedSourceCommit $source -DescriptorPath $descriptorPath
         if (-not $?) { throw "Source-bound verifier negative regression qualification failed." }
     }
+    # Presentation-only projection. Every numeric value is read back from a
+    # verified producer artifact; manifest hashes remain the evidence authority.
+    $observations = [Collections.Generic.List[object]]::new()
+    foreach ($run in $runs) {
+        foreach ($reference in $run.rateReports) {
+            $rawPath = Join-Path $runRoot $reference.path
+            $raw = Get-Content -LiteralPath $rawPath -Raw | ConvertFrom-Json
+            foreach ($case in @($raw.profiles)) {
+                $observations.Add([ordered]@{
+                    iteration = [int]$run.iteration
+                    format = [string]$case.format
+                    monitoringEnabled = [bool]$case.monitoringEnabled
+                    recordingEnabled = [bool]$case.recordingEnabled
+                    syntheticOutputCopyEnabled = [bool]$case.outputCopyEnabled
+                    measuredBoundaries = [int]$case.samples
+                    p50CpuWallMs = [double]$case.p50Milliseconds
+                    p95CpuWallMs = [double]$case.p95Milliseconds
+                    p99CpuWallMs = [double]$case.p99Milliseconds
+                    maxCpuWallMs = [double]$case.maximumMilliseconds
+                    producerThreadAllocatedBytesPerFrame = [double]$case.allocation.measuredThreadBytesPerBoundary
+                    approximateProcessAllocatedBytesPerFrame = [double]$case.allocation.approximateProcessBytesPerBoundary
+                    gen0 = [int]$case.garbageCollection.gen0Collections
+                    gen1 = [int]$case.garbageCollection.gen1Collections
+                    gen2 = [int]$case.garbageCollection.gen2Collections
+                    gcPauseMs = [double]$case.garbageCollection.pauseMilliseconds
+                    lohBytesAtLastGc = $case.garbageCollection.largeObjectHeapBytesAtLastGc
+                    pohBytesAtLastGc = $case.garbageCollection.pinnedObjectHeapBytesAtLastGc
+                    logicalReadbacks = [ulong]$case.transfers.ReadbackOperations
+                    logicalReadbackBytes = [ulong]$case.transfers.ReadbackBytes
+                    deviceToHostBytes = [ulong]$case.transfers.DeviceToHostBytes
+                    activeReadbackBuffersAfterBoundary = [int]$case.transfers.ReadbackPool.ActiveBuffers
+                })
+            }
+        }
+    }
+    $comparison = Get-Content -LiteralPath $comparisonPath -Raw | ConvertFrom-Json
+    $summary = [ordered]@{
+        schemaVersion = "1.0"
+        qualification = "rtaime-managed-allocation-gc-derived-summary"
+        numericalAuthority = "MANIFEST_HASHED_SOURCE_PRODUCER_REPORTS"
+        sourceCommit = $source
+        descriptorSha256 = $descriptorHash
+        runner = $runner
+        profile = $Profile
+        caseCount = $observations.Count
+        cases = $observations.ToArray()
+        comparison = $comparison
+        subsystems = @(
+            [ordered]@{ name = "Program"; status = "MEASURED_SOFTWARE"; nextAction = "Compare a baseline from the same runner using approved profile-bound thresholds." },
+            [ordered]@{ name = "GC_LOH_POH"; status = "COUNTERS_AND_LAST_GC_SNAPSHOTS"; nextAction = "Collect correlated complete ETW events on a qualified runner before claiming all object allocations." },
+            [ordered]@{ name = "NativeDecoder"; status = [string]$native.status; nextAction = "Qualify real simultaneous A/B and SSD source playback separately." },
+            [ordered]@{ name = "GpuReadback"; status = "LOGICAL_MANAGED_READBACK"; nextAction = "Run CUDA reference GPU transfer and fence evidence on identified hardware." },
+            [ordered]@{ name = "OperatorUI"; status = "SCALAR_ASSERTION_ONLY"; nextAction = "Qualify actual WPF render and Dispatcher P99 with source-linked UI evidence." },
+            [ordered]@{ name = "ReplayAndNetwork"; status = "UNVERIFIED"; nextAction = "Bind their actual consuming producers to a future independent workload profile." }
+        )
+        physicalOutput = "UNVERIFIED"
+    }
+    $summary | ConvertTo-Json -Depth 32 |
+        Set-Content -LiteralPath (Join-Path $runRoot "subsystem-summary.json") -Encoding utf8
     Write-Host "Source-bound Program / GC software qualification complete: $runRoot"
     Write-Host "Physical hardware, complete ETW object allocations and full Operator UI latency remain UNVERIFIED."
 }
