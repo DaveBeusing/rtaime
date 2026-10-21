@@ -272,6 +272,8 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.IsType<TextBlock>(window.FindName("LiveSendEvidence")).Text);
         Assert.Equal(owner.RecordingStatus,
             Assert.IsType<TextBlock>(window.FindName("LiveRecordingEvidence")).Text);
+        Assert.Equal(owner.AudioLeftDb,
+            Assert.IsType<TextBlock>(window.FindName("LiveAudioLeftEvidence")).Text);
         Assert.True(Descendants(root).OfType<RtaimeButton>().Any(button =>
             button.IsVisible && Equals(button.Content, "RESTORE") &&
             ReferenceEquals(button.Command, window.Shell.ResetLayoutCommand)));
