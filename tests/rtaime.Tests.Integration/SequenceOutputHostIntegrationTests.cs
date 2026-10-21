@@ -35,7 +35,16 @@ public sealed partial class ExternalControlIntegrationTests
 
         var imported = await grpc.ImportMediaAssetsAsync([mediaFile.Path]);
         Assert.True(imported.Succeeded);
-        var sequence = PreparedVideoSequence(Assert.Single(imported.Snapshot.Assets));
+        var seedSequence = PreparedVideoSequence(Assert.Single(imported.Snapshot.Assets));
+        // The repository reference media is one second long. Reserve a
+        // forty-frame authored window so real native preroll, Preview
+        // observation and the explicit Take can run on ordinary CI runners
+        // without timing out an artificially four-frame sequence.
+        var authoredClip = Assert.Single(seedSequence.Clips);
+        var sequence = seedSequence with
+        {
+            Clips = [authoredClip with { SourceOut = 40 * 4800, Duration = 40 * 4800 }]
+        };
         var authoring = new SequenceAuthoringClient(grpc);
         var saved = await authoring.SaveAsync(new(
             SequenceContract.Version, Guid.NewGuid(), 0,
