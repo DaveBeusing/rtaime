@@ -25,6 +25,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly MediaSourceId _sourceId;
 	private readonly bool _hasAudio;
 	private readonly byte[] _rgbaFrameBuffer;
+    private readonly bool _collectCopyDiagnostics;
+    private LocalMediaDecodeCopyMeasurements _copyMeasurements;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
     private byte[]? _pendingAudioPacket;
@@ -49,12 +51,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		Probe = probe;
 		_hasAudio = hasAudio;
 		_rgbaFrameBuffer = new byte[checked((int)((ulong)probe.VideoFormat.Width * probe.VideoFormat.Height * 4UL))];
+        _collectCopyDiagnostics = string.Equals(
+            Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS"), "1",
+            StringComparison.Ordinal);
         _videoStride = checked((int)probe.VideoFormat.Width * 4);
 	}
 
 	public LocalMediaProbe Probe { get; }
     public LocalMediaReadMeasurements VideoReadMeasurements { get; private set; }
     public LocalMediaReadMeasurements AudioReadMeasurements { get; private set; }
+    public LocalMediaDecodeCopyMeasurements CopyMeasurements => _copyMeasurements;
 
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
@@ -385,9 +391,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                 return false;
             }
             var copy = checked((int)Math.Min(available, end - cursor));
+            var pcmStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
             CopyPcm16ToFloat32(
                 _pendingAudioPacket.AsSpan(_pendingAudioFrameOffset * pcmFrameBytes, copy * pcmFrameBytes),
                 output.AsSpan(checked((int)(cursor - start) * channels * sizeof(float)), copy * channels * sizeof(float)));
+            if (_collectCopyDiagnostics)
+                _copyMeasurements = _copyMeasurements with
+                {
+                    Pcm16ToFloat32 = _copyMeasurements.Pcm16ToFloat32.Observe(
+                        copy * channels * sizeof(float), Stopwatch.GetElapsedTime(pcmStarted).TotalMilliseconds)
+                };
             _pendingAudioFrameOffset += copy;
             cursor += copy;
         }
@@ -564,7 +577,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         finally { MediaFoundation.ReleaseComObject(type); }
     }
 
-	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
+	private byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
 	{
 		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out var maximumLength, out var currentLength));
 		try
@@ -572,8 +585,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			if (currentLength > maximumLength || address == IntPtr.Zero)
                 throw new LocalMediaDecodeException("media.file.audio_payload_invalid", "Native PCM buffer extent is invalid.");
             var payload = new byte[LocalMediaSampleProgress.ValidatePcmLength(currentLength)];
+            var started = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
 			if (payload.Length > 0)
 				Marshal.Copy(address, payload, 0, payload.Length);
+            if (_collectCopyDiagnostics)
+                _copyMeasurements = _copyMeasurements with
+                {
+                    NativePcmToScratch = _copyMeasurements.NativePcmToScratch.Observe(
+                        payload.Length, Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+                };
 			return payload;
 		}
 		finally
@@ -583,7 +603,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	}
 
 
-	private static void CopyRgb32ToRgba(
+	private void CopyRgb32ToRgba(
 		IMFMediaBuffer buffer,
 		VideoFormat format,
 		byte[] destination,
@@ -596,6 +616,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		if (destination.Length != requiredLength)
 			throw new InvalidDataException("Reusable RGBA frame buffer length does not match the configured output format.");
 
+        var copyStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
 		if (buffer is IMF2DBuffer buffer2D)
 		{
 			MediaFoundation.ThrowIfFailed(buffer2D.Lock2D(out var scanline0, out var pitch));
@@ -624,7 +645,20 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			}
 		}
 
+        if (_collectCopyDiagnostics)
+            _copyMeasurements = _copyMeasurements with
+            {
+                Rgb32ToScratch = _copyMeasurements.Rgb32ToScratch.Observe(
+                    requiredLength, Stopwatch.GetElapsedTime(copyStarted).TotalMilliseconds)
+            };
+        var swizzleStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
         SwizzleRgb32(destination);
+        if (_collectCopyDiagnostics)
+            _copyMeasurements = _copyMeasurements with
+            {
+                RgbaSwizzle = _copyMeasurements.RgbaSwizzle.Observe(
+                    requiredLength, Stopwatch.GetElapsedTime(swizzleStarted).TotalMilliseconds)
+            };
     }
 
     internal static void CopyContiguousRgb32Rows(IntPtr address, uint length, uint capacity,
