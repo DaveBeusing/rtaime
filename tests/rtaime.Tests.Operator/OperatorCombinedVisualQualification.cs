@@ -64,6 +64,7 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.Same(owner.CutCommand, window.Shortcuts.Definitions.Single(item => item.Id == "cut").Command);
             Assert.Same(owner.DissolveCommand, window.Shortcuts.Definitions.Single(item => item.Id == "auto").Command);
             VerifyModalRouting(window);
+            VerifyMediaServerNavigation(window);
             window.MinWidth = 960; window.MinHeight = 500;
             foreach (var row in OperatorVisualQualificationTests.QualificationMatrix())
             {
@@ -109,6 +110,9 @@ public sealed partial class OperatorCombinedVisualQualification
                     }
                     Assert.NotEmpty(Descendants(window).OfType<PreviewViewer>());
                     Assert.NotEmpty(Descendants(window).OfType<ProgramViewer>());
+                    var more = Assert.IsType<RtaimeNavigationItem>(window.FindName("MoreNavigationButton"));
+                    Assert.True(more.IsVisible && more.ActualHeight >= 32,
+                        name + "/" + workspace + ": More navigation is inaccessible.");
                     if (workspace == "LIVE") VerifyLiveComposition(window, root, width);
                     var first = Capture(window, root);
                     Assert.All(Descendants(root).OfType<OperatorDrawingSurface>(),
@@ -183,6 +187,43 @@ public sealed partial class OperatorCombinedVisualQualification
         }
     }
 
+
+    private static void VerifyMediaServerNavigation(MainWindow window)
+    {
+        var owner = Assert.IsType<OperatorViewModel>(window.DataContext);
+        var program = owner.ProgramSourceId;
+        var preview = owner.PreviewSourceId;
+        var originalWorkspace = window.Shell.SelectedWorkspace;
+        var rail = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("WorkspaceNavigation"));
+        var navigation = Descendants(rail).OfType<RtaimeNavigationItem>().ToArray();
+        // Four primary workspaces, More, Show checks and Commands.
+        Assert.Equal(7, navigation.Length);
+        Assert.Contains(navigation, item => item.Name == "MoreNavigationButton");
+        Assert.Equal(new[] { "LIVE", "MEDIA", "EDIT", "OUTPUTS" },
+            window.Shell.NavigationGroups.SelectMany(group => group.Items).Select(link => link.Id));
+
+        var menu = window.CreateMoreNavigationMenu();
+        var links = menu.Items.OfType<RtaimeMenuItem>()
+            .Where(item => item.CommandParameter is string).ToArray();
+        Assert.Equal(new[] { "SCENES", "MULTIVIEW", "COMPOSITING", "HEALTH", "AI", "SETTINGS" },
+            links.Select(item => (string)item.CommandParameter!));
+        Assert.All(links, item => Assert.Same(window.Shell.SelectWorkspaceCommand, item.Command));
+        var health = links.Single(item => (string)item.CommandParameter! == "HEALTH");
+        Assert.True(health.Command!.CanExecute(health.CommandParameter));
+        health.Command.Execute(health.CommandParameter);
+        Assert.Equal("HEALTH", window.Shell.SelectedWorkspace);
+        Assert.True(window.Shell.IsSecondaryWorkspaceSelected);
+        var selected = window.CreateMoreNavigationMenu().Items.OfType<RtaimeMenuItem>()
+            .Single(item => (string?)item.CommandParameter == "HEALTH");
+        Assert.StartsWith("✓ ", (string)selected.Header);
+        window.Shell.SelectWorkspace(originalWorkspace);
+        Assert.Equal(program, owner.ProgramSourceId);
+        Assert.Equal(preview, owner.PreviewSourceId);
+
+        var recording = Assert.IsType<TextBlock>(window.FindName("TopBarRecordingState"));
+        Assert.Equal(owner.RecordingStatus, recording.Text);
+        Assert.NotNull(Descendants(window).OfType<RtaimeGlobalStatusButton>().FirstOrDefault());
+    }
 
     private static void VerifyLiveComposition(MainWindow window, FrameworkElement root, double width)
     {

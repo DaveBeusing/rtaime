@@ -71,10 +71,11 @@ A replacement NLE, 3D stage, arbitrary plugin graphs, new commercial codecs and
 hardware drivers are not implicitly added obligations. See the scope record for
 compatibility, commercial and physical evidence boundaries.
 
-Current reference geometry and schema 6 remain unchanged by this baseline.
-They may evolve with migration/tests and focused policy updates; eight existing
-identities must remain readable. Four workflow groups are information architecture,
-not a permanent ceiling or four replacement serialized workspaces. Cyan does not replace green Preview or red Program. Proposed cosmetic motion does not override the current no-decorative-Storyboard policy.
+Current reference geometry and persisted layout schema 7 remain in force;
+the newer LIVE/MEDIA/Timeline/OUTPUTS primary rail and grouped More navigation
+are presentation-only. All ten registered workspace identities, including the
+original eight, must remain readable. Four workflow groups are information
+architecture, not a ceiling or four replacement serialized workspaces. Cyan does not replace green Preview or red Program. Proposed cosmetic motion does not override the current no-decorative-Storyboard policy.
 
 ## Approved domain delivery and integration barrier
 

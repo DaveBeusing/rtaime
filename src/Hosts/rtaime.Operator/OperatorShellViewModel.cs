@@ -593,7 +593,8 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		}
 	}
 
-	public string WorkspaceTitle => $"{SelectedWorkspace} WORKSPACE";
+    public string WorkspaceTitle => SelectedWorkspace == OperatorWorkspaceNames.Edit
+        ? "TIMELINE WORKSPACE" : $"{SelectedWorkspace} WORKSPACE";
 	public string FullscreenLabel => IsFullscreen ? "WINDOWED  F11" : "FULLSCREEN  F11";
 	public string CenterModeLabel => IsCenterMaximized ? "RESTORE PANELS" : "MAXIMIZE VIEW";
 
@@ -930,7 +931,10 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	{
         _productionViewportHeight = double.NaN;
         RaiseAdaptivePresentationChanged();
-        foreach (var link in NavigationGroups.SelectMany(g => g.Items)) link.Refresh();
+        foreach (var link in NavigationGroups.Concat(SecondaryNavigationGroups).SelectMany(g => g.Items))
+            link.Refresh();
+        OnPropertyChanged(nameof(IsSecondaryWorkspaceSelected));
+        OnPropertyChanged(nameof(SecondaryNavigationDescription));
 		OnPropertyChanged(nameof(TemplateCaptureWorkspace));
 		OnPropertyChanged(nameof(WorkspaceTitle));
 		OnPropertyChanged(nameof(HasLeftRegion));

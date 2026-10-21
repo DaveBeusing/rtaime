@@ -36,6 +36,33 @@ The four existing experience groups map onto current identifiers without replaci
 | Outputs | OUTPUTS |
 | System & Health | HEALTH, AI, SETTINGS |
 
+### Media-server navigation hierarchy
+
+The primary navigation rail now exposes four production workflows in a fixed,
+always-reachable order: **LIVE, MEDIA, Timeline (serialized ID EDIT), OUTPUTS**.
+A persistent **More** action opens one custom menu grouping the other six
+registered destinations: **Live tools** (SCENES, MULTIVIEW), **Creation**
+(COMPOSITING), and **System** (HEALTH, AI, SETTINGS). A selected secondary
+workspace highlights More and is named in its tooltip. Show checks/activity and
+Commands remain separate, always-reachable rail actions. The same menu also
+offers both entry points without duplicating their commands.
+
+All ten workspace IDs, docked/floating layouts, templates, focus/cinema state,
+per-workspace viewer preferences and layout schema 7 are unchanged. Existing
+saved secondary selections reopen as-is. A fresh or reset layout still starts
+on LIVE where no valid saved workspace exists. Navigating to a secondary
+workspace does not elevate it to Program or Preview authority.
+
+The command palette (Ctrl+K) retains stable `workspace-<id>` command identities,
+includes human-readable secondary names, and recognizes both "Timeline" and
+"EDIT" for the Timeline destination. Keyboard users can also tab to the More
+rail button, press Enter/Space, navigate the menu and select an item. The
+global top bar retains confirmed Program/source identity, readiness-to-Health
+incident access and real output-transmission evidence. Recording status is
+shown there only when RECORDING, FINALIZING or FAILED is reported; there is no
+synthetic recording-ready state and the displayed state is never a save
+confirmation.
+
 The AI workspace reuses governed model/provider approval and the shared Program monitor. OUTPUTS embeds the productive 2D canvas/mapping editor in its existing routing and health presentation. Draft geometry, saved authoring and confirmed Runtime execution remain separate; the stage is not a WPF Program renderer and unsupported physical scan-out is not claimed.
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
@@ -111,10 +138,12 @@ are shown as unavailable and are never installed automatically. See
 [AI Processing Workspace](AIProcessingWorkspace.md) for the workflow, failure recovery
 and qualification boundaries.
 
-The single OperatorWorkspaceRegistry contributes stable IDs, labels, groups and
-canonical viewer defaults to navigation, the command palette and persistence.
-Groups are Live, Media & Timeline, Outputs & Mapping and System & Health. Only
-productive destinations are registered; there is no placeholder Mapping tab.
+The single OperatorWorkspaceRegistry contributes stable IDs, operator-facing labels,
+legacy experience groups, navigation tiers and canonical viewer defaults to the
+rail, More menu, command palette and persistence. The existing experience groups
+remain Live, Media & Timeline, Outputs & Mapping and System & Health; navigation
+tiers only alter discoverability, not the registered view. Only productive
+destinations are registered; there is no placeholder Mapping tab.
 Unknown IDs select LIVE and retain their bounded stored layout for later versions.
 
 ## EDIT
