@@ -264,6 +264,8 @@ public sealed class GpuDrawingSurfaceTests
 		try
 		{
 			window.Show();
+			var dispatchMilliseconds = new double[400];
+			var observedDispatches = 0;
 			foreach (var scale in new[] { 1d, 1.25d, 1.5d, 2d })
 			{
 				surface.ChangeDpi(scale);
@@ -271,11 +273,20 @@ public sealed class GpuDrawingSurfaceTests
 				Assert.Equal(checked((int)Math.Ceiling(51 * scale)), surface.TextureHeight);
 				var creations = surface.TargetCreateCount;
 				for (var iteration = 0; iteration < 100; iteration++)
+				{
+					var started = Stopwatch.GetTimestamp();
 					surface.Invalidate();
-				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+					await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+					dispatchMilliseconds[observedDispatches++] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+				}
 				Assert.Equal(creations, surface.TargetCreateCount);
 				Console.WriteLine($"GPU DPI STABILITY PASS: injectedScale={scale}; unchanged target through 100 coalesced invalidate requests; creates={creations}. This is not a physical monitor move.");
 			}
+			Assert.Equal(dispatchMilliseconds.Length, observedDispatches);
+			Array.Sort(dispatchMilliseconds);
+			var dispatchP99 = dispatchMilliseconds[(int)Math.Ceiling(observedDispatches * .99) - 1];
+			Console.WriteLine($"GPU DPI DISPATCH P99: {dispatchP99:F3}ms over {observedDispatches} actual Windows WPF dispatcher completions; " +
+				$"process={Environment.ProcessId}; OS={RuntimeInformation.OSDescription}; no physical display-move or native frame-latency claim.");
 			surface.Width = 8192.1;
 			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.WaitingForSize, dispatcher, "device-limit deferral");
 			Assert.Null(surface.ColorTexture);
