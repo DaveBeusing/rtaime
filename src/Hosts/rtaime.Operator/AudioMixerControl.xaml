@@ -83,6 +83,9 @@
                             </DockPanel>
                             <TextBlock Text="{Binding Owner.AudioRoutingSourceName, StringFormat=Confirmed source: {0}}"
                                 Style="{StaticResource MixerLabel}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding SelectedSource.SourceName, StringFormat=Breakaway selection: {0}}"
+                                Style="{StaticResource MixerLabel}" TextTrimming="CharacterEllipsis"
+                                AutomationProperties.Name="Locally selected audio breakaway source" />
                             <WrapPanel Margin="0,5,0,0">
                                 <controls:RtaimeButton Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}"
                                     AutomationProperties.Name="Request governed Audio Follow Video" IsCompact="True" Margin="0,0,6,0" />
@@ -172,6 +175,10 @@
                                             <TextBlock Text="{Binding RuntimeState}" DockPanel.Dock="Right" Style="{StaticResource MixerLabel}"
                                                 AutomationProperties.LiveSetting="Polite" />
                                         </DockPanel>
+                                        <controls:RtaimeButton Content="{Binding MixerSelectionLabel}" Command="{Binding SelectSourceCommand}"
+                                            IsCompact="True" HorizontalAlignment="Left" Margin="0,0,0,4"
+                                            AutomationProperties.Name="Select this source for Breakaway"
+                                            ToolTip="Local source selection only. Breakaway is a separate Control-owned command." />
                                         <TextBlock Text="{Binding RoutingEvidence}" Style="{StaticResource MixerLabel}"
                                             TextWrapping="Wrap" AutomationProperties.Name="Confirmed source routing" />
                                         <Grid Margin="0,5,0,2">
