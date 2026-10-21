@@ -32,7 +32,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private ID3D11SamplerState? _pointSampler;
 	private ID3D11Texture2D? _sharedTexture;
 	private ID3D11ShaderResourceView? _sharedView;
-	private MonitoringResourceId? _openedResourceId;
 	private MonitoringSharedResourceDescriptor? _openedResource;
 	private long _deviceAdapterLuid;
 	private DateTimeOffset _lastAnalysisAt;
@@ -331,7 +330,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 				CloseSharedResource(); return false;
 			}
 			_sharedView = device.CreateShaderResourceView(_sharedTexture);
-			_openedResourceId = frame.Resource.ResourceId;
 			_openedResource = frame.Resource;
 			return true;
 		}
@@ -605,7 +603,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		_sharedTexture?.Dispose();
 		_sharedView = null;
 		_sharedTexture = null;
-		_openedResourceId = null;
 		_openedResource = null;
 	}
 
