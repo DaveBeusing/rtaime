@@ -216,6 +216,15 @@ public sealed class ShowReadinessOperatorTests
 			Assert.True(window.IsKeyboardFocusWithin);
 			var export = Assert.IsType<RtaimeButton>(window.FindName("ExportChecksSupportButton"));
 			Assert.Same(main.Startup.ExportSupportBundleCommand, export.Command);
+            var advanced = Assert.IsType<RtaimeButton>(window.FindName("ToggleShowChecksAdvancedButton"));
+            var project = Assert.IsType<RtaimeButton>(window.FindName("ReviewCurrentShowButton"));
+            Assert.Same(main.ShowReadiness.OpenShowWorkspaceCommand, project.Command);
+            Assert.Equal(Visibility.Collapsed, main.ShowReadiness.AdvancedVisibility);
+            advanced.Command.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+            Assert.True(export.IsVisible);
+            advanced.Command.Execute(null);
+            Assert.Equal(Visibility.Collapsed, main.ShowReadiness.AdvancedVisibility);
 			Assert.Equal(10, main.ShowReadiness.Checks.Count);
 			main.MediaPool.SetCatalogSnapshot(MediaAssetCatalogSnapshot.Empty);
 			var catalogueObservedAt = main.MediaPool.CatalogObservedAtUtc;
