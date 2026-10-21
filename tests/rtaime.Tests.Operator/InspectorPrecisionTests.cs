@@ -239,6 +239,129 @@ public sealed class InspectorPrecisionTests
     }
 
     [Fact]
+    public async Task Layer_quick_actions_and_advanced_graph_toggle_preserve_Program_until_explicit_Apply()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        Assert.False(graph.ShowAdvancedGraph);
+        Assert.Empty(graph.VisibleNodes);
+        Assert.Equal(graph.Layers.Count, owner.CompositingLayers.Count);
+        Assert.Contains("RUNTIME OBSERVED", graph.LayerStackOverview);
+
+        var row = graph.Layers.Single(layer => layer.Id == "layer:bitmap-graphics");
+        graph.SelectNodeCommand.Execute(row);
+        Assert.Contains("GRADE", row.LayerEffectEvidence);
+        Assert.Contains("CHROMA KEY", row.LayerEffectEvidence);
+        var program = owner.ProgramSourceId;
+
+        graph.ToggleSelectedLayerCommand.Execute(null);
+        graph.DecreaseSelectedLayerOpacityCommand.Execute(null);
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.True(row.HasStateDraft);
+        Assert.Equal(false, row.VisibleDraft);
+        Assert.Equal(239, row.OpacityDraft);
+        Assert.Contains("LOCAL DRAFT", row.DraftEvidence);
+        Assert.True(owner.CompositingLayers[0].Visible);
+        Assert.Equal(255, owner.CompositingLayers[0].Opacity);
+        Assert.Equal(program, owner.ProgramSourceId);
+
+        graph.ToggleAdvancedGraphCommand.Execute(null);
+        Assert.True(graph.ShowAdvancedGraph);
+        graph.UpdateViewport(1600, 900);
+        Assert.NotEmpty(graph.VisibleNodes);
+        Assert.Same(row, graph.SelectedLayerRow);
+        graph.ToggleAdvancedGraphCommand.Execute(null);
+        Assert.False(graph.ShowAdvancedGraph);
+        Assert.Empty(graph.VisibleNodes);
+        Assert.Equal(0, transport.MutationCalls);
+
+        Assert.True(graph.ApplyLayerDraftCommand.CanExecute(null));
+        graph.ApplyLayerDraftCommand.Execute(null);
+        await UntilAsync(() => transport.MutationCalls == 1 && !owner.IsBusy);
+        Assert.False(owner.CompositingLayers[0].Visible);
+        Assert.Equal(239, owner.CompositingLayers[0].Opacity);
+        Assert.Equal(program, owner.ProgramSourceId);
+        Assert.False(row.HasStateDraft);
+        Assert.Contains("CONFIRMED", graph.LayerCommandStatus);
+    }
+
+    [Fact]
+    public async Task Changed_layer_content_blocks_Review_and_Apply_until_explicit_Discard()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        var row = graph.Layers.Single(layer => layer.Id == "layer:bitmap-graphics");
+        graph.SelectNodeCommand.Execute(row);
+        row.OpacityDraft = 97;
+        Assert.True(graph.ApplyLayerDraftCommand.CanExecute(null));
+
+        transport.ReplaceBitmapContent("relinked-new-asset.rgba");
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Same(row, graph.SelectedLayerRow);
+        Assert.True(row.SourceChanged);
+        Assert.True(row.StateConflict);
+        Assert.False(row.CanReviewStateDraft);
+        Assert.Contains("SOURCE CHANGED", graph.SelectionEvidence);
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        graph.ReviewLayerDraftCommand.Execute(null);
+        Assert.True(row.StateConflict);
+        Assert.Equal(0, transport.MutationCalls);
+        graph.DiscardLayerDraftCommand.Execute(null);
+        Assert.False(row.HasStateDraft);
+        Assert.False(row.SourceChanged);
+        Assert.False(graph.ApplyLayerDraftCommand.CanExecute(null));
+        Assert.Contains("relinked-new-asset.rgba", row.LayerEvidence);
+    }
+
+    [Fact]
+    public async Task Layer_order_intent_fails_closed_on_revision_or_source_change_without_implicit_commit()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        var original = owner.CompositingLayers.OrderBy(layer => layer.Order)
+            .Select(layer => layer.LayerId).ToArray();
+        graph.StageLayerOrder("other", "bitmap-graphics");
+        Assert.Equal("layer:other", graph.Layers[0].Id);
+        Assert.Contains("LOCAL ORDER DRAFT", graph.OrderEvidence);
+        Assert.True(graph.ApplyOrderDraftCommand.CanExecute(null));
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.Equal(original, owner.CompositingLayers.OrderBy(layer => layer.Order)
+            .Select(layer => layer.LayerId).ToArray());
+
+        transport.RevisionValue++;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Contains("STALE ORDER DRAFT", graph.OrderEvidence);
+        Assert.False(graph.ApplyOrderDraftCommand.CanExecute(null));
+        graph.ApplyOrderDraftCommand.Execute(null);
+        Assert.Equal(0, transport.MutationCalls);
+        graph.DiscardOrderDraftCommand.Execute(null);
+        Assert.Equal("layer:bitmap-graphics", graph.Layers[0].Id);
+
+        graph.StageLayerOrder("other", "bitmap-graphics");
+        Assert.True(graph.ApplyOrderDraftCommand.CanExecute(null));
+        transport.ReplaceBitmapContent("other-bitmap-file.rgba");
+        owner.SynchronizeCommand.Execute(null);
+        Assert.False(graph.ApplyOrderDraftCommand.CanExecute(null));
+        Assert.Contains("STALE ORDER DRAFT", graph.OrderEvidence);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
     public async Task Compositing_missing_bitmap_retains_selection_and_dirty_intent_until_identity_returns()
     {
         var transport = new InspectorTransport();
@@ -402,6 +525,15 @@ public sealed class InspectorPrecisionTests
             var index = Array.IndexOf(CueIds, command.CuePointId!.Value);
             CueNames[index] = command.Name!;
             return ValueTask.FromResult(MediaSnapshot());
+        }
+        internal void ReplaceBitmapContent(string contentIdentity)
+        {
+            _layer = new(_layer.LayerId, _layer.Kind, _layer.Order, _layer.Visible,
+                _layer.Opacity, _layer.PositionX, _layer.PositionY, _layer.Scale,
+                contentIdentity, _layer.RotationDegrees, _layer.AnchorX, _layer.AnchorY,
+                _layer.CropLeft, _layer.CropTop, _layer.CropRight, _layer.CropBottom,
+                processingStack: _layer.ProcessingStack);
+            RevisionValue++;
         }
         private IReadOnlyList<OperatorCompositingLayerDescriptor> Layers => ManyLayers ?
             Enumerable.Range(0, 8).Select(i => new OperatorCompositingLayerDescriptor("layer" + i, 2, i, true, 255, 0.1, 0.2, 1, "logo.rgba",
