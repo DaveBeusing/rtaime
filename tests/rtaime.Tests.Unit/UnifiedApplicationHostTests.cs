@@ -1133,6 +1133,46 @@ public sealed class UnifiedApplicationHostTests
         Assert.False(platform.StopSignalWritten);
     }
 
+    [Fact]
+    public async Task AppHost_instance_rejects_parallel_and_repeated_start_without_duplicate_processes()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.Interactive);
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var platform = new FakeApplicationHostPlatform(options)
+        {
+            PublishReadinessAfterDelay = true,
+            FirstDelayGate = gate
+        };
+        var host = new UnifiedApplicationHost(options, platform);
+        var first = host.RunAsync();
+        Assert.False(first.IsCompleted);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+        gate.TrySetResult(true);
+
+        Assert.True((await first).Success);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+        Assert.Equal(1, platform.StartedBaseNames.Count(name => name == "rtaime.ControlHost"));
+        Assert.Equal(1, platform.StartedBaseNames.Count(name => name == "rtaime.Operator"));
+    }
+
+    [Fact]
+    public async Task Windows_service_readiness_is_written_atomically_and_withdrawn_after_shutdown()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine,
+            ApplicationLifecycleOwnership.PersistentEngine, windowsService: true);
+        using var cancellation = new CancellationTokenSource();
+        var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+        platform.OnDelay = cancellation.Cancel;
+
+        var result = await new UnifiedApplicationHost(options, platform).RunAsync(cancellation.Token);
+
+        Assert.True(result.Success);
+        Assert.Contains(platform.AtomicPublishedPaths,
+            path => string.Equals(path, options.ServiceReadinessEvidencePath, StringComparison.OrdinalIgnoreCase));
+        Assert.False(platform.FileExists(options.ServiceReadinessEvidencePath));
+        Assert.True(platform.StopSignalWritten);
+    }
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
