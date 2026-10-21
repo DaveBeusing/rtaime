@@ -266,21 +266,88 @@
                     <controls:RtaimeButton Content="VIEW" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="PRIMARY" AutomationProperties.Name="Primary workspace view" />
                     <controls:RtaimeButton Content="DETAILS" Command="{Binding Shell.SelectCompactAuxiliaryCommand, ElementName=RootWindow}" CommandParameter="DETAILS" AutomationProperties.Name="Workspace details" Margin="4,0,0,0" />
                 </StackPanel>
-                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"
-                    Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}">
-                    <WrapPanel Margin="0,0,0,4">
-                        <controls:RtaimeButton Content="LIBRARY" Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Library" />
-                        <controls:RtaimeButton Content="INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, ElementName=RootWindow}" ToolTip="Show or hide Inspector" Margin="3,0" />
-                        <controls:RtaimeButton Content="PVW" Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PREVIEW" ToolTip="Focus Preview in compact mode" Margin="3,0" />
-                        <TextBlock Text="{Binding PreviewSourceName}" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource OperatorPreviewBrush}" />
-                        <controls:RtaimeButton Content="PGM" Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PROGRAM" ToolTip="Focus Program in compact mode" Margin="3,0" />
-                        <TextBlock Text="{Binding ProgramSourceName}" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource OperatorProgramBrush}" />
-                        <controls:RtaimeButton Content="SET PVW" Command="{Binding SetPreviewCommand}" Margin="6,0,3,0" />
-                        <controls:RtaimeButton Content="CUT" Command="{Binding CutCommand}" Margin="3,0" />
-                        <controls:RtaimeButton Content="AUTO" Command="{Binding DissolveCommand}" Margin="3,0" />
-                        <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" VerticalAlignment="Center" Margin="4,0" />
-                        <controls:RtaimeButton Content="RESTORE" Command="{Binding Shell.ResetLayoutCommand, ElementName=RootWindow}" ToolTip="Restore this workspace layout" Margin="3,0" />
-                    </WrapPanel>
+                <controls:RtaimeScrollViewer x:Name="LiveActionStrip" Loaded="OnShellLiveStripLoaded" Grid.Row="0"
+                    HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                    Visibility="{Binding Shell.LiveActionVisibility, ElementName=RootWindow}"
+                    AutomationProperties.Name="Live playout actions and authoritative signal evidence">
+                    <!-- Keep a single row. A narrow center may scroll locally instead of
+                         shrinking or pushing the actual Preview/Program image out of view. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,0,3">
+                        <controls:RtaimeButton Content="LIBRARY" IsCompact="True" Height="30"
+                            Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}"
+                            ToolTip="Show or hide the existing Media Library; selection alone never routes." />
+                        <controls:RtaimeButton Content="INSPECTOR" IsCompact="True" Height="30" Margin="4,0,8,0"
+                            Command="{Binding Shell.ToggleRightPanelCommand, ElementName=RootWindow}"
+                            ToolTip="Show or hide the contextual Inspector." />
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Text="SELECTED" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="LiveSelectedSource" Text="{Binding SelectedSource.Name, TargetNullValue=NONE}"
+                                Style="{StaticResource OperatorValue}" MaxWidth="105" TextTrimming="CharacterEllipsis"
+                                VerticalAlignment="Center" ToolTip="{Binding SelectedSource.Name}"/>
+                        </StackPanel>
+
+                        <controls:RtaimeButton Content="PVW" IsCompact="True" Height="30"
+                            Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PREVIEW"
+                            ToolTip="Show Preview in compact mode; no routing change."/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,8,0">
+                            <TextBlock Text="NEXT / PVW" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold"
+                                VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="LiveNextIdentity" Text="{Binding PreviewSourceName}"
+                                MaxWidth="110" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                ToolTip="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+                        </StackPanel>
+                        <controls:RtaimeButton Content="PGM" IsCompact="True" Height="30"
+                            Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PROGRAM"
+                            ToolTip="Show Program in compact mode; no routing change."/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,8,0">
+                            <TextBlock Text="LIVE / PGM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold"
+                                VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="LiveProgramIdentity" Text="{Binding ProgramSourceName}"
+                                MaxWidth="110" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                ToolTip="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+                        </StackPanel>
+
+                        <controls:RtaimeButton Content="SET PVW" IsCompact="True" Height="30"
+                            Command="{Binding SetPreviewCommand}" Margin="0,0,4,0"
+                            ToolTip="Request the selected source on Preview; Program is unchanged."/>
+                        <controls:RtaimeButton Content="CUT" IsCompact="True" Height="30"
+                            Command="{Binding CutCommand}" Margin="0,0,4,0"
+                            Background="{DynamicResource OperatorAccentBrush}"
+                            BorderBrush="{DynamicResource OperatorAccentBrush}"
+                            Foreground="{DynamicResource OperatorBackgroundBrush}"
+                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"/>
+                        <controls:RtaimeButton Content="AUTO" IsCompact="True" Height="30"
+                            Command="{Binding DissolveCommand}" Margin="0,0,5,0"
+                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"/>
+                        <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" Style="{StaticResource OperatorLabel}"
+                            VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                        <TextBlock Text="NEXT CUE" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="LiveCueIdentity" Text="{Binding Rundown.PendingNext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                            Style="{StaticResource OperatorValue}" MaxWidth="120" TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" Margin="0,0,8,0"
+                            ToolTip="{Binding Rundown.FollowCountdown, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+
+                        <TextBlock x:Name="LiveAuthorityDetail" Text="{Binding PreviewTakeDetail}"
+                            Style="{StaticResource OperatorLabel}" MaxWidth="200" TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" Margin="0,0,10,0"
+                            ToolTip="{Binding PreviewTakeDetail}"/>
+
+                        <TextBlock Text="NETWORK" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="LiveSendEvidence"
+                            Text="{Binding OutputHealth.ProgramTransmissionState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                            Style="{StaticResource OperatorValue}" MaxWidth="95" TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" Margin="0,0,8,0"
+                            ToolTip="{Binding OutputHealth.ProgramTransmissionDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+                        <TextBlock Text="REC" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="LiveRecordingEvidence" Text="{Binding RecordingStatus}"
+                            Style="{StaticResource OperatorValue}" MaxWidth="95" TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="{Binding RecordingError}"/>
+                        <controls:RtaimeButton Content="RESTORE" IsCompact="True" Height="30"
+                            Command="{Binding Shell.ResetLayoutCommand, ElementName=RootWindow}"
+                            ToolTip="Restore the saved workspace panel layout."/>
+                    </StackPanel>
                 </controls:RtaimeScrollViewer>
 				<Grid x:Name="LiveWorkspaceSurface" Grid.Row="1"
 					Visibility="{Binding Shell.LiveWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
