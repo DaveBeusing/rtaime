@@ -281,6 +281,14 @@ public sealed partial class LocalMediaDeckRuntimeService
         }
     }
 
+    // A previously confirmed Preview frame remains eligible while the next
+    // source frame is still passing through the existing Program boundary.
+    // A two-frame gap, source failure or stale generation is not Take-ready.
+    private static bool HasRecentConfirmedPreview(SequenceOutputSession session) =>
+        session.LastPreviewSlot is { } confirmed &&
+        session.LastPublishedSlot >= confirmed &&
+        session.LastPublishedSlot - confirmed <= 1;
+
     /// <summary>
     /// Arm a previously proven Preview sequence without touching committed
     /// Program. This owner reservation is checked again by Runtime's
@@ -301,8 +309,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 session.AuthorityRevision != revision.Value ||
                 session.ProgramAuthorized ||
                 session.OutputState is not ("PREVIEW_READY" or "TAKE_PENDING") ||
-                session.LastPreviewSlot is null ||
-                session.LastPreviewSlot != session.LastPublishedSlot ||
+                !HasRecentConfirmedPreview(session) ||
                 session.LastPublishedSlot + 1 < runtime.NextSequenceOutputSlot ||
                 !runtime.IsCommittedSequencePreviewSource(session.SourceId))
                 throw new InvalidOperationException("Only confirmed native Preview pixels and PCM may arm Program Take.");
@@ -362,8 +369,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 "Sequence Program requires a separately armed, revision-bound Take.");
             if (session.ProgramAuthorized ||
                 session.OutputState != "TAKE_PENDING" ||
-                session.LastPreviewSlot is null ||
-                session.LastPreviewSlot != session.LastPublishedSlot ||
+                !HasRecentConfirmedPreview(session) ||
                 candidate.AuthoritySnapshot.Revision.Value !=
                     checked(command.ExpectedProductionRevision + 1) ||
                 transition?.Kind != RuntimeProgramTransitionKind.Cut ||
