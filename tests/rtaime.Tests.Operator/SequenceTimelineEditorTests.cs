@@ -449,6 +449,49 @@ public sealed class SequenceTimelineEditorTests
         Assert.True(playout.CanCancel);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RuntimeHost_replacement_with_unchanged_route_never_authorizes_old_native_Take(
+        bool restartBeforeArm)
+    {
+        var saved = new RetainedSequenceTransport(Sequence());
+        using var editor = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(saved));
+        await editor.RefreshAsync(); await editor.LoadAsync();
+        var source = Guid.NewGuid().ToString();
+        var native = new SequencePlayoutFixture(editor.Sequence!.SequenceId, source, 5, 7)
+        { PreviewFramesAvailable = true };
+        var authority = new SequenceOperatorAuthority(true, false, false, true,
+            source, Guid.NewGuid().ToString(), 7);
+        editor.AttachPlayout(new SequenceOperatorPlayoutViewModel(editor,
+            new SequenceAuthoringClient(saved), new SequencePreparationClient(native),
+            new SequenceShuttleClient(native), new SequenceOutputClient(native),
+            () => authority));
+        var playout = editor.Playout;
+        await playout.PrepareAsync();
+        await playout.ActivatePreviewAsync();
+        await playout.ShuttleAsync(SequenceShuttleAction.Play);
+        await playout.ObserveAsync();
+        Assert.True(playout.CanArm);
+
+        if (!restartBeforeArm)
+        {
+            await playout.ArmAsync();
+            Assert.True(playout.CanTake);
+        }
+        native.RuntimeEpochOverride = Guid.NewGuid().ToString();
+        if (restartBeforeArm)
+            await playout.ArmAsync();
+        else
+            await playout.TakeAsync();
+        Assert.Equal("STALE", playout.Status);
+        Assert.False(playout.CanArm);
+        Assert.False(playout.CanTake);
+        Assert.Equal(0, native.TakeCount);
+        Assert.Equal("NO CONFIRMED OUTPUT", playout.OutputEvidence);
+        Assert.True(playout.CanCancel);
+    }
+
     private sealed class SequencePlayoutFixture(Guid sequenceId, string sourceId, ulong revision, ulong productionRevision)
         : ISequencePreparationTransport, ISequenceShuttleTransport, ISequenceOutputTransport
     {
@@ -463,6 +506,7 @@ public sealed class SequenceTimelineEditorTests
         public bool ExpirePreparation { get; set; }
         public TaskCompletionSource? PreparationGate { get; set; }
         public string SourceId => sourceId;
+        public string? RuntimeEpochOverride { get; set; }
         public int TakeCount { get; private set; }
         public int CancelCount { get; private set; }
         public int RecoveryCount { get; private set; }
@@ -471,7 +515,8 @@ public sealed class SequenceTimelineEditorTests
 
         public ValueTask<SequencePreparationContext> GetSequencePreparationContextAsync(
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new SequencePreparationContext(SequencePreparationContract.Version, _epoch, revision));
+            ValueTask.FromResult(new SequencePreparationContext(SequencePreparationContract.Version,
+                RuntimeEpochOverride ?? _epoch, revision));
         public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
             SequencePreparationRequest request, CancellationToken cancellationToken = default)
         {
