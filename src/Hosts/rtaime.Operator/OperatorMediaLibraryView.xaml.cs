@@ -152,7 +152,7 @@ public partial class OperatorMediaLibraryView : UserControl
 			entry.IsEnabled = action switch
 			{
 				"Prepare selected assets…" => true, // The actual Prepare command enforces the bounded eligible selection.
-				"Open in Preview" => !multi && MediaPool.CanDropToPreview(item),
+				"Open in Preview" => !multi && MediaPool.CanOpenLibraryPreviewItem(item),
 				"Add to Timeline" => !multi && item is not null && Timeline.CanAcceptMediaPoolDrop(item,
 					item.Kind switch { MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
 						MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
