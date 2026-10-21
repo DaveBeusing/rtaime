@@ -56,8 +56,13 @@ public sealed partial class RundownViewModel
             if (execution.State == RundownExecutionState.Held)
                 return "HELD · FOLLOW DISARMED";
             if (NextConfirmedId is null) return "NO CONFIRMED NEXT ITEM";
+            if (execution.PreparedItemId == NextConfirmedId &&
+                execution.PreparedMediaState == "NEXT_READY" &&
+                execution.PreparedMediaExpiresAtUtc is { } expiredAt &&
+                expiredAt <= DateTimeOffset.UtcNow)
+                return "RESIDENT PREPARATION EXPIRED · PREPARE AGAIN";
             if (execution.AutoAdvanceArmed && execution.PendingNextItemId == NextConfirmedId)
-                return "AUTO FOLLOW ARMED · AWAITING HOST";
+                return "AUTO FOLLOW ARMED · HOST REVALIDATES";
             if (execution.PreparedItemId != NextConfirmedId)
                 return "NEXT CANDIDATE · NOT PREPARED";
             var next = _confirmedSnapshot?.Rundown?.Items.FirstOrDefault(item => item.ItemId == NextConfirmedId);
