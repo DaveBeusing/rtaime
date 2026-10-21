@@ -87,6 +87,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal ulong LastPublishedSlot { get; set; } = ulong.MaxValue;
         internal ulong? LastPreviewSlot { get; set; }
         internal ulong? LastProgramSlot { get; set; }
+        // First Program slot allowed to confirm the committed Take. Frames
+        // completed on Preview before the commit can be observed afterward.
+        internal ulong FirstAuthorizedProgramSlot { get; set; } = ulong.MaxValue;
         internal ulong PublishedBoundaries { get; set; }
         internal ulong FailedBoundaries { get; set; }
         internal string OutputState { get; set; } = "UNAVAILABLE";
@@ -163,6 +166,14 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 session.OutputState = "STALE";
                 session.FailureCode = "runtime.sequence.route_changed";
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            // An actual sink failure is terminal for this prepared owner.
+            // A new native ingress cannot requalify a failed Program output
+            // without an explicit cancellation and fresh preparation.
+            if (session.OutputState == "FAILED")
+            {
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
@@ -495,6 +506,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     _sequenceOwners = prepared with { AuthorityRevision = committedRevision.Value };
                 }
                 session.AuthorityRevision = committedRevision.Value;
+                session.FirstAuthorizedProgramSlot = runtime.NextSequenceOutputSlot;
                 session.ProgramAuthorized = true;
                 session.OutputState = "TAKE_COMMITTED";
                 session.FailureCode = null;
@@ -516,6 +528,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                 return;
             if (session.ProgramAuthorized)
             {
+                // The boundary may have finished before Take but be reported
+                // after its authoritative commit. It cannot confirm or fail the
+                // newly selected Program; only post-commit slots qualify.
+                if (boundary.SequenceNumber < session.FirstAuthorizedProgramSlot)
+                    return;
                 if (boundary.CommittedProgramSourceId == session.SourceId &&
                     boundary.ProgramFrame.SourceId == session.SourceId &&
                     boundary.ProgramPixels.Length > 0 &&
@@ -529,6 +546,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 {
                     session.OutputState = "FAILED";
                     session.FailureCode = "runtime.sequence.program_sink_unconfirmed";
+                    session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
                 }
             }
             else if (session.OutputState is "PREVIEW_READY" or "TAKE_PENDING")
