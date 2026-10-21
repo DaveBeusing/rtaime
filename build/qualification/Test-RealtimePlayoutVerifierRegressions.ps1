@@ -45,10 +45,10 @@ function Must-Reject([string]$label, [string]$expected) {
 }
 try {
     $fake.sourceCommit = "b" * 40
-    Must-Reject "source substitution" "Source/build"
+    Must-Reject "source substitution" "Unbound software completion"
     $fake.sourceCommit = $source
     $fake.completion = "PASS"
-    Must-Reject "premature completion" "Source/build"
+    Must-Reject "premature completion" "Unbound software completion"
     $fake.completion = "SOFTWARE_COLLECTION_VERIFIED_NOT_REALTIME_APPROVAL"
     $fake.allPhysicalAcceptance = "PASS"
     Must-Reject "physical promotion" "Software-only evidence cannot qualify"
