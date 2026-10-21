@@ -322,7 +322,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 		catch (Exception exception)
 		{
-			await StopAsync(CancellationToken.None).ConfigureAwait(false);
+			await StopCoreAsync(lifetime, CancellationToken.None).ConfigureAwait(false);
 			if (exception is not OperationCanceledException && !lifetime.IsCancellationRequested)
 			{
 				lock (_gate)
@@ -335,7 +335,10 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
-	public async ValueTask StopAsync(CancellationToken cancellationToken = default)
+	public ValueTask StopAsync(CancellationToken cancellationToken = default) =>
+		StopCoreAsync(null, cancellationToken);
+
+	private async ValueTask StopCoreAsync(CancellationTokenSource? expectedLifetime, CancellationToken cancellationToken)
 	{
 		CancellationTokenSource? lifetime;
 		Channel<IntegrationTrigger>? inputs;
@@ -343,7 +346,8 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		Task? snapshotWorker;
 		lock (_gate)
 		{
-			if (!_started) return;
+			if (!_started || (expectedLifetime is not null && !ReferenceEquals(_lifetime, expectedLifetime)))
+				return;
 			_stopping = true;
 			_started = false;
 			lifetime = _lifetime;
