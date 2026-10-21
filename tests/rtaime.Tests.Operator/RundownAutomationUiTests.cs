@@ -89,6 +89,50 @@ public sealed class RundownAutomationUiTests
 		Assert.Contains("if (!CanEditDraft())", source, StringComparison.Ordinal);
 	}
 
+    [Fact]
+    public void Live_rundown_and_show_cue_surfaces_distinguish_confirmed_targets_from_local_selection()
+    {
+        var root = FindRepositoryRoot();
+        var folder = Path.Combine(root, "src", "Hosts", "rtaime.Operator");
+        var rundownPath = Path.Combine(folder, "RundownControl.xaml");
+        var showPath = Path.Combine(folder, "ShowControlCueStackControl.xaml");
+        var rundown = XDocument.Load(rundownPath);
+        var show = XDocument.Load(showPath);
+        var rundownText = File.ReadAllText(rundownPath);
+        var showText = File.ReadAllText(showPath);
+        var handlers = File.ReadAllText(Path.Combine(folder, "RundownControl.xaml.cs"));
+
+        foreach (var binding in new[] { "NowItemName", "NowItemStatus",
+            "NextItemName", "NextItemStatus", "SelectedItemName" })
+            Assert.Contains(rundown.Descendants(), node =>
+                node.Attributes().Any(attribute =>
+                    attribute.Value.Contains("Binding " + binding, StringComparison.Ordinal)));
+        Assert.Contains(rundown.Descendants(), node =>
+            node.Name.LocalName == "RtaimeButton" &&
+            node.Attribute("Click")?.Value == "ToggleAuthoringOptions_Click");
+        Assert.Contains(rundown.Descendants(), node =>
+            node.Name.LocalName == "RtaimeContextMenu" &&
+            node.Descendants().Any(item =>
+                item.Name.LocalName == "RtaimeMenuItem" &&
+                (item.Attribute("Command")?.Value.Contains("AddGraphicsCommand", StringComparison.Ordinal) ?? false)));
+        Assert.Contains("Binding AdvancedAuthoringVisibility", rundownText, StringComparison.Ordinal);
+        Assert.Contains("Ctrl+Shift+G", rundownText, StringComparison.Ordinal);
+        Assert.Contains("Ctrl+Shift+H", rundownText, StringComparison.Ordinal);
+        Assert.Contains("e.IsRepeat", handlers, StringComparison.Ordinal);
+        Assert.Contains("model.GoCommand", handlers, StringComparison.Ordinal);
+        Assert.Contains("model.HoldCommand", handlers, StringComparison.Ordinal);
+
+        foreach (var binding in new[] { "CueRunStatus", "LocalCueSelection", "NextCueStatus" })
+            Assert.Contains(show.Descendants(), node =>
+                node.Attributes().Any(attribute =>
+                    attribute.Value.Contains("Binding " + binding, StringComparison.Ordinal)));
+        Assert.Contains("SHOW GO · F9", showText, StringComparison.Ordinal);
+        Assert.Contains("RUNDOWN GO", rundownText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Command=\"{Binding GoCommand}\"",
+            string.Join("\n", show.Descendants().Where(element =>
+                element.Name.LocalName == "RtaimeMenuItem")), StringComparison.Ordinal);
+    }
+
 	private static string FindRepositoryRoot()
 	{
 		DirectoryInfo? directory = new(AppContext.BaseDirectory);
