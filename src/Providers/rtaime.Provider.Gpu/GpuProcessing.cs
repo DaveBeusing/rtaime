@@ -1224,7 +1224,12 @@ public sealed class GpuProcessingProvider : IDisposable
     }
 
 
-    public bool SupportsOutputMapping => _backend is IGpuOutputMappingBackend;
+    // Only the existing managed-reference mapping backend is admitted.
+    // A future native backend implementing the interface cannot silently
+    // advertise unqualified CUDA warp/blend without an explicit provider gate.
+    public bool SupportsOutputMapping =>
+        _backend.Info.Kind == GpuBackendKind.ManagedReference &&
+        _backend is IGpuOutputMappingBackend;
 
     /// <summary>
     /// Produces a separately lifetime-tracked mapped frame. Never changes the
@@ -1241,7 +1246,7 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             EnsureRunning();
             var stopwatch = Stopwatch.StartNew();
-            if (_backend is not IGpuOutputMappingBackend backend)
+            if (!SupportsOutputMapping || _backend is not IGpuOutputMappingBackend backend)
                 return GpuProcessingResult.Rejected(
                     new Failure("gpu.output_mapping.unsupported",
                         "The selected GPU backend has no qualified output mapping capability."),
@@ -1252,6 +1257,15 @@ public sealed class GpuProcessingProvider : IDisposable
                     stopwatch.Elapsed, inputs.Count);
 
             var format = program.Descriptor.Surface.Format;
+            // Defense in depth: the Runtime also admits a 16-MiB mapping
+            // framebuffer, but the public GPU provider must not allocate a
+            // larger nonidentity output if used directly by another client.
+            if (format.PixelFormat != PixelFormat.Rgba8 ||
+                (ulong)format.Width * format.Height * 4UL > 16UL * 1024 * 1024)
+                return GpuProcessingResult.Rejected(
+                    new Failure("gpu.output_mapping.capacity",
+                        "The requested mapped output exceeds the admitted RGBA8 framebuffer budget."),
+                    stopwatch.Elapsed, inputs.Count);
             var surfaces = new GpuOutputMappingSurface[inputs.Count];
             for (var i = 0; i < inputs.Count; i++)
             {
