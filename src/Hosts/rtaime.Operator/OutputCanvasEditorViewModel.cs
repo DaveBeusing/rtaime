@@ -54,6 +54,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private double _zoom = 1;
     private double _panX, _panY;
     private bool _snapEnabled = true, _showGuides = true;
+    private bool _workspaceVisible;
 
     internal OutputCanvasEditorViewModel(OperatorViewModel owner, IOutputCanvasGateway? gateway = null)
     {
@@ -121,6 +122,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public bool IsDirty => _session?.IsDirty == true;
     public bool HasSavedConflict => _savedConflict;
     public bool SaveOutcomeUnconfirmed => _saveOutcomeUnknown;
+    // Visibility is presentation-only. Hiding the canvas preserves its current
+    // unsaved draft, transaction fence and Runtime confirmation evidence.
+    public bool IsWorkspaceVisible => _workspaceVisible;
+    internal void SetWorkspaceVisible(bool visible) => Set(ref _workspaceVisible, visible);
     public bool CanEdit => _session is not null && !_busy;
     public bool CanSubmit => _session is not null && !_busy && _gateway is not null &&
         _owner.IsConnected && !_owner.IsStale && !_owner.IsBusy &&
