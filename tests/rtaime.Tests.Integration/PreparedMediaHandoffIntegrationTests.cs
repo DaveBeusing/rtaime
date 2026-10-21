@@ -151,6 +151,18 @@ public sealed class PreparedMediaHandoffIntegrationTests
         var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assetPath)));
         var opened = deck.Preload(new(MediaContractVersion.Current, b, assetPath), Prepared(deck, b), hash);
         Assert.Equal(MediaDeckState.Ready, opened.State);
+        if (use5994)
+        {
+            // The generated 59.94 reference has a separately qualified native
+            // EOF boundary. Use an authored short OUT to exercise ordinary
+            // HoldLastFrame completion without conflating that EOF boundary.
+            var configured = deck.ApplyTransport(new(MediaContractVersion.Current, opened.Probe!.AssetId,
+                MediaTransportCommandKind.ConfigurePlayback, autoPlayOnProgram: true,
+                endBehavior: MediaDeckEndBehavior.HoldLastFrame, inPointFrame: 0, outPointFrame: 5)
+            { SourceId = b });
+            Assert.True(configured.Succeeded, configured.Failure?.Message);
+            Assert.Equal(5, configured.Snapshot.EffectiveEndFrame);
+        }
         var prepared = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
         var generation = prepared.DecodeGeneration;
         Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
@@ -175,7 +187,10 @@ public sealed class PreparedMediaHandoffIntegrationTests
                 Thread.Sleep(2);
             }
             var atEnd = deck.GetSnapshot(b);
-            Assert.Equal(MediaTransportState.Ended, atEnd.Transport!.State);
+            Assert.True(atEnd.Transport!.State == MediaTransportState.Ended,
+                $"Expected normal HoldLastFrame completion, got {atEnd.Transport.State}; " +
+                $"deckFailure={atEnd.Failure?.Code}:{atEnd.Failure?.Message}; " +
+                $"transportFailure={atEnd.Transport.Failure?.Code}:{atEnd.Transport.Failure?.Message}.");
             Assert.Null(atEnd.Failure);
             Assert.True(deck.GetPlaybackMeasurements(b)!.Value.DecodedAudioSamples > 0);
         }
