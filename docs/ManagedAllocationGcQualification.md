@@ -76,7 +76,14 @@ guards. The longer profile additionally retains a native TRX and bounded
 test console log. Only after every subprocess and result has succeeded
 does the runner write `manifest.json` and verify all its hashes,
 source identities, rates, consumer masks, quantiles, allocated bytes per
-boundary and ownership/queue release evidence.
+boundary and ownership/queue release evidence. It then writes
+`subsystem-summary.json`, a **derived presentation-only** per-case table of
+Program CPU-wall P50/P95/P99, thread/process allocation bytes per frame,
+GC counts/pauses/last-GC LOH/POH snapshots, logical readback bytes,
+comparison deltas and specific next-action recommendations for Program,
+GC, Decoder, GPU readback, Operator UI and Replay/Network. Its numeric
+authority remains the unchanged manifest-hashed source producer files;
+the summary itself is not a second measurement source.
 
 The independent verifier can be rerun without rebuilding or executing
 production code:
