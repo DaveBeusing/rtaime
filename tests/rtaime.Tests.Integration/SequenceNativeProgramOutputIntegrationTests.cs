@@ -132,11 +132,28 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.True(decks.IsBoundSequenceProgramTarget(mediaB));
         Assert.Equal(takeCommand, decks.RequireArmedSequenceTake(
             preparedCut.PreparedExecution, preparedCut.ProgramTransition));
-        var committed = runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
-            preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
-            () => decks.AuthorizeSequenceProgram(reference, mediaB,
-                authority.ProductionId.Value, previous,
-                preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime));
+        var unapprovedCommitAttempts = 0;
+        Assert.Throws<InvalidOperationException>(() =>
+            decks.CommitArmedSequenceTake(
+                takeCommand with { TransactionId = Guid.NewGuid() },
+                preparedCut.PreparedExecution,
+                () =>
+                {
+                    unapprovedCommitAttempts++;
+                    return runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+                        preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+                        () => throw new InvalidOperationException(
+                            "Unapproved native transaction reached Program."));
+                }));
+        Assert.Equal(0, unapprovedCommitAttempts);
+        Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
+
+        var committed = decks.CommitArmedSequenceTake(takeCommand, preparedCut.PreparedExecution,
+            () => runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+                preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+                () => decks.AuthorizeSequenceProgram(reference, mediaB,
+                    authority.ProductionId.Value, previous,
+                    preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
         Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
             committed.Prepare.Failure?.Message);
         Assert.True(control.ConfirmRuntimeCommit(
