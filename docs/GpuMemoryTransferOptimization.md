@@ -55,6 +55,39 @@ Each reused materialization still receives a new `FrameDescriptor` with current 
 
 This preserves the existing compositor requirement that all frame descriptors in one request carry current matching timing without re-uploading identical pixels.
 
+## Output mapping resource and transfer boundary
+
+An enabled nonidentity managed-reference mapping uses the existing GPU
+provider's `MapOutput` API and produces **one separately lifetime-tracked
+host-resident mapped framebuffer**. A true identity mapping is already
+bypassed in Runtime without any extra mapped output. The managed raster's
+bounded sort/preflight, crop-tap hoisting and cached input resolver avoid
+short-lived CPU allocation/work; they do **not** remove a full-frame transfer
+or change GPU hardware transfer counts. The existing Program readback pool
+continues to serve recording, monitoring and output consumers, with independent
+leases. The new provider sequence fence prevents an earlier source frame
+from masquerading as the current Program slot, without rejecting valid
+different native presentation timebases.
+
+The current `CudaGpuProcessingBackend` has **no** output-mapping interface,
+kernel, activation or hardware-capability claim; support remains explicitly
+`UNSUPPORTED`. Compositor and D3D11-monitoring capabilities cannot be
+interpreted as CUDA warp/blend support. No staging CPU readback and HtoD
+upload is added to simulate GPU mapping. A native GPU output-mapping
+implementation would require bounded device allocations and completion
+fences, real pixel/alpha parity, source-bound 50/59.94 P99, VRAM and
+readback cleanup, reference GPU/driver evidence, and separate external
+output qualification before it can be advertised.
+
+Software mapping measurement is emitted by
+`OutputMappingSoftwarePerformanceTests`: 96×54 two-layer CPU raster,
+96 measured windows per format, warmed allocation deltas, Gen0/1/2,
+GC-pause deltas and wall-clock P50/P95/P99. Treat it as a **small software
+microprofile**, never a projection of 1080p Program timing, device bus
+traffic, actual VRAM consumption or physical scan-out.
+Physical baseline improvement remains `UNVERIFIED` without before/after
+measurements on the same approved NVIDIA reference system.
+
 ## Mutation and generation safety
 
 `RgbaFrameBuffer` tracks a monotonic in-process content version. Both full-buffer and region mutations advance it.
