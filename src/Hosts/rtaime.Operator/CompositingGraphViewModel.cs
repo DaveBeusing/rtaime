@@ -240,11 +240,11 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		ResetViewCommand = new CompositingGraphCommand(_ => ResetView());
 		FitCommand = new CompositingGraphCommand(_ => Fit());
 		AutoLayoutCommand = new CompositingGraphCommand(_ => AutoLayout());
-		ToggleSelectedLayerCommand = new AsyncRelayCommand(ToggleSelectedLayerAsync, CanEditSelectedLayer);
-		MoveSelectedLayerUpCommand = new AsyncRelayCommand(() => MoveSelectedLayerAsync(1), () => CanMoveSelectedLayer(1));
-		MoveSelectedLayerDownCommand = new AsyncRelayCommand(() => MoveSelectedLayerAsync(-1), () => CanMoveSelectedLayer(-1));
-		DecreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(-16), CanEditSelectedLayer);
-		IncreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(16), CanEditSelectedLayer);
+		ToggleSelectedLayerCommand = new AsyncRelayCommand(StageSelectedLayerVisibilityAsync, CanEditSelectedLayer);
+		MoveSelectedLayerUpCommand = new AsyncRelayCommand(() => StageSelectedLayerOrderAsync(1), () => CanMoveSelectedLayer(1));
+		MoveSelectedLayerDownCommand = new AsyncRelayCommand(() => StageSelectedLayerOrderAsync(-1), () => CanMoveSelectedLayer(-1));
+		DecreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => StageSelectedLayerOpacityAsync(-16), CanEditSelectedLayer);
+		IncreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => StageSelectedLayerOpacityAsync(16), CanEditSelectedLayer);
 
 		InitializeLayerWorkspace();
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
@@ -571,7 +571,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	{
 		var layer = SelectedLayer();
 		return SelectedLayerCount <= 1 && layer is not null &&
-			layer.Kind is 2 or 3 &&
+			layer.Kind is 2 or 3 && SelectedLayerRow is not { StateConflict: true } &&
 			_operator.CanManageCompositingLayers();
 	}
 
@@ -591,49 +591,35 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		return index >= 0 && target >= 0 && target < ordered.Length;
 	}
 
-	private async Task ToggleSelectedLayerAsync()
-	{
-		var layer = SelectedLayer();
-		if (layer is null || !CanEditSelectedLayer())
-			return;
-		LayerCommandStatus = "APPLYING";
-		await _operator.SetCompositingLayerStateAsync(layer.LayerId, !layer.Visible, layer.Opacity);
-		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
-		RefreshLayerCommandState();
-	}
+    private Task StageSelectedLayerVisibilityAsync()
+    {
+        var row = SelectedLayerRow;
+        if (row is not null && CanEditSelectedLayer() && !row.StateConflict)
+        {
+            row.VisibleDraft = !row.VisibleDraft;
+            LayerCommandStatus = "LOCAL VISIBILITY DRAFT · APPLY required";
+            SynchronizeSelectedLayerDraft();
+        }
+        return Task.CompletedTask;
+    }
 
-	private async Task AdjustSelectedLayerOpacityAsync(int delta)
-	{
-		var layer = SelectedLayer();
-		if (layer is null || !CanEditSelectedLayer())
-			return;
-		var opacity = checked((byte)Math.Clamp(layer.Opacity + delta, byte.MinValue, byte.MaxValue));
-		if (opacity == layer.Opacity)
-			return;
-		LayerCommandStatus = "APPLYING";
-		await _operator.SetCompositingLayerStateAsync(layer.LayerId, layer.Visible, opacity);
-		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
-		RefreshLayerCommandState();
-	}
+    private Task StageSelectedLayerOpacityAsync(int delta)
+    {
+        var row = SelectedLayerRow;
+        if (row is not null && CanEditSelectedLayer() && !row.StateConflict)
+        {
+            row.OpacityDraft = Math.Clamp(row.OpacityDraft + delta, byte.MinValue, byte.MaxValue);
+            LayerCommandStatus = "LOCAL OPACITY DRAFT · APPLY required";
+            SynchronizeSelectedLayerDraft();
+        }
+        return Task.CompletedTask;
+    }
 
-	private async Task MoveSelectedLayerAsync(int delta)
-	{
-		var selected = SelectedLayer();
-		if (selected is null || !CanMoveSelectedLayer(delta))
-			return;
-		var ordered = _operator.CompositingLayers
-			.OrderBy(layer => layer.Order)
-			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
-			.Select(layer => layer.LayerId)
-			.ToList();
-		var index = ordered.FindIndex(layerId => string.Equals(layerId, selected.LayerId, StringComparison.Ordinal));
-		var target = index + delta;
-		(ordered[index], ordered[target]) = (ordered[target], ordered[index]);
-		LayerCommandStatus = "APPLYING";
-		await _operator.ReorderCompositingLayersAsync(ordered);
-		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
-		RefreshLayerCommandState();
-	}
+    private Task StageSelectedLayerOrderAsync(int delta)
+    {
+        if (CanMoveSelectedLayer(delta)) StageLayerMove(delta);
+        return Task.CompletedTask;
+    }
 
 	private void RefreshLayerCommandState()
 	{
