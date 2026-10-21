@@ -44,9 +44,23 @@ internal static class AudioMixerWorkspaceQualification
             Assert.Same(view,window.Docking.Panels["AUDIO"]);
             Assert.Same(mixer,view.DataContext);
             Assert.Same(window.MediaPool,view.Inspector);
-            var faders = Descendants<RtaimeSlider>(view).ToArray();
+            Assert.False(mixer.ShowProcessing);
+            Assert.Equal(Visibility.Visible, mixer.CompactVisibility);
+            Assert.Equal(Visibility.Collapsed, mixer.AdvancedVisibility);
+            Assert.Contains(Descendants<RtaimeSlider>(view),
+                slider => slider.Orientation == Orientation.Horizontal &&
+                    AutomationProperties.GetName(slider) == "Source gain draft fader");
+            Assert.True(Descendants<RtaimeMetricBar>(view).Count(bar =>
+                AutomationProperties.GetName(bar).StartsWith("Live ", StringComparison.Ordinal)) >= 4);
+            Capture(floating,"mixer-compact");
+            mixer.DetailedPresentationCommand.Execute(null);
+            await dispatcher.InvokeAsync(floating.UpdateLayout,DispatcherPriority.Render);
+            Assert.True(mixer.ShowProcessing);
+            Assert.Equal(Visibility.Collapsed, mixer.CompactVisibility);
+            Assert.Equal(Visibility.Visible, mixer.AdvancedVisibility);
+            var faders = Descendants<RtaimeSlider>(view).Where(f => f.Orientation == Orientation.Vertical).ToArray();
             Assert.NotEmpty(faders);
-            Assert.All(faders, f => { Assert.Equal(Orientation.Vertical,f.Orientation); Assert.Equal(104,f.Height); Assert.True(f.ActualWidth>=30); });
+            Assert.All(faders, f => { Assert.Equal(104,f.Height); Assert.True(f.ActualWidth>=30); });
             var field = Descendants<RtaimeNumericField>(view).First(f => f.Definition.Id=="audio.gain");
             field.Focus(); field.Text="NaN";
             Assert.True(field.HasInputError);
@@ -62,16 +76,16 @@ internal static class AudioMixerWorkspaceQualification
             Assert.False(guard.TryHandle(Key.Space,ModifierKeys.None,false,OperatorKeyboardCommandRegistry.IsTextEntryContext(cell)));
             Assert.Equal(0,presses);
             Capture(floating,"mixer-detailed");
-            mixer.CompactPresentationCommand.Execute(null);
-            await dispatcher.InvokeAsync(floating.UpdateLayout,DispatcherPriority.Render);
-            Assert.False(mixer.ShowProcessing); Assert.Same(selected,mixer.SelectedSource);
-            Assert.All(Descendants<RtaimeSlider>(view),f=>Assert.Equal(104,f.Height));
-            Capture(floating,"mixer-compact");
+            Assert.Same(selected,mixer.SelectedSource);
             var bank=Descendants<RtaimeListBox>(view).First(b=>AutomationProperties.GetName(b)=="Audio source strips");
             Assert.Equal(8,bank.Items.Count);
             bank.ScrollIntoView(mixer.Sources[^1]);
             await dispatcher.InvokeAsync(floating.UpdateLayout,DispatcherPriority.Render);
             Assert.NotNull(bank.ItemContainerGenerator.ContainerFromItem(mixer.Sources[^1]));
+            mixer.CompactPresentationCommand.Execute(null);
+            await dispatcher.InvokeAsync(floating.UpdateLayout,DispatcherPriority.Render);
+            Assert.False(mixer.ShowProcessing);
+            Assert.Same(selected,mixer.SelectedSource);
             floating.Close();
             await dispatcher.InvokeAsync(()=>{},DispatcherPriority.Loaded);
             Assert.Empty(window.Docking.FloatingWindows);
@@ -79,9 +93,9 @@ internal static class AudioMixerWorkspaceQualification
         }
         finally
         {
-            mixer.Sources.Clear(); mixer.Buses.Clear(); mixer.SelectedSource=null;
+            mixer.Sources.Clear(); mixer.Buses.Clear(); mixer.CompactBuses.Clear(); mixer.SelectedSource=null;
             mixer.SetEvidenceAvailability("UNAVAILABLE");
-            mixer.DetailedPresentationCommand.Execute(null);
+            mixer.CompactPresentationCommand.Execute(null);
             window.Shell.ResetLayoutCommand.Execute(null);
         }
     }

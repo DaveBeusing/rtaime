@@ -287,6 +287,22 @@ The Operator receives snapshots through **Operator → rtaime.Client → Control
 
 Generated audio diagnostics reuse the same `AudioBufferDescriptor`, exact sample window, FOLLOW_VIDEO selection, gain/mute stage, Program metering and recording/output payload path. They do not introduce a second audio engine or a UI timer.
 
+### Compact mixer routing and confidence
+
+The Audio Mixer now exposes the confirmed FOLLOW VIDEO / BREAKAWAY route
+above the compact Program/Aux bus and source sample-peak strips. Each
+gain and mute adjustment is a **draft**, pending an explicit Apply through
+the existing ControlHost/RuntimeHost configuration path. A successful
+button click or visible fader movement is never a new Program audio
+configuration by itself. Advanced routing, EQ, dynamics and diagnostics
+remain available without switching to a different audio engine.
+
+The compact signal-confidence label summarizes existing current, missing,
+clipping or stale Runtime evidence. A dropped connection leaves the
+retained values **not live**; zero sample peak means measured silence,
+whereas an absent, nonfinite or negative reading means no meter value.
+No new LUFS, true-peak, RMS or physical-device confidence is inferred.
+
 ### Stereo metering
 
 `AudioMetering.MeasureInterleavedStereoFloat32` measures actual interleaved Float32 samples without allocating on the measurement path. RuntimeHost applies input gain/mute to the observed L/R peaks and reports clipping when the pre-clamped post-gain level reaches or exceeds full scale.

@@ -37,6 +37,54 @@ public sealed partial class AudioMixerMutationTests
     }
 
     [Fact]
+    public async Task Compact_bus_and_source_adjustments_remain_local_until_explicit_apply()
+    {
+        var transport = new AudioTransport();
+        await using var owner = new OperatorViewModel(new OperatorControlClient(transport), runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var mixer = owner.AudioMixer;
+        Assert.False(mixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, mixer.CompactVisibility);
+        var source = mixer.Sources[0];
+        var other = mixer.Sources[1];
+        source.SelectSourceCommand.Execute(null);
+        Assert.Equal("SELECTED", source.MixerSelectionLabel);
+        other.SelectSourceCommand.Execute(null);
+        Assert.Same(other, mixer.SelectedSource);
+        Assert.Equal("SELECTED", other.MixerSelectionLabel);
+        Assert.Equal("SELECT", source.MixerSelectionLabel);
+        var bus = mixer.Buses[0];
+        var confirmedSourceGain = transport.Configuration.Sources[0].Gain;
+        var confirmedBusGain = transport.Configuration.Buses[0].MasterGain;
+
+        source.Gain = 0.5;
+        bus.MasterGain = 0.75;
+        source.ToggleMuteCommand.Execute(null);
+        Assert.Equal("DRAFT", source.DraftState);
+        Assert.Equal("DRAFT", bus.DraftState);
+        Assert.Contains("PROGRAM", source.BusSummary);
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.Equal(confirmedSourceGain, transport.Configuration.Sources[0].Gain);
+        Assert.Equal(confirmedBusGain, transport.Configuration.Buses[0].MasterGain);
+
+        mixer.DetailedPresentationCommand.Execute(null);
+        Assert.True(mixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, mixer.AdvancedVisibility);
+        Assert.Equal(0.5, source.Gain);
+        Assert.Equal(0.75, bus.MasterGain);
+        mixer.CompactPresentationCommand.Execute(null);
+        Assert.False(mixer.ShowProcessing);
+        Assert.Equal("DRAFT", source.DraftState);
+        Assert.Equal("DRAFT", bus.DraftState);
+
+        source.DiscardDraftCommand.Execute(null);
+        bus.DiscardDraftCommand.Execute(null);
+        Assert.Equal("CONFIRMED", source.DraftState);
+        Assert.Equal("CONFIRMED", bus.DraftState);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
     public async Task Mixer_precision_clipboard_and_invalid_input_preserve_explicit_commit_boundary()
     {
         var transport = new AudioTransport();
@@ -63,6 +111,35 @@ public sealed partial class AudioMixerMutationTests
 
 public sealed partial class AudioMixerOperatorSurfaceTests
 {
+    [Fact]
+    public async Task Compact_program_bus_is_first_without_changing_authoritative_bus_order()
+    {
+        await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+        var sourceId = new MediaSourceId(Identity.New());
+        var aux = new AudioBusId("aux");
+        var config = new AudioProductionConfiguration(1,
+            [new(aux, 1, false), new(AudioBusId.Program, 1, false)],
+            [new(sourceId, 1, false, true, [AudioBusId.Program])]);
+        var evidence = new[]
+        {
+            new OperatorAudioProductionBusDescriptor("aux", 1, false, .2, .1, .2, false, 0, 0, 0),
+            new OperatorAudioProductionBusDescriptor("program", 1, false, .4, .2, .4, false, 0, 1, 0)
+        };
+        owner.AudioMixer.ApplyProjection(Descriptor(config, evidence),
+            [new(sourceId.ToString(), "Camera")],
+            [new(sourceId.ToString(), "stream", 1, false, .4, .2, .4, false, "HEALTHY")],
+            [], true);
+
+        Assert.Equal("aux", owner.AudioMixer.Buses[0].BusId);
+        Assert.Equal("program", owner.AudioMixer.CompactBuses[0].BusId);
+        Assert.Same(owner.AudioMixer.Buses[1], owner.AudioMixer.CompactBuses[0]);
+        Assert.Same(owner.AudioMixer.Buses[0], owner.AudioMixer.CompactBuses[1]);
+        var retainedProgram = owner.AudioMixer.CompactBuses[0];
+        owner.AudioMixer.SetEvidenceAvailability("STALE");
+        Assert.Same(retainedProgram, owner.AudioMixer.CompactBuses[0]);
+        Assert.False(retainedProgram.HasMeterEvidence);
+    }
+
     [Theory]
     [InlineData(0, "−∞", true)]
     [InlineData(0.5, "-6.0", true)]
@@ -90,7 +167,10 @@ public sealed partial class AudioMixerOperatorSurfaceTests
         Assert.Equal(label, strip.LeftPeakLabel);
         Assert.True(double.IsFinite(strip.DisplayLeftPeak));
         Assert.Equal(hasValue, owner.AudioMixer.Buses[0].HasMeterEvidence);
+        Assert.Contains("CURRENT RUNTIME SAMPLE PEAKS", owner.AudioMixer.CompactSignalState);
         owner.AudioMixer.SetEvidenceAvailability("STALE");
         Assert.Equal("—", strip.LeftPeakLabel); Assert.Equal("STALE", strip.RuntimeState);
+        Assert.Contains("STALE", owner.AudioMixer.CompactSignalState);
+        Assert.False(owner.AudioMixer.Buses[0].HasMeterEvidence);
     }
 }

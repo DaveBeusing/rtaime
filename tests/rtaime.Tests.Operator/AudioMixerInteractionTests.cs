@@ -15,7 +15,9 @@ public sealed class AudioMixerInteractionTests
 	{
 		var document = Surface();
 		var faders = document.Descendants().Where(element => element.Name.LocalName == "RtaimeSlider").ToArray();
-		Assert.Equal(2, faders.Length);
+		Assert.Equal(4, faders.Length);
+        Assert.Equal(2, faders.Count(fader => fader.Attribute("Orientation")?.Value == "Horizontal"));
+        Assert.Equal(2, faders.Count(fader => fader.Attribute("Orientation")?.Value == "Vertical"));
 		Assert.All(faders, fader =>
 		{
 			Assert.Equal("0", fader.Attribute("Minimum")?.Value);
@@ -27,7 +29,13 @@ public sealed class AudioMixerInteractionTests
 			Assert.Contains("Mode=TwoWay", fader.Attribute("Value")!.Value, StringComparison.Ordinal);
 		});
 		var meters = document.Descendants().Where(element => element.Name.LocalName == "RtaimeMetricBar").ToArray();
-		Assert.Equal(4, meters.Length);
+		Assert.Equal(8, meters.Length);
+        Assert.Equal(4, meters.Count(m => m.Attribute("AutomationProperties.Name")?.Value?.Contains("Live ") == true));
+        Assert.Contains(document.Descendants(), e => e.Attribute("Visibility")?.Value == "{Binding CompactVisibility}");
+        Assert.Contains(document.Descendants(), e => e.Attribute("Visibility")?.Value == "{Binding AdvancedVisibility}");
+        Assert.Contains(document.Descendants(), e =>
+            e.Attribute("Command")?.Value == "{Binding SelectSourceCommand}" &&
+            e.Attribute("AutomationProperties.Name")?.Value == "Select this source for Breakaway");
 		Assert.All(meters, meter => Assert.Equal("{Binding HasMeterEvidence}", meter.Attribute("HasValue")?.Value));
 		foreach (var command in new[] { "ApplyCommand", "DiscardDraftCommand" })
 			Assert.All(document.Descendants().Where(element => element.Attribute("Command")?.Value == "{Binding " + command + "}"), action =>

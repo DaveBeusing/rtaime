@@ -3,6 +3,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 using rtaime.Core;
@@ -17,13 +18,14 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private string _availability = "UNAVAILABLE";
 	private string _disabledReason = "Synchronize authoritative audio state.";
 	private string _mutationState = "CONFIRMED";
-	private bool _showProcessing = true;
+	private bool _showProcessing;
 
 	internal OperatorAudioMixerViewModel(OperatorViewModel owner)
 	{
 		_owner = owner ?? throw new ArgumentNullException(nameof(owner));
 		Sources = new ObservableCollection<OperatorAudioSourceStripViewModel>();
 		Buses = new ObservableCollection<OperatorAudioBusStripViewModel>();
+        CompactBuses = new ObservableCollection<OperatorAudioBusStripViewModel>();
 		CompactPresentationCommand = new AsyncRelayCommand(() => SetPresentationAsync(false));
 		DetailedPresentationCommand = new AsyncRelayCommand(() => SetPresentationAsync(true));
 	}
@@ -33,14 +35,19 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	public OperatorViewModel Owner => _owner;
 	public ObservableCollection<OperatorAudioSourceStripViewModel> Sources { get; }
 	public ObservableCollection<OperatorAudioBusStripViewModel> Buses { get; }
+    // Ordered presentation references only: Program is always first in Compact.
+    public ObservableCollection<OperatorAudioBusStripViewModel> CompactBuses { get; }
 
 	public OperatorAudioSourceStripViewModel? SelectedSource
 	{
 		get => _selectedSource;
 		set
 		{
-			if (!Set(ref _selectedSource, value))
+			var previous = _selectedSource;
+		if (!Set(ref _selectedSource, value))
 				return;
+        previous?.NotifyMixerSelection();
+        value?.NotifyMixerSelection();
 			if (value is not null)
 			{
 				var input = _owner.AudioInputs.FirstOrDefault(candidate =>
@@ -60,7 +67,18 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	public string MeteringLabel => $"{Availability} · RUNTIME VIA CONTROL · RMS NOT EXPOSED";
 	public bool EvidenceIsCurrent => Availability == "CONFIRMED";
 	public bool ShowProcessing => _showProcessing;
-	public string PresentationLabel => ShowProcessing ? "DETAILED · LOCAL VIEW ONLY" : "COMPACT · LOCAL VIEW ONLY";
+	public string PresentationLabel => ShowProcessing ? "ADVANCED · LOCAL VIEW ONLY" : "COMPACT · LOCAL VIEW ONLY";
+    public Visibility CompactVisibility => ShowProcessing ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility AdvancedVisibility => ShowProcessing ? Visibility.Visible : Visibility.Collapsed;
+    public string CompactSignalState => !EvidenceIsCurrent
+        ? $"{Availability} · retained readings are not live signal confidence"
+        : Buses.Count == 0 || Buses.All(bus => !bus.HasMeterEvidence)
+            ? "NO CURRENT BUS SAMPLE-PEAK EVIDENCE · output unverified"
+            : Buses.Any(bus => bus.EvidenceState == "CLIPPING")
+                ? "CLIPPING · observed bus sample peak exceeds the configured safety level"
+                : Buses.Any(bus => bus.EvidenceState is "MISSING SOURCE" or "INVALID METER" or "UNAVAILABLE")
+                    ? "PARTIAL SIGNAL · missing source or unavailable meter evidence"
+                    : "CURRENT RUNTIME SAMPLE PEAKS · physical output unverified";
 	public ICommand CompactPresentationCommand { get; }
 	public ICommand DetailedPresentationCommand { get; }
 	public string DuckingEvidence { get; private set; } = "UNAVAILABLE";
@@ -68,7 +86,11 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private Task SetPresentationAsync(bool showProcessing)
 	{
 		if (Set(ref _showProcessing, showProcessing, nameof(ShowProcessing)))
+        {
 			OnPropertyChanged(nameof(PresentationLabel));
+            OnPropertyChanged(nameof(CompactVisibility));
+            OnPropertyChanged(nameof(AdvancedVisibility));
+        }
 		return Task.CompletedTask;
 	}
 
@@ -77,6 +99,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		Availability = availability;
 		OnPropertyChanged(nameof(EvidenceIsCurrent));
 		OnPropertyChanged(nameof(MeteringLabel));
+        OnPropertyChanged(nameof(CompactSignalState));
 		foreach (var source in Sources)
 			source.RefreshEvidenceState();
 		foreach (var bus in Buses)
@@ -90,6 +113,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		{
 			Sources.Clear();
 			Buses.Clear();
+            CompactBuses.Clear();
 			SelectedSource = null;
 			SetEvidenceAvailability("UNAVAILABLE");
 			MutationState = "UNCONFIRMED";
@@ -169,6 +193,13 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		}
 
 		Reconcile(Buses, nextBuses);
+        // Do not reorder the authoritative bank; compact cards reuse the exact
+        // same strip identities, with Program ahead of Aux/other routed buses.
+        Reconcile(CompactBuses, nextBuses
+            .OrderBy(bus => string.Equals(bus.BusId, AudioBusId.Program.Value, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(bus => bus.BusLabel, StringComparer.OrdinalIgnoreCase)
+            .ToArray());
+        OnPropertyChanged(nameof(CompactSignalState));
 
 		SelectedSource = Sources.FirstOrDefault(source =>
 				string.Equals(source.SourceId, previousSelectedId, StringComparison.Ordinal))
@@ -482,6 +513,11 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 		}, () => MutationState != "PENDING");
 		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
 		ToggleContributionCommand = new AsyncRelayCommand(() => { FollowRoutedSource = !FollowRoutedSource; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
+        SelectSourceCommand = new AsyncRelayCommand(() =>
+        {
+            _owner.SelectedSource = this;
+            return Task.CompletedTask;
+        });
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -517,6 +553,9 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 	public ICommand ToggleMuteCommand { get; }
 	public ICommand DiscardDraftCommand { get; }
 	public ICommand ToggleContributionCommand { get; }
+    public ICommand SelectSourceCommand { get; }
+    public string MixerSelectionLabel => ReferenceEquals(_owner.SelectedSource, this) ? "SELECTED" : "SELECT";
+    internal void NotifyMixerSelection() => OnPropertyChanged(nameof(MixerSelectionLabel));
 
 	public double Gain { get => _gain; set { if (Set(ref _gain, Clamp(value, 0, 4, _gain))) DraftChanged(); } }
 	public bool Muted { get => _muted; set { if (Set(ref _muted, value)) DraftChanged(); } }
