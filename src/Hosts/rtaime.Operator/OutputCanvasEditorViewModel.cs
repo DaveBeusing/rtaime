@@ -74,10 +74,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             _validatedDraftRevision == _session?.Draft.EditRevision);
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, () => CanSubmit && !IsDirty && !_savedConflict && !_awaitingBoundary && !_applyOutcomeUnknown &&
             _validatedSavedRevision == _session?.Saved.EditRevision);
-        DisableCommand = new AsyncRelayCommand(DisableAsync, () => CanSubmit && !_applyOutcomeUnknown &&
+        DisableCommand = new AsyncRelayCommand(DisableAsync, () => CanSubmit && !_applyOutcomeUnknown && !_saveOutcomeUnknown &&
             (_evidence?.ActiveRenderRevision is not null || _awaitingBoundary));
-        UndoCommand = new AsyncRelayCommand(() => { Undo(); return Task.CompletedTask; }, () => !_busy && _session?.CanUndo == true);
-        RedoCommand = new AsyncRelayCommand(() => { Redo(); return Task.CompletedTask; }, () => !_busy && _session?.CanRedo == true);
+        UndoCommand = new AsyncRelayCommand(() => { Undo(); return Task.CompletedTask; }, () => CanEdit && _session?.CanUndo == true);
+        RedoCommand = new AsyncRelayCommand(() => { Redo(); return Task.CompletedTask; }, () => CanEdit && _session?.CanRedo == true);
         AddCanvasCommand = new AsyncRelayCommand(() => { AddCanvas(); return Task.CompletedTask; }, () => CanEdit &&
             _session!.Draft.Canvases.Length < OutputCanvasContract.MaximumCanvases);
         RemoveCanvasCommand = new AsyncRelayCommand(() => { RemoveCanvas(); return Task.CompletedTask; }, () => CanEdit && SelectedCanvas is not null);
@@ -143,7 +143,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     // unsaved draft, transaction fence and Runtime confirmation evidence.
     public bool IsWorkspaceVisible => _workspaceVisible;
     internal void SetWorkspaceVisible(bool visible) => Set(ref _workspaceVisible, visible);
-    public bool CanEdit => _session is not null && !_busy;
+    public bool CanEdit => _session is not null && !_busy && !_saveOutcomeUnknown && !_applyOutcomeUnknown;
     public bool CanSubmit => _session is not null && !_busy && _gateway is not null &&
         _owner.IsConnected && !_owner.IsStale && !_owner.IsBusy &&
         _owner.ProgramSafety != OperatorProgramSafetyStates.Blocked &&
