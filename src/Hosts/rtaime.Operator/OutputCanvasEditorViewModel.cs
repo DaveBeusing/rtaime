@@ -45,7 +45,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private OutputCanvasTargetChoice? _selectedTarget;
     private string _status = "Connect to ControlHost to read saved canvas configuration.";
     private string _resultDetail = "Local geometry is not Program output.";
-    private bool _busy, _disposed, _rebuilding, _savedConflict, _observing, _awaitingBoundary, _saveOutcomeUnknown, _applyOutcomeUnknown, _showGeometryDetails;
+    private bool _busy, _disposed, _rebuilding, _savedConflict, _observing, _awaitingBoundary, _saveOutcomeUnknown, _applyOutcomeUnknown, _unknownDisable, _showGeometryDetails;
     private ulong? _validatedSavedRevision;
     private ulong? _validatedDraftRevision;
     private ulong? _requestedRevision;
@@ -447,6 +447,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             SetEvidence(result);
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
             _applyOutcomeUnknown = false;
+            _unknownDisable = false;
             _requestedRevision = _awaitingBoundary ? _session.Saved.EditRevision : null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary
@@ -458,6 +459,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             // A lost APPLY reply is not a rejection. Keep observing this exact
             // revision through the existing health refresh; suppress retries.
             _applyOutcomeUnknown = true;
+            _unknownDisable = false;
             _awaitingBoundary = true;
             _requestedRevision = _session.Saved.EditRevision;
             _nextObservationAt = DateTimeOffset.MinValue;
@@ -469,7 +471,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
 
     public async Task DisableAsync()
     {
-        if (!CanSubmit || _gateway is null || _session is null) return;
+        if (!CanSubmit || _gateway is null || _session is null ||
+            _applyOutcomeUnknown || _saveOutcomeUnknown) return;
         IsBusy = true;
         try
         {
@@ -478,6 +481,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             if (_disposed) return;
             SetEvidence(result);
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
+            _applyOutcomeUnknown = false;
+            _unknownDisable = false;
             _requestedRevision = null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary ? "Disable requested; the active Program route remains until Runtime confirms the next boundary."
@@ -485,8 +490,14 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         }
         catch (Exception ex) when (RemoteFailure(ex))
         {
+            // A missing response must not turn into an automatic second disable.
+            _applyOutcomeUnknown = true;
+            _unknownDisable = true;
+            _awaitingBoundary = true;
+            _requestedRevision = null;
+            _nextObservationAt = DateTimeOffset.MinValue;
             _evidence = null; PublishEvidence();
-            Status = "Disable unconfirmed; inspect the current Runtime output: " + ex.Message;
+            Status = "Disable outcome UNKNOWN. Inspect Runtime evidence before further mutations: " + ex.Message;
         }
         finally { IsBusy = false; RaiseAll(); }
     }
@@ -501,9 +512,16 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             var evidence = await _gateway.EvidenceAsync();
             if (_disposed) return;
             SetEvidence(evidence);
-            if (evidence.ActivationState != "PENDING_BOUNDARY")
+            if (_applyOutcomeUnknown)
             {
-                _applyOutcomeUnknown = false;
+                // UNMAPPED or a different active revision may predate an uncertain
+                // APPLY. Keep the request fenced until the desired revision is seen.
+                Status = $"Runtime reports {evidence.ActivationState}, but the previous " +
+                    (_unknownDisable ? "DISABLE" : "APPLY") +
+                    " outcome remains unconfirmed. Do not retry; inspect Runtime authority.";
+            }
+            else if (evidence.ActivationState != "PENDING_BOUNDARY")
+            {
                 _awaitingBoundary = false;
                 _requestedRevision = null;
                 Status = evidence.ActivationState == "ACTIVE" &&
@@ -527,9 +545,15 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private void SetEvidence(OutputCanvasActivationResult evidence)
     {
         _evidence = evidence;
-        if (_applyOutcomeUnknown && evidence.ActivationState != "PENDING_BOUNDARY")
+        // Only terminal evidence for the intended result can reconcile an
+        // ambiguous reply. A previous UNMAPPED/ACTIVE snapshot is insufficient.
+        if (_applyOutcomeUnknown && (_unknownDisable
+            ? evidence.ActivationState == "UNMAPPED" && evidence.ActiveRenderRevision is null
+            : _requestedRevision is { } revision &&
+              evidence.ActivationState == "ACTIVE" && evidence.ActiveRenderRevision == revision))
         {
             _applyOutcomeUnknown = false;
+            _unknownDisable = false;
             _awaitingBoundary = false;
             _requestedRevision = null;
         }
