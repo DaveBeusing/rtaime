@@ -104,6 +104,19 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal("PREVIEW_READY", beforeTake.OutputState);
         Assert.Equal(1UL, beforeTake.PublishedSourceFrames);
 
+        // A generic Program CUT cannot adopt these native owners without
+        // the separate optimistic sequence Take reservation.
+        var generic = control.CutProgram(new CutProgramCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current,
+                CommandId.New(), control.State.ProductionId, control.State.Revision), sourceB));
+        Assert.True(generic.Accepted);
+        var genericExecution = Assert.IsType<ControlHostExecutionPackage>(generic.Execution);
+        Assert.Throws<InvalidOperationException>(() => decks.RequireArmedSequenceTake(
+            genericExecution.PreparedExecution, genericExecution.ProgramTransition));
+        control.RejectRuntimeCommit(genericExecution.PreparedExecution.PreparedExecutionId,
+            new Failure("runtime.sequence.take_not_armed", "Unarmed native source must not change Program."));
+        Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
+
         var previous = control.State.Revision;
         var takeCommand = new SequenceOutputCommand(
             SequenceOutputContract.Version, reference, mediaB.ToString(),
@@ -146,10 +159,28 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal(2UL, observed.PublishedSourceFrames);
         Assert.NotNull(observed.LastProgramSlot);
         Assert.Equal(control.State.Revision.Value, observed.ProductionRevision);
+        var committedRevision = control.State.Revision;
+        // A lost promotion response may only reconcile the same native
+        // owner/committed successor. It must not increment production again.
+        decks.AuthorizeSequenceProgram(reference, mediaB, authority.ProductionId.Value,
+            previous, committedRevision, runtime);
+        Assert.Equal(committedRevision, control.State.Revision);
+        Assert.Throws<InvalidOperationException>(() => decks.ArmSequenceTake(
+            takeCommand with { TransactionId = Guid.NewGuid() },
+            authority.ProductionId.Value, committedRevision, runtime, host));
 
         var cancellation = decks.CancelPreparedSequence(reference, host);
         Assert.Equal("CANCELED", cancellation.State);
         Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        using (var afterCancellation = runtime.ProcessNextBoundary())
+        {
+            Assert.Equal(mediaB, afterCancellation.CommittedProgramSourceId);
+            var lostPixels = afterCancellation.ProgramPixels.Span;
+            Assert.Equal((byte)0, lostPixels[0]);
+            Assert.Equal((byte)0, lostPixels[1]);
+            Assert.Equal((byte)0, lostPixels[2]);
+            Assert.Equal((byte)255, lostPixels[3]);
+        }
         Assert.Equal(0, runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
     }
 
