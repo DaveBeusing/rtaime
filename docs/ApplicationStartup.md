@@ -250,7 +250,7 @@ Healthy
 
 The recovery deadline is configured independently through `startup.runtimeRecoveryTimeoutMs`. It is not the initial `startup.timeoutMs`; the canonical policy keeps both at 30 seconds today so existing operational timing remains unchanged while their meanings are explicit.
 
-If authoritative readiness does not recover before that runtime deadline, the application lifecycle becomes `Failed`. A failure after initial production qualification is not reclassified as startup failure. AppHost uses stable failure categories and logging codes:
+If authoritative readiness does not recover before that runtime deadline, the application lifecycle becomes `Failed`. The existing Production Readiness stage is also explicitly marked `Failed` with the final typed recovery reason instead of remaining `Degraded` after the AppHost has already failed. A failure after initial production qualification is not reclassified as startup failure. AppHost uses stable failure categories and logging codes:
 
 - `apphost.startup-failure` for configuration/startup/initial-qualification failure;
 - `apphost.runtime-recovery-timeout` for a post-start readiness recovery deadline;
