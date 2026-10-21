@@ -63,6 +63,18 @@ native normalization, padding, audio, cache traffic and retained output consumer
 add costs that this count does not measure. A decoded frame may be dropped, repeated
 or resampled before GPU materialization, so decoded-frame count is not upload count.
 
+Current decoder copy refinements do not remove any of these boundaries.
+For positive, tightly packed RGB32 rows, the existing native-to-managed copy
+uses one `Marshal.Copy` instead of one call per scanline. Padded, negative-pitch
+and bottom-up surfaces retain validated row-wise copying. The same RGBA
+byte count is copied and the same in-place R/B channel swizzle remains.
+The audio Source Reader retains only one bounded native PCM16 packet scratch,
+reused after its previous packet is consumed. Its converted per-frame stereo
+Float32 payload still has independent ownership; the worker still copies it
+into its bounded audio slot. These are CPU/managed-allocation changes, not
+GPU-native decoding, zero-copy frame delivery or a modified Runtime admission
+contract. See [Native decode copy qualification](NativeMediaDecodeCopyQualification.md).
+
 No IMF DXGI device manager / DXGI buffer admission exists in this decoder. The
 current opaque handle is a descriptor, not a safe imported-resource implementation.
 
