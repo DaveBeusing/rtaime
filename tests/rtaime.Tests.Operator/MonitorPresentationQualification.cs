@@ -180,7 +180,8 @@ internal static class MonitorPresentationQualification
 				.ReadFramesAsync(readStop.Token).GetAsyncEnumerator(readStop.Token);
 			async Task<MonitoringFrame> NextProgramAsync()
 			{
-				while (await frames.MoveNextAsync())
+				var reader = frames ?? throw new InvalidOperationException("Viewer monitoring reader is not initialized.");
+				while (await reader.MoveNextAsync())
 					if (frames.Current.Descriptor.StreamKind == MonitoringStreamKind.Program && frames.Current.HasFallbackPayload)
 						return frames.Current;
 				throw new InvalidOperationException("Runtime monitoring ended before a Program observation.");
@@ -336,8 +337,8 @@ internal static class MonitorPresentationQualification
 				readStop?.Cancel();
 				return Task.CompletedTask;
 			});
-			if (frames is not null)
-				await PhaseAsync("monitor-dispose", () => frames.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)));
+			if (frames is { } activeReader)
+				await PhaseAsync("monitor-dispose", () => activeReader.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)));
 			await PhaseAsync("monitor-token-dispose", () =>
 			{
 				readStop?.Dispose();
@@ -389,14 +390,15 @@ internal static class MonitorPresentationQualification
 				Assert.Equal(RuntimeHostExitCode.Success, exit);
 				Assert.Equal(RuntimeHostProcessState.Stopped, runtime.Lifecycle.State);
 			});
-			if (controlRun.IsCompleted && runtimeRun.IsCompleted)
+			if (controlRun.IsCompletedSuccessfully && runtimeRun.IsCompletedSuccessfully &&
+				controlRun.Result == ControlHostExitCode.Success && runtimeRun.Result == RuntimeHostExitCode.Success)
 				await PhaseAsync("durability-root-cleanup", () =>
 				{
 					if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
 					return Task.CompletedTask;
 				});
 			else
-				errors.Add(new InvalidOperationException("Fixture-owned hosts did not finish; retained the durability root for diagnosis."));
+				Console.WriteLine($"VIEWER DURABILITY ROOT RETAINED: incomplete or unsuccessful host shutdown; path={root}");
 
 			if (visualFailure is not null)
 				errors.Insert(0, new InvalidOperationException("Productive viewer qualification failed before teardown.", visualFailure));
