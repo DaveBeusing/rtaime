@@ -184,15 +184,35 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
 	{
-		if (!IsLoaded) { base.OnRenderSizeChanged(sizeInfo); return; }
+		if (!IsLoaded || MatchesAllocatedViewportPixels())
+		{
+			// Fractional-DIP layout changes that retain exactly the same physical target
+			// must not force a reduced fallback or recreate a D3D11/D3D9Ex texture.
+			_resizeSettleTimer.Stop();
+			_pendingSize = null;
+			base.OnRenderSizeChanged(sizeInfo);
+			return;
+		}
 		Monitor?.SetGpuPresentationState(false, "Resize settling · CPU/WPF fallback");
-		_pendingSize = sizeInfo; _resizeSettleTimer.Stop(); _resizeSettleTimer.Start();
+		_pendingSize = sizeInfo;
+		_resizeSettleTimer.Stop();
+		_resizeSettleTimer.Start();
 	}
 
-	// Layout uses DIPs; only the texture allocation converts to physical pixels.
-	protected override DpiScale TargetScale => Monitor is { } monitor
-		? new DpiScale(monitor.DpiScaleX, monitor.DpiScaleY)
-		: VisualTreeHelper.GetDpi(this);
+	private bool MatchesAllocatedViewportPixels()
+	{
+		if (TextureWidth <= 0 || TextureHeight <= 0)
+			return false;
+		var dpi = VisualTreeHelper.GetDpi(this);
+		return OperatorSurfaceTargetPolicy.TryMeasure(
+			ActualWidth, ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY,
+			TextureWidth, TextureHeight, out var requested, out _) &&
+			requested.Width == TextureWidth && requested.Height == TextureHeight;
+	}
+
+	// Allocate in the actual WPF visual's physical pixel space, never with a
+	// cached sibling viewport DPI from before a PerMonitorV2 window transition.
+	protected override DpiScale TargetScale => VisualTreeHelper.GetDpi(this);
 
 	private void OnLoadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
