@@ -5,6 +5,13 @@
 </p>
 
 # Operator Workspaces, Multiview and Keyboard UX
+### OUTPUTS task focus
+
+OUTPUTS uses one persistent **ROUTING / SIGNAL** versus **CANVAS / MAPPING** selector in its existing detail region rather than permanently stacking output rows, technical telemetry and the entire mapping form. The routing view prioritizes the selected Program/Aux role's source, provider/target, declared format and fresh Runtime/transport evidence. **TECHNICAL DETAILS** reveals the existing diagnostics without a new poller. Preview is explicitly monitoring-only; Clean Feed is local display-only.
+
+The mapping view retains the single governed `OutputCanvasEditorViewModel`, saved revision and local-draft ownership already present in the shell. Geometry editing remains local until explicit Validate, Save and Runtime Apply. Advanced numeric/warp/blend editing is contextual. The shell's navigation IDs, docking composition, panel instances, persisted layouts and central `MainWindow.xaml` wiring do not change when a mode is selected; selecting a view never mutates routing or Program.
+
+
 
 ## Purpose
 
