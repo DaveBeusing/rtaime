@@ -344,6 +344,14 @@
                         <TextBlock x:Name="LiveRecordingEvidence" Text="{Binding RecordingStatus}"
                             Style="{StaticResource OperatorValue}" MaxWidth="95" TextTrimming="CharacterEllipsis"
                             VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="{Binding RecordingError}"/>
+                        <TextBlock Text="AUDIO L/R" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0"
+                            ToolTip="Observed Program audio levels, not evidence of physical output.">
+                            <TextBlock x:Name="LiveAudioLeftEvidence" Text="{Binding AudioLeftDb}"
+                                Style="{StaticResource OperatorValue}" VerticalAlignment="Center"/>
+                            <TextBlock Text=" / " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding AudioRightDb}" Style="{StaticResource OperatorValue}" VerticalAlignment="Center"/>
+                        </StackPanel>
                         <controls:RtaimeButton Content="RESTORE" IsCompact="True" Height="30"
                             Command="{Binding Shell.ResetLayoutCommand, ElementName=RootWindow}"
                             ToolTip="Restore the saved workspace panel layout."/>
