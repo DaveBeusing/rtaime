@@ -133,7 +133,7 @@ Size each video canvas from its actual container and current monitor DPI. Preser
 
 Retain qualification at 1920×1080, 1600×900, 1536×864, 1280×720 and 960×540 logical workspaces, with 100/125/150/200% DPI coverage. Mixed physical monitor moves, taskbar/work-area constraints and display removal need separate retained hardware evidence. Persist reference layout coordinates, not temporary scaled sizes. Compact mode and Focus/Cinema must restore the prior arrangement without changing production or overwriting ordinary preferences.
 
-Timeline coordinates follow the actual media-edit ruler width in DIPs, rather than an assumed shell width; repeated identical measurements do not rebuild displayed clip items. Visible track/clip count remains bounded, and unchanged rows retain their WPF item identity through sizing, selection and evidence refreshes. Output-geometry drawing is invalidated only when visible geometry changes, and view-only subscriptions end when the canvas surface unloads. Pointer gestures cancel on capture loss or control detachment without committing incomplete drafts.
+Timeline coordinates follow the measured ruler and scrollbar-adjusted track viewport in DIPs, rather than an assumed shell width; repeated identical measurements do not rebuild displayed clip items. Visible track/clip count remains bounded, and unchanged rows retain their WPF item identity through sizing, selection and evidence refreshes. Output-geometry drawing is invalidated only when visible geometry changes, and view-only subscriptions end when the canvas surface unloads. Pointer gestures cancel on capture loss or control detachment without committing incomplete drafts.
 
 ### Honest image-detail contract
 
