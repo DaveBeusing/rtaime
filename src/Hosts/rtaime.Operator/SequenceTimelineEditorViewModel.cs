@@ -183,8 +183,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public void SetViewport(double width, int visibleTrackCount = 8)
     {
         if (!double.IsFinite(width) || width <= 0) return;
-        _viewportWidth = Math.Max(100, width);
-        _visibleTrackCount = Math.Clamp(visibleTrackCount, 1, SequenceTimelineGeometry.MaximumRealizedRows);
+        var measuredWidth = Math.Max(1, width);
+        var rows = Math.Clamp(visibleTrackCount, 1, SequenceTimelineGeometry.MaximumRealizedRows);
+        if (_viewportWidth == measuredWidth && _visibleTrackCount == rows) return;
+        _viewportWidth = measuredWidth;
+        _visibleTrackCount = rows;
         RefreshViewport();
     }
 
