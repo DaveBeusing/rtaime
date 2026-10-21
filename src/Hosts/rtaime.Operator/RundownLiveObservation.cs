@@ -15,6 +15,62 @@ public sealed partial class RundownViewModel
     private string ResolveItem(RundownItemId? id) => id is { } value
         ? _confirmedSnapshot?.Rundown?.Items.FirstOrDefault(item => item.ItemId == value)?.Name ?? value.ToString()
         : "NONE";
+
+    // NOW and NEXT come exclusively from the confirmed ControlHost execution.
+    // Local row selection is authoring intent and must never be presented as Program.
+    public string NowItemName => _observationAvailable
+        ? ResolveItem(_confirmedSnapshot?.Execution.CurrentItemId) : "UNVERIFIED";
+    public string NowItemStatus => !_observationAvailable ? "SYNC REQUIRED · PROGRAM NOT VERIFIED" :
+        _confirmedSnapshot?.Execution.State switch
+        {
+            RundownExecutionState.Executing => "RUNDOWN EXECUTING · CONTROL CONFIRMED",
+            RundownExecutionState.Held => "HOLD · AUTO DISARMED",
+            RundownExecutionState.Completed => "LAST ITEM · EXECUTION COMPLETE",
+            RundownExecutionState.Failed => "FAILED · FOLLOW HALTED",
+            RundownExecutionState.RecoveryRequired => "RECOVERY · INSPECT PROGRAM",
+            _ => "NO ACTIVE RUNDOWN EXECUTION"
+        };
+    private RundownItemId? NextConfirmedId
+    {
+        get
+        {
+            var execution = _confirmedSnapshot?.Execution;
+            return execution?.AutoAdvanceArmed == true && execution.PendingNextItemId is { } pending
+                ? pending : execution?.PreparedItemId ?? execution?.NextItemId;
+        }
+    }
+    public string NextItemName => _observationAvailable ? ResolveItem(NextConfirmedId) : "UNVERIFIED";
+    public string SelectedItemName => SelectedItem?.Name ?? "NONE";
+    public string NextItemStatus
+    {
+        get
+        {
+            if (!_observationAvailable) return "SYNC REQUIRED · NO EXECUTION ASSUMED";
+            var execution = _confirmedSnapshot?.Execution;
+            if (execution is null) return "UNVERIFIED · WAITING FOR CONTROL";
+            if (execution.RequiresAcknowledgement ||
+                execution.State == RundownExecutionState.RecoveryRequired)
+                return "RECOVERY REQUIRED · GO BLOCKED";
+            if (execution.State == RundownExecutionState.Failed)
+                return "FAILED · FOLLOW HALTED";
+            if (execution.State == RundownExecutionState.Held)
+                return "HELD · FOLLOW DISARMED";
+            if (NextConfirmedId is null) return "NO CONFIRMED NEXT ITEM";
+            if (execution.AutoAdvanceArmed && execution.PendingNextItemId == NextConfirmedId)
+                return "AUTO FOLLOW ARMED · AWAITING HOST";
+            if (execution.PreparedItemId != NextConfirmedId)
+                return "NEXT CANDIDATE · NOT PREPARED";
+            var next = _confirmedSnapshot?.Rundown?.Items.FirstOrDefault(item => item.ItemId == NextConfirmedId);
+            if (next is not RundownMediaItem)
+                return "PREPARED · CONTROL CONFIRMED · NOT PROGRAM";
+            if (execution.PreparedMediaState != "NEXT_READY")
+                return "MEDIA · NATIVE READINESS UNVERIFIED";
+            if (execution.PreparedMediaExpiresAtUtc is { } expires &&
+                expires <= DateTimeOffset.UtcNow)
+                return "RESIDENT PREPARATION EXPIRED · PREPARE AGAIN";
+            return "HOST NEXT_READY · REVALIDATED AT GO";
+        }
+    }
     public string LiveActionDetail => !_observationAvailable ? "Rundown observation unavailable. Synchronize before executing." : !LiveAuthorityAvailable ? _operator.LiveAvailability :
         IsBusy ? "Rundown command pending; wait for confirmation." :
         _draftConflict ? "Saved rundown changed. Refresh to discard the local draft and reload." :
