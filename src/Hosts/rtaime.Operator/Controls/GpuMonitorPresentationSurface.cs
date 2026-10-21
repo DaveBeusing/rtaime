@@ -142,7 +142,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 				(eventArgs.OldValue as OperatorGpuMonitoringFrame)?.Resource,
 				(eventArgs.NewValue as OperatorGpuMonitoringFrame)?.Resource))
 			surface.CloseSharedResource();
-		if (eventArgs.Property == GpuFrameProperty)
+		if (eventArgs.Property == MonitorProperty || eventArgs.Property == GpuFrameProperty)
 			surface.ResetAnalysisEvidence();
 		surface.Invalidate();
 		if (surface.GpuFrame is null)
