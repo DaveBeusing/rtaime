@@ -33,6 +33,9 @@ public sealed class AudioMixerInteractionTests
         Assert.Equal(4, meters.Count(m => m.Attribute("AutomationProperties.Name")?.Value?.Contains("Live ") == true));
         Assert.Contains(document.Descendants(), e => e.Attribute("Visibility")?.Value == "{Binding CompactVisibility}");
         Assert.Contains(document.Descendants(), e => e.Attribute("Visibility")?.Value == "{Binding AdvancedVisibility}");
+        Assert.Contains(document.Descendants(), e =>
+            e.Attribute("Command")?.Value == "{Binding SelectSourceCommand}" &&
+            e.Attribute("AutomationProperties.Name")?.Value == "Select this source for Breakaway");
 		Assert.All(meters, meter => Assert.Equal("{Binding HasMeterEvidence}", meter.Attribute("HasValue")?.Value));
 		foreach (var command in new[] { "ApplyCommand", "DiscardDraftCommand" })
 			Assert.All(document.Descendants().Where(element => element.Attribute("Command")?.Value == "{Binding " + command + "}"), action =>
