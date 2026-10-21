@@ -690,6 +690,7 @@ public sealed class UnifiedApplicationHost
 	private readonly StartupEvidenceSession _diagnostics;
 	private DateTimeOffset? _qualificationDeadline;
     private string _lastReadinessReason = "readiness.evidence.missing";
+    private int _runStarted;
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
 	{
@@ -712,6 +713,11 @@ public sealed class UnifiedApplicationHost
 
 	public async Task<ApplicationHostRunResult> RunAsync(CancellationToken cancellationToken = default)
 	{
+        // One host object owns one capture, ControlHost identity and stop file.
+        // Reusing it for parallel/repeated runs could create conflicting owners.
+        if (Interlocked.CompareExchange(ref _runStarted, 1, 0) != 0)
+            throw new InvalidOperationException(
+                "An application host instance may run only once; create a fresh instance for another lifecycle.");
 		Transition(ApplicationLifecycleState.Starting);
 		try
 		{
@@ -1206,10 +1212,11 @@ public sealed class UnifiedApplicationHost
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
+					_readinessTracker.Observe(_controlProcessId, null, _activeReadinessPath, _lastReadinessReason);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
-						"Qualified engine readiness is currently unavailable.");
+                        "Qualified engine readiness is unavailable: " + _lastReadinessReason + ".");
 					Transition(ApplicationLifecycleState.Degraded);
 					degradationPublished = true;
 				}
@@ -1219,6 +1226,9 @@ public sealed class UnifiedApplicationHost
 			else
 			{
 				TrackReadiness(readiness.Value);
+                if (degradedSince is not null)
+                    _readinessTracker.Observe(_controlProcessId, readiness.Value.Evidence, readiness.Value.Path,
+                        "readiness.evidence.qualified");
 				if (degradedSince is not null)
 				{
 					if (degradationPublished)
@@ -1257,10 +1267,11 @@ public sealed class UnifiedApplicationHost
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
+					_readinessTracker.Observe(_controlProcessId, null, _activeReadinessPath, _lastReadinessReason);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
-						"Qualified engine readiness is currently unavailable.");
+                        "Qualified engine readiness is unavailable: " + _lastReadinessReason + ".");
 					Transition(ApplicationLifecycleState.Degraded);
 					degradationPublished = true;
 				}
@@ -1270,6 +1281,9 @@ public sealed class UnifiedApplicationHost
 			else
 			{
 				TrackReadiness(readiness.Value);
+                if (degradedSince is not null)
+                    _readinessTracker.Observe(_controlProcessId, readiness.Value.Evidence, readiness.Value.Path,
+                        "readiness.evidence.qualified");
 				if (degradedSince is not null)
 				{
 					if (degradationPublished)
@@ -1291,7 +1305,8 @@ public sealed class UnifiedApplicationHost
 	private ApplicationHostLifecycleException CreateRuntimeRecoveryTimeout(TimeSpan recoveryDuration) =>
 		new(
 			ApplicationHostFailureKind.RuntimeRecoveryTimeout,
-			"Engine readiness did not recover within the configured runtime recovery window.",
+			"Engine readiness did not recover within the configured runtime recovery window. Last observation: " +
+                _lastReadinessReason + ".",
 			State,
 			_options.Profile,
 			_options.Ownership,
@@ -1376,7 +1391,9 @@ public sealed class UnifiedApplicationHost
 			internalPipeQualification = "PASS",
 			verifiedAtUtc = _platform.UtcNow
 		});
-		_platform.WriteAllText(_options.ServiceReadinessEvidencePath, payload + Environment.NewLine);
+		// Service administrators must never consume a partially written PASS
+        // document while the supervisor refreshes its observations.
+		_platform.WriteAllTextAtomic(_options.ServiceReadinessEvidencePath, payload + Environment.NewLine);
 	}
 
 	private bool ShouldStopOwnedControlOnHostExit() =>
