@@ -2,6 +2,7 @@
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Gpu;
+using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
@@ -12,6 +13,26 @@ namespace rtaime.RuntimeHost;
 /// </summary>
 public sealed partial class RuntimeProgramExecutionService
 {
+    /// <summary>
+    /// The one existing Program boundary mutex spans both the normal
+    /// transactional Runtime Commit and promotion of the already armed
+    /// native sequence source. No Program frame may interleave between
+    /// those steps and no second scheduler or renderer is introduced.
+    /// </summary>
+    internal RuntimeHostApplyResult ApplyArmedSequenceTake(
+        PreparedExecutionContract prepared, MediaSinkId programSink,
+        RuntimeProgramTransitionIntent? transition, Action confirmNativeSource)
+    {
+        ArgumentNullException.ThrowIfNull(confirmNativeSource);
+        lock (_boundaryExecutionGate)
+        {
+            var applied = ApplyExecution(prepared, programSink, transition);
+            if (applied.Committed)
+                confirmNativeSource();
+            return applied;
+        }
+    }
+
     internal GpuProcessingProvider SequenceCompositionGpu => _gpu;
     internal ulong NextSequenceOutputSlot
     {
