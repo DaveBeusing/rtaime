@@ -16,8 +16,15 @@ public sealed partial class ControlHostIpcServer
         WireEnvelope message, CancellationToken cancellationToken)
     {
         await _sequencePreparationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var mutationGateHeld = false;
         try
         {
+            // Serialize authored edits and other production mutations with
+            // sequence output authorization. The catalogue revision lease
+            // below is acquired only AFTER the mutation gate, matching the
+            // existing sequence-authoring lock order and avoiding deadlocks.
+            await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            mutationGateHeld = true;
             var isGet = message.MessageType == "control.sequence.output.get";
             var isRecover = message.MessageType == "control.sequence.output.recover";
             var isPreview = message.MessageType == "control.sequence.output.preview";
@@ -59,6 +66,12 @@ public sealed partial class ControlHostIpcServer
                 catalogue.Revision != binding.CatalogueRevision)
                 return Error(message, "sequence.output.source_stale",
                     "A saved sequence or catalogue revision changed; old frames cannot be output.");
+            // This guard owns the catalogue semaphore until the exact Preview
+            // or Program command finishes. A concurrent file relink/removal
+            // cannot silently substitute the authorized native source.
+            // Never call GetSnapshotAsync again before disposing this lease.
+            await using var catalogueLease = await _mediaAssetCatalog.AcquireRevisionLeaseAsync(
+                catalogue.Revision, cancellationToken).ConfigureAwait(false);
 
             if (isGet)
             {
@@ -148,7 +161,8 @@ public sealed partial class ControlHostIpcServer
                 null);
             var outcome = await MutateAsync(
                 InternalRequest("control.sequence.output.take.commit", cut),
-                MutationKind.Cut, cancellationToken).ConfigureAwait(false);
+                MutationKind.Cut, cancellationToken,
+                mutationGateAlreadyHeld: true).ConfigureAwait(false);
             var failure = ReadMutationFailure(outcome);
             if (failure is not null)
             {
@@ -187,6 +201,11 @@ public sealed partial class ControlHostIpcServer
             return Error(message, "sequence.output.rejected",
                 "Sequence output was rejected or needs explicit reconciliation: " + error.GetType().Name);
         }
-        finally { _sequencePreparationGate.Release(); }
+        finally
+        {
+            if (mutationGateHeld)
+                _mutationGate.Release();
+            _sequencePreparationGate.Release();
+        }
     }
 }
