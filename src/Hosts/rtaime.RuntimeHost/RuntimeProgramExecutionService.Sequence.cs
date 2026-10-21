@@ -14,6 +14,30 @@ public sealed partial class RuntimeProgramExecutionService
 {
     internal GpuProcessingProvider SequenceCompositionGpu => _gpu;
 
+    internal bool IsCommittedSequencePreviewSource(MediaSourceId sourceId) =>
+        IsCommittedSequenceOutputSource(sourceId, allowProgram: false);
+
+    internal bool IsCommittedSequenceOutputSource(MediaSourceId sourceId, bool allowProgram)
+    {
+        lock (_gate)
+        {
+            var active = _runtime.ActiveExecution?.PreparedExecution;
+            if (active is null || !_backgrounds.ContainsKey(sourceId))
+                return false;
+            var preview = active.Bindings.SingleOrDefault(binding =>
+                binding.OutputRoleId is null &&
+                binding.MediaSourceId is not null &&
+                binding.MediaSinkId is not null);
+            var program = active.Bindings.SingleOrDefault(binding =>
+                binding.MediaSinkId == _programSinkId);
+            if (program is null || preview is null)
+                return false;
+            return (preview.MediaSourceId == sourceId &&
+                    (allowProgram || program.MediaSourceId != sourceId)) ||
+                   (allowProgram && program.MediaSourceId == sourceId);
+        }
+    }
+
     internal void PresentSequenceInput(
         MediaSourceId sourceId, GpuFrame composedVideo,
         ReadOnlySpan<float> composedStereo48k)
