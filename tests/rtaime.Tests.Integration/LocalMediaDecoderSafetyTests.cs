@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Security.Cryptography;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Core;
@@ -308,6 +309,44 @@ public sealed class LocalMediaDecoderSafetyTests
             }));
         }
         finally { Marshal.FreeHGlobal(native); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Native_H264_AAC_keeps_returned_PCM_immutable_across_future_reads_and_seek(bool use5994)
+    {
+        if (!OperatingSystem.IsWindows() || !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        var profile = use5994 ? ReferenceMediaProfile.Hd5994 : ReferenceMediaProfile.Hd50;
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var asset = ReferenceMediaTestAsset.Generate(profile);
+        var opened = new LocalMediaFileProvider(format).TryOpen(asset.Path, MediaSourceId.New());
+        Assert.True(opened.Succeeded, opened.Failure?.Message);
+        using var reader = opened.Source!;
+
+        var first = reader.ReadNext(0);
+        Assert.True(first.Succeeded, first.Failure?.Message);
+        Assert.NotNull(first.Frame!.Audio);
+        Assert.False(first.Frame.AudioPayload.IsEmpty);
+        var pixelsHash = SHA256.HashData(first.Frame.RgbaPixels.Span);
+        var retainedAudioHash = SHA256.HashData(first.Frame.AudioPayload.Span);
+        for (ulong sequence = 1; sequence < 40; sequence++)
+        {
+            var frame = reader.ReadNext(sequence);
+            Assert.True(frame.Succeeded, frame.Failure?.Message);
+            Assert.NotNull(frame.Frame!.Audio);
+            Assert.NotEmpty(frame.Frame.AudioPayload.ToArray());
+        }
+        // Decoder scratch is private. Public Float32 payloads remain owned
+        // by their returned frames and cannot alias the next native packet.
+        Assert.Equal(retainedAudioHash, SHA256.HashData(first.Frame.AudioPayload.Span));
+
+        Assert.True(reader.SeekToFrame(0).Succeeded);
+        var recovered = reader.ReadNext(40);
+        Assert.True(recovered.Succeeded, recovered.Failure?.Message);
+        Assert.Equal(pixelsHash, SHA256.HashData(recovered.Frame!.RgbaPixels.Span));
+        Assert.Equal(retainedAudioHash, SHA256.HashData(recovered.Frame.AudioPayload.Span));
+        Assert.Equal(0UL, reader.Measurements.ReadFailures);
     }
 
     [Fact]
