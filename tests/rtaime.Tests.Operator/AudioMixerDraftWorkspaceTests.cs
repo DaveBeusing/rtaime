@@ -37,6 +37,47 @@ public sealed partial class AudioMixerMutationTests
     }
 
     [Fact]
+    public async Task Compact_bus_and_source_adjustments_remain_local_until_explicit_apply()
+    {
+        var transport = new AudioTransport();
+        await using var owner = new OperatorViewModel(new OperatorControlClient(transport), runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var mixer = owner.AudioMixer;
+        Assert.False(mixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, mixer.CompactVisibility);
+        var source = mixer.Sources[0];
+        var bus = mixer.Buses[0];
+        var confirmedSourceGain = transport.Configuration.Sources[0].Gain;
+        var confirmedBusGain = transport.Configuration.Buses[0].MasterGain;
+
+        source.Gain = 0.5;
+        bus.MasterGain = 0.75;
+        source.ToggleMuteCommand.Execute(null);
+        Assert.Equal("DRAFT", source.DraftState);
+        Assert.Equal("DRAFT", bus.DraftState);
+        Assert.Contains("CONFIRMED", source.RoutingEvidence);
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.Equal(confirmedSourceGain, transport.Configuration.Sources[0].Gain);
+        Assert.Equal(confirmedBusGain, transport.Configuration.Buses[0].MasterGain);
+
+        mixer.DetailedPresentationCommand.Execute(null);
+        Assert.True(mixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, mixer.AdvancedVisibility);
+        Assert.Equal(0.5, source.Gain);
+        Assert.Equal(0.75, bus.MasterGain);
+        mixer.CompactPresentationCommand.Execute(null);
+        Assert.False(mixer.ShowProcessing);
+        Assert.Equal("DRAFT", source.DraftState);
+        Assert.Equal("DRAFT", bus.DraftState);
+
+        source.DiscardDraftCommand.Execute(null);
+        bus.DiscardDraftCommand.Execute(null);
+        Assert.Equal("CONFIRMED", source.DraftState);
+        Assert.Equal("CONFIRMED", bus.DraftState);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
     public async Task Mixer_precision_clipboard_and_invalid_input_preserve_explicit_commit_boundary()
     {
         var transport = new AudioTransport();
@@ -90,7 +131,10 @@ public sealed partial class AudioMixerOperatorSurfaceTests
         Assert.Equal(label, strip.LeftPeakLabel);
         Assert.True(double.IsFinite(strip.DisplayLeftPeak));
         Assert.Equal(hasValue, owner.AudioMixer.Buses[0].HasMeterEvidence);
+        Assert.Contains("CURRENT RUNTIME SAMPLE PEAKS", owner.AudioMixer.CompactSignalState);
         owner.AudioMixer.SetEvidenceAvailability("STALE");
         Assert.Equal("—", strip.LeftPeakLabel); Assert.Equal("STALE", strip.RuntimeState);
+        Assert.Contains("STALE", owner.AudioMixer.CompactSignalState);
+        Assert.False(owner.AudioMixer.Buses[0].HasMeterEvidence);
     }
 }
