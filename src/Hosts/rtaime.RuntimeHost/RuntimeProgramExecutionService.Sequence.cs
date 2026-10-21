@@ -13,6 +13,10 @@ namespace rtaime.RuntimeHost;
 public sealed partial class RuntimeProgramExecutionService
 {
     internal GpuProcessingProvider SequenceCompositionGpu => _gpu;
+    internal ulong NextSequenceOutputSlot
+    {
+        get { lock (_gate) return _nextSequenceNumber; }
+    }
 
     internal bool IsCommittedSequencePreviewSource(MediaSourceId sourceId) =>
         IsCommittedSequenceOutputSource(sourceId, allowProgram: false);
