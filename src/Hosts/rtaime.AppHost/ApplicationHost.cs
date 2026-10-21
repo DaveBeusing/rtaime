@@ -867,6 +867,7 @@ public sealed class UnifiedApplicationHost
                 _lifecycle.FailStage(
                     ApplicationLifecycleStages.ProductionReadiness,
                     DiagnosticRedactor.RedactText(classified.Message),
+                    canRetry: false,
                     statusText: "AppHost runtime lifecycle or recovery failed.");
 			else
 				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
