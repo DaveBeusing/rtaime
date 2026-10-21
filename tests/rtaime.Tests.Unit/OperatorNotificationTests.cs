@@ -216,6 +216,29 @@ public sealed class OperatorNotificationTests
 		}
 	}
 
+    [Theory]
+    [InlineData("MULTIVIEW")]
+    [InlineData("AI")]
+    public void Crash_recovery_retains_registered_workspace_but_no_live_production_values(string workspace)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var path = Path.Combine(root, "operator-session.json");
+            var first = new OperatorSessionRecoveryStore(path);
+            var initial = first.BeginSession(new OperatorSafeSessionState(workspace));
+            Assert.Equal(workspace, initial.SafeState.SelectedWorkspace);
+            Assert.True(initial.PersistenceAvailable);
+            var next = new OperatorSessionRecoveryStore(path)
+                .BeginSession(new OperatorSafeSessionState("LIVE"));
+            Assert.True(next.PreviousSessionEndedUnexpectedly);
+            Assert.False(next.StateWasCorrupted);
+            Assert.Equal(workspace, next.SafeState.SelectedWorkspace);
+            Assert.Single(typeof(OperatorSafeSessionState).GetProperties());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Fact]
     public void Oversized_or_unsupported_session_document_cannot_restore_prior_workspace_or_live_actions()
     {
