@@ -593,7 +593,8 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		}
 	}
 
-	public string WorkspaceTitle => $"{SelectedWorkspace} WORKSPACE";
+    public string WorkspaceTitle => SelectedWorkspace == OperatorWorkspaceNames.Edit
+        ? "TIMELINE WORKSPACE" : $"{SelectedWorkspace} WORKSPACE";
 	public string FullscreenLabel => IsFullscreen ? "WINDOWED  F11" : "FULLSCREEN  F11";
 	public string CenterModeLabel => IsCenterMaximized ? "RESTORE PANELS" : "MAXIMIZE VIEW";
 
