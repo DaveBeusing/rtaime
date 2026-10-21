@@ -373,11 +373,12 @@ Float32 through the existing AudioProductionEngine. It feeds the resulting
 pixels and PCM into the established Runtime source buffers. The existing
 Program compositor, route, output-mapping, recorder, network, replay and
 monitoring consumers remain the only downstream production path.
-A newly composed Preview input remains `UNAVAILABLE` until the matching
-Runtime boundary has completed; native ingress alone cannot publish
-`PREVIEW_READY`. A genuine `BUFFERING` failure is not converted into
-readiness by an older delayed boundary, and the existing revision/source
-and bounded recency checks remain mandatory before arming Take.
+Before the first completed Preview boundary, native source ingress
+remains `UNAVAILABLE` and cannot by itself publish `PREVIEW_READY`.
+Subsequent readiness is retained only within the existing one-frame
+confirmed-Preview recency window. A genuine `BUFFERING` failure is not
+converted into readiness by an older delayed boundary; source/revision
+guards remain mandatory before arming Take.
 A supported silent video/audio gap results in a real black frame and
 sample-exact silence; native source failures fence stale generations and
 mark the source unavailable rather than manufacturing frames.
