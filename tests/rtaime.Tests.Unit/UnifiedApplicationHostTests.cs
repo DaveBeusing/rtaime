@@ -463,6 +463,9 @@ public sealed class UnifiedApplicationHostTests
 
 		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
 		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+        Assert.Equal(LifecycleStageStatus.Failed,
+            host.Lifecycle.Stages.Single(stage =>
+                stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
 		Assert.True(platform.StopSignalWritten);
 	}
 
@@ -663,6 +666,10 @@ public sealed class UnifiedApplicationHostTests
 		Assert.Equal(ApplicationLifecycleOwnership.EphemeralLocal, exception.Ownership);
 		Assert.True(exception.RecoveryDuration >= options.Policy.RuntimeRecoveryTimeout);
 		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+        var terminal = host.Lifecycle.Stages.Single(stage =>
+            stage.Id == ApplicationLifecycleStages.ProductionReadiness);
+        Assert.Equal(LifecycleStageStatus.Failed, terminal.Status);
+        Assert.Contains("readiness.evidence.missing", terminal.FailureReason, StringComparison.Ordinal);
 		Assert.True(platform.StopSignalWritten);
 	}
 
@@ -773,10 +780,14 @@ public sealed class UnifiedApplicationHostTests
 			if (delayCount == 1) platform.RemoveReadiness();
 		};
 
+		var host = new UnifiedApplicationHost(options, platform);
 		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(
-			() => new UnifiedApplicationHost(options, platform).RunAsync());
+			() => host.RunAsync());
 
 		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
+        Assert.Equal(LifecycleStageStatus.Failed,
+            host.Lifecycle.Stages.Single(stage =>
+                stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
 		Assert.Equal(ApplicationLifecycleOwnership.ExternalManaged, exception.Ownership);
 		Assert.False(platform.StopSignalWritten);
 		Assert.True(platform.IsProcessAlive(42));
