@@ -227,6 +227,12 @@ function Verify-Evidence {
     if ([bool]$selected[0].includeNativeDiagnostic) {
         Require ([string]$manifest.nativeDecoder.status -ceq "PASSED_ASSERTION_ONLY") "Native diagnostic test was required but missing."
         Verify-Trx (Read-BoundArtifact $root $manifest.nativeDecoder.trx ".trx") 2
+        $nativeLogPath = Read-BoundArtifact $root $manifest.nativeDecoder.log ".txt"
+        Require ((Get-Item -LiteralPath $nativeLogPath).Length -gt 0) "The qualified native diagnostic log is empty."
+        Require ([string]$manifest.nativeDecoder.producerScope -ceq
+            "ISOLATED_NATIVE_DECODER_AND_WORKER_NOT_LIVE_PROGRAM" -and
+            [string]$manifest.nativeDecoder.numericalDecoderAndGcResults -ceq
+            "UNVERIFIED_UNTIL_LOG_REVIEW") "Isolated native diagnostics were misrepresented as live Program telemetry."
     } else {
         Require ([string]$manifest.nativeDecoder.status -ceq "UNVERIFIED") "Optional native diagnostics were fabricated."
     }
