@@ -102,6 +102,12 @@ The productive MainWindow must continue to bind shell geometry through the centr
 
 Fixed 1920 × 1080 render dimensions are forbidden in the productive window. The reference surface remains a design and qualification coordinate system, not a hard render size.
 
+## LIVE action-row and playout geometry qualification
+
+The productive LIVE layout retains the original bound Preview/Program viewers (Preview left/green, Program right/red), context Inspector and lower Rundown/timeline. Its `LiveActionStrip` uses a single horizontal stack inside a bounded horizontal scroll region; narrow windows must not turn supplementary labels and output evidence into extra rows that steal the Preview/Program viewport. Explicit selected/NEXT/Program text and controlled Set Preview/CUT/AUTO remain distinct from reported eligibility and pending state. Network send state, recording state and observed audio level are presented without implying physical output or recording finalization.
+
+The existing real WPF `OperatorCombinedVisualQualification` matrix now checks action-row height and zero vertical scroll, source/Cue/Program identity bindings, actual network/recording/audio evidence, access to layout restoration, one visible CUT and the single Preview transport per visible Preview viewer. These checks run with existing 960–1920 DIP viewport and injected DPI cases; injected scale and WPF bitmap screenshots are not real physical mixed-DPI display or D3D scan-out evidence. Focus, docking, window restore and authority boundaries remain covered by their existing real-window and connected-host qualifications. Physical display review remains UNVERIFIED without target-bound evidence.
+
 ## Static policy boundary
 
 build/quality/Test-OperatorUiPolicy.ps1 remains responsible for static architectural and design-system contracts such as:
