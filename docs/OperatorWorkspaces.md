@@ -173,6 +173,10 @@ The existing Audio Mixer supports up to eight confirmed source strips, four bus 
 
 See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md). Local Program, Clean Program monitoring and external-send evidence must remain distinct in every compact layout.
 
+### Output canvas stage lifecycle
+
+The OUTPUTS authoring stage remains a geometry-only WPF surface. It attaches to the current draft editor only while loaded, detaches on unload, and invalidates drawing only for stage geometry, selection, zoom, pan and guide changes. Save/health/transport notifications that do not alter the stage do not trigger a redundant geometry redraw. Mouse-capture loss, template/window removal and editor rebinding cancel uncommitted stage gestures; any active preview belongs to the original draft editor and is cleared there. Only an explicit successful pointer release commits the local geometry draft, never a Program output change.
+
 ## HEALTH
 
 HEALTH consumes the central event-driven snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and monitoring. Subsystem health is not global Runtime Readiness. Show duration, last successful check, measurements, recovery and optional detail without creating another authority. Offer recovery only through an existing safe command. See [Health Center](HealthCenter.md).
