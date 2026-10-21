@@ -77,6 +77,7 @@ public sealed partial class MediaPoolInspectorViewModel
         }, () => !_preparing);
         PropertyChanged += PreparationContextChanged;
         _operator.PropertyChanged += PreparationOperatorChanged;
+        _mediaDeck.PropertyChanged += PreparationDeckChanged;
         _preparationTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
             (_, _) => ExpirePreparationEvidence(), Dispatcher.CurrentDispatcher);
     }
@@ -162,6 +163,9 @@ public sealed partial class MediaPoolInspectorViewModel
     private void PreparationOperatorChanged(object? sender, PropertyChangedEventArgs args)
     {
         if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or
+            nameof(OperatorViewModel.PreviewSourceId))
+            _libraryJourneyMessage = null;
+        if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or
             nameof(OperatorViewModel.IsBusy) or nameof(OperatorViewModel.SelectedSource) or
             nameof(OperatorViewModel.PreviewSourceId) or nameof(OperatorViewModel.RuntimeStatus))
             RaisePreparationCommands();
@@ -172,6 +176,19 @@ public sealed partial class MediaPoolInspectorViewModel
             InvalidatePreparationEvidence("Control connection changed. Prepare again after synchronization.");
         }
     }
+    private void PreparationDeckChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(MediaDeckViewModel.AssetId) or nameof(MediaDeckViewModel.State) or
+            nameof(MediaDeckViewModel.IsLoaded) or nameof(MediaDeckViewModel.HasError) or
+            nameof(MediaDeckViewModel.LastError) or nameof(MediaDeckViewModel.SourceId) or
+            nameof(MediaDeckViewModel.IsBusy))
+        {
+            // The next label must always follow the latest confirmed resident state.
+            _libraryJourneyMessage = null;
+            RaiseLibraryJourney();
+        }
+    }
+
     private string AssetPreparationState(string assetId)
     {
         var value = _preflightEvidence.LastOrDefault(item => item.AssetId == assetId);
@@ -267,10 +284,12 @@ public sealed partial class MediaPoolInspectorViewModel
         !_operator.IsBusy && _operator.IsConnected && !_operator.IsStale &&
         !HasMultipleSelection && SelectedItem is { Kind: MediaPoolItemKind.Clip } selected &&
         Guid.TryParse(selected.ReferenceId, out _);
-    public bool CanOpenLibraryPreview => !_openingLibraryPreview && !_preparing && !_catalogBusy &&
+    public bool CanOpenLibraryPreviewItem(MediaPoolItemViewModel? item) =>
+        !_preparationDisposed && !_openingLibraryPreview && !_preparing && !_catalogBusy &&
         !_batchRunning && !_operator.IsBusy && _operator.IsConnected && !_operator.IsStale &&
-        !HasMultipleSelection && SelectedItem is { } selected && CanDropToPreview(selected) &&
+        !HasMultipleSelection && CanDropToPreview(item) && item is { } selected &&
         (selected.Kind != MediaPoolItemKind.Clip || Guid.TryParse(selected.ReferenceId, out _));
+    public bool CanOpenLibraryPreview => CanOpenLibraryPreviewItem(SelectedItem);
     public string LibraryJourneyFeedback => _libraryJourneyMessage ?? LibraryJourneyState;
 
     public string LibraryJourneyState
@@ -389,6 +408,7 @@ public sealed partial class MediaPoolInspectorViewModel
         _preparationTimer?.Stop(); _preparationTimer = null;
         PropertyChanged -= PreparationContextChanged;
         _operator.PropertyChanged -= PreparationOperatorChanged;
+        _mediaDeck.PropertyChanged -= PreparationDeckChanged;
         // The in-flight method sends cancellation after any admitted response and owns cleanup.
     }
 }
