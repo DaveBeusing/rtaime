@@ -192,8 +192,9 @@
                     <ColumnDefinition Width="190" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <controls:RtaimeScrollViewer Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Disabled">
+                <controls:RtaimeScrollViewer x:Name="SequenceTrackScroll" Grid.ColumnSpan="2"
+                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    ScrollChanged="OnTrackScrollChanged">
                     <ItemsControl ItemsSource="{Binding VisibleRows}"
                         SnapsToDevicePixels="True">
                         <ItemsControl.ItemTemplate>
