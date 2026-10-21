@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.Text.Json;
 using rtaime.AppHost;
 
@@ -56,6 +57,36 @@ public sealed class WindowsApplicationBootstrapTests : IDisposable
 			document.RootElement.GetProperty("message").GetString());
 		Assert.DoesNotContain("top-secret", content, StringComparison.Ordinal);
 	}
+
+    [Fact]
+    public void System_host_platform_never_terminates_an_untracked_external_process()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var start = new ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add("/c");
+        start.ArgumentList.Add("ping -n 20 127.0.0.1 >nul");
+        using var foreign = Process.Start(start);
+        Assert.NotNull(foreign);
+        try
+        {
+            var platform = new SystemApplicationHostPlatform();
+            Assert.True(platform.IsProcessAlive(foreign.Id));
+            platform.KillProcessTree(foreign.Id);
+            Assert.False(foreign.HasExited);
+        }
+        finally
+        {
+            if (!foreign.HasExited)
+            {
+                foreign.Kill(entireProcessTree: true);
+                Assert.True(foreign.WaitForExit(5000));
+            }
+        }
+    }
 
 	public void Dispose()
 	{
