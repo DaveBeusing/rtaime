@@ -150,4 +150,141 @@ public sealed class OutputMappingGpuTests
         Assert.Equal(0, provider.ActiveSurfaceCount);
         Assert.Equal(0, backend.ActiveAllocationCount);
     }
+    [Fact]
+    public void Canonical_surface_identity_order_agrees_with_existing_guid_string_order()
+    {
+        var random = new Random(29817);
+        var identities = new Guid[1024];
+        for (var index = 0; index < identities.Length; index++)
+        {
+            var bytes = new byte[16];
+            random.NextBytes(bytes);
+            identities[index] = new Guid(bytes);
+        }
+
+        var reference = identities.OrderBy(identity => identity.ToString("N"), StringComparer.Ordinal).ToArray();
+        var withoutStrings = identities.OrderBy(identity => identity).ToArray();
+        Assert.Equal(reference, withoutStrings);
+    }
+
+    [Fact]
+    public void Overlapping_solid_surfaces_preserve_stable_z_and_identity_order()
+    {
+        var ids = new[]
+        {
+            Guid.Parse("81000000-0000-0000-0000-000000000001"),
+            Guid.Parse("01000000-0000-0000-0000-000000000002"),
+            Guid.Parse("ff000000-0000-0000-0000-000000000003"),
+            Guid.Parse("40000000-0000-0000-0000-000000000004")
+        };
+        var surfaces = new GpuOutputMappingSurface[ids.Length];
+        var inputs = new Dictionary<SurfaceId, ReadOnlyMemory<byte>>();
+        var layers = new byte[] { 22, 44, 66, 88 };
+        for (var index = 0; index < ids.Length; index++)
+        {
+            var id = new SurfaceId(Identity.New());
+            surfaces[index] = Quad(id, Small, 2, 2, z: index == 0 ? -2 : 3) with
+            {
+                SurfaceIdentity = ids[index]
+            };
+            var rgba = new byte[16];
+            for (var offset = 0; offset < rgba.Length; offset += 4)
+            {
+                rgba[offset] = layers[index];
+                rgba[offset + 3] = 255;
+            }
+            inputs.Add(id, rgba);
+        }
+
+        var target = new byte[16];
+        GpuOutputMappingRaster.Render(Small, target, surfaces, id => inputs[id],
+            opaqueProgramSink: true);
+        // The max z=3 layer with the max canonical Guid is on top.
+        Assert.Equal(new byte[] { 66, 0, 0, 255 }, target.AsSpan(0, 4).ToArray());
+        Assert.All(target.Where((_, index) => index % 4 == 3), alpha => Assert.Equal((byte)255, alpha));
+    }
+
+    [Fact]
+    public void Invalid_later_source_and_degenerate_later_quad_keep_previous_sink_untouched()
+    {
+        var pixels = Enumerable.Repeat((byte)117, 16).ToArray();
+        var good = Quad(SurfaceA, Small, 2, 2, z: 0);
+        var later = Quad(SurfaceB, Small, 2, 2, z: 1);
+        Assert.Throws<ArgumentException>(() =>
+            GpuOutputMappingRaster.Render(Small, pixels, [good, later],
+                id => id == SurfaceA ? new byte[16] : new byte[12]));
+        Assert.All(pixels, value => Assert.Equal((byte)117, value));
+
+        var invalid = later with { BottomRight = new(0, 0) };
+        Assert.Throws<ArgumentException>(() =>
+            GpuOutputMappingRaster.Render(Small, pixels, [good, invalid], _ => new byte[16]));
+        Assert.All(pixels, value => Assert.Equal((byte)117, value));
+    }
+
+    [Fact]
+    public void Warmed_mapping_preparation_and_raster_do_not_allocate_per_frame()
+    {
+        var format = Format(32, 18);
+        var input = new byte[RgbaFrameBuffer.RequiredByteLength(format)];
+        for (var offset = 0; offset < input.Length; offset += 4)
+        {
+            input[offset] = 180;
+            input[offset + 1] = 24;
+            input[offset + 2] = 90;
+            input[offset + 3] = 192;
+        }
+        var surface = Quad(SurfaceA, format, 32, 18,
+            new GpuOutputEdgeBlend(.12, .08, .15, .1), z: 1);
+        GpuOutputMappingSurface[] geometry = [surface, surface with
+        {
+            ZOrder = 2,
+            SurfaceIdentity = Guid.Parse("9a4efed1-0000-0000-0000-000000000000")
+        }];
+        var destination = new byte[input.Length];
+        Func<SurfaceId, ReadOnlyMemory<byte>> resolve = _ => input;
+
+        for (var i = 0; i < 32; i++)
+            GpuOutputMappingRaster.Render(format, destination, geometry, resolve, opaqueProgramSink: true);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 256; i++)
+            GpuOutputMappingRaster.Render(format, destination, geometry, resolve, opaqueProgramSink: true);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.InRange(allocated, 0, 4_096);
+        Assert.Equal((byte)255, destination[3]);
+        Assert.InRange(destination[0], (byte)0, (byte)180);
+    }
+
+    [Fact]
+    public void Stale_mapping_sequence_is_rejected_before_allocating_or_reading_a_mapped_output()
+    {
+        var backend = new ManagedReferenceGpuBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var source = MediaSourceId.New();
+        var older = new FrameTiming(7, 7, new Timebase(1, 50));
+        var current = new FrameTiming(8, 8, new Timebase(1, 50));
+        using var input = provider.Upload(source,
+            RgbaFrameBuffer.Solid(Small, 71, 82, 93), older, Generation.Initial, "old-mapping");
+        using var program = provider.Upload(source,
+            RgbaFrameBuffer.Solid(Small, 22, 33, 44), current, Generation.Initial, "program-mapping");
+        var priorReadbacks = provider.MemoryTransferStatistics.ReadbackOperations;
+        var result = provider.MapOutput(program,
+            [new GpuOutputMappingInput(input, Quad(input.SurfaceId, Small, 2, 2))]);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.output_mapping.sequence_stale", result.Failure?.Code);
+        Assert.Equal(2, provider.ActiveSurfaceCount);
+        Assert.Equal(2, backend.ActiveAllocationCount);
+        Assert.Equal(priorReadbacks, provider.MemoryTransferStatistics.ReadbackOperations);
+    }
+
+    [Fact]
+    public void CUDA_does_not_advertise_output_mapping_without_an_implemented_mapping_backend()
+    {
+        using var backend = new CudaGpuProcessingBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        Assert.False(provider.SupportsOutputMapping);
+    }
+
 }
