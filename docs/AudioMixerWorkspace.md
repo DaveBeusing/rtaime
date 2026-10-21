@@ -19,7 +19,10 @@ peaks, gain/mute draft and the same explicit Apply/Discard boundary.
 An **UNASSIGNED** bus or **NO BUS** source is not claimed to produce output.
 
 The top strip retains **FOLLOW VIDEO / BREAKAWAY SELECTED** using the
-existing governed routing commands and shows the confirmed routed source.
+existing governed routing commands. It distinguishes the **confirmed**
+routed source from the locally **selected Breakaway target**; each
+compact source card includes an explicit SELECT/SELECTED control. Selection
+itself makes no ControlHost mutation and cannot change Program audio.
 The consolidated signal label distinguishes current sample-peak evidence
 from CLIPPING, PARTIAL SIGNAL and stale/offline/unavailable readings. It
 does not report physical output, LUFS, RMS or true peak. All source and
