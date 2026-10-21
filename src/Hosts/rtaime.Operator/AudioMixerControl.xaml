@@ -61,14 +61,162 @@
 				<TextBlock Text="{Binding Owner.CommandStatus}" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
 				<TextBlock Text="{Binding Owner.LastError}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 				<WrapPanel Margin="0,5,0,0">
-					<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="COMPACT" Command="{Binding CompactPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
-					<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DETAILED" Command="{Binding DetailedPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
+					<controls:RtaimeButton AutomationProperties.Name="Show compact live audio controls" Content="COMPACT" Command="{Binding CompactPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
+					<controls:RtaimeButton AutomationProperties.Name="Expand advanced audio mixer controls" Content="ADVANCED" Command="{Binding DetailedPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
 					<controls:RtaimeButton Content="DETACH MIXER" Click="DetachMixer_Click" IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Detach audio mixer through workspace docking" />
 					<TextBlock Text="{Binding PresentationLabel}" Style="{StaticResource MixerLabel}" VerticalAlignment="Center" />
 				</WrapPanel>
 			</StackPanel>
 
-			<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+
+            <!-- Bounded presentation-only view over the same four bus and eight source owners. -->
+            <controls:RtaimeScrollViewer Grid.Row="1" Visibility="{Binding CompactVisibility}"
+                VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                AutomationProperties.Name="Compact live audio bus and source controls">
+                <StackPanel Margin="0,0,2,0">
+                    <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+                        BorderThickness="1" CornerRadius="4" Padding="9" Margin="0,0,0,8">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,5">
+                                <TextBlock Text="PROGRAM AUDIO ROUTING" Style="{StaticResource OperatorSectionTitle}" />
+                                <TextBlock Text="{Binding Owner.AudioRoutingMode}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Owner.AudioRoutingSourceName, StringFormat=Confirmed source: {0}}"
+                                Style="{StaticResource MixerLabel}" TextTrimming="CharacterEllipsis" />
+                            <WrapPanel Margin="0,5,0,0">
+                                <controls:RtaimeButton Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}"
+                                    AutomationProperties.Name="Request governed Audio Follow Video" IsCompact="True" Margin="0,0,6,0" />
+                                <controls:RtaimeButton Content="BREAKAWAY SELECTED" Command="{Binding Owner.SetAudioBreakawayCommand}"
+                                    AutomationProperties.Name="Request governed audio source breakaway" IsCompact="True" />
+                            </WrapPanel>
+                            <TextBlock Text="{Binding CompactSignalState}" Style="{StaticResource MixerLabel}"
+                                Margin="0,6,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                AutomationProperties.Name="Program audio signal confidence" />
+                            <TextBlock Text="{Binding OutputRoutingEvidence}" Style="{StaticResource MixerLabel}"
+                                Margin="0,3,0,0" TextWrapping="Wrap" AutomationProperties.Name="Confirmed bus to output assignments" />
+                        </StackPanel>
+                    </Border>
+
+                    <DockPanel Margin="0,0,0,5">
+                        <TextBlock Text="PROGRAM / AUX BUSES" Style="{StaticResource OperatorSectionTitle}" />
+                        <TextBlock Text="Runtime sample peaks · — = unavailable" Style="{StaticResource MixerLabel}" DockPanel.Dock="Right" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Buses}" AutomationProperties.Name="Live audio bus strips">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="290" Margin="0,0,8,8" Padding="9"
+                                    Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,3">
+                                            <TextBlock Text="{Binding BusLabel}" Style="{StaticResource OperatorValue}" FontWeight="Bold" />
+                                            <TextBlock Text="{Binding EvidenceState}" Style="{StaticResource MixerLabel}"
+                                                DockPanel.Dock="Right" AutomationProperties.LiveSetting="Polite" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding OutputRoles, StringFormat=Output: {0}}"
+                                            TextTrimming="CharacterEllipsis" Style="{StaticResource MixerLabel}"
+                                            ToolTip="{Binding OutputRoles}" />
+                                        <Grid Margin="0,5,0,2">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="15" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                            <TextBlock Text="L" Style="{StaticResource MixerLabel}" />
+                                            <controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Height="8"
+                                                HasValue="{Binding HasMeterEvidence}" Value="{Binding DisplayLeftPeak, Mode=OneWay}"
+                                                Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live bus left sample peak" />
+                                            <TextBlock Grid.Column="2" Text="{Binding LeftPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="15" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                            <TextBlock Text="R" Style="{StaticResource MixerLabel}" />
+                                            <controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Height="8"
+                                                HasValue="{Binding HasMeterEvidence}" Value="{Binding DisplayRightPeak, Mode=OneWay}"
+                                                Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live bus right sample peak" />
+                                            <TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat=CONFIRMED {0}}"
+                                            Style="{StaticResource MixerLabel}" />
+                                        <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
+                                            Style="{StaticResource OperatorValue}" AutomationProperties.LiveSetting="Polite" />
+                                        <TextBlock Text="{Binding DraftGainLabel, StringFormat=Draft gain: {0}}"
+                                            Style="{StaticResource MixerLabel}" />
+                                        <controls:RtaimeSlider Minimum="0" Maximum="4" SmallChange="0.01" LargeChange="0.1"
+                                            Value="{Binding MasterGain, Mode=TwoWay}" IsEnabled="{Binding CanEditDraft}"
+                                            Orientation="Horizontal" Height="26" AutomationProperties.Name="Bus gain draft fader"
+                                            AutomationProperties.HelpText="Adjust local bus gain only; Apply requests authoritative confirmation. Arrow steps 0.01x, Page 0.1x." />
+                                        <WrapPanel Margin="0,5,0,0">
+                                            <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local bus mute draft" />
+                                            <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Apply bus draft to Control" />
+                                            <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardDraftCommand}"
+                                                IsCompact="True" AutomationProperties.Name="Discard local bus draft" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <DockPanel Margin="4,2,0,5">
+                        <TextBlock Text="SOURCE INPUTS" Style="{StaticResource OperatorSectionTitle}" />
+                        <TextBlock Text="{Binding MeteringLabel}" Style="{StaticResource MixerLabel}" DockPanel.Dock="Right" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Sources}" AutomationProperties.Name="Compact live source strips">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="290" Margin="0,0,8,8" Padding="9"
+                                    Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,4">
+                                            <TextBlock Text="{Binding SourceName}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding RuntimeState}" DockPanel.Dock="Right" Style="{StaticResource MixerLabel}"
+                                                AutomationProperties.LiveSetting="Polite" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding RoutingEvidence}" Style="{StaticResource MixerLabel}"
+                                            TextWrapping="Wrap" AutomationProperties.Name="Confirmed source routing" />
+                                        <Grid Margin="0,5,0,2">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="15" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                            <TextBlock Text="L" Style="{StaticResource MixerLabel}" />
+                                            <controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Height="8"
+                                                HasValue="{Binding HasMeterEvidence}" Value="{Binding DisplayLeftPeak, Mode=OneWay}"
+                                                Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live source left sample peak" />
+                                            <TextBlock Grid.Column="2" Text="{Binding LeftPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="15" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                            <TextBlock Text="R" Style="{StaticResource MixerLabel}" />
+                                            <controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Height="8"
+                                                HasValue="{Binding HasMeterEvidence}" Value="{Binding DisplayRightPeak, Mode=OneWay}"
+                                                Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live source right sample peak" />
+                                            <TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat=CONFIRMED {0}}"
+                                            Style="{StaticResource MixerLabel}" />
+                                        <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
+                                            Style="{StaticResource OperatorValue}" AutomationProperties.LiveSetting="Polite" />
+                                        <TextBlock Text="{Binding DraftGainLabel, StringFormat=Draft gain: {0}}"
+                                            Style="{StaticResource MixerLabel}" />
+                                        <controls:RtaimeSlider Minimum="0" Maximum="4" SmallChange="0.01" LargeChange="0.1"
+                                            Value="{Binding Gain, Mode=TwoWay}" IsEnabled="{Binding CanEditDraft}"
+                                            Orientation="Horizontal" Height="26" AutomationProperties.Name="Source gain draft fader"
+                                            AutomationProperties.HelpText="Adjust local source gain only; Apply requests authoritative confirmation. Arrow steps 0.01x, Page 0.1x." />
+                                        <WrapPanel Margin="0,5,0,0">
+                                            <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local source mute draft" />
+                                            <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Apply source draft to Control" />
+                                            <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardDraftCommand}"
+                                                IsCompact="True" AutomationProperties.Name="Discard local source draft" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </controls:RtaimeScrollViewer>
+
+			<controls:RtaimeScrollViewer Grid.Row="1" Visibility="{Binding AdvancedVisibility}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Advanced audio mixer processing and routing">
 				<StackPanel Margin="0,0,2,0">
 					<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9" Margin="0,0,0,10">
 						<StackPanel>
