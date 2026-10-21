@@ -87,6 +87,18 @@ public interface IControlRuntimeTransportSeam
         SequenceShuttleRequest request, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<SequenceShuttleObservation>(
             new NotSupportedException("Runtime sequence shuttle is unavailable."));
+    ValueTask<SequenceOutputObservation> BindSequencePreviewAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequenceOutputObservation>(
+            new NotSupportedException("Runtime sequence Preview output is unavailable."));
+    ValueTask<SequenceOutputObservation> ConfirmSequenceTakeAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequenceOutputObservation>(
+            new NotSupportedException("Runtime sequence Program Take is unavailable."));
+    ValueTask<SequenceOutputObservation> GetSequenceOutputAsync(
+        SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequenceOutputObservation>(
+            new NotSupportedException("Runtime sequence output observations are unavailable."));
 
 	ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
 	ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
