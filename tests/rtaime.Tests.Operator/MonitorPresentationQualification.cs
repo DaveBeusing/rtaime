@@ -165,6 +165,9 @@ internal static class MonitorPresentationQualification
 		host.Children.Add(viewer);
 		var window = new Window { Width = 980, Height = 700, Content = host, ShowInTaskbar = false };
 		GpuMonitorPresentationSurface? surface = null;
+		CancellationTokenSource? readStop = null;
+		IAsyncEnumerator<MonitoringFrame>? frames = null;
+		Exception? visualFailure = null;
 		try
 		{
 			await WaitAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready &&
@@ -172,8 +175,8 @@ internal static class MonitorPresentationQualification
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(
 				controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
 			var before = await client.SynchronizeAsync();
-			using var readStop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-			await using var frames = new NamedPipeOperatorMonitoringTransport(runtime.MonitoringEndpoint)
+			readStop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+			frames = new NamedPipeOperatorMonitoringTransport(runtime.MonitoringEndpoint)
 				.ReadFramesAsync(readStop.Token).GetAsyncEnumerator(readStop.Token);
 			async Task<MonitoringFrame> NextProgramAsync()
 			{
@@ -299,34 +302,109 @@ internal static class MonitorPresentationQualification
 			Assert.False(viewer.HasPresentedFrame);
 			Assert.False(viewer.IsRoiActive);
 			Assert.False(viewer.BeginRoiSelectionAt(10, 10));
-			Console.WriteLine("VIEWER PROGRAM PASS: real RuntimeHost Program sequence advanced through the named-pipe monitoring transport; productive ProgramViewer BAML, fallback native pixels, Fit/Fill/zoom, ROI retention, stale/recovered evidence, resize targets, detach/reattach of the same viewer, unchanged confirmed production revision. PNG is static fallback evidence; interaction assertions are separate. No physical multi-monitor or provider hardware claim.");
+			Console.WriteLine("VIEWER PROGRAM VISUAL PASS: confirmed live Runtime Program frames, productive WPF viewer, native fallback, zoom/ROI, shared GPU readback, retained/stale evidence and resource epoch isolation. Host shutdown is qualified separately.");
+		}
+		catch (Exception exception)
+		{
+			visualFailure = exception;
+			Console.WriteLine($"VIEWER VISUAL FAIL: pid={Environment.ProcessId}; {exception}");
 		}
 		finally
 		{
-			window.Close();
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
-			controlStop.Cancel();
-			try
+			var errors = new List<Exception>();
+			async Task PhaseAsync(string name, Func<Task> action)
 			{
-				var controlExit = await controlRun;
-				Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=ControlHost; pid={Environment.ProcessId}; " +
-					$"exit={controlExit}; state={control.Lifecycle.State}; health={control.Lifecycle.Health}; " +
-					$"detail={control.Lifecycle.Detail}; shutdownPhases={JsonSerializer.Serialize(control.ShutdownPhases)}");
-				Assert.Equal(ControlHostExitCode.Success, controlExit);
-			}
-			finally
-			{
-				runtimeStop.Cancel();
+				var elapsed = Stopwatch.StartNew();
+				Console.WriteLine($"VIEWER TEARDOWN BEGIN: phase={name}; pid={Environment.ProcessId}; thread={Environment.CurrentManagedThreadId}");
 				try
 				{
-					var runtimeExit = await runtimeRun;
-					Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=RuntimeHost; pid={Environment.ProcessId}; " +
-						$"exit={runtimeExit}; state={runtime.Lifecycle.State}; health={runtime.Lifecycle.Health}; detail={runtime.Lifecycle.Detail}");
-					Assert.Equal(RuntimeHostExitCode.Success, runtimeExit);
+					await action();
+					Console.WriteLine($"VIEWER TEARDOWN PASS: phase={name}; elapsedMs={elapsed.Elapsed.TotalMilliseconds:F1}");
 				}
-				finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+				catch (Exception exception)
+				{
+					Console.WriteLine($"VIEWER TEARDOWN FAIL: phase={name}; elapsedMs={elapsed.Elapsed.TotalMilliseconds:F1}; {exception}");
+					errors.Add(new InvalidOperationException($"Fixture teardown failed during '{name}'.", exception));
+				}
 			}
-			if (surface is not null) Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
+
+			// The monitoring lease and productive WPF/COM presentation owner must be
+			// retired before asking the authoritative host to drain. Both hosts are
+			// in-process fixture owners, not adopted external child processes.
+			await PhaseAsync("monitor-cancel", () =>
+			{
+				readStop?.Cancel();
+				return Task.CompletedTask;
+			});
+			if (frames is not null)
+				await PhaseAsync("monitor-dispose", () => frames.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)));
+			await PhaseAsync("monitor-token-dispose", () =>
+			{
+				readStop?.Dispose();
+				return Task.CompletedTask;
+			});
+			await PhaseAsync("viewer-unload", async () =>
+			{
+				try
+				{
+					viewer.GpuFrame = null;
+					viewer.Frame = null;
+					host.Children.Remove(viewer);
+				}
+				finally { window.Close(); }
+				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+				if (surface is not null)
+				{
+					Assert.Equal(OperatorSurfaceState.Unloaded, surface.SurfaceState);
+					Assert.Null(surface.ColorTexture);
+					Assert.Null(surface.ColorTextureView);
+					Assert.Equal(0, surface.RenderingSubscriptionBalance);
+					Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
+				}
+			});
+			await PhaseAsync("control-cancel", () =>
+			{
+				controlStop.Cancel();
+				return Task.CompletedTask;
+			});
+			await PhaseAsync("control-stop", async () =>
+			{
+				var exit = await controlRun.WaitAsync(TimeSpan.FromSeconds(12));
+				Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=ControlHost; pid={Environment.ProcessId}; " +
+					$"exit={exit}; state={control.Lifecycle.State}; health={control.Lifecycle.Health}; " +
+					$"detail={control.Lifecycle.Detail}; shutdownPhases={JsonSerializer.Serialize(control.ShutdownPhases)}");
+				Assert.Equal(ControlHostExitCode.Success, exit);
+				Assert.Equal(ControlHostProcessState.Stopped, control.Lifecycle.State);
+			});
+			await PhaseAsync("runtime-cancel", () =>
+			{
+				runtimeStop.Cancel();
+				return Task.CompletedTask;
+			});
+			await PhaseAsync("runtime-stop", async () =>
+			{
+				var exit = await runtimeRun.WaitAsync(TimeSpan.FromSeconds(12));
+				Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=RuntimeHost; pid={Environment.ProcessId}; " +
+					$"exit={exit}; state={runtime.Lifecycle.State}; health={runtime.Lifecycle.Health}; detail={runtime.Lifecycle.Detail}");
+				Assert.Equal(RuntimeHostExitCode.Success, exit);
+				Assert.Equal(RuntimeHostProcessState.Stopped, runtime.Lifecycle.State);
+			});
+			if (controlRun.IsCompleted && runtimeRun.IsCompleted)
+				await PhaseAsync("durability-root-cleanup", () =>
+				{
+					if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+					return Task.CompletedTask;
+				});
+			else
+				errors.Add(new InvalidOperationException("Fixture-owned hosts did not finish; retained the durability root for diagnosis."));
+
+			if (visualFailure is not null)
+				errors.Insert(0, new InvalidOperationException("Productive viewer qualification failed before teardown.", visualFailure));
+			if (errors.Count != 0)
+				throw new AggregateException("Viewer/host qualification did not complete cleanly; see individually attributed teardown phases.", errors);
+
+			Console.WriteLine("VIEWER SHUTDOWN PASS: monitoring reader disconnected; WPF/COM target leases released; ControlHost and RuntimeHost both exited Success and reached Stopped.");
+			Console.WriteLine("VIEWER PROGRAM PASS: real RuntimeHost Program frames, productive WPF/GPU viewer, DPI/zoom, ROI and resource epochs remained correct through successful owned host teardown.");
 		}
 	}
 
