@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Input;
@@ -484,6 +485,17 @@ public sealed class MediaLibraryBrowsingTests
 		try
 		{
 			await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+            var advanced = Assert.IsType<Grid>(owner.MediaLibraryView.FindName("MediaAdvancedTools"));
+            var details = Assert.IsType<Border>(owner.MediaLibraryView.FindName("MediaSelectedDetails"));
+            var tools = Assert.Single(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
+                button => AutomationProperties.GetName(button) == "Show advanced Media Library tools");
+            Assert.Equal(Visibility.Collapsed, advanced.Visibility);
+            Assert.Equal(Visibility.Collapsed, details.Visibility);
+            Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
+                button => AutomationProperties.GetName(button) == "Open selected asset in confirmed Preview");
+            tools.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.Equal(Visibility.Visible, advanced.Visibility);
 			Assert.True(combo.IsVisible); Assert.True(combo.ActualWidth > 0); Assert.True(combo.Focus());
 			Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
 			Assert.Equal(Visibility.Collapsed, owner.MediaPool.MetadataFiltersVisibility);
@@ -510,6 +522,9 @@ public sealed class MediaLibraryBrowsingTests
 			// Focus recovery from a hidden text field can otherwise compete with later ScrollIntoView.
 			Assert.True(combo.Focus());
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
+            tools.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.Equal(Visibility.Collapsed, advanced.Visibility);
             // A hidden refresh preserves keys but replaces projected records. Re-show must adopt current objects.
             owner.MediaPool.UpdateSelection(owner.MediaPool.FilteredItems.Take(2));
             var selectedKeys = owner.MediaPool.SelectedItems.Select(item => item.Key).ToArray();
