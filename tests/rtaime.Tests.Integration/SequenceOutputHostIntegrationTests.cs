@@ -64,9 +64,7 @@ public sealed partial class ExternalControlIntegrationTests
             staged.PreparedExecutionId, staged.Generation);
         var shuttle = new SequenceShuttleClient(grpc);
         var stopped = await shuttle.GetAsync(reference);
-        var playing = await shuttle.ApplyAsync(new(SequenceShuttleContract.Version,
-            reference, stopped.StateRevision, SequenceShuttleAction.Play));
-        Assert.Equal("PLAYING", playing.State);
+        Assert.Equal("STOPPED", stopped.State);
 
         var command = new SequenceOutputCommand(SequenceOutputContract.Version,
             reference, sourceB.ToString(), previewCommitted.Production.Revision.Value,
@@ -76,6 +74,12 @@ public sealed partial class ExternalControlIntegrationTests
         var grpcOutput = new SequenceOutputClient(grpc);
         var activation = await localOutput.ActivatePreviewAsync(command);
         Assert.Equal(sourceB.ToString(), activation.PreviewSourceId);
+        // Arm the exact Preview route before consuming the finite one-second
+        // reference clip. This still requires genuine PLAYING native frames
+        // and a completed Preview sink observation before any Program Take.
+        var playing = await shuttle.ApplyAsync(new(SequenceShuttleContract.Version,
+            reference, stopped.StateRevision, SequenceShuttleAction.Play));
+        Assert.Equal("PLAYING", playing.State);
 
         static async Task<SequenceOutputObservation> AwaitOutputAsync(
             SequenceOutputClient client, SequencePreparationReference current,
