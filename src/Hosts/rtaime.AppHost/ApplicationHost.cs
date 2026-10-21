@@ -1429,11 +1429,22 @@ public sealed class UnifiedApplicationHost
 		var requestedAtUtc = _platform.UtcNow;
 		var processAliveAtRequest = _platform.IsProcessAlive(processId);
 		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
+        Exception? stopRequestFailure = null;
 		if (processAliveAtRequest)
 		{
-			_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
-			while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
-				await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            try
+            {
+			    _platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
+			    while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
+				    await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A denied stop signal is not permission to leave a live
+                // AppHost-owned engine orphaned. Continue bounded emergency
+                // cleanup and retain the original storage failure.
+                stopRequestFailure = exception;
+            }
 		}
 
 		var forcedTermination = processAliveAtRequest && _platform.IsProcessAlive(processId);
@@ -1448,7 +1459,8 @@ public sealed class UnifiedApplicationHost
 			diagnosticsDrained = true;
 		}
 		catch (OperationCanceledException) when (drainTimeout.IsCancellationRequested) { }
-		var graceful = processAliveAtRequest && !forcedTermination && !_platform.IsProcessAlive(processId);
+		var graceful = processAliveAtRequest && stopRequestFailure is null &&
+            !forcedTermination && !_platform.IsProcessAlive(processId);
 
 		var evidence = JsonSerializer.Serialize(new
 		{
@@ -1460,6 +1472,7 @@ public sealed class UnifiedApplicationHost
 			status = graceful ? "PASS" : "FAIL",
 			graceful,
 			forcedTermination,
+            stopSignalFailure = stopRequestFailure is null ? null : stopRequestFailure.GetType().Name,
 			processAliveAtRequest,
 			controlProcessId = processId,
 			requestedAtUtc,
@@ -1470,6 +1483,8 @@ public sealed class UnifiedApplicationHost
 		_platform.DeleteFile(_options.StopPath);
 		_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 		_ownedControlProcessId = null;
+        if (stopRequestFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(stopRequestFailure).Throw();
 	}
 
 	private void Transition(ApplicationLifecycleState next)
