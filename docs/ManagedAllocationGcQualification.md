@@ -158,6 +158,15 @@ commit: CI, Quality, Security, Provider Smoke and Packaged E2E.
 This package does not modify the central workflow or create a second
 performance monitor. The new opt-in Windows scripts can run independently
 and the normal Performance test project compiles their producer harness.
-Future official CI scheduling and broader native/replay/network/Operator
-cross-products require explicit ownership and supported producer evidence;
-until then those remain **UNVERIFIED**.
+A path-scoped [managed allocation and GC software qualification workflow](../.github/workflows/managed-allocation-gc-qualification.yml)
+runs the actual `smoke` profile on a hosted Windows x64 runner when this
+qualification's producer, verifier or profile changes, and retains the
+source-bound raw reports, TRXs, comparison and manifest as Actions artifacts.
+It checks out the exact PR head and does not change the five Required Gates.
+An absent, skipped, queued or failed hosted run is not qualification PASS;
+read the exact commit, run, job and immutable evidence before accepting it.
+The longer `repeat` profile, a comparable before/after run on one controlled
+physical machine, full ETW coverage, hardware latency and future mandatory
+gate integration remain separately scheduled and **UNVERIFIED**.
+Broader native/replay/network/Operator cross-products still require their
+own verified producers and clear ownership.
