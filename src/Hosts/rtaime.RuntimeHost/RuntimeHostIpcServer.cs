@@ -598,9 +598,10 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		{
 			result = await completion.WaitAsync(RecordingStopResponseBudget, cancellationToken).ConfigureAwait(false);
 		}
-		catch (TimeoutException) when (!completion.IsCompleted)
+		catch (TimeoutException) when (!completion.IsFaulted)
 		{
-			// A writer that has not finalized must never be represented as a saved file.
+			// If the completion races the observation deadline, inspect the terminal
+			// task below rather than turning a late successful result into an error.
 		}
 		if (result is null && completion.IsCompletedSuccessfully)
 			result = completion.Result;
