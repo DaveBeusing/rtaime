@@ -277,6 +277,9 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 	public string? DiagnosticLogRoot => _logRoot ?? Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
 	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
+    // Windows may reuse numeric PIDs; an exited owned child cannot qualify
+    // merely because a different process appears under that identity.
+    private readonly ConcurrentDictionary<int, byte> _exitedOwnedProcessIds = new();
 
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 	public IDisposable OpenDiagnosticSession(string directory) => StartupEvidenceSession.OpenDirectory(directory);
@@ -412,6 +415,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 			if (processId != 0)
 			{
+                _exitedOwnedProcessIds.TryAdd(processId, 0);
 				_diagnosticProcesses.TryRemove(processId, out _);
 				_diagnosticCompletions.TryRemove(processId, out _);
 			}
@@ -431,6 +435,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 			if (!processWithDiagnostics.Start())
 				throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
 			processId = processWithDiagnostics.Id;
+            _exitedOwnedProcessIds.TryRemove(processId, out _);
 			_diagnosticProcesses[processId] = processWithDiagnostics;
 			_diagnosticCompletions[processId] = completion;
 			processWithDiagnostics.BeginOutputReadLine();
@@ -459,12 +464,21 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public bool IsProcessAlive(int processId)
 	{
+        if (processId <= 0 || _exitedOwnedProcessIds.ContainsKey(processId)) return false;
+        if (_diagnosticProcesses.TryGetValue(processId, out var owned))
+        {
+            try { return !owned.HasExited; }
+            catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+            {
+                return false;
+            }
+        }
 		try
 		{
 			using var process = Process.GetProcessById(processId);
 			return !process.HasExited;
 		}
-		catch (ArgumentException)
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
 		{
 			return false;
 		}
@@ -493,13 +507,18 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public void KillProcessTree(int processId)
 	{
+        // This cleanup method must never kill adopted engines or a numeric
+        // PID reused after an owned ControlHost has exited.
+        if (!_diagnosticProcesses.TryGetValue(processId, out var owned) ||
+            _exitedOwnedProcessIds.ContainsKey(processId))
+            return;
 		try
 		{
-			using var process = Process.GetProcessById(processId);
-			if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!owned.HasExited) owned.Kill(entireProcessTree: true);
 		}
-		catch (ArgumentException)
+		catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
 		{
+            // Already exited: do not resolve the numeric PID again.
 		}
 	}
 
