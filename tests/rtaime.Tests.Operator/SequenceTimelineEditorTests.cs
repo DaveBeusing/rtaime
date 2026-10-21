@@ -414,6 +414,41 @@ public sealed class SequenceTimelineEditorTests
         Assert.Equal(0, native.TakeCount);
     }
 
+    [Fact]
+    public async Task Stale_native_preparation_revokes_cached_Preview_evidence_and_an_unsubmitted_Take()
+    {
+        var saved = new RetainedSequenceTransport(Sequence());
+        using var editor = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(saved));
+        await editor.RefreshAsync(); await editor.LoadAsync();
+        var source = Guid.NewGuid().ToString();
+        var native = new SequencePlayoutFixture(editor.Sequence!.SequenceId, source, 5, 8)
+        { PreviewFramesAvailable = true };
+        var authority = new SequenceOperatorAuthority(true, false, false, true,
+            source, Guid.NewGuid().ToString(), 8);
+        editor.AttachPlayout(new SequenceOperatorPlayoutViewModel(editor,
+            new SequenceAuthoringClient(saved), new SequencePreparationClient(native),
+            new SequenceShuttleClient(native), new SequenceOutputClient(native),
+            () => authority));
+        var playout = editor.Playout;
+        await playout.PrepareAsync();
+        await playout.ActivatePreviewAsync();
+        await playout.ObserveAsync();
+        Assert.Equal("PREVIEW READY", playout.Status);
+        await playout.ArmAsync();
+        Assert.True(playout.CanTake);
+
+        native.ExpirePreparation = true;
+        await playout.ObserveAsync();
+        Assert.Equal("STALE", playout.Status);
+        Assert.Contains("NO CONFIRMED OUTPUT", playout.OutputEvidence);
+        Assert.False(playout.CanArm);
+        Assert.False(playout.CanTake);
+        await playout.ArmAsync();
+        await playout.TakeAsync();
+        Assert.Equal(0, native.TakeCount);
+        Assert.True(playout.CanCancel);
+    }
+
     private sealed class SequencePlayoutFixture(Guid sequenceId, string sourceId, ulong revision, ulong productionRevision)
         : ISequencePreparationTransport, ISequenceShuttleTransport, ISequenceOutputTransport
     {
@@ -425,6 +460,7 @@ public sealed class SequenceTimelineEditorTests
         public bool PreviewFramesAvailable { get; set; }
         public bool DropTakeReply { get; set; }
         public bool RejectPrepare { get; set; }
+        public bool ExpirePreparation { get; set; }
         public TaskCompletionSource? PreparationGate { get; set; }
         public string SourceId => sourceId;
         public int TakeCount { get; private set; }
@@ -454,7 +490,10 @@ public sealed class SequenceTimelineEditorTests
             SequencePreparationReference reference, CancellationToken cancellationToken = default)
         {
             Assert.Equal(_reference, reference);
-            return ValueTask.FromResult(Prepared());
+            return ValueTask.FromResult(ExpirePreparation
+                ? Prepared() with { State = "STALE", DecoderOwners = 0,
+                    Detail = "Prepared Runtime owner expired." }
+                : Prepared());
         }
         public ValueTask<SequencePreparationStatus> CancelSequencePreparationAsync(
             SequencePreparationReference reference, CancellationToken cancellationToken = default)
