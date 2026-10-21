@@ -11,6 +11,7 @@
 			<RowDefinition Height="34" />
 			<RowDefinition Height="32" />
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 			<RowDefinition Height="220" />
 		</Grid.RowDefinitions>
@@ -29,6 +30,9 @@
 					TextTrimming="CharacterEllipsis" />
 			</StackPanel>
 			<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <controls:RtaimeButton Content="IMPORT MEDIA" Command="{Binding Context.MediaPool.ImportCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                    IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Import media into catalogue"
+                    ToolTip="Import local media into the existing authoritative catalogue. Review source identity before Preview." />
 				<controls:RtaimeIconButton
 					IconData="{StaticResource RtaimeIconAddGeometry}"
 					Click="OnMediaPoolAddClick"
@@ -118,7 +122,75 @@
 			</controls:RtaimeListBox.ItemsPanel>
 		</controls:RtaimeListBox>
 
-		<Grid Grid.Row="3" Margin="0,2,0,0">
+        <!-- One operator journey; advanced catalogue administration stays discoverable below. -->
+        <Grid Grid.Row="3" Margin="0,6,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+                BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="9,7">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Context.MediaPool.LibraryJourneyTitle, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                FontSize="{StaticResource OperatorFontSizeCaption}"
+                                AutomationProperties.Name="Selected media asset" />
+                            <TextBlock Text="{Binding Context.MediaPool.LibraryJourneyDetails, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
+                                ToolTip="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
+                        </StackPanel>
+                        <controls:RtaimeButton Grid.Column="1" Content="MORE TOOLS" Click="OnMediaLibraryToggleToolsClick"
+                            IsCompact="True" Margin="8,0,0,0" AutomationProperties.Name="Show advanced Media Library tools"
+                            ToolTip="Smart Bins, metadata filters, representative preflight options, and bounded batch management." />
+                    </Grid>
+                    <WrapPanel Margin="0,6,0,0">
+                        <controls:RtaimeButton Content="INSPECT" Click="OnMediaLibraryInspectClick" IsCompact="True"
+                            IsEnabled="{Binding Context.MediaPool.CanInspectLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            Margin="0,0,5,0" AutomationProperties.Name="Inspect selected media evidence" />
+                        <controls:RtaimeButton Content="PREPARE OPTIONS" Click="OnMediaPoolPrepareClick" IsCompact="True"
+                            IsEnabled="{Binding Context.MediaPool.CanPrepareLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            Margin="0,0,5,0" AutomationProperties.Name="Show representative media preparation options"
+                            ToolTip="Preflight does not retain a decoder or route Preview. Open in Preview separately." />
+                        <controls:RtaimeButton Content="OPEN PREVIEW" Click="OnMediaLibraryOpenSelectedPreviewClick" IsCompact="True"
+                            IsEnabled="{Binding Context.MediaPool.CanOpenLibraryPreview, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorPreviewBrush}"
+                            Margin="0,0,5,0" AutomationProperties.Name="Open selected asset in confirmed Preview"
+                            ToolTip="Open resident media, then request authoritative Preview route; no Program Take." />
+                        <controls:RtaimeButton Content="RELINK…" Click="OnMediaLibraryRelinkSelectedClick" IsCompact="True"
+                            IsEnabled="{Binding Context.MediaPool.CanRelinkLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Relink selected missing or moved media" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.LibraryJourneyFeedback, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" Margin="0,6,0,0" TextWrapping="Wrap"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media Library next action and confirmation" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Row="1" x:Name="MediaSelectedDetails" Visibility="Collapsed"
+                Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+                BorderThickness="1" Margin="0,3,0,0" Padding="8,5">
+                <StackPanel>
+                    <TextBlock Text="INSPECT · CATALOGUE METADATA (NOT OUTPUT EVIDENCE)"
+                        Style="{StaticResource OperatorSectionTitle}" />
+                    <TextBlock Text="{Binding Context.MediaPool.SelectedItem.Name, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Context.MediaPool.SelectedItem.Detail, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Context.MediaPool.SelectedItem.Format, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Context.MediaPool.SelectedItem.LocalPath, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
+                        ToolTip="{Binding Context.MediaPool.SelectedItem.LocalPath, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
+                    <TextBlock Text="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+		<Grid x:Name="MediaAdvancedTools" Grid.Row="4" Visibility="Collapsed" Margin="0,2,0,0">
 			<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
 			<Grid>
 				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /><ColumnDefinition Width="36" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
@@ -203,7 +275,7 @@
 
 		</Grid>
 
-		<Grid Grid.Row="4" Margin="0,10,0,0">
+		<Grid Grid.Row="5" Margin="0,10,0,0">
 			<Grid Height="36" VerticalAlignment="Bottom" Panel.ZIndex="20" IsHitTestVisible="False" Background="{DynamicResource OperatorSurfaceBrush}" Visibility="{Binding Context.MediaPool.LibraryFeedbackVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
 				<Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 				<Image Source="{Binding Context.MediaPool.HoverThumbnail, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Stretch="Uniform" Margin="0,2,4,2" />
@@ -415,7 +487,7 @@
 		</Grid>
 
 		<local:NdiSourceDiscoveryControl
-			Grid.Row="5"
+			Grid.Row="6"
 			DataContext="{Binding Context.NdiSources, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
 	</Grid>
 </UserControl>

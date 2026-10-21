@@ -110,6 +110,23 @@ override/HOLD semantics: old automation is invalidated first. This slice does no
 silently add automatic lookahead while another authored rule is running. Configure
 any desired automatic follow explicitly in the existing rundown.
 
+## Library inspection and separate resident rundown readiness
+
+The MEDIA Library's **Prepare Options** verifies representative frame/audio
+samples through an independent, bounded preflight job. Successful
+`CONDITIONALLY_READY` evidence is time-limited, releases its decoder
+and does not grant a resident Rundown `NEXT READY` ticket. The Library's
+**Open Preview** explicitly opens an asset in a selected ordinary Media
+Deck and requests the existing Control-owned Preview route only after
+rechecking asset, source and connected-authority identity. It does not
+perform Rundown PREPARE/GO and never authorizes Program Take.
+
+Conversely, Rundown PREPARE reserves and fences a resident decoder and
+source generation. It must still use the existing Show Control
+preparation deadline, fingerprint, revision, off-Program source and
+single-use ticket before GO. Neither ordinary Library readiness nor
+an observed Preview thumbnail can skip those conditions.
+
 ## Operator and compatibility
 
 Prepared media rows display NEXT READY and the confirmed deadline in the existing

@@ -35,20 +35,33 @@
 						TextTrimming="CharacterEllipsis" />
 					<TextBlock Text="{Binding SourceId, StringFormat=Source slot: {0}}" Style="{StaticResource OperatorLabel}"
 						Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                        <TextBlock Text="{Binding ProgramDeckState}" Style="{StaticResource OperatorLabel}"
+                            FontWeight="SemiBold" Margin="0,0,10,0" />
+                        <TextBlock Text="{Binding Countdown}" Style="{StaticResource OperatorTimecode}" />
+                    </StackPanel>
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-					<controls:RtaimeButton Content="OPEN MEDIA" Command="{Binding OpenCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" Margin="0,0,8,0" />
-					<controls:RtaimeButton Content="SELECT SOURCE DECK" Command="{Binding RefreshCommand}"  Margin="0,0,8,0" />
-					<controls:RtaimeButton Content="CLOSE" Command="{Binding CloseCommand}"  />
-				</StackPanel>
+                    <controls:RtaimeButton Content="OPEN FILE" Command="{Binding OpenCommand}" IsCompact="True"
+                        Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}"
+                        Margin="0,0,6,0" AutomationProperties.Name="Open a local file in the selected deck" />
+                    <controls:RtaimeButton Content="SELECT DECK" Command="{Binding RefreshCommand}" IsCompact="True"
+                        Margin="0,0,6,0" ToolTip="Read the currently selected source deck without changing production."
+                        AutomationProperties.Name="Select source deck" />
+                    <controls:RtaimeButton Content="DETAILS / POLICY" Command="{Binding TogglePlaybackOptionsCommand}"
+                        IsCompact="True" Margin="0,0,6,0" ToolTip="Show codec details and controlled autoplay policy."
+                        AutomationProperties.Name="Toggle deck metadata and playback policy" />
+                    <controls:RtaimeButton Content="CLOSE" Command="{Binding CloseCommand}" IsCompact="True"
+                        AutomationProperties.Name="Close selected media deck" />
+                </StackPanel>
 			</Grid>
 
 			<Grid Grid.Row="1" Margin="0,0,0,14">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="1.55*" />
-					<ColumnDefinition Width="14" />
-					<ColumnDefinition Width="1*" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="10" />
+					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 
 				<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorPreviewBrush}" BorderThickness="1"
@@ -57,7 +70,7 @@
 						<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Stretch="Uniform" SnapsToDevicePixels="True" />
 						<Border VerticalAlignment="Top" HorizontalAlignment="Left" Style="{StaticResource OperatorOverlayScrim}" Padding="{StaticResource OperatorMonitorLabelPadding}" Margin="8">
-							<TextBlock Text="PRODUCTION PREVIEW MONITOR" Foreground="{DynamicResource OperatorPreviewBrush}"
+							<TextBlock Text="ROUTED PREVIEW MONITOR · DECK INDEPENDENT" Foreground="{DynamicResource OperatorPreviewBrush}"
 								FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="Bold" />
 						</Border>
 						<Border VerticalAlignment="Bottom" Style="{StaticResource OperatorOverlayScrim}" Padding="{StaticResource OperatorMonitorFooterPadding}">
@@ -66,14 +79,17 @@
 									<ColumnDefinition Width="*" />
 									<ColumnDefinition Width="Auto" />
 								</Grid.ColumnDefinitions>
-								<TextBlock Text="{Binding FileName}" Foreground="{DynamicResource OperatorTextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-								<TextBlock Grid.Column="1" Text="{Binding State}" Foreground="{DynamicResource OperatorTextBrush}" FontWeight="Bold" Margin="12,0,0,0" />
+								<TextBlock Text="Preview image shows the committed monitoring route, not necessarily this deck."
+                                    Foreground="{DynamicResource OperatorTextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Text="OBSERVATION" Foreground="{DynamicResource OperatorPreviewBrush}"
+                                    FontWeight="Bold" Margin="12,0,0,0" />
 							</Grid>
 						</Border>
 					</Grid>
 				</Border>
 
-				<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+				<Border Grid.Column="2" Width="262" Visibility="{Binding PlaybackOptionsVisibility}"
+                    Background="{DynamicResource OperatorRaisedSurfaceBrush}"
 					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12">
 					<StackPanel>
 						<TextBlock Text="CLIP METADATA" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
@@ -88,7 +104,7 @@
 				</Border>
 			</Grid>
 
-			<Border Grid.Row="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+			<Border Grid.Row="2" Visibility="{Binding PlaybackOptionsVisibility}" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
 				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12" Margin="0,0,0,14">
 				<Grid>
 					<Grid.ColumnDefinitions>
@@ -119,20 +135,27 @@
 			</Border>
 
 			<Grid Grid.Row="3" Margin="0,0,0,14">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="10" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="10" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<controls:RtaimeButton Grid.Column="0" Content="PLAY / PAUSE&#x0a;Space" Command="{Binding TogglePlayPauseCommand}"
-					Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" />
-				<controls:RtaimeButton Grid.Column="2" Content="STOP&#x0a;K / S" Command="{Binding StopCommand}"  />
-				<controls:RtaimeButton Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}"  />
-			</Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:RtaimeButton Grid.Column="0" Content="PLAY" Command="{Binding PlayCommand}"
+                    Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}"
+                    AutomationProperties.Name="Play selected deck" ToolTip="Play the confirmed resident deck. Space also toggles Play/Pause." />
+                <controls:RtaimeButton Grid.Column="2" Content="PAUSE" Command="{Binding PauseCommand}"
+                    AutomationProperties.Name="Pause selected deck" ToolTip="Pause the confirmed resident deck without changing Program routing." />
+                <controls:RtaimeButton Grid.Column="4" Content="STOP" Command="{Binding StopCommand}"
+                    AutomationProperties.Name="Stop selected deck" ToolTip="Stop deck transport. K or S also stops playback." />
+                <controls:RtaimeButton Grid.Column="6" Content="REFRESH" Command="{Binding RefreshCommand}"
+                    AutomationProperties.Name="Refresh authoritative deck state" ToolTip="Refresh the selected resident deck snapshot." />
+            </Grid>
 
-			<!-- Timeline is hosted persistently by the production shell lower workspace. -->
+            			<!-- Timeline is hosted persistently by the production shell lower workspace. -->
 
 			<Grid Grid.Row="5" Margin="0,0,0,14">
 				<Grid.ColumnDefinitions>

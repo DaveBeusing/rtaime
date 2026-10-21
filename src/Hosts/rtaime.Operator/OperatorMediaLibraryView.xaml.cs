@@ -31,6 +31,40 @@ public partial class OperatorMediaLibraryView : UserControl
         MediaSearchBox.SelectAll();
     }
 
+    private void OnMediaLibraryToggleToolsClick(object sender, RoutedEventArgs e)
+    {
+        MediaAdvancedTools.Visibility = MediaAdvancedTools.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryInspectClick(object sender, RoutedEventArgs e)
+    {
+        if (MediaPool.CanInspectLibrarySelection)
+            MediaSelectedDetails.Visibility = MediaSelectedDetails.Visibility == Visibility.Visible
+                ? Visibility.Collapsed : Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private async void OnMediaLibraryOpenSelectedPreviewClick(object sender, RoutedEventArgs e)
+    {
+        if (MediaPool.CanOpenLibraryPreview)
+            await MediaPool.OpenSelectedLibraryPreviewAsync();
+        e.Handled = true;
+    }
+
+    private async void OnMediaLibraryRelinkSelectedClick(object sender, RoutedEventArgs e)
+    {
+        if (MediaPool.CanRelinkLibrarySelection && MediaPool.SelectedItem is { } selected)
+        {
+            var path = PickRelinkMediaFile();
+            if (MediaPool.CanRelinkLibrarySelection && MediaPool.SelectedItem?.Key == selected.Key &&
+                !string.IsNullOrWhiteSpace(path))
+                await MediaPool.RelinkAssetAsync(selected, path);
+        }
+        e.Handled = true;
+    }
+
 	private static string? PickRelinkMediaFile()
 	{
 		var dialog = new OpenFileDialog
@@ -118,7 +152,7 @@ public partial class OperatorMediaLibraryView : UserControl
 			entry.IsEnabled = action switch
 			{
 				"Prepare selected assets…" => true, // The actual Prepare command enforces the bounded eligible selection.
-				"Open in Preview" => !multi && MediaPool.CanDropToPreview(item),
+				"Open in Preview" => !multi && MediaPool.CanOpenLibraryPreviewItem(item),
 				"Add to Timeline" => !multi && item is not null && Timeline.CanAcceptMediaPoolDrop(item,
 					item.Kind switch { MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
 						MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
@@ -220,7 +254,12 @@ public partial class OperatorMediaLibraryView : UserControl
 		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
 	}
 
-	private void OnMediaPoolPrepareClick(object sender, RoutedEventArgs e) => MediaPool.ShowPreparation();
+	private void OnMediaPoolPrepareClick(object sender, RoutedEventArgs e)
+    {
+        MediaAdvancedTools.Visibility = Visibility.Visible;
+        MediaPool.ShowPreparation();
+        e.Handled = true;
+    }
 
 	private void OnMediaPoolAddClick(object sender, RoutedEventArgs e)
 	{
@@ -251,8 +290,16 @@ public partial class OperatorMediaLibraryView : UserControl
 	{
 		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
 		var item = GetMediaPoolItemFromSender(sender);
-		if (item is not null && MediaPool.CanDropToPreview(item))
-			await MediaPool.DropToPreviewAsync(item);
+        // Virtualized tiles may be recycled between pointer-down and command execution.
+        var current = item is null ? null :
+            MediaPool.FilteredItems.FirstOrDefault(asset => asset.Key == item.Key);
+        if (current is not null && current.ReferenceId == item!.ReferenceId &&
+            current.LocalPath == item.LocalPath)
+        {
+            MediaPool.UpdateSelection([current]);
+            if (MediaPool.CanOpenLibraryPreview)
+                await MediaPool.OpenSelectedLibraryPreviewAsync();
+        }
 		e.Handled = true;
 	}
 

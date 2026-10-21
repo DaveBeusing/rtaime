@@ -80,6 +80,44 @@ For a persistent Clip, **Open in Preview** requires an online catalogue entry an
 
 The catalogue therefore does not create a second playback path or routing authority. Existing Timeline and Cue behavior remains on established command paths. Cue actions apply only when the selected catalogue `AssetId` is the currently loaded Media Deck asset.
 
+## Guided media-first Library actions
+
+The Library keeps the search, virtualized grid/list and persistent catalogue
+unchanged. A compact, always-visible selection strip now presents the
+catalogue name, typed duration/format and current readiness with four explicit
+next actions: **Inspect**, **Prepare Options**, **Open Preview** and **Relink**.
+**Import Media** is prominent; the existing Add menu still contains generator
+and refresh actions. Advanced **More Tools** reveals Smart Bin editing,
+metadata filters, bounded batch operations and representative preflight
+options without making them prerequisites for ordinary playback.
+
+**Inspect** opens local metadata/capability details for the selected asset;
+hover frames remain independently cancelable and never seek a production
+deck. **Prepare Options** exposes the existing optional representative
+sample checks, not a new resident preload owner. A recent
+`CONDITIONALLY_READY` result is not `READY` or a retained deck. For one
+eligible, online catalogue Clip, **Open Preview** reuses the existing Media
+Deck open and authoritative Set Preview request. It retains the selected
+source and asset fingerprint/revision across the asynchronous open; a
+changed selection, catalogue identity, source slot or Control connection
+prevents the subsequent route request. A Clip cannot be opened by this
+guided action into the active Program source; first choose an off-Program
+A/B slot. The displayed
+`PREVIEW REQUESTED` message is pending authority, not a claim that
+Preview pixels or Program output were already delivered. The resident
+Deck and confirmed route remain separate evidence.
+
+Missing, offline or stale items get a specific recovery message and a
+guarded **Relink** path, preserving stable catalogue identity and
+fingerprint validation in ControlHost. Multi-selection cannot open
+Preview or mutate a single asset; the existing bounded batch workflows
+remain accessible via **More Tools**. No single selection, hover,
+preflight, import or local navigation implicitly calls Take, CUT or
+DISSOLVE. The existing drag/drop route is still an independent legacy
+interaction surface and is not silently rewritten by the selection
+strip; later cross-workspace consolidation must retain the same
+post-await stale-source fences and explicit-authority rules.
+
 ## Context actions
 
 **Clear selection** in the Add menu clears the entire local selection. **Refresh availability** in the Add menu uses the existing catalogue-wide availability refresh. Single-target Preview, Timeline, Cue, Relink and Remove context actions stay disabled during multi-selection. Use **Batch · Remove selected…** for explicit multi-record removal with preflight and confirmation. Reveal and Properties remain read-only single-target inspection actions. No source file is deleted.

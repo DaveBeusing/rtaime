@@ -96,6 +96,103 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.False(pool.PrepareAssetsCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task Library_next_step_preserves_conditional_and_resident_distinction_under_selection_changes()
+    {
+        var transport = new ForbiddenTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        var catalog = new Catalog();
+        using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
+        await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
+        var clips = pool.FilteredItems.Take(2).ToArray();
+        var program = owner.ProgramSourceId;
+        var preview = owner.PreviewSourceId;
+
+        Assert.Contains("IMPORT", pool.LibraryJourneyState);
+        Assert.False(pool.CanOpenLibraryPreview);
+        await pool.OpenSelectedLibraryPreviewAsync(); // No implicit source/Program command.
+
+        pool.UpdateSelection(clips);
+        Assert.True(pool.HasMultipleSelection);
+        Assert.False(pool.CanOpenLibraryPreview);
+        Assert.False(pool.CanInspectLibrarySelection);
+        Assert.Contains("MULTI-SELECT", pool.LibraryJourneyState);
+        await pool.OpenSelectedLibraryPreviewAsync();
+        Assert.Equal(0, transport.Calls);
+
+        pool.UpdateSelection([clips[0]]);
+        Assert.True(pool.CanInspectLibrarySelection);
+        Assert.Contains("UNVERIFIED", pool.LibraryJourneyDetails);
+        Assert.True(pool.CanPrepareLibrarySelection);
+        await pool.PrepareSelectedAssetsAsync();
+        Assert.Contains("CONDITIONALLY_READY", pool.SelectedItem!.ReadinessLabel);
+        // The one-source test fixture has its only source on Program.
+        // A valid conditional preflight never overrides the stronger live-safety guard.
+        Assert.Contains("ON PROGRAM", pool.LibraryJourneyState);
+        Assert.False(deck.IsLoaded);
+        Assert.Equal(0, transport.Calls);
+
+        pool.UpdateSelection([]);
+        pool.UpdateSelection([clips[0] with { IsOnline = false, State = "MISSING", IsReady = false }]);
+        Assert.False(pool.CanOpenLibraryPreview);
+        Assert.False(pool.CanPrepareLibrarySelection);
+        Assert.Contains("UNAVAILABLE", pool.LibraryJourneyState);
+        await pool.OpenSelectedLibraryPreviewAsync();
+        Assert.Equal(0, transport.Calls);
+        Assert.Equal("—", deck.AssetId);
+
+        Assert.Equal(program, owner.ProgramSourceId);
+        Assert.Equal(preview, owner.PreviewSourceId);
+        Assert.Equal(0, catalog.Mutations);
+    }
+
+    [Fact]
+    public async Task Guided_clip_open_rejects_program_slot_before_any_deck_or_routing_mutation()
+    {
+        var transport = new ForbiddenTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        var catalog = new Catalog(1);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
+        await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
+        pool.UpdateSelection(pool.FilteredItems.Take(1));
+        owner.SelectedSource = Assert.Single(owner.Sources);
+        Assert.Equal(owner.ProgramSourceId, owner.SelectedSource.Id);
+        Assert.False(pool.CanOpenLibraryPreview);
+        Assert.Contains("ON PROGRAM", pool.LibraryJourneyState);
+
+        await pool.OpenSelectedLibraryPreviewAsync();
+        Assert.Equal(0, transport.Calls);
+        Assert.Equal(0, catalog.Mutations);
+        Assert.False(deck.IsLoaded);
+    }
+
+    [Fact]
+    public async Task Deck_details_toggle_is_local_and_does_not_change_playback_authority()
+    {
+        var transport = new ForbiddenTransport();
+        var client = new OperatorControlClient(transport);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        Assert.Equal(System.Windows.Visibility.Collapsed, deck.PlaybackOptionsVisibility);
+        deck.TogglePlaybackOptionsCommand.Execute(null);
+        Assert.Equal(System.Windows.Visibility.Visible, deck.PlaybackOptionsVisibility);
+        deck.TogglePlaybackOptionsCommand.Execute(null);
+        Assert.Equal(System.Windows.Visibility.Collapsed, deck.PlaybackOptionsVisibility);
+        Assert.False(deck.CanPlay);
+        Assert.False(deck.CanPause);
+        Assert.False(deck.CanStop);
+        Assert.Equal(0, transport.Calls);
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
