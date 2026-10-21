@@ -81,6 +81,66 @@ public sealed class ManagedAllocationGcEvidenceTests
             JsonSerializer.Serialize(metadata) + Environment.NewLine);
     }
 
+    [Fact]
+    public async Task Qualification_profile_and_PowerShell_sources_parse_on_the_Windows_CI_runner()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        DirectoryInfo? folder = new(AppContext.BaseDirectory);
+        while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "rtaime.slnx")))
+            folder = folder.Parent;
+        Assert.NotNull(folder);
+        var root = folder.FullName;
+        var profileFile = Path.Combine(root, "qualification", "performance", "managed-allocation-gc.json");
+        using var descriptor = JsonDocument.Parse(File.ReadAllText(profileFile));
+        var data = descriptor.RootElement;
+        Assert.Equal("1.0", data.GetProperty("schemaVersion").GetString());
+        Assert.Equal("10.0.401", data.GetProperty("sdk").GetString());
+        Assert.Equal(3, data.GetProperty("warmupBoundaries").GetInt32());
+        Assert.Equal(12, data.GetProperty("measuredBoundaries").GetInt32());
+        Assert.Equal(8, data.GetProperty("casesPerFormat").GetInt32());
+        Assert.Equal(2, data.GetProperty("formats").GetArrayLength());
+        Assert.Equal("UNVERIFIED",
+            data.GetProperty("sourceEvidence").GetProperty("physicalOutput").GetString());
+        Assert.Equal("UNVERIFIED",
+            data.GetProperty("sourceEvidence").GetProperty("hardwareGpu").GetString());
+
+        var scripts = new[]
+        {
+            "Invoke-ManagedAllocationGcQualification.ps1",
+            "Test-ManagedAllocationGcEvidence.ps1",
+            "Test-ManagedAllocationGcVerifierRegressions.ps1"
+        }.Select(file => Path.Combine(root, "build", "qualification", file)).ToArray();
+        Assert.All(scripts, script => Assert.True(File.Exists(script), script));
+        static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+        var powershell = "$files = @(" + string.Join(",", scripts.Select(Quote)) + "); " +
+            "foreach ($file in $files) { $tokens = $null; $parseErrors = $null; " +
+            "[System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$parseErrors) | Out-Null; " +
+            "if ($parseErrors.Count -gt 0) { $parseErrors | ForEach-Object { Write-Error $_.Message }; exit 1 } }; exit 0";
+        var start = new ProcessStartInfo("pwsh")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add(powershell);
+        using var process = Process.Start(start) ??
+            throw new InvalidOperationException("The PowerShell parser process did not start.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(25)); }
+        catch
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw;
+        }
+        var diagnostics = (await stdout) + (await stderr);
+        Assert.Equal(0, process.ExitCode);
+        Assert.True(diagnostics.Length < 8192, "PowerShell syntax qualification emitted unbounded diagnostics.");
+    }
+
     private static string RequiredSha(string name)
     {
         var sha = Environment.GetEnvironmentVariable(name);
