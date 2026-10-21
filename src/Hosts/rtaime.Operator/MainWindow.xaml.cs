@@ -67,6 +67,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
         SequenceTimeline = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(controlTransport), client);
+        ConfigureSequencePlayout(controlTransport, viewModel);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		Replay = new ReplayViewModel(client, MediaDeck);

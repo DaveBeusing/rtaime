@@ -15,6 +15,7 @@ public sealed class OperatorComposition
         Viewer = shell.Monitoring;
         Live = (OperatorViewModel)shell.DataContext;
         Timeline = shell.Timeline;
+        SequencePlayout = shell.SequenceTimeline.Playout;
         Outputs = shell.OutputHealth;
         Health = shell.HealthCenter;
         Ai = Live;
@@ -32,6 +33,7 @@ public sealed class OperatorComposition
     public OperatorMonitoringViewModel Viewer { get; }
     public OperatorViewModel Live { get; }
     public MediaTimelineViewModel Timeline { get; }
+    public SequenceOperatorPlayoutViewModel SequencePlayout { get; }
     public OutputRoutingHealthViewModel Outputs { get; }
     public HealthCenterViewModel Health { get; }
     // Existing governed AI properties/commands; an independent workspace comes later.

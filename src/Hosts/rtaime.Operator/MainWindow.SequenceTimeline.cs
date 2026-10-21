@@ -1,10 +1,24 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
+using rtaime.Client;
 
 namespace rtaime.Operator;
 
 public partial class MainWindow
 {
+    private void ConfigureSequencePlayout(
+        NamedPipeOperatorControlTransport controlTransport, OperatorViewModel owner)
+    {
+        // Reuse the one authenticated ControlHost connection and its authority snapshot.
+        // This is presentation composition only; Runtime owns the output clock and sink.
+        SequenceTimeline.AttachPlayout(new SequenceOperatorPlayoutViewModel(
+            SequenceTimeline, new SequenceAuthoringClient(controlTransport),
+            new SequencePreparationClient(controlTransport),
+            new SequenceShuttleClient(controlTransport),
+            new SequenceOutputClient(controlTransport),
+            () => SequenceOperatorAuthority.From(owner), owner));
+    }
+
     public static readonly DependencyProperty TimelineSequenceVisibilityProperty =
         DependencyProperty.Register(nameof(TimelineSequenceVisibility), typeof(Visibility),
             typeof(MainWindow), new PropertyMetadata(Visibility.Visible));
