@@ -171,10 +171,141 @@ public sealed class ProductionIntegrationGatewayTests
 		await gateway.StartAsync();
 
 		Assert.Equal("DEGRADED", gateway.Health.State);
+		await adapter.FirstFeedbackReceived.Task.WaitAsync(TimeSpan.FromSeconds(3));
 		await WaitUntilAsync(() => gateway.CurrentFeedback is not null && gateway.Health.State == "HEALTHY");
 
 		Assert.True(transport.GetSnapshotCalls >= 3);
+		Assert.Equal(1, transport.MaxConcurrentCalls);
 		Assert.Equal("ControlHost snapshot synchronization recovered.", gateway.Health.Detail);
+	}
+
+
+	[Fact]
+	public async Task Gateway_cancellation_during_initial_sync_never_publishes_healthy_state()
+	{
+		var transport = new ProbeTransport();
+		transport.BlockNextSnapshot();
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(new PassiveAdapter("reference"));
+		using var cancellation = new CancellationTokenSource();
+
+		var starting = gateway.StartAsync(cancellation.Token).AsTask();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			Assert.Equal("STARTING", gateway.Health.State);
+
+			cancellation.Cancel();
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await starting);
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Gateway_delayed_cancelled_startup_cannot_stop_a_new_lifecycle(bool lateTransportFailure)
+	{
+		var transport = new ProbeTransport();
+		transport.BlockNextSnapshot(ignoreCancellation: true, failAfterRelease: lateTransportFailure);
+		var adapter = new PassiveAdapter("reference");
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+
+		var firstStart = gateway.StartAsync().AsTask();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			await gateway.StopAsync();
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+
+			var restarted = gateway.StartAsync().AsTask();
+			transport.ReleaseSnapshot.TrySetResult();
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await firstStart);
+			await restarted.WaitAsync(TimeSpan.FromSeconds(3));
+
+			Assert.Equal("HEALTHY", gateway.Health.State);
+			Assert.NotNull(gateway.CurrentFeedback);
+			Assert.Equal(2, adapter.StartCount);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+	}
+
+
+	[Fact]
+	public async Task Gateway_required_adapter_failure_preserves_failed_startup_health()
+	{
+		var adapter = new FailedStartAdapter("required");
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("required") with { Required = true }),
+			new OperatorControlClient(new ProbeTransport()));
+		gateway.RegisterAdapter(adapter);
+
+		await Assert.ThrowsAsync<IOException>(() => gateway.StartAsync().AsTask());
+		Assert.Equal("FAILED", gateway.Health.State);
+		Assert.Null(gateway.CurrentFeedback);
+		Assert.Equal(IntegrationAdapterState.Stopped, adapter.Health.State);
+	}
+
+	[Fact]
+	public async Task Gateway_stop_cancels_blocked_snapshot_pump_without_healthy_republication()
+	{
+		var transport = new ProbeTransport();
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(new PassiveAdapter("reference"));
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+
+		transport.BlockNextSnapshot();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			await gateway.StopAsync();
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+		Assert.NotNull(gateway.CurrentFeedback);
+	}
+
+	[Fact]
+	public async Task Gateway_preserves_feedback_adapter_degradation_across_healthy_control_snapshots()
+	{
+		var transport = new ProbeTransport();
+		var adapter = new FaultingFeedbackAdapter("reference");
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+
+		await gateway.StartAsync();
+		Assert.Equal("DEGRADED", gateway.Health.State);
+		await WaitUntilAsync(() => adapter.FeedbackAttempts >= 2);
+
+		Assert.Equal("DEGRADED", gateway.Health.State);
+		Assert.StartsWith("Feedback to adapter 'reference' failed", gateway.Health.Detail, StringComparison.Ordinal);
+		Assert.True(transport.GetSnapshotCalls >= 2);
 	}
 
 	[Fact]
@@ -266,6 +397,62 @@ public sealed class ProductionIntegrationGatewayTests
 		await WaitUntilAsync(() => transport.MacroCalls > 0);
 
 		Assert.Equal(macroId, transport.LastMacroId);
+	}
+
+
+	[Fact]
+	public async Task Gateway_discards_outdated_pump_feedback_after_newer_serialized_snapshots()
+	{
+		var transport = new ProbeTransport { StampSnapshotCallNumber = true };
+		var adapter = new PassiveAdapter("reference");
+		var options = GatewayOptions(
+			new[] { Adapter("reference") },
+			new[]
+			{
+				new IntegrationMappingOptions
+				{
+					Id = "macro",
+					AdapterId = "reference",
+					TriggerKey = "macro",
+					Action = new IntegrationActionOptions
+					{
+						Kind = IntegrationActionKind.ProductionMacroExecute,
+						TargetId = "9a000000-0000-0000-0000-000000000099"
+					}
+				}
+			}) with { SnapshotMinimumIntervalMs = 250 };
+		await using var gateway = new IntegrationGateway(options, new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+
+		adapter.BlockNextFeedback();
+		var trigger = new IntegrationTrigger("reference", "macro");
+		var firstMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+		try
+		{
+			await adapter.FeedbackBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			var pumpCall = transport.GetSnapshotCalls + 1;
+			await transport.WaitForSnapshotCallAsync(pumpCall).WaitAsync(TimeSpan.FromSeconds(5));
+
+			var secondMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+			var thirdMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+			await transport.WaitForSnapshotCallAsync(pumpCall + 4).WaitAsync(TimeSpan.FromSeconds(5));
+
+			adapter.ReleaseFeedback.TrySetResult();
+			await Task.WhenAll(firstMapping, secondMapping, thirdMapping).WaitAsync(TimeSpan.FromSeconds(5));
+			await gateway.StopAsync();
+
+			var emitted = adapter.ReadinessHistory;
+			Assert.DoesNotContain(emitted, value => value.EndsWith($"Snapshot-{pumpCall}", StringComparison.Ordinal));
+			Assert.Contains(emitted, value => value.EndsWith($"Snapshot-{pumpCall + 4}", StringComparison.Ordinal));
+			Assert.Equal(1, transport.MaxConcurrentCalls);
+			Assert.Equal("STOPPED", gateway.Health.State);
+		}
+		finally
+		{
+			adapter.ReleaseFeedback.TrySetResult();
+		}
 	}
 
 	[Fact]
@@ -413,16 +600,36 @@ public sealed class ProductionIntegrationGatewayTests
 		Assert.True(condition(), $"Condition did not become true within {timeoutMilliseconds} ms.");
 	}
 
+
 	private sealed class PassiveAdapter : IntegrationAdapterBase
 	{
+		private readonly object _feedbackGate = new();
+		private readonly List<string> _readinessHistory = new();
+		private int _feedbackCount;
+		private int _blockNextFeedback;
+		private IntegrationFeedbackSnapshot? _lastFeedback;
+
 		public PassiveAdapter(string id)
 			: base(id, IntegrationAdapterKind.Discrete, false)
 		{
 		}
 
 		public int StartCount { get; private set; }
-		public int FeedbackCount { get; private set; }
-		public IntegrationFeedbackSnapshot? LastFeedback { get; private set; }
+		public int FeedbackCount => Volatile.Read(ref _feedbackCount);
+		public IntegrationFeedbackSnapshot? LastFeedback => Volatile.Read(ref _lastFeedback);
+		public TaskCompletionSource FeedbackBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public TaskCompletionSource ReleaseFeedback { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public TaskCompletionSource FirstFeedbackReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public IReadOnlyList<string> ReadinessHistory
+		{
+			get
+			{
+				lock (_feedbackGate)
+					return _readinessHistory.ToArray();
+			}
+		}
+
+		public void BlockNextFeedback() => Interlocked.Exchange(ref _blockNextFeedback, 1);
 
 		public override ValueTask StartAsync(IntegrationInputSink input, CancellationToken cancellationToken)
 		{
@@ -431,11 +638,73 @@ public sealed class ProductionIntegrationGatewayTests
 			return ValueTask.CompletedTask;
 		}
 
+		public override async ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken)
+		{
+			if (Interlocked.Exchange(ref _blockNextFeedback, 0) != 0)
+			{
+				FeedbackBlocked.TrySetResult();
+				await ReleaseFeedback.Task.WaitAsync(cancellationToken);
+			}
+
+			lock (_feedbackGate)
+				_readinessHistory.Add(snapshot.RuntimeReadiness);
+			Volatile.Write(ref _lastFeedback, snapshot);
+			Interlocked.Increment(ref _feedbackCount);
+			FirstFeedbackReceived.TrySetResult();
+		}
+
+		public override ValueTask StopAsync(CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Stopped, "Reference adapter is stopped.");
+			return ValueTask.CompletedTask;
+		}
+	}
+
+
+	private sealed class FailedStartAdapter : IntegrationAdapterBase
+	{
+		public FailedStartAdapter(string id)
+			: base(id, IntegrationAdapterKind.Discrete, true)
+		{
+		}
+
+		public override ValueTask StartAsync(IntegrationInputSink input, CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Failed, "Simulated required adapter startup failure.");
+			throw new IOException("Simulated required adapter startup failure.");
+		}
+
+		public override ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken) =>
+			ValueTask.CompletedTask;
+
+		public override ValueTask StopAsync(CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Stopped, "Reference adapter is stopped.");
+			return ValueTask.CompletedTask;
+		}
+	}
+
+	private sealed class FaultingFeedbackAdapter : IntegrationAdapterBase
+	{
+		private int _feedbackAttempts;
+
+		public FaultingFeedbackAdapter(string id)
+			: base(id, IntegrationAdapterKind.Discrete, false)
+		{
+		}
+
+		public int FeedbackAttempts => Volatile.Read(ref _feedbackAttempts);
+
+		public override ValueTask StartAsync(IntegrationInputSink input, CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Healthy, "Reference adapter is active.");
+			return ValueTask.CompletedTask;
+		}
+
 		public override ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken)
 		{
-			FeedbackCount++;
-			LastFeedback = snapshot;
-			return ValueTask.CompletedTask;
+			Interlocked.Increment(ref _feedbackAttempts);
+			throw new IOException("Simulated adapter feedback failure.");
 		}
 
 		public override ValueTask StopAsync(CancellationToken cancellationToken)
@@ -487,9 +756,18 @@ public sealed class ProductionIntegrationGatewayTests
 		private int _snapshotFailuresRemaining;
 		private int _activeCalls;
 		private int _blockNextSnapshot;
+		private int _failBlockedSnapshot;
+		private readonly Dictionary<int, TaskCompletionSource> _snapshotCallWaiters = new();
+		public bool StampSnapshotCallNumber { get; set; }
 		public TaskCompletionSource SnapshotBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource ReleaseSnapshot { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-		public void BlockNextSnapshot() => Interlocked.Exchange(ref _blockNextSnapshot, 1);
+		private int _ignoreBlockedSnapshotCancellation;
+		public void BlockNextSnapshot(bool ignoreCancellation = false, bool failAfterRelease = false)
+		{
+			Interlocked.Exchange(ref _ignoreBlockedSnapshotCancellation, ignoreCancellation ? 1 : 0);
+			Interlocked.Exchange(ref _failBlockedSnapshot, failAfterRelease ? 1 : 0);
+			Interlocked.Exchange(ref _blockNextSnapshot, 1);
+		}
 
 		public ProbeTransport(int delayMilliseconds = 0, int snapshotFailures = 0)
 		{
@@ -518,6 +796,21 @@ public sealed class ProductionIntegrationGatewayTests
 		public string? LastMacroId { get; private set; }
 		public int MaxConcurrentCalls { get; private set; }
 
+		public Task WaitForSnapshotCallAsync(int count)
+		{
+			lock (_gate)
+			{
+				if (GetSnapshotCalls >= count)
+					return Task.CompletedTask;
+				if (!_snapshotCallWaiters.TryGetValue(count, out var completion))
+				{
+					completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+					_snapshotCallWaiters.Add(count, completion);
+				}
+				return completion.Task;
+			}
+		}
+
 		public async ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
 		{
 			await EnterAsync(cancellationToken);
@@ -526,17 +819,24 @@ public sealed class ProductionIntegrationGatewayTests
 				if (Interlocked.Exchange(ref _blockNextSnapshot, 0) != 0)
 				{
 					SnapshotBlocked.TrySetResult();
-					await ReleaseSnapshot.Task.WaitAsync(cancellationToken);
+					var waitToken = Interlocked.Exchange(ref _ignoreBlockedSnapshotCancellation, 0) != 0
+						? CancellationToken.None
+						: cancellationToken;
+					await ReleaseSnapshot.Task.WaitAsync(waitToken);
+					if (Interlocked.Exchange(ref _failBlockedSnapshot, 0) != 0)
+						throw new IOException("Late ControlHost snapshot failure.");
 				}
 				lock (_gate)
 				{
-					GetSnapshotCalls++;
+					var call = ++GetSnapshotCalls;
+					if (_snapshotCallWaiters.Remove(call, out var reached))
+						reached.TrySetResult();
 					if (_snapshotFailuresRemaining > 0)
 					{
 						_snapshotFailuresRemaining--;
 						throw new IOException("Simulated ControlHost snapshot outage.");
 					}
-					return Snapshot(_state);
+					return Snapshot(_state, StampSnapshotCallNumber ? $"Snapshot-{call}" : "Ready");
 				}
 			}
 			finally
@@ -618,13 +918,13 @@ public sealed class ProductionIntegrationGatewayTests
 				_activeCalls--;
 		}
 
-		private static OperatorStatusSnapshot Snapshot(AuthoritativeProductionState state)
+		private static OperatorStatusSnapshot Snapshot(AuthoritativeProductionState state, string runtimeStatus)
 		{
 			var sourceIds = new[] { state.Routing.PreviewSourceId, state.Routing.ProgramSourceId }.Distinct().ToArray();
 			return new OperatorStatusSnapshot(
 				state,
 				sourceIds.Select((id, index) => new OperatorSourceDescriptor(id.ToString(), $"Input {index + 1}")).ToArray(),
-				"Ready",
+				runtimeStatus,
 				"Locked",
 				"Valid",
 				"Optional",
