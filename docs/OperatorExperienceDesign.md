@@ -51,6 +51,15 @@ Four experience groups organize the existing eight canonical destinations. They 
 | Outputs | OUTPUTS | Where is Program/Aux going, and what is actually confirmed? |
 | System & Health | HEALTH, SETTINGS | What is degraded, why, and which supported recovery action is safe? |
 
+The production navigation rail presents LIVE, MEDIA, Timeline (the existing
+`EDIT` workspace) and OUTPUTS as the four first-class entry points. The
+other existing destinations remain available through grouped Live tools,
+Creation and System entries in the custom More menu and through the Ctrl+K
+command palette. This is a presentation hierarchy, not a reduction from ten
+registered workspaces or a revision to their saved identifiers. Global
+readiness/incident access, Program identity, output status and active
+recording feedback stay visible across destinations.
+
 The earlier functional deferrals are superseded by the
 [2026-10-17 scope record](OperatorExperienceScope.md#supersession-and-acceptance-checklist):
 2D canvas/mapping and an independent AI workspace are approved implementation

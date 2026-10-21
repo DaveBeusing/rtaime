@@ -307,7 +307,11 @@ public sealed class OperatorCommandPaletteTests
 			search.RaiseEvent(enter);
 			Assert.True(enter.Handled);
 			Assert.Equal(program, ((OperatorViewModel)main.DataContext).ProgramSourceId);
-			main.CommandPalette.Query = "workspace health";
+			main.CommandPalette.Query = "workspace timeline";
+            Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-edit");
+            main.CommandPalette.Query = "workspace edit";
+            Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-edit");
+            main.CommandPalette.Query = "workspace health";
 			main.CommandPalette.Selected = main.CommandPalette.Results.Single(entry => entry.Id == "workspace-health");
 			Assert.True(main.CommandPalette.ExecuteSelected(true));
 			Assert.Null(main.CommandPaletteWindow);
