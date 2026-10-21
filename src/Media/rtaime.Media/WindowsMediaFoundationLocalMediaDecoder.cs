@@ -679,6 +679,14 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         if (width <= 0 || height <= 0 || Math.Abs((long)pitch) < rowBytes ||
             destination.Length != checked(rowBytes * height))
             throw new InvalidDataException("RGB32 row extents do not match the visible surface.");
+        // The normal positive, tightly packed RGB32 layout needs only one
+        // managed/native copy. Padded and bottom-up surfaces still preserve
+        // their real pitch and row orientation.
+        if (pitch == rowBytes)
+        {
+            Marshal.Copy(scanline0, destination, 0, destination.Length);
+            return;
+        }
         for (var y = 0; y < height; y++)
             Marshal.Copy(IntPtr.Add(scanline0, checked(y * pitch)), destination, checked(y * rowBytes), rowBytes);
     }
