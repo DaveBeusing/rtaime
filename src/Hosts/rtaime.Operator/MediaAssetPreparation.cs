@@ -288,7 +288,9 @@ public sealed partial class MediaPoolInspectorViewModel
         !_preparationDisposed && !_openingLibraryPreview && !_preparing && !_catalogBusy &&
         !_batchRunning && !_operator.IsBusy && _operator.IsConnected && !_operator.IsStale &&
         !HasMultipleSelection && CanDropToPreview(item) && item is { } selected &&
-        (selected.Kind != MediaPoolItemKind.Clip || Guid.TryParse(selected.ReferenceId, out _));
+        (selected.Kind != MediaPoolItemKind.Clip ||
+            (Guid.TryParse(selected.ReferenceId, out _) &&
+             !string.Equals(_operator.SelectedSource?.Id, _operator.ProgramSourceId, StringComparison.Ordinal)));
     public bool CanOpenLibraryPreview => CanOpenLibraryPreviewItem(SelectedItem);
     public string LibraryJourneyFeedback => _libraryJourneyMessage ?? LibraryJourneyState;
 
@@ -307,6 +309,9 @@ public sealed partial class MediaPoolInspectorViewModel
             if (item.Kind is not (MediaPoolItemKind.Clip or MediaPoolItemKind.Source))
                 return "INSPECT ONLY · this asset is not a media deck or Preview source.";
             if (!item.IsOnline) return "UNAVAILABLE · refresh availability or relink the missing asset.";
+            if (item.Kind == MediaPoolItemKind.Clip &&
+                string.Equals(_operator.SelectedSource?.Id, _operator.ProgramSourceId, StringComparison.Ordinal))
+                return "ON PROGRAM · choose the other source slot before opening a resident Preview clip.";
             if (item.Kind == MediaPoolItemKind.Source)
                 return CanOpenLibraryPreview ? "SOURCE ONLINE · select Preview to request a confirmed route." :
                     "SOURCE ONLINE · review source and current routing eligibility.";
@@ -378,7 +383,9 @@ public sealed partial class MediaPoolInspectorViewModel
                 !string.Equals(current.SourceLocation, path, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(current.FingerprintSha256, fingerprint, StringComparison.Ordinal) ||
                 SelectedItem?.Key != item.Key || HasMultipleSelection ||
-                _operator.SelectedSource?.Id != sourceId || !_operator.IsConnected ||
+                _operator.SelectedSource?.Id != sourceId ||
+                string.Equals(_operator.ProgramSourceId, sourceId, StringComparison.Ordinal) ||
+                !_operator.IsConnected ||
                 _operator.IsStale || _operator.IsBusy || !_operator.SetPreviewCommand.CanExecute(null) ||
                 !deck.IsLoaded || deck.Probe?.AssetId != new MediaAssetId(new Identity(id)) ||
                 deck.SourceId?.ToString() != sourceId)
