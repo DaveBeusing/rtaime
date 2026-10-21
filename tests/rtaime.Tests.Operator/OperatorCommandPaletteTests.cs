@@ -319,7 +319,11 @@ public sealed class OperatorCommandPaletteTests
             Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-edit");
             main.CommandPalette.Query = "workspace edit";
             Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-edit");
-            main.CommandPalette.Query = "workspace health";
+            main.CommandPalette.Query = "workspace ai";
+			Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-ai");
+			main.CommandPalette.Query = "workspace settings";
+			Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-settings");
+			main.CommandPalette.Query = "workspace health";
 			main.CommandPalette.Selected = main.CommandPalette.Results.Single(entry => entry.Id == "workspace-health");
 			Assert.True(main.CommandPalette.ExecuteSelected(true));
 			Assert.Null(main.CommandPaletteWindow);

@@ -11,6 +11,20 @@ public sealed class OperatorOnboardingTests : IDisposable
 	private readonly string _root = Path.Combine(Path.GetTempPath(), "rtaime-guide-" + Guid.NewGuid().ToString("N"));
 	private string PathName => Path.Combine(_root, "guide.json");
 	[Fact]
+	public void System_diagnostics_guidance_preserves_the_seven_local_review_topics()
+	{
+		var steps = OperatorOnboardingViewModel.Steps;
+		Assert.Equal(7, steps.Count);
+		Assert.Contains("Ctrl+K", steps.Single(x => x.Id == "preflight").Detail);
+		Assert.Contains("More > Live tools", steps.Single(x => x.Id == "cues").Detail);
+		Assert.Contains("More > System > Health", steps.Single(x => x.Id == "outputs").Detail);
+		Assert.Contains("acknowledging an alert is not repairing it", steps.Single(x => x.Id == "outputs").Detail);
+		Assert.Contains("More > System > Settings", steps.Single(x => x.Id == "layout").Detail);
+		Assert.Contains("More > System > AI", steps.Single(x => x.Id == "layout").Detail);
+		Assert.Equal(1, OperatorGuideProgress.Empty.Version);
+	}
+
+	[Fact]
 	public async Task Cold_start_review_minimize_disable_and_reopen_persist_only_versioned_local_progress()
 	{
 		var store = new OperatorOnboardingStore(PathName);

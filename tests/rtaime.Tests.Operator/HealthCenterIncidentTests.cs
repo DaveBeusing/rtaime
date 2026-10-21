@@ -72,6 +72,56 @@ public sealed class HealthCenterIncidentTests
 	}
 
 	[Fact]
+	public void Detailed_telemetry_is_opt_in_without_hiding_active_incidents_or_changing_readiness()
+	{
+		var provider = new TestProvider(
+			Snapshot("cpu", SubsystemHealthState.Healthy, SubsystemProgramImpact.None),
+			Snapshot("recording", SubsystemHealthState.Failed, SubsystemProgramImpact.RecordingOnly),
+			Snapshot("audio", SubsystemHealthState.Unknown, SubsystemProgramImpact.Unknown));
+		var context = new QueuedContext();
+		var sync = new TestCommand();
+		using var readiness = new RuntimeReadinessService(() => Start);
+		using var model = new HealthCenterViewModel(provider, readiness, sync, context);
+
+		Assert.False(model.TelemetryOverviewVisible);
+		Assert.Equal("SHOW TELEMETRY", model.TelemetryOverviewAction);
+		Assert.Equal(2, model.AttentionCount);
+		Assert.Equal(1, model.FailedCount);
+		Assert.Equal("recording", model.SelectedSubsystem!.Id);
+		Assert.False(model.TechnicalDetailsVisible);
+		Assert.True(model.ToggleTelemetryOverviewCommand.CanExecute(null));
+		var selected = model.SelectedSubsystem;
+		var readinessBefore = readiness.Current;
+		model.ToggleTelemetryOverviewCommand.Execute(null);
+		Assert.True(model.TelemetryOverviewVisible);
+		Assert.Equal("HIDE TELEMETRY", model.TelemetryOverviewAction);
+		Assert.Same(selected, model.SelectedSubsystem);
+		Assert.Equal(readinessBefore, readiness.Current);
+		Assert.Equal(0, sync.Executions);
+
+		model.ToggleTechnicalDetailsCommand.Execute(null);
+		Assert.True(model.TechnicalDetailsVisible);
+		provider.Publish(
+			Snapshot("cpu", SubsystemHealthState.Healthy, SubsystemProgramImpact.None),
+			Snapshot("recording", SubsystemHealthState.Degraded, SubsystemProgramImpact.RecordingOnly),
+			Snapshot("audio", SubsystemHealthState.Unknown, SubsystemProgramImpact.Unknown));
+		context.Drain();
+		Assert.Same(selected, model.SelectedSubsystem);
+		Assert.True(model.TelemetryOverviewVisible);
+		Assert.Equal(2, model.AttentionCount);
+		Assert.Equal(0, model.FailedCount);
+		Assert.Equal(readinessBefore, readiness.Current);
+		model.SelectedSubsystem = model.Subsystems.Single(x => x.Id == "audio");
+		Assert.False(model.TechnicalDetailsVisible);
+		model.ToggleTelemetryOverviewCommand.Execute(null);
+		Assert.False(model.TelemetryOverviewVisible);
+		Assert.Equal(0, sync.Executions);
+		model.Dispose();
+		Assert.False(model.ToggleTelemetryOverviewCommand.CanExecute(null));
+		Assert.False(model.ToggleTechnicalDetailsCommand.CanExecute(null));
+	}
+
+	[Fact]
 	public void Recovery_rechecks_authorization_and_releases_command_subscription()
 	{
 		var provider = new TestProvider(Snapshot("control", SubsystemHealthState.Failed, SubsystemProgramImpact.ControlLimited) with { CanRecover = true });

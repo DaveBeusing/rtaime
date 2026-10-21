@@ -34,4 +34,38 @@ public sealed class HealthCenterSurfaceTests
 		Assert.Contains(evidence.Descendants(), element =>
 			element.Attribute("AutomationProperties.LiveSetting")?.Value == "Polite");
 	}
+	[Fact]
+	public void Health_diagnostics_and_advanced_links_reuse_visible_custom_incident_controls()
+	{
+		DirectoryInfo? root = new(AppContext.BaseDirectory);
+		while (root is not null && !File.Exists(Path.Combine(root.FullName, "rtaime.slnx")))
+			root = root.Parent;
+		Assert.NotNull(root);
+		var document = XDocument.Load(Path.Combine(root.FullName, "src", "Hosts", "rtaime.Operator", "HealthCenterControl.xaml"));
+		var elements = document.Descendants().ToArray();
+		Assert.Contains(elements, element => element.Name.LocalName == "RtaimeButton" &&
+			element.Attribute("Command")?.Value == "{Binding ToggleTelemetryOverviewCommand}" &&
+			!string.IsNullOrWhiteSpace(element.Attribute("AutomationProperties.Name")?.Value));
+		Assert.Contains(elements, element => element.Name.LocalName == "RtaimeListBox" &&
+			element.Attribute("ItemsSource")?.Value == "{Binding Overview}" &&
+			element.Descendants().Any(trigger => trigger.Name.LocalName == "DataTrigger" &&
+				trigger.Attribute("Binding")?.Value == "{Binding TelemetryOverviewVisible}" &&
+				trigger.Attribute("Value")?.Value == "True"));
+		Assert.Contains(elements, element => element.Name.LocalName == "RtaimeListBox" &&
+			element.Attribute("ItemsSource")?.Value == "{Binding SelectedSubsystem.Metrics}" &&
+			element.Descendants().Any(trigger => trigger.Name.LocalName == "DataTrigger" &&
+				trigger.Attribute("Binding")?.Value == "{Binding TechnicalDetailsVisible}" &&
+				trigger.Attribute("Value")?.Value == "True"));
+		foreach (var destination in new[] { "AI", "SETTINGS" })
+			Assert.Contains(elements, element => element.Name.LocalName == "RtaimeButton" &&
+				element.Attribute("CommandParameter")?.Value == destination &&
+				element.Attribute("Command")?.Value?.Contains("Shell.SelectWorkspaceCommand", StringComparison.Ordinal) == true &&
+				!string.IsNullOrWhiteSpace(element.Attribute("AutomationProperties.Name")?.Value));
+		foreach (var command in new[] { "OpenShowChecksCommand", "OpenCommandPaletteCommand" })
+			Assert.Contains(elements, element => element.Name.LocalName == "RtaimeButton" &&
+				element.Attribute("Command")?.Value?.Contains(command, StringComparison.Ordinal) == true);
+		Assert.Contains(elements, element =>
+			element.Attribute("AutomationProperties.Name")?.Value == "Operator product version and build identity");
+	}
+
 }
