@@ -250,6 +250,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	{
 		Channel<IntegrationTrigger> inputs;
 		CancellationTokenSource lifetime;
+		CancellationTokenSource startupCancellation;
 		lock (_gate)
 		{
 			if (_stopping)
@@ -260,6 +261,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			_feedback = null;
 			inputs = CreateInputChannel();
 			lifetime = new CancellationTokenSource();
+			startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
 			_inputs = inputs;
 			_lifetime = lifetime;
 			_state = "STARTING";
@@ -267,8 +269,8 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			_updatedAtUtc = DateTimeOffset.UtcNow;
 		}
 
-		using var startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
-		var startupToken = startupCancellation.Token;
+		using var startupLifetime = startupCancellation;
+		var startupToken = startupLifetime.Token;
 		try
 		{
 			foreach (var adapter in SnapshotAdapters())
@@ -317,7 +319,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 					return;
 				var token = lifetime.Token;
 				_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
-				_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(lifetime), CancellationToken.None);
+				_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(lifetime, token), CancellationToken.None);
 			}
 		}
 		catch (Exception exception)
@@ -585,9 +587,8 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	}
 
 
-	private async Task RunSnapshotPumpAsync(CancellationTokenSource lifetime)
+	private async Task RunSnapshotPumpAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
 	{
-		var cancellationToken = lifetime.Token;
 		try
 		{
 			while (!cancellationToken.IsCancellationRequested)
