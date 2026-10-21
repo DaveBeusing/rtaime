@@ -3531,6 +3531,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	{
 		foreach (var sourceId in _audioStreams.Keys)
 		{
+			// Only the two reference sources have a VirtualEmbeddedAudio
+			// generator. Late external/sequence inputs own genuine audio
+			// samples and meters; never manufacture a virtual packet for one.
+			if (sourceId != _virtualMedia.SourceA.SourceId &&
+				sourceId != _virtualMedia.SourceB.SourceId)
+				continue;
 			var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
 			if (_audioTestSignals.TryGetValue(sourceId, out var testSignal))
 			{
