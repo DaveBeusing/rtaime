@@ -11,6 +11,13 @@ on:
       - "build/qualification/Test-RealtimePlayoutVerifierRegressions.ps1"
       - "qualification/performance/realtime-playout-matrix.json"
       - "tests/rtaime.Tests.Integration/RealtimePlayoutEvidenceMatrixTests.cs"
+      - "tests/rtaime.Tests.Integration/SequenceNativeProgramOutputIntegrationTests.cs"
+      - "tests/rtaime.Tests.Integration/ReferenceSequenceDistinctSourcesOutputTests.cs"
+      - "tests/rtaime.Tests.Integration/ReferenceMediaPlaybackAllocationDiagnosticsTests.cs"
+      - "tests/rtaime.Tests.Integration/MultiDeckSsdPlaybackQualificationTests.cs"
+      - "tests/rtaime.Tests.Integration/RuntimeMemoryBoundednessTests.cs"
+      - "tests/rtaime.Tests.Integration/RuntimeResourceCapacityAdmissionTests.cs"
+      - "tests/rtaime.Tests.Operator/MonitoringVisualPerformanceQualificationTests.cs"
       - ".github/workflows/realtime-playout-evidence.yml"
   workflow_dispatch:
     inputs:
