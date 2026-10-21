@@ -277,10 +277,6 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			if (failedRequired is not null)
 				throw new InvalidOperationException($"Required integration adapter '{failedRequired.Id}' failed to start: {failedRequired.Health.Detail}");
 
-			var token = lifetime.Token;
-			_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
-			_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(token), CancellationToken.None);
-
 			try
 			{
 				var initial = await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
@@ -295,6 +291,11 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			{
 				SetGatewayState("DEGRADED", $"ControlHost unavailable at startup; automatic resynchronization remains active: {exception.Message}");
 			}
+
+			// Initial synchronization settles before the periodic snapshot pump begins.
+			var token = lifetime.Token;
+			_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
+			_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(token), CancellationToken.None);
 		}
 		catch
 		{
