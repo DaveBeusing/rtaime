@@ -1,0 +1,73 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+name: Real-time playout software evidence
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "build/qualification/Invoke-RealtimePlayoutEvidence.ps1"
+      - "build/qualification/Test-RealtimePlayoutEvidence.ps1"
+      - "build/qualification/Test-RealtimePlayoutVerifierRegressions.ps1"
+      - "qualification/performance/realtime-playout-matrix.json"
+      - "tests/rtaime.Tests.Integration/RealtimePlayoutEvidenceMatrixTests.cs"
+      - ".github/workflows/realtime-playout-evidence.yml"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Existing bounded software producer profile"
+        type: choice
+        options: ["smoke", "reference"]
+        default: "smoke"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: realtime-playout-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  software-evidence:
+    name: Exact-source real playout software matrix
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup pinned .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Verify fail-closed evidence parser regressions
+        shell: pwsh
+        run: ./build/qualification/Test-RealtimePlayoutVerifierRegressions.ps1
+
+      - name: Collect existing Program GC native SSD sequence and mixed evidence
+        shell: pwsh
+        env:
+          RTAIME_MATRIX_PROFILE: ${{ inputs.profile || 'smoke' }}
+        run: ./build/qualification/Invoke-RealtimePlayoutEvidence.ps1 -Profile $env:RTAIME_MATRIX_PROFILE
+
+      - name: Require one exact-source completed software matrix
+        shell: pwsh
+        run: |
+          $manifests = @(Get-ChildItem -Path artifacts/qualification/realtime-playout -File -Filter manifest.json -Recurse)
+          if ($manifests.Count -ne 1) {
+            throw "Exactly one source-verified final matrix must exist; pending/failed evidence is not PASS."
+          }
+          $commit = ('${{ github.event.pull_request.head.sha || github.sha }}').ToLowerInvariant()
+          ./build/qualification/Test-RealtimePlayoutEvidence.ps1 -EvidencePath $manifests[0].FullName -ExpectedSourceCommit $commit
+
+      - name: Retain raw source-bound reports and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-realtime-playout-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/realtime-playout/
+          if-no-files-found: warn
