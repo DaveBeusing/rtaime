@@ -9,6 +9,7 @@
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
@@ -18,16 +19,19 @@
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" />
 				<ColumnDefinition Width="6" />
-				<ColumnDefinition Width="64" />
+				<ColumnDefinition Width="98" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="64" />
 			</Grid.ColumnDefinitions>
 			<StackPanel>
 				<TextBlock Text="RUNDOWN" Style="{StaticResource OperatorLabel}" />
 				<controls:RtaimeTextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditAuthoring}" MaxLength="128" IsCompact="True" Margin="0,2,0,0" />
 			</StackPanel>
-			<controls:RtaimeButton Grid.Column="2" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+			<controls:RtaimeButton Grid.Column="2" Content="{Binding AdvancedAuthoringLabel, ElementName=RundownRoot}" Click="ToggleAuthoringOptions_Click" IsCompact="True" VerticalAlignment="Bottom" ToolTip="Show or hide follow, transition and repeat authoring options. No Program action." />
+            <controls:RtaimeButton Grid.Column="4" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 		</Grid>
 
-		<StackPanel Grid.Row="1" Margin="0,6,0,6" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
+		<StackPanel Grid.Row="1" Margin="0,6,0,6" Visibility="{Binding AdvancedAuthoringVisibility, ElementName=RundownRoot}">
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
@@ -106,7 +110,42 @@
 		</StackPanel>
 
 		<TextBlock Text="RUNDOWN" Style="{StaticResource OperatorLabel}" Visibility="{Binding ConsoleVisibility, ElementName=RundownRoot}" ToolTip="Full rundown authoring: Multiview → RUNDOWN." />
-		<controls:RtaimeListBox Grid.Row="2" MinHeight="{Binding MinimumListHeight, ElementName=RundownRoot}" MaxHeight="280"
+        <!-- These cards are confirmed ControlHost execution, never the locally selected row. -->
+        <Grid Grid.Row="2" Margin="0,4,0,4" AutomationProperties.Name="Confirmed rundown NOW and NEXT">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Padding="6,4" Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                    BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+                    CornerRadius="{DynamicResource OperatorRadiusControl}">
+                <StackPanel>
+                    <TextBlock Text="NOW · RUNDOWN" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="{Binding NowItemName}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding NowItemName}"
+                               AutomationProperties.Name="Confirmed current rundown item" />
+                    <TextBlock Text="{Binding NowItemStatus}" Style="{StaticResource OperatorLabel}"
+                               FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding NowItemStatus}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Padding="6,4" Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                    BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+                    CornerRadius="{DynamicResource OperatorRadiusControl}">
+                <StackPanel>
+                    <TextBlock Text="NEXT · CONTROL CANDIDATE" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="{Binding NextItemName}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding NextItemName}"
+                               AutomationProperties.Name="Confirmed next rundown candidate" />
+                    <TextBlock Text="{Binding NextItemStatus}" Style="{StaticResource OperatorLabel}"
+                               FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding NextItemStatus}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+		<controls:RtaimeListBox Grid.Row="3" MinHeight="{Binding MinimumListHeight, ElementName=RundownRoot}" MaxHeight="280"
             AllowDrop="True" PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
             MouseMove="Rows_MouseMove" DragOver="Rows_DragOver" Drop="Rows_Drop"
             PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
@@ -159,28 +198,30 @@
 			</controls:RtaimeListBox.ItemTemplate>
 		</controls:RtaimeListBox>
 
-		<StackPanel Grid.Row="3" Margin="0,6,0,0">
-			<WrapPanel Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
-				<controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Z: undo local authoring only." AutomationProperties.Name="Undo rundown authoring draft" Margin="0,0,4,4" />
-				<controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoDraftCommand}" IsCompact="True" ToolTip="Ctrl+Y: redo local authoring only." AutomationProperties.Name="Redo rundown authoring draft" />
-			</WrapPanel>
+		<StackPanel Grid.Row="4" Margin="0,6,0,0">
+
 			<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="Drag a row before another row. Save commits the local order." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
             <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding DraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,4" />
-			<Grid Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<controls:RtaimeButton Content="↑" Command="{Binding MoveUpCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="2" Content="↓" Command="{Binding MoveDownCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="4" Content="REMOVE" Command="{Binding RemoveCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="6" Content="REFRESH" Command="{Binding RefreshCommand}" ToolTip="Reload saved rundown and discard unsaved authoring and undo history." IsCompact="True" />
-			</Grid>
+            <controls:RtaimeButton Content="MORE AUTHORING ···" Click="OpenAuthoringMenu_Click"
+                                   Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}"
+                                   IsCompact="True" Margin="0,2,0,0"
+                                   ToolTip="Additional draft actions and refresh. Never executes Program.">
+                <controls:RtaimeButton.ContextMenu>
+                    <controls:RtaimeContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <controls:RtaimeMenuItem Header="Add audio · Follow Video" Command="{Binding AddFollowVideoCommand}" />
+                        <controls:RtaimeMenuItem Header="Add audio · Breakaway" Command="{Binding AddAudioBreakawayCommand}" />
+                        <controls:RtaimeMenuItem Header="Add graphics action" Command="{Binding AddGraphicsCommand}" />
+                        <controls:RtaimeMenuSeparator />
+                        <controls:RtaimeMenuItem Header="Move selected up" Command="{Binding MoveUpCommand}" />
+                        <controls:RtaimeMenuItem Header="Move selected down" Command="{Binding MoveDownCommand}" />
+                        <controls:RtaimeMenuItem Header="Remove selected" Command="{Binding RemoveCommand}" />
+                        <controls:RtaimeMenuSeparator />
+                        <controls:RtaimeMenuItem Header="Undo local draft · Ctrl+Z" Command="{Binding UndoDraftCommand}" />
+                        <controls:RtaimeMenuItem Header="Redo local draft · Ctrl+Y" Command="{Binding RedoDraftCommand}" />
+                        <controls:RtaimeMenuItem Header="Refresh confirmed state · discard unsaved draft" Command="{Binding RefreshCommand}" />
+                    </controls:RtaimeContextMenu>
+                </controls:RtaimeButton.ContextMenu>
+            </controls:RtaimeButton>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{Binding NavigationColumnWidth, ElementName=RundownRoot}" />
@@ -197,29 +238,19 @@
 				<controls:RtaimeButton Grid.Column="2" Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
 				<controls:RtaimeButton Grid.Column="4"
 					Content="RUNDOWN GO"
+					AutomationProperties.HelpText="Ctrl+Shift+G when the rundown has focus. Only ControlHost can commit Program."
 					Command="{Binding GoCommand}" ToolTip="{Binding LiveActionDetail}" ToolTipService.ShowOnDisabled="True"
 					IsCompact="True"
 					Background="{DynamicResource OperatorAccentBrush}"
 					BorderBrush="{DynamicResource OperatorAccentBrush}"
 					Foreground="{DynamicResource OperatorBackgroundBrush}" />
 				<controls:RtaimeButton Grid.Column="6" Content="NEXT" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Command="{Binding NextCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="8" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="8" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" AutomationProperties.HelpText="Ctrl+Shift+H when the rundown has focus. Halt governed auto-follow; Program remains authoritative." />
 			</Grid>
-			<Grid Margin="0,4,0,0" Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="3" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<controls:RtaimeButton Content="+ AFV" Command="{Binding AddFollowVideoCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="2" Content="+ BREAKAWAY" Command="{Binding AddAudioBreakawayCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="4" Content="+ GRAPHICS" Command="{Binding AddGraphicsCommand}" IsCompact="True" />
-			</Grid>
+
 		</StackPanel>
 
-		<Border Grid.Row="4"
+		<Border Grid.Row="5"
 			Margin="0,6,0,0"
 			Padding="6,4"
 			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
@@ -246,8 +277,12 @@
 					<TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FollowStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 					<TextBlock Grid.Column="2" Text="{Binding RepeatStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</Grid>
-				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding CurrentItemName, StringFormat=CURRENT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock MaxHeight="{Binding StatusMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding PreparedItemName}" Text="{Binding PreparedItemName, StringFormat=PREPARED · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}"
+                           Text="{Binding SelectedItemName, StringFormat=LOCAL SELECTION · {0}}"
+                           Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}"
+                           TextTrimming="CharacterEllipsis" />
+				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding NowItemName, StringFormat=CONFIRMED NOW · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock MaxHeight="{Binding StatusMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding NextItemStatus}" Text="{Binding NextItemName, StringFormat=CONFIRMED NEXT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock MaxHeight="{Binding DetailMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding LiveActionDetail}" Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
@@ -257,6 +292,7 @@
                         <Style TargetType="TextBlock">
                             <Style.Triggers>
                                 <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
+                                 <Trigger Property="Text" Value="NONE"><Setter Property="Visibility" Value="Collapsed" /></Trigger>
                                 <Trigger Property="Text" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></Trigger>
                             </Style.Triggers>
                         </Style>

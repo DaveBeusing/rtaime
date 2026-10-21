@@ -62,7 +62,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
 		PrepareCommand = new AsyncRelayCommand(PrepareAsync, CanPrepare);
-		GoCommand = new AsyncRelayCommand(GoAsync, () => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
+		GoCommand = new AsyncRelayCommand(GoAsync, CanGo);
 		NextCommand = new AsyncRelayCommand(NextAsync, CanNavigate);
 		PreviousCommand = new AsyncRelayCommand(PreviousAsync, CanNavigate);
 		HoldCommand = new AsyncRelayCommand(HoldAsync, () => LiveAuthorityAvailable && !IsBusy && State is "EXECUTING" or "PREPARED" or "HELD");
@@ -394,8 +394,10 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		Detail = execution.State switch
 		{
 			RundownExecutionState.Prepared => execution.PreparedMediaState == "NEXT_READY"
-                ? $"Next clip is resident and ready until {execution.PreparedMediaExpiresAtUtc:T}. GO uses the prepared A/B deck."
-                : "Selected item is prepared through authoritative Show Control.",
+                ? execution.PreparedMediaExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow
+                    ? "Resident preparation expired. Prepare again before GO."
+                    : "ControlHost reports NEXT_READY. GO must revalidate the resident A/B deck."
+                : "Selected item is prepared through authoritative Show Control; Program is unchanged.",
 			RundownExecutionState.Executing => execution.AutoAdvanceArmed
 				? $"Executing · {execution.FollowActionKind} armed from confirmed completion evidence."
 				: "Executing through authoritative Show Control.",
@@ -429,12 +431,20 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 			IOException or
 			FormatException or
 			TimeoutException or
+            OperationCanceledException or
 			NotSupportedException)
 		{
 			Failure = exception.Message;
-			// A rejected save retains local draft identity and undo history.
-			if (!_hasLocalDraft) State = "FAILED";
-			Detail = "Rundown command was rejected; no local production authority was assumed.";
+			// A failed or uncertain response cannot prove the current Program.
+            // Retain a local authoring draft but require a fresh Control snapshot
+            // before accepting another live mutation.
+            _observationAvailable = false; // Draft undo must not reopen stale live authority.
+            if (!_hasLocalDraft)
+            {
+                State = "UNVERIFIED";
+                Detail = "Command result unverified. Synchronize Control before another GO or HOLD; never replay an uncertain action.";
+            }
+            else Detail = "Local draft retained; refresh Control before resaving. No live production mutation is assumed.";
 		}
 		finally
 		{
@@ -456,6 +466,19 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
 	private bool CanPrepare() => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
+    private bool CanGo()
+    {
+        if (!LiveAuthorityAvailable || _hasLocalDraft || _draftConflict || IsBusy ||
+            RequiresAcknowledgement || _confirmedSnapshot is not { } snapshot)
+            return false;
+        var execution = snapshot.Execution;
+        if (execution.PreparedMediaState == "NEXT_READY" &&
+            execution.PreparedMediaExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+            return false;
+        return (execution.State == RundownExecutionState.Prepared && execution.PreparedItemId is not null) ||
+            (execution.State == RundownExecutionState.Executing && execution.AutoAdvanceArmed &&
+             execution.PendingNextItemId is not null);
+    }
 	private bool CanNavigate() => LiveAuthorityAvailable && !_hasLocalDraft && !_draftConflict && !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
 	private bool CanUseSelectedFollowForNonMedia() => SelectedFollowAction != RundownFollowActionKind.AutoOnMediaEnd;
 
@@ -473,6 +496,11 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(LiveActionDetail));
 		OnPropertyChanged(nameof(CurrentItemName));
 		OnPropertyChanged(nameof(PreparedItemName));
+        OnPropertyChanged(nameof(NowItemName));
+        OnPropertyChanged(nameof(NowItemStatus));
+        OnPropertyChanged(nameof(NextItemName));
+        OnPropertyChanged(nameof(NextItemStatus));
+        OnPropertyChanged(nameof(SelectedItemName));
 		OnPropertyChanged(nameof(StorageLabel));
 		OnPropertyChanged(nameof(DraftHistoryLabel));
 		(UndoDraftCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();

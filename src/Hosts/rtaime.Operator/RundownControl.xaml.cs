@@ -18,6 +18,10 @@ public partial class RundownControl : UserControl, INotifyPropertyChanged
     public bool IsConsoleMode { get => (bool)GetValue(IsConsoleModeProperty); set => SetValue(IsConsoleModeProperty, value); }
     public Visibility AuthoringVisibility => IsConsoleMode ? Visibility.Collapsed : Visibility.Visible;
     public Visibility ConsoleVisibility => IsConsoleMode ? Visibility.Visible : Visibility.Collapsed;
+    private bool _showAdvancedAuthoring;
+    public Visibility AdvancedAuthoringVisibility =>
+        !IsConsoleMode && _showAdvancedAuthoring ? Visibility.Visible : Visibility.Collapsed;
+    public string AdvancedAuthoringLabel => _showAdvancedAuthoring ? "HIDE OPTIONS" : "OPTIONS";
     public double MinimumListHeight => IsConsoleMode ? 0 : 140;
     public GridLength NavigationColumnWidth => IsConsoleMode ? new(0) : new(1, GridUnitType.Star);
     public GridLength NavigationGap => new(IsConsoleMode ? 0 : 3);
@@ -29,7 +33,8 @@ public partial class RundownControl : UserControl, INotifyPropertyChanged
     {
         foreach (var name in new[] { nameof(AuthoringVisibility), nameof(ConsoleVisibility),
             nameof(MinimumListHeight), nameof(NavigationColumnWidth), nameof(NavigationGap),
-            nameof(ConsoleGoWidth), nameof(StatusMaximumHeight), nameof(DetailMaximumHeight) })
+            nameof(ConsoleGoWidth), nameof(StatusMaximumHeight), nameof(DetailMaximumHeight),
+            nameof(AdvancedAuthoringVisibility), nameof(AdvancedAuthoringLabel) })
             PropertyChanged?.Invoke(this, new(name));
     }
 	public RundownControl()
@@ -39,6 +44,22 @@ public partial class RundownControl : UserControl, INotifyPropertyChanged
         AddHandler(Keyboard.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, _) =>
         { if (DataContext is RundownViewModel model) model.EndDraftNameEdit(); }));
 	}
+    private void ToggleAuthoringOptions_Click(object sender, RoutedEventArgs e)
+    {
+        _showAdvancedAuthoring = !_showAdvancedAuthoring;
+        RefreshPresentation();
+    }
+
+    private void OpenAuthoringMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+    }
+
     private Point _dragStart;
     private RundownOperatorItemViewModel? _dragItem;
     private void Rows_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -88,9 +109,14 @@ public partial class RundownControl : UserControl, INotifyPropertyChanged
 	{
 		// Text editors retain their own native text undo.
 		if (Keyboard.FocusedElement is TextBoxBase || DataContext is not RundownViewModel model) return;
-		if (Keyboard.Modifiers != ModifierKeys.Control) return;
-		var command = e.Key == Key.Z ? model.UndoDraftCommand : e.Key == Key.Y ? model.RedoDraftCommand : null;
-		if (command is null) return;
+        ICommand? command = null;
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+            command = e.Key == Key.Z ? model.UndoDraftCommand :
+                e.Key == Key.Y ? model.RedoDraftCommand : null;
+        else if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            command = e.Key == Key.G ? model.GoCommand :
+                e.Key == Key.H ? model.HoldCommand : null;
+        if (command is null) return;
 		if (!e.IsRepeat && command.CanExecute(null)) command.Execute(null);
 		e.Handled = true;
 	}

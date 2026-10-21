@@ -37,12 +37,27 @@ public sealed partial class RundownOperatorItemViewModel
     {
         Thumbnail = thumbnail;
         Duration = duration;
-        Readiness = execution?.PreparedItemId == Item.ItemId && execution.PreparedMediaState == "NEXT_READY"
-            ? execution.PreparedMediaExpiresAtUtc is { } expires && expires <= DateTimeOffset.UtcNow
-                ? $"{availability} · PREPARE AGAIN · RESIDENCY EXPIRED" : $"{availability} · NEXT_READY · HOST REVALIDATES AT GO"
-            : $"{availability} · NOT PREPARED";
+        Readiness = ResolveReadiness(availability, execution);
         PropertyChanged?.Invoke(this, new(nameof(Thumbnail)));
         PropertyChanged?.Invoke(this, new(nameof(Duration)));
         PropertyChanged?.Invoke(this, new(nameof(Readiness)));
+    }
+
+    private string ResolveReadiness(string availability, RundownExecutionSnapshot? execution)
+    {
+        if (execution is null) return $"{availability} · HOST UNVERIFIED";
+        if (execution.RequiresAcknowledgement ||
+            execution.State == RundownExecutionState.RecoveryRequired)
+            return $"{availability} · RECOVERY REQUIRED · GO BLOCKED";
+        if (execution.PreparedItemId != Item.ItemId)
+            return $"{availability} · NOT PREPARED";
+        if (Item is not RundownMediaItem)
+            return "PREPARED IN CONTROL · NOT YET PROGRAM";
+        if (execution.PreparedMediaState != "NEXT_READY")
+            return $"{availability} · NO VERIFIED RESIDENT DECODER";
+        if (execution.PreparedMediaExpiresAtUtc is { } expires &&
+            expires <= DateTimeOffset.UtcNow)
+            return $"{availability} · RESIDENT EXPIRED · PREPARE AGAIN";
+        return $"{availability} · HOST NEXT_READY · RECHECK AT GO";
     }
 }
