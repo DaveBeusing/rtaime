@@ -133,7 +133,7 @@ Seeking, IN/OUT, cue operations and take commands retain the existing Media Deck
 
 ### Timeline viewport and gesture lifetime
 
-The Timeline measures its usable edit width from the live `SequenceRuler` container, not a guessed window or dock width minus fixed chrome. The same measured width drives saved clip projection and cursor/trim/drag tick mapping; changes to dock, floating window or compact width are reprojected only when that measurement changes. A pointer release from a different mouse button cannot commit a left-button edit gesture.
+The Timeline measures its usable edit width from the live `SequenceRuler` and the track scroll viewport after its 190-DIP label column and visible vertical scrollbar, not a guessed window or dock width minus fixed chrome. The same measured width drives saved clip projection and cursor/trim/drag tick mapping; changes to dock, floating window or compact width are reprojected only when that measurement changes. A pointer release from a different mouse button cannot commit a left-button edit gesture.
 
 The projection retains a maximum of sixteen visible rows and 256 clips, selecting the earliest visible clips in saved track/layer and clip-time order without materializing all overlapping offscreen or hidden objects. Unchanged rows retain their WPF item identity on a viewport/selection refresh; a changed row replaces only its own visible item. This preserves local selection/focus visual continuity and avoids an every-refresh `ObservableCollection.Clear` reset. The saved sequence, authoring revisions, independent media transport and Program authority remain unaffected.
 
