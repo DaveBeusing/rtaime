@@ -6,7 +6,18 @@ using System.Windows.Media;
 
 namespace rtaime.Operator;
 
-public sealed record OperatorWorkspaceDestination(string Id, string Label, string Group, string IconKey, string ViewerMode = "DUAL");
+public enum OperatorWorkspaceNavigationSection
+{
+    Primary,
+    LiveTools,
+    Creation,
+    System
+}
+
+public sealed record OperatorWorkspaceDestination(
+    string Id, string Label, string Group, string IconKey,
+    string ViewerMode = "DUAL",
+    OperatorWorkspaceNavigationSection NavigationSection = OperatorWorkspaceNavigationSection.Primary);
 
 // Add a destination only with a productive view connection; IDs also feed templates and the command catalogue.
 public static class OperatorWorkspaceRegistry
@@ -15,16 +26,30 @@ public static class OperatorWorkspaceRegistry
     public static IReadOnlyList<OperatorWorkspaceDestination> Destinations { get; } =
     [
         new("LIVE", "Live", "Live", "RtaimeIconLiveGeometry"),
-        new("SCENES", "Scenes", "Live", "RtaimeIconMediaGeometry"),
-        new("MULTIVIEW", "Multiview", "Live", "RtaimeIconGridGeometry"),
+        new("SCENES", "Scenes", "Live", "RtaimeIconMediaGeometry",
+            NavigationSection: OperatorWorkspaceNavigationSection.LiveTools),
+        new("MULTIVIEW", "Multiview", "Live", "RtaimeIconGridGeometry",
+            NavigationSection: OperatorWorkspaceNavigationSection.LiveTools),
         new("MEDIA", "Media", "Media & Timeline", "RtaimeIconMediaGeometry", "PREVIEW"),
-        new("EDIT", "Edit", "Media & Timeline", "RtaimeIconTimelineGeometry"),
-        new("COMPOSITING", "Comp", "Media & Timeline", "RtaimeIconCompositingGeometry"),
+        new("EDIT", "Timeline", "Media & Timeline", "RtaimeIconTimelineGeometry"),
+        new("COMPOSITING", "Compositing", "Media & Timeline", "RtaimeIconCompositingGeometry",
+            NavigationSection: OperatorWorkspaceNavigationSection.Creation),
         new("OUTPUTS", "Outputs", "Outputs & Mapping", "RtaimeIconOutputGeometry", "PROGRAM"),
-        new("HEALTH", "Health", "System & Health", "RtaimeIconHealthGeometry", "PROGRAM"),
-        new("AI", "AI", "System & Health", "RtaimeIconSettingsGeometry", "PROGRAM"),
-        new("SETTINGS", "Settings", "System & Health", "RtaimeIconSettingsGeometry", "PROGRAM")
+        new("HEALTH", "Health", "System & Health", "RtaimeIconHealthGeometry", "PROGRAM",
+            OperatorWorkspaceNavigationSection.System),
+        new("AI", "AI", "System & Health", "RtaimeIconSettingsGeometry", "PROGRAM",
+            OperatorWorkspaceNavigationSection.System),
+        new("SETTINGS", "Settings", "System & Health", "RtaimeIconSettingsGeometry", "PROGRAM",
+            OperatorWorkspaceNavigationSection.System)
     ];
+    // Presentation hierarchy never changes the persisted IDs or the complete destination set.
+    public static IReadOnlyList<OperatorWorkspaceDestination> PrimaryDestinations { get; } =
+        Destinations.Where(destination => destination.NavigationSection == OperatorWorkspaceNavigationSection.Primary).ToArray();
+    public static IReadOnlyList<OperatorWorkspaceDestination> SecondaryDestinations { get; } =
+        Destinations.Where(destination => destination.NavigationSection != OperatorWorkspaceNavigationSection.Primary).ToArray();
+    public static bool IsSecondaryWorkspace(string id) =>
+        SecondaryDestinations.Any(destination => destination.Id == id);
+
     public static bool IsPersistableId(string id) => id.Length is > 0 and <= 64 &&
         id.All(c => c is >= 'A' and <= 'Z' or >= '0' and <= '9' or '_' or '-');
 }
