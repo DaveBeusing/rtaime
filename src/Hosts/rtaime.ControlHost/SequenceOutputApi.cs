@@ -142,7 +142,7 @@ public sealed partial class ControlHostIpcServer
             var failure = ReadMutationFailure(outcome);
             if (failure is not null)
                 return Error(message, "sequence.output.take_rejected",
-                    "The existing production transaction rejected Take: " + failure.Code);
+                    "The existing production transaction rejected Take: " + failure.Value.Code);
 
             var after = _controlAccessor()?.State;
             if (after is null || after.ProductionId.Value != binding.AuthorityStateId ||
