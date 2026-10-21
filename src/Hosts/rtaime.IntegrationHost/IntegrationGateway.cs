@@ -322,8 +322,12 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 		catch (Exception exception)
 		{
+			bool failedActiveStartup;
+			lock (_gate)
+				failedActiveStartup = exception is not OperationCanceledException && IsActiveInLock(lifetime);
+
 			await StopCoreAsync(lifetime, CancellationToken.None).ConfigureAwait(false);
-			if (exception is not OperationCanceledException && !lifetime.IsCancellationRequested)
+			if (failedActiveStartup)
 			{
 				lock (_gate)
 				{
