@@ -128,6 +128,32 @@
 					<StackPanel HorizontalAlignment="Center">
 						<TextBlock Text="LIVE" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" HorizontalAlignment="Center" />
 						<TextBlock Text="{Binding OutputHealth.ProgramTransmissionState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeFinePrint}" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="TopBarRecordingState"
+                            Text="{Binding RecordingStatus}"
+                            FontSize="{StaticResource OperatorFontSizeMicro}"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Center"
+                            ToolTip="{Binding RecordingError}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding RecordingStatus}" Value="RECORDING">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding RecordingStatus}" Value="FINALIZING">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding RecordingStatus}" Value="FAILED">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
 					</StackPanel>
 				</controls:RtaimeStatusBadge>
 				<controls:RtaimeStatusBadge Grid.Column="8"
