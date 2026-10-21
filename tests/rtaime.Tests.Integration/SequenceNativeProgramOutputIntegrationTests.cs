@@ -104,13 +104,30 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal("PREVIEW_READY", beforeTake.OutputState);
         Assert.Equal(1UL, beforeTake.PublishedSourceFrames);
 
+        var previous = control.State.Revision;
+        var takeCommand = new SequenceOutputCommand(
+            SequenceOutputContract.Version, reference, mediaB.ToString(),
+            previous.Value, Guid.NewGuid());
+        var armed = decks.ArmSequenceTake(takeCommand,
+            authority.ProductionId.Value, previous, runtime, host);
+        Assert.Equal("TAKE_PENDING", armed.OutputState);
         var cut = control.CutProgram(new CutProgramCommand(
             new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
-                control.State.ProductionId, control.State.Revision), sourceB));
-        var previous = control.State.Revision;
-        Confirm(control, runtime, cut);
-        decks.AuthorizeSequenceProgram(reference, mediaB, authority.ProductionId.Value,
-            previous, control.State.Revision, runtime);
+                control.State.ProductionId, previous), sourceB));
+        Assert.True(cut.Accepted, cut.Failure?.Message);
+        var preparedCut = Assert.IsType<ControlHostExecutionPackage>(cut.Execution);
+        Assert.True(decks.IsBoundSequenceProgramTarget(mediaB));
+        Assert.Equal(takeCommand, decks.RequireArmedSequenceTake(
+            preparedCut.PreparedExecution, preparedCut.ProgramTransition));
+        var committed = runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+            preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+            () => decks.AuthorizeSequenceProgram(reference, mediaB,
+                authority.ProductionId.Value, previous,
+                preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime));
+        Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
+            committed.Prepare.Failure?.Message);
+        Assert.True(control.ConfirmRuntimeCommit(
+            preparedCut.PreparedExecution.PreparedExecutionId, committed.Commit!).Committed);
 
         var program = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
         Assert.True(program.Published, program.FailureCode);
