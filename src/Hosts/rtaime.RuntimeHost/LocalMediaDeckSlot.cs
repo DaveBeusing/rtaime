@@ -26,6 +26,8 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 	private Failure? _failure;
 	private bool _autoPlayOnProgram = true;
     private bool _preparedNextPlayback;
+    // Set only by an authorized prepared TAKE; the final cue Play is one-shot.
+    private bool _preparedNextPlayPending;
 	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
 	private long? _inPointFrame;
 	private long? _outPointFrame;
@@ -52,6 +54,11 @@ internal sealed class LocalMediaDeckSlot : IDisposable
     }
 
     internal bool HasPreparedAudio { get { lock (_gate) return _session?.HasPreparedAudio == true; } }
+    internal void ArmPreparedGoPlay()
+    {
+        // The guarded Runtime transaction has already committed the resident owner.
+        lock (_gate) _preparedNextPlayPending = true;
+    }
     internal long PrepareNext()
     {
         lock (_openGate)
@@ -176,6 +183,8 @@ internal sealed class LocalMediaDeckSlot : IDisposable
             _inPointFrame = null;
             _outPointFrame = null;
             _isOnProgram = false;
+            _preparedNextPlayback = false;
+            _preparedNextPlayPending = false;
         }
         // Probing, allocation, preroll and worker join run outside the admission lock.
         if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
@@ -247,7 +256,27 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 					"Media-deck command targets a different media asset.");
 			}
 
-            if (command.Kind != MediaTransportCommandKind.Play) _preparedNextPlayback = false;
+            // The Program cadence can autoplay before the final GO MediaPlay arrives.
+            // A late duplicate Play must not rewind an already finished short clip.
+            if (command.Kind == MediaTransportCommandKind.Play && _preparedNextPlayPending && _isOnProgram)
+            {
+                var transport = _session.Transport;
+                if (transport.State is MediaTransportState.Playing or MediaTransportState.Ended)
+                {
+                    _preparedNextPlayPending = false;
+                    return MediaTransportCommandResult.Accepted(Decorate(transport));
+                }
+            }
+            if (command.Kind != MediaTransportCommandKind.Play)
+            {
+                _preparedNextPlayback = false;
+                _preparedNextPlayPending = false;
+            }
+            else if (!_preparedNextPlayPending && _session.Transport.State == MediaTransportState.Ended)
+            {
+                // Explicit replay after the prepared cue retains normal seek semantics.
+                _preparedNextPlayback = false;
+            }
 			if (command.Kind == MediaTransportCommandKind.ConfigurePlayback)
 			{
 				var totalFrames = _session.Transport.Position.TotalFrames;
@@ -267,6 +296,8 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 			}
 
 			var result = _session.ApplyTransport(command);
+            if (result.Succeeded && command.Kind == MediaTransportCommandKind.Play)
+                _preparedNextPlayPending = false;
             if (command.Kind is MediaTransportCommandKind.Seek or MediaTransportCommandKind.Stop or
                 MediaTransportCommandKind.JumpToStart or MediaTransportCommandKind.StepBackward or MediaTransportCommandKind.StepForward)
             {
@@ -297,6 +328,10 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 
 			var wasOnProgram = _isOnProgram;
 			_isOnProgram = programSourceId.HasValue && programSourceId.Value == _session.Probe.SourceId;
+            // A cue from an earlier Program tenure must not acknowledge a later manual Play.
+            // Repeated old-Program observations before the first B edge must not revoke TAKE.
+            if (wasOnProgram && !_isOnProgram)
+                _preparedNextPlayPending = false;
 			if (_isOnProgram && !wasOnProgram && _autoPlayOnProgram)
 				StartForProgramUnsafe();
 
@@ -375,6 +410,8 @@ internal sealed class LocalMediaDeckSlot : IDisposable
             _inPointFrame = null;
             _outPointFrame = null;
             _isOnProgram = false;
+            _preparedNextPlayback = false;
+            _preparedNextPlayPending = false;
         }
         if (!ReleaseSession(previous)) { lock (_gate) return CreateSnapshot(); }
         _ticket?.OwnerCompleted();
