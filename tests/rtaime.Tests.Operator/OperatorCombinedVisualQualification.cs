@@ -264,6 +264,10 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.IsType<TextBlock>(window.FindName("LiveNextIdentity")).Text);
         Assert.Equal(owner.ProgramSourceName,
             Assert.IsType<TextBlock>(window.FindName("LiveProgramIdentity")).Text);
+        Assert.Equal(window.Monitoring.PreviewState,
+            Assert.IsType<TextBlock>(window.FindName("LivePreviewEvidence")).Text);
+        Assert.Equal(window.Monitoring.ProgramState,
+            Assert.IsType<TextBlock>(window.FindName("LiveProgramEvidence")).Text);
         Assert.Equal(window.Rundown.PendingNext,
             Assert.IsType<TextBlock>(window.FindName("LiveCueIdentity")).Text);
         Assert.Equal(owner.PreviewTakeDetail,
