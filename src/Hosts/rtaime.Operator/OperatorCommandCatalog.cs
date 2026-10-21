@@ -13,7 +13,8 @@ public static class OperatorCommandCatalog
 
 	public static IReadOnlyList<OperatorPaletteCommand> Create(OperatorKeyboardCommandRegistry registry,
 		OperatorViewModel owner, MediaDeckViewModel deck, OperatorShellViewModel shell, MediaPoolInspectorViewModel pool,
-		ICommand? openShowChecks = null, ICommand? openLibrary = null, ICommand? openHelp = null, ICommand? openWorkspaceTemplates = null)
+		ICommand? openShowChecks = null, ICommand? openLibrary = null, ICommand? openHelp = null,
+        ICommand? openWorkspaceTemplates = null, SequenceOperatorPlayoutViewModel? nativeSequence = null)
 	{
 		string? ProductionReason()
 		{
@@ -72,6 +73,22 @@ public static class OperatorCommandCatalog
 		if (openLibrary is not null) commands.Add(new("recent-favorites", "Recent items and favorites", "Navigation", openLibrary));
         if (openHelp is not null) commands.Add(new("inline-help", "Contextual help and searchable shortcut hints", "Help", openHelp));
         if (openWorkspaceTemplates is not null) commands.Add(new("workspace-templates", "Named workspace layout templates and portable import/export", "Workspaces", openWorkspaceTemplates));
+        if (nativeSequence is not null)
+        {
+            void Native(string id, string label, ICommand command, bool confirmation = false) =>
+                commands.Add(new(id, label, "Sequence playout", command, RequiresExplicitButton: confirmation));
+            Native("sequence-prepare", "Prepare saved native sequence", nativeSequence.PrepareCommand, true);
+            Native("sequence-preview", "Activate native sequence in confirmed Preview", nativeSequence.ActivatePreviewCommand, true);
+            Native("sequence-observe", "Observe actual sequence Preview / Program output", nativeSequence.ObserveCommand);
+            Native("sequence-cue", "Cue native shuttle to local edit cursor", nativeSequence.CueCommand, true);
+            Native("sequence-play", "Play native sequence shuttle", nativeSequence.PlayCommand, true);
+            Native("sequence-pause", "Pause native sequence shuttle", nativeSequence.PauseCommand);
+            Native("sequence-stop", "Stop native sequence shuttle", nativeSequence.StopCommand);
+            Native("sequence-arm", "Arm confirmed sequence Take", nativeSequence.ArmCommand, true);
+            Native("sequence-take", "Take armed native sequence to Program", nativeSequence.TakeCommand, true);
+            Native("sequence-recover", "Recover exact ambiguous sequence Take", nativeSequence.RecoverCommand, true);
+            Native("sequence-release", "Release prepared native sequence", nativeSequence.CancelCommand, true);
+        }
         return commands;
 	}
 }

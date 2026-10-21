@@ -150,7 +150,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand, SequenceTimeline.Playout),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel);
 		Monitoring.Start();
@@ -259,7 +259,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand, SequenceTimeline.Playout),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel, libraryPreferenceStore);
 		viewModel.StartAudioMetering();
