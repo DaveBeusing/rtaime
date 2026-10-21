@@ -11,6 +11,8 @@ public sealed record OperatorSafeSessionState(string SelectedWorkspace)
 		"MEDIA",
 		"EDIT",
 		"LIVE",
+        "MULTIVIEW",
+        "AI",
 		"SCENES",
 		"COMPOSITING",
 		"OUTPUTS",
