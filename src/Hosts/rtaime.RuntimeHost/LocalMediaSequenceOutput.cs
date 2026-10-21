@@ -87,6 +87,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal ulong LastPublishedSlot { get; set; } = ulong.MaxValue;
         internal ulong? LastPreviewSlot { get; set; }
         internal ulong? LastProgramSlot { get; set; }
+        // First Program slot allowed to confirm the committed Take. Frames
+        // completed on Preview before the commit can be observed afterward.
+        internal ulong FirstAuthorizedProgramSlot { get; set; } = ulong.MaxValue;
         internal ulong PublishedBoundaries { get; set; }
         internal ulong FailedBoundaries { get; set; }
         internal string OutputState { get; set; } = "UNAVAILABLE";
@@ -163,6 +166,14 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 session.OutputState = "STALE";
                 session.FailureCode = "runtime.sequence.route_changed";
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            // An actual sink failure is terminal for this prepared owner.
+            // A new native ingress cannot requalify a failed Program output
+            // without an explicit cancellation and fresh preparation.
+            if (session.OutputState == "FAILED")
+            {
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
@@ -251,7 +262,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                 // buffering, stale authority and failure still invalidate it.
                 session.OutputState = session.ProgramAuthorized
                     ? session.LastProgramSlot is null ? "TAKE_COMMITTED" : "PROGRAM_CONFIRMED"
-                    : session.ArmedTake is not null ? "TAKE_PENDING" : "PREVIEW_READY";
+                    : session.ArmedTake is not null ? "TAKE_PENDING"
+                    : HasRecentConfirmedPreview(session) ? "PREVIEW_READY" : "UNAVAILABLE";
                 session.FailureCode = null;
                 return (true, session.OutputState, null, programSlot);
             }
@@ -355,6 +367,37 @@ public sealed partial class LocalMediaDeckRuntimeService
             session.ArmedTake = null;
             session.OutputState = session.LastPreviewSlot == session.LastPublishedSlot
                 ? "PREVIEW_READY" : "BUFFERING";
+        }
+    }
+
+    /// <summary>
+    /// A transport mutation invalidates previously sampled Preview evidence
+    /// and any armed Take before native seek/repreroll can begin. This runs
+    /// only on the management path; the existing Program cadence is not held
+    /// across native worker operations.
+    /// </summary>
+    internal void InvalidateSequenceOutputOnShuttleMutation(SequencePreparationReference reference)
+    {
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != reference)
+                return;
+            // A terminal sink failure or stale authority cannot be
+            // requalified by a transport command.
+            if (session.OutputState is "FAILED" or "STALE")
+            {
+                session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return;
+            }
+            session.ArmedTake = null;
+            session.LastPreviewSlot = null;
+            session.LastProgramSlot = null;
+            session.LastPublishedSlot = ulong.MaxValue;
+            session.OutputState = session.ProgramAuthorized
+                ? "TAKE_COMMITTED" : "UNAVAILABLE";
+            session.FailureCode = null;
+            session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
         }
     }
 
@@ -495,6 +538,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     _sequenceOwners = prepared with { AuthorityRevision = committedRevision.Value };
                 }
                 session.AuthorityRevision = committedRevision.Value;
+                session.FirstAuthorizedProgramSlot = runtime.NextSequenceOutputSlot;
                 session.ProgramAuthorized = true;
                 session.OutputState = "TAKE_COMMITTED";
                 session.FailureCode = null;
@@ -512,10 +556,16 @@ public sealed partial class LocalMediaDeckRuntimeService
         lock (_sequenceOutputGate)
         {
             var session = _sequenceOutput;
-            if (session is null || session.LastPublishedSlot != boundary.SequenceNumber)
-                return;
+            if (session is null || session.LastPublishedSlot != boundary.SequenceNumber ||
+                session.OutputState is "FAILED" or "STALE")
+                return; // Late feedback cannot revive terminal owner/authority loss.
             if (session.ProgramAuthorized)
             {
+                // The boundary may have finished before Take but be reported
+                // after its authoritative commit. It cannot confirm or fail the
+                // newly selected Program; only post-commit slots qualify.
+                if (boundary.SequenceNumber < session.FirstAuthorizedProgramSlot)
+                    return;
                 if (boundary.CommittedProgramSourceId == session.SourceId &&
                     boundary.ProgramFrame.SourceId == session.SourceId &&
                     boundary.ProgramPixels.Length > 0 &&
@@ -529,10 +579,17 @@ public sealed partial class LocalMediaDeckRuntimeService
                 {
                     session.OutputState = "FAILED";
                     session.FailureCode = "runtime.sequence.program_sink_unconfirmed";
+                    session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
                 }
             }
-            else if (session.OutputState is "PREVIEW_READY" or "TAKE_PENDING")
+            else if (session.OutputState is "UNAVAILABLE" or "PREVIEW_READY" or "TAKE_PENDING")
+            {
+                // Native composition is only input readiness. Preview is
+                // observable after the corresponding Runtime boundary completes.
                 session.LastPreviewSlot = boundary.SequenceNumber;
+                if (session.OutputState == "UNAVAILABLE")
+                    session.OutputState = "PREVIEW_READY";
+            }
         }
     }
 
