@@ -16,6 +16,8 @@ public sealed partial class MediaPoolInspectorViewModel
     private string? _preparationJob;
     private DispatcherTimer? _preparationTimer;
     private bool _preparing, _preparationVisible, _preparationDisposed;
+    private bool _openingLibraryPreview;
+    private string? _libraryJourneyMessage;
     private string _preparationStatus = "Select up to 16 catalogue assets. File decks must be closed deliberately. No routing changes.";
     private IReadOnlyList<MediaAssetPreflightObservation> _preflightEvidence = [];
     public IReadOnlyList<MediaAssetPreflightObservation> PreflightEvidence => _preflightEvidence;
@@ -109,6 +111,7 @@ public sealed partial class MediaPoolInspectorViewModel
         (PrepareAssetsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (CancelPreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClosePreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        RaiseLibraryJourney();
     }
     private void SetPreparationEvidence(IReadOnlyList<MediaAssetPreflightObservation> values)
     {
@@ -131,7 +134,10 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         if (_preparationDisposed) return;
         if (_preparationVisible && _preflightEvidence.Count > 0)
+        {
             OnPropertyChanged(nameof(PreparationRows)); // Reuse existing one-second UI timer.
+            OnPropertyChanged(nameof(LibraryJourneyFeedback));
+        }
         var now = DateTimeOffset.UtcNow;
         if (_preflightEvidence.Any(value => value.RepresentativeVerificationPassed &&
             (now < value.ObservedAtUtc || now - value.ObservedAtUtc > TimeSpan.FromSeconds(10))))
@@ -146,11 +152,17 @@ public sealed partial class MediaPoolInspectorViewModel
             OnPropertyChanged(nameof(PreparationRows));
             _preparationStop?.Cancel();
         }
-        if (args.PropertyName is nameof(SelectionCount) or nameof(IsLoading)) RaisePreparationCommands();
+        if (args.PropertyName is nameof(SelectedItem) or nameof(CatalogEvidence))
+            _libraryJourneyMessage = null;
+        if (args.PropertyName is nameof(SelectedItem) or nameof(SelectionCount) or
+            nameof(HasMultipleSelection) or nameof(IsLoading) or nameof(CatalogEvidence))
+            RaisePreparationCommands();
     }
     private void PreparationOperatorChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or nameof(OperatorViewModel.IsBusy))
+        if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) or
+            nameof(OperatorViewModel.IsBusy) or nameof(OperatorViewModel.SelectedSource) or
+            nameof(OperatorViewModel.PreviewSourceId) or nameof(OperatorViewModel.RuntimeStatus))
             RaisePreparationCommands();
         if (args.PropertyName is nameof(OperatorViewModel.IsConnected) or nameof(OperatorViewModel.IsStale) &&
             (!_operator.IsConnected || _operator.IsStale))
@@ -238,6 +250,136 @@ public sealed partial class MediaPoolInspectorViewModel
             if (_preparationDisposed) _preparationStop?.Dispose();
         }
     }
+    // One projection over the existing catalogue, preflight and resident deck owners.
+    // A conditional sample check is never presented as a resident Preview lease.
+    public string LibraryJourneyTitle => HasMultipleSelection
+        ? $"{SelectionCount} media assets selected"
+        : SelectedItem?.Name ?? "Select a media asset";
+    public string LibraryJourneyDetails => HasMultipleSelection
+        ? "Use the bounded batch and preparation tools; Preview needs one asset."
+        : SelectedItem is { } item
+            ? $"{item.DurationLabel} · {item.Format} · {item.ReadinessLabel}"
+            : "Import a local file or select a clip to inspect its current evidence.";
+    public bool CanInspectLibrarySelection => !HasMultipleSelection && SelectedItem is not null;
+    public bool CanPrepareLibrarySelection => CanPrepareAssets();
+    public bool CanRelinkLibrarySelection => !_catalogBusy && !_batchRunning && !_preparing &&
+        !_operator.IsBusy && _operator.IsConnected && !_operator.IsStale &&
+        !HasMultipleSelection && SelectedItem is { Kind: MediaPoolItemKind.Clip } selected &&
+        Guid.TryParse(selected.ReferenceId, out _);
+    public bool CanOpenLibraryPreview => !_openingLibraryPreview && !_preparing && !_catalogBusy &&
+        !_batchRunning && !_operator.IsBusy && _operator.IsConnected && !_operator.IsStale &&
+        !HasMultipleSelection && SelectedItem is { } selected && CanDropToPreview(selected) &&
+        (selected.Kind != MediaPoolItemKind.Clip || Guid.TryParse(selected.ReferenceId, out _));
+    public string LibraryJourneyFeedback => _libraryJourneyMessage ?? LibraryJourneyState;
+
+    public string LibraryJourneyState
+    {
+        get
+        {
+            if (_catalogBusy || _batchRunning) return "UPDATING · wait for catalogue and batch confirmation.";
+            if (_openingLibraryPreview || _mediaDeck.IsBusy) return "OPENING · awaiting confirmed deck and routing evidence.";
+            if (_preparing) return "VERIFYING · independent representative frame checks are in progress.";
+            if (!_operator.IsConnected) return "DISCONNECTED · reconnect Control and refresh availability.";
+            if (_operator.IsStale) return "STALE · synchronize Control before preparing or opening Preview.";
+            if (_operator.IsBusy) return "PENDING · wait for authoritative Control confirmation.";
+            if (HasMultipleSelection) return "MULTI-SELECT · inspect or open one clip; prepare up to 16 online assets.";
+            if (SelectedItem is not { } item) return "IMPORT → SELECT → INSPECT → PREPARE (OPTIONAL) → OPEN PREVIEW.";
+            if (item.Kind is not (MediaPoolItemKind.Clip or MediaPoolItemKind.Source))
+                return "INSPECT ONLY · this asset is not a media deck or Preview source.";
+            if (!item.IsOnline) return "UNAVAILABLE · refresh availability or relink the missing asset.";
+            if (item.Kind == MediaPoolItemKind.Source)
+                return CanOpenLibraryPreview ? "SOURCE ONLINE · select Preview to request a confirmed route." :
+                    "SOURCE ONLINE · review source and current routing eligibility.";
+            if (_mediaDeck.IsLoaded && !_mediaDeck.HasError &&
+                string.Equals(_mediaDeck.AssetId, item.ReferenceId, StringComparison.OrdinalIgnoreCase) &&
+                _mediaDeck.State is "READY" or "PLAYING" or "PAUSED")
+                return string.Equals(_operator.PreviewSourceId, _mediaDeck.SourceId, StringComparison.Ordinal)
+                    ? "PREVIEW ROUTED · resident deck confirmed; Program remains independent."
+                    : "RESIDENT DECK · not confirmed on Preview; route separately.";
+            if (AssetPreparationState(item.ReferenceId ?? "") == "CONDITIONALLY_READY")
+                return "CONDITIONALLY VERIFIED · no resident deck; open in Preview for actual preroll.";
+            return CanOpenLibraryPreview
+                ? "ONLINE · inspect or conditionally prepare, then open the resident Preview deck."
+                : "ONLINE / UNVERIFIED · select an eligible source slot and refresh Control.";
+        }
+    }
+    private void RaiseLibraryJourney()
+    {
+        OnPropertyChanged(nameof(LibraryJourneyTitle));
+        OnPropertyChanged(nameof(LibraryJourneyDetails));
+        OnPropertyChanged(nameof(CanInspectLibrarySelection));
+        OnPropertyChanged(nameof(CanPrepareLibrarySelection));
+        OnPropertyChanged(nameof(CanRelinkLibrarySelection));
+        OnPropertyChanged(nameof(CanOpenLibraryPreview));
+        OnPropertyChanged(nameof(LibraryJourneyFeedback));
+        OnPropertyChanged(nameof(LibraryJourneyState));
+    }
+    private void LibraryJourneyNotice(string text)
+    {
+        _libraryJourneyMessage = text;
+        OnPropertyChanged(nameof(LibraryJourneyFeedback));
+    }
+
+    // A guided request does not implicitly Take. Recheck selection, stable
+    // catalogue identity, source slot and the confirmed deck after each await.
+    public async Task OpenSelectedLibraryPreviewAsync()
+    {
+        if (!CanOpenLibraryPreview || SelectedItem is not { } item) return;
+        if (item.Kind == MediaPoolItemKind.Source)
+        {
+            await DropToPreviewAsync(item);
+            return;
+        }
+        if (!Guid.TryParse(item.ReferenceId, out var id) || item.LocalPath is not { } path ||
+            _operator.SelectedSource is not { } selectedSource) return;
+        var sourceId = selectedSource.Id;
+        var catalogAsset = _catalogSnapshot.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == item.ReferenceId);
+        if (catalogAsset is null || !string.Equals(catalogAsset.SourceLocation, path, StringComparison.OrdinalIgnoreCase))
+        {
+            LibraryJourneyNotice("STALE · asset identity changed; refresh the library before opening.");
+            return;
+        }
+        var catalogRevision = _catalogSnapshot.Revision;
+        var fingerprint = catalogAsset.FingerprintSha256;
+        _openingLibraryPreview = true;
+        RaiseLibraryJourney();
+        try
+        {
+            var opened = await _mediaDeck.OpenCatalogAssetAsync(path, new MediaAssetId(new Identity(id)));
+            if (!opened)
+            {
+                LibraryJourneyNotice("OPEN REJECTED · " + (_mediaDeck.LastError ??
+                    "Decoder or resource admission was not confirmed. Review Deck status and retry."));
+                return;
+            }
+            var current = _catalogSnapshot.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == item.ReferenceId);
+            var deck = _mediaDeck.ConfirmedSnapshot;
+            if (_catalogSnapshot.Revision != catalogRevision || current is null ||
+                !string.Equals(current.SourceLocation, path, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(current.FingerprintSha256, fingerprint, StringComparison.Ordinal) ||
+                SelectedItem?.Key != item.Key || HasMultipleSelection ||
+                _operator.SelectedSource?.Id != sourceId || !_operator.IsConnected ||
+                _operator.IsStale || _operator.IsBusy || !_operator.SetPreviewCommand.CanExecute(null) ||
+                !deck.IsLoaded || deck.Probe?.AssetId != new MediaAssetId(new Identity(id)) ||
+                deck.SourceId?.ToString() != sourceId)
+            {
+                LibraryJourneyNotice("DECK OPENED · Preview NOT changed: selection, catalogue, source or Control changed. Reselect and retry.");
+                return;
+            }
+            _operator.SetPreviewCommand.Execute(null);
+            LibraryJourneyNotice("PREVIEW REQUESTED · awaiting authoritative routing confirmation; no Program Take.");
+        }
+        catch (Exception error) when (error is IOException or InvalidOperationException or ArgumentException)
+        {
+            LibraryJourneyNotice("OPEN REJECTED · " + error.Message + " Preview/Program were not requested.");
+        }
+        finally
+        {
+            _openingLibraryPreview = false;
+            RaiseLibraryJourney();
+        }
+    }
+
     private void DisposePreparation()
     {
         _preparationDisposed = true;
