@@ -153,6 +153,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public string ActiveRevision => _evidence?.ActiveRenderRevision?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED";
     public string PendingRevision => _evidence?.PendingRenderRevision?.ToString(CultureInfo.InvariantCulture) ??
         _requestedRevision?.ToString(CultureInfo.InvariantCulture) ?? "—";
+    public string TargetEligibility => SelectedTarget?.Target is { } target
+        ? $"CONTROL-AUTHORIZED {target.RoleId?.ToUpperInvariant() ?? "OUTPUT"} · {target.ProviderId} · {target.TargetId} · " +
+          $"{target.Width}×{target.Height} · {target.ProfileId} · PHYSICAL SCAN-OUT UNVERIFIED"
+        : "NO CONTROL-AUTHORIZED OUTPUT TARGET · DO NOT APPLY";
     public string ActivationState => _evidence?.ActivationState ?? "UNVERIFIED";
     public string ActivationFailure => _evidence?.FailureCode ?? "—";
     public string RuntimeOutputTarget => _evidence?.TargetId ?? "UNVERIFIED";
@@ -228,7 +232,15 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public OutputCanvasTargetChoice? SelectedTarget
     {
         get => _selectedTarget;
-        set { if (_rebuilding) return; if (Set(ref _selectedTarget, value)) RaiseCommandState(); }
+        set
+        {
+            if (_rebuilding) return;
+            if (Set(ref _selectedTarget, value))
+            {
+                OnPropertyChanged(nameof(TargetEligibility));
+                RaiseCommandState();
+            }
+        }
     }
     public Guid? SelectedSurfaceId => _selectedSurface?.Id;
     public int CanvasWidth => SelectedCanvas?.Width ?? 0;
@@ -555,6 +567,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             Targets.FirstOrDefault(t => t.Target.RoleId == "program");
         _rebuilding = false;
         OnPropertyChanged(nameof(SelectedTarget));
+        OnPropertyChanged(nameof(TargetEligibility));
         RaiseCommandState();
     }
 
