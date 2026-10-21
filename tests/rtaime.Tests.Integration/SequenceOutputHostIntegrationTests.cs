@@ -74,6 +74,35 @@ public sealed partial class ExternalControlIntegrationTests
         var grpcOutput = new SequenceOutputClient(grpc);
         var activation = await localOutput.ActivatePreviewAsync(command);
         Assert.Equal(sourceB.ToString(), activation.PreviewSourceId);
+        // The Runtime cadence may already have reported BUFFERING while
+        // the native shuttle remains stopped; neither state proves Preview.
+        Assert.Contains((await grpcOutput.GetAsync(reference)).OutputState,
+            new[] { "UNAVAILABLE", "BUFFERING" });
+
+        // Source identity, Runtime lifetime and production revision are
+        // independently checked by the real ControlHost gRPC boundary.
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await grpcOutput.ActivatePreviewAsync(command with
+            {
+                Preparation = reference with { RuntimeHostInstanceId = Guid.NewGuid().ToString("D") },
+                TransactionId = Guid.NewGuid()
+            }));
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await grpcOutput.TakeAsync(command with
+            {
+                ExpectedProductionRevision = command.ExpectedProductionRevision + 1,
+                TransactionId = Guid.NewGuid()
+            }));
+        // PREPARED and preview activation are not sufficient. A Take before
+        // any actual Preview frame must leave the committed Program unchanged.
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await grpcOutput.TakeAsync(command));
+        var beforeRealPreview = await grpc.GetSnapshotAsync();
+        Assert.Equal(original.Production.Routing.ProgramSourceId,
+            beforeRealPreview.Production.Routing.ProgramSourceId);
+        Assert.Equal(previewCommitted.Production.Revision,
+            beforeRealPreview.Production.Revision);
+
         // Arm the exact Preview route before consuming the finite one-second
         // reference clip. This still requires genuine PLAYING native frames
         // and a completed Preview sink observation before any Program Take.

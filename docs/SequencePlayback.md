@@ -6,12 +6,19 @@
 
 Sequence authoring is durable and supports simultaneous Video, Audio and
 Graphics tracks. Source/revision-bound planning, native Runtime admission,
-bounded decoder preroll and a versioned Client -> ControlHost -> RuntimeHost
-**preparation-only** lifecycle are implemented. The product still has **no
-live multitrack sequence playback authority**. Native PREPARED means neither
-Preview playback nor Program pixels/audio, Take or committed execution.
-Sequence List/Get deliberately retain playback state `UNAVAILABLE` until
-the real output path and recovery are integrated and qualified.
+bounded decoder preroll, authority-fenced shuttle and the separately versioned
+Client -> ControlHost -> RuntimeHost **sequence output** integration are
+implemented. The current admitted software path composes native Preview
+pixels and 48-kHz PCM on the existing Runtime clock, and permits an explicit,
+ControlHost-authorized Preview-to-Program Take. Native `PREPARED` or shuttle
+`PLAYING` alone still proves no presented output. Real source/readback,
+owner and recovery tests are required to qualify the integrated path.
+
+The legacy Sequence List/Get playback fields deliberately remain
+`UNAVAILABLE` until their public status contract and compatibility migration
+are accepted. This compatibility value is **not** a claim that the opt-in
+`rtaime.sequence-output.v1` Preview/Take route is absent, nor a claim that
+physical devices or additional formats are qualified.
 
 See [Sequence Authoring](SequenceAuthoring.md), [Local Media File Source](LocalMediaFileSource.md), [Production Rundown](ProductionRundown.md),
 [Operator Experience Scope](OperatorExperienceScope.md) and
@@ -248,7 +255,8 @@ States `PREPARED`, `REJECTED`, `STALE`, and `CANCELED` describe
 the **native preparation lifecycle only**. In particular, they never
 promote `SequenceList.PlaybackState` or `SequenceSnapshot.PlaybackState`
 from `UNAVAILABLE`. The separately versioned shuttle staging below
-adds cue and native transport intent, but **not** output or Take.
+adds cue and native transport intent; only the distinct, explicit sequence
+output contract described below can authorize Preview and Take.
 
 ## Authority-fenced native shuttle staging
 
@@ -297,18 +305,21 @@ not visible video or actual produced audio. `NativePrepared=true` means
 all prepared native queues have evidence for the currently expected
 decoder generation and loop pass. At a loop wrap with no confirmed new
 preroll, `NativePrepared=false` rather than a repeated old frame.
-`OutputState` is always **`UNAVAILABLE`**. There is no committed
-sequence Preview picture, output bus, Program Take, or UI playback
-capability in this stage, and `SequenceList/Get.PlaybackState` remains
-`UNAVAILABLE`. A real compositor/mixer sink must still validate every
-lease after queued work and before presenting any pixel/sample.
+The shuttle-only observation's `OutputState` remains **`UNAVAILABLE`**;
+it is not an output qualification signal. The current dedicated
+`SequenceOutputObservation`, reached only through explicit Preview
+activation and authorized Take, reports its own source-bound states.
+`SequenceList/Get.PlaybackState` remains `UNAVAILABLE` for public
+compatibility. The output compositor/mixer validates native leases
+before publishing pixels or audio.
 
 Windows integration tests exercise native queue ownership through
 Cue, frame-step, Play and Stop, plus authenticated Client/Control/Runtime
 roundtrips, rejection of older optimistic revisions, changed
 catalogue/authoring authority and unchanged Program state.
-These tests establish authoritative transport *staging*, not a combined
-two-video/two-audio broadcast output.
+These shuttle tests independently establish authoritative transport staging;
+the distinct native output, Program sink and mixed-source integration tests
+below provide the additional real pixel/PCM evidence.
 
 ## Isolated two-source image and audio composition
 
@@ -332,17 +343,18 @@ frame leases together with the **existing Runtime slot's** FrameTiming and
   Scratch PCM is not published until both media paths succeed.
 - The reference implementation preallocates no more than eight reusable
   video staging buffers and eight audio tracks of 2,048 stereo samples.
-  GPU uploads/composites and readback remain real provider operations;
-  this testable preparation is **not yet qualified for Program cadence**.
-  Its returned GPU frame is disposable caller-owned evidence only.
+  GPU uploads/composites and readback remain real provider operations.
+  The isolated composer alone does not establish Program delivery; the
+  integrated Runtime output path below now uses this seam on the existing
+  Program clock. Its returned GPU frame remains disposable caller-owned evidence.
 
 `SequenceFrameCompositionIntegrationTests` exercises two genuine native
 MP4/H.264/AAC decoder owners, their actual combined RGBA readback through
 the reference GPU backend and actual mixed PCM through the established
 audio-production engine. It also tests complementary sample weights and
-denial of output after native seek/generation replacement. This is an
-internal source-to-image/audio proof, **not** two distinct externally
-authored media sources committed to Program or a real Preview/Take.
+denial of output after native seek/generation replacement. This **isolated**
+source-to-image/audio proof must be distinguished from the additional
+real Preview/Take and two-distinct-source Program readback/PCM tests below.
 
 ## Preview/Program native source integration (qualification pending)
 
@@ -361,6 +373,12 @@ Float32 through the existing AudioProductionEngine. It feeds the resulting
 pixels and PCM into the established Runtime source buffers. The existing
 Program compositor, route, output-mapping, recorder, network, replay and
 monitoring consumers remain the only downstream production path.
+Before the first completed Preview boundary, native source ingress
+remains `UNAVAILABLE` and cannot by itself publish `PREVIEW_READY`.
+Subsequent readiness is retained only within the existing one-frame
+confirmed-Preview recency window. A genuine `BUFFERING` failure is not
+converted into readiness by an older delayed boundary; source/revision
+guards remain mandatory before arming Take.
 A supported silent video/audio gap results in a real black frame and
 sample-exact silence; native source failures fence stale generations and
 mark the source unavailable rather than manufacturing frames.
@@ -377,14 +395,24 @@ ordinary production mutations with its existing mutation gate, then holds
 the exact catalogue revision lease until the Take outcome is known.
 The native management/output locks span both the Runtime commit and native
 owner promotion, preventing a concurrent Seek/Cancel between validation
-and Program activation. The catalogue lease is not re-entered: rereading
+and Program activation. Any accepted shuttle transport mutation now revokes
+previously confirmed Preview samples and a pending native Take **before**
+decoder repreroll; Seek, Stop and explicit owner cancellation cannot carry
+an older `TAKE_PENDING` ticket into a later Program commit. Already
+authorized Program routing is not silently retaken by the shuttle. The catalogue lease is not re-entered: rereading
 a catalogue snapshot while it is held would deadlock its non-reentrant
 semaphore. Control's follow-up Runtime confirmation is idempotent.
 A lost response must be resolved using the read-only output observation
 and explicit `RecoverTake` for the already committed successor; Take
 itself is never replayed or retried with a new command identity.
-Only actual ProgramBoundaryResult readback pixels plus a produced PCM
-payload can report `PROGRAM_CONFIRMED`.
+Only actual post-Take ProgramBoundaryResult readback pixels plus a produced PCM
+payload can report `PROGRAM_CONFIRMED`. A delayed pre-Take Program boundary
+cannot confirm or falsely fail a newer Take even if its callback arrives
+after the commit. Once a qualifying post-Take boundary reports an
+unconfirmed Program sink, the native sequence source is withdrawn and the
+failure stays terminal for that prepared session: later successful source
+ingress alone cannot restore `PROGRAM_CONFIRMED`. Explicit cancellation
+and fresh authorized preparation are required.
 
 The additive external Control operations reserve tags 126–129 for
 Preview activation, Take, output observation and explicit recovery.
@@ -409,10 +437,11 @@ migration. This stage must remain **Draft / NO-GO** until exact-head
 Windows, actual two-distinct-source RGB/PCM and failure/recovery E2E
 results pass and all five Required Gates are green.
 
-## Required productive execution integration
+## Required productive execution qualification
 
-The source-bound implementation exists in the feature branch, but
-acceptance remains conditional on source-exact Windows and physical evidence:
+The source-bound implementation is integrated into `master`.
+Qualification and capability admission still require exact-source Windows
+evidence and separate physical proof for any advertised hardware mode:
 
 1. The existing Program clock and native ledger select real decoded clip
    groups and feed GPU composition and Float32 PCM into the committed Runtime
@@ -449,8 +478,8 @@ A missing/relinked media asset invalidates a new plan; it does not modify
 running Program. Over-budget slices are rejected with exact interval
 and owner-count evidence before resource reservation. Runtime admission
 failures, quarantined native handles, worker cancellation, late samples,
-stale sequence/production epoch and transport faults must all fail closed
-in the future host integration rather than retake or replay committed
+stale sequence/production epoch and transport faults must fail closed
+in the integrated host path rather than retake or replay committed
 Program. Source and sample generation fences prevent using old queued
 media after seek, replace, loop or Runtime restart. A lost peer must
 first reestablish fresh authoritative state; automatic Take replay is
@@ -466,7 +495,7 @@ Runtime Program cadence remain unchanged by execution-planning work.
 and 48-kHz sample mapping, simultaneous videos/audio, precise transition
 edges, source offsets, overbudget/missing asset rejection, black gaps,
 immutability and deterministic fixed-point fade envelopes.
-Compiler tests are pure scheduling tests. The feature branch also
+Compiler tests are pure scheduling tests. The integrated repository also
 contains distinct actual native H.264/AAC source composition, Preview
 monitoring, Program readback/PCM and Control/Runtime Take recovery
 qualifications, plus source/lease and authority-fence regressions. Their
@@ -476,7 +505,8 @@ proof nor a CI green check is a physical hardware qualification.
 Run the focused sequence tests, canonical Release developer build,
 complete `rtaime.slnx` tests and packaged Windows gates.
 
-Merge remains gated on exact-head `CI`, `Quality`, `Security`,
-`Provider Smoke` and `Packaged E2E`. The independent hardware
-qualification and known Program timing/handle findings remain separate
+Any further code integration or release acceptance remains gated on
+exact-head `CI`, `Quality`, `Security`, `Provider Smoke` and
+`Packaged E2E`. The independent physical hardware qualification and
+long-running Program timing/handle headroom remain separate
 UNVERIFIED / NO-GO evidence until measured.
