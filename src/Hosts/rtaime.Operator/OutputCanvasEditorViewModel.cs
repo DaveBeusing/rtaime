@@ -166,6 +166,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public string RenderedSequence => _evidence?.LastRenderedSequence?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED";
     public string EditingSafety => _savedConflict ? "SAVED REVISION CHANGED · DISCARD & RELOAD REQUIRED" :
         _saveOutcomeUnknown ? "SAVE UNCONFIRMED · RELOAD TO RECONCILE" :
+        _applyOutcomeUnknown ? "OUTPUT ACTIVATION UNKNOWN · RUNTIME CONFIRMATION REQUIRED" :
         CanSubmit ? "CONTROL / RUNTIME AVAILABLE" :
         _owner.IsStale ? "STALE AUTHORITY · EDIT DRAFT ONLY" :
         !_owner.IsConnected ? "OFFLINE · EDIT DRAFT ONLY" :
