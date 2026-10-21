@@ -381,6 +381,62 @@ public sealed class ProductionIntegrationGatewayTests
 		Assert.Equal(macroId, transport.LastMacroId);
 	}
 
+
+	[Fact]
+	public async Task Gateway_discards_outdated_pump_feedback_after_newer_serialized_snapshots()
+	{
+		var transport = new ProbeTransport { StampSnapshotCallNumber = true };
+		var adapter = new PassiveAdapter("reference");
+		var options = GatewayOptions(
+			new[] { Adapter("reference") },
+			new[]
+			{
+				new IntegrationMappingOptions
+				{
+					Id = "macro",
+					AdapterId = "reference",
+					TriggerKey = "macro",
+					Action = new IntegrationActionOptions
+					{
+						Kind = IntegrationActionKind.ProductionMacroExecute,
+						TargetId = "9a000000-0000-0000-0000-000000000099"
+					}
+				}
+			}) with { SnapshotMinimumIntervalMs = 250 };
+		await using var gateway = new IntegrationGateway(options, new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+
+		adapter.BlockNextFeedback();
+		var trigger = new IntegrationTrigger("reference", "macro");
+		var firstMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+		try
+		{
+			await adapter.FeedbackBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			var pumpCall = transport.GetSnapshotCalls + 1;
+			await transport.WaitForSnapshotCallAsync(pumpCall).WaitAsync(TimeSpan.FromSeconds(5));
+
+			var secondMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+			var thirdMapping = gateway.ProcessTriggerAsync(trigger).AsTask();
+			await transport.WaitForSnapshotCallAsync(pumpCall + 4).WaitAsync(TimeSpan.FromSeconds(5));
+
+			adapter.ReleaseFeedback.TrySetResult();
+			await Task.WhenAll(firstMapping, secondMapping, thirdMapping).WaitAsync(TimeSpan.FromSeconds(5));
+			await gateway.StopAsync();
+
+			var emitted = adapter.ReadinessHistory;
+			Assert.DoesNotContain(emitted, value => value.EndsWith($"Snapshot-{pumpCall}", StringComparison.Ordinal));
+			Assert.Contains(emitted, value => value.EndsWith($"Snapshot-{pumpCall + 4}", StringComparison.Ordinal));
+			Assert.Equal(1, transport.MaxConcurrentCalls);
+			Assert.Equal("STOPPED", gateway.Health.State);
+		}
+		finally
+		{
+			adapter.ReleaseFeedback.TrySetResult();
+		}
+	}
+
 	[Fact]
 	public async Task Gateway_serializes_client_snapshot_refresh_with_production_commands()
 	{
