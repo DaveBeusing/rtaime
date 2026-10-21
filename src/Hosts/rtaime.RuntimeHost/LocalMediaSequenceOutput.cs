@@ -375,6 +375,54 @@ public sealed partial class LocalMediaDeckRuntimeService
     }
 
     /// <summary>
+    /// Hold the native owner lifecycle and output-session fences across the
+    /// existing Runtime transaction and native promotion. Without this scope
+    /// Cancel/Seek could retire the armed workers after verification but
+    /// before the Runtime Program commit, leaving ambiguous cross-host state.
+    /// Program frame cadence itself is still owned by Runtime.
+    /// </summary>
+    internal RuntimeHostApplyResult CommitArmedSequenceTake(
+        SequenceOutputCommand command, PreparedExecutionContract candidate,
+        Func<RuntimeHostApplyResult> commit)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(commit);
+        command.Validate();
+        lock (_management)
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null ||
+                session.Reference != command.Preparation ||
+                session.ArmedTake != command ||
+                session.ProgramAuthorized ||
+                session.SourceId.ToString() != command.PreviewSourceId ||
+                session.AuthorityRevision != command.ExpectedProductionRevision ||
+                candidate.AuthoritySnapshot.Revision.Value !=
+                    checked(command.ExpectedProductionRevision + 1))
+                throw new InvalidOperationException(
+                    "Sequence Take was invalidated before the Program transaction.");
+            lock (_sequenceGate)
+            {
+                var prepared = _sequenceOwners;
+                if (prepared is null ||
+                    prepared.PreparedExecution.ToString() != command.Preparation.PreparedExecutionId ||
+                    prepared.SequenceId != command.Preparation.SequenceId ||
+                    prepared.AuthoringRevision != command.Preparation.AuthoringRevision ||
+                    prepared.InitialGeneration != command.Preparation.Generation ||
+                    prepared.AuthorityStateId != candidate.AuthoritySnapshot.StateId ||
+                    prepared.AuthorityRevision != command.ExpectedProductionRevision ||
+                    prepared.Generation != _sequenceShuttleMap?.Generation)
+                    throw new InvalidOperationException(
+                        "Prepared native owner or shuttle generation changed before Program commit.");
+            }
+            // AuthorizeSequenceProgram executes synchronously, under these
+            // same re-entrant management/session locks, after Runtime Commit.
+            return commit();
+        }
+    }
+
+    /// <summary>
     /// A confirmed ControlHost production commit may promote the *same*
     /// prepared native owner into Program. No implicit take or new decoder
     /// reservation occurs. A stale or reordered revision is refused.
