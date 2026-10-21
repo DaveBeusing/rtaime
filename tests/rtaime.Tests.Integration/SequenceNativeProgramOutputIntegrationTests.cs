@@ -186,6 +186,21 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
             takeCommand with { TransactionId = Guid.NewGuid() },
             authority.ProductionId.Value, committedRevision, runtime, host));
 
+        // A subsequent ordinary committed Preview mutation must not keep
+        // publishing the old sequence on Program with an outdated authority
+        // revision. It is invalidated and Program falls back to black.
+        var reselect = control.SelectPreview(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), sourceA));
+        Confirm(control, runtime, reselect);
+        Assert.Equal(mediaB, runtime.CommittedProgramSourceId);
+        var staleOutput = decks.PresentSequenceBoundary(
+            runtime, runtime.NextSequenceOutputSlot);
+        Assert.False(staleOutput.Published);
+        Assert.Equal("STALE", staleOutput.State);
+        Assert.Equal("runtime.sequence.route_changed", staleOutput.FailureCode);
+        Assert.Equal("STALE", decks.GetSequenceOutput(reference, host).OutputState);
+
         var cancellation = decks.CancelPreparedSequence(reference, host);
         Assert.Equal("CANCELED", cancellation.State);
         Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
