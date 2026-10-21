@@ -242,6 +242,62 @@ public sealed class LocalMediaDecoderSafetyTests
     }
 
     [Theory]
+    [InlineData(50, 1)]
+    [InlineData(60_000, 1_001)]
+    public void Full_frame_RGB32_pitch_and_orientation_preserve_visible_pixels_at_production_rates(
+        int rateNumerator, int rateDenominator)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const int width = 1_920, height = 1_080, rowBytes = width * 4;
+        var expected = new byte[rowBytes * height];
+        var actual = new byte[expected.Length];
+        var from2D = new byte[expected.Length];
+
+        foreach (var pitch in new[] { rowBytes, -rowBytes, rowBytes + 32, -(rowBytes + 32) })
+        {
+            var absolutePitch = Math.Abs(pitch);
+            var extent = checked((height - 1) * absolutePitch + rowBytes);
+            var source = new byte[extent];
+            for (var y = 0; y < height; y++)
+            {
+                var offset = y * absolutePitch;
+                for (var x = 0; x < rowBytes; x++)
+                    source[offset + x] = (byte)(x * 37 + y * 17 + 11);
+            }
+            for (var y = 0; y < height; y++)
+            {
+                var sourceRow = pitch < 0 ? height - 1 - y : y;
+                Buffer.BlockCopy(source, sourceRow * absolutePitch, expected, y * rowBytes, rowBytes);
+            }
+
+            var native = Marshal.AllocHGlobal(extent);
+            try
+            {
+                Marshal.Copy(source, 0, native, extent);
+                WindowsMediaFoundationLocalMediaDecoder.CopyContiguousRgb32Rows(
+                    native, (uint)extent, (uint)extent, width, height, pitch, actual);
+                var scanline0 = pitch < 0
+                    ? IntPtr.Add(native, checked((height - 1) * absolutePitch))
+                    : native;
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                    scanline0, pitch, width, height, from2D);
+                Assert.Equal(expected, actual);
+                Assert.Equal(expected, from2D);
+
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(expected);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(actual);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(from2D);
+                Assert.Equal(expected, actual);
+                Assert.Equal(expected, from2D);
+                Assert.Equal(byte.MaxValue, actual[3]);
+            }
+            finally { Marshal.FreeHGlobal(native); }
+        }
+        Console.WriteLine($"Full-frame RGB32 pitch parity: rate={rateNumerator}/{rateDenominator}, " +
+            "size=1920x1080, layouts=tight+/tight-/padded+/padded-, parity=true.");
+    }
+
+    [Theory]
     [InlineData(50, 1, 50)]
     [InlineData(60_000, 1_001, 60)]
     public void Native_RGB32_bulk_copy_matches_row_reference_at_both_production_rates(
@@ -259,34 +315,55 @@ public sealed class LocalMediaDecoderSafetyTests
             Marshal.Copy(expected, 0, native, expected.Length);
             var optimized = new byte[expected.Length];
             var reference = new byte[expected.Length];
-            for (var i = 0; i < 4; i++)
+            // Exercise both paths and Stopwatch before the strict allocation windows.
+            // Tiered interop/JIT activation and timing observation are not frame-copy allocations.
+            for (var i = 0; i < 64; i++)
             {
+                var warmupStarted = Stopwatch.GetTimestamp();
                 WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
                     native, rowBytes, width, height, optimized);
+                _ = Stopwatch.GetElapsedTime(warmupStarted).TotalMilliseconds;
+                warmupStarted = Stopwatch.GetTimestamp();
                 for (var y = 0; y < height; y++)
                     Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
+                _ = Stopwatch.GetElapsedTime(warmupStarted).TotalMilliseconds;
             }
 
             var optimizedTimes = new double[samples];
             var referenceTimes = new double[samples];
+            // Only the copy operations belong to the 4096-byte allocation budget.
             var caller = GC.GetAllocatedBytesForCurrentThread();
             for (var i = 0; i < samples; i++)
-            {
-                var start = Stopwatch.GetTimestamp();
                 WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
                     native, rowBytes, width, height, optimized);
-                optimizedTimes[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            }
             var optimizedAllocations = GC.GetAllocatedBytesForCurrentThread() - caller;
+
             caller = GC.GetAllocatedBytesForCurrentThread();
             for (var i = 0; i < samples; i++)
             {
-                var start = Stopwatch.GetTimestamp();
                 for (var y = 0; y < height; y++)
                     Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
-                referenceTimes[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             }
             var referenceAllocations = GC.GetAllocatedBytesForCurrentThread() - caller;
+
+            // Sample wall time independently. Retain the observer-inclusive allocation
+            // delta as diagnostic evidence, not as a proxy for copy-path allocation.
+            caller = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < samples; i++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                    native, rowBytes, width, height, optimized);
+                optimizedTimes[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            }
+            for (var i = 0; i < samples; i++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                for (var y = 0; y < height; y++)
+                    Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
+                referenceTimes[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            }
+            var timedWindowAllocations = GC.GetAllocatedBytesForCurrentThread() - caller;
 
             Assert.Equal(reference, optimized);
             Assert.InRange(optimizedAllocations, 0, 4_096);
@@ -304,6 +381,7 @@ public sealed class LocalMediaDecoderSafetyTests
                 referenceNativeCopyCallsPerFrame = height,
                 optimized = new { p50 = P(optimizedTimes, .5), p95 = P(optimizedTimes, .95), p99 = P(optimizedTimes, .99), allocatedBytes = optimizedAllocations },
                 allocatingReference = new { p50 = P(referenceTimes, .5), p95 = P(referenceTimes, .95), p99 = P(referenceTimes, .99), allocatedBytes = referenceAllocations },
+                timedWindowAllocatedBytes = timedWindowAllocations, allocationScope = "COPY_ONLY",
                 parity = true, metric = "CPU_WALL_MICROBENCH", nativeMediaFoundation = "NOT_IN_MICROBENCH",
                 actualPlaybackLatency = "UNVERIFIED"
             }));
@@ -458,12 +536,25 @@ public sealed class LocalMediaDecoderSafetyTests
         {
             Array.Fill(pixels, (byte)17);
             Marshal.Copy(pixels, 0, native, pixels.Length);
-            for (var index = 0; index < 4; index++)
+            // Warm interop, channel normalization and the timing observer before
+            // counting copy-path allocations, including tiered JIT activation.
+            for (var index = 0; index < 64; index++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(native, width * 4, width, height, pixels);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(pixels);
+                _ = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < elapsed.Length; index++)
             {
                 WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(native, width * 4, width, height, pixels);
                 WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(pixels);
             }
-            var allocated = GC.GetAllocatedBytesForCurrentThread();
+            allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+
+            var timedStartAllocations = GC.GetAllocatedBytesForCurrentThread();
             for (var index = 0; index < elapsed.Length; index++)
             {
                 var started = Stopwatch.GetTimestamp();
@@ -471,10 +562,11 @@ public sealed class LocalMediaDecoderSafetyTests
                 WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(pixels);
                 elapsed[index] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             }
-            allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+            var timedWindowAllocations = GC.GetAllocatedBytesForCurrentThread() - timedStartAllocations;
             Array.Sort(elapsed);
             Console.WriteLine("Production RGB32 copy/swizzle: samples=64 size=1920x1080; allocatedBytes=" +
-                allocated + "; P99Milliseconds=" + elapsed[^1]);
+                allocated + "; allocationScope=COPY_AND_SWIZZLE_ONLY; timedWindowAllocatedBytes=" +
+                timedWindowAllocations + "; P99Milliseconds=" + elapsed[^1]);
             Assert.Equal(17, pixels[0]);
             Assert.Equal(255, pixels[3]);
             Assert.InRange(allocated, 0, 4096);
