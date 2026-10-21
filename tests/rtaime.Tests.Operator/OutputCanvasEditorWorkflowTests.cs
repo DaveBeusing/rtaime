@@ -30,7 +30,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         editor.AddSurfaceCommand.Execute(null);
         Assert.True(editor.IsDirty);
         Assert.Equal("1", editor.DraftRevision);
+        Assert.False(editor.SaveCommand.CanExecute(null));
         await editor.ValidateAsync();
+        Assert.True(editor.IsDraftValidated);
+        Assert.True(editor.SaveCommand.CanExecute(null));
         Assert.Equal(0, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
         await editor.SaveAsync();
@@ -39,8 +42,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         Assert.Equal("1", editor.SavedRevision);
         Assert.Equal("UNVERIFIED", editor.ActiveRevision);
         Assert.False(editor.IsDirty);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
 
         await editor.ValidateAsync();
+        Assert.True(editor.ApplyCommand.CanExecute(null));
         await editor.ApplyAsync();
         Assert.Equal(1, gateway.Applies);
         Assert.Equal("PENDING_BOUNDARY", editor.ActivationState);
@@ -49,6 +54,7 @@ public sealed class OutputCanvasEditorWorkflowTests
         await editor.ObserveBoundaryAsync();
         Assert.Equal("ACTIVE", editor.ActivationState);
         Assert.Equal("1", editor.ActiveRevision);
+        Assert.True(editor.IsActiveMappingConfirmed);
         Assert.Equal("virtual-program", editor.RuntimeOutputTarget);
         Assert.Equal("1920×1080", editor.RuntimeOutputSize);
 
@@ -93,6 +99,8 @@ public sealed class OutputCanvasEditorWorkflowTests
         using var editor = new OutputCanvasEditorViewModel(owner, gateway);
         await editor.ReloadAsync();
         editor.NudgeSelected(4, 5);
+        Assert.False(editor.SaveCommand.CanExecute(null));
+        await editor.ValidateAsync();
         await editor.SaveAsync();
         Assert.True(editor.IsDirty);
         Assert.True(editor.SaveOutcomeUnconfirmed);
@@ -126,9 +134,56 @@ public sealed class OutputCanvasEditorWorkflowTests
 
         gateway.RejectWith = "canvas.target_unsupported";
         editor.NudgeSelected(2, 0);
+        await editor.ValidateAsync();
+        Assert.False(editor.SaveCommand.CanExecute(null));
         await editor.SaveAsync();
         Assert.True(editor.IsDirty);
         Assert.NotEmpty(editor.Issues);
+        Assert.Equal(0, gateway.Saves);
+        Assert.Equal(0, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Lost_apply_reply_fences_retry_until_runtime_confirms_exact_saved_revision()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway { DropApplyResponse = true };
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        Assert.True(editor.ApplyCommand.CanExecute(null));
+        await editor.ApplyAsync();
+        Assert.Equal(1, gateway.Applies);
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
+        Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.Contains("UNKNOWN", editor.WorkflowStage);
+
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.Equal(1, gateway.Applies);
+
+        gateway.ConfirmMapping();
+        await editor.ObserveBoundaryAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.True(editor.IsActiveMappingConfirmed);
+        Assert.Equal(1, gateway.Applies);
+        Assert.Equal("RUNTIME CONFIRMED · ACTIVE MAPPING", editor.WorkflowStage);
+    }
+
+    [Fact]
+    public async Task Draft_revalidation_is_invalidated_by_a_followup_local_surface_edit()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        editor.NudgeSelected(2, 0);
+        await editor.ValidateAsync();
+        Assert.True(editor.SaveCommand.CanExecute(null));
+        editor.NudgeSelected(3, 0);
+        Assert.False(editor.IsDraftValidated);
+        Assert.False(editor.SaveCommand.CanExecute(null));
         Assert.Equal(0, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
     }
@@ -158,6 +213,7 @@ public sealed class OutputCanvasEditorWorkflowTests
         public int Applies { get; private set; }
         public string? RejectWith { get; set; }
         public bool DropSaveResponse { get; set; }
+        public bool DropApplyResponse { get; set; }
 
         public ValueTask<OutputCanvasSnapshot> GetAsync(CancellationToken token = default) =>
             ValueTask.FromResult(new OutputCanvasSnapshot(Stored,Stored.EditRevision,
@@ -199,6 +255,7 @@ public sealed class OutputCanvasEditorWorkflowTests
             Assert.Equal(Stored.EditRevision,request.ExpectedSavedRevision);
             _runtime = _runtime with { ActivationState="PENDING_BOUNDARY",
                 PendingRenderRevision=request.Enabled?Stored.EditRevision:null, FailureCode=null };
+            if (DropApplyResponse) throw new TimeoutException("Apply response lost after Runtime accepted the request.");
             return ValueTask.FromResult(_runtime);
         }
 
