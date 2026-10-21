@@ -210,10 +210,6 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var format = ParseFormat(_control.CurrentFormat);
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
 		var performanceEvidence = ResolvePerformanceEvidence(runtimeEvidence);
-		var runtimeStatus = ToOperatorStatus(runtimeEvidence);
-		var runtimeDetail = runtimeEvidence == "PASS"
-			? "Program routing reflects the authoritative Runtime state."
-			: _control.EngineHealthDetail;
 
 		UpdateSystemHealth("engine", _control.EngineHealth);
 		UpdateSystemHealth("control", _control.ControlHealth);
@@ -257,9 +253,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		_preview.Update(
 			target: "Control Preview · monitoring only",
 			assignedSource: FormatSource(_control.PreviewSourceName, _control.PreviewSourceId),
-			resolution: format.Resolution,
-			frameRate: format.FrameRate,
-			pixelFormat: format.PixelFormat,
+			// The Program output format cannot certify a distinct Preview source.
+			resolution: Unavailable,
+			frameRate: Unavailable,
+			pixelFormat: Unavailable,
 			colorSpace: Unavailable,
 			status: ToOperatorStatus(previewEvidence),
 			evidenceState: previewEvidence,
@@ -895,6 +892,23 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	public string StreamingQueue { get => _streamingQueue; private set => Set(ref _streamingQueue, value); }
 	public string StreamingDrops { get => _streamingDrops; private set => Set(ref _streamingDrops, value); }
 	public string StreamingReconnects { get => _streamingReconnects; private set => Set(ref _streamingReconnects, value); }
+	public string OutputKind => Id switch
+	{
+		"program" => "GOVERNED PROGRAM ROLE · PHYSICAL SCAN-OUT UNVERIFIED",
+		"aux" => "GOVERNED AUX ROLE · PHYSICAL SCAN-OUT UNVERIFIED",
+		"preview" => "CONTROL PREVIEW · MONITOR ONLY, NOT A DEVICE SEND",
+		_ => "LOCAL CLEAN FEED · NOT A PHYSICAL PROGRAM OUTPUT"
+	};
+	public string DeliveryEvidence => Id switch
+	{
+		"preview" => "CONTROL PREVIEW · NO PHYSICAL SEND",
+		"clean-program" => $"LOCAL DISPLAY {EvidenceState} · NO PHYSICAL SEND CONFIRMATION",
+		_ when EvidenceState == "FAIL" => "ROLE FAULTED · CHECK TARGET AND PROVIDER",
+		_ when EvidenceState != "PASS" => "OUTPUT ROUTE UNVERIFIED · CHECK RUNTIME EVIDENCE",
+		_ when StreamingStatus == "LIVE" => "NETWORK SEND LIVE · RUNTIME OBSERVED, NOT SCAN-OUT",
+		_ when StreamingProvider == "UNAVAILABLE" => "RUNTIME ROLE CONFIRMED · NETWORK SEND NOT CONFIGURED",
+		_ => $"RUNTIME ROLE CONFIRMED · NETWORK SEND {StreamingStatus}"
+	};
 
 	internal void Update(
 		string target,
@@ -932,6 +946,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		StreamingQueue = streamingQueue;
 		StreamingDrops = streamingDrops;
 		StreamingReconnects = streamingReconnects;
+		OnPropertyChanged(nameof(DeliveryEvidence));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
