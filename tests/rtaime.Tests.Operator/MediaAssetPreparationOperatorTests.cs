@@ -150,6 +150,31 @@ public sealed class MediaAssetPreparationOperatorTests
     }
 
     [Fact]
+    public async Task Guided_clip_open_rejects_program_slot_before_any_deck_or_routing_mutation()
+    {
+        var transport = new ForbiddenTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        var catalog = new Catalog(1);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck, catalog);
+        owner.SynchronizeCommand.Execute(null);
+        await Until(() => owner.IsConnected && !owner.IsBusy);
+        await pool.LoadCatalogAsync();
+        pool.SelectedCategory = "Clips";
+        pool.UpdateSelection(pool.FilteredItems.Take(1));
+        owner.SelectedSource = Assert.Single(owner.Sources);
+        Assert.Equal(owner.ProgramSourceId, owner.SelectedSource.Id);
+        Assert.False(pool.CanOpenLibraryPreview);
+        Assert.Contains("ON PROGRAM", pool.LibraryJourneyState);
+
+        await pool.OpenSelectedLibraryPreviewAsync();
+        Assert.Equal(0, transport.Calls);
+        Assert.Equal(0, catalog.Mutations);
+        Assert.False(deck.IsLoaded);
+    }
+
+    [Fact]
     public async Task Deck_details_toggle_is_local_and_does_not_change_playback_authority()
     {
         var transport = new ForbiddenTransport();
