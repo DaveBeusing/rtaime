@@ -55,7 +55,7 @@ public sealed partial class AudioMixerMutationTests
         source.ToggleMuteCommand.Execute(null);
         Assert.Equal("DRAFT", source.DraftState);
         Assert.Equal("DRAFT", bus.DraftState);
-        Assert.Contains("CONFIRMED", source.RoutingEvidence);
+        Assert.Contains("PROGRAM", source.BusSummary);
         Assert.Equal(0, transport.MutationCalls);
         Assert.Equal(confirmedSourceGain, transport.Configuration.Sources[0].Gain);
         Assert.Equal(confirmedBusGain, transport.Configuration.Buses[0].MasterGain);
