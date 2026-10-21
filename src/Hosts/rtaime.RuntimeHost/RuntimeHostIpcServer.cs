@@ -900,14 +900,15 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
                         null, null);
                     return Success(request, "runtime.execution.apply.response", ToWire(rejected));
                 }
-                result = runtime.ApplyArmedSequenceTake(prepared, sink, transition,
-                    () => nativeSequenceOwner.AuthorizeSequenceProgram(
-                        armed.Preparation,
-                        new MediaSourceId(Identity.Parse(armed.PreviewSourceId)),
-                        prepared.AuthoritySnapshot.StateId,
-                        new Revision(armed.ExpectedProductionRevision),
-                        prepared.AuthoritySnapshot.Revision,
-                        runtime));
+                result = nativeSequenceOwner.CommitArmedSequenceTake(armed, prepared,
+                    () => runtime.ApplyArmedSequenceTake(prepared, sink, transition,
+                        () => nativeSequenceOwner.AuthorizeSequenceProgram(
+                            armed.Preparation,
+                            new MediaSourceId(Identity.Parse(armed.PreviewSourceId)),
+                            prepared.AuthoritySnapshot.StateId,
+                            new Revision(armed.ExpectedProductionRevision),
+                            prepared.AuthoritySnapshot.Revision,
+                            runtime)));
             }
             else
                 result = runtime.ApplyExecution(prepared, sink, transition);
