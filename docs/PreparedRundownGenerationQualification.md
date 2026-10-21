@@ -81,7 +81,13 @@ increment generation exactly once.
 
 The bundled Windows 1080p50 H.264/AAC clip runs by default. Generated
 1080p59.94 H.264/AAC variants run when the reference-media regression
-environment is enabled. The existing end-to-end Runtime/Control A → B
+environment is enabled. The generated 59.94-fps late-cue case uses an
+explicitly authored short OUT at frame 5 so the successful HoldLastFrame
+handoff is isolated from the separate full-duration native-EOF boundary.
+Initial reference run `39651717289`, job `119401479172`, exposed an
+`Error` instead of `Ended` when that generated six-second clip was driven
+to native EOF; this is not treated as a passing EOF qualification and
+requires separate source-bound diagnosis. The existing end-to-end Runtime/Control A → B
 CUT/DISSOLVE integration retains its exact generation assertion and now
 includes final-state/owner diagnostics on failure. Existing seek, cancel,
 close, ticket, epoch, catalogue, authority, HOLD, monotonic-expiry,
