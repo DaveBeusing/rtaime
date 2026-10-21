@@ -29,9 +29,9 @@ public sealed partial class ExternalControlIntegrationTests
         var sourceB = new ProductionSourceId(Identity.Parse(original.Sources[1].Id));
         await CommitSequencePreparationAuthorityAsync(grpc);
         var previewCommitted = await grpc.GetSnapshotAsync();
-        Assert.Equal(sourceB.ToString(), previewCommitted.Production.PreviewSourceId);
-        Assert.NotEqual(previewCommitted.Production.PreviewSourceId,
-            previewCommitted.Production.ProgramSourceId);
+        Assert.Equal(sourceB, previewCommitted.Production.Routing.PreviewSourceId);
+        Assert.NotEqual(previewCommitted.Production.Routing.PreviewSourceId,
+            previewCommitted.Production.Routing.ProgramSourceId);
 
         var imported = await grpc.ImportMediaAssetsAsync([mediaFile.Path]);
         Assert.True(imported.Succeeded);
@@ -99,7 +99,7 @@ public sealed partial class ExternalControlIntegrationTests
         Assert.True(confirmed.PublishedSourceFrames > 0);
 
         var committed = await grpc.GetSnapshotAsync();
-        Assert.Equal(sourceB.ToString(), committed.Production.ProgramSourceId);
+        Assert.Equal(sourceB, committed.Production.Routing.ProgramSourceId);
         Assert.Equal(previewCommitted.Production.Revision.Value + 1,
             committed.Production.Revision.Value);
 
