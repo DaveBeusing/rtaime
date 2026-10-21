@@ -95,6 +95,14 @@ public interface IControlRuntimeTransportSeam
         SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<SequenceOutputObservation>(
             new NotSupportedException("Runtime sequence Program Take is unavailable."));
+    ValueTask<SequenceOutputObservation> ArmSequenceTakeAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequenceOutputObservation>(
+            new NotSupportedException("Runtime sequence Take admission is unavailable."));
+    ValueTask<SequenceOutputObservation> DisarmSequenceTakeAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<SequenceOutputObservation>(
+            new NotSupportedException("Runtime sequence Take cancellation is unavailable."));
     ValueTask<SequenceOutputObservation> GetSequenceOutputAsync(
         SequencePreparationReference reference, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<SequenceOutputObservation>(
