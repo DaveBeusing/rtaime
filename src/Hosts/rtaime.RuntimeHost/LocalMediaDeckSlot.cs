@@ -328,6 +328,10 @@ internal sealed class LocalMediaDeckSlot : IDisposable
 
 			var wasOnProgram = _isOnProgram;
 			_isOnProgram = programSourceId.HasValue && programSourceId.Value == _session.Probe.SourceId;
+            // A cue from an earlier Program tenure must not acknowledge a later manual Play.
+            // Repeated old-Program observations before the first B edge must not revoke TAKE.
+            if (wasOnProgram && !_isOnProgram)
+                _preparedNextPlayPending = false;
 			if (_isOnProgram && !wasOnProgram && _autoPlayOnProgram)
 				StartForProgramUnsafe();
 
