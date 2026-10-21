@@ -307,6 +307,26 @@ Example:
 
 The rollback wrapper delegates software restoration to `Invoke-SoftwareRollback.ps1`, then requires the persistent engine to return to qualified readiness. Failed rollback or post-rollback readiness remains `FAIL`; it is never hidden as a successful recovery.
 
+### Operator presentation after host recovery
+
+The normal Windows GUI startup keeps the branded, non-console Operator
+surface. The initial AppHost readiness label covers host qualification
+only; media assets, selected Show and output sinks must be examined
+against separately fresh ControlHost/Runtime observations.
+The Show checks entry displays current project state and directs the
+operator to the existing Media, Outputs, Show or Health workspace.
+Advanced support export remains available without becoming the main
+startup workflow.
+
+A previous unclean Operator session may restore its safe workspace but
+**cannot** restore an unconfirmed production route, codec reservation,
+prepared ticket, recording action, cue continuation or GO.
+Oversized/corrupt local session state falls back safely. Missing media,
+stale output evidence and `RECOVERY_REQUIRED` authored Show state
+require explicit review and existing ControlHost authority checks
+before a subsequent operator decision. No new supervisor or automatic
+lifecycle retry was added.
+
 ## Boot and crash recovery
 
 Automatic service startup provides the supported boot path.
