@@ -618,15 +618,24 @@ public sealed record ApplicationReadinessEvidence(
 	ApplicationSupervisionEvidence? AISupervision)
 {
 	public DateTimeOffset? ReadyAtUtc { get; init; }
+    internal const int MaximumDocumentChars = 64 * 1024;
 
 	public static bool TryParse(string json, out ApplicationReadinessEvidence? evidence)
 	{
+        evidence = null;
+        // This is a process-authored observation, never a trusted command.
+        // Cap parsing even when an unexpectedly large or malformed file is
+        // produced by a crashed, replaced or unrelated service.
+        if (string.IsNullOrWhiteSpace(json) || json.Length > MaximumDocumentChars)
+            return false;
 		try
 		{
-			using var document = JsonDocument.Parse(json);
+			using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
 			var root = document.RootElement;
+            var processId = root.GetProperty("processId").GetInt32();
+            if (processId <= 0) return false;
 			evidence = new ApplicationReadinessEvidence(
-				root.GetProperty("processId").GetInt32(),
+				processId,
 				root.GetProperty("state").GetString() ?? string.Empty,
 				root.GetProperty("health").GetString() ?? string.Empty,
 				root.GetProperty("controlEndpoint").GetString() ?? string.Empty,
@@ -639,7 +648,7 @@ public sealed record ApplicationReadinessEvidence(
 			};
 			return true;
 		}
-		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
 		{
 			evidence = null;
 			return false;
@@ -649,7 +658,13 @@ public sealed record ApplicationReadinessEvidence(
 	private static ApplicationSupervisionEvidence? ReadSupervision(JsonElement root, string name)
 	{
 		if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
-		int? processId = value.TryGetProperty("processId", out var process) && process.ValueKind == JsonValueKind.Number ? process.GetInt32() : null;
+		int? processId = null;
+        if (value.TryGetProperty("processId", out var process) && process.ValueKind != JsonValueKind.Null)
+        {
+            processId = process.GetInt32();
+            if (processId <= 0)
+                throw new FormatException("Supervised host process identity must be positive.");
+        }
 		return new ApplicationSupervisionEvidence(value.GetProperty("state").GetString() ?? string.Empty, processId);
 	}
 }
