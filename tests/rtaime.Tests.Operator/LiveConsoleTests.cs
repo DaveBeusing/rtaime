@@ -210,6 +210,38 @@ public sealed class LiveConsoleTests
     }
 
     [Fact]
+    public async Task Uncertain_refresh_with_local_draft_keeps_live_authority_blocked_after_undo()
+    {
+        var transport = new ReadOnlyTransport { CancelRundownReads = true };
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var model = new RundownViewModel(client, owner, pool);
+        var a = new RundownHoldItem(RundownItemId.New(), "A", 25);
+        var b = new RundownHoldItem(RundownItemId.New(), "B", 50);
+        var rundown = new RundownDefinition(RundownContractVersion.Current,
+            RundownId.New(), "Show", [a, b]);
+        var prepared = RundownExecutionSnapshot.Idle with
+        {
+            RundownId = rundown.RundownId,
+            State = RundownExecutionState.Prepared,
+            PreparedItemId = a.ItemId,
+            Revision = 2
+        };
+        model.ApplyConfirmedObservation(new(rundown, prepared, 1));
+        Assert.True(model.MoveDraftBefore(model.Items[1], model.Items[0]));
+        await model.RefreshAsync();
+        Assert.Equal("UNVERIFIED", model.NowItemName);
+        Assert.True(model.UndoDraftCommand.CanExecute(null));
+        model.UndoDraftCommand.Execute(null);
+        Assert.Equal("UNVERIFIED", model.NowItemName);
+        Assert.Equal("UNVERIFIED", model.NextItemName);
+        Assert.False(model.GoCommand.CanExecute(null));
+        Assert.Equal(0, transport.Mutations);
+    }
+
+    [Fact]
     public void Show_control_run_target_is_confirmed_and_never_the_unsaved_selected_editor_cue()
     {
         var transport = new ReadOnlyTransport();
