@@ -266,3 +266,28 @@ latency and future mandatory gate integration remain separately
 **UNVERIFIED** without the requisite source-bound equipment evidence.
 Broader native/replay/network/Operator cross-products still require their
 own verified producers and clear ownership.
+
+## Cross-subsystem real-time playout software matrix
+
+The opt-in [real-time playout evidence workflow](../.github/workflows/realtime-playout-evidence.yml)
+runs the existing managed Program GC producer, native decoder/worker-copy
+diagnostics, real distinct H.264/AAC sequence Preview/Program integration,
+bounded runtime and monitoring guards, two-deck SSD playback at 1080p50
+and 1080p59.94, and staged recording/recovery mixed load. Its
+[source-controlled profile](../qualification/performance/realtime-playout-matrix.json)
+offers finite `smoke` and `reference` durations only; neither is an
+uninterrupted physical long soak.
+
+Each run records the exact full source SHA, SDK 10.0.401, machine/OS,
+report hashes and producer-specific measurements. The aggregate verifier
+reopens the hashed raw producers and rejects missing, skipped, changed or
+unattributed reports. P99 is an observed 12-boundary managed-reference
+CPU-wall statistic; the nominal frame-period comparison is descriptive,
+not an approved real-time or physical latency pass. Measured native
+copy costs are isolated worker diagnostics, not proven PCIe transfer
+or native-Program end-to-end headroom.
+
+The 25 fps native path, CUDA driver/VRAM, physical I/O/cache-pressure
+latency, SDI/NDI/genlock, physical A/V synchronization, real device-loss
+recovery and continuous multitrack long soak remain **UNVERIFIED**.
+Software-matrix collection cannot satisfy physical release requirements.

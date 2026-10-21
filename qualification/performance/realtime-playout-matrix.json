@@ -1,0 +1,107 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-realtime-playout-software-matrix",
+  "sdk": "10.0.401",
+  "sourceScope": "EXISTING_CONTROL_RUNTIME_SOFTWARE_MEASUREMENT_COMPOSITION",
+  "executionProfiles": [
+    {
+      "name": "smoke",
+      "managedGc": "smoke",
+      "ssd": "smoke",
+      "mixed": "smoke",
+      "ssdDurationSecondsPerFormat": 30,
+      "requireLongSoak": false
+    },
+    {
+      "name": "reference",
+      "managedGc": "repeat",
+      "ssd": "10m",
+      "mixed": "smoke",
+      "ssdDurationSecondsPerFormat": 600,
+      "requireLongSoak": false
+    }
+  ],
+  "cadence": [
+    {
+      "format": "1080p25",
+      "frameBudgetMilliseconds": 40,
+      "producer": "NONE_FOR_EXACT_NATIVE_PROGRAM_25",
+      "evidence": "UNVERIFIED"
+    },
+    {
+      "format": "1080p50",
+      "frameBudgetMilliseconds": 20,
+      "producer": "MANAGED_PROGRAM_AND_DUAL_NATIVE_DECKS",
+      "evidence": "MEASURE_ONLY_WHEN_EXECUTED"
+    },
+    {
+      "format": "1080p59.94",
+      "frameBudgetMilliseconds": 16.683333333333334,
+      "producer": "MANAGED_PROGRAM_AND_DUAL_NATIVE_DECKS",
+      "evidence": "MEASURE_ONLY_WHEN_EXECUTED"
+    }
+  ],
+  "sourceScenarios": [
+    {
+      "id": "program-gc",
+      "runner": "Invoke-ManagedAllocationGcQualification.ps1",
+      "measurement": "MANAGED_REFERENCE_PROGRAM_CONSUMER_MATRIX_EIGHT_CASES_PER_FORMAT"
+    },
+    {
+      "id": "dual-deck-50",
+      "runner": "Invoke-SsdPlaybackQualification.ps1",
+      "measurement": "ACTUAL_TWO_LOCAL_MEDIA_DECODERS_SOFTWARE_PROGRAM_1080P50"
+    },
+    {
+      "id": "dual-deck-5994",
+      "runner": "Invoke-SsdPlaybackQualification.ps1",
+      "measurement": "ACTUAL_TWO_LOCAL_MEDIA_DECODERS_SOFTWARE_PROGRAM_1080P5994"
+    },
+    {
+      "id": "sequence-two-source",
+      "test": "ReferenceSequenceDistinctSourcesOutputTests",
+      "measurement": "DISTINCT_NATIVE_H264_RGB_AND_440_880_HZ_AAC_COMMITTED_SOFTWARE_SINK"
+    },
+    {
+      "id": "resource-recovery",
+      "test": "RuntimeResourceCapacityAdmissionTests",
+      "measurement": "FINITE_SOFTWARE_PROVIDER_ADMISSION_ONLY"
+    },
+    {
+      "id": "bounded-observations",
+      "test": "RuntimeMemoryBoundednessTests",
+      "measurement": "FIXED_OBSERVATION_RING_NOT_LONG_RUN_RAM_PLATEAU"
+    },
+    {
+      "id": "monitoring-ui",
+      "test": "MonitoringVisualPerformanceQualificationTests",
+      "measurement": "WPF_GEOMETRY_AND_ALLOCATION_GUARDS_NOT_DISPATCHER_END_TO_END_P99"
+    },
+    {
+      "id": "mixed-soak",
+      "runner": "Invoke-SustainedMixedLoadQualification.ps1",
+      "measurement": "STAGED_CONSUMER_RECORDING_CUES_RECOVERY_NOT_CONTINUOUS_SINGLE_PROGRAM"
+    }
+  ],
+  "qualificationLimits": {
+    "softwareProfileStatus": "COLLECTION_ONLY_NOT_REALTIME_OR_PHYSICAL_ACCEPTANCE",
+    "noApprovedP99Budget": true,
+    "maxResourceSamples": 128,
+    "maxResourceWindows": 96,
+    "physicalOutput": "UNVERIFIED",
+    "gpuDriverVram": "UNVERIFIED",
+    "storageIoCachePressure": "UNVERIFIED",
+    "externalAvSync": "UNVERIFIED",
+    "externalGenlock": "UNVERIFIED",
+    "physicalDeviceLoss": "UNVERIFIED",
+    "realContinuousMultitrackSoak": "UNVERIFIED",
+    "real25FpsNativeProgram": "UNVERIFIED"
+  },
+  "prerequisiteHardwareWorkflows": [
+    ".github/workflows/ssd-playback-qualification.yml",
+    ".github/workflows/cuda-reference-qualification.yml",
+    ".github/workflows/media-io-reference-qualification.yml",
+    ".github/workflows/timing-reference-qualification.yml"
+  ]
+}
