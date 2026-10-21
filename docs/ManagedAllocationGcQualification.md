@@ -74,9 +74,13 @@ Each iteration retains the existing `program-load-False.json` and
 its TRX result. Separate TRXs record the scalar and compositor factor
 guards. The longer profile additionally retains a native TRX and bounded
 test console log. Only after every subprocess and result has succeeded
-does the runner write `manifest.json` and verify all its hashes,
-source identities, rates, consumer masks, quantiles, allocated bytes per
-boundary and ownership/queue release evidence. It then writes
+does the runner write a private `manifest.pending.json` and verify
+all its hashes, source identities, rates, consumer masks, quantiles,
+allocated bytes per boundary and ownership/queue release evidence.
+For the smoke profile, the negative verifier regression suite also
+completes before the staged manifest is renamed to the final
+`manifest.json`. A failed or interrupted run therefore does not publish
+a final manifest with a misleading successful status. It then writes
 `subsystem-summary.json`, a **derived presentation-only** per-case table of
 Program CPU-wall P50/P95/P99, thread/process allocation bytes per frame,
 GC counts/pauses/last-GC LOH/POH snapshots, logical readback bytes,
