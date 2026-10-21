@@ -83,9 +83,11 @@ public sealed partial class ExternalControlIntegrationTests
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             var clock = Stopwatch.StartNew();
+            SequenceOutputObservation? last = null;
             while (!timeout.IsCancellationRequested)
             {
                 var status = await client.GetAsync(current, timeout.Token);
+                last = status;
                 if (status.OutputState == expected) return status;
                 Assert.DoesNotContain(status.OutputState, new[] { "FAILED", "STALE" });
                 if (clock.Elapsed > TimeSpan.FromSeconds(19))
@@ -93,7 +95,11 @@ public sealed partial class ExternalControlIntegrationTests
                 await Task.Delay(60, timeout.Token);
             }
             throw new TimeoutException(
-                "No matching confirmed native Preview/Program output was observed.");
+                "No matching confirmed native Preview/Program output was observed. " +
+                $"Expected={expected}; lastState={last?.OutputState ?? "missing"}; " +
+                $"failure={last?.FailureCode ?? "none"}; " +
+                $"sourceFrames={last?.PublishedSourceFrames}; sinkFrame={last?.LastProgramSlot}; " +
+                $"latestSourceSlot={last?.LastSourceSlot}.");
         }
 
         var preview = await AwaitOutputAsync(grpcOutput, reference, "PREVIEW_READY");
