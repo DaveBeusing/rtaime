@@ -53,6 +53,12 @@ internal static class OutputCanvasWorkspaceQualification
             Assert.Equal(Visibility.Visible, editor.Visibility);
 
             var stage = Assert.Single(Descendants<OutputCanvasStageSurface>(editor));
+            // In compact OUTPUTS the editor lives inside the existing scrolling
+            // details region. Its stage must be scrolled into the actual viewport
+            // before asserting native layout dimensions.
+            stage.BringIntoView();
+            window.UpdateLayout();
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.Same(window.OutputHealth.CanvasEditor, stage.Editor);
             Assert.True(stage.Focusable);
             Assert.True(stage.ActualWidth > 100,
