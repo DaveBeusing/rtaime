@@ -372,7 +372,14 @@ confirmed Preview output and an exact source/revision/generation arm in the
 Runtime; an ordinary CUT to a bound sequence without the arm is rejected.
 The native promotion and the normal Runtime commit execute within one
 existing Program-boundary lock, so a frame cannot interleave between those
-two operations. Control's follow-up Runtime confirmation is idempotent.
+two operations. ControlHost also serializes authored sequence edits and
+ordinary production mutations with its existing mutation gate, then holds
+the exact catalogue revision lease until the Take outcome is known.
+The native management/output locks span both the Runtime commit and native
+owner promotion, preventing a concurrent Seek/Cancel between validation
+and Program activation. The catalogue lease is not re-entered: rereading
+a catalogue snapshot while it is held would deadlock its non-reentrant
+semaphore. Control's follow-up Runtime confirmation is idempotent.
 A lost response must be resolved using the read-only output observation
 and explicit `RecoverTake` for the already committed successor; Take
 itself is never replayed or retried with a new command identity.
@@ -404,32 +411,37 @@ results pass and all five Required Gates are green.
 
 ## Required productive execution integration
 
-These are **open acceptance obligations**, not simulated features:
+The source-bound implementation exists in the feature branch, but
+acceptance remains conditional on source-exact Windows and physical evidence:
 
-1. Connect the admitted source/revision plan to real Runtime source-to-clip
-   ownership, native Play/Pause/Seek/Loop on the one existing clock, and
-   the committed compositor/audio sink with explicit recovery. Preparation
-   and its bounded native queues exist, but no playout is activated.
-3. Runtime's existing GPU compositor and audio production mixer must
-   combine at least two actual independent video frames and two actual
-   audio tracks with the same rational boundary. Graphics layers,
-   alpha/track order, cut/dissolve, sample-level crossfade, gaps/silence
-   and last-frame policy require concrete connected sink evidence.
-4. An explicit Control-authorized Preview sequence route and Take must
-   retain the established production prepare/commit semantics, durable
-   source identity, old-peer capability rejection and ambiguous-Take
-   recovery. Saved show format v1/v2/v3 and current source identities
-   must remain readable; a draft edit must not silently replace the
-   executing revision.
-5. Real-decoder MP4 and PCM fixture tests must correlate committed
-   Program source/revision, two distinct video pixels in one frame,
-   two correct independent audio windows, source PTS, resource ledger,
-   seek/loop/host loss and actual output. Only then may List/Get
-   advertise playback as available.
+1. The existing Program clock and native ledger select real decoded clip
+   groups and feed GPU composition and Float32 PCM into the committed Runtime
+   source path. Verify on the exact source that the ordinary Preview
+   monitoring/render path and Program output actually show the expected
+   two distinct sources and correct audio, including nonlinear frame timing.
+2. Prove the one normal Control Stage / Runtime Prepare-Commit / Control
+   Confirm Take, authorization denial, optimistic revision identity, saved
+   edit and catalogue relink exclusion, and non-replayed uncertain-result
+   recovery through actual Named Pipe and authenticated gRPC hosts.
+3. Qualify both pre-commit rollback and post-commit fail-closed recovery
+   under concurrent native Cancel, Seek, host replacement and lost replies.
+   Only the same exact already committed successor can be recovered; the
+   software must never start a second Program transaction to guess.
+4. Verify actual transition layer order, dissolve, sample-level crossfade,
+   black/silent gaps, last-frame handling, loop repreroll, audio bus mapping,
+   source PTS and independent native owner release. Graphics source
+   integration, wider codecs/resolutions, reverse shuttle and professional
+   hardware I/O require additional explicit admission, not invented output.
+5. Confirm the complete Windows Release solution build, focused native
+   two-source H.264/AAC tests, all five exact-head Required Gates and
+   packaged lifecycle. Physical SDI/NDI/GPU/driver, multi-output latency
+   and long-running headroom remain UNVERIFIED without measured devices.
 
-Until that end-to-end qualification exists, the new ControlHost,
-Runtime IPC and external operations are **preparation-only**. The renderer,
-program routing and advertised sequence playback are unchanged.
+The feature is not an accepted public sequence playback capability yet:
+`SequenceList/Get.PlaybackState` and the historical preparation/shuttle
+observations deliberately keep their compatibility value `UNAVAILABLE`.
+The separately versioned sequence output observation is the only opt-in
+source-bound Preview/Take evidence while acceptance is incomplete.
 
 ## Reference safety and recovery
 
@@ -454,12 +466,15 @@ Runtime Program cadence remain unchanged by execution-planning work.
 and 48-kHz sample mapping, simultaneous videos/audio, precise transition
 edges, source offsets, overbudget/missing asset rejection, black gaps,
 immutability and deterministic fixed-point fade envelopes.
-Compiler tests are pure scheduling tests; the native preparation and
-Client/Control/Runtime integration exercise real catalogue-authorized
-MP4 native admission and resource cleanup but **do not composite or mix
-decoded RGBA/PCM into committed Program pixels or samples**. The production Runtime and physical hardware require
-their own integrated evidence. Run focused sequence Unit tests, then the
-canonical Release developer build and complete `rtaime.slnx` tests.
+Compiler tests are pure scheduling tests. The feature branch also
+contains distinct actual native H.264/AAC source composition, Preview
+monitoring, Program readback/PCM and Control/Runtime Take recovery
+qualifications, plus source/lease and authority-fence regressions. Their
+presence in source is not a PASS: each requires completed exact-head
+Windows execution and coherent evidence. Neither software-only sink
+proof nor a CI green check is a physical hardware qualification.
+Run the focused sequence tests, canonical Release developer build,
+complete `rtaime.slnx` tests and packaged Windows gates.
 
 Merge remains gated on exact-head `CI`, `Quality`, `Security`,
 `Provider Smoke` and `Packaged E2E`. The independent hardware
