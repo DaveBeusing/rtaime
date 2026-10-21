@@ -26,12 +26,27 @@ public partial class SequenceTimelineControl : UserControl
 
     private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e) => UpdateRulerViewport();
 
+    private void OnTrackScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.ViewportWidthChange != 0) UpdateRulerViewport();
+    }
+
+    private double VisibleTrackWidth()
+    {
+        // The scroll viewport excludes the vertical scrollbar, unlike the
+        // ruler row above it. Both click mapping and clip projection use the
+        // same usable track area after removing the fixed label column.
+        var scrollWidth = SequenceTrackScroll.ViewportWidth - 190;
+        return double.IsFinite(scrollWidth) && scrollWidth > 0
+            ? Math.Min(SequenceRuler.ActualWidth, scrollWidth)
+            : SequenceRuler.ActualWidth;
+    }
+
     private void UpdateRulerViewport()
     {
-        // The ruler owns the same horizontal coordinate system as the clips.
-        // Parent widths include the track label column and may include dock chrome.
-        if (Editor is { } editor && SequenceRuler.ActualWidth > 0)
-            editor.SetViewport(SequenceRuler.ActualWidth);
+        var width = VisibleTrackWidth();
+        if (Editor is { } editor && width > 0)
+            editor.SetViewport(width);
     }
 
     private void OnRulerClick(object sender, MouseButtonEventArgs e)
@@ -40,8 +55,9 @@ public partial class SequenceTimelineControl : UserControl
             FindParent<ButtonBase>(e.OriginalSource as DependencyObject) is not null)
             return;
         var cursor = e.GetPosition(SequenceRuler);
-        if (cursor.X < 0 || cursor.X > SequenceRuler.ActualWidth) return;
-        model.PlaceCursor(cursor.X, SequenceRuler.ActualWidth);
+        var width = VisibleTrackWidth();
+        if (width <= 0 || cursor.X < 0 || cursor.X > width) return;
+        model.PlaceCursor(cursor.X, width);
         Focus();
         e.Handled = true;
     }
@@ -62,9 +78,10 @@ public partial class SequenceTimelineControl : UserControl
             local >= border.ActualWidth - 9 ? SequenceEditorGestureKind.TrimEnd :
             SequenceEditorGestureKind.Move;
         var absoluteX = e.GetPosition(SequenceRuler).X;
+        var width = Math.Max(1, VisibleTrackWidth());
         var pointer = SequenceTimelineGeometry.ToTick(
-            Math.Clamp(absoluteX, 0, SequenceRuler.ActualWidth),
-            Math.Max(1, SequenceRuler.ActualWidth),
+            Math.Clamp(absoluteX, 0, width),
+            width,
             model.VisibleStart, model.VisibleEnd,
             model.Sequence!.FrameRate);
         if (!model.BeginGesture(clip.Id, kind, pointer)) return;
@@ -79,9 +96,10 @@ public partial class SequenceTimelineControl : UserControl
             Editor is not { HasSequence: true } model)
             return;
         var x = e.GetPosition(SequenceRuler).X;
+        var width = Math.Max(1, VisibleTrackWidth());
         var tick = SequenceTimelineGeometry.ToTick(
-            Math.Clamp(x, 0, SequenceRuler.ActualWidth),
-            Math.Max(1, SequenceRuler.ActualWidth),
+            Math.Clamp(x, 0, width),
+            width,
             model.VisibleStart, model.VisibleEnd, model.Sequence!.FrameRate);
         model.UpdateGesture(tick);
         e.Handled = true;
