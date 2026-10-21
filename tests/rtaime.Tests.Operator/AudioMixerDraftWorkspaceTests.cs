@@ -111,6 +111,35 @@ public sealed partial class AudioMixerMutationTests
 
 public sealed partial class AudioMixerOperatorSurfaceTests
 {
+    [Fact]
+    public async Task Compact_program_bus_is_first_without_changing_authoritative_bus_order()
+    {
+        await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+        var sourceId = new MediaSourceId(Identity.New());
+        var aux = new AudioBusId("aux");
+        var config = new AudioProductionConfiguration(1,
+            [new(aux, 1, false), new(AudioBusId.Program, 1, false)],
+            [new(sourceId, 1, false, true, [AudioBusId.Program])]);
+        var evidence = new[]
+        {
+            new OperatorAudioProductionBusDescriptor("aux", 1, false, .2, .1, .2, false, 0, 0, 0),
+            new OperatorAudioProductionBusDescriptor("program", 1, false, .4, .2, .4, false, 0, 1, 0)
+        };
+        owner.AudioMixer.ApplyProjection(Descriptor(config, evidence),
+            [new(sourceId.ToString(), "Camera")],
+            [new(sourceId.ToString(), "stream", 1, false, .4, .2, .4, false, "HEALTHY")],
+            [], true);
+
+        Assert.Equal("aux", owner.AudioMixer.Buses[0].BusId);
+        Assert.Equal("program", owner.AudioMixer.CompactBuses[0].BusId);
+        Assert.Same(owner.AudioMixer.Buses[1], owner.AudioMixer.CompactBuses[0]);
+        Assert.Same(owner.AudioMixer.Buses[0], owner.AudioMixer.CompactBuses[1]);
+        var retainedProgram = owner.AudioMixer.CompactBuses[0];
+        owner.AudioMixer.SetEvidenceAvailability("STALE");
+        Assert.Same(retainedProgram, owner.AudioMixer.CompactBuses[0]);
+        Assert.False(retainedProgram.HasMeterEvidence);
+    }
+
     [Theory]
     [InlineData(0, "−∞", true)]
     [InlineData(0.5, "-6.0", true)]
