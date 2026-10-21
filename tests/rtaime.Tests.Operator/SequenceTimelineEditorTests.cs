@@ -50,6 +50,69 @@ public sealed class SequenceTimelineEditorTests
         Assert.Empty(offscreen);
     }
 
+    [Fact]
+    public void Large_overlapping_timeline_projects_only_ordered_bounded_clips()
+    {
+        var definition = Sequence(1_600);
+        var track = definition.Tracks[0];
+        const long first = 25 * 4800L;
+        const long last = 2000 * 4800L;
+        var rows = SequenceTimelineGeometry.Project(definition, first, last, 0, 8, 720);
+
+        Assert.Equal(SequenceTimelineGeometry.MaximumRealizedClips, rows.Sum(row => row.Clips.Count));
+        var expected = definition.Clips.Where(clip => clip.TrackId == track.TrackId &&
+            clip.TimelineStart < last && SequenceTimelineGeometry.ClipEnd(clip) > first)
+            .OrderBy(clip => clip.TimelineStart).ThenBy(clip => clip.ClipId)
+            .Take(SequenceTimelineGeometry.MaximumRealizedClips)
+            .Select(clip => clip.ClipId);
+        Assert.Equal(expected, rows[0].Clips.Select(clip => clip.Id));
+        Assert.Empty(rows[1].Clips);
+    }
+
+    [Fact]
+    public async Task Unchanged_measured_viewport_keeps_existing_timeline_rows_and_selection_focus()
+    {
+        using var vm = new SequenceTimelineEditorViewModel(
+            new SequenceAuthoringClient(new RetainedSequenceTransport(Sequence())));
+        await vm.RefreshAsync();
+        await vm.LoadAsync();
+        vm.SetViewport(760, 2);
+        var initialVideo = vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Video);
+        var initialAudio = vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Audio);
+        var collectionChanges = 0;
+        vm.VisibleRows.CollectionChanged += (_, _) => collectionChanges++;
+
+        vm.SetViewport(760, 2);
+        Assert.Equal(0, collectionChanges);
+        Assert.Same(initialVideo, vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Video));
+        Assert.Same(initialAudio, vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Audio));
+
+        vm.SelectClip(vm.Sequence!.Clips[0].ClipId);
+        Assert.NotSame(initialVideo, vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Video));
+        Assert.Same(initialAudio, vm.VisibleRows.Single(row => row.Kind == SequenceMediaKind.Audio));
+        Assert.True(collectionChanges > 0);
+
+        vm.SetViewport(535, 2);
+        Assert.All(vm.VisibleRows.SelectMany(row => row.Clips),
+            clip => Assert.InRange(clip.Left + clip.Width, 0, 536));
+        Assert.Equal(2, vm.VisibleRows.Count);
+    }
+
+    [Fact]
+    public void Timeline_edge_snapping_avoids_per_clip_managed_materialization()
+    {
+        var definition = Sequence(2_000);
+        var target = 30 * 4800L + 200;
+        for (var i = 0; i < 8; i++)
+            Assert.Equal(30 * 4800L, SequenceTimelineGeometry.Snap(target, definition, true));
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 128; i++)
+            Assert.Equal(30 * 4800L, SequenceTimelineGeometry.Snap(target, definition, true));
+        var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.InRange(bytes, 0, 128 * 1024);
+    }
+
     [Theory]
     [InlineData(50, 1, 4800)]
     [InlineData(60000, 1001, 4004)]

@@ -110,6 +110,19 @@ D3DImage video pixels may be absent in WPF capture. Retain exact source,
 runner, Windows build, adapter/driver and actual/injected DPI before a
 manual/physical approval. This document claims **no human visual sign-off**.
 
+## Viewport geometry and lifecycle regression scope
+
+The Operator workspace implementation retains the existing monitoring and production controls. The focused UI regression additions qualify source-space behavior without claiming physical monitor equivalence:
+
+| Test or qualification | Required observation | Evidence boundary |
+| --- | --- | --- |
+| `SequenceTimelineEditorTests` | True scrollbar-adjusted ruler/track viewport width, repeat-viewport row identity, first 256 correctly ordered visible clips and bounded snapping allocations | Managed model and WPF collection behavior; no native GPU output |
+| `OperatorMediaWorkspaceLifecycleTests` | Cancelled monitoring ROI is restored on view replacement; loaded Output Canvas detaches its draft-editor event subscription on unload | Windows STA/WPF lifecycle; actual native graphic devices not qualified |
+| `MediaViewportVisualQualityQualificationTests` and `MonitoringVisualPerformanceQualificationTests` | 100/125/150/175/200% geometry, Fit/Fill/100% behavior and unmodified GPU versus truthful CPU fallback basis | Existing software evidence; real multi-monitor topology and screen-reader testing remain separate |
+| Existing real XAML and docking qualifications | 1920×1080 through compact, focus/cinema and floating workspace layouts without incorrect crop or overwritten authoring state | Exact runner/source screenshots require human review; `D3DImage` may not appear in bitmap captures |
+
+Passing a newly added test cannot be assumed from its presence. The exact PR-head Windows Release build, targeted tests, complete solution and five required gates must be read from their actual runs; inherited failures and hardware limits remain explicit. The view-only changes do not alter `rtaime.sequence-output.v1`, Program authority, source formats, monitoring transport, allocation pools, persisted layouts or capability versions.
+
 ## Validation and release guard
 
 Canonical checks use [Build and Test](BuildAndTest.md) and the existing

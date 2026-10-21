@@ -131,6 +131,12 @@ EDIT is the reference Preview/Program production workspace. At 1920×1080 its ce
 
 Seeking, IN/OUT, cue operations and take commands retain the existing Media Deck, Timeline and authoritative Control paths. Viewer maximize/fullscreen changes no production state.
 
+### Timeline viewport and gesture lifetime
+
+The Timeline measures its usable edit width from the live `SequenceRuler` and the track scroll viewport after its 190-DIP label column and visible vertical scrollbar, not a guessed window or dock width minus fixed chrome. The same measured width drives saved clip projection and cursor/trim/drag tick mapping; changes to dock, floating window or compact width are reprojected only when that measurement changes. A pointer release from a different mouse button cannot commit a left-button edit gesture.
+
+The projection retains a maximum of sixteen visible rows and 256 clips, selecting the earliest visible clips in saved track/layer and clip-time order without materializing all overlapping offscreen or hidden objects. Unchanged rows retain their WPF item identity on a viewport/selection refresh; a changed row replaces only its own visible item. This preserves local selection/focus visual continuity and avoids an every-refresh `ObservableCollection.Clear` reset. The saved sequence, authoring revisions, independent media transport and Program authority remain unaffected.
+
 ## MEDIA
 
 MEDIA emphasizes preparation: expanded Media Pool, governed NDI discovery/adoption, Preview-focused viewing, Media Deck, metadata/Context Inspector, import/open and IN/OUT/playback-policy preparation. It introduces no second ingest or media-management subsystem.
@@ -166,6 +172,10 @@ Display only confirmed format, target and provider evidence. Runtime CPU/memory,
 The existing Audio Mixer supports up to eight confirmed source strips, four bus strips, a compact source×bus matrix, typed three-band source EQ and bus compressor/sample-peak limiter drafts, L/R peak/reduction/clipping evidence, and Program/Aux audio-bus assignments. Compact/Detailed session presets, named fine-step draft faders and strip-local Apply/Discard preserve the distinction between drafts and confirmed state. Pending presentation coalesces without resetting selection; stale meters stay explicit. The existing 200-ms management path remains; no local WPF audio analysis, generic DSP graph, LUFS or true-peak claim is added.
 
 See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md). Local Program, Clean Program monitoring and external-send evidence must remain distinct in every compact layout.
+
+### Output canvas stage lifecycle
+
+The OUTPUTS authoring stage remains a geometry-only WPF surface. It attaches to the current draft editor only while loaded, detaches on unload, and invalidates drawing only for stage geometry, selection, zoom, pan and guide changes. Save/health/transport notifications that do not alter the stage do not trigger a redundant geometry redraw. Mouse-capture loss, template/window removal and editor rebinding cancel uncommitted stage gestures; any active preview belongs to the original draft editor and is cleared there. Only an explicit successful pointer release commits the local geometry draft, never a Program output change.
 
 ## HEALTH
 

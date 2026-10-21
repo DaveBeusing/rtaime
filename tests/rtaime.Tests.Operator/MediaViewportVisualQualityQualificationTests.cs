@@ -150,6 +150,29 @@ public sealed class MediaViewportVisualQualityQualificationTests
 	}
 
 	[Fact]
+	public void Timeline_uses_actual_scrollbar_adjusted_track_geometry()
+	{
+		var root = FindRepositoryRoot();
+		var xaml = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator",
+			"SequenceTimelineControl.xaml"));
+		var source = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator",
+			"SequenceTimelineControl.xaml.cs"));
+		var document = XDocument.Parse(xaml);
+		var ruler = Assert.Single(document.Descendants(),
+			element => element.Attributes().Any(attribute =>
+				attribute.Name.LocalName == "Name" && attribute.Value == "SequenceRuler"));
+		var trackScroll = Assert.Single(document.Descendants(),
+			element => element.Attributes().Any(attribute =>
+				attribute.Name.LocalName == "Name" && attribute.Value == "SequenceTrackScroll"));
+
+		Assert.Equal("OnViewportSizeChanged", (string?)ruler.Attribute("SizeChanged"));
+		Assert.Equal("OnTrackScrollChanged", (string?)trackScroll.Attribute("ScrollChanged"));
+		Assert.Contains("SequenceTrackScroll.ViewportWidth - 190", source, StringComparison.Ordinal);
+		Assert.Contains("SequenceRuler.ActualWidth", source, StringComparison.Ordinal);
+		Assert.DoesNotContain("ActualWidth - 190", source, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Clean_program_reuses_program_gpu_frame_without_operator_overlays()
 	{
 		var root = FindRepositoryRoot();

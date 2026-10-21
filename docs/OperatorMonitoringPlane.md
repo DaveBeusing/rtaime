@@ -194,6 +194,12 @@ Structured events use the existing Operator HostLog category `gpu-surface`, incl
 The original production crash records did not include the attempted descriptor, DPI, adapter or device state. A device-limit hypothesis alone cannot identify that incident: a Windows runner driver even accepted 16385 × 100 despite the documented conservative limit. Native qualification instead checks an unequivocally invalid width (uint.MaxValue) for E_INVALIDARG. The original incident remains unclassified until matching structured diagnostics from the affected desktop are available. See [OperatorVisualQualification.md](OperatorVisualQualification.md) for actual Windows lifetime tests and physical qualification boundaries.
 
 
+## Viewer interaction and cancelled ROI safety
+
+Keyboard zoom, Fit, Pixel Perfect, pan and ROI shortcuts apply only when the media viewport itself owns focus. The containing presentation must not tunnel shortcuts into focused overlay controls or text entry. A captured ROI create/resize/move gesture retains the original monitoring view and its previous ROI. Escape, focus/resource rebinding, changed DPI/size, mouse-capture failure or lost capture cancel the gesture and restore that original ROI; an ordinary matching left-button release commits the local observation ROI. Pan has the same explicit capture/cancel lifetime. A cancelled gesture never changes Preview/Program routing, the measured monitoring frame, output health or pixel evidence.
+
+The GPU shared-resource view retains the native source dimensions when qualified. The 320×180 CPU/WPF fallback remains explicitly reduced and cannot be labeled full native detail by a larger dock, detached window or high-DPI screen. A viewport resize changes only presentation geometry and the existing bounded render target, not the monitoring transport cadence or Runtime Program clock.
+
 ## Viewer presentation and inspection evidence
 
 The shared viewer reports the actual active presentation basis separately from authoritative production format. GPU descriptors become native-pixel evidence only after successful adapter/texture validation and drawing; rejected or retired resources expose the reduced CPU fallback. Local receipt age and retained/not-current evidence are presentation observations and add no poller or production clock.

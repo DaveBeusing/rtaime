@@ -183,8 +183,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public void SetViewport(double width, int visibleTrackCount = 8)
     {
         if (!double.IsFinite(width) || width <= 0) return;
-        _viewportWidth = Math.Max(100, width);
-        _visibleTrackCount = Math.Clamp(visibleTrackCount, 1, SequenceTimelineGeometry.MaximumRealizedRows);
+        var measuredWidth = Math.Max(1, width);
+        var rows = Math.Clamp(visibleTrackCount, 1, SequenceTimelineGeometry.MaximumRealizedRows);
+        if (_viewportWidth == measuredWidth && _visibleTrackCount == rows) return;
+        _viewportWidth = measuredWidth;
+        _visibleTrackCount = rows;
         RefreshViewport();
     }
 
@@ -634,13 +637,13 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
 
     public void RefreshViewport()
     {
-        VisibleRows.Clear();
+        var projected = new List<SequenceEditorRow>();
         if (Sequence is { } definition)
         {
             var rows = SequenceTimelineGeometry.Project(definition, VisibleStart, VisibleEnd,
                 FirstTrack, _visibleTrackCount, _viewportWidth);
             foreach (var row in rows)
-                VisibleRows.Add(row with { Clips = row.Clips.Select(clip =>
+                projected.Add(row with { Clips = row.Clips.Select(clip =>
                 {
                     var visible = clip with
                     {
@@ -670,9 +673,37 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                     };
                 }).ToArray() });
         }
+        // ObservableCollection.Clear() resets every realized clip and focus target.
+        // Update only rows whose projected geometry or state actually changed.
+        var changedRows = false;
+        for (var index = 0; index < projected.Count; index++)
+        {
+            var candidate = projected[index];
+            if (index >= VisibleRows.Count)
+            {
+                VisibleRows.Add(candidate);
+                changedRows = true;
+            }
+            else if (!SameVisibleRow(VisibleRows[index], candidate))
+            {
+                VisibleRows[index] = candidate;
+                changedRows = true;
+            }
+        }
+        while (VisibleRows.Count > projected.Count)
+        {
+            VisibleRows.RemoveAt(VisibleRows.Count - 1);
+            changedRows = true;
+        }
         Changed(nameof(VisibleStart)); Changed(nameof(VisibleEnd));
-        Changed(nameof(VisibleSpan)); Changed(nameof(VisibleRows));
+        Changed(nameof(VisibleSpan));
+        if (changedRows) Changed(nameof(VisibleRows));
     }
+
+    private static bool SameVisibleRow(SequenceEditorRow left, SequenceEditorRow right) =>
+        left.Id == right.Id && left.Name == right.Name && left.Kind == right.Kind &&
+        left.Enabled == right.Enabled && left.Muted == right.Muted && left.Layer == right.Layer &&
+        left.Clips.SequenceEqual(right.Clips);
 
     private void UpdateSelectedStatus()
     {

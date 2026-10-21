@@ -23,6 +23,7 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
     private OutputCanvasQuad? _originalQuad;
     private Guid _surfaceId;
     private OutputCanvasEditorViewModel? _attached;
+    private OutputCanvasEditorViewModel? _gestureEditor;
 
     public static readonly DependencyProperty EditorProperty = DependencyProperty.Register(
         nameof(Editor), typeof(OutputCanvasEditorViewModel), typeof(OutputCanvasStageSurface),
@@ -41,19 +42,62 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
         UseLayoutRounding = true;
         Cursor = Cursors.Cross;
         ClipToBounds = true;
+        Loaded += OnStageLoaded;
+        Unloaded += OnStageUnloaded;
     }
 
     private static void EditorChanged(DependencyObject obj, DependencyPropertyChangedEventArgs e)
     {
         var surface = (OutputCanvasStageSurface)obj;
-        if (surface._attached is not null) surface._attached.PropertyChanged -= surface.ModelChanged;
-        surface._attached = (OutputCanvasEditorViewModel?)e.NewValue;
-        if (surface._attached is not null) surface._attached.PropertyChanged += surface.ModelChanged;
         surface.CancelDrag();
+        if (surface.IsMouseCaptured) surface.ReleaseMouseCapture();
+        surface.DetachEditor();
+        surface.AttachEditor();
         surface.InvalidateVisual();
     }
 
-    private void ModelChanged(object? sender, PropertyChangedEventArgs e) => InvalidateVisual();
+    private void OnStageLoaded(object sender, RoutedEventArgs e) => AttachEditor();
+
+    private void OnStageUnloaded(object sender, RoutedEventArgs e)
+    {
+        CancelDrag();
+        if (IsMouseCaptured) ReleaseMouseCapture();
+        DetachEditor();
+    }
+
+    private void AttachEditor()
+    {
+        if (!IsLoaded || Editor is null || ReferenceEquals(_attached, Editor)) return;
+        DetachEditor();
+        _attached = Editor;
+        _attached.PropertyChanged += ModelChanged;
+        InvalidateVisual();
+    }
+
+    private void DetachEditor()
+    {
+        if (_attached is null) return;
+        _attached.PropertyChanged -= ModelChanged;
+        _attached = null;
+    }
+
+    private void ModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Health, save state and unrelated numeric-field notifications must
+        // not rebuild the WPF stage when its visible geometry has not changed.
+        if (e.PropertyName is null or nameof(OutputCanvasEditorViewModel.SelectedCanvas)
+            or nameof(OutputCanvasEditorViewModel.SelectedSurfaceId)
+            or nameof(OutputCanvasEditorViewModel.CanvasWidth)
+            or nameof(OutputCanvasEditorViewModel.CanvasHeight)
+            or nameof(OutputCanvasEditorViewModel.VisibleSurfaces)
+            or nameof(OutputCanvasEditorViewModel.PreviewQuad)
+            or nameof(OutputCanvasEditorViewModel.Zoom)
+            or nameof(OutputCanvasEditorViewModel.PanX)
+            or nameof(OutputCanvasEditorViewModel.PanY)
+            or nameof(OutputCanvasEditorViewModel.SnapEnabled)
+            or nameof(OutputCanvasEditorViewModel.ShowGuides))
+            InvalidateVisual();
+    }
 
     private OutputCanvasViewport View => new(
         ActualWidth,ActualHeight, Editor?.CanvasWidth ?? 0, Editor?.CanvasHeight ?? 0,
@@ -161,7 +205,7 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
         {
             _drag=DragKind.Pan;
             _previousView=e.GetPosition(this);
-            CaptureMouse();
+            if (!CaptureMouse()) CancelDrag();
             e.Handled=true;
         }
         else if (e.ChangedButton==MouseButton.Left && Editor is { CanEdit:true } editor)
@@ -180,6 +224,7 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
                 editor.SelectSurface(surface.SurfaceId);
                 _surfaceId=surface.SurfaceId;
                 _originalQuad=surface.Destination;
+                _gestureEditor=editor;
                 _corner=corner;
                 _drag=corner>=0?DragKind.Corner:
                     (Keyboard.Modifiers&ModifierKeys.Alt)!=0?DragKind.Rotate:DragKind.Move;
@@ -188,7 +233,7 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
             if (_drag!=DragKind.None)
             {
                 Focus();
-                CaptureMouse();
+                if (!CaptureMouse()) CancelDrag();
                 e.Handled=true;
             }
         }
@@ -209,6 +254,11 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
     {
         base.OnMouseMove(e);
         if (Editor is not { } editor || _drag==DragKind.None) return;
+        if (!IsMouseCaptured)
+        {
+            CancelDrag();
+            return;
+        }
         var pointer=e.GetPosition(this);
         if (_drag==DragKind.Pan)
         {
@@ -225,13 +275,12 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
         {
             if(Math.Abs(dx)>Math.Abs(dy))dy=0;else dx=0;
         }
-        OutputCanvasPoint[] original=[
+        OutputCanvasPoint[] points=[
             _originalQuad.TopLeft,_originalQuad.TopRight,_originalQuad.BottomRight,_originalQuad.BottomLeft];
-        var points=(OutputCanvasPoint[])original.Clone();
         if(_drag==DragKind.Move)
         {
             for(var i=0;i<4;i++)
-                points[i]=OutputCanvasViewport.Snap(new(original[i].X+dx,original[i].Y+dy),
+                points[i]=OutputCanvasViewport.Snap(new(points[i].X+dx,points[i].Y+dy),
                     editor.SnapEnabled,(Keyboard.Modifiers&ModifierKeys.Control)!=0);
         }
         else if(_drag==DragKind.Corner)
@@ -241,14 +290,14 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
         }
         else if(_drag==DragKind.Rotate)
         {
-            var center=new OutputCanvasPoint(original.Average(p=>p.X),original.Average(p=>p.Y));
+            var center=new OutputCanvasPoint(points.Average(p=>p.X),points.Average(p=>p.Y));
             var from=Math.Atan2(_pressCanvas.Y-center.Y,_pressCanvas.X-center.X);
             var to=Math.Atan2(canvas.Y-center.Y,canvas.X-center.X);
             var angle=to-from;
             var cos=Math.Cos(angle);var sin=Math.Sin(angle);
             for(var i=0;i<4;i++)
             {
-                var x=original[i].X-center.X;var y=original[i].Y-center.Y;
+                var x=points[i].X-center.X;var y=points[i].Y-center.Y;
                 points[i]=new(center.X+x*cos-y*sin,center.Y+x*sin+y*cos);
             }
         }
@@ -279,8 +328,9 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
 
     private void CancelDrag()
     {
-        if (_originalQuad is not null) Editor?.PreviewSurfaceQuad(_surfaceId,null);
+        if (_originalQuad is not null) _gestureEditor?.PreviewSurfaceQuad(_surfaceId,null);
         _originalQuad=null;
+        _gestureEditor=null;
         _drag=DragKind.None;
     }
 

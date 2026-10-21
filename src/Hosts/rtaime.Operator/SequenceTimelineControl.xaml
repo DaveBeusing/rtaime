@@ -15,8 +15,7 @@
     PreviewMouseWheel="OnMouseWheel"
     PreviewMouseMove="OnCapturedMouseMove"
     PreviewMouseLeftButtonUp="OnCapturedMouseUp"
-    LostMouseCapture="OnCapturedMouseCaptureLost"
-    SizeChanged="OnViewportSizeChanged">
+    LostMouseCapture="OnCapturedMouseCaptureLost">
     <UserControl.Resources>
         <SolidColorBrush x:Key="SequenceVideoBrush" Color="{StaticResource OperatorColorTimeline}" />
         <SolidColorBrush x:Key="SequenceAudioBrush" Color="{StaticResource OperatorColorAudio}" />
@@ -166,6 +165,7 @@
                 </StackPanel>
                 <Border Grid.Column="1" Background="Transparent" MouseLeftButtonDown="OnRulerClick"
                     x:Name="SequenceRuler"
+                    SizeChanged="OnViewportSizeChanged"
                     ToolTip="Click to position local edit cursor. No Preview/Program seek.">
                     <Grid>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
@@ -192,8 +192,9 @@
                     <ColumnDefinition Width="190" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <controls:RtaimeScrollViewer Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Disabled">
+                <controls:RtaimeScrollViewer x:Name="SequenceTrackScroll" Grid.ColumnSpan="2"
+                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    ScrollChanged="OnTrackScrollChanged">
                     <ItemsControl ItemsSource="{Binding VisibleRows}"
                         SnapsToDevicePixels="True">
                         <ItemsControl.ItemTemplate>

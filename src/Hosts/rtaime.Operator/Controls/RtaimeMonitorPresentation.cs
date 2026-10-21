@@ -15,6 +15,8 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	private FrameworkElement? _mediaViewport;
 	private Point? _panOrigin;
 	private bool _roiSelecting;
+	private MonitorView? _roiGestureMonitor;
+	private MediaInspectionRoi? _roiBeforeGesture;
 
 	public RtaimeMonitorPresentation()
 	{
@@ -181,17 +183,21 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private static void OnMonitorChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
-		((RtaimeMonitorPresentation)dependencyObject).RefreshViewport();
+		var presentation = (RtaimeMonitorPresentation)dependencyObject;
+		presentation.CancelInteraction();
+		presentation.RefreshViewport();
 	}
 
 	protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
 	{
 		base.OnDpiChanged(oldDpi, newDpi);
+		if (_roiSelecting || _panOrigin is not null) CancelInteraction();
 		RefreshViewport();
 	}
 
 	private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e)
 	{
+		if (_roiSelecting || _panOrigin is not null) CancelInteraction();
 		RefreshViewport();
 		_resizeSettleTimer.Stop();
 		_resizeSettleTimer.Start();
@@ -215,8 +221,18 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private void OnViewportPreviewKeyDown(object sender, KeyEventArgs e)
 	{
-		if (Monitor is null)
+		// PreviewKeyDown tunnels through the complete viewer. Do not intercept
+		// text editors, drop-downs or other focused overlay controls.
+		if (Monitor is null || _mediaViewport is null ||
+			!ReferenceEquals(Keyboard.FocusedElement, _mediaViewport))
 			return;
+
+		if (e.Key == Key.Escape && (_roiSelecting || _panOrigin is not null))
+		{
+			CancelInteraction();
+			e.Handled = true;
+			return;
+		}
 
 		if (Keyboard.Modifiers == ModifierKeys.Shift && e.Key == Key.R)
 		{
@@ -263,10 +279,13 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		var current = e.GetPosition(_mediaViewport);
 		if (Monitor.IsRoiSelectionEnabled)
 		{
+			var previousRoi = Monitor.InspectionRoi;
 			if (Monitor.BeginRoiSelectionAt(current.X, current.Y))
 			{
+				_roiGestureMonitor = Monitor;
+				_roiBeforeGesture = previousRoi;
 				_roiSelecting = true;
-				_mediaViewport?.CaptureMouse();
+				if (_mediaViewport?.CaptureMouse() != true) CancelInteraction();
 				e.Handled = true;
 			}
 			return;
@@ -283,7 +302,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 			return;
 
 		_panOrigin = current;
-		_mediaViewport?.CaptureMouse();
+		if (_mediaViewport?.CaptureMouse() != true) _panOrigin = null;
 		e.Handled = true;
 	}
 
@@ -292,7 +311,9 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		if (_roiSelecting)
 		{
 			_roiSelecting = false;
-			Monitor?.EndRoiSelection();
+			_roiGestureMonitor?.EndRoiSelection();
+			_roiGestureMonitor = null;
+			_roiBeforeGesture = null;
 			_mediaViewport?.ReleaseMouseCapture();
 			e.Handled = true;
 			return;
@@ -313,13 +334,21 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		var current = e.GetPosition(_mediaViewport);
 		Monitor.InspectPresentationAt(current.X, current.Y);
-		if (_roiSelecting && e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+		if (_roiSelecting || _panOrigin is not null)
 		{
-			Monitor.UpdateRoiSelectionAt(current.X, current.Y);
-			e.Handled = true;
-			return;
+			if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+			{
+				CancelInteraction();
+				return;
+			}
+			if (_roiSelecting)
+			{
+				Monitor.UpdateRoiSelectionAt(current.X, current.Y);
+				e.Handled = true;
+				return;
+			}
 		}
-		if (_panOrigin is null || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+		if (_panOrigin is null)
 			return;
 
 		var delta = current - _panOrigin.Value;
@@ -340,8 +369,18 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	private void OnViewportLostMouseCapture(object sender, MouseEventArgs e) => CancelInteraction();
 	private void CancelInteraction()
 	{
-		_panOrigin = null; _roiSelecting = false;
-		Monitor?.EndRoiSelection(); _resizeSettleTimer.Stop();
+		if (_roiSelecting && _roiGestureMonitor is { } gestureMonitor)
+		{
+			gestureMonitor.EndRoiSelection();
+			// A cancelled resize/drag must restore the previously confirmed ROI,
+			// including when the monitor binding switches during pointer capture.
+			gestureMonitor.InspectionRoi = _roiBeforeGesture;
+		}
+		_roiSelecting = false;
+		_roiGestureMonitor = null;
+		_roiBeforeGesture = null;
+		_panOrigin = null;
+		_resizeSettleTimer.Stop();
 		if (_mediaViewport?.IsMouseCaptured == true) _mediaViewport.ReleaseMouseCapture();
 	}
 
@@ -361,7 +400,6 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		_mediaViewport = null;
 		_panOrigin = null;
 		_roiSelecting = false;
-		Monitor?.EndRoiSelection();
 		_resizeSettleTimer.Stop();
 	}
 
