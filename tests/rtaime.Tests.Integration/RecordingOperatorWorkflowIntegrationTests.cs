@@ -178,6 +178,15 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.False(duplicate.Succeeded);
 			Assert.Equal("recording.stop.completion_unknown", duplicate.Failure?.Code);
 			Assert.Equal(1, writer.FinalizeCount);
+
+			// Cancelling one waiter cannot revoke or start another session finalization.
+			using (var cancelledWait = new CancellationTokenSource())
+			{
+				var waiting = runtime.Runtime.StopRecordingAsync(cancelledWait.Token).AsTask();
+				cancelledWait.Cancel();
+				await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
+			}
+			Assert.Equal(1, writer.FinalizeCount);
 			writer.ReleaseFinalize.TrySetResult();
 
 			await WaitUntilAsync(() => runtime.Runtime?.Snapshot.Recording.State ==
@@ -216,7 +225,12 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 				e.Events.Any(stage => stage.Name == "runtime.response.received"));
 			foreach (var entry in events)
 			{
-				var origin = entry.Events.FirstOrDefault().Timestamp;
+				Assert.False(string.IsNullOrWhiteSpace(entry.RequestId));
+				Assert.False(string.IsNullOrWhiteSpace(entry.CorrelationId));
+				Assert.NotEmpty(entry.Events);
+				var origin = entry.Events[0].Timestamp;
+				Assert.True(entry.Events.Zip(entry.Events.Skip(1)).All(pair =>
+					pair.First.Timestamp <= pair.Second.Timestamp));
 				foreach (var stage in entry.Events)
 					_output.WriteLine(
 						$"{entry.Source} request={entry.RequestId} correlation={entry.CorrelationId} session={entry.SessionId ?? "none"} " +
