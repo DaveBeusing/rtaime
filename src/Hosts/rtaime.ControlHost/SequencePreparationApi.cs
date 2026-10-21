@@ -360,13 +360,15 @@ public sealed partial class ControlHostIpcServer
             // the native preparation gate is held. The initial exact Runtime
             // authority and final Control revision/host identity fence both
             // remain mandatory.
-            var latestCatalogue = await _mediaAssetCatalog.GetSnapshotAsync(
-                refreshAvailability: false, cancellationToken).ConfigureAwait(false);
+            // The held catalogue RevisionLease owns the catalogue gate until
+            // this method exits: a concurrent relink/remove cannot advance the
+            // revision here. Calling GetSnapshotAsync while still holding the
+            // same non-reentrant semaphore would deadlock and time out the
+            // gRPC and Runtime prepare transaction.
             if (latest.Revision == library.Revision &&
                 latestControl is { HasAuthoritativeState: true } &&
                 latestControl.State.ProductionId.Value == authority.ProductionId.Value &&
                 latestControl.State.Revision == authority.Revision &&
-                latestCatalogue.Revision == catalog.Revision &&
                 _runtimeTransport.HostInstanceId == request.ExpectedRuntimeHostInstanceId)
                 return Success(message, message.MessageType + ".response", admitted);
 
