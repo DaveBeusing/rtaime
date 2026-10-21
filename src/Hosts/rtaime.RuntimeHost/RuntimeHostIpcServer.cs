@@ -215,6 +215,9 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
                 "runtime.media.analysis.begin" or "runtime.media.analysis.get" or "runtime.media.analysis.cancel" => ValueTask.FromResult(DispatchMediaAnalysis(request)),
                 "runtime.sequence.preparation.prepare" or "runtime.sequence.preparation.get" or "runtime.sequence.preparation.cancel" => ValueTask.FromResult(DispatchSequencePreparation(request, runtime, cancellationToken)),
                 "runtime.sequence.shuttle.get" or "runtime.sequence.shuttle.command" => ValueTask.FromResult(DispatchSequenceShuttle(request, runtime, cancellationToken)),
+                "runtime.sequence.output.preview" or "runtime.sequence.output.arm_take" or
+                    "runtime.sequence.output.disarm_take" or "runtime.sequence.output.take" or
+                    "runtime.sequence.output.get" => ValueTask.FromResult(DispatchSequenceOutput(request, runtime)),
                 "runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" or "runtime.media_deck.scoped.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" or "runtime.media_deck.preload.open" => ValueTask.FromResult(OpenMediaDeck(request)),
@@ -846,6 +849,14 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 				wire.Transition.DurationFrames);
 
         RuntimeHostApplyResult result;
+        var nativeSequenceOwner = _mediaDeckAccessor();
+        var candidateProgramSource = prepared.Bindings.SingleOrDefault(
+            binding => binding.MediaSinkId == sink)?.MediaSourceId;
+        if (request.MessageType == "runtime.execution.prepared_media.apply" &&
+            nativeSequenceOwner?.IsBoundSequenceProgramTarget(candidateProgramSource) == true)
+            return Error(request, "runtime.sequence.take_required",
+                "A bounded prepared-media commit cannot bypass explicit sequence Take admission.");
+
         if (request.MessageType == "runtime.execution.prepared_media.apply")
         {
             try
@@ -869,7 +880,38 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
         else
         {
             if (wire.Preparation is not null) throw new InvalidDataException("Prepared media requires the guarded operation.");
-            result = runtime.ApplyExecution(prepared, sink, transition);
+            if (nativeSequenceOwner?.IsBoundSequenceProgramTarget(candidateProgramSource) == true)
+            {
+                // The existing Runtime transaction must reject a generic CUT
+                // to an active native sequence. Only the matching Control
+                // revision / expressly armed Take can cross this boundary.
+                SequenceOutputCommand armed;
+                try
+                {
+                    armed = nativeSequenceOwner.RequireArmedSequenceTake(prepared, transition);
+                }
+                catch (Exception error) when (error is InvalidOperationException or ArgumentException or OverflowException)
+                {
+                    var rejected = new RuntimeHostApplyResult(
+                        new RuntimePrepareResult(RuntimeContractVersion.Current,
+                            prepared.PreparedExecutionId, RuntimePrepareStatus.Rejected, null,
+                            new Failure("runtime.sequence.take_not_armed",
+                                "Sequence Program commit was denied before altering Program: " + error.GetType().Name)),
+                        null, null);
+                    return Success(request, "runtime.execution.apply.response", ToWire(rejected));
+                }
+                result = nativeSequenceOwner.CommitArmedSequenceTake(armed, prepared,
+                    () => runtime.ApplyArmedSequenceTake(prepared, sink, transition,
+                        () => nativeSequenceOwner.AuthorizeSequenceProgram(
+                            armed.Preparation,
+                            new MediaSourceId(Identity.Parse(armed.PreviewSourceId)),
+                            prepared.AuthoritySnapshot.StateId,
+                            new Revision(armed.ExpectedProductionRevision),
+                            prepared.AuthoritySnapshot.Revision,
+                            runtime)));
+            }
+            else
+                result = runtime.ApplyExecution(prepared, sink, transition);
         }
 		if (result.Committed)
 		{

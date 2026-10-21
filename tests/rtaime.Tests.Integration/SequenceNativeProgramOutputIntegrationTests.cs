@@ -1,0 +1,241 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Security.Cryptography;
+using rtaime.Control.Contracts;
+using rtaime.ControlHost;
+using rtaime.Core;
+using rtaime.Media.Contracts;
+using rtaime.Persistence;
+using rtaime.Recording;
+using rtaime.Runtime;
+using rtaime.Runtime.Contracts;
+using rtaime.RuntimeHost;
+using Xunit;
+
+namespace rtaime.Tests.Integration;
+
+public sealed class SequenceNativeProgramOutputIntegrationTests
+{
+    [Fact]
+    public async Task Two_native_video_and_two_audio_tracks_reach_committed_program_pixel_and_pcm_sink()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var media = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(media.Path)));
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var sourceA = ProductionSourceId.New();
+        var sourceB = ProductionSourceId.New();
+        var mediaB = new MediaSourceId(sourceB.Value);
+        await using var runtime = new RuntimeProgramExecutionService(
+            new MediaSourceId(sourceA.Value), mediaB, format, new NoopRecordingWriter());
+        await using var journal = new BoundedProductionJournal(64);
+        var spec = new ProductionSpecification(ControlContractVersion.Current,
+            ProductionId.New(), "Native Sequence Program Output",
+            [new ProductionSourceSpecification(sourceA, "A"),
+             new ProductionSourceSpecification(sourceB, "Preview sequence")],
+            new ProductionRoutingState(sourceA, sourceA),
+            initialOutputRoles:
+            [ProductionOutputRoleState.Program(sourceA),
+             ProductionOutputRoleState.Aux(sourceB)]);
+        var control = new ControlHostService(spec, runtime.ProviderDescriptors, journal);
+        Confirm(control, runtime, control.Initialize());
+        Confirm(control, runtime, control.SelectPreview(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), sourceB)));
+        Assert.True(runtime.IsCommittedSequencePreviewSource(mediaB));
+
+        using var decks = new LocalMediaDeckRuntimeService(format, 2);
+        var provider = decks.ProviderDescriptor;
+        var route = provider.Capabilities.Single(cap => cap.Kind == "media.route");
+        var resources = provider.Resources.Where(resource => resource.Kind == "media.route").ToArray();
+        var owners = new[]
+        {
+            new SequenceMediaOwnerRequest(MediaSourceId.New(), MediaAssetId.New(), media.Path, hash, 0, 0),
+            new SequenceMediaOwnerRequest(MediaSourceId.New(), MediaAssetId.New(), media.Path, hash, 0, 0)
+        };
+        var authority = control.State;
+        var staged = new PreparedExecutionContract(RuntimeContractVersion.Current,
+            PreparedExecutionId.New(),
+            new AuthoritySnapshotReference(authority.ProductionId.Value, authority.Revision),
+            new Generation(1),
+            owners.Select((o, i) => new PreparedExecutionBinding(o.SourceId.Value,
+                route.CapabilityId, resources[i], o.SourceId, null)).ToArray());
+        var sequenceId = Guid.NewGuid();
+        var map = SequenceRuntimePositionMap.Prepare(sequenceId, 7, format.FrameRate,
+            20 * 4800, runtime.NextSequenceOutputSlot, 1);
+        SequenceExecutionClip Clip(int owner, SequenceMediaKind kind, int order) =>
+            new(Guid.NewGuid(), Guid.Parse(owners[owner].AssetId.ToString()), hash,
+                kind, owners[owner].SourceId.ToString(), order,
+                kind == SequenceMediaKind.Audio ? "program" : null,
+                0, 0, null, 0, 0, false);
+        var snapshot = new SequenceExecutionSnapshot(
+            SequenceExecutionSnapshotContract.Version, sequenceId, 7,
+            new(50, 1), 20 * 4800,
+            [new SequenceExecutionSlice(0, 20 * 4800,
+            [
+                Clip(0, SequenceMediaKind.Video, 0),
+                Clip(1, SequenceMediaKind.Video, 1),
+                Clip(0, SequenceMediaKind.Audio, 2),
+                Clip(1, SequenceMediaKind.Audio, 3)
+            ])]);
+        var prepared = decks.PrepareSequenceMedia(staged, map, owners, executionSnapshot: snapshot);
+        Assert.True(prepared.Prepared, prepared.Failure?.Message);
+        Assert.Equal(2, prepared.DecoderOwners);
+
+        var host = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(
+            SequencePreparationContract.Version, sequenceId, 7, host,
+            staged.PreparedExecutionId.ToString(), 1);
+        decks.BindSequencePreviewOutput(reference, mediaB,
+            authority.ProductionId.Value, authority.Revision, runtime);
+        var playing = decks.ApplySequenceShuttle(
+            new(SequenceShuttleContract.Version, reference, 0, SequenceShuttleAction.Play),
+            host, authority.ProductionId.Value, authority.Revision,
+            () => runtime.NextSequenceOutputSlot);
+        Assert.Equal("PLAYING", playing.State);
+
+        var preview = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(preview.Published, preview.FailureCode);
+        using (var first = runtime.ProcessNextBoundary())
+        {
+            decks.ObserveSequenceProgramBoundary(first);
+            Assert.Equal(new MediaSourceId(sourceA.Value), first.CommittedProgramSourceId);
+        }
+        var beforeTake = decks.GetSequenceOutput(reference, host);
+        Assert.Equal("PREVIEW_READY", beforeTake.OutputState);
+        Assert.Equal(1UL, beforeTake.PublishedSourceFrames);
+
+        // A generic Program CUT cannot adopt these native owners without
+        // the separate optimistic sequence Take reservation.
+        var generic = control.CutProgram(new CutProgramCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current,
+                CommandId.New(), control.State.ProductionId, control.State.Revision), sourceB));
+        Assert.True(generic.Accepted);
+        var genericExecution = Assert.IsType<ControlHostExecutionPackage>(generic.Execution);
+        Assert.Throws<InvalidOperationException>(() => decks.RequireArmedSequenceTake(
+            genericExecution.PreparedExecution, genericExecution.ProgramTransition));
+        control.RejectRuntimeCommit(genericExecution.PreparedExecution.PreparedExecutionId,
+            new Failure("runtime.sequence.take_not_armed", "Unarmed native source must not change Program."));
+        Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
+
+        var previous = control.State.Revision;
+        var takeCommand = new SequenceOutputCommand(
+            SequenceOutputContract.Version, reference, mediaB.ToString(),
+            previous.Value, Guid.NewGuid());
+        var armed = decks.ArmSequenceTake(takeCommand,
+            authority.ProductionId.Value, previous, runtime, host);
+        Assert.Equal("TAKE_PENDING", armed.OutputState);
+        var cut = control.CutProgram(new CutProgramCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, previous), sourceB));
+        Assert.True(cut.Accepted, cut.Failure?.Message);
+        var preparedCut = Assert.IsType<ControlHostExecutionPackage>(cut.Execution);
+        Assert.True(decks.IsBoundSequenceProgramTarget(mediaB));
+        Assert.Equal(takeCommand, decks.RequireArmedSequenceTake(
+            preparedCut.PreparedExecution, preparedCut.ProgramTransition));
+        var unapprovedCommitAttempts = 0;
+        Assert.Throws<InvalidOperationException>(() =>
+            decks.CommitArmedSequenceTake(
+                takeCommand with { TransactionId = Guid.NewGuid() },
+                preparedCut.PreparedExecution,
+                () =>
+                {
+                    unapprovedCommitAttempts++;
+                    return runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+                        preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+                        () => throw new InvalidOperationException(
+                            "Unapproved native transaction reached Program."));
+                }));
+        Assert.Equal(0, unapprovedCommitAttempts);
+        Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
+
+        var committed = decks.CommitArmedSequenceTake(takeCommand, preparedCut.PreparedExecution,
+            () => runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+                preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+                () => decks.AuthorizeSequenceProgram(reference, mediaB,
+                    authority.ProductionId.Value, previous,
+                    preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
+        Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
+            committed.Prepare.Failure?.Message);
+        Assert.True(control.ConfirmRuntimeCommit(
+            preparedCut.PreparedExecution.PreparedExecutionId, committed.Commit!).Committed);
+
+        var program = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(program.Published, program.FailureCode);
+        using (var taken = runtime.ProcessNextBoundary())
+        {
+            decks.ObserveSequenceProgramBoundary(taken);
+            Assert.Equal(mediaB, taken.CommittedProgramSourceId);
+            Assert.Equal(mediaB, taken.ProgramFrame.SourceId);
+            Assert.True(taken.ProgramPixels.Length > 0);
+            Assert.Equal((byte)255, taken.ProgramPixels.Span[3]);
+            Assert.NotEmpty(taken.ProgramAudioPayload);
+            Assert.Equal(960 * 2 * sizeof(float), taken.ProgramAudioPayload.Length);
+        }
+        var observed = decks.GetSequenceOutput(reference, host);
+        Assert.Equal("PROGRAM_CONFIRMED", observed.OutputState);
+        Assert.Equal(2UL, observed.PublishedSourceFrames);
+        Assert.NotNull(observed.LastProgramSlot);
+        Assert.Equal(control.State.Revision.Value, observed.ProductionRevision);
+        var committedRevision = control.State.Revision;
+        // A lost promotion response may only reconcile the same native
+        // owner/committed successor. It must not increment production again.
+        decks.AuthorizeSequenceProgram(reference, mediaB, authority.ProductionId.Value,
+            previous, committedRevision, runtime);
+        Assert.Equal(committedRevision, control.State.Revision);
+        Assert.Throws<InvalidOperationException>(() => decks.ArmSequenceTake(
+            takeCommand with { TransactionId = Guid.NewGuid() },
+            authority.ProductionId.Value, committedRevision, runtime, host));
+
+        // A subsequent ordinary committed Preview mutation must not keep
+        // publishing the old sequence on Program with an outdated authority
+        // revision. It is invalidated and Program falls back to black.
+        var reselect = control.SelectPreview(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), sourceA));
+        Confirm(control, runtime, reselect);
+        Assert.Equal(mediaB, runtime.CommittedProgramSourceId);
+        var staleOutput = decks.PresentSequenceBoundary(
+            runtime, runtime.NextSequenceOutputSlot);
+        Assert.False(staleOutput.Published);
+        Assert.Equal("STALE", staleOutput.State);
+        Assert.Equal("runtime.sequence.route_changed", staleOutput.FailureCode);
+        Assert.Equal("STALE", decks.GetSequenceOutput(reference, host).OutputState);
+
+        var cancellation = decks.CancelPreparedSequence(reference, host);
+        Assert.Equal("CANCELED", cancellation.State);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+        using (var afterCancellation = runtime.ProcessNextBoundary())
+        {
+            Assert.Equal(mediaB, afterCancellation.CommittedProgramSourceId);
+            var lostPixels = afterCancellation.ProgramPixels.Span;
+            Assert.Equal((byte)0, lostPixels[0]);
+            Assert.Equal((byte)0, lostPixels[1]);
+            Assert.Equal((byte)0, lostPixels[2]);
+            Assert.Equal((byte)255, lostPixels[3]);
+        }
+        Assert.Equal(0, runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
+    }
+
+    private static void Confirm(ControlHostService control, RuntimeProgramExecutionService runtime,
+        ControlHostOperationResult staged)
+    {
+        Assert.True(staged.Accepted, staged.Failure?.Message);
+        var package = Assert.IsType<ControlHostExecutionPackage>(staged.Execution);
+        var applied = runtime.ApplyExecution(package.PreparedExecution,
+            package.ProgramSinkId, package.ProgramTransition);
+        Assert.True(applied.Committed, applied.Commit?.Failure?.Message ?? applied.Prepare.Failure?.Message);
+        var confirmed = control.ConfirmRuntimeCommit(
+            package.PreparedExecution.PreparedExecutionId, applied.Commit!);
+        Assert.True(confirmed.Committed, confirmed.Failure?.Message);
+    }
+
+    private sealed class NoopRecordingWriter : IProgramRecordingWriter
+    {
+        public ValueTask OpenAsync(RecordingStartRequest request,
+            CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public ValueTask WriteAsync(RecordingProgramSample sample,
+            CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public ValueTask FinalizeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+    }
+}

@@ -523,6 +523,9 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			"control.sequence.list" or "control.sequence.get" or "control.sequence.save" or "control.sequence.edit" or "control.sequence.undo" or "control.sequence.redo" => await RunSequenceAsync(request, cancellationToken).ConfigureAwait(false),
             "control.sequence.prepare" or "control.sequence.preparation.get" or "control.sequence.preparation.cancel" or "control.sequence.preparation.context.get" => await RunSequencePreparationAsync(request, cancellationToken).ConfigureAwait(false),
             "control.sequence.shuttle.get" or "control.sequence.shuttle.command" => await RunSequenceShuttleAsync(request, cancellationToken).ConfigureAwait(false),
+            "control.sequence.output.preview" or "control.sequence.output.take" or
+                "control.sequence.output.get" or "control.sequence.output.recover" =>
+                await RunSequenceOutputAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.output.canvas.get" or "control.output.canvas.evidence.get" or "control.output.canvas.validate" or "control.output.canvas.save" or "control.output.canvas.activate" => await RunOutputCanvasAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.snapshot.get" => await GetSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.preview.select" => await MutateAsync(request, MutationKind.SelectPreview, cancellationToken).ConfigureAwait(false),
@@ -3107,9 +3110,14 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		$"{format.Width}×{format.Height} {format.FrameRate}";
 
 
-	private async ValueTask<WireEnvelope> MutateAsync(WireEnvelope request, MutationKind kind, CancellationToken cancellationToken)
+	private async ValueTask<WireEnvelope> MutateAsync(
+        WireEnvelope request, MutationKind kind, CancellationToken cancellationToken,
+        bool mutationGateAlreadyHeld = false)
 	{
-		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // A sequence Take holds the mutation gate across saved-authoring and
+        // catalogue revision validation. Reacquiring it here would deadlock.
+        if (!mutationGateAlreadyHeld)
+            await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
 			var control = _controlAccessor();
@@ -3246,7 +3254,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		}
 		finally
 		{
-			_mutationGate.Release();
+            if (!mutationGateAlreadyHeld)
+                _mutationGate.Release();
 		}
 	}
 

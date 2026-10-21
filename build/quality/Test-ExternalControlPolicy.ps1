@@ -73,7 +73,11 @@ Assert-Condition ($server -match 'ValidateClientCertificate' -and $server -match
 Assert-Condition ($server -match 'ExternalControlRole\.Observer' -and $server -match 'ExternalControlRole\.Operator') "Server-side RBAC must preserve Observer and Operator capability separation."
 Assert-Condition ($server -match 'MaxConcurrentConnections' -and $server -match 'MaxConcurrentOperationsPerClient' -and $server -match 'RequestsPerSecond' -and $server -match 'RequestBurst') "External control must retain explicit connection, in-flight and request-rate bounds."
 Assert-Condition ($server -match 'MaxReceiveMessageSize = _options\.MaxRequestBytes' -and $server -match 'MaxSendMessageSize = _options\.MaxResponseBytes') "gRPC request and response sizes must remain bounded."
-Assert-Condition ($server -match 'RequestTimeout' -and $server -match 'operationTimeout\.CancelAfter\(_options\.RequestTimeout\)' -and $server -match 'StatusCode\.DeadlineExceeded') "Unary external control execution must retain a server-side request deadline."
+Assert-Condition ($server -match 'RequestTimeout' -and $server -match 'StatusCode\.DeadlineExceeded' -and
+    (($server -match 'operationTimeout\.CancelAfter\(_options\.RequestTimeout\)') -or
+     ($server -match 'var requestTimeout = operation == "control\.sequence\.prepare"' -and
+      $server -match '_options\.RequestTimeout < TimeSpan\.FromSeconds\(45\)' -and
+      $server -match 'operationTimeout\.CancelAfter\(requestTimeout\)'))) "Unary external control must retain the ordinary bounded deadline, with at most a source-specific native sequence preroll exception."
 Assert-Condition ($server -match '_dispatcher\.DispatchExternalAsync') "External gRPC requests must terminate in the shared ControlHost dispatch seam."
 Assert-Condition ($server -notmatch '"runtime\.' -and $server -notmatch '"ai\.') "External-control transport must not dispatch directly to RuntimeHost or AIHost."
 Assert-Condition ($server -match '"authentication"' -and $server -match '"request-validation"' -and $server -match '"resource-limit"') "External security diagnostics must audit authentication, request validation and resource-limit outcomes."

@@ -218,6 +218,10 @@ public sealed partial class ControlHostIpcServer
         if (!compiled.Succeeded)
             return Error(message, "sequence.preparation.invalid",
                 "Saved sequence is unavailable or exceeds native decoder admission; inspect sequence validation.");
+        if (!SequenceExecutionCompiler.IsRuntimeCadenceCompatible(
+                compiled.Plan!.FrameRate, runtime.Format.FrameRate))
+            return Error(message, "sequence.preparation.frame_rate_mismatch",
+                "The saved sequence rate does not match the committed Runtime Program cadence; frame-rate conversion is not admitted.");
 
         // Conservatively stage every distinct native source/offset. The peak
         // interval bound alone cannot guarantee enough simultaneously retained
@@ -272,11 +276,39 @@ public sealed partial class ControlHostIpcServer
             // needs a nonzero independent resource generation, not a higher
             // production revision or an implicit production mutation.
             new Generation(authority.Revision.Next().Value), bindings.ToArray());
+        // The immutable execution slices are compiled from the same saved
+        // revision and are bound to precisely those ephemeral native SourceIds
+        // for which Runtime will reserve real decoder tickets. A slot can never
+        // supply a client-invented file path or an unadmitted owner.
+        var nativeSourceIds = owners.Select((owner, index) => new
+        {
+            Key = (owner.AssetId, Offset: checked(owner.SourceIn - owner.TimelineStart)),
+            SourceId = remoteOwners[index].SourceId.ToString()
+        }).ToDictionary(owner => owner.Key, owner => owner.SourceId);
+        var slices = compiled.Plan.Windows.Select(window => new SequenceExecutionSlice(
+            window.StartTick, window.EndTick,
+            window.Clips.Select(clip => new SequenceExecutionClip(
+                clip.ClipId, clip.AssetId, clip.FingerprintSha256, clip.Kind,
+                clip.Kind == SequenceMediaKind.Graphics ? null : nativeSourceIds[
+                    (clip.AssetId, checked(clip.SourceIn - clip.TimelineStart))],
+                clip.LayerOrder, clip.AudioBusId, clip.SourceIn, clip.TimelineStart,
+                clip.TransitionKind, clip.TransitionStart, clip.TransitionDuration,
+                clip.FadeIn)).ToArray())).ToArray();
+        var snapshot = new SequenceExecutionSnapshot(
+            SequenceExecutionSnapshotContract.Version, request.SequenceId,
+            request.ExpectedAuthoringRevision, compiled.Plan.FrameRate,
+            compiled.Plan.DurationTicks, slices);
+        try { snapshot.Validate(); }
+        catch (InvalidDataException)
+        {
+            return Error(message, "sequence.preparation.snapshot_capacity",
+                "Saved sequence exceeds the bounded execution-snapshot capacity; no native resources were reserved.");
+        }
         var command = new SequenceRuntimePrepareCommand(
             request.Version, request.ExpectedRuntimeHostInstanceId,
             request.SequenceId, request.ExpectedAuthoringRevision,
             compiled.Plan.DurationTicks, runtime.Format.FrameRate,
-            execution, remoteOwners);
+            execution, remoteOwners, snapshot);
 
         SequencePreparationStatus? admitted = null;
         try
@@ -284,8 +316,28 @@ public sealed partial class ControlHostIpcServer
             admitted = await _runtimeTransport.PrepareSequenceAsync(command, cancellationToken)
                 .ConfigureAwait(false);
             if (admitted.Version != request.Version)
+            {
+                if (admitted.State == "PREPARED")
+                {
+                    // An incompatible Runtime response may still have reserved
+                    // native workers. Keep its exact owner fenced until the
+                    // Runtime explicitly confirms cleanup.
+                    var mismatchedOwner = new SequencePreparationReference(
+                        admitted.Version, admitted.SequenceId, admitted.AuthoringRevision,
+                        admitted.RuntimeHostInstanceId, admitted.PreparedExecutionId, admitted.Generation);
+                    _preparedSequence = new PreparedSequenceBinding(
+                        mismatchedOwner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var incompatibleCleanup = await _runtimeTransport.CancelSequencePreparationAsync(
+                        mismatchedOwner, cleanup.Token).ConfigureAwait(false);
+                    if (incompatibleCleanup.State != "CANCELED")
+                        return Error(message, "sequence.preparation.cleanup_unconfirmed",
+                            "Incompatible native preparation remains owned until cleanup is confirmed.");
+                    _preparedSequence = null;
+                }
                 return Error(message, "sequence.preparation.version_mismatch",
                     "RuntimeHost responded with a different negotiated preparation protocol.");
+            }
             if (admitted.State != "PREPARED")
                 return Success(message, message.MessageType + ".response", admitted);
 
@@ -301,40 +353,59 @@ public sealed partial class ControlHostIpcServer
             // current output authorization.
             var latest = await _showProjectStore.LoadSequencesAsync(baseline, cancellationToken)
                 .ConfigureAwait(false);
+            var latestControl = _controlAccessor();
+            // Runtime's committed authority can only advance through the
+            // Control-owned commit path. Re-reading the Runtime snapshot here
+            // risks blocking behind an unrelated control IPC request while
+            // the native preparation gate is held. The initial exact Runtime
+            // authority and final Control revision/host identity fence both
+            // remain mandatory.
+            // The held catalogue RevisionLease owns the catalogue gate until
+            // this method exits: a concurrent relink/remove cannot advance the
+            // revision here. Calling GetSnapshotAsync while still holding the
+            // same non-reentrant semaphore would deadlock and time out the
+            // gRPC and Runtime prepare transaction.
             if (latest.Revision == library.Revision &&
-                _controlAccessor()?.State.ProductionId.Value == authority.ProductionId.Value &&
-                _controlAccessor()?.State.Revision == authority.Revision &&
+                latestControl is { HasAuthoritativeState: true } &&
+                latestControl.State.ProductionId.Value == authority.ProductionId.Value &&
+                latestControl.State.Revision == authority.Revision &&
                 _runtimeTransport.HostInstanceId == request.ExpectedRuntimeHostInstanceId)
                 return Success(message, message.MessageType + ".response", admitted);
 
+            using var staleCleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var closed = await _runtimeTransport.CancelSequencePreparationAsync(
-                reference, CancellationToken.None).ConfigureAwait(false);
+                reference, staleCleanup.Token).ConfigureAwait(false);
             if (closed.State != "CANCELED")
                 return Error(message, "sequence.preparation.cleanup_unconfirmed",
                     "Stale native preparation cleanup was not confirmed.");
             _preparedSequence = null;
             return Success(message, message.MessageType + ".response",
                 closed with { State = "STALE", Detail =
-                    "Sequence, RuntimeHost or committed production changed during preroll." });
+                    "Sequence, catalogue, RuntimeHost or committed production changed during preroll." });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (admitted?.State == "PREPARED")
             {
                 var owner = new SequencePreparationReference(
-                    request.Version, admitted.SequenceId,
+                    admitted.Version, admitted.SequenceId,
                     admitted.AuthoringRevision, admitted.RuntimeHostInstanceId,
                     admitted.PreparedExecutionId, admitted.Generation);
+                // An interrupted response must never free native ownership on
+                // the Control side without an explicit Runtime acknowledgment.
+                _preparedSequence ??= new PreparedSequenceBinding(
+                    owner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 try
                 {
-                    _ = await _runtimeTransport.CancelSequencePreparationAsync(
-                        owner, CancellationToken.None).ConfigureAwait(false);
-                    _preparedSequence = null;
+                    var closed = await _runtimeTransport.CancelSequencePreparationAsync(
+                        owner, cleanup.Token).ConfigureAwait(false);
+                    if (closed.State == "CANCELED") _preparedSequence = null;
                 }
-                catch (Exception)
+                catch (Exception error) when (error is IOException or TimeoutException or
+                    OperationCanceledException or InvalidOperationException or NotSupportedException)
                 {
-                    _preparedSequence ??= new PreparedSequenceBinding(
-                        owner, authority.ProductionId.Value, authority.Revision, catalog.Revision);
+                    // Leave the uncertain prepared owner fenced for reconciliation.
                 }
             }
             throw;

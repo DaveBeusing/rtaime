@@ -119,6 +119,27 @@ Transport failure or Runtime rejection never promotes staged state to authoritat
 
 `control.output.route` also uses the same stage/plan/apply/confirm pipeline. V1 accepts it for governed non-Program roles such as Aux; Program continues to require the transition-aware CUT/DISSOLVE/Scene paths. The command carries only role identity and source identity in addition to normal optimistic Control metadata. Control snapshots carry authoritative role configuration, while Runtime snapshots carry bounded role-specific provider/target/format/timing/lifecycle/health evidence. ControlHost reconciles the two before publishing Operator evidence; stale, missing or source-mismatched Runtime evidence never becomes confirmed output truth.
 
+The additive sequence-output capability uses
+`control.sequence.output.preview/take/get/recover` over the established
+local Named Pipe and authenticated external Control gRPC (tags 126–129).
+Control validates the persisted sequence/asset revisions and the current
+explicit Preview source. Runtime's optional native
+`runtime.sequence.output.preview/arm_take/disarm_take/take/get`
+operations retain finite source reservations and source-bound output
+observations; no raw decoded image/audio is transmitted through
+management IPC. An explicit Take first arms the prepared source and
+then uses the existing normal ControlHost CUT transaction. Runtime
+rejects an unarmed generic CUT to a bound sequence source, and promotes
+the native owner under the same Program boundary mutex as the ordinary
+Runtime prepared/commit operation. Read-only inspection cannot mutate
+Program. Recovery only re-confirms a previously committed exact
+production successor and never repeats the CUT. Old clients receive
+an unsupported-capability response rather than a false successful
+Take. The current software reference source, video/audio, graphics,
+performance and physical-hardware limits are documented in
+[Sequence Playback](SequencePlayback.md); the feature remains unqualified
+until exact-head sink and recovery evidence is complete.
+
 Direct graphics and compositing messages continue through ControlHost rather than creating a Scene-specific transport. After Runtime confirms such a mutation, ControlHost incorporates the resulting bounded compositing snapshot into Production authority. If it no longer exactly matches the active Scene's governed state, `ActiveSceneId` is cleared before the updated authoritative snapshot is published.
 
 ### RuntimeHost

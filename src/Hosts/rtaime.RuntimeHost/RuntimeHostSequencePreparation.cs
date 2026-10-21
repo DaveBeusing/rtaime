@@ -21,7 +21,8 @@ public sealed partial class RuntimeHostIpcServer
     private sealed record WireSequencePrepare(
         string Version, string ExpectedRuntimeHostInstanceId, Guid SequenceId,
         ulong AuthoringRevision, long DurationTicks, string ProgramFrameRate,
-        WirePreparedExecution PreparedExecution, WireSequenceOwner[] Sources);
+        WirePreparedExecution PreparedExecution, WireSequenceOwner[] Sources,
+        SequenceExecutionSnapshot? ExecutionSnapshot = null);
 
     private WireEnvelope DispatchSequencePreparation(
         WireEnvelope message, RuntimeProgramExecutionService runtime, CancellationToken cancellationToken)
@@ -60,7 +61,8 @@ public sealed partial class RuntimeHostIpcServer
                     new MediaAssetId(Identity.Parse(source.AssetId)),
                     source.LocalPath, source.FingerprintSha256,
                     source.SourceInTicks, source.TimelineStartTicks)).ToArray();
-                var preparation = deck.PrepareSequenceMedia(execution, map, sources, cancellationToken, wire.Version);
+                var preparation = deck.PrepareSequenceMedia(
+                    execution, map, sources, cancellationToken, wire.Version, wire.ExecutionSnapshot);
                 if (!preparation.Prepared)
                 {
                     var error = preparation.Failure;

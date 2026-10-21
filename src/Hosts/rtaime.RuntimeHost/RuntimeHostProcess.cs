@@ -498,8 +498,16 @@ public sealed class RuntimeHostProcess
 				continue;
 			}
 
+            // Sequence native reads remain nonblocking and use this exact
+            // existing Program slot. Real GPU/PCM frames become an ordinary
+            // committed Preview source before the single Program compositor,
+            // recorder, monitoring, network and physical-output path runs.
+            // Without explicit output binding this is a no-op.
+            mediaDeck.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+
 			var processingStartedAt = _timingClock.Elapsed;
 			using var boundary = runtime.ProcessNextBoundary();
+            mediaDeck.ObserveSequenceProgramBoundary(boundary);
 			var renderDuration = _timingClock.Elapsed - processingStartedAt;
 			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.InputAdmission, boundary.SequenceNumber, processingStartedAt - admissionStartedAt);
 			var outputStartedAt = _timingClock.Elapsed;
