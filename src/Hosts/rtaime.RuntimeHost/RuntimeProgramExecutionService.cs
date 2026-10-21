@@ -2708,6 +2708,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			return RecordingOperatorSnapshotUnsafe();
 	}
 
+	internal RecordingSessionId? ReadRecordingStopSessionId()
+	{
+		lock (_gate)
+			return _recorder.Snapshot.SessionId;
+	}
+
 	private async Task<RecordingStopResult> CompleteRecordingStopAsync()
 	{
 		var result = await _recorder.StopAsync(CancellationToken.None).ConfigureAwait(false);
