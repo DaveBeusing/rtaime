@@ -507,6 +507,7 @@ public sealed class RuntimeHostProcess
 
 			var processingStartedAt = _timingClock.Elapsed;
 			using var boundary = runtime.ProcessNextBoundary();
+            mediaDeck.ObserveSequenceProgramBoundary(boundary);
 			var renderDuration = _timingClock.Elapsed - processingStartedAt;
 			_timingProbe.TryObserveStage(RuntimePipelineTimingStage.InputAdmission, boundary.SequenceNumber, processingStartedAt - admissionStartedAt);
 			var outputStartedAt = _timingClock.Elapsed;
