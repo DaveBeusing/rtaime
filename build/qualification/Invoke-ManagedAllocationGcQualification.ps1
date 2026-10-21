@@ -211,6 +211,10 @@ try {
     }
     & ./build/qualification/Test-ManagedAllocationGcEvidence.ps1 @verify
     if (-not $?) { throw "Managed allocation/GC source-bound verification failed." }
+    if ($Profile -eq "smoke") {
+        & ./build/qualification/Test-ManagedAllocationGcVerifierRegressions.ps1 -EvidencePath $manifestPath -ExpectedSourceCommit $source -DescriptorPath $descriptorPath
+        if (-not $?) { throw "Source-bound verifier negative regression qualification failed." }
+    }
     Write-Host "Source-bound Program / GC software qualification complete: $runRoot"
     Write-Host "Physical hardware, complete ETW object allocations and full Operator UI latency remain UNVERIFIED."
 }
