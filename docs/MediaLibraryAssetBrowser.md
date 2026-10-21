@@ -100,7 +100,9 @@ eligible, online catalogue Clip, **Open Preview** reuses the existing Media
 Deck open and authoritative Set Preview request. It retains the selected
 source and asset fingerprint/revision across the asynchronous open; a
 changed selection, catalogue identity, source slot or Control connection
-prevents the subsequent route request. The displayed
+prevents the subsequent route request. A Clip cannot be opened by this
+guided action into the active Program source; first choose an off-Program
+A/B slot. The displayed
 `PREVIEW REQUESTED` message is pending authority, not a claim that
 Preview pixels or Program output were already delivered. The resident
 Deck and confirmed route remain separate evidence.
