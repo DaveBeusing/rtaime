@@ -188,6 +188,30 @@ public sealed class OutputCanvasEditorWorkflowTests
         Assert.Equal(0, gateway.Applies);
     }
 
+    [Fact]
+    public void Output_role_evidence_never_inherits_global_Runtime_PASS_for_missing_inactive_or_stale_targets()
+    {
+        OperatorOutputRoleDescriptor Role(bool active, string health, Failure? failure = null) =>
+            new("program", "PROGRAM", Source.ToString(), "virtual-program", "reference",
+                1920, 1080, "50", "RGBA8", "FRAME_BOUNDARY", "CONNECTED",
+                active, health, "Runtime Program target observation", failure);
+
+        var healthy = Role(true, "PASS");
+        Assert.Equal("PASS", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(null, true, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, false, false, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, true, "PASS"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(healthy, true, false, "UNVERIFIED"));
+        Assert.Equal("UNVERIFIED", OutputRoutingHealthViewModel.RoleEvidence(Role(false, "PASS"), true, false, "PASS"));
+        Assert.Equal("FAIL", OutputRoutingHealthViewModel.RoleEvidence(
+            Role(true, "FAIL", new Failure("output.writer_unavailable", "Target writer unavailable.")),
+            true, false, "PASS"));
+
+        Assert.Contains("MONITOR ONLY", new OutputStatusViewModel("preview", "PREVIEW").OutputKind);
+        Assert.Contains("NOT A PHYSICAL", new OutputStatusViewModel("clean-program", "CLEAN FEED").OutputKind);
+        Assert.Contains("UNVERIFIED", new OutputStatusViewModel("aux", "AUX").DeliveryEvidence);
+    }
+
     private static OperatorViewModel ReadyOwner()
     {
         var owner = new OperatorViewModel(new OperatorControlClient(new PassiveTransport()),
