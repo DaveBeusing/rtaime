@@ -163,6 +163,7 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 	public void ApplyConfirmedSnapshot(ShowControlWorkspaceSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+		_requiresFreshControlObservation = false;
 		_confirmedLiveSnapshot = snapshot;
 		var localSelectionId = SelectedCueList?.CueListId;
 		var localCueId = SelectedCue?.CueId;
@@ -349,14 +350,18 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 		try
 		{
 			await operation();
-			Status = "READY";
+			Status = "CONFIRMED";
 			if (_serverExecutionState != ShowControlExecutionState.Failed)
 				Failure = "NONE";
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or IOException or TimeoutException or NotSupportedException)
 		{
-			Status = "FAILED";
-			Failure = exception.Message;
+			// Any lost or rejected response needs a new Control observation.
+            // Never reuse the prior Armed state to issue a duplicate GO.
+            _requiresFreshControlObservation = true;
+            Status = "UNVERIFIED";
+            Failure = exception.Message;
+            ExecutionDetail = "Command result unverified. Synchronize Control before another ARM or GO.";
 		}
 		finally
 		{
@@ -459,6 +464,9 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 	{
 		OnPropertyChanged(nameof(LiveActionDetail));
 		OnPropertyChanged(nameof(NextCue));
+        OnPropertyChanged(nameof(LocalCueSelection));
+        OnPropertyChanged(nameof(CueRunStatus));
+        OnPropertyChanged(nameof(NextCueStatus));
 		OnPropertyChanged(nameof(CanEditAuthoring));
 		Templates.RaiseCommandState();
 		foreach (var command in new[]
