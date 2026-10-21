@@ -190,7 +190,13 @@ public sealed partial class LocalMediaDeckRuntimeService
                 decode.Value.Failure is not null || !entry.Deck.HasPreparedAudio)
                 throw new MediaDeckPreparationException("Prepared-next evidence is stale, replaced, expired or not ready. Prepare again.");
             var result = apply();
-            if (consume && committed(result)) _preparation = null;
+            if (consume && committed(result))
+            {
+                // Arm only after the authoritative TAKE committed successfully.
+                // An off-Program preload alone must never suppress a later manual Play.
+                entry.Deck.ArmPreparedGoPlay();
+                _preparation = null;
+            }
             return result;
         }
     }
