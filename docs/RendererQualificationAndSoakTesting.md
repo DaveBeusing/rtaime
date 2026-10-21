@@ -31,6 +31,36 @@ The canonical profile is `qualification/renderer/renderer-qualification.json`.
 
 Every profile executes 1080p50 RGBA8 and 1080p59.94 RGBA8. The direct CUDA compositor matrix covers CUT and 50% DISSOLVE with **0 / 1 / 2 / 4 / 8** ordered layers. Full-frame SHA-256 output is compared with the managed semantic reference, while surface lifetime and CUDA/D3D11 monitoring export are also required.
 
+## Output mapping qualification boundary
+
+The GPU output-warp/blend feature is **not** included in the existing CUDA
+compositor reference qualification matrix. That matrix exercises the
+`composite_rgba` path and the shared monitoring resource; it must not
+be treated as native output-mapping evidence. The CUDA backend does not
+implement `IGpuOutputMappingBackend`, so the feature remains unsupported
+and cannot be enabled on an NVIDIA device merely because GPU compositing
+or monitoring works.
+
+The `OutputMappingGpuTests`, `OutputMappingSurfaceOwnershipTests` and
+existing Runtime mapping integration suite exercise software identity/crop,
+projective warp, overlap order, encoded-space alpha/edge blending, invalid
+input preflight, stale Program sequence fencing, mapped-frame disposal,
+retained readback consumers and failed-release tracking. The separate
+`OutputMappingSoftwarePerformanceTests` captures CPU-wall P50/P95/P99,
+allocations, GC collections and pauses in a bounded 96×54 dual-layer profile
+at both 50/1 and 60000/1001. This is not physical NVIDIA performance evidence.
+
+Before native mapping support can be advertised, the reference-hardware
+qualification would need exact CUDA kernel/driver capability, actual
+1920×1080 or approved target format, pixel/alpha parity to the managed
+reference (including degeneracy, blending, order and crop), device completion
+fences, surface-pool capacity and clean-release observations, GPU-event
+timing and Program P95/P99 with source/target identities and full trace.
+Failed synchronization must quarantine in-flight surfaces. Hardware
+GPU→GPU mapping must not introduce an implicit Program DtoH→HtoD loop.
+Physical AJA/SDI/projector delivery, HDR and external synchronization
+require their own approved tests.
+
 ## Exact qualification manifest
 
 `New-RendererQualificationManifest.ps1` captures the exact 40-character source SHA, selected profile and profile SHA-256, Windows version/build/architecture, pinned .NET SDK 10.0.401, NVIDIA device name/ordinal/driver/PCI identity/VRAM, workflow run/attempt/runner identity and the 90-day retention policy.
