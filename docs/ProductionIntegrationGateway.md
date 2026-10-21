@@ -68,6 +68,14 @@ One gateway snapshot pump refreshes `OperatorControlClient` and fans cached stat
 
 Adapter failure or IntegrationHost failure cannot stop Program. A deployment may mark an adapter required for IntegrationHost startup, but that requirement does not alter ControlHost/RuntimeHost readiness.
 
+### Synchronization and recovery ordering
+
+The gateway starts its configured adapters, completes an initial ControlHost snapshot attempt, and only then starts its existing periodic snapshot pump. An initial synchronization failure leaves the gateway **DEGRADED** while that single pump continues bounded refresh attempts at the configured minimum interval. On a successful initial snapshot the gateway becomes **HEALTHY**; after a ControlHost startup/refresh failure, a successful newer snapshot restores **HEALTHY** with a recovery detail. Adapter failures, input drops, and command failures remain separate causes of degradation and are not cleared merely by a successful ControlHost poll.
+
+Every ControlHost synchronization is serialized with Production commands through the client gate and receives a monotonic gateway-local observation version when completed or failed. Feedback publication is additionally serialized and accepts only the latest successful observation from the currently active gateway lifetime. An older successful snapshot or delayed exception cannot replace a newer observation or override its health state. A failed refresh marks **DEGRADED** without falsely publishing the previous snapshot as fresh; cached feedback remains observational rather than new Production authority.
+
+Stopping cancels the lifetime, invalidates its published feedback, and prevents late startup, refresh, or adapter callbacks from republishing health. Restart creates a new lifetime and resynchronizes with ControlHost before its pump starts. This adds no second poller, Production command authority, or retry/timeout expansion. Snapshot sequence numbers are gateway publication identifiers; they are not ControlHost revisions or proof of physical output health.
+
 ## Configuration and secrets
 
 The schema is `schemas/integration/v1/integration-gateway.schema.json`. A secret-free example is `docs/examples/ProductionIntegrationGateway.example.json`.
