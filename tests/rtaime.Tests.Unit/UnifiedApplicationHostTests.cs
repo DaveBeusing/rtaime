@@ -1091,6 +1091,10 @@ public sealed class UnifiedApplicationHostTests
 		public int PipeProbeCount { get; private set; }
 		public int? LastControlProcessId { get; private set; }
 		public Action? OnDelay { get; set; }
+        public TaskCompletionSource<bool>? FirstDelayGate { get; init; }
+        public int UnreadableReadinessReadsRemaining { get; set; }
+        public List<string> AtomicPublishedPaths { get; } = new();
+        private bool _firstDelayHeld;
 		public List<string> StartedBaseNames { get; } = new();
 		public List<string> Events { get; } = new();
 		public List<string> ProbedEndpoints { get; } = new();
@@ -1143,7 +1147,25 @@ public sealed class UnifiedApplicationHostTests
 
 		public bool FileExists(string path) => _files.ContainsKey(Path.GetFullPath(path));
 
-		public string ReadAllText(string path) => _files[Path.GetFullPath(path)];
+		public string ReadAllText(string path)
+        {
+            if (string.Equals(Path.GetFullPath(path), Path.GetFullPath(_options.ReadinessPath),
+                    StringComparison.OrdinalIgnoreCase) && UnreadableReadinessReadsRemaining > 0)
+            {
+                UnreadableReadinessReadsRemaining--;
+                throw new IOException("Readiness document is temporarily share-denied.");
+            }
+            return _files[Path.GetFullPath(path)];
+        }
+
+        public void ReplaceReadinessPayload(string payload) =>
+            _files[Path.GetFullPath(_options.ReadinessPath)] = payload;
+
+        public void WriteAllTextAtomic(string path, string content)
+        {
+            AtomicPublishedPaths.Add(Path.GetFullPath(path));
+            WriteAllText(path, content);
+        }
 
 		public void WriteAllText(string path, string content)
 		{
@@ -1197,6 +1219,11 @@ public sealed class UnifiedApplicationHostTests
 				if (OperatorDelayBudget == 0 && _operatorProcessId is { } operatorProcessId)
 					_alive.Remove(operatorProcessId);
 			}
+            if (!_firstDelayHeld && FirstDelayGate is not null)
+            {
+                _firstDelayHeld = true;
+                return FirstDelayGate.Task;
+            }
 			return Task.CompletedTask;
 		}
 
