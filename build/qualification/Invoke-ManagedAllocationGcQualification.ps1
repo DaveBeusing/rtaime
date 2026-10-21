@@ -30,6 +30,7 @@ if ($LASTEXITCODE -ne 0) { throw "Source checkout has tracked changes. Commit be
 $sdk = (& dotnet --version).Trim()
 if ($LASTEXITCODE -ne 0 -or $sdk -ne "10.0.401") { throw "Pinned .NET SDK 10.0.401 is required." }
 
+$startedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
 $output = if ([IO.Path]::IsPathRooted($OutputRoot)) {
     [IO.Path]::GetFullPath($OutputRoot)
 } else {
@@ -175,7 +176,7 @@ try {
         sdk = $sdk
         descriptorSha256 = $descriptorHash
         profile = $Profile
-        startedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+        startedAtUtc = $startedAtUtc
         runner = $runner
         harnessProcessId = $PID
         githubRunId = $env:GITHUB_RUN_ID
