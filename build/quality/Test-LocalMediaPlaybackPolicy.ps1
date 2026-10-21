@@ -103,7 +103,14 @@ $progress = Get-Content -LiteralPath $progressPath -Raw
 $deck = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/LocalMediaDeckSlot.cs") -Raw
 $safetyTests = Get-Content -LiteralPath (Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/LocalMediaDecoderSafetyTests.cs") -Raw
 Assert-Condition ($decoder -match 'progress.BeforeRead' -and $decoder -match 'progress.Observe' -and $progress -match 'MaximumReads = 4096' -and $progress -match 'MaximumEmptyReads = 128') "Native sample loops must retain finite operation and empty-result budgets."
-Assert-Condition ($decoder -match 'ValidatePcmLength' -and $progress -match '192_000') "Decoded PCM lengths must be bounded before allocation."
+$pcmPacketScratchPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/LocalMediaPcmPacketScratch.cs"
+Assert-Condition (Test-Path -LiteralPath $pcmPacketScratchPath -PathType Leaf) "Decoder-local PCM packet scratch must exist."
+$pcmPacketScratch = Get-Content -LiteralPath $pcmPacketScratchPath -Raw
+Assert-Condition ($decoder -match '_pcmPacketScratch.CopyFromNative' -and
+    $pcmPacketScratch -match 'LocalMediaSampleProgress.ValidatePcmLength' -and
+    $pcmPacketScratch -match 'currentLength > maximumLength' -and
+    $pcmPacketScratch -match 'MaximumPacketBytes = 192_000' -and
+    $progress -match '192_000') "Decoded PCM must validate native extent and bounded scratch capacity before every copy."
 Assert-Condition ($source -match '_terminalFailure' -and $source -match 'catch [(]LocalMediaDecodeException') "Terminal native progress faults must fence read and seek."
 Assert-Condition ($worker -match '_disposeGate' -and $worker -match '_resourcesDisposed' -and $deck -match '_quarantinedSession' -and $deck -match 'runtime.media_deck.cleanup_failed') "Failed cleanup must retain owner resources and block deck replacement."
 Assert-Condition ($safetyTests -match 'Repeated_native_open_seek_close' -and $safetyTests -match 'Production_RGB32_copy' -and $safetyTests -match 'operation_deadline') "Lifecycle, native pixel parity and deadline regression coverage is required."

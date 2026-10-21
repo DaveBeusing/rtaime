@@ -25,9 +25,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly MediaSourceId _sourceId;
 	private readonly bool _hasAudio;
 	private readonly byte[] _rgbaFrameBuffer;
+    private readonly bool _collectCopyDiagnostics;
+    private LocalMediaDecodeCopyMeasurements _copyMeasurements;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
-    private byte[]? _pendingAudioPacket;
+    private readonly LocalMediaPcmPacketScratch _pcmPacketScratch = new();
+    private bool _hasPendingAudioPacket;
     private int _pendingAudioFrameOffset;
     private long _pendingAudioSamplePosition;
     private bool _audioEnded;
@@ -49,12 +52,17 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		Probe = probe;
 		_hasAudio = hasAudio;
 		_rgbaFrameBuffer = new byte[checked((int)((ulong)probe.VideoFormat.Width * probe.VideoFormat.Height * 4UL))];
+        _collectCopyDiagnostics = string.Equals(
+            Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS"), "1",
+            StringComparison.Ordinal);
         _videoStride = checked((int)probe.VideoFormat.Width * 4);
 	}
 
 	public LocalMediaProbe Probe { get; }
     public LocalMediaReadMeasurements VideoReadMeasurements { get; private set; }
     public LocalMediaReadMeasurements AudioReadMeasurements { get; private set; }
+    public LocalMediaDecodeCopyMeasurements CopyMeasurements => _copyMeasurements;
+    public bool CopyDiagnosticsEnabled => _collectCopyDiagnostics;
 
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
@@ -250,7 +258,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			};
 			MediaFoundation.ThrowIfFailed(_reader.SetCurrentPosition(ref timeFormat, ref position));
 			_pendingSeekTimestamp = LocalMediaFrameMath.FrameSeekMinimumTimestamp(frameNumber, Probe.VideoFormat.FrameRate);
-            _pendingAudioPacket = null;
+            _hasPendingAudioPacket = false;
+            _pcmPacketScratch.Reset();
             _pendingAudioFrameOffset = 0;
             _audioEnded = false;
             _videoEnded = false;
@@ -354,23 +363,25 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         // native COM calls themselves cannot be forcibly interrupted.
         for (var packet = 0; packet < 1_024 && cursor < end; packet++)
         {
-            if (_pendingAudioPacket is null || _pendingAudioFrameOffset >= _pendingAudioPacket.Length / pcmFrameBytes)
+            if (!_hasPendingAudioPacket ||
+                _pendingAudioFrameOffset >= _pcmPacketScratch.Length / pcmFrameBytes)
             {
-                _pendingAudioPacket = null;
+                _hasPendingAudioPacket = false;
+                _pcmPacketScratch.Reset();
                 _pendingAudioFrameOffset = 0;
                 if (_audioEnded || !TryReadSample(MediaFoundation.FirstAudioStream, null, progress,
-                    out var timestamp, out var decoded))
+                    out var timestamp, out var decodedLength))
                 {
                     _audioEnded = true;
                     output = Array.Empty<byte>();
                     return false;
                 }
-                if (decoded.Length == 0 || decoded.Length % pcmFrameBytes != 0)
+                if (decodedLength == 0 || decodedLength % pcmFrameBytes != 0)
                     throw new InvalidDataException("Decoded PCM packet is not aligned to complete audio frames.");
-                _pendingAudioPacket = decoded;
+                _hasPendingAudioPacket = true;
                 _pendingAudioSamplePosition = AudioSamplePosition(timestamp, rate);
             }
-            var available = _pendingAudioPacket.Length / pcmFrameBytes - _pendingAudioFrameOffset;
+            var available = _pcmPacketScratch.Length / pcmFrameBytes - _pendingAudioFrameOffset;
             var position = _pendingAudioSamplePosition + _pendingAudioFrameOffset;
             if (position < cursor)
             {
@@ -385,9 +396,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                 return false;
             }
             var copy = checked((int)Math.Min(available, end - cursor));
+            var pcmStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
             CopyPcm16ToFloat32(
-                _pendingAudioPacket.AsSpan(_pendingAudioFrameOffset * pcmFrameBytes, copy * pcmFrameBytes),
+                _pcmPacketScratch.Payload.Slice(_pendingAudioFrameOffset * pcmFrameBytes, copy * pcmFrameBytes),
                 output.AsSpan(checked((int)(cursor - start) * channels * sizeof(float)), copy * channels * sizeof(float)));
+            if (_collectCopyDiagnostics)
+                _copyMeasurements = _copyMeasurements with
+                {
+                    Pcm16ToFloat32 = _copyMeasurements.Pcm16ToFloat32.Observe(
+                        copy * channels * sizeof(float), Stopwatch.GetElapsedTime(pcmStarted).TotalMilliseconds)
+                };
             _pendingAudioFrameOffset += copy;
             cursor += copy;
         }
@@ -471,7 +489,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		long? minimumTimestamp,
         LocalMediaSampleProgress progress,
 		out long timestamp,
-		out byte[] payload)
+		out int payloadLength)
 	{
         while (true)
 		{
@@ -499,13 +517,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
                 var typeQualified = (flags & 0x30) != 0 && (flags & (0x1 | 0x4 | 0x200)) == 0
                     && ValidateDecodedLayout(streamIndex);
                 var disposition = progress.Observe(flags, timestamp, sample is not null, minimumTimestamp, typeQualified);
-                if (disposition == LocalMediaSampleDisposition.Ended) { payload = Array.Empty<byte>(); return false; }
+                if (disposition == LocalMediaSampleDisposition.Ended) { payloadLength = 0; return false; }
                 if (disposition == LocalMediaSampleDisposition.Gap) continue;
 
 				MediaFoundation.ThrowIfFailed(sample!.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
-					payload = CopyMediaBuffer(buffer);
+					payloadLength = CopyMediaBuffer(buffer);
                     if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0) _audioEnded = true;
 					return true;
 				}
@@ -564,17 +582,20 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         finally { MediaFoundation.ReleaseComObject(type); }
     }
 
-	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
+	private int CopyMediaBuffer(IMFMediaBuffer buffer)
 	{
 		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out var maximumLength, out var currentLength));
 		try
 		{
-			if (currentLength > maximumLength || address == IntPtr.Zero)
-                throw new LocalMediaDecodeException("media.file.audio_payload_invalid", "Native PCM buffer extent is invalid.");
-            var payload = new byte[LocalMediaSampleProgress.ValidatePcmLength(currentLength)];
-			if (payload.Length > 0)
-				Marshal.Copy(address, payload, 0, payload.Length);
-			return payload;
+            var started = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
+            var copied = _pcmPacketScratch.CopyFromNative(address, currentLength, maximumLength);
+            if (_collectCopyDiagnostics)
+                _copyMeasurements = _copyMeasurements with
+                {
+                    NativePcmToScratch = _copyMeasurements.NativePcmToScratch.Observe(
+                        copied, Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+                };
+            return copied;
 		}
 		finally
 		{
@@ -582,8 +603,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-
-	private static void CopyRgb32ToRgba(
+	private void CopyRgb32ToRgba(
 		IMFMediaBuffer buffer,
 		VideoFormat format,
 		byte[] destination,
@@ -596,6 +616,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		if (destination.Length != requiredLength)
 			throw new InvalidDataException("Reusable RGBA frame buffer length does not match the configured output format.");
 
+        var copyStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
 		if (buffer is IMF2DBuffer buffer2D)
 		{
 			MediaFoundation.ThrowIfFailed(buffer2D.Lock2D(out var scanline0, out var pitch));
@@ -624,7 +645,20 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			}
 		}
 
+        if (_collectCopyDiagnostics)
+            _copyMeasurements = _copyMeasurements with
+            {
+                Rgb32ToScratch = _copyMeasurements.Rgb32ToScratch.Observe(
+                    requiredLength, Stopwatch.GetElapsedTime(copyStarted).TotalMilliseconds)
+            };
+        var swizzleStarted = _collectCopyDiagnostics ? Stopwatch.GetTimestamp() : 0;
         SwizzleRgb32(destination);
+        if (_collectCopyDiagnostics)
+            _copyMeasurements = _copyMeasurements with
+            {
+                RgbaSwizzle = _copyMeasurements.RgbaSwizzle.Observe(
+                    requiredLength, Stopwatch.GetElapsedTime(swizzleStarted).TotalMilliseconds)
+            };
     }
 
     internal static void CopyContiguousRgb32Rows(IntPtr address, uint length, uint capacity,
@@ -645,6 +679,14 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
         if (width <= 0 || height <= 0 || Math.Abs((long)pitch) < rowBytes ||
             destination.Length != checked(rowBytes * height))
             throw new InvalidDataException("RGB32 row extents do not match the visible surface.");
+        // The normal positive, tightly packed RGB32 layout needs only one
+        // managed/native copy. Padded and bottom-up surfaces still preserve
+        // their real pitch and row orientation.
+        if (pitch == rowBytes)
+        {
+            Marshal.Copy(scanline0, destination, 0, destination.Length);
+            return;
+        }
         for (var y = 0; y < height; y++)
             Marshal.Copy(IntPtr.Add(scanline0, checked(y * pitch)), destination, checked(y * rowBytes), rowBytes);
     }

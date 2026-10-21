@@ -30,6 +30,31 @@ This removes the former steady-state NV12 managed per-pixel conversion plus repe
 
 When an audio track is present, it is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation. When no supported audio track is available, decoded frames carry no audio buffer or audio payload.
 
+The Windows decoder now retains one expandable, strictly bounded PCM16 packet
+scratch (maximum 192,000 bytes, the preexisting native packet admission limit).
+Each native packet overwrites that scratch only after the preceding packet
+has been consumed, or on an explicit seek. A failed extent validation clears
+its readable length and cannot retain a stale packet as valid. This avoids
+the former fresh managed PCM16 packet array on every native read. It does
+**not** reuse the returned Float32 audio payload: that frame-owned byte array
+must stay immutable across later decoded frames, worker copies, seek,
+generation rollover and retained consumer leases. Native and video scratch
+remain exclusively decoder-thread-owned; copying into one of ten retained
+worker slots remains mandatory.
+
+Positive contiguous RGB32 with a pitch equal to the visible row width
+uses one full-frame `Marshal.Copy` call. Other validated pitches (including
+negative/bottom-up) still copy each visible scanline. The in-place RGBA
+swizzle, alpha normalization and all source/decoder contracts remain intact.
+The exact number of full-frame host transfer boundaries is unchanged.
+
+Optional `RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS=1` emits constant-space
+copy-stage observations for native RGB copy, channel swizzle, native PCM
+packet copy, PCM16-to-Float32 conversion and worker video/audio slot copies.
+They are diagnostic-only CPU-wall/payload counts, not physical memory
+bandwidth or GPU decoding evidence. See
+[Native decode copy qualification](NativeMediaDecodeCopyQualification.md).
+
 This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary MP4 files with different native dimensions, frame rates and supported codecs to be imported. Decoder availability is determined by the Windows Media Foundation installation on the host. If Media Foundation cannot decode or normalize the selected stream, the file fails closed with an explicit `Failure` value.
 
 ### Expanded MP4 input envelope

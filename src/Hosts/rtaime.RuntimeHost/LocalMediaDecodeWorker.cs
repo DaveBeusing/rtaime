@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
@@ -45,11 +46,15 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     private LocalMediaDecodeState _state = LocalMediaDecodeState.Prerolling;
     private Failure? _failure;
     private LocalMediaPlaybackMeasurements _measurements;
+    private readonly bool _collectCopyDiagnostics;
+    private LocalMediaCopyMeasurements _slotVideoCopy;
+    private LocalMediaCopyMeasurements _slotAudioCopy;
 
     internal LocalMediaDecodeWorker(LocalMediaFileSource source, TimeSpan? joinTimeout = null,
         LocalMediaResourceLedger.LocalMediaResourceTicket? resources = null)
     {
         _source = source;
+        _collectCopyDiagnostics = source.Measurements.CopyDiagnosticsEnabled;
         _resources = resources;
         _joinTimeout = joinTimeout ?? TimeSpan.FromSeconds(10);
         try
@@ -214,7 +219,15 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                         if (_source.Probe.AudioCodec != MediaAudioCodec.None &&
                             (decoded.Frame!.Audio is null || decoded.Frame.AudioPayload.IsEmpty))
                             throw new InvalidDataException("Decoded frame has no required audio window.");
-                        slot.Copy(decoded.Frame!);
+                        var copyDurations = slot.Copy(decoded.Frame!, _collectCopyDiagnostics);
+                        if (_collectCopyDiagnostics)
+                        {
+                            _slotVideoCopy = _slotVideoCopy.Observe(
+                                decoded.Frame!.RgbaPixels.Length, copyDurations.VideoMilliseconds);
+                            if (decoded.Frame.Audio is not null)
+                                _slotAudioCopy = _slotAudioCopy.Observe(
+                                    decoded.Frame.AudioPayload.Length, copyDurations.AudioMilliseconds);
+                        }
                         if (lastPresentationTicks is { } previous && slot.PresentationTicks <= previous)
                             throw new InvalidDataException("Decoded video PTS regressed within one playback generation.");
                         lastPresentationTicks = slot.PresentationTicks;
@@ -223,7 +236,11 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
                     }
                     lock (_gate)
                     {
-                        _measurements = _source.Measurements;
+                        _measurements = _source.Measurements with
+                        {
+                            WorkerSlotVideoCopy = _slotVideoCopy,
+                            WorkerSlotAudioCopy = _slotAudioCopy
+                        };
                         if (generation != _generation || _stopped) { if (owned is not null) _discarded++; owned?.Dispose(); }
                         else if (decoded.Status == LocalMediaFrameReadStatus.Ended) _ended = true;
                         else if (!decoded.Succeeded) FailUnsafe(decoded.Failure ??
@@ -367,6 +384,9 @@ internal sealed class LocalMediaDecodeWorker : IDisposable
     }
 }
 
+internal readonly record struct LocalMediaFrameSlotCopyDuration(
+    double VideoMilliseconds, double AudioMilliseconds);
+
 internal sealed class LocalMediaFrameSlot
 {
     private readonly byte[] _video;
@@ -395,12 +415,15 @@ internal sealed class LocalMediaFrameSlot
         }
     }
 
-    internal void Copy(LocalMediaDecodedFrame frame)
+    internal LocalMediaFrameSlotCopyDuration Copy(LocalMediaDecodedFrame frame, bool profile = false)
     {
         if (frame.RgbaPixels.Length != _video.Length || frame.AudioPayload.Length > _audio.Length)
             throw new InvalidDataException("Decoded payload exceeds its fixed session slot.");
+        var started = profile ? Stopwatch.GetTimestamp() : 0;
         frame.RgbaPixels.Span.CopyTo(_video);
+        var afterVideo = profile ? Stopwatch.GetTimestamp() : 0;
         frame.AudioPayload.Span.CopyTo(_audio);
+        var afterAudio = profile ? Stopwatch.GetTimestamp() : 0;
         if (frame.Audio is { } audio)
         {
             if (frame.AudioPayload.Length != checked((int)(audio.Timing.SampleCount * audio.Format.ChannelCount * sizeof(float))) ||
@@ -416,6 +439,9 @@ internal sealed class LocalMediaFrameSlot
             (decimal)frame.Video.Timing.PresentationTimestamp * frame.Video.Timing.Timebase.Numerator *
             TimeSpan.TicksPerSecond / frame.Video.Timing.Timebase.Denominator, 0, MidpointRounding.AwayFromZero));
         Frame = frame with { RgbaPixels = _video, AudioPayload = _audio.AsMemory(0, frame.AudioPayload.Length) };
+        return profile ? new(
+            Stopwatch.GetElapsedTime(started, afterVideo).TotalMilliseconds,
+            Stopwatch.GetElapsedTime(afterVideo, afterAudio).TotalMilliseconds) : default;
     }
 
     internal LocalMediaFrameLease Lease(long generation)

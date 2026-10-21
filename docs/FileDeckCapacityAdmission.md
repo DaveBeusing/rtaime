@@ -93,6 +93,22 @@ Runtime support diagnostics expose `mediaResources.capacity`,
 `storagePressure` and `lastRejection`. Reserved owners include failed opens
 awaiting Close, optional work and retained pools; this is not a measured MFT count.
 
+### Decoder PCM packet scratch accounting
+
+Each already-admitted Windows native decoder can additionally retain at most one
+PCM16 packet scratch buffer up to 192,000 bytes. Its capacity grows only to
+an admitted packet size and remains stable for equal or smaller later packets.
+This replaces the preexisting one-packet managed array churn; it does not add
+a second packet queue, another worker, or any decoder owner. The fixed ten
+RGBA/audio worker slots, the owner ledger, the 1/2/4 owner profiles and
+retained-lease release/quarantine conditions are unchanged. The existing
+`knownManagedBytes` ledger still reports its documented video/slot
+components, not the full native/MFT memory envelope; the additional
+decoder-local scratch ceiling must be included separately when estimating
+worst-case total managed memory. One owner adds at most 192,000 bytes
+of this scratch, two at most 384,000 and four at most 768,000,
+without implying a physical peak-memory measurement.
+
 ## Program priority and optional work
 
 Committed Runtime state supplies Program identity. Playing/Program decks cannot

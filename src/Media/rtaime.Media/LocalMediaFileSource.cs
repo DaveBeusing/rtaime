@@ -89,7 +89,9 @@ public sealed class LocalMediaFileSource : IDisposable
 	}
 
 	public LocalMediaPlaybackMeasurements Measurements => _measurements with {
-        NativeVideoRead = _decoder.VideoReadMeasurements, NativeAudioRead = _decoder.AudioReadMeasurements };
+        NativeVideoRead = _decoder.VideoReadMeasurements, NativeAudioRead = _decoder.AudioReadMeasurements,
+        DecoderCopies = _decoder.CopyMeasurements,
+        CopyDiagnosticsEnabled = _decoder.CopyDiagnosticsEnabled };
 
 	public string Path { get; }
 	public LocalMediaProbe Probe { get; }
@@ -321,6 +323,8 @@ internal interface ILocalMediaDecoder : IDisposable
 	LocalMediaProbe Probe { get; }
     LocalMediaReadMeasurements VideoReadMeasurements => default;
     LocalMediaReadMeasurements AudioReadMeasurements => default;
+    LocalMediaDecodeCopyMeasurements CopyMeasurements => default;
+    bool CopyDiagnosticsEnabled => false;
 	bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame);
     bool TryReadNext(ulong sequenceNumber, CancellationToken cancellationToken, out LocalMediaDecodedFrame? frame)
     {
