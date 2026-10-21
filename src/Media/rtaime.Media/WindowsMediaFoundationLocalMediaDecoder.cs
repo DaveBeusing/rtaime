@@ -61,6 +61,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
     public LocalMediaReadMeasurements VideoReadMeasurements { get; private set; }
     public LocalMediaReadMeasurements AudioReadMeasurements { get; private set; }
     public LocalMediaDecodeCopyMeasurements CopyMeasurements => _copyMeasurements;
+    public bool CopyDiagnosticsEnabled => _collectCopyDiagnostics;
 
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
