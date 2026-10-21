@@ -242,6 +242,62 @@ public sealed class LocalMediaDecoderSafetyTests
     }
 
     [Theory]
+    [InlineData(50, 1)]
+    [InlineData(60_000, 1_001)]
+    public void Full_frame_RGB32_pitch_and_orientation_preserve_visible_pixels_at_production_rates(
+        int rateNumerator, int rateDenominator)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const int width = 1_920, height = 1_080, rowBytes = width * 4;
+        var expected = new byte[rowBytes * height];
+        var actual = new byte[expected.Length];
+        var from2D = new byte[expected.Length];
+
+        foreach (var pitch in new[] { rowBytes, -rowBytes, rowBytes + 32, -(rowBytes + 32) })
+        {
+            var absolutePitch = Math.Abs(pitch);
+            var extent = checked((height - 1) * absolutePitch + rowBytes);
+            var source = new byte[extent];
+            for (var y = 0; y < height; y++)
+            {
+                var offset = y * absolutePitch;
+                for (var x = 0; x < rowBytes; x++)
+                    source[offset + x] = (byte)(x * 37 + y * 17 + 11);
+            }
+            for (var y = 0; y < height; y++)
+            {
+                var sourceRow = pitch < 0 ? height - 1 - y : y;
+                Buffer.BlockCopy(source, sourceRow * absolutePitch, expected, y * rowBytes, rowBytes);
+            }
+
+            var native = Marshal.AllocHGlobal(extent);
+            try
+            {
+                Marshal.Copy(source, 0, native, extent);
+                WindowsMediaFoundationLocalMediaDecoder.CopyContiguousRgb32Rows(
+                    native, (uint)extent, (uint)extent, width, height, pitch, actual);
+                var scanline0 = pitch < 0
+                    ? IntPtr.Add(native, checked((height - 1) * absolutePitch))
+                    : native;
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                    scanline0, pitch, width, height, from2D);
+                Assert.Equal(expected, actual);
+                Assert.Equal(expected, from2D);
+
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(expected);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(actual);
+                WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(from2D);
+                Assert.Equal(expected, actual);
+                Assert.Equal(expected, from2D);
+                Assert.Equal(byte.MaxValue, actual[3]);
+            }
+            finally { Marshal.FreeHGlobal(native); }
+        }
+        Console.WriteLine($"Full-frame RGB32 pitch parity: rate={rateNumerator}/{rateDenominator}, " +
+            "size=1920x1080, layouts=tight+/tight-/padded+/padded-, parity=true.");
+    }
+
+    [Theory]
     [InlineData(50, 1, 50)]
     [InlineData(60_000, 1_001, 60)]
     public void Native_RGB32_bulk_copy_matches_row_reference_at_both_production_rates(
