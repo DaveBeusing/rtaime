@@ -90,8 +90,12 @@ The main LIVE workspace uses its existing Media Library, production Preview/Prog
 
 ### Required LIVE target and measurable acceptance
 
-This is the **TO IMPLEMENT** composition; current LIVE uses scene/cue selection,
-multiview and Live Controls. Existing screenshots do not certify the new target.
+This layout reuses the existing LIVE media/Preview/Program workspace; SCENES,
+MULTIVIEW and their specialized controls remain independently accessible through
+the current navigation. The implemented LIVE row includes separately observed
+Preview/Program availability beside role names. This composition still requires
+the real-Windows and physical-display acceptance described below; screenshots
+or retained simulation do not certify the hardware target.
 
 | Region | Required target | Acceptance observation |
 | --- | --- | --- |
