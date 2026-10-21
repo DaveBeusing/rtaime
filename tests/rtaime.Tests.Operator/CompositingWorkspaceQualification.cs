@@ -34,6 +34,9 @@ internal static class CompositingWorkspaceQualification
         try
         {
             control.DataContext = graph;
+            Assert.False(graph.ShowAdvancedGraph);
+            Assert.Empty(graph.VisibleNodes);
+            Assert.Contains("layers", graph.LayerStackOverview);
             inspectorView.Inspector = inspector;
             inspectorView.ControlState = owner;
             inspectorView.MediaDeck = deck;
@@ -76,7 +79,16 @@ internal static class CompositingWorkspaceQualification
             Assert.True(graph.Layers[7].MatchesSearch);
             graph.SearchText = "";
             graph.UpdateWorkspaceWidth(320);
+            Assert.InRange(graph.LayerPanelWidth, 300, 320);
+            var viewport = Assert.IsType<Grid>(control.FindName("GraphViewport"));
+            Assert.False(viewport.IsVisible);
+            var savedSelection = graph.SelectedNode;
+            graph.ToggleAdvancedGraphCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.True(graph.ShowAdvancedGraph);
+            Assert.True(viewport.IsVisible);
             Assert.InRange(graph.LayerPanelWidth, 0, 122);
+            Assert.Same(savedSelection, graph.SelectedNode);
             graph.CollapseLayerCommand.Execute(graph.Layers[0]);
             Assert.True(graph.Layers[0].IsCollapsed);
             graph.Fit();
@@ -84,8 +96,13 @@ internal static class CompositingWorkspaceQualification
             OperatorControlPresentation.SetReducedMotion(control, true);
             OperatorControlPresentation.ApplyPreferenceSnapshot(control, false, true);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
-            var viewport = Assert.IsType<Grid>(control.FindName("GraphViewport"));
             Assert.Equal(SystemColors.WindowColor, Assert.IsType<SolidColorBrush>(viewport.Background).Color);
+            graph.ToggleAdvancedGraphCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.False(graph.ShowAdvancedGraph);
+            Assert.False(viewport.IsVisible);
+            Assert.InRange(graph.LayerPanelWidth, 300, 320);
+            Assert.Same(savedSelection, graph.SelectedNode);
             Assert.Same(monitoring, window.Monitoring);
             Assert.Equal(0, transport.MutationCalls);
             Console.WriteLine("COMPOSITING WORKSPACE PASS: productive controls, precision drafts/undo, stable refresh, filter, finite layer virtualization, compact bounds and shared High Contrast/Reduced Motion; production authority unchanged.");
