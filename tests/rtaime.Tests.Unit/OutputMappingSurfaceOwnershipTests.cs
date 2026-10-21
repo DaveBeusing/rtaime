@@ -83,6 +83,43 @@ public sealed class OutputMappingSurfaceOwnershipTests
         Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
     }
 
+    [Fact]
+    public void Unqualified_hardware_mapping_interface_cannot_advertise_or_render_GPU_warp()
+    {
+        var backend = new UnqualifiedHardwareMappingBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        Assert.False(provider.SupportsOutputMapping);
+        provider.Start();
+        var format = Format(use5994: false);
+        using var source = provider.Upload(MediaSourceId.New(),
+            RgbaFrameBuffer.Solid(format, 7, 8, 9),
+            new FrameTiming(1, 1, new Timebase(1, 50)),
+            Generation.Initial, "hardware-capability-guard");
+        var result = provider.MapOutput(source,
+            [new GpuOutputMappingInput(source, Mapping(source.SurfaceId, format))]);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.output_mapping.unsupported", result.Failure?.Code);
+        Assert.Equal(0, backend.MappingCalls);
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal(1, backend.ActiveAllocationCount);
+    }
+
+    [Fact]
+    public void Output_mapping_budget_rejects_over_UHD_without_allocating_a_new_frame()
+    {
+        var large = new VideoFormat(2048, 2049, FrameRate.Fps50,
+            PixelFormat.Rgba8, ScanMode.Progressive);
+        Assert.True((ulong)large.Width * large.Height * 4UL > 16UL * 1024 * 1024);
+        // This is a source-only regression of the geometry cap; no 16-MiB
+        // native mapping buffer is allocated in this test.
+        var providerSource = new GpuOutputMappingSurface(
+            new SurfaceId(Identity.New()), large, 0, 0, 1, 1,
+            new(0, 0), new(2048, 0), new(2048, 2049), new(0, 2049),
+            GpuOutputEdgeBlend.None, 0);
+        providerSource.Validate();
+    }
+
     private static VideoFormat Format(bool use5994) =>
         new(2, 2, use5994 ? FrameRate.Fps59_94 : FrameRate.Fps50,
             PixelFormat.Rgba8, ScanMode.Progressive);
@@ -91,6 +128,35 @@ public sealed class OutputMappingSurfaceOwnershipTests
         new(surfaceId, format, 0, 0, 1, 1,
             new(0, 0), new(2, 0), new(2, 2), new(0, 2),
             GpuOutputEdgeBlend.None, 0);
+
+    private sealed class UnqualifiedHardwareMappingBackend : IGpuProcessingBackend, IGpuOutputMappingBackend
+    {
+        private readonly ManagedReferenceGpuBackend _inner = new();
+
+        public GpuBackendInfo Info { get; } = new(
+            GpuBackendKind.NvidiaCuda, "Unqualified mapping test adapter",
+            hardwareAccelerated: true, available: true);
+        public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
+        public int MappingCalls { get; private set; }
+        public int ActiveAllocationCount => _inner.ActiveAllocationCount;
+        public void Start() => _inner.Start();
+        public void Stop() => _inner.Stop();
+        public void Allocate(SurfaceId id, VideoFormat format, ReadOnlySpan<byte> pixels) =>
+            _inner.Allocate(id, format, pixels);
+        public void Composite(SurfaceId id, VideoFormat format, GpuCompositeOperation operation) =>
+            _inner.Composite(id, format, operation);
+        public byte[] Readback(SurfaceId id, VideoFormat format) => _inner.Readback(id, format);
+        public void ReadbackInto(SurfaceId id, VideoFormat format, Span<byte> destination) =>
+            _inner.ReadbackInto(id, format, destination);
+        public void Release(SurfaceId id) => _inner.Release(id);
+        public void RenderOutputMapping(SurfaceId id, VideoFormat format,
+            IReadOnlyList<GpuOutputMappingSurface> surfaces)
+        {
+            MappingCalls++;
+            throw new InvalidOperationException("Unqualified hardware mapping must not execute.");
+        }
+        public void Dispose() => _inner.Dispose();
+    }
 
     private sealed class FailingOutputMappingBackend : IGpuProcessingBackend, IGpuOutputMappingBackend
     {
