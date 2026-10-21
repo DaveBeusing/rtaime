@@ -210,9 +210,15 @@ public sealed partial class CompositingGraphViewModel
             var row = SelectedLayerRow;
             var layer = SelectedLayer();
             if (row is null || layer is null || !CanApplyLayerDraft()) return;
+            var visible = row.VisibleDraft;
+            var opacity = checked((byte)row.OpacityDraft);
             LayerCommandStatus = "APPLYING";
-            await _operator.SetCompositingLayerStateAsync(layer.LayerId, row.VisibleDraft, checked((byte)row.OpacityDraft));
-            LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED · draft retained";
+            await _operator.SetCompositingLayerStateAsync(layer.LayerId, visible, opacity);
+            var confirmed = _operator.LastError is null && _operator.CompositingLayers.Any(current =>
+                current.LayerId == layer.LayerId && current.ContentIdentity == layer.ContentIdentity &&
+                current.Visible == visible && current.Opacity == opacity);
+            LayerCommandStatus = confirmed ? "CONFIRMED · RUNTIME OBSERVED"
+                : "REJECTED / UNCONFIRMED · draft retained";
             SynchronizeSelectedLayerDraft();
         }, CanApplyLayerDraft);
         DiscardLayerDraftCommand = new CompositingGraphCommand(_ => { SelectedLayerRow?.ResetStateDraft(); SynchronizeSelectedLayerDraft(); });
