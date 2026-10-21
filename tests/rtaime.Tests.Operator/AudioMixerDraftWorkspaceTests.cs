@@ -47,6 +47,7 @@ public sealed partial class AudioMixerMutationTests
         Assert.Equal(System.Windows.Visibility.Visible, mixer.CompactVisibility);
         var source = mixer.Sources[0];
         var other = mixer.Sources[1];
+        source.SelectSourceCommand.Execute(null);
         Assert.Equal("SELECTED", source.MixerSelectionLabel);
         other.SelectSourceCommand.Execute(null);
         Assert.Same(other, mixer.SelectedSource);
