@@ -79,8 +79,27 @@ for ($i = 0; $i -lt 2; $i++) {
       $row.maximumObservedCallerThreadBytesPerBoundary)) {
     Require ([double]::IsFinite([double]$n) -and [double]$n -ge 0) "Invalid Program metric."
   }
-  Require ([bool]$row.sampledCpuP99ExceedsNominalFramePeriod -eq
-      ([double]$row.maximumObservedCpuP99Milliseconds -gt $period)) "False deadline comparison."
+  $values = [Collections.Generic.List[object]]::new()
+  foreach ($run in @($managed.runs)) {
+    foreach ($reference in @($run.rateReports)) {
+      $rawFile = Join-Path (Split-Path -Parent $managedPath) $reference.path
+      $raw = Get-Content -LiteralPath $rawFile -Raw | ConvertFrom-Json
+      foreach ($case in @($raw.profiles | Where-Object { $_.format -ceq $format })) {
+        Require ([int]$case.samples -eq 12) "Program producer sample window changed."
+        $values.Add($case)
+      }
+    }
+  }
+  Require ($values.Count -eq [int]$row.consumerCases) "Measured consumer-count drift."
+  $worstP99 = ($values | Measure-Object -Property p99Milliseconds -Maximum).Maximum
+  $callerBytes = @($values | ForEach-Object {
+    [double]$_.allocation.measuredThreadBytesPerBoundary
+  })
+  $maximumBytes = ($callerBytes | Measure-Object -Maximum).Maximum
+  Require ([Math]::Abs([double]$row.maximumObservedCpuP99Milliseconds - [double]$worstP99) -lt 0.000001 -and
+    [Math]::Abs([double]$row.maximumObservedCallerThreadBytesPerBoundary - [double]$maximumBytes) -lt 0.000001 -and
+    [bool]$row.sampledCpuP99ExceedsNominalFramePeriod -eq
+      ([double]$worstP99 -gt $period)) "Derived Program metrics disagree with hashed producer reports."
 }
 Require ($e.nativeDecodeCopy.status -ceq "ISOLATED_H264_AAC_DECODER_AND_WORKER_NOT_COMMITTED_PROGRAM" -and
   $e.nativeDecodeCopy.sourceCommit -ceq $ExpectedSourceCommit -and
@@ -90,8 +109,7 @@ Check-Trx (Bound-File $e.nativeDecodeCopy.trx) @(
   "Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames")
 $copyLog = Get-Content -LiteralPath (Bound-File $e.nativeDecodeCopy.log) -Raw
 foreach ($label in @("NATIVE DECODE COPY SOFTWARE PROFILE: ", "NATIVE WORKER SLOT COPY SOFTWARE PROFILE: ")) {
-  $matching = @($copyLog -split "[
-]+" | Where-Object { $_.Contains($label) })
+  $matching = @($copyLog -split '[\r\n]+' | Where-Object { $_.Contains($label) })
   Require ($matching.Count -eq 1) "Missing or duplicated native decoder copy summary."
   $json = $matching[0].Substring($matching[0].IndexOf($label, [StringComparison]::Ordinal) + $label.Length) | ConvertFrom-Json
   Require ($json.sourceCommit -ceq $ExpectedSourceCommit) "Native reader/worker source identity mismatch."
