@@ -863,6 +863,11 @@ public sealed class UnifiedApplicationHost
 					DiagnosticRedactor.RedactText(classified.Message), exception is TimeoutException);
 				_lifecycle.CaptureReadinessFailure(failure);
 			}
+            else if (_initialQualificationCompleted)
+                _lifecycle.FailStage(
+                    ApplicationLifecycleStages.ProductionReadiness,
+                    DiagnosticRedactor.RedactText(classified.Message),
+                    statusText: "AppHost runtime lifecycle or recovery failed.");
 			else
 				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
 			_diagnostics.CaptureBeforeShutdown("startup.failure", _readinessTracker.GetHosts());
