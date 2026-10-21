@@ -65,6 +65,16 @@ public sealed class ProgramPipelineMeasurementBaselineTests
             const int count = 12;
             for (var index = 0; index < warmup; index++) Boundary();
             probe.ResetPipelineSamples();
+            // Observe both the caller's direct allocations and approximate process-wide
+            // allocations separately: monitoring/recording may execute on other threads.
+            // No GC.Collect or artificial NoGCRegion alters the real pipeline workload.
+            var measurementThread = Environment.CurrentManagedThreadId;
+            var allocatedOnThreadBefore = GC.GetAllocatedBytesForCurrentThread();
+            var totalAllocatedBefore = GC.GetTotalAllocatedBytes(precise: false);
+            var gc0Before = GC.CollectionCount(0);
+            var gc1Before = GC.CollectionCount(1);
+            var gc2Before = GC.CollectionCount(2);
+            var pauseBefore = GC.GetTotalPauseDuration();
             var samples = new double[count];
             for (var index = 0; index < count; index++)
             {
@@ -72,6 +82,18 @@ public sealed class ProgramPipelineMeasurementBaselineTests
                 Boundary();
                 samples[index] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             }
+            var allocatedOnThreadAfter = GC.GetAllocatedBytesForCurrentThread();
+            var totalAllocatedAfter = GC.GetTotalAllocatedBytes(precise: false);
+            var pauseAfter = GC.GetTotalPauseDuration();
+            var gen0Collections = GC.CollectionCount(0) - gc0Before;
+            var gen1Collections = GC.CollectionCount(1) - gc1Before;
+            var gen2Collections = GC.CollectionCount(2) - gc2Before;
+            var gcInfo = GC.GetGCMemoryInfo();
+            Assert.Equal(measurementThread, Environment.CurrentManagedThreadId);
+            Assert.True(allocatedOnThreadAfter >= allocatedOnThreadBefore);
+            Assert.True(totalAllocatedAfter >= totalAllocatedBefore);
+            var threadAllocationBytes = allocatedOnThreadAfter - allocatedOnThreadBefore;
+            var totalAllocationBytes = totalAllocatedAfter - totalAllocatedBefore;
             if (recordingEnabled)
                 Assert.Equal(RecordingStopStatus.Stopped, (await runtime.StopRecordingAsync()).Status);
             var drain = Stopwatch.StartNew();
@@ -98,6 +120,26 @@ public sealed class ProgramPipelineMeasurementBaselineTests
                 warmupBoundaries = warmup, samples = count, measurementKind = "CPU_WALL",
                 boundaryScope = "V1_SERVICE_AND_OPTIONAL_SYNTHETIC_OUTPUT_COPY",
                 p50Milliseconds = P(.50), p95Milliseconds = P(.95), p99Milliseconds = P(.99), maximumMilliseconds = ordered[^1],
+                allocation = new
+                {
+                    measuredThread = measurementThread,
+                    measuredThreadBytes = threadAllocationBytes,
+                    measuredThreadBytesPerBoundary = threadAllocationBytes / (double)count,
+                    approximateProcessBytes = totalAllocationBytes,
+                    approximateProcessBytesPerBoundary = totalAllocationBytes / (double)count,
+                    processTotalIncludesAsynchronousConsumers = true
+                },
+                garbageCollection = new
+                {
+                    gen0Collections, gen1Collections, gen2Collections,
+                    pauseMilliseconds = (pauseAfter - pauseBefore).TotalMilliseconds,
+                    heapSizeBytesAtLastGc = gcInfo.HeapSizeBytes,
+                    fragmentedBytesAtLastGc = gcInfo.FragmentedBytes,
+                    committedBytesAtLastGc = gcInfo.TotalCommittedBytes,
+                    pinnedObjectCountAtLastGc = gcInfo.PinnedObjectsCount,
+                    largeObjectHeapBytesAtLastGc = gcInfo.GenerationInfo.Length > 3 ? gcInfo.GenerationInfo[3].SizeAfterBytes : (long?)null,
+                    pinnedObjectHeapBytesAtLastGc = gcInfo.GenerationInfo.Length > 4 ? gcInfo.GenerationInfo[4].SizeAfterBytes : (long?)null
+                },
                 pipelineTiming = summary,
                 queues = new { recording = final.Recording.Statistics, monitoring = monitoringStatistics, monitoringQueues = monitoringQueueStatistics },
                 transfers = runtime.GpuMemoryTransfers,
