@@ -277,6 +277,9 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 	public string? DiagnosticLogRoot => _logRoot ?? Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
 	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
+    // Windows may reuse numeric PIDs; an exited owned child cannot qualify
+    // merely because a different process appears under that identity.
+    private readonly ConcurrentDictionary<int, byte> _exitedOwnedProcessIds = new();
 
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 	public IDisposable OpenDiagnosticSession(string directory) => StartupEvidenceSession.OpenDirectory(directory);
@@ -412,6 +415,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 			if (processId != 0)
 			{
+                _exitedOwnedProcessIds.TryAdd(processId, 0);
 				_diagnosticProcesses.TryRemove(processId, out _);
 				_diagnosticCompletions.TryRemove(processId, out _);
 			}
@@ -431,6 +435,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 			if (!processWithDiagnostics.Start())
 				throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
 			processId = processWithDiagnostics.Id;
+            _exitedOwnedProcessIds.TryRemove(processId, out _);
 			_diagnosticProcesses[processId] = processWithDiagnostics;
 			_diagnosticCompletions[processId] = completion;
 			processWithDiagnostics.BeginOutputReadLine();
@@ -459,12 +464,21 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public bool IsProcessAlive(int processId)
 	{
+        if (processId <= 0 || _exitedOwnedProcessIds.ContainsKey(processId)) return false;
+        if (_diagnosticProcesses.TryGetValue(processId, out var owned))
+        {
+            try { return !owned.HasExited; }
+            catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+            {
+                return false;
+            }
+        }
 		try
 		{
 			using var process = Process.GetProcessById(processId);
 			return !process.HasExited;
 		}
-		catch (ArgumentException)
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
 		{
 			return false;
 		}
@@ -493,13 +507,18 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public void KillProcessTree(int processId)
 	{
+        // This cleanup method must never kill adopted engines or a numeric
+        // PID reused after an owned ControlHost has exited.
+        if (!_diagnosticProcesses.TryGetValue(processId, out var owned) ||
+            _exitedOwnedProcessIds.ContainsKey(processId))
+            return;
 		try
 		{
-			using var process = Process.GetProcessById(processId);
-			if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!owned.HasExited) owned.Kill(entireProcessTree: true);
 		}
-		catch (ArgumentException)
+		catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
 		{
+            // Already exited: do not resolve the numeric PID again.
 		}
 	}
 
@@ -618,15 +637,24 @@ public sealed record ApplicationReadinessEvidence(
 	ApplicationSupervisionEvidence? AISupervision)
 {
 	public DateTimeOffset? ReadyAtUtc { get; init; }
+    internal const int MaximumDocumentChars = 64 * 1024;
 
 	public static bool TryParse(string json, out ApplicationReadinessEvidence? evidence)
 	{
+        evidence = null;
+        // This is a process-authored observation, never a trusted command.
+        // Cap parsing even when an unexpectedly large or malformed file is
+        // produced by a crashed, replaced or unrelated service.
+        if (string.IsNullOrWhiteSpace(json) || json.Length > MaximumDocumentChars)
+            return false;
 		try
 		{
-			using var document = JsonDocument.Parse(json);
+			using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
 			var root = document.RootElement;
+            var processId = root.GetProperty("processId").GetInt32();
+            if (processId <= 0) return false;
 			evidence = new ApplicationReadinessEvidence(
-				root.GetProperty("processId").GetInt32(),
+				processId,
 				root.GetProperty("state").GetString() ?? string.Empty,
 				root.GetProperty("health").GetString() ?? string.Empty,
 				root.GetProperty("controlEndpoint").GetString() ?? string.Empty,
@@ -639,7 +667,7 @@ public sealed record ApplicationReadinessEvidence(
 			};
 			return true;
 		}
-		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
 		{
 			evidence = null;
 			return false;
@@ -649,7 +677,13 @@ public sealed record ApplicationReadinessEvidence(
 	private static ApplicationSupervisionEvidence? ReadSupervision(JsonElement root, string name)
 	{
 		if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
-		int? processId = value.TryGetProperty("processId", out var process) && process.ValueKind == JsonValueKind.Number ? process.GetInt32() : null;
+		int? processId = null;
+        if (value.TryGetProperty("processId", out var process) && process.ValueKind != JsonValueKind.Null)
+        {
+            processId = process.GetInt32();
+            if (processId <= 0)
+                throw new FormatException("Supervised host process identity must be positive.");
+        }
 		return new ApplicationSupervisionEvidence(value.GetProperty("state").GetString() ?? string.Empty, processId);
 	}
 }
@@ -674,6 +708,8 @@ public sealed class UnifiedApplicationHost
 	private readonly ApplicationReadinessTracker _readinessTracker;
 	private readonly StartupEvidenceSession _diagnostics;
 	private DateTimeOffset? _qualificationDeadline;
+    private string _lastReadinessReason = "readiness.evidence.missing";
+    private int _runStarted;
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
 	{
@@ -696,6 +732,11 @@ public sealed class UnifiedApplicationHost
 
 	public async Task<ApplicationHostRunResult> RunAsync(CancellationToken cancellationToken = default)
 	{
+        // One host object owns one capture, ControlHost identity and stop file.
+        // Reusing it for parallel/repeated runs could create conflicting owners.
+        if (Interlocked.CompareExchange(ref _runStarted, 1, 0) != 0)
+            throw new InvalidOperationException(
+                "An application host instance may run only once; create a fresh instance for another lifecycle.");
 		Transition(ApplicationLifecycleState.Starting);
 		try
 		{
@@ -822,6 +863,12 @@ public sealed class UnifiedApplicationHost
 					DiagnosticRedactor.RedactText(classified.Message), exception is TimeoutException);
 				_lifecycle.CaptureReadinessFailure(failure);
 			}
+            else if (_initialQualificationCompleted)
+                _lifecycle.FailStage(
+                    ApplicationLifecycleStages.ProductionReadiness,
+                    DiagnosticRedactor.RedactText(classified.Message),
+                    canRetry: false,
+                    statusText: "AppHost runtime lifecycle or recovery failed.");
 			else
 				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
 			_diagnostics.CaptureBeforeShutdown("startup.failure", _readinessTracker.GetHosts());
@@ -996,26 +1043,25 @@ public sealed class UnifiedApplicationHost
 		var reason = "readiness.evidence.missing";
 		foreach (var path in GetReadinessCandidates())
 		{
-			if (!_platform.FileExists(path)) continue;
-			observedPath = path;
-			try
-			{
-				if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null)
-				{
-					reason = "readiness.evidence.invalid";
-					continue;
-				}
-				lastEvidence = evidence;
-				reason = "readiness.evidence.observed";
-				_readinessTracker.Observe(_controlProcessId, evidence, path, reason);
-				if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false))
-					return (path, evidence);
-			}
-			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-			{
-				reason = "readiness.evidence.unreadable";
-			}
+            var evidence = ReadReadinessCandidate(path, out var candidateReason);
+            if (evidence is null)
+            {
+                if (candidateReason != "readiness.evidence.missing")
+                {
+                    observedPath = path;
+                    reason = candidateReason;
+                }
+                continue;
+            }
+
+            observedPath = path;
+            lastEvidence = evidence;
+            reason = "readiness.evidence.observed";
+            _readinessTracker.Observe(_controlProcessId, evidence, path, reason);
+            if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false))
+                return (path, evidence);
 		}
+        _lastReadinessReason = reason;
 		_readinessTracker.Observe(_controlProcessId, lastEvidence, observedPath, reason);
 		var hosts = _readinessTracker.GetHosts();
 		_lifecycle.ProjectHostObservations(hosts);
@@ -1025,6 +1071,31 @@ public sealed class UnifiedApplicationHost
 			throw new InvalidOperationException($"{failedChild.Host} supervision failed before qualified readiness; process state {failedChild.ProcessAlive?.ToString() ?? "unknown"}.");
 		return null;
 	}
+
+    private ApplicationReadinessEvidence? ReadReadinessCandidate(string path, out string reason)
+    {
+        reason = "readiness.evidence.missing";
+        try
+        {
+            if (!_platform.FileExists(path)) return null;
+            if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) ||
+                evidence is null)
+            {
+                reason = "readiness.evidence.invalid";
+                return null;
+            }
+            reason = "readiness.evidence.observed";
+            return evidence;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // During atomic replacement, antivirus scans and share-denied
+            // reads the observation is unavailable, not a host-level crash.
+            // Only current process/binding/endpoint evidence can restore READY.
+            reason = "readiness.evidence.unreadable";
+            return null;
+        }
+    }
 
 	private TimeoutException CreateStartupTimeout(string message)
 	{
@@ -1039,33 +1110,64 @@ public sealed class UnifiedApplicationHost
 
 	private (string Path, ApplicationReadinessEvidence Evidence)? FindObservedReadiness()
 	{
+        var reason = "readiness.evidence.missing";
 		foreach (var path in GetReadinessCandidates())
 		{
-			if (!_platform.FileExists(path)) continue;
-			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
-			if (IsAuthoritativeReadinessValid(evidence)) return (path, evidence);
+            var evidence = ReadReadinessCandidate(path, out var candidateReason);
+            if (evidence is null)
+            {
+                if (candidateReason != "readiness.evidence.missing")
+                    reason = candidateReason;
+                continue;
+            }
+			if (IsAuthoritativeReadinessValid(evidence))
+            {
+                _lastReadinessReason = "readiness.evidence.qualified";
+                return (path, evidence);
+            }
+            // A syntactically valid document is not authoritative when its
+            // process, child supervision or endpoint identity is stale.
+            reason = "readiness.evidence.unqualified";
 		}
+        _lastReadinessReason = reason;
 		return null;
 	}
 
 	private IEnumerable<string> GetReadinessCandidates()
 	{
 		yield return _options.ReadinessPath;
-		if (!_platform.FileExists(_options.LegacyLifecycleStatePath)) yield break;
 
-		string? legacyReadiness = null;
-		try
-		{
-			using var document = JsonDocument.Parse(_platform.ReadAllText(_options.LegacyLifecycleStatePath));
-			if (document.RootElement.TryGetProperty("readinessPath", out var value))
-				legacyReadiness = value.GetString();
-		}
-		catch (JsonException)
-		{
-		}
+        // Legacy lifecycle metadata can be partially replaced or corrupt.
+        // It may supply an observation path but never grant readiness itself.
+        string? legacyReadiness = null;
+        try
+        {
+            if (_platform.FileExists(_options.LegacyLifecycleStatePath))
+            {
+                var payload = _platform.ReadAllText(_options.LegacyLifecycleStatePath);
+                if (payload.Length <= ApplicationReadinessEvidence.MaximumDocumentChars)
+                {
+                    using var document = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 16 });
+                    if (document.RootElement.TryGetProperty("readinessPath", out var value) &&
+                        value.ValueKind == JsonValueKind.String)
+                    {
+                        var candidate = value.GetString();
+                        if (!string.IsNullOrWhiteSpace(candidate))
+                            legacyReadiness = Path.GetFullPath(candidate);
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+            JsonException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            // Ignore only the legacy pointer; the primary readiness source
+            // remains mandatory for the configured ownership profile.
+        }
 
-		if (!string.IsNullOrWhiteSpace(legacyReadiness))
-			yield return Path.GetFullPath(legacyReadiness);
+        if (legacyReadiness is not null &&
+            !string.Equals(legacyReadiness, _options.ReadinessPath, StringComparison.OrdinalIgnoreCase))
+            yield return legacyReadiness;
 	}
 
 	private bool IsAuthoritativeReadinessValid(ApplicationReadinessEvidence evidence)
@@ -1135,10 +1237,11 @@ public sealed class UnifiedApplicationHost
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
+					_readinessTracker.Observe(_controlProcessId, null, _activeReadinessPath, _lastReadinessReason);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
-						"Qualified engine readiness is currently unavailable.");
+                        "Qualified engine readiness is unavailable: " + _lastReadinessReason + ".");
 					Transition(ApplicationLifecycleState.Degraded);
 					degradationPublished = true;
 				}
@@ -1148,6 +1251,9 @@ public sealed class UnifiedApplicationHost
 			else
 			{
 				TrackReadiness(readiness.Value);
+                if (degradedSince is not null)
+                    _readinessTracker.Observe(_controlProcessId, readiness.Value.Evidence, readiness.Value.Path,
+                        "readiness.evidence.qualified");
 				if (degradedSince is not null)
 				{
 					if (degradationPublished)
@@ -1186,10 +1292,11 @@ public sealed class UnifiedApplicationHost
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
+					_readinessTracker.Observe(_controlProcessId, null, _activeReadinessPath, _lastReadinessReason);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
-						"Qualified engine readiness is currently unavailable.");
+                        "Qualified engine readiness is unavailable: " + _lastReadinessReason + ".");
 					Transition(ApplicationLifecycleState.Degraded);
 					degradationPublished = true;
 				}
@@ -1199,6 +1306,9 @@ public sealed class UnifiedApplicationHost
 			else
 			{
 				TrackReadiness(readiness.Value);
+                if (degradedSince is not null)
+                    _readinessTracker.Observe(_controlProcessId, readiness.Value.Evidence, readiness.Value.Path,
+                        "readiness.evidence.qualified");
 				if (degradedSince is not null)
 				{
 					if (degradationPublished)
@@ -1220,7 +1330,8 @@ public sealed class UnifiedApplicationHost
 	private ApplicationHostLifecycleException CreateRuntimeRecoveryTimeout(TimeSpan recoveryDuration) =>
 		new(
 			ApplicationHostFailureKind.RuntimeRecoveryTimeout,
-			"Engine readiness did not recover within the configured runtime recovery window.",
+			"Engine readiness did not recover within the configured runtime recovery window. Last observation: " +
+                _lastReadinessReason + ".",
 			State,
 			_options.Profile,
 			_options.Ownership,
@@ -1305,7 +1416,9 @@ public sealed class UnifiedApplicationHost
 			internalPipeQualification = "PASS",
 			verifiedAtUtc = _platform.UtcNow
 		});
-		_platform.WriteAllText(_options.ServiceReadinessEvidencePath, payload + Environment.NewLine);
+		// Service administrators must never consume a partially written PASS
+        // document while the supervisor refreshes its observations.
+		_platform.WriteAllTextAtomic(_options.ServiceReadinessEvidencePath, payload + Environment.NewLine);
 	}
 
 	private bool ShouldStopOwnedControlOnHostExit() =>
@@ -1322,11 +1435,22 @@ public sealed class UnifiedApplicationHost
 		var requestedAtUtc = _platform.UtcNow;
 		var processAliveAtRequest = _platform.IsProcessAlive(processId);
 		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
+        Exception? stopRequestFailure = null;
 		if (processAliveAtRequest)
 		{
-			_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
-			while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
-				await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            try
+            {
+			    _platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
+			    while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
+				    await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A denied stop signal is not permission to leave a live
+                // AppHost-owned engine orphaned. Continue bounded emergency
+                // cleanup and retain the original storage failure.
+                stopRequestFailure = exception;
+            }
 		}
 
 		var forcedTermination = processAliveAtRequest && _platform.IsProcessAlive(processId);
@@ -1341,7 +1465,8 @@ public sealed class UnifiedApplicationHost
 			diagnosticsDrained = true;
 		}
 		catch (OperationCanceledException) when (drainTimeout.IsCancellationRequested) { }
-		var graceful = processAliveAtRequest && !forcedTermination && !_platform.IsProcessAlive(processId);
+		var graceful = processAliveAtRequest && stopRequestFailure is null &&
+            !forcedTermination && !_platform.IsProcessAlive(processId);
 
 		var evidence = JsonSerializer.Serialize(new
 		{
@@ -1353,6 +1478,7 @@ public sealed class UnifiedApplicationHost
 			status = graceful ? "PASS" : "FAIL",
 			graceful,
 			forcedTermination,
+            stopSignalFailure = stopRequestFailure is null ? null : stopRequestFailure.GetType().Name,
 			processAliveAtRequest,
 			controlProcessId = processId,
 			requestedAtUtc,
@@ -1363,6 +1489,8 @@ public sealed class UnifiedApplicationHost
 		_platform.DeleteFile(_options.StopPath);
 		_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 		_ownedControlProcessId = null;
+        if (stopRequestFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(stopRequestFailure).Throw();
 	}
 
 	private void Transition(ApplicationLifecycleState next)

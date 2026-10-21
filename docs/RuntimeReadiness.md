@@ -75,6 +75,17 @@ Control synchronization loss produces `Recovering`. The existing synchronization
 
 Once the affected subsystem publishes healthy authoritative evidence again, the same service automatically returns the global state to `Ready` when no other reason remains.
 
+AppHost's file-backed ControlHost lifecycle observation is a separate,
+non-authoritative startup/service-readiness projection. A malformed,
+oversized, stale-binding or temporarily unreadable `control-readiness.json`
+cannot be promoted to engine readiness and is recorded as an explicit
+readiness-evidence reason in `apphost-lifecycle.json`. Its existing short
+steady-state presentation grace does not relax ControlHost's own
+mutation/readiness restrictions. The Operator's global
+`RuntimeReadinessService` continues to consume authoritative Control/
+Runtime snapshots; no new health poller or secondary production-readiness
+authority is introduced.
+
 ## Concurrency and lifecycle
 
 `RuntimeReadinessService` serializes state transitions under one private gate and raises `Changed` after releasing the gate.

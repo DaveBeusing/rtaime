@@ -198,6 +198,16 @@ Service `Running` is not sufficient evidence.
 
 A failed readiness check remains a failure. It is not rewritten to PASS because the Windows service process itself is running.
 
+The AppHost writes `apphost-readiness.json` using the existing atomic
+replace/move publication path, so administrative readers receive either
+a complete prior snapshot or a complete new one, never a partially
+truncated `PASS` record. An absent, corrupt, unqualified or temporarily
+unreadable ControlHost readiness file immediately withdraws the
+service-level evidence even if the AppHost UI-oriented lifecycle remains
+inside its configured transient observation grace. Recovery requires
+fresh matching ControlHost/RuntimeHost evidence; the service state alone
+cannot restore readiness.
+
 ## Shutdown semantics
 
 A Service Control Manager stop is an explicit engine stop.
@@ -207,6 +217,22 @@ The service host cancels the persistent headless lifecycle, which routes shutdow
 The service-management tool does not force-kill a service and does not classify a timeout as graceful success. AppHost writes `apphost-shutdown.json` for an owned shutdown. A normal service stop requires `status = PASS`, `graceful = true` and `forcedTermination = false`.
 
 If ControlHost does not exit within the bounded AppHost shutdown window, emergency process-tree cleanup may still be used to prevent orphaned owned processes, but the evidence is written as `FAIL` with `forcedTermination = true`. The service stop therefore cannot be reported as a graceful PASS.
+
+Emergency process termination resolves the actual live ControlHost process
+started and tracked by this AppHost, never an arbitrary process by its
+numeric PID. Once the owned process exits, its PID is marked retired for
+that AppHost instance, preventing cleanup from terminating a replacement
+process that happens to receive the same number. `ExternalManaged`
+remains adopt-only, and ControlHost continues to own any RuntimeHost/
+AIHost descendants. This is application process ownership enforcement,
+not a substitute for Windows Service Control Manager recovery testing.
+
+When writing the owned ControlHost stop sentinel fails due to denied or
+unavailable storage, AppHost still attempts emergency cleanup of its
+tracked process. Shutdown evidence records `status = FAIL`, the
+`stopSignalFailure` exception type, and any forced termination; the
+original stop failure remains available as a shutdown diagnostic. It
+never turns a failed graceful request into PASS or kills an adopted host.
 
 ## Update and maintenance
 

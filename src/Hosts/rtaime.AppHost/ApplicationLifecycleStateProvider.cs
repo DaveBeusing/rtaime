@@ -166,7 +166,10 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				CanRetry = canRetry
 			});
 
-	public void FailStage(string id, string failureReason, bool canRetry = false) =>
+    public void FailStage(string id, string failureReason, bool canRetry = false) =>
+        FailStage(id, failureReason, canRetry, "Startup stage failed.");
+
+    public void FailStage(string id, string failureReason, bool canRetry, string statusText) =>
 		UpdateStage(
 			id,
 			stage => stage with
@@ -174,7 +177,7 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				Status = LifecycleStageStatus.Failed,
 				StartedAt = stage.StartedAt ?? _platform.UtcNow,
 				CompletedAt = _platform.UtcNow,
-				StatusText = "Startup stage failed.",
+				StatusText = statusText,
 				FailureReason = failureReason,
 				CanRetry = canRetry
 			});

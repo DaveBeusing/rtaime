@@ -113,6 +113,20 @@ It is on-demand, bounded and redacted:
 
 Support data is diagnostic evidence, not Production Authority.
 
+AppHost startup and recovery evidence uses the existing bounded
+`apphost-lifecycle.json`, per-capture manifests and owned
+`controlhost-process.log`. Failed readiness explicitly distinguishes
+missing, malformed, unreadable and unqualified ControlHost documents;
+the existing typed recovery timeout retains the last observed reason
+and original process diagnostic path when available. Windows service
+readiness is atomically published and withdrawn immediately on lost
+authoritative ControlHost readiness. An incident reviewer must check
+actual ControlHost/RuntimeHost process, endpoint, child-supervision and
+production revision evidence before treating a recovery as complete.
+An initial splash becoming Ready, an SCM Running state, or a previous
+support bundle cannot authorize Take, replay an ambiguous command, or
+turn missing current evidence into PASS.
+
 ## Platform and driver compatibility
 
 A platform tuple may be called SUPPORTED only when it is concrete and evidence-backed.
