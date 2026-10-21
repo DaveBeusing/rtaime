@@ -101,6 +101,10 @@ workflow or shared documentation at a time. Integrate small shared patches
 serially after inspecting current master and PR diffs; no stacked branches,
 duplicate command registries or fake backend data as completion.
 
+### Integrated LIVE playout presentation
+
+The LIVE UI now concentrates its existing media preparation, full Preview/Program monitoring and lower rundown/timeline around the single-row, horizontally scrollable live actions. The row carries confirmed role identities and the existing guarded commands, then displays runtime-backed NEXT, transmission, recording and audio evidence without adding a producer, authority endpoint or poller. Remaining work is to qualify the combined Windows UI/connected journeys and separately capture physical-display review. This presentation change does not authorize additional media formats or professional output modes.
+
 ## Delivery sequence
 
 ### Establish a connected visual and interaction baseline
