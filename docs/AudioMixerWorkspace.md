@@ -7,6 +7,35 @@ configuration path. Eight admitted source strips and four admitted buses remain 
 contract bounds. Horizontally virtualized, scrollable strip banks expose every admitted source/bus;
 the number fitting the current viewport does not alter the configuration.
 
+## Compact live operation
+
+The Mixer starts in **COMPACT** with one bounded, scrollable panel of the
+existing authoritative Program/Aux bus and source-strip projections. Bus cards
+display the current bus role assignment, explicitly labeled L/R Runtime
+sample-peak bars, confirmed gain, local draft state, clipping/missing-signal
+warnings and gain/mute **draft → Apply / Discard** controls. Source cards
+present actual source identity, confirmed contribution/routing, input L/R
+peaks, gain/mute draft and the same explicit Apply/Discard boundary.
+An **UNASSIGNED** bus or **NO BUS** source is not claimed to produce output.
+
+The top strip retains **FOLLOW VIDEO / BREAKAWAY SELECTED** using the
+existing governed routing commands and shows the confirmed routed source.
+The consolidated signal label distinguishes current sample-peak evidence
+from CLIPPING, PARTIAL SIGNAL and stale/offline/unavailable readings. It
+does not report physical output, LUFS, RMS or true peak. All source and
+bus cards are projections of the same maximum eight/four retained owners:
+there is no new meter producer, DSP session or poller.
+
+**ADVANCED** reveals the original full-size, horizontally virtualized
+source/bus controls, 8×4 assignment matrix, three-band EQ, compressor,
+sample-peak limiter, crossfade, ducking and diagnostics. Switching modes
+only changes local visibility; drafts, authoritative revisions, meter
+ownership, source selection, keyboard shortcuts and output assignments
+remain intact. The original detailed faders, numeric gain editing and
+other advanced tools remain accessible; no UI mode silently commits
+audio. A mute button changes a **local draft**, not the actual bus
+until the operator selects **APPLY**.
+
 ## Signal flow and evidence
 
 Source strips show stable source identity, confirmed inclusion/routing, EQ and L/R sample peaks.
@@ -53,9 +82,11 @@ leave the destination unchanged; paste is a local draft operation requiring Appl
 
 ## Adaptive layout and docking
 
-Compact and Detailed hide/reveal processing fields without changing drafts, selection or
-Runtime state. Strip widths, fader targets and meter geometry use DIPs rather than scaling with
-the whole window. The banks and outer workspace scroll to preserve access at small viewports.
+Compact is the default bounded bus/source operation surface; Advanced reveals
+the original detailed processing and routing banks. Neither mode changes
+drafts, selection, commands or Runtime state. Strip widths, meter geometry,
+horizontal compact faders and vertical advanced faders use DIPs instead of
+scaling with the whole window. The banks and outer workspace scroll to preserve access at small viewports.
 
 DETACH MIXER reparents the same AudioMixerControl instance through OperatorDockController and
 OperatorPanelWindow. The existing return/dock/window-close, keyboard routing and monitor
@@ -83,7 +114,7 @@ dynamics, follow-video/breakaway, test signals, clipping and sample payload beha
 
 The real-WPF docking qualification exercises AUDIO alongside existing panels, verifies the
 same Mixer/Inspector references, numeric input gating, shortcut suppression, all eight sources,
-fixed fader geometry and Compact/Detailed capture. Mixer PNGs and source-correlated JSON are
+fixed vertical Advanced and horizontal Compact fader geometry, and both mode captures. Mixer PNGs and source-correlated JSON are
 retained in the existing Operator visual artifact. Snapshot fixtures are software visual
 evidence; physical multi-monitor, touch and audio-device performance require separate hardware
 qualification. The five existing Required gates remain mandatory.
