@@ -166,8 +166,10 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				CanRetry = canRetry
 			});
 
-	public void FailStage(string id, string failureReason, bool canRetry = false,
-        string statusText = "Startup stage failed.") =>
+    public void FailStage(string id, string failureReason, bool canRetry = false) =>
+        FailStage(id, failureReason, canRetry, "Startup stage failed.");
+
+    public void FailStage(string id, string failureReason, bool canRetry, string statusText) =>
 		UpdateStage(
 			id,
 			stage => stage with
