@@ -182,9 +182,15 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			runtime.Runtime?.Snapshot.Recording.Statistics.Accepted >= 1);
 
 		var stopped = await client.StopRecordingAsync();
-		Assert.True(stopped.Succeeded, stopped.Failure?.ToString());
-		Assert.Equal("COMPLETED", client.Snapshot!.Recording.State);
-		Assert.True(client.Snapshot.Recording.Written >= 1);
+		if (!stopped.Succeeded)
+			Assert.Equal("recording.stop.completion_unknown", stopped.Failure?.Code);
+
+		// STOP admission is not file finalization: qualify actual terminal Runtime state.
+		await WaitUntilAsync(() => runtime.Runtime?.Snapshot.Recording.State is
+			RecordingLifecycleState.Completed or RecordingLifecycleState.Failed);
+		var final = await client.SynchronizeAsync();
+		Assert.Equal("COMPLETED", final.Recording.State);
+		Assert.True(final.Recording.Written >= 1);
 		Assert.Equal(0UL, client.Snapshot.Recording.Dropped);
 
 		var finalPath = client.Snapshot.Recording.FinalPath;
