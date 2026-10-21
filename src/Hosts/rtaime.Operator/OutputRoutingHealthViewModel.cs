@@ -946,7 +946,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		StreamingQueue = streamingQueue;
 		StreamingDrops = streamingDrops;
 		StreamingReconnects = streamingReconnects;
-		OnPropertyChanged(nameof(DeliveryEvidence));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DeliveryEvidence)));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
