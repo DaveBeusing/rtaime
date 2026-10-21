@@ -2697,7 +2697,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				return _recordingStopTask;
 
 			_recordingStopSession = session;
-			_recordingStopTask = CompleteRecordingStopAsync();
+			_recordingStopTask = CompleteRecordingStopAsync(session);
 			return _recordingStopTask;
 		}
 	}
@@ -2714,14 +2714,19 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			return _recorder.Snapshot.SessionId;
 	}
 
-	private async Task<RecordingStopResult> CompleteRecordingStopAsync()
+	private async Task<RecordingStopResult> CompleteRecordingStopAsync(RecordingSessionId? session)
 	{
 		var result = await _recorder.StopAsync(CancellationToken.None).ConfigureAwait(false);
 		lock (_gate)
 		{
-			if (result.Status == RecordingStopStatus.Stopped)
-				_recordingCompletedAtUtc = DateTimeOffset.UtcNow;
-			Observe($"recording.stop:{result.Status}");
+			// A new session may have started after the previous recorder reached terminal state.
+			// Late completion metadata belongs only to the session that initiated STOP.
+			if (_recorder.Snapshot.SessionId == session)
+			{
+				if (result.Status == RecordingStopStatus.Stopped)
+					_recordingCompletedAtUtc = DateTimeOffset.UtcNow;
+				Observe($"recording.stop:{result.Status}");
+			}
 		}
 		return result;
 	}
