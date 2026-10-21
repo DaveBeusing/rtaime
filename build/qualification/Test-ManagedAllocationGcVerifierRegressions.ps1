@@ -95,6 +95,15 @@ try {
         $report = Join-Path $root ($m.runs[0].rateReports[0].path)
         Remove-Item -LiteralPath $report
     } "" ""
+    Check-Fails "failed-test-process" {
+        param($m, $root)
+        $reference = $m.runs[0].trx
+        $path = Join-Path $root $reference.path
+        [xml]$result = Get-Content -LiteralPath $path -Raw
+        $result.TestRun.ResultSummary.Counters.failed = "1"
+        $result.Save($path)
+        $reference.sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } "" ""
     Check-Fails "unverified-lease-owner" {
         param($m, $root)
         $reference = $m.runs[0].rateReports[0]
