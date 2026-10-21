@@ -4,6 +4,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Runtime;
+using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
@@ -461,7 +462,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.FailureCode = "runtime.sequence.program_sink_unconfirmed";
                 }
             }
-            else if (session.OutputState == "PREVIEW_READY")
+            else if (session.OutputState is "PREVIEW_READY" or "TAKE_PENDING")
                 session.LastPreviewSlot = boundary.SequenceNumber;
         }
     }
