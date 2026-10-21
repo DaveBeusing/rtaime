@@ -131,7 +131,9 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.True(pool.CanPrepareLibrarySelection);
         await pool.PrepareSelectedAssetsAsync();
         Assert.Contains("CONDITIONALLY_READY", pool.SelectedItem!.ReadinessLabel);
-        Assert.Contains("CONDITIONALLY VERIFIED", pool.LibraryJourneyState);
+        // The one-source test fixture has its only source on Program.
+        // A valid conditional preflight never overrides the stronger live-safety guard.
+        Assert.Contains("ON PROGRAM", pool.LibraryJourneyState);
         Assert.False(deck.IsLoaded);
         Assert.Equal(0, transport.Calls);
 
