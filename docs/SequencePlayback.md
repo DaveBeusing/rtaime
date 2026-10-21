@@ -395,7 +395,11 @@ ordinary production mutations with its existing mutation gate, then holds
 the exact catalogue revision lease until the Take outcome is known.
 The native management/output locks span both the Runtime commit and native
 owner promotion, preventing a concurrent Seek/Cancel between validation
-and Program activation. The catalogue lease is not re-entered: rereading
+and Program activation. Any accepted shuttle transport mutation now revokes
+previously confirmed Preview samples and a pending native Take **before**
+decoder repreroll; Seek, Stop and explicit owner cancellation cannot carry
+an older `TAKE_PENDING` ticket into a later Program commit. Already
+authorized Program routing is not silently retaken by the shuttle. The catalogue lease is not re-entered: rereading
 a catalogue snapshot while it is held would deadlock its non-reentrant
 semaphore. Control's follow-up Runtime confirmation is idempotent.
 A lost response must be resolved using the read-only output observation
