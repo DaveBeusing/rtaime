@@ -34,6 +34,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 .GroupBy(clip => clip.ClipId)
                 .Select(group => group.First()).ToArray();
             if (audioClips.Length > MaximumSequenceOutputAudioTracks ||
+                audioClips.Any(clip => clip.AudioBusId != AudioBusId.Program.Value) ||
                 snapshot.Slices.Any(slice =>
                     slice.Clips.Count(clip => clip.Kind == SequenceMediaKind.Video) > MaximumSequenceOutputVideoLayers ||
                     slice.Clips.Count(clip => clip.Kind == SequenceMediaKind.Audio) > MaximumSequenceOutputAudioTracks ||
@@ -302,6 +303,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 session.OutputState is not ("PREVIEW_READY" or "TAKE_PENDING") ||
                 session.LastPreviewSlot is null ||
                 session.LastPreviewSlot != session.LastPublishedSlot ||
+                session.LastPublishedSlot + 1 < runtime.NextSequenceOutputSlot ||
                 !runtime.IsCommittedSequencePreviewSource(session.SourceId))
                 throw new InvalidOperationException("Only confirmed native Preview pixels and PCM may arm Program Take.");
             lock (_sequenceGate)
