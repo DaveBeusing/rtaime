@@ -1019,6 +1019,120 @@ public sealed class UnifiedApplicationHostTests
 		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 	}
 
+    [Fact]
+    public async Task Malformed_readiness_during_startup_waits_for_a_fresh_qualified_document()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.Interactive);
+        var platform = new FakeApplicationHostPlatform(options);
+        var delays = 0;
+        platform.OnDelay = () =>
+        {
+            delays++;
+            if (delays == 1) platform.ReplaceReadinessPayload("{");
+            if (delays == 2) platform.PublishReadiness(platform.LastControlProcessId!.Value);
+        };
+
+        var host = new UnifiedApplicationHost(options, platform);
+        var result = await host.RunAsync();
+
+        Assert.True(result.Success);
+        Assert.False(result.AdoptedControlHost);
+        Assert.Equal(1, platform.StartedBaseNames.Count(name => name == "rtaime.ControlHost"));
+        Assert.Equal(LifecycleStageStatus.Ready,
+            host.Lifecycle.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
+    }
+
+    [Fact]
+    public async Task Untrusted_legacy_readiness_pointer_is_ignored_without_starting_external_hosts()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.Interactive,
+            ApplicationLifecycleOwnership.ExternalManaged);
+        var platform = new FakeApplicationHostPlatform(options);
+        platform.WriteAllText(options.LegacyLifecycleStatePath, "{\"readinessPath\":[\"invalid\"]}");
+        platform.ReplaceReadinessPayload("{");
+        var host = new UnifiedApplicationHost(options, platform);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+
+        Assert.False(host.OwnsControlLifecycle);
+        Assert.False(platform.StopSignalWritten);
+        Assert.Equal(new[] { "rtaime.Operator" }, platform.StartedBaseNames);
+        using var evidence = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+        var failure = evidence.RootElement.GetProperty("readinessFailure");
+        Assert.Equal("startup.deadline.expired", failure.GetProperty("reasonCode").GetString());
+        Assert.Contains("readiness.evidence.invalid",
+            failure.GetProperty("unmetCriteria").ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Corrupt_steady_readiness_degrades_with_a_reason_then_recovers_without_relaunch()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.Interactive,
+            ApplicationLifecycleOwnership.PersistentEngine, runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+        var platform = new FakeApplicationHostPlatform(options)
+        {
+            PublishReadinessOnControlStart = true,
+            OperatorDelayBudget = 7
+        };
+        var host = new UnifiedApplicationHost(options, platform);
+        var states = new List<ApplicationLifecycleState>();
+        var reasons = new List<string?>();
+        host.StateChanged += states.Add;
+        host.Lifecycle.StateChanged += (_, args) =>
+        {
+            var stage = args.Stages.Single(x => x.Id == ApplicationLifecycleStages.ProductionReadiness);
+            if (stage.Status == LifecycleStageStatus.Degraded) reasons.Add(stage.FailureReason);
+        };
+        var delays = 0;
+        platform.OnDelay = () =>
+        {
+            delays++;
+            if (delays == 1) platform.ReplaceReadinessPayload("{");
+            else if (delays == 3) platform.PublishReadiness(platform.LastControlProcessId!.Value);
+        };
+
+        var result = await host.RunAsync();
+
+        Assert.True(result.Success);
+        Assert.Contains(ApplicationLifecycleState.Degraded, states);
+        Assert.Contains(ApplicationLifecycleState.Recovering, states);
+        Assert.Contains(reasons, reason =>
+            reason?.Contains("readiness.evidence.invalid", StringComparison.Ordinal) == true);
+        Assert.False(platform.StopSignalWritten);
+        Assert.Equal(1, platform.StartedBaseNames.Count(name => name == "rtaime.ControlHost"));
+        Assert.Equal(3, platform.PipeProbeCount);
+    }
+
+    [Fact]
+    public async Task Short_unreadable_readiness_file_does_not_crash_or_reprobe_the_engine()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.Interactive,
+            ApplicationLifecycleOwnership.PersistentEngine,
+            runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+        var platform = new FakeApplicationHostPlatform(options)
+        {
+            PublishReadinessOnControlStart = true,
+            OperatorDelayBudget = 5
+        };
+        var host = new UnifiedApplicationHost(options, platform);
+        var states = new List<ApplicationLifecycleState>();
+        host.StateChanged += states.Add;
+        var delays = 0;
+        platform.OnDelay = () =>
+        {
+            if (++delays == 1) platform.UnreadableReadinessReadsRemaining = 1;
+        };
+
+        var result = await host.RunAsync();
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain(ApplicationLifecycleState.Degraded, states);
+        Assert.DoesNotContain(ApplicationLifecycleState.Recovering, states);
+        Assert.Equal(3, platform.PipeProbeCount);
+        Assert.Equal(1, platform.StartedBaseNames.Count(name => name == "rtaime.ControlHost"));
+        Assert.False(platform.StopSignalWritten);
+    }
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
