@@ -149,7 +149,9 @@ public sealed partial class OperatorCombinedVisualQualification
             // A bounded single-row toolbar deliberately scrolls horizontally at compact
             // sizes. Every original action must be individually reachable and wholly
             // visible after the standard WPF BringIntoView keyboard/pointer path.
-            var actions = Descendants(strip).OfType<ButtonBase>().Where(button => button.IsVisible).ToArray();
+            // The themed horizontal ScrollBar also owns zero-width internal repeat
+            // buttons; only the actual Operator action controls are playout commands.
+            var actions = Descendants(strip).OfType<RtaimeButton>().Where(button => button.IsVisible).ToArray();
             Assert.NotEmpty(actions);
             foreach (var action in actions)
             {
