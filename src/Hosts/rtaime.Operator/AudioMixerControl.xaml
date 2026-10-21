@@ -46,17 +46,17 @@
 						<TextBlock Text="{Binding MutationState}" FontWeight="Bold" />
 					</Border>
 				</DockPanel>
-				<DockPanel LastChildFill="False" Margin="0,0,0,3">
+				<DockPanel LastChildFill="False" Margin="0,0,0,3" Visibility="{Binding AdvancedVisibility}">
 					<TextBlock Text="{Binding BoundsLabel}" Style="{StaticResource MixerLabel}" />
 					<TextBlock Text="{Binding Availability}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 				</DockPanel>
-				<TextBlock Text="{x:Static local:AudioMixerPresentation.MeterDisclaimer}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding AttributeTransferStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-                <ItemsControl ItemsSource="{Binding Buses}">
+				<TextBlock Text="{x:Static local:AudioMixerPresentation.MeterDisclaimer}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" Visibility="{Binding AdvancedVisibility}" />
+                <TextBlock Text="{Binding AttributeTransferStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" Visibility="{Binding AdvancedVisibility}" AutomationProperties.LiveSetting="Polite" />
+                <ItemsControl ItemsSource="{Binding Buses}" Visibility="{Binding AdvancedVisibility}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding LiveSummary}" Style="{StaticResource MixerLabel}" Margin="0,0,12,4" /></DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Text="{Binding OutputRoutingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding OutputRoutingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" Visibility="{Binding AdvancedVisibility}" />
                 <TextBlock Text="{Binding DisabledReason}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 				<TextBlock Text="{Binding Owner.CommandStatus}" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
 				<TextBlock Text="{Binding Owner.LastError}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
