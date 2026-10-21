@@ -201,14 +201,20 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	private bool MatchesAllocatedViewportPixels()
 	{
-		if (TextureWidth <= 0 || TextureHeight <= 0)
-			return false;
 		var dpi = VisualTreeHelper.GetDpi(this);
-		return OperatorSurfaceTargetPolicy.TryMeasure(
-			ActualWidth, ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY,
-			TextureWidth, TextureHeight, out var requested, out _) &&
-			requested.Width == TextureWidth && requested.Height == TextureHeight;
+		return MatchesViewportPixels(
+			TextureWidth, TextureHeight,
+			ActualWidth, ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY);
 	}
+
+	internal static bool MatchesViewportPixels(
+		int allocatedWidth, int allocatedHeight,
+		double widthDip, double heightDip, double dpiScaleX, double dpiScaleY) =>
+		allocatedWidth > 0 && allocatedHeight > 0 &&
+		OperatorSurfaceTargetPolicy.TryMeasure(
+			widthDip, heightDip, dpiScaleX, dpiScaleY,
+			allocatedWidth, allocatedHeight, out var requested, out _) &&
+		requested.Width == allocatedWidth && requested.Height == allocatedHeight;
 
 	// Allocate in the actual WPF visual's physical pixel space, never with a
 	// cached sibling viewport DPI from before a PerMonitorV2 window transition.
