@@ -13,6 +13,7 @@ public sealed partial class CompositingGraphNodeViewModel
     private double _opacityDraft = 255;
     private bool _stateDirty, _stateConflict, _sourceChanged;
     private ulong _observedRevision, _draftRevision;
+    private int _draftKind;
     private string? _draftContentIdentity;
     public bool IsCollapsed { get => _collapsed; set => Set(ref _collapsed, value); }
     public bool MatchesSearch { get => _matchesSearch; internal set => Set(ref _matchesSearch, value); }
@@ -24,7 +25,8 @@ public sealed partial class CompositingGraphNodeViewModel
     public bool SourceChanged => _sourceChanged;
     public bool CanReviewStateDraft => _stateDirty && _stateConflict && !_sourceChanged;
     public bool IsDraftCurrent => _stateDirty && !_stateConflict &&
-        !_sourceChanged && _layer is not null && _layer.ContentIdentity == _draftContentIdentity &&
+        !_sourceChanged && _layer is not null &&
+        _layer.ContentIdentity == _draftContentIdentity && _layer.Kind == _draftKind &&
         _draftRevision == _observedRevision;
     public string LayerEffectEvidence => _layer is null ? "NO CURRENT LAYER" :
         _layer.ProcessingStack.Count == 0 ? "FX NONE · CONFIRMED" :
@@ -55,6 +57,7 @@ public sealed partial class CompositingGraphNodeViewModel
         {
             _draftRevision = _observedRevision;
             _draftContentIdentity = _layer!.ContentIdentity;
+            _draftKind = _layer.Kind;
         }
         if (!_stateDirty)
         {
@@ -69,7 +72,8 @@ public sealed partial class CompositingGraphNodeViewModel
     internal void ObserveLayer(OperatorCompositingLayerDescriptor layer, ulong revision)
     {
         var stateChanged = _layer is not null && (_layer.Visible != layer.Visible || _layer.Opacity != layer.Opacity);
-        var contentChanged = _stateDirty && _draftContentIdentity != layer.ContentIdentity;
+        var contentChanged = _stateDirty &&
+            (_draftContentIdentity != layer.ContentIdentity || _draftKind != layer.Kind);
         _layer = layer;
         _observedRevision = revision;
         if (!_stateDirty || !contentChanged &&
@@ -92,7 +96,7 @@ public sealed partial class CompositingGraphNodeViewModel
         if (_layer is null) return;
         _visibleDraft = _layer.Visible; _opacityDraft = _layer.Opacity;
         _stateDirty = false; _stateConflict = false; _sourceChanged = false;
-        _draftContentIdentity = null; _draftRevision = _observedRevision;
+        _draftContentIdentity = null; _draftKind = _layer.Kind; _draftRevision = _observedRevision;
         foreach (var name in new[] { nameof(VisibleDraft), nameof(OpacityDraft), nameof(HasStateDraft),
             nameof(StateConflict), nameof(SourceChanged), nameof(IsDraftCurrent),
             nameof(CanReviewStateDraft), nameof(DraftEvidence) })
