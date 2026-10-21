@@ -1105,7 +1105,14 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 	private async Task<WireEnvelope> ExchangeAsync(string messageType, object payload, CancellationToken cancellationToken)
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-		timeout.CancelAfter(_requestTimeout);
+		// Native fingerprint verification and decoder preroll are bounded
+		// management operations, not a latency-sensitive control mutation.
+		// The ordinary IPC timeout must not kill the staging request while
+		// its native workers may still be open. Never automatically replay it.
+		var requestBudget = messageType == "runtime.sequence.preparation.prepare" &&
+			_requestTimeout < TimeSpan.FromSeconds(45)
+				? TimeSpan.FromSeconds(45) : _requestTimeout;
+		timeout.CancelAfter(requestBudget);
 		var gate = messageType is "runtime.sequence.preparation.prepare" or
             "runtime.sequence.shuttle.command" or "runtime.sequence.shuttle.get"
             ? _sequencePreparationRequestGate : _requestGate;
