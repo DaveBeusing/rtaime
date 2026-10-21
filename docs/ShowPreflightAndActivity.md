@@ -37,7 +37,7 @@ Notifications are grouped as FATAL, ERROR, WARNING, RECOVERY, INFORMATION and SU
 
 **Pause reminders 5 min** affects presentation reminders only. The condition stays visible in its group and in the existing persistent active-problem list. Fatal conditions cannot be paused. Identical observations preserve the deadline, materially changed conditions resume reminders immediately, and the existing expiry timer resumes reminders at the deadline. **Resume reminders** ends the pause early. Neither action acknowledges or resolves a fault; no reconnect, production or launch policy changes.
 
-**Acknowledge** records presentation acknowledgement while retaining the active/fatal condition. Identical observations preserve it; a materially changed condition resets it. **Dismiss** removes nonfatal presentation; fatal conditions stay visible until replaced by their owner. A subsequent observation can publish a dismissed nonfatal condition again. Neither operation changes Health, recovery state, production revision or launch policy. **Review** navigates only to an existing workspace. **Export support bundle** delegates directly to the existing startup/System exporter, picker, availability gate and visible result status. It does not add an exporter or include action arguments in history.
+**Acknowledge** records presentation acknowledgement while retaining the active/fatal condition. The visible acknowledgement label now explicitly says **NOT A REPAIR**; it does not certify a successful recovery, current output or release readiness. Identical observations preserve it; a materially changed condition resets it. **Dismiss** removes nonfatal presentation; fatal conditions stay visible until replaced by their owner. A subsequent observation can publish a dismissed nonfatal condition again. Neither operation changes Health, recovery state, production revision or launch policy. **Review** navigates only to an existing workspace. **Export support bundle** delegates directly to the existing startup/System exporter, picker, availability gate and visible result status. It does not add an exporter or include action arguments in history.
 
 Technical details remain opt-in and expanded state survives duplicate refreshes.
 
@@ -48,6 +48,20 @@ Free-form footer events are informational. Correlated response outcomes drive in
 Focused domain tests cover missing/stale evidence, references, media availability absence, audio freshness, inactive outputs, wire/revision correlation, rejection, uncertain completion, reconnect, refresh failure and history privacy/bounds. Notification tests cover capacity, duplicate acknowledgement, bounded snooze expiry/change/fatal handling, severity grouping and safe navigation. History regressions preserve submission provenance across a delayed reply and reconnect, and never invent acceptance or a server epoch. Preflight tests independently fail Program/AUX, reject unverified recording targets and mismatched AI sequences, and assert unchanged input snapshots. Operator tests cover a delayed dispatcher, incident presentation and disposal. The existing real MainWindow/BAML qualification opens the view, checks keyboard navigation, automation names and workspace deep links at 960×500 with injected 100/125/150/200% layout scales.
 
 Injected scales verify software layout, not physical mixed-monitor hardware qualification. Required Gates and packaged lifecycle results must be checked at the exact source head. Physical hardware and external release qualification remain UNVERIFIED until their separate evidence exists.
+
+## Advanced System and diagnostic paths
+
+From LIVE, the existing `More → System` group opens HEALTH, governed
+AI Processing and SETTINGS. Show checks remains on the persistent
+navigation rail and is also available through Commands (Ctrl+K).
+Within HEALTH, **SHOW TELEMETRY** reveals the existing detailed subsystem
+cards only on demand, and **TECHNICAL DETAILS** reveals current metric
+rows, technical errors and Operator build information. **COPY INCIDENT
+SUMMARY** uses the bounded redactor; **EXPORT SUPPORT BUNDLE** uses
+the existing exporter, including source-log limits and privacy checks.
+Neither action acknowledges a fault, alters a configured provider
+or starts a recovery. This is a content hierarchy only; the actual
+critical alert and readiness indicator remain globally accessible.
 
 ## Preparation guidance and local progress
 
