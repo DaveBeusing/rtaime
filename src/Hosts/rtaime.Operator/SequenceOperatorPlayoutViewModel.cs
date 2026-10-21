@@ -124,13 +124,16 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
     public bool CanPrepare => Available && _reference is null && _authority().CanStage &&
         _editor.CanEdit && _editor.GestureLabel == "NO PENDING EDIT";
     public bool CanCancel => Available && _reference is not null && !_submitted;
-    public bool CanActivate => Available && CurrentPreview && !_activated && !_submitted;
+    public bool CanActivate => Available && Status == "PREPARED · NO OUTPUT" &&
+        CurrentPreview && !_activated && !_submitted;
     public bool CanObserve => Available && _reference is not null &&
         _authority() is { Connected: true, Stale: false };
-    public bool CanShuttle => Available && CurrentPreview && _shuttle is not null &&
+    public bool CanShuttle => Available && Status is not ("STALE" or "ERROR") &&
+        CurrentPreview && _shuttle is not null &&
         _take is null && _output?.OutputState is not ("PROGRAM_CONFIRMED" or "TAKE_COMMITTED");
-    public bool CanArm => Available && RealPreview && _take is null;
-    public bool CanTake => Available && _armed && !_submitted && _take is not null && RealPreview;
+    public bool CanArm => Available && Status == "PREVIEW READY" && RealPreview && _take is null;
+    public bool CanTake => Available && Status == "TAKE ARMED" &&
+        _armed && !_submitted && _take is not null && RealPreview;
     public bool CanRecover => Available && _submitted && _take is not null && SavedOwner &&
         _authority() is { Connected: true, Stale: false, Busy: false, Ready: true } &&
         Status != "PROGRAM CONFIRMED";
@@ -239,6 +242,10 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
         var prepared = await _preparation.GetAsync(_reference, ct);
         if (prepared.State != "PREPARED")
         {
+            _output = null;
+            _armed = false;
+            _take = null;
+            Changed(nameof(OutputEvidence));
             Status = "STALE"; Detail = prepared.Detail; return;
         }
         _shuttle = await _shuttleClient.GetAsync(_reference, ct);
@@ -253,7 +260,7 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
 
     public Task ArmAsync() => RunAsync(async ct =>
     {
-        if (!RealPreview || _reference is null || _authoring is null) return;
+        if (Status != "PREVIEW READY" || !RealPreview || _reference is null || _authoring is null) return;
         var saved = await _authoring.GetAsync(_reference.SequenceId, ct);
         if (saved.AuthoringRevision != _reference.AuthoringRevision ||
             !saved.Validation.IsValid || !CurrentPreview)
@@ -268,7 +275,8 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
 
     public Task TakeAsync() => RunAsync(async ct =>
     {
-        if (!_armed || _submitted || _take is null || !RealPreview || _outputClient is null) return;
+        if (Status != "TAKE ARMED" || !_armed || _submitted ||
+            _take is null || !RealPreview || _outputClient is null) return;
         var command = _take;
         _armed = false;
         // Never retry an ambiguous authority mutation, even if the IPC reply is lost.
@@ -321,10 +329,16 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
                 ? evidence.OutputState : "TAKE PENDING";
         }
         else if (RealPreview)
-            Status = "PREVIEW READY";
+            Status = _armed && _take is not null ? "TAKE ARMED" : "PREVIEW READY";
         else
+        {
+            // A lost Preview source/sink observation revokes any unsubmitted
+            // TAKE arm. Regaining actual output requires an explicit new ARM.
+            _armed = false;
+            _take = null;
             Status = evidence.OutputState is "STALE" or "FAILED" ? evidence.OutputState :
                 "PREVIEW " + evidence.OutputState + " · UNCONFIRMED";
+        }
     }
 
     private void ClearOwner()
