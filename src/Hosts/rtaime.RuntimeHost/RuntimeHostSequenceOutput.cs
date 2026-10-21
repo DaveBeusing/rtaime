@@ -47,6 +47,17 @@ public sealed partial class RuntimeHostIpcServer
                 deck.BindSequencePreviewOutput(command.Preparation,
                     sourceId, stateId, authority, runtime);
             }
+            else if (request.MessageType == "runtime.sequence.output.arm_take")
+            {
+                if (authority.Value != command.ExpectedProductionRevision)
+                    return Error(request, "runtime.sequence.output.authority_changed",
+                        "Sequence Take can only arm the current committed Preview revision.");
+                _ = deck.ArmSequenceTake(command, stateId, authority, runtime, _hostInstanceId);
+            }
+            else if (request.MessageType == "runtime.sequence.output.disarm_take")
+            {
+                deck.DisarmSequenceTake(command);
+            }
             else if (request.MessageType == "runtime.sequence.output.take")
             {
                 if (authority.Value != checked(command.ExpectedProductionRevision + 1))
