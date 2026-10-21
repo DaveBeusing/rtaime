@@ -689,6 +689,7 @@ public sealed class UnifiedApplicationHost
 	private readonly ApplicationReadinessTracker _readinessTracker;
 	private readonly StartupEvidenceSession _diagnostics;
 	private DateTimeOffset? _qualificationDeadline;
+    private string _lastReadinessReason = "readiness.evidence.missing";
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
 	{
@@ -1011,26 +1012,25 @@ public sealed class UnifiedApplicationHost
 		var reason = "readiness.evidence.missing";
 		foreach (var path in GetReadinessCandidates())
 		{
-			if (!_platform.FileExists(path)) continue;
-			observedPath = path;
-			try
-			{
-				if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null)
-				{
-					reason = "readiness.evidence.invalid";
-					continue;
-				}
-				lastEvidence = evidence;
-				reason = "readiness.evidence.observed";
-				_readinessTracker.Observe(_controlProcessId, evidence, path, reason);
-				if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false))
-					return (path, evidence);
-			}
-			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-			{
-				reason = "readiness.evidence.unreadable";
-			}
+            var evidence = ReadReadinessCandidate(path, out var candidateReason);
+            if (evidence is null)
+            {
+                if (candidateReason != "readiness.evidence.missing")
+                {
+                    observedPath = path;
+                    reason = candidateReason;
+                }
+                continue;
+            }
+
+            observedPath = path;
+            lastEvidence = evidence;
+            reason = "readiness.evidence.observed";
+            _readinessTracker.Observe(_controlProcessId, evidence, path, reason);
+            if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false))
+                return (path, evidence);
 		}
+        _lastReadinessReason = reason;
 		_readinessTracker.Observe(_controlProcessId, lastEvidence, observedPath, reason);
 		var hosts = _readinessTracker.GetHosts();
 		_lifecycle.ProjectHostObservations(hosts);
@@ -1040,6 +1040,31 @@ public sealed class UnifiedApplicationHost
 			throw new InvalidOperationException($"{failedChild.Host} supervision failed before qualified readiness; process state {failedChild.ProcessAlive?.ToString() ?? "unknown"}.");
 		return null;
 	}
+
+    private ApplicationReadinessEvidence? ReadReadinessCandidate(string path, out string reason)
+    {
+        reason = "readiness.evidence.missing";
+        try
+        {
+            if (!_platform.FileExists(path)) return null;
+            if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) ||
+                evidence is null)
+            {
+                reason = "readiness.evidence.invalid";
+                return null;
+            }
+            reason = "readiness.evidence.observed";
+            return evidence;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // During atomic replacement, antivirus scans and share-denied
+            // reads the observation is unavailable, not a host-level crash.
+            // Only current process/binding/endpoint evidence can restore READY.
+            reason = "readiness.evidence.unreadable";
+            return null;
+        }
+    }
 
 	private TimeoutException CreateStartupTimeout(string message)
 	{
@@ -1054,33 +1079,64 @@ public sealed class UnifiedApplicationHost
 
 	private (string Path, ApplicationReadinessEvidence Evidence)? FindObservedReadiness()
 	{
+        var reason = "readiness.evidence.missing";
 		foreach (var path in GetReadinessCandidates())
 		{
-			if (!_platform.FileExists(path)) continue;
-			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
-			if (IsAuthoritativeReadinessValid(evidence)) return (path, evidence);
+            var evidence = ReadReadinessCandidate(path, out var candidateReason);
+            if (evidence is null)
+            {
+                if (candidateReason != "readiness.evidence.missing")
+                    reason = candidateReason;
+                continue;
+            }
+			if (IsAuthoritativeReadinessValid(evidence))
+            {
+                _lastReadinessReason = "readiness.evidence.qualified";
+                return (path, evidence);
+            }
+            // A syntactically valid document is not authoritative when its
+            // process, child supervision or endpoint identity is stale.
+            reason = "readiness.evidence.unqualified";
 		}
+        _lastReadinessReason = reason;
 		return null;
 	}
 
 	private IEnumerable<string> GetReadinessCandidates()
 	{
 		yield return _options.ReadinessPath;
-		if (!_platform.FileExists(_options.LegacyLifecycleStatePath)) yield break;
 
-		string? legacyReadiness = null;
-		try
-		{
-			using var document = JsonDocument.Parse(_platform.ReadAllText(_options.LegacyLifecycleStatePath));
-			if (document.RootElement.TryGetProperty("readinessPath", out var value))
-				legacyReadiness = value.GetString();
-		}
-		catch (JsonException)
-		{
-		}
+        // Legacy lifecycle metadata can be partially replaced or corrupt.
+        // It may supply an observation path but never grant readiness itself.
+        string? legacyReadiness = null;
+        try
+        {
+            if (_platform.FileExists(_options.LegacyLifecycleStatePath))
+            {
+                var payload = _platform.ReadAllText(_options.LegacyLifecycleStatePath);
+                if (payload.Length <= ApplicationReadinessEvidence.MaximumDocumentChars)
+                {
+                    using var document = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 16 });
+                    if (document.RootElement.TryGetProperty("readinessPath", out var value) &&
+                        value.ValueKind == JsonValueKind.String)
+                    {
+                        var candidate = value.GetString();
+                        if (!string.IsNullOrWhiteSpace(candidate))
+                            legacyReadiness = Path.GetFullPath(candidate);
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+            JsonException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            // Ignore only the legacy pointer; the primary readiness source
+            // remains mandatory for the configured ownership profile.
+        }
 
-		if (!string.IsNullOrWhiteSpace(legacyReadiness))
-			yield return Path.GetFullPath(legacyReadiness);
+        if (legacyReadiness is not null &&
+            !string.Equals(legacyReadiness, _options.ReadinessPath, StringComparison.OrdinalIgnoreCase))
+            yield return legacyReadiness;
 	}
 
 	private bool IsAuthoritativeReadinessValid(ApplicationReadinessEvidence evidence)
