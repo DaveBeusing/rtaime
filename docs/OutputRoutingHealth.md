@@ -23,6 +23,15 @@ Program and Aux therefore share the governed output-role state model, while Prev
 
 The workspace also shows the existing Engine, Control, Runtime, Media and GPU-provider health states as a compact system-health surface. The selected-output details expose target, assigned source, resolution, frame rate, pixel format, color-space evidence, recording state and streaming evidence. A field is shown as `UNAVAILABLE` when no authoritative value exists.
 
+## OUTPUTS operating modes and evidence hierarchy
+
+The OUTPUTS detail region has one persistent **ROUTING / SIGNAL** and **CANVAS / MAPPING** selector. It switches only the visible UI: one `OutputRoutingHealthViewModel` owns the role projections and exactly one `OutputCanvasEditorViewModel` retains the existing unsaved draft and revision/failure fences. Compact LIVE/EDIT output controls do not instantiate an extra editor; the shared OUTPUTS selector does not issue CUT, APPLY or any output mutation.
+
+ROUTING is the initial view. A selected role shows authoritative source, provider/target identity, declared format, lifecycle and Runtime health before optional network send status. Program and Aux require a fresh, active, PASS-qualified Runtime role for a positive *role* status; neither global Runtime health nor the mere existence of a role implies it is transmitting or physically scanned out. A missing, inactive, disconnected or stale role is UNVERIFIED; a current explicit failure is FAIL. Preview is Control monitoring and Clean Feed is local display presentation, never a professional output device. Preview's format is not inferred from Program's format.
+
+The summary distinguishes **role confirmation** from recent network **send confirmation**. Network LIVE requires the existing freshness, connection and drop/rejection gates; absence of a network sink is shown as not configured rather than live. Even a live network sender is not proof of physical SDI scan-out. Technical system/performance gauges and per-target network queue details are available through the explicit **TECHNICAL DETAILS** control instead of occupying the primary route view. All status values continue to come from the existing Control/Runtime observations and the existing refresh, with no new network probe, polling loop or output authority.
+
+
 ## Canvas and mapping authoring
 
 OUTPUTS mounts a single `OutputCanvasEditorControl` adjacent to the existing full
