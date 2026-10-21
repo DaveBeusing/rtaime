@@ -25,6 +25,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		_owner = owner ?? throw new ArgumentNullException(nameof(owner));
 		Sources = new ObservableCollection<OperatorAudioSourceStripViewModel>();
 		Buses = new ObservableCollection<OperatorAudioBusStripViewModel>();
+        CompactBuses = new ObservableCollection<OperatorAudioBusStripViewModel>();
 		CompactPresentationCommand = new AsyncRelayCommand(() => SetPresentationAsync(false));
 		DetailedPresentationCommand = new AsyncRelayCommand(() => SetPresentationAsync(true));
 	}
@@ -34,6 +35,8 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	public OperatorViewModel Owner => _owner;
 	public ObservableCollection<OperatorAudioSourceStripViewModel> Sources { get; }
 	public ObservableCollection<OperatorAudioBusStripViewModel> Buses { get; }
+    // Ordered presentation references only: Program is always first in Compact.
+    public ObservableCollection<OperatorAudioBusStripViewModel> CompactBuses { get; }
 
 	public OperatorAudioSourceStripViewModel? SelectedSource
 	{
@@ -110,6 +113,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		{
 			Sources.Clear();
 			Buses.Clear();
+            CompactBuses.Clear();
 			SelectedSource = null;
 			SetEvidenceAvailability("UNAVAILABLE");
 			MutationState = "UNCONFIRMED";
@@ -189,6 +193,12 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		}
 
 		Reconcile(Buses, nextBuses);
+        // Do not reorder the authoritative bank; compact cards reuse the exact
+        // same strip identities, with Program ahead of Aux/other routed buses.
+        Reconcile(CompactBuses, nextBuses
+            .OrderBy(bus => string.Equals(bus.BusId, AudioBusId.Program.Value, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(bus => bus.BusLabel, StringComparer.OrdinalIgnoreCase)
+            .ToArray());
         OnPropertyChanged(nameof(CompactSignalState));
 
 		SelectedSource = Sources.FirstOrDefault(source =>
