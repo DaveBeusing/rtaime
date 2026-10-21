@@ -27,6 +27,12 @@ public partial class CompositingGraphControl : UserControl
 	private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e) =>
 		UpdateViewport();
 
+    private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (ViewModel is { } model) model.UpdateWorkspaceWidth(e.NewSize.Width);
+        UpdateViewport();
+    }
+
 	private void OnGraphSizeChanged(object sender, SizeChangedEventArgs e) =>
 		UpdateViewport();
 
