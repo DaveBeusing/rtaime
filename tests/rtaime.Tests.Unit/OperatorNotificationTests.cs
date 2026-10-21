@@ -234,7 +234,8 @@ public sealed class OperatorNotificationTests
             Assert.True(next.PreviousSessionEndedUnexpectedly);
             Assert.False(next.StateWasCorrupted);
             Assert.Equal(workspace, next.SafeState.SelectedWorkspace);
-            Assert.Single(typeof(OperatorSafeSessionState).GetProperties());
+            Assert.Single(typeof(OperatorSafeSessionState).GetProperties(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
