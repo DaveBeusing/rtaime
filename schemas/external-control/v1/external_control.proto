@@ -256,6 +256,11 @@ message ExternalControlRequest {
     EmptyRequest get_sequence_preparation_context = 123;
     JsonPayloadRequest get_sequence_shuttle = 124;
     JsonPayloadRequest apply_sequence_shuttle = 125;
+    // Explicit source-bound Preview output and non-replayed Program Take.
+    JsonPayloadRequest activate_sequence_preview = 126;
+    JsonPayloadRequest take_sequence_program = 127;
+    JsonPayloadRequest get_sequence_output = 128;
+    JsonPayloadRequest recover_sequence_take = 129;
     EmptyRequest get_output_canvas = 146;
     JsonPayloadRequest validate_output_canvas = 147;
     JsonPayloadRequest save_output_canvas = 148;
