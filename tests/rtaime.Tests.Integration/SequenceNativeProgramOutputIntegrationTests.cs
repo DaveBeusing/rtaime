@@ -271,6 +271,126 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal(0, runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
     }
 
+    [Theory]
+    [InlineData("seek")]
+    [InlineData("stop")]
+    [InlineData("cancel")]
+    public async Task Armed_sequence_take_is_revoked_by_native_transport_change_before_commit(string change)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var media = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(media.Path)));
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var sourceA = ProductionSourceId.New();
+        var sourceB = ProductionSourceId.New();
+        var mediaB = new MediaSourceId(sourceB.Value);
+        await using var runtime = new RuntimeProgramExecutionService(
+            new MediaSourceId(sourceA.Value), mediaB, format, new NoopRecordingWriter());
+        await using var journal = new BoundedProductionJournal(64);
+        var spec = new ProductionSpecification(ControlContractVersion.Current,
+            ProductionId.New(), "Native sequence Take mutation fence",
+            [new ProductionSourceSpecification(sourceA, "A"),
+             new ProductionSourceSpecification(sourceB, "B")],
+            new ProductionRoutingState(sourceA, sourceA),
+            initialOutputRoles:
+            [ProductionOutputRoleState.Program(sourceA), ProductionOutputRoleState.Aux(sourceB)]);
+        var control = new ControlHostService(spec, runtime.ProviderDescriptors, journal);
+        Confirm(control, runtime, control.Initialize());
+        Confirm(control, runtime, control.SelectPreview(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), sourceB)));
+
+        using var decks = new LocalMediaDeckRuntimeService(format, 2);
+        var provider = decks.ProviderDescriptor;
+        var route = provider.Capabilities.Single(cap => cap.Kind == "media.route");
+        var resource = provider.Resources.First(r => r.Kind == "media.route");
+        var owner = new SequenceMediaOwnerRequest(
+            MediaSourceId.New(), MediaAssetId.New(), media.Path, hash, 0, 0);
+        var authority = control.State;
+        var staged = new PreparedExecutionContract(RuntimeContractVersion.Current,
+            PreparedExecutionId.New(),
+            new AuthoritySnapshotReference(authority.ProductionId.Value, authority.Revision),
+            new Generation(1),
+            [new PreparedExecutionBinding(owner.SourceId.Value, route.CapabilityId,
+                resource, owner.SourceId, null)]);
+        var sequenceId = Guid.NewGuid();
+        const long duration = 20 * 4800;
+        var map = SequenceRuntimePositionMap.Prepare(
+            sequenceId, 7, format.FrameRate, duration, runtime.NextSequenceOutputSlot, 1);
+        SequenceExecutionClip Clip(SequenceMediaKind kind, int order) =>
+            new(Guid.NewGuid(), Guid.Parse(owner.AssetId.ToString()), hash,
+                kind, owner.SourceId.ToString(), order,
+                kind == SequenceMediaKind.Audio ? "program" : null,
+                0, 0, null, 0, 0, false);
+        var snapshot = new SequenceExecutionSnapshot(
+            SequenceExecutionSnapshotContract.Version, sequenceId, 7,
+            new(50, 1), duration,
+            [new SequenceExecutionSlice(0, duration,
+                [Clip(SequenceMediaKind.Video, 0), Clip(SequenceMediaKind.Audio, 1)])]);
+        var preparation = decks.PrepareSequenceMedia(staged, map, [owner],
+            executionSnapshot: snapshot);
+        Assert.True(preparation.Prepared, preparation.Failure?.Message);
+
+        var epoch = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(
+            SequencePreparationContract.Version, sequenceId, 7, epoch,
+            staged.PreparedExecutionId.ToString(), 1);
+        decks.BindSequencePreviewOutput(reference, mediaB,
+            authority.ProductionId.Value, authority.Revision, runtime);
+        var playing = decks.ApplySequenceShuttle(
+            new(SequenceShuttleContract.Version, reference, 0, SequenceShuttleAction.Play),
+            epoch, authority.ProductionId.Value, authority.Revision,
+            () => runtime.NextSequenceOutputSlot);
+        Assert.Equal("PLAYING", playing.State);
+        var first = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(first.Published, first.FailureCode);
+        using (var boundary = runtime.ProcessNextBoundary())
+            decks.ObserveSequenceProgramBoundary(boundary);
+        Assert.Equal("PREVIEW_READY", decks.GetSequenceOutput(reference, epoch).OutputState);
+
+        var command = new SequenceOutputCommand(SequenceOutputContract.Version,
+            reference, mediaB.ToString(), authority.Revision.Value, Guid.NewGuid());
+        Assert.Equal("TAKE_PENDING", decks.ArmSequenceTake(command,
+            authority.ProductionId.Value, authority.Revision, runtime, epoch).OutputState);
+
+        if (change == "cancel")
+        {
+            Assert.Equal("CANCELED", decks.CancelPreparedSequence(reference, epoch).State);
+        }
+        else
+        {
+            var action = change == "seek"
+                ? SequenceShuttleAction.Seek : SequenceShuttleAction.Stop;
+            var request = new SequenceShuttleRequest(
+                SequenceShuttleContract.Version, reference, playing.StateRevision, action,
+                change == "seek" ? 5 * 4800L : null);
+            _ = decks.ApplySequenceShuttle(request, epoch,
+                authority.ProductionId.Value, authority.Revision,
+                () => runtime.NextSequenceOutputSlot);
+            var invalidated = decks.GetSequenceOutput(reference, epoch);
+            Assert.Equal("UNAVAILABLE", invalidated.OutputState);
+            Assert.Null(invalidated.LastProgramSlot);
+            Assert.ThrowsAny<InvalidOperationException>(() => decks.ArmSequenceTake(
+                command with { TransactionId = Guid.NewGuid() },
+                authority.ProductionId.Value, authority.Revision, runtime, epoch));
+        }
+
+        var cut = control.CutProgram(new CutProgramCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), sourceB));
+        Assert.True(cut.Accepted, cut.Failure?.Message);
+        var package = Assert.IsType<ControlHostExecutionPackage>(cut.Execution);
+        Assert.ThrowsAny<InvalidOperationException>(() =>
+            decks.RequireArmedSequenceTake(package.PreparedExecution, package.ProgramTransition));
+        control.RejectRuntimeCommit(package.PreparedExecution.PreparedExecutionId,
+            new Failure("runtime.sequence.take_not_armed",
+                "Transport changed after the last confirmed Preview frame."));
+        Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
+        if (change != "cancel")
+            Assert.Equal("CANCELED", decks.CancelPreparedSequence(reference, epoch).State);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
     private static void Confirm(ControlHostService control, RuntimeProgramExecutionService runtime,
         ControlHostOperationResult staged)
     {
