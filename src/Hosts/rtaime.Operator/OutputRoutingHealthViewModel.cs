@@ -59,6 +59,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
 	private OutputStatusViewModel? _selectedOutput;
 	private bool _disposed;
+	private bool _isCanvasMode;
+	private bool _showTechnicalDetails;
 
 	public OutputRoutingHealthViewModel(
 		OperatorViewModel control,
@@ -80,6 +82,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		};
 		SelectedOutput = _program;
 		CanvasEditor = new OutputCanvasEditorViewModel(_control);
+		ShowRoutingModeCommand = new AsyncRelayCommand(() => { SelectCanvasMode(false); return Task.CompletedTask; });
+		ShowCanvasModeCommand = new AsyncRelayCommand(() => { SelectCanvasMode(true); return Task.CompletedTask; });
+		ToggleTechnicalDetailsCommand = new AsyncRelayCommand(() =>
+		{
+			ShowTechnicalDetails = !ShowTechnicalDetails;
+			return Task.CompletedTask;
+		});
 
 		_metrics = new Dictionary<string, PerformanceMetricViewModel>(StringComparer.Ordinal)
 		{
@@ -115,6 +124,23 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public OutputCanvasEditorViewModel CanvasEditor { get; }
+	public ICommand ShowRoutingModeCommand { get; }
+	public ICommand ShowCanvasModeCommand { get; }
+	public ICommand ToggleTechnicalDetailsCommand { get; }
+	public bool IsCanvasMode => _isCanvasMode;
+	public bool IsRoutingMode => !_isCanvasMode;
+	public bool ShowTechnicalDetails
+	{
+		get => _showTechnicalDetails;
+		set => Set(ref _showTechnicalDetails, value);
+	}
+
+	private void SelectCanvasMode(bool canvas)
+	{
+		if (!Set(ref _isCanvasMode, canvas)) return;
+		CanvasEditor.SetWorkspaceVisible(canvas);
+		OnPropertyChanged(nameof(IsRoutingMode));
+	}
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
