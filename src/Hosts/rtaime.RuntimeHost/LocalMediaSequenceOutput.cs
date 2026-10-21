@@ -262,7 +262,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                 // buffering, stale authority and failure still invalidate it.
                 session.OutputState = session.ProgramAuthorized
                     ? session.LastProgramSlot is null ? "TAKE_COMMITTED" : "PROGRAM_CONFIRMED"
-                    : session.ArmedTake is not null ? "TAKE_PENDING" : "PREVIEW_READY";
+                    : session.ArmedTake is not null ? "TAKE_PENDING"
+                    : HasRecentConfirmedPreview(session) ? "PREVIEW_READY" : "BUFFERING";
                 session.FailureCode = null;
                 return (true, session.OutputState, null, programSlot);
             }
@@ -549,8 +550,14 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
                 }
             }
-            else if (session.OutputState is "PREVIEW_READY" or "TAKE_PENDING")
+            else if (session.OutputState is "BUFFERING" or "PREVIEW_READY" or "TAKE_PENDING")
+            {
+                // Native composition is only input readiness. Preview is
+                // observable after the corresponding Runtime boundary completes.
                 session.LastPreviewSlot = boundary.SequenceNumber;
+                if (session.OutputState == "BUFFERING")
+                    session.OutputState = "PREVIEW_READY";
+            }
         }
     }
 
