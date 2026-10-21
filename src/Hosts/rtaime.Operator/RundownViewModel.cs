@@ -438,9 +438,9 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 			// A failed or uncertain response cannot prove the current Program.
             // Retain a local authoring draft but require a fresh Control snapshot
             // before accepting another live mutation.
+            _observationAvailable = false; // Draft undo must not reopen stale live authority.
             if (!_hasLocalDraft)
             {
-                _observationAvailable = false;
                 State = "UNVERIFIED";
                 Detail = "Command result unverified. Synchronize Control before another GO or HOLD; never replay an uncertain action.";
             }
