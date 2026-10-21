@@ -90,6 +90,54 @@ slot-count/queue/backpressure and quarantine must not be relaxed.
 No forced `GC.Collect`, unbounded pools, background alloc logs or artificial
 `NoGCRegion` are part of the measured path.
 
+## Regression of microbenchmark allocation windows (2026-10-21)
+
+The merged native-copy optimization was followed by two intermittent Windows
+Integration failures on later PR HEADs. [Run 39603350045](https://github.com/DaveBeusing/rtaime/actions/runs/39603350045),
+Provider Smoke job `119233184694`, observed **7,352 bytes** against the
+unchanged **4,096-byte** budget in the *row-reference* copy measurement at 50/1,
+not in the optimized-copy assertion. [Run 39611347595](https://github.com/DaveBeusing/rtaime/actions/runs/39611347595),
+Provider Smoke job `119260855815`, observed **7,664 bytes** against the same
+budget in the combined RGB32 copy/swizzle test. Neither failure by itself
+proves a decoder leak, incorrect pixels, or a measured native throughput loss.
+
+Previously, `GC.GetAllocatedBytesForCurrentThread` covered the test's
+`Stopwatch.GetTimestamp` / `Stopwatch.GetElapsedTime` observation as well
+as the actual copy operations, after only four untimed warm-up iterations.
+These counters could not attribute sporadic managed allocations to the
+copy operations rather than lazy runtime/JIT/interop or observer work.
+The exact byte-level origin of the historical spikes remains **UNVERIFIED**
+without source-correlated allocation attribution.
+
+The corrected synthetic qualification now:
+
+- Warms the existing production bulk-copy and reference-row paths, the
+  combined copy/swizzle path, and timing APIs with 64 iterations *before*
+  either strict managed-allocation sample.
+- Measures **the same number of complete frame copies** without a timer inside
+  each strict allocation window; the optimized copy, row-reference copy and
+  production copy+swizzle path each retain the original **4,096-byte** ceiling.
+  No results or `referenceAllocations` assertions are omitted.
+- Separately samples copy/row-reference and copy+swizzle CPU-wall times,
+  including P50/P95/P99 where applicable. Reports observer-inclusive
+  allocation deltas independently so stopwatch/JIT noise remains diagnosable
+  without being misidentified as a managed copy-buffer allocation.
+- Compares 1920x1080 pixel bytes before and after in-place RGB32 swizzle
+  at 50/1 and 60000/1001, with tightly packed and padded positive/negative
+  pitches. The 2D scanline and contiguous-buffer entry points must agree.
+  Ownership, PCM leases, packet bounds, native sessions and decoder semantics
+  are unchanged.
+
+This corrective change is limited to the synthetic Integration tests and
+their qualification documentation. No extra full-frame transfer, renderer,
+worker, diagnostic poller, or production buffer allocation is introduced.
+The regression branch starts from `master`
+`35f05b73604683697af45a53c87c8cfbd83a6a0c`; its final head,
+Windows runner, observed copy-only and timed-window allocation deltas,
+native 50/59.94 cases, and all five Required Gates require independently
+verified PR/Actions evidence. A successful synthetic test cannot establish
+hardware memory traffic, end-to-end Program latency, or physical GPU behavior.
+
 ## Exact-source results and acceptance
 
 | Evidence | Current state |
