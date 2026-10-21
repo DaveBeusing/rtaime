@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using rtaime.Core;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -53,6 +54,7 @@ internal static class MonitorPresentationQualification
 		}) start.ArgumentList.Add(argument);
 		start.Environment[childMarker] = "1";
 		using var process = Process.Start(start)!;
+		Console.WriteLine($"VIEWER ISOLATION START: parentPid={Environment.ProcessId}; childPid={process.Id}; ownership=fixture-owned-child; timeout=45s.");
 		var stdout = process.StandardOutput.ReadToEndAsync();
 		var stderr = process.StandardError.ReadToEndAsync();
 		try
@@ -62,7 +64,8 @@ internal static class MonitorPresentationQualification
 			var errors = await stderr;
 			Console.WriteLine(result);
 			Console.WriteLine(errors);
-			Assert.True(process.ExitCode == 0, $"Isolated productive viewer failed: {result}\n{errors}");
+			Assert.True(process.ExitCode == 0,
+				$"Isolated productive viewer exit={process.ExitCode}, childPid={process.Id}: {result}\n{errors}");
 			Assert.Contains("VIEWER SHARED GPU PASS", result);
 			Assert.Contains("VIEWER PROGRAM PASS", result);
 		}
@@ -303,11 +306,24 @@ internal static class MonitorPresentationQualification
 			window.Close();
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			controlStop.Cancel();
-			try { Assert.Equal(ControlHostExitCode.Success, await controlRun); }
+			try
+			{
+				var controlExit = await controlRun;
+				Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=ControlHost; pid={Environment.ProcessId}; " +
+					$"exit={controlExit}; state={control.Lifecycle.State}; health={control.Lifecycle.Health}; " +
+					$"detail={control.Lifecycle.Detail}; shutdownPhases={JsonSerializer.Serialize(control.ShutdownPhases)}");
+				Assert.Equal(ControlHostExitCode.Success, controlExit);
+			}
 			finally
 			{
 				runtimeStop.Cancel();
-				try { Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun); }
+				try
+				{
+					var runtimeExit = await runtimeRun;
+					Console.WriteLine($"VIEWER HOST EXIT: owner=fixture-owned-in-process; host=RuntimeHost; pid={Environment.ProcessId}; " +
+						$"exit={runtimeExit}; state={runtime.Lifecycle.State}; health={runtime.Lifecycle.Health}; detail={runtime.Lifecycle.Detail}");
+					Assert.Equal(RuntimeHostExitCode.Success, runtimeExit);
+				}
 				finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 			}
 			if (surface is not null) Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
