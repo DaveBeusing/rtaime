@@ -170,6 +170,8 @@ public sealed class PreparedMediaHandoffIntegrationTests
 
         // Exercise the exact successful consume gate used by the authorized TAKE.
         Assert.True(deck.WithPreparedNext(prepared, consume: true, () => true, result => result));
+        // An old-Program observation can precede the first post-TAKE Program edge.
+        deck.ObserveProgramSource(a);
         deck.ObserveProgramSource(b);
         Assert.Equal(MediaTransportState.Playing, deck.GetSnapshot(b).Transport!.State);
         Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
@@ -214,6 +216,40 @@ public sealed class PreparedMediaHandoffIntegrationTests
             Assert.Equal(generation + 1, deck.GetDecodeSnapshot(b)!.Value.Generation);
         }
 
+        deck.Close(b);
+        Assert.Equal(0, deck.Resources.Reserved);
+    }
+
+
+    [Fact]
+    public void Prepared_GO_pending_acknowledgement_is_revoked_on_a_later_Program_exit()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        deck.ObserveProgramSource(a);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        var prepared = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
+        var generation = prepared.DecodeGeneration;
+        Assert.True(deck.WithPreparedNext(prepared, consume: true, () => true, accepted => accepted));
+
+        deck.ObserveProgramSource(b);
+        Assert.Equal(MediaTransportState.Playing, deck.GetSnapshot(b).Transport!.State);
+        deck.ObserveProgramSource(a);
+        deck.ObserveProgramSource(b);
+        Assert.Equal(MediaTransportState.Playing, deck.GetSnapshot(b).Transport!.State);
+
+        // This is a distinct command after another Program tenure, not the old GO cue.
+        var manual = deck.ApplyTransport(new(MediaContractVersion.Current, opened.Probe.AssetId,
+            MediaTransportCommandKind.Play) { SourceId = b });
+        Assert.False(manual.Succeeded);
+        Assert.Equal(MediaTransportState.Playing, manual.Snapshot.State);
+        Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
+        Assert.Equal(1, deck.Resources.Reserved);
         deck.Close(b);
         Assert.Equal(0, deck.Resources.Reserved);
     }
