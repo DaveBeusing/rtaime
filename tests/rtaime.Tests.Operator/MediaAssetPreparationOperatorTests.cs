@@ -110,6 +110,8 @@ public sealed class MediaAssetPreparationOperatorTests
         await pool.LoadCatalogAsync();
         pool.SelectedCategory = "Clips";
         var clips = pool.FilteredItems.Take(2).ToArray();
+        var program = owner.ProgramSourceId;
+        var preview = owner.PreviewSourceId;
 
         Assert.Contains("IMPORT", pool.LibraryJourneyState);
         Assert.False(pool.CanOpenLibraryPreview);
@@ -133,6 +135,7 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.False(deck.IsLoaded);
         Assert.Equal(0, transport.Calls);
 
+        pool.UpdateSelection([]);
         pool.UpdateSelection([clips[0] with { IsOnline = false, State = "MISSING", IsReady = false }]);
         Assert.False(pool.CanOpenLibraryPreview);
         Assert.False(pool.CanPrepareLibrarySelection);
@@ -141,8 +144,6 @@ public sealed class MediaAssetPreparationOperatorTests
         Assert.Equal(0, transport.Calls);
         Assert.Equal("—", deck.AssetId);
 
-        var program = owner.ProgramSourceId;
-        var preview = owner.PreviewSourceId;
         Assert.Equal(program, owner.ProgramSourceId);
         Assert.Equal(preview, owner.PreviewSourceId);
         Assert.Equal(0, catalog.Mutations);
