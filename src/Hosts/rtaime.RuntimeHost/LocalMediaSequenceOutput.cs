@@ -26,6 +26,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             RuntimeProgramExecutionService runtime)
         {
             Reference = reference;
+            Runtime = runtime;
             SourceId = sourceId;
             var audioClips = snapshot.Slices.SelectMany(slice => slice.Clips)
                 .Where(clip => clip.Kind == SequenceMediaKind.Audio)
@@ -56,6 +57,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         }
 
         internal SequencePreparationReference Reference { get; }
+        internal RuntimeProgramExecutionService Runtime { get; }
         internal MediaSourceId SourceId { get; }
         internal SequenceFrameComposition Composer { get; }
         internal SequenceExecutionClip[] Clips { get; } =
@@ -253,6 +255,24 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.Frames[index] = null;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Native cleanup immediately withdraws the published source signal and
+    /// clears the session before a future media owner can reuse its slot.
+    /// Cancellation of a taken Program sequence must never leave a falsely
+    /// healthy frozen frame or silently rebind the previous source.
+    /// </summary>
+    private void RetireSequenceOutput(string code)
+    {
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null) return;
+            _sequenceOutput = null;
+            try { session.Runtime.MarkSequenceInputUnavailable(session.SourceId); }
+            catch (ObjectDisposedException) { } // A completed Runtime shutdown owns final teardown.
         }
     }
 
