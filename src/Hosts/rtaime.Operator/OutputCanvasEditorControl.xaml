@@ -32,7 +32,10 @@
                 BorderBrush="{DynamicResource OperatorBorderBrush}"
                 BorderThickness="1" Padding="8" Margin="0,0,0,9">
                 <StackPanel>
-                    <TextBlock Text="{Binding EditingSafety}" Style="{StaticResource OperatorLabel}" />
+                    <TextBlock Text="{Binding WorkflowStage}" Style="{StaticResource OperatorValue}"
+                        FontWeight="SemiBold" TextWrapping="Wrap"
+                        AutomationProperties.Name="Canvas validation, save and Runtime confirmation stage" />
+                    <TextBlock Text="{Binding EditingSafety}" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
                     <TextBlock Text="{Binding DraftSafety}" Style="{StaticResource OperatorValue}"
                         TextWrapping="Wrap" Margin="0,3,0,5" />
                     <Grid>
@@ -89,7 +92,9 @@
                 DisplayMemberPath="Label"
                 AutomationProperties.Name="Control-authorized Runtime output target"
                 Margin="0,0,0,6" />
-            <controls:RtaimeButton Content="BIND SELECTED CANVAS TO PROGRAM"
+            <TextBlock Text="{Binding TargetEligibility}" Style="{StaticResource OperatorLabel}"
+                TextWrapping="Wrap" Margin="0,1,0,6" />
+            <controls:RtaimeButton Content="BIND SELECTED CANVAS TO PROGRAM DRAFT"
                 Command="{Binding BindProgramCommand}" IsCompact="True" Margin="0,0,0,10"
                 ToolTip="Only the confirmed Program target is eligible. Existing other output bindings are retained disabled in this saved draft; no live routing changes." />
 
@@ -136,7 +141,22 @@
                 AutomationProperties.Name="Select actual governed bus or configured source for mapped surface"
                 Margin="0,0,0,8" />
 
-            <TextBlock Text="CORNERS / CROP / EDGE BLEND" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,7" />
+            <controls:RtaimeButton Content="ADVANCED GEOMETRY / BLEND"
+                Command="{Binding ToggleGeometryDetailsCommand}" IsCompact="True"
+                AutomationProperties.Name="Show or hide numeric corner crop and edge blend editors"
+                Margin="0,4,0,8" />
+            <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowGeometryDetails}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="CORNERS / CROP / EDGE BLEND" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,7" />
             <ItemsControl ItemsSource="{Binding Fields}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
@@ -161,12 +181,15 @@
             <controls:RtaimeButton Content="APPLY NUMERIC TO DRAFT" Command="{Binding ApplyNumericCommand}"
                 IsCompact="True" Margin="0,0,0,9"
                 ToolTip="Rejects invalid or nonconvex quads. Numeric and pointer editing modify local drafts only." />
+            </StackPanel>
 
             <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
                 BorderBrush="{DynamicResource OperatorBorderBrush}"
                 BorderThickness="1" Padding="8" Margin="0,0,0,8">
                 <StackPanel>
-                    <TextBlock Text="VALIDATE → SAVE → APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <TextBlock Text="VALIDATE DRAFT → SAVE → VALIDATE SAVED → REQUEST APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <TextBlock Text="Only Runtime-confirmed ACTIVE at the saved revision is live; no button alone changes Program."
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,7" />
                     <WrapPanel Margin="0,0,0,7">
                         <controls:RtaimeButton Content="VALIDATE DRAFT"
                             Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
@@ -174,7 +197,7 @@
                         <controls:RtaimeButton Content="SAVE"
                             Command="{Binding SaveCommand}" IsCompact="True" Margin="0,0,5,4"
                             ToolTip="Authoritative ControlHost transaction; does not change live Program." />
-                        <controls:RtaimeButton Content="APPLY TO PROGRAM"
+                        <controls:RtaimeButton Content="REQUEST RUNTIME APPLY"
                             Command="{Binding ApplyCommand}" IsCompact="True"
                             Background="{DynamicResource OperatorAccentSurfaceBrush}"
                             BorderBrush="{DynamicResource OperatorAccentBrush}"
