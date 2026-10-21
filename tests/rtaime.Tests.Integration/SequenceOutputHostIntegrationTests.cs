@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using Xunit;
