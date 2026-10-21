@@ -60,12 +60,29 @@
 				</Grid.ColumnDefinitions>
 				<StackPanel>
 					<TextBlock Text="HEALTH CENTER" Style="{StaticResource OperatorSectionTitle}" FontSize="{StaticResource OperatorFontSizeSubheading}" />
+					<TextBlock Text="SYSTEM · INCIDENTS &amp; RECOVERY" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
 					<TextBlock
 						Text="{Binding OverallSummary}"
 						Style="{StaticResource OperatorLabel}"
 						TextWrapping="Wrap"
 						Margin="0,5,0,0"
 						MaxWidth="780" />
+					<WrapPanel Margin="0,9,0,0" KeyboardNavigation.TabNavigation="Continue">
+						<controls:RtaimeButton Content="SHOW CHECKS" IsCompact="True"
+							Command="{Binding OpenShowChecksCommand, ElementName=RootWindow}"
+							Margin="0,0,5,4" AutomationProperties.Name="Open show preflight and active notification review" />
+						<controls:RtaimeButton Content="PROCESSING · AI" IsCompact="True"
+							Command="{Binding Shell.SelectWorkspaceCommand, ElementName=RootWindow}"
+							CommandParameter="AI" Margin="0,0,5,4"
+							AutomationProperties.Name="Open governed AI Processing workspace" />
+						<controls:RtaimeButton Content="PREFERENCES · SETTINGS" IsCompact="True"
+							Command="{Binding Shell.SelectWorkspaceCommand, ElementName=RootWindow}"
+							CommandParameter="SETTINGS" Margin="0,0,5,4"
+							AutomationProperties.Name="Open system preferences workspace" />
+						<controls:RtaimeButton Content="ADVANCED TOOLS · COMMANDS" IsCompact="True"
+							Command="{Binding OpenCommandPaletteCommand, ElementName=RootWindow}"
+							Margin="0,0,5,4" AutomationProperties.Name="Open searchable advanced commands and workspace tools" />
+					</WrapPanel>
 				</StackPanel>
 				<StackPanel Grid.Column="1" HorizontalAlignment="Right">
 					<TextBlock Text="PRODUCTION READINESS" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" Margin="0,0,0,4" />
@@ -77,15 +94,35 @@
 			</Grid>
 		</Border>
 
+		<StackPanel Grid.Row="1" Margin="0,0,0,2">
+			<DockPanel LastChildFill="True" Margin="0,0,0,5">
+				<controls:RtaimeButton Content="{Binding TelemetryOverviewAction}"
+					Command="{Binding ToggleTelemetryOverviewCommand}" IsCompact="True"
+					DockPanel.Dock="Right" MinHeight="28" Margin="8,0,0,0"
+					AutomationProperties.Name="Show or hide detailed health telemetry overview" />
+				<TextBlock Text="DIAGNOSTICS · TELEMETRY ON DEMAND"
+					Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+			</DockPanel>
 		<controls:RtaimeListBox
-			Grid.Row="1"
 			ItemsSource="{Binding Overview}"
 			SelectedItem="{Binding SelectedSubsystem, Mode=TwoWay}"
 			Background="Transparent"
 			BorderThickness="0"
+			MaxHeight="205"
 			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-			ScrollViewer.VerticalScrollBarVisibility="Disabled"
-			AutomationProperties.Name="Health Center overview">
+			ScrollViewer.VerticalScrollBarVisibility="Auto"
+			AutomationProperties.Name="Health Center detailed telemetry overview">
+			<controls:RtaimeListBox.Style>
+				<Style TargetType="{x:Type controls:RtaimeListBox}"
+					BasedOn="{StaticResource {x:Type controls:RtaimeListBox}}">
+					<Setter Property="Visibility" Value="Collapsed" />
+					<Style.Triggers>
+						<DataTrigger Binding="{Binding TelemetryOverviewVisible}" Value="True">
+							<Setter Property="Visibility" Value="Visible" />
+						</DataTrigger>
+					</Style.Triggers>
+				</Style>
+			</controls:RtaimeListBox.Style>
 			<controls:RtaimeListBox.ItemsPanel>
 				<ItemsPanelTemplate>
 					<WrapPanel />
@@ -120,6 +157,7 @@
 				</DataTemplate>
 			</controls:RtaimeListBox.ItemTemplate>
 		</controls:RtaimeListBox>
+		</StackPanel>
 
 		<Grid Grid.Row="3">
 			<Grid.ColumnDefinitions>
@@ -289,7 +327,7 @@
 					</Border>
 
 					<controls:RtaimeListBox
-						Grid.Row="3"
+						Grid.Row="4"
 						ItemsSource="{Binding SelectedSubsystem.Metrics}"
 						Background="Transparent"
 						BorderThickness="0"
@@ -297,7 +335,18 @@
 						Margin="0,12,0,0"
 						MaxHeight="160"
 						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-						AutomationProperties.Name="Selected subsystem metrics">
+						AutomationProperties.Name="Selected subsystem metrics on demand">
+						<controls:RtaimeListBox.Style>
+							<Style TargetType="{x:Type controls:RtaimeListBox}"
+								BasedOn="{StaticResource {x:Type controls:RtaimeListBox}}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding TechnicalDetailsVisible}" Value="True">
+										<Setter Property="Visibility" Value="Visible" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</controls:RtaimeListBox.Style>
 						<controls:RtaimeListBox.ItemTemplate>
 							<DataTemplate>
 								<DockPanel Margin="5,3">
@@ -308,7 +357,9 @@
 						</controls:RtaimeListBox.ItemTemplate>
 					</controls:RtaimeListBox>
 
-					<StackPanel Grid.Row="4" Margin="0,12,0,0">
+					<StackPanel Grid.Row="3" Margin="0,12,0,0">
+						<TextBlock Text="ADVANCED TOOLS · DIAGNOSTICS"
+							Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
 						<WrapPanel Margin="0,0,0,8">
 							<controls:RtaimeButton Content="COPY INCIDENT SUMMARY" Command="{Binding CopyIncidentSummaryCommand}" MinHeight="28" Padding="10,3" Margin="0,0,8,6" AutomationProperties.Name="Copy redacted incident summary" />
 							<controls:RtaimeButton Content="{Binding Startup.SupportBundleActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" MinHeight="28" Padding="10,3" Margin="0,0,0,6" AutomationProperties.Name="Export diagnostics support bundle from Health Center" />
@@ -320,7 +371,8 @@
 							Command="{Binding ToggleTechnicalDetailsCommand}"
 							HorizontalAlignment="Left"
 							MinHeight="28"
-							Padding="10,3" />
+							Padding="10,3"
+							AutomationProperties.Name="Show or hide technical logs and subsystem metrics" />
 						<Border Margin="0,8,0,0" Padding="10" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
 							<Border.Style>
 								<Style TargetType="Border">
@@ -332,7 +384,14 @@
 									</Style.Triggers>
 								</Style>
 							</Border.Style>
-							<TextBlock Text="{Binding SelectedSubsystem.TechnicalDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							<StackPanel>
+								<TextBlock Text="TECHNICAL EVIDENCE · OBSERVATION ONLY"
+									Style="{StaticResource OperatorLabel}" Margin="0,0,0,6" />
+								<TextBlock Text="{Binding SelectedSubsystem.TechnicalDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+								<TextBlock Text="{Binding ProductBuildIdentity, ElementName=RootWindow}"
+									Style="{StaticResource OperatorLabel}" Margin="0,7,0,0"
+									AutomationProperties.Name="Operator product version and build identity" />
+							</StackPanel>
 						</Border>
 					</StackPanel>
 				</Grid>

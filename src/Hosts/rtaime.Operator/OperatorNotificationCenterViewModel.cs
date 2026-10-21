@@ -40,7 +40,10 @@ public sealed class OperatorNotificationItemViewModel : INotifyPropertyChanged
 	public ICommand DismissCommand { get; }
 	public ICommand NavigateCommand { get; }
 	public bool IsAcknowledged => _notification.AcknowledgedAtUtc.HasValue;
-	public string Acknowledgement => IsAcknowledged ? $"ACKNOWLEDGED · {_notification.AcknowledgedAtUtc:HH:mm:ss}" : "NOT ACKNOWLEDGED";
+	// Acknowledgement is presentation bookkeeping, never incident resolution or production readiness.
+	public string Acknowledgement => IsAcknowledged
+		? $"ACKNOWLEDGED · {_notification.AcknowledgedAtUtc:HH:mm:ss} UTC · NOT A REPAIR"
+		: "NOT ACKNOWLEDGED";
 	public void Apply(OperatorNotification notification)
 	{
 		_notification = notification; OnPropertyChanged(string.Empty);

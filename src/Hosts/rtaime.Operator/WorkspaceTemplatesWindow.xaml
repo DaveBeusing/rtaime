@@ -8,7 +8,10 @@
     KeyboardNavigation.TabNavigation="Cycle" WindowStartupLocation="CenterOwner">
     <controls:RtaimeScrollViewer>
         <StackPanel Margin="16">
+            <TextBlock Text="ADVANCED TOOLS · PREFERENCES" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
             <TextBlock Text="WORKSPACE LAYOUT TEMPLATES" Style="{StaticResource OperatorSectionTitle}" />
+            <TextBlock Text="Open from Commands (Ctrl+K). Imported templates do not apply themselves or change production authority."
+                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,5,0,2" />
             <TextBlock Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8">
                 <Run Text="PROGRAM " /><Run Text="{Binding Owner.DataContext.ProgramSourceName, Mode=OneWay, RelativeSource={RelativeSource AncestorType=Window}}" />
                 <Run Text=" · " /><Run Text="{Binding Owner.DataContext.ConnectionState, Mode=OneWay, RelativeSource={RelativeSource AncestorType=Window}}" />

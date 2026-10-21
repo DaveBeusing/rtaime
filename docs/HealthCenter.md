@@ -38,7 +38,7 @@ This keeps high-frequency media and render paths decoupled from WPF layout and d
 
 `HEALTH` is a dedicated Operator workspace.
 
-The overview shows:
+The opt-in **SHOW TELEMETRY** overview shows (collapsed by default to keep the current incident and recovery visible first):
 
 - overall Runtime Readiness;
 - CPU;
@@ -56,6 +56,32 @@ The subsystem list additionally exposes Decoder, Control Service, Runtime Servic
 Selecting a subsystem shows its current state, state-change time, most recent successful health check, key measurements, operator-readable detail, recovery status and optional technical detail.
 
 Warnings, degradation, recovery and failures remain grouped without collapsing independent subsystem reasons into one UI-only global state.
+
+### Incident-first advanced workspace
+
+The `More → System → HEALTH` workspace keeps active incidents ahead of
+the optional CPU/GPU/Memory/Media/Audio/Output metric cards. The current
+severity, explicit Program impact, evidence provenance/freshness, and safe
+next action remain immediately readable. **SHOW TELEMETRY** opens the same
+nine existing measurements in a bounded, scrollable section; it makes no
+new probe, changes no sample freshness and does not alter selection,
+production revision or Runtime Readiness. **HIDE TELEMETRY** closes only
+the local presentation. The selected subsystem's extended numeric metrics,
+technical error details and Operator build identity appear under the
+existing **TECHNICAL DETAILS** action; selecting a different subsystem
+closes those details. The incident and recovery actions are never
+dependent on opening telemetry.
+
+The Health header provides existing actions, not a new navigation owner:
+**SHOW CHECKS** opens preflight/notifications, **PROCESSING · AI** opens
+the governed AI destination, **PREFERENCES · SETTINGS** opens retained
+settings, and **ADVANCED TOOLS · COMMANDS** opens Ctrl+K search. From
+LIVE, reach these via `More → System` in at most two deliberate
+navigation steps or directly via Commands. These buttons are bound to
+the original MainWindow command owner even in a detached panel.
+The global readiness/Program/recording indicators stay in the primary
+shell, so critical incidents are not hidden merely because Health is
+a secondary workspace.
 
 ## Recovery
 
@@ -101,7 +127,7 @@ Health retains current rows and state timestamps only. A slow UI has at most one
 
 Transient event history remains owned by the existing keyed notifications and structured logs. Health is a current-state projection: intermediate projections may be coalesced and are not a lossless event journal.
 
-Deterministic regressions cover simultaneous monitoring/audio/recording failures, 5,000 delayed UI updates, selection retention, stale evidence, reconnect, recovery gating, clipboard failure/redaction, transport send freshness, export metadata/cancellation and notification deduplication. Surface checks cover named custom keyboard controls and scrollable incident evidence. Existing shell geometry/DPI tests continue to apply; physical multi-monitor interaction remains separately UNVERIFIED.
+Deterministic regressions cover simultaneous monitoring/audio/recording failures, 5,000 delayed UI updates, selection retention, stale evidence, reconnect, recovery gating, clipboard failure/redaction, transport send freshness, export metadata/cancellation and notification deduplication. The focused Operator suite additionally verifies opt-in telemetry state, unchanged health and readiness, hidden-by-default metric detail, safe workspace links, shared detached-window commands and acknowledgement-without-repair. Surface checks cover named custom keyboard controls and scrollable incident evidence. Existing shell geometry/DPI tests continue to apply; physical multi-monitor interaction remains separately UNVERIFIED.
 
 ## Show checks and activity
 

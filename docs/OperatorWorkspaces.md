@@ -234,7 +234,7 @@ The OUTPUTS authoring stage remains a geometry-only WPF surface. It attaches to 
 
 ## HEALTH
 
-HEALTH consumes the central event-driven snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and monitoring. Subsystem health is not global Runtime Readiness. Show duration, last successful check, measurements, recovery and optional detail without creating another authority. Offer recovery only through an existing safe command. See [Health Center](HealthCenter.md).
+HEALTH consumes the central event-driven snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and monitoring. Subsystem health is not global Runtime Readiness. Its default view prioritizes active incidents, observed Program impact and the safe next action. The existing nine-card telemetry overview is now deliberately opened with **SHOW TELEMETRY**; extended numeric/error evidence and build identity use **TECHNICAL DETAILS**, without adding a hardware reader, log store or authority. The header links to retained Show checks, governed AI Processing, Settings and Commands using the same shell/command owner, including when detached. The global Program/readiness/recording indicators never depend on the secondary Health view. Offer recovery only through an existing safe command. See [Health Center](HealthCenter.md).
 
 ## SETTINGS
 

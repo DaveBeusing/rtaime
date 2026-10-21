@@ -114,6 +114,7 @@ public sealed class ShowReadinessOperatorTests
 		Assert.True(item.IsTechnicalDetailsVisible);
 		item.AcknowledgeCommand.Execute(null); context.Drain();
 		Assert.True(item.IsAcknowledged);
+		Assert.Contains("NOT A REPAIR", item.Acknowledgement);
 		Assert.False(item.AcknowledgeCommand.CanExecute(null));
 		Assert.Equal("ACTIVE", item.Condition);
 		Assert.Single(center.ActiveProblems);

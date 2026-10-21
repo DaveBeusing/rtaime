@@ -7,6 +7,13 @@ Search matches command labels, IDs and categories with bounded fuzzy matching (1
 
 Enter in search or results can execute navigation and local draft actions. AUTO, CUT, recording, GO, Preview transport and catalogue mutations require deliberate activation of **Execute** by mouse or keyboard after leaving the text field. Execute is not a default button. Ctrl+Enter, typing, key repeat and profile editing never forward to the production shortcut router. Existing command CanExecute and readiness rules are checked again at execution; visible results never grant authority.
 
+Secondary System workspaces remain command-addressable: search **Workspace HEALTH**,
+**Workspace AI** or **Workspace SETTINGS** from any primary workspace.
+The Health Center itself offers the existing **Show checks**, governed
+**Processing · AI**, **Preferences · Settings** and **Advanced Tools · Commands**
+routes. The same command owner is reused from detached panels; there is no
+additional source reader, production control or shortcut router.
+
 Escape or Ctrl+K closes the palette. Cancellation restores the previous visible control's focus. Successful navigation keeps the destination focus; Ctrl+F reveals the MEDIA tools when required and focuses the existing media search. Detached panels share the central registry. Normal text fields retain typing suppression, numeric-edit Escape handling and local timeline editing precedence.
 
 ## Profiles
@@ -55,4 +62,4 @@ Transform editing uses the selected layer or transform node; selecting a process
 
 ## Workspace focus and portable layouts
 
-Ctrl+Shift+F focuses/restores the selected dock panel. Ctrl+Shift+C toggles Cinema using existing Program monitoring. Escape restores the original arrangement and fullscreen preference; numeric Escape still cancels the current edit first. Program identity/connection/safety remain visible. Search **Named workspace layout templates** in Commands to save up to 16 named layouts from the current workspace without navigating away. Import adds a template and Apply is explicit; the preference editor suppresses production shortcuts. See [Operator workspaces](OperatorWorkspaces.md#named-workspace-layout-templates) for migration, bounds and missing-monitor recovery.
+Ctrl+Shift+F focuses/restores the selected dock panel. Ctrl+Shift+C toggles Cinema using existing Program monitoring. Escape restores the original arrangement and fullscreen preference; numeric Escape still cancels the current edit first. Program identity/connection/safety remain visible. Search **Named workspace layout templates** in Commands to save up to 16 named layouts from the current workspace without navigating away. The window is identified as **ADVANCED TOOLS · PREFERENCES** and still stores presentation preferences only. Import adds a template and Apply is explicit; the preference editor suppresses production shortcuts. See [Operator workspaces](OperatorWorkspaces.md#named-workspace-layout-templates) for migration, bounds and missing-monitor recovery.
