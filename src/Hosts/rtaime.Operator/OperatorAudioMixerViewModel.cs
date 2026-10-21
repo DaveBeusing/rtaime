@@ -3,6 +3,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 using rtaime.Core;
@@ -17,7 +18,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private string _availability = "UNAVAILABLE";
 	private string _disabledReason = "Synchronize authoritative audio state.";
 	private string _mutationState = "CONFIRMED";
-	private bool _showProcessing = true;
+	private bool _showProcessing;
 
 	internal OperatorAudioMixerViewModel(OperatorViewModel owner)
 	{
@@ -60,7 +61,18 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	public string MeteringLabel => $"{Availability} · RUNTIME VIA CONTROL · RMS NOT EXPOSED";
 	public bool EvidenceIsCurrent => Availability == "CONFIRMED";
 	public bool ShowProcessing => _showProcessing;
-	public string PresentationLabel => ShowProcessing ? "DETAILED · LOCAL VIEW ONLY" : "COMPACT · LOCAL VIEW ONLY";
+	public string PresentationLabel => ShowProcessing ? "ADVANCED · LOCAL VIEW ONLY" : "COMPACT · LOCAL VIEW ONLY";
+    public Visibility CompactVisibility => ShowProcessing ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility AdvancedVisibility => ShowProcessing ? Visibility.Visible : Visibility.Collapsed;
+    public string CompactSignalState => !EvidenceIsCurrent
+        ? $"{Availability} · retained readings are not live signal confidence"
+        : Buses.Count == 0 || Buses.All(bus => !bus.HasMeterEvidence)
+            ? "NO CURRENT BUS SAMPLE-PEAK EVIDENCE · output unverified"
+            : Buses.Any(bus => bus.EvidenceState == "CLIPPING")
+                ? "CLIPPING · observed bus sample peak exceeds the configured safety level"
+                : Buses.Any(bus => bus.EvidenceState is "MISSING SOURCE" or "INVALID METER" or "UNAVAILABLE")
+                    ? "PARTIAL SIGNAL · missing source or unavailable meter evidence"
+                    : "CURRENT RUNTIME SAMPLE PEAKS · physical output unverified";
 	public ICommand CompactPresentationCommand { get; }
 	public ICommand DetailedPresentationCommand { get; }
 	public string DuckingEvidence { get; private set; } = "UNAVAILABLE";
@@ -68,7 +80,11 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private Task SetPresentationAsync(bool showProcessing)
 	{
 		if (Set(ref _showProcessing, showProcessing, nameof(ShowProcessing)))
+        {
 			OnPropertyChanged(nameof(PresentationLabel));
+            OnPropertyChanged(nameof(CompactVisibility));
+            OnPropertyChanged(nameof(AdvancedVisibility));
+        }
 		return Task.CompletedTask;
 	}
 
@@ -77,6 +93,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		Availability = availability;
 		OnPropertyChanged(nameof(EvidenceIsCurrent));
 		OnPropertyChanged(nameof(MeteringLabel));
+        OnPropertyChanged(nameof(CompactSignalState));
 		foreach (var source in Sources)
 			source.RefreshEvidenceState();
 		foreach (var bus in Buses)
@@ -169,6 +186,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		}
 
 		Reconcile(Buses, nextBuses);
+        OnPropertyChanged(nameof(CompactSignalState));
 
 		SelectedSource = Sources.FirstOrDefault(source =>
 				string.Equals(source.SourceId, previousSelectedId, StringComparison.Ordinal))
