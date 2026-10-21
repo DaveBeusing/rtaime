@@ -152,6 +152,7 @@ $liveDocumentation = Get-Content -LiteralPath $liveDocumentationPath -Raw
 $compositingGraph = Get-Content -LiteralPath $compositingGraphPath -Raw
 $compositingGraphCode = Get-Content -LiteralPath $compositingGraphCodePath -Raw
 $compositingGraphViewModel = Get-Content -LiteralPath $compositingGraphViewModelPath -Raw
+$compositingLayerWorkspace = Get-Content -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/CompositingLayerWorkspace.cs") -Raw
 $compositingGraphProjection = Get-Content -LiteralPath $compositingGraphProjectionPath -Raw
 $compositingGraphDocumentation = Get-Content -LiteralPath $compositingGraphDocumentationPath -Raw
 $mediaPool = (Get-Content -LiteralPath $mediaPoolPath -Raw) + "`n" +
@@ -1142,7 +1143,16 @@ Assert-Condition ($compositingGraph -notmatch '<(Button|ToggleButton|CheckBox|Ra
 Assert-Condition ($compositingGraphViewModel -match 'CompositingGraphProjector\.Project' -and $compositingGraphViewModel -match 'node\.Apply\(projection\)' -and $compositingGraphViewModel -match 'UpdateConnections\(\)') "Live graph refresh must update stable node projections incrementally rather than replace the graph on every status change."
 Assert-Condition ($compositingGraphViewModel -match 'OnSourcePropertyChanged[\s\S]+Thumbnail[\s\S]+return;' -and $compositingGraphViewModel -match 'topologyBefore[\s\S]+AutoLayout\(\)') "Status updates must preserve node positions while topology/source collection changes may auto-layout."
 Assert-Condition ($compositingGraphViewModel -notmatch 'using rtaime\.(RuntimeHost|ControlHost|Provider\.Gpu|Recording)') "Compositing presentation must not depend directly on Runtime, ControlHost, GPU provider or recording implementations."
-Assert-Condition ($compositingGraphViewModel -match 'LayerCommandStatus = "APPLYING"' -and $compositingGraphViewModel -match '_operator\.SetCompositingLayerStateAsync' -and $compositingGraphViewModel -match '_operator\.ReorderCompositingLayersAsync') "Compositing layer mutations must remain client-mediated and visibly pending until confirmed state returns."
+Assert-Condition ($compositingGraphViewModel -match 'StageSelectedLayerVisibilityAsync' -and
+    $compositingGraphViewModel -match 'StageSelectedLayerOpacityAsync' -and
+    $compositingGraphViewModel -match 'StageSelectedLayerOrderAsync' -and
+    $compositingGraphViewModel -notmatch '_operator\.SetCompositingLayerStateAsync|_operator\.ReorderCompositingLayersAsync' -and
+    $compositingLayerWorkspace -match 'LayerCommandStatus = "APPLYING"' -and
+    $compositingLayerWorkspace -match '_operator\.SetCompositingLayerStateAsync' -and
+    $compositingLayerWorkspace -match '_operator\.ReorderCompositingLayersAsync' -and
+    $compositingLayerWorkspace -match 'OrderBaselineCurrent' -and
+    $compositingLayerWorkspace -match 'IsDraftCurrent')
+    "Compositing toolbar must stage local intent only; explicit APPLY must retain Runtime authority, source/revision fences and pending confirmation."
 Assert-Condition ($compositingGraphProjection -match 'CompositingGraphNodeKind' -and $compositingGraphProjection -match 'CanRewire = false' -and $compositingGraphProjection -match '"program-output"' -and $compositingGraphProjection -match '"recorder"') "Client graph projection must expose stable read-only source/routing/composite/output/recorder semantics."
 Assert-Condition ($mediaPool -match 'SelectCompositingNode' -and $mediaPool -match '"graph\.node\.status"' -and $mediaPool -match '"graph\.node\.rewire"') "Graph node selection must project into the existing shared Inspector."
 Assert-Condition ($compositingWorkspaceSurface -match '<local:PreviewViewer' -and $compositingWorkspaceSurface -match 'Monitoring\.PreviewImage' -and $compositingWorkspaceSurface -match 'MediaDeck\.TogglePlayPauseCommand' -and $previewViewer -match '<controls:RtaimeMonitorPresentation' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorPresentation"') "Compositing Preview must reuse the shared monitor presentation and existing monitoring/transport paths."
