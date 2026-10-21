@@ -205,6 +205,7 @@ public sealed class GpuDrawingSurfaceTests
 			await ReadyAsync(surface, dispatcher);
 			surface.SetFrontBufferForQualification(null);
 
+			Console.WriteLine($"GPU NEGATIVE CONTROL: injecting DXGI_ERROR_DEVICE_REMOVED before target creation for {surface.GetType().Name}; this is not a physical device-removal observation.");
 			var failNextAllocation = true;
 			surface.BeforeTargetCreation = description =>
 			{
@@ -268,12 +269,19 @@ public sealed class GpuDrawingSurfaceTests
 				surface.ChangeDpi(scale);
 				await ReadyAsync(surface, dispatcher, checked((int)Math.Ceiling(101 * scale)));
 				Assert.Equal(checked((int)Math.Ceiling(51 * scale)), surface.TextureHeight);
+				var creations = surface.TargetCreateCount;
+				for (var iteration = 0; iteration < 100; iteration++)
+					surface.Invalidate();
+				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+				Assert.Equal(creations, surface.TargetCreateCount);
+				Console.WriteLine($"GPU DPI STABILITY PASS: injectedScale={scale}; unchanged target through 100 coalesced invalidate requests; creates={creations}. This is not a physical monitor move.");
 			}
 			surface.Width = 8192.1;
 			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.WaitingForSize, dispatcher, "device-limit deferral");
 			Assert.Null(surface.ColorTexture);
 			surface.Width = 101;
 			await ReadyAsync(surface, dispatcher);
+			Console.WriteLine("GPU NEGATIVE CONTROL: injecting E_INVALIDARG in qualified DPI target creation; these expected HRESULTs do not describe the hosted graphics driver's health.");
 			var calls = 0;
 			surface.BeforeTargetCreation = _ =>
 			{
@@ -314,7 +322,12 @@ public sealed class GpuDrawingSurfaceTests
 		{
 			window.Close();
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+			Assert.Equal(OperatorSurfaceState.Unloaded, surface.SurfaceState);
+			Assert.Null(surface.ColorTexture);
+			Assert.Null(surface.ColorTextureView);
+			Assert.Equal(0, surface.RenderingSubscriptionBalance);
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
+			Console.WriteLine($"GPU DPI CLEANUP PASS: created={surface.TargetCreateCount}; released={surface.TargetReleaseCount}; rendering subscriptions={surface.RenderingSubscriptionBalance}.");
 		}
 	}
 
