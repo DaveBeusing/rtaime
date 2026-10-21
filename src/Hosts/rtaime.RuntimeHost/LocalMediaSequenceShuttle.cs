@@ -70,6 +70,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                     "Sequence shuttle action is unchanged or incompatible with the current state.")
             };
 
+            // The old Preview sample and pending Take are bound to the
+            // previous transport position/generation. Revoke that evidence
+            // before any potentially blocking decoder repreroll begins.
+            InvalidateSequenceOutputOnShuttleMutation(command.Preparation);
+
             if (next.Generation != map.Generation &&
                 next.State != SequenceRuntimeTransportState.Stopped)
             {
