@@ -214,7 +214,8 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
 
     public Task ActivatePreviewAsync() => RunAsync(async ct =>
     {
-        if (!CurrentPreview || _activated || _submitted || _outputClient is null) return;
+        if (Status != "PREPARED · NO OUTPUT" || !CurrentPreview ||
+            _activated || _submitted || _outputClient is null) return;
         var result = await _outputClient.ActivatePreviewAsync(
             new(SequenceOutputContract.Version, _reference!, _source, _revision, Guid.NewGuid()), ct);
         _activated = true;
@@ -225,7 +226,7 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
         RunAsync(async ct =>
         {
             if (_shuttle is null || _reference is null || _shuttleClient is null ||
-                !CurrentPreview || _take is not null) return;
+                Status is "STALE" or "ERROR" || !CurrentPreview || _take is not null) return;
             var request = new SequenceShuttleRequest(SequenceShuttleContract.Version,
                 _reference, _shuttle.StateRevision, action, ticks);
             _shuttle = await _shuttleClient.ApplyAsync(request, ct);
@@ -294,7 +295,7 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
     public Task RecoverAsync() => RunAsync(async ct =>
     {
         if (!_submitted || _take is not { } command || _reference is null ||
-            _authoring is null || _outputClient is null) return;
+            !SavedOwner || _authoring is null || _outputClient is null) return;
         var live = _authority();
         var saved = await _authoring.GetAsync(_reference.SequenceId, ct);
         if (!live.Connected || live.Stale || live.Busy || !live.Ready ||
