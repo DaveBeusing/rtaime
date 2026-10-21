@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Core;
@@ -235,6 +236,76 @@ public sealed class LocalMediaDecoderSafetyTests
                 Marshal.Copy(IntPtr.Add(native, (height - 1 - y) * rowBytes),
                     expected, y * rowBytes, rowBytes);
             Assert.Equal(expected, bottomUp);
+        }
+        finally { Marshal.FreeHGlobal(native); }
+    }
+
+    [Theory]
+    [InlineData(50, 1, 50)]
+    [InlineData(60_000, 1_001, 60)]
+    public void Native_RGB32_bulk_copy_matches_row_reference_at_both_production_rates(
+        int rateNumerator, int rateDenominator, int samples)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const int width = 1_920, height = 1_080;
+        const int rowBytes = width * 4;
+        var expected = new byte[rowBytes * height];
+        for (var index = 0; index < expected.Length; index++)
+            expected[index] = (byte)(index * 37 + 13);
+        var native = Marshal.AllocHGlobal(expected.Length);
+        try
+        {
+            Marshal.Copy(expected, 0, native, expected.Length);
+            var optimized = new byte[expected.Length];
+            var reference = new byte[expected.Length];
+            for (var i = 0; i < 4; i++)
+            {
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                    native, rowBytes, width, height, optimized);
+                for (var y = 0; y < height; y++)
+                    Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
+            }
+
+            var optimizedTimes = new double[samples];
+            var referenceTimes = new double[samples];
+            var caller = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < samples; i++)
+            {
+                var start = Stopwatch.GetTimestamp();
+                WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                    native, rowBytes, width, height, optimized);
+                optimizedTimes[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            }
+            var optimizedAllocations = GC.GetAllocatedBytesForCurrentThread() - caller;
+            caller = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < samples; i++)
+            {
+                var start = Stopwatch.GetTimestamp();
+                for (var y = 0; y < height; y++)
+                    Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
+                referenceTimes[i] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            }
+            var referenceAllocations = GC.GetAllocatedBytesForCurrentThread() - caller;
+
+            Assert.Equal(reference, optimized);
+            Assert.InRange(optimizedAllocations, 0, 4_096);
+            Assert.InRange(referenceAllocations, 0, 4_096);
+            Array.Sort(optimizedTimes);
+            Array.Sort(referenceTimes);
+            static double P(double[] timings, double rank) =>
+                timings[Math.Max(0, (int)Math.Ceiling(timings.Length * rank) - 1)];
+            Console.WriteLine("NATIVE RGB32 TRANSFER SOFTWARE COMPARISON: " + JsonSerializer.Serialize(new
+            {
+                sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT") ?? "UNAVAILABLE",
+                videoRate = $"{rateNumerator}/{rateDenominator}", width, height,
+                bytesPerFrame = expected.Length, samples,
+                optimizedNativeCopyCallsPerFrame = 1,
+                referenceNativeCopyCallsPerFrame = height,
+                optimized = new { p50 = P(optimizedTimes, .5), p95 = P(optimizedTimes, .95), p99 = P(optimizedTimes, .99), allocatedBytes = optimizedAllocations },
+                allocatingReference = new { p50 = P(referenceTimes, .5), p95 = P(referenceTimes, .95), p99 = P(referenceTimes, .99), allocatedBytes = referenceAllocations },
+                parity = true, metric = "CPU_WALL_MICROBENCH", nativeMediaFoundation = "NOT_IN_MICROBENCH",
+                actualPlaybackLatency = "UNVERIFIED"
+            }));
         }
         finally { Marshal.FreeHGlobal(native); }
     }
