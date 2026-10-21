@@ -132,6 +132,73 @@ public sealed class PreparedMediaHandoffIntegrationTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prepared_GO_media_play_acknowledges_existing_autoplay_without_a_decoder_restart(
+        bool reachEndBeforeCue)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var a = MediaSourceId.New();
+        var b = MediaSourceId.New();
+        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        deck.ObserveProgramSource(a);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        Assert.Equal(MediaDeckState.Ready, opened.State);
+        var prepared = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
+        var generation = prepared.DecodeGeneration;
+        Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
+        Assert.Equal(1, deck.Resources.Reserved);
+
+        // Exercise the exact successful consume gate used by the authorized TAKE.
+        Assert.True(deck.WithPreparedNext(prepared, consume: true, () => true, result => result));
+        deck.ObserveProgramSource(b);
+        Assert.Equal(MediaTransportState.Playing, deck.GetSnapshot(b).Transport!.State);
+        Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
+
+        if (reachEndBeforeCue)
+        {
+            // The bundled 1080p50 clip is only one second long. A delayed final
+            // rundown MediaPlay can arrive after its Program-edge autoplay ended.
+            var deadline = Stopwatch.StartNew();
+            while (deck.GetSnapshot(b).Transport!.State != MediaTransportState.Ended &&
+                   deadline.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                deck.ProcessBoundary(b, out var boundary);
+                boundary?.Dispose();
+                Thread.Sleep(2);
+            }
+            var atEnd = deck.GetSnapshot(b);
+            Assert.Equal(MediaTransportState.Ended, atEnd.Transport!.State);
+            Assert.Null(atEnd.Failure);
+            Assert.True(deck.GetPlaybackMeasurements(b)!.Value.DecodedAudioSamples > 0);
+        }
+
+        var beforeCue = deck.GetSnapshot(b).Transport!.State;
+        var cue = new MediaTransportCommand(MediaContractVersion.Current,
+            opened.Probe.AssetId, MediaTransportCommandKind.Play) { SourceId = b };
+        var acknowledged = deck.ApplyTransport(cue);
+        Assert.True(acknowledged.Succeeded, acknowledged.Failure?.Message);
+        Assert.Equal(beforeCue, acknowledged.Snapshot.State);
+        Assert.Equal(generation, deck.GetDecodeSnapshot(b)!.Value.Generation);
+        Assert.Equal(1, deck.Resources.Reserved);
+
+        if (reachEndBeforeCue)
+        {
+            // The next explicit manual replay remains a real seek with a new
+            // generation. Only the first post-TAKE cue is idempotent.
+            var replay = deck.ApplyTransport(cue);
+            Assert.True(replay.Succeeded, replay.Failure?.Message);
+            Assert.Equal(MediaTransportState.Playing, replay.Snapshot.State);
+            Assert.Equal(generation + 1, deck.GetDecodeSnapshot(b)!.Value.Generation);
+        }
+
+        deck.Close(b);
+        Assert.Equal(0, deck.Resources.Reserved);
+    }
+
+    [Theory]
     [InlineData(false, "none")]
     [InlineData(true, "none")]
     [InlineData(false, "seek")]
@@ -212,7 +279,12 @@ public sealed class PreparedMediaHandoffIntegrationTests
             }
             Assert.NotEqual(RundownExecutionState.Failed, go.Execution.State);
             Assert.Equal(b, runtime.Runtime.CommittedProgramSourceId);
-            Assert.Equal(generation, runtime.MediaDeck.GetDecodeSnapshot(b)!.Value.Generation);
+            var committedGeneration = runtime.MediaDeck.GetDecodeSnapshot(b)!.Value.Generation;
+            Assert.True(committedGeneration == generation,
+                $"Prepared GO must keep the resident decoder generation: prepared={generation}, " +
+                $"afterGO={committedGeneration}, deck={runtime.MediaDeck.GetSnapshot(b).State}, " +
+                $"transport={runtime.MediaDeck.GetSnapshot(b).Transport?.State}, " +
+                $"reservedOwners={runtime.MediaDeck.Resources.Reserved}.");
             Assert.Equal(2, runtime.MediaDeck.Resources.Reserved);
             Assert.Equal(revision.Value + 2, control.Control!.State.Revision.Value);
             var sequence = runtime.Runtime.Snapshot.NextSequenceNumber;
