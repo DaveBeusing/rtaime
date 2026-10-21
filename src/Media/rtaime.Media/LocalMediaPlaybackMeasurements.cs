@@ -89,4 +89,10 @@ public readonly record struct LocalMediaPlaybackMeasurements(
     public double VideoSecondsPerTick { get; init; }
     public ulong VideoForwardGapCount { get; init; }
     public double MaximumVideoIntervalMilliseconds { get; init; }
+
+    // Diagnostic-only software stages; unset fields explicitly mean UNMEASURED.
+    // These do not enter any versioned media or control transport contract.
+    public LocalMediaDecodeCopyMeasurements DecoderCopies { get; init; }
+    public LocalMediaCopyMeasurements WorkerSlotVideoCopy { get; init; }
+    public LocalMediaCopyMeasurements WorkerSlotAudioCopy { get; init; }
 }
