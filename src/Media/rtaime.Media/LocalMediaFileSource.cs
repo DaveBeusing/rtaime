@@ -324,6 +324,7 @@ internal interface ILocalMediaDecoder : IDisposable
     LocalMediaReadMeasurements VideoReadMeasurements => default;
     LocalMediaReadMeasurements AudioReadMeasurements => default;
     LocalMediaDecodeCopyMeasurements CopyMeasurements => default;
+    bool CopyDiagnosticsEnabled => false;
 	bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame);
     bool TryReadNext(ulong sequenceNumber, CancellationToken cancellationToken, out LocalMediaDecodedFrame? frame)
     {
