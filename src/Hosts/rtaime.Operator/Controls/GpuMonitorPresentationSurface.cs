@@ -32,7 +32,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private ID3D11SamplerState? _pointSampler;
 	private ID3D11Texture2D? _sharedTexture;
 	private ID3D11ShaderResourceView? _sharedView;
-	private MonitoringResourceId? _openedResourceId;
 	private MonitoringSharedResourceDescriptor? _openedResource;
 	private long _deviceAdapterLuid;
 	private DateTimeOffset _lastAnalysisAt;
@@ -134,12 +133,34 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private static void OnPresentationChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var surface = (GpuMonitorPresentationSurface)dependencyObject;
-		surface.CloseSharedResource();
-		surface.ResetAnalysisEvidence();
+		// Monitoring frames may advance their sequence while referencing the same
+		// owned shared texture. Reopening that texture per frame creates needless
+		// D3D interop churn and can momentarily replace sharp GPU presentation.
+		if (eventArgs.Property == MonitorProperty ||
+			eventArgs.Property == GpuFrameProperty &&
+			!SameSharedResource(
+				(eventArgs.OldValue as OperatorGpuMonitoringFrame)?.Resource,
+				(eventArgs.NewValue as OperatorGpuMonitoringFrame)?.Resource))
+			surface.CloseSharedResource();
+		if (eventArgs.Property == MonitorProperty || eventArgs.Property == GpuFrameProperty)
+			surface.ResetAnalysisEvidence();
 		surface.Invalidate();
 		if (surface.GpuFrame is null)
 			surface.Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
 	}
+
+	internal static bool SameSharedResource(
+		MonitoringSharedResourceDescriptor? previous,
+		MonitoringSharedResourceDescriptor? current) =>
+		previous is not null && current is not null &&
+		previous.ResourceId == current.ResourceId &&
+		previous.ProviderInstanceId == current.ProviderInstanceId &&
+		previous.SurfaceId == current.SurfaceId &&
+		previous.Format == current.Format &&
+		previous.StorageDomain == current.StorageDomain &&
+		previous.AccessMode == current.AccessMode &&
+		previous.Lifetime == current.Lifetime &&
+		previous.Interop == current.Interop;
 
 	private static void OnInspectionChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
@@ -163,15 +184,41 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 
 	protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
 	{
-		if (!IsLoaded) { base.OnRenderSizeChanged(sizeInfo); return; }
+		if (!IsLoaded || MatchesAllocatedViewportPixels())
+		{
+			// Fractional-DIP layout changes that retain exactly the same physical target
+			// must not force a reduced fallback or recreate a D3D11/D3D9Ex texture.
+			_resizeSettleTimer.Stop();
+			_pendingSize = null;
+			base.OnRenderSizeChanged(sizeInfo);
+			return;
+		}
 		Monitor?.SetGpuPresentationState(false, "Resize settling · CPU/WPF fallback");
-		_pendingSize = sizeInfo; _resizeSettleTimer.Stop(); _resizeSettleTimer.Start();
+		_pendingSize = sizeInfo;
+		_resizeSettleTimer.Stop();
+		_resizeSettleTimer.Start();
 	}
 
-	// Layout uses DIPs; only the texture allocation converts to physical pixels.
-	protected override DpiScale TargetScale => Monitor is { } monitor
-		? new DpiScale(monitor.DpiScaleX, monitor.DpiScaleY)
-		: VisualTreeHelper.GetDpi(this);
+	private bool MatchesAllocatedViewportPixels()
+	{
+		var dpi = VisualTreeHelper.GetDpi(this);
+		return MatchesViewportPixels(
+			TextureWidth, TextureHeight,
+			ActualWidth, ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY);
+	}
+
+	internal static bool MatchesViewportPixels(
+		int allocatedWidth, int allocatedHeight,
+		double widthDip, double heightDip, double dpiScaleX, double dpiScaleY) =>
+		allocatedWidth > 0 && allocatedHeight > 0 &&
+		OperatorSurfaceTargetPolicy.TryMeasure(
+			widthDip, heightDip, dpiScaleX, dpiScaleY,
+			allocatedWidth, allocatedHeight, out var requested, out _) &&
+		requested.Width == allocatedWidth && requested.Height == allocatedHeight;
+
+	// Allocate in the actual WPF visual's physical pixel space, never with a
+	// cached sibling viewport DPI from before a PerMonitorV2 window transition.
+	protected override DpiScale TargetScale => VisualTreeHelper.GetDpi(this);
 
 	private void OnLoadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
@@ -294,10 +341,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 			return false;
 		}
 
-		if (_sharedTexture is not null && _openedResource is { } opened &&
-			_openedResourceId == frame.Resource.ResourceId && opened.ProviderInstanceId == frame.Resource.ProviderInstanceId &&
-			opened.Lifetime.Generation == frame.Resource.Lifetime.Generation && opened.Format == frame.Resource.Format &&
-			opened.Interop.AdapterLuid == interop.AdapterLuid && opened.Interop.SharedHandle == interop.SharedHandle)
+		if (_sharedTexture is not null && SameSharedResource(_openedResource, frame.Resource))
 			return true;
 		CloseSharedResource();
 		try
@@ -312,7 +356,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 				CloseSharedResource(); return false;
 			}
 			_sharedView = device.CreateShaderResourceView(_sharedTexture);
-			_openedResourceId = frame.Resource.ResourceId;
 			_openedResource = frame.Resource;
 			return true;
 		}
@@ -586,7 +629,6 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 		_sharedTexture?.Dispose();
 		_sharedView = null;
 		_sharedTexture = null;
-		_openedResourceId = null;
 		_openedResource = null;
 	}
 

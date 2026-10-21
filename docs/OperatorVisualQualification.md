@@ -136,8 +136,8 @@ The suite qualifies these invariants:
 - Fill remains aspect-correct, covers the physical viewport and uses centered intentional cropping.
 - 100% maps one source pixel to one physical target pixel independently of WPF DPI scale.
 - a one-physical-pixel target error and an accidental second scaling stage are independently detectable.
-- the productive monitor template contains one media `Image` surface, uses high-quality bitmap scaling and device-pixel snapping, and contains no nested `Viewbox`.
-- rapid resize/DPI changes do not repeatedly adopt transient render targets; after the settle interval the final target is adopted once.
+- the productive monitor template contains one CPU media `Image`, one GPU presentation surface, viewport-scoped device-pixel snapping and no nested `Viewbox`. The CPU fallback uses high-quality Fit/Fill/fractional scaling and point filtering only at integral pixel enlargement/100%, preventing interpolation of native-pixel inspection.
+- rapid resize/DPI changes do not repeatedly adopt transient render targets; the GPU surface compares local WPF DPI and exact ceiling physical target pixels before scheduling a resize, avoiding fallback/reallocation when a fractional-DIP adjustment does not change those pixels. After the settle interval the final target is adopted once.
 - a stable 60 fps-equivalent sequence of 3,600 presentation requests retains one render-target revision, providing a deterministic resource-churn regression bound.
 
 These checks intentionally avoid pixel-identical GPU golden images in normal CI. Driver-sensitive raster evidence belongs to the existing reference-platform qualification strategy; normal Required Gates prove the renderer-independent geometry, scaling-path declaration and resource-lifetime contracts.

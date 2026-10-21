@@ -53,7 +53,7 @@
 								</StackPanel>
 							</Grid>
 						</Border>
-						<Grid x:Name="PART_MediaViewport" Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}" ClipToBounds="True" AutomationProperties.Name="Viewer image; F Fit, 1 native pixels, plus or minus zoom, arrows pan, Shift R ROI">
+						<Grid x:Name="PART_MediaViewport" Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}" ClipToBounds="True" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" UseLayoutRounding="True" AutomationProperties.Name="Viewer image; F Fit, 1 native pixels, plus or minus zoom, arrows pan, Shift R ROI">
 							<controls:RtaimeStatePlaceholder State="{TemplateBinding PlaceholderState}" Title="{TemplateBinding PlaceholderTitle}" Detail="{TemplateBinding PlaceholderDetail}" Panel.ZIndex="60" Margin="10"/>
 							<Border Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
 								<Border.Background><DrawingBrush TileMode="Tile" Viewport="0,0,12,12" ViewportUnits="Absolute"><DrawingBrush.Drawing><DrawingGroup>
@@ -62,10 +62,17 @@
 								<Border.RenderTransform><TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"/></Border.RenderTransform>
 							</Border>
 							<Image Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}" Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
-							 Stretch="Fill" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False">
-								<Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers>
-									<DataTrigger Binding="{Binding Monitor.IsGpuPresentationActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-								</Style.Triggers></Style></Image.Style>
+							 Stretch="Fill" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True" SnapsToDevicePixels="True" IsHitTestVisible="False">
+								<Image.Style><Style TargetType="Image">
+									<Setter Property="Visibility" Value="Visible"/>
+									<Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding Monitor.IsGpuPresentationActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+										<DataTrigger Binding="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Value="100%"><Setter Property="RenderOptions.BitmapScalingMode" Value="NearestNeighbor"/></DataTrigger>
+										<DataTrigger Binding="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Value="200%"><Setter Property="RenderOptions.BitmapScalingMode" Value="NearestNeighbor"/></DataTrigger>
+										<DataTrigger Binding="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Value="400%"><Setter Property="RenderOptions.BitmapScalingMode" Value="NearestNeighbor"/></DataTrigger>
+										<DataTrigger Binding="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Value="800%"><Setter Property="RenderOptions.BitmapScalingMode" Value="NearestNeighbor"/></DataTrigger>
+									</Style.Triggers></Style></Image.Style>
 								<Image.RenderTransform><TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"/></Image.RenderTransform>
 							</Image>
 							<controls:GpuMonitorPresentationSurface Monitor="{Binding Monitor, RelativeSource={RelativeSource TemplatedParent}}" GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}" InspectionChannel="{Binding Monitor.InspectionChannel, RelativeSource={RelativeSource TemplatedParent}}" Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="10"/>

@@ -2,7 +2,10 @@
 
 using System.IO;
 using System.Xml.Linq;
+using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Operator;
+using rtaime.Operator.Controls;
 using Xunit;
 
 namespace rtaime.Tests.Operator;
@@ -147,6 +150,130 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		var document = XDocument.Parse(theme);
 		Assert.Single(document.Descendants(), element => element.Name.LocalName == "Image");
 		Assert.Single(document.Descendants(), element => element.Name.LocalName == "GpuMonitorPresentationSurface");
+	}
+
+
+	[Fact]
+	public void Cpu_fallback_uses_exact_source_pixel_sampling_only_at_integral_zoom()
+	{
+		var root = FindRepositoryRoot();
+		var theme = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator",
+			"Themes", "Controls", "RtaimeMonitorWorkspace.xaml"));
+		var document = XDocument.Parse(theme);
+		var viewport = Assert.Single(document.Descendants(), element =>
+			element.Name.LocalName == "Grid" &&
+			(string?)element.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == "Name") == "PART_MediaViewport");
+		Assert.Equal("True", (string?)viewport.Attribute("ClipToBounds"));
+		Assert.Equal("True", (string?)viewport.Attribute("UseLayoutRounding"));
+		Assert.Equal("HighQuality", (string?)viewport.Attribute("RenderOptions.BitmapScalingMode"));
+
+		var image = Assert.Single(viewport.Elements(), element => element.Name.LocalName == "Image");
+		Assert.Equal("Fill", (string?)image.Attribute("Stretch"));
+		Assert.Null(image.Attribute("RenderOptions.BitmapScalingMode"));
+		var style = Assert.Single(image.Descendants(), element => element.Name.LocalName == "Style");
+		Assert.Contains(style.Descendants(), element =>
+			element.Name.LocalName == "Setter" &&
+			(string?)element.Attribute("Property") == "RenderOptions.BitmapScalingMode" &&
+			(string?)element.Attribute("Value") == "HighQuality");
+
+		var integralZoom = style.Descendants()
+			.Where(element => element.Name.LocalName == "DataTrigger" &&
+				((string?)element.Attribute("Binding"))?.Contains("Monitor.ZoomMode", StringComparison.Ordinal) == true &&
+				element.Elements().Any(setter =>
+					setter.Name.LocalName == "Setter" &&
+					(string?)setter.Attribute("Property") == "RenderOptions.BitmapScalingMode" &&
+					(string?)setter.Attribute("Value") == "NearestNeighbor"))
+			.Select(element => (string?)element.Attribute("Value"))
+			.OrderBy(value => value, StringComparer.Ordinal)
+			.ToArray();
+		Assert.Equal(new[] { "100%", "200%", "400%", "800%" }, integralZoom);
+		// Reduced-resolution Fit/Fill and fractional zoom must not claim native detail.
+		Assert.DoesNotContain(integralZoom, value => value is "FIT" or "FILL" or "25%" or "50%" or "FREE");
+	}
+
+
+	[Theory]
+	[InlineData(1.00)]
+	[InlineData(1.25)]
+	[InlineData(1.50)]
+	[InlineData(1.75)]
+	[InlineData(2.00)]
+	public void Subpixel_layout_changes_reuse_allocated_gpu_pixels_but_dpi_transitions_do_not(double dpi)
+	{
+		var target = MediaRenderTarget.Create(800.1, 450.1, dpi, dpi, MediaScalingPath.GpuProvider);
+		Assert.True(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1, 450.1, dpi, dpi));
+		Assert.True(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1001, 450.1001, dpi, dpi));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 802, 452, dpi, dpi));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1, 450.1, dpi + 0.25, dpi + 0.25));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 0, 450.1, dpi, dpi));
+	}
+
+	[Fact]
+	public void Shared_gpu_resource_reuse_is_fenced_by_full_identity_and_lifetime()
+	{
+		var provider = Identity.New();
+		var resource = MonitoringResourceId.New();
+		var surface = SurfaceId.New();
+		var lease = new SurfaceLifetimeDescriptor(new Generation(7), resource.Value);
+		MonitoringSharedResourceDescriptor Create(
+			MonitoringResourceId id, Identity providerId, SurfaceId surfaceId,
+			SurfaceLifetimeDescriptor lifetime, long adapter = 17, ulong handle = 0x1234) =>
+			new(id, providerId, surfaceId, VideoFormat.Hd1080p50Rgba8,
+				SurfaceStorageDomain.Shared, MonitoringResourceAccessMode.ReadOnly, lifetime,
+				new MonitoringSharedResourceInteropDescriptor(
+					MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle, adapter, handle));
+
+		var first = Create(resource, provider, surface, lease);
+		var unchangedNextFrame = Create(resource, provider, surface, lease);
+		Assert.True(GpuMonitorPresentationSurface.SameSharedResource(first, unchangedNextFrame));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first, null));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(null, first));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(MonitoringResourceId.New(), provider, surface, lease)));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(resource, Identity.New(), surface, lease)));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(resource, provider, SurfaceId.New(), lease)));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(resource, provider, surface, new SurfaceLifetimeDescriptor(new Generation(8), resource.Value))));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(resource, provider, surface, lease, adapter: 18)));
+		Assert.False(GpuMonitorPresentationSurface.SameSharedResource(first,
+			Create(resource, provider, surface, lease, handle: 0x2345)));
+	}
+
+	[Theory]
+	[InlineData(801.0, 451.0, 1.25)]
+	[InlineData(960.0, 540.0, 1.75)]
+	[InlineData(1280.5, 720.25, 1.50)]
+	[InlineData(1920.0, 1080.0, 1.00)]
+	[InlineData(960.0, 540.0, 2.00)]
+	public void Local_gpu_target_and_monitor_viewport_agree_on_ceil_physical_pixels(
+		double widthDip, double heightDip, double dpi)
+	{
+		var requested = MediaRenderTarget.Create(widthDip, heightDip, dpi, dpi, MediaScalingPath.GpuProvider);
+		Assert.True(OperatorSurfaceTargetPolicy.TryMeasure(
+			widthDip, heightDip, dpi, dpi, 16384, 16384, out var actual, out var reason), reason);
+		Assert.Equal(requested.PixelWidth, actual.Width);
+		Assert.Equal(requested.PixelHeight, actual.Height);
+		var fit = MediaPresentationGeometry.Calculate(3840, 2160, actual.Width, actual.Height, MediaPresentationMode.Fit);
+		Assert.True(fit.Width <= actual.Width + 1e-6);
+		Assert.True(fit.Height <= actual.Height + 1e-6);
+	}
+
+	[Fact]
+	public void Subpixel_layout_changes_do_not_change_allocated_gpu_target()
+	{
+		var first = MediaRenderTarget.Create(800.1, 450.1, 1.25, 1.25, MediaScalingPath.GpuProvider);
+		var second = MediaRenderTarget.Create(800.3, 450.3, 1.25, 1.25, MediaScalingPath.GpuProvider);
+		Assert.Equal(first, second);
+		var changed = MediaRenderTarget.Create(802, 452, 1.25, 1.25, MediaScalingPath.GpuProvider);
+		Assert.NotEqual(first, changed);
 	}
 
 	[Fact]

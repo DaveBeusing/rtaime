@@ -556,7 +556,11 @@ Assert-Condition ($window -match 'ProgramOutput\.Health') "Program Output / Clea
 Assert-Condition ($programOutputWindow -match 'Source="\{Binding ProgramImage\}"') "Clean Feed must present the same Runtime-derived ProgramImage used by the Operator monitoring surface."
 Assert-Condition ($programOutputWindow -match 'Stretch="Uniform"') "Clean Feed must preserve Program aspect ratio."
 Assert-Condition ($programOutputWindow -match 'RenderOptions\.BitmapScalingMode="HighQuality"') "Clean Feed must use an explicit high-quality bitmap scaling policy."
-Assert-Condition ($monitorWorkspaceTheme -match 'Monitor\.Frame[\s\S]+RenderOptions\.BitmapScalingMode="HighQuality"') "Shared Preview/Program monitoring must use the same explicit high-quality bitmap scaling policy."
+Assert-Condition ($monitorWorkspaceTheme -match 'Monitor\.Frame[\s\S]+<Setter Property="RenderOptions\.BitmapScalingMode" Value="HighQuality"/>') "Shared Preview/Program monitoring must retain explicit high-quality Fit/Fill and fractional fallback sampling."
+foreach ($zoom in @('100%', '200%', '400%', '800%')) {
+	$nativePixelTrigger = 'DataTrigger Binding="\{Binding Monitor\.ZoomMode[^"]*\}" Value="' + [Regex]::Escape($zoom) + '"><Setter Property="RenderOptions\.BitmapScalingMode" Value="NearestNeighbor"/>'
+	Assert-Condition ($monitorWorkspaceTheme -match $nativePixelTrigger) "Shared Preview/Program monitoring must preserve exact source pixels at integral zoom $zoom."
+}
 Assert-Condition ($programOutputWindow -notmatch '<Button|<ComboBox|<TextBox|MediaElement|VideoDrawing') "Clean Feed must contain no Operator controls or independent media player."
 Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel') "Clean Feed controller must consume the existing Operator monitoring projection rather than own Program rendering."
 Assert-Condition ($programOutputController -match 'EnumDisplayMonitors' -and $programOutputController -match 'GetMonitorInfo') "Program Output / Clean Feed must enumerate selectable Windows displays through the native monitor API."
