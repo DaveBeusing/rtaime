@@ -104,7 +104,12 @@ public sealed class OutputCanvasEditorWorkflowTests
         await editor.SaveAsync();
         Assert.True(editor.IsDirty);
         Assert.True(editor.SaveOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
         Assert.False(editor.SaveCommand.CanExecute(null));
+        var retained = editor.Fields.First(field => field.Key == "tlx").Value;
+        editor.NudgeSelected(9, 0);
+        Assert.Equal(retained, editor.Fields.First(field => field.Key == "tlx").Value);
+        Assert.True(editor.SaveOutcomeUnconfirmed);
         Assert.Equal(1, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
 
@@ -155,8 +160,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         await editor.ApplyAsync();
         Assert.Equal(1, gateway.Applies);
         Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
         Assert.False(editor.ApplyCommand.CanExecute(null));
         Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.False(editor.DisableCommand.CanExecute(null));
         Assert.Contains("UNKNOWN", editor.WorkflowStage);
 
         await editor.ObserveBoundaryAsync();
