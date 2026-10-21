@@ -142,6 +142,43 @@
 					</Style.Triggers>
 				</Style>
 			</StackPanel.Style>
+			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10">
+				<StackPanel>
+					<DockPanel Margin="0,0,0,6">
+						<TextBlock Text="OUTPUTS" Style="{StaticResource OperatorSectionTitle}" />
+						<controls:RtaimeStatusBadge DockPanel.Dock="Right"
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding AccessState}" />
+					</DockPanel>
+					<WrapPanel>
+						<controls:RtaimeButton Content="ROUTING / SIGNAL"
+							Command="{Binding ShowRoutingModeCommand}" IsCompact="True" Margin="0,0,6,4"
+							AutomationProperties.Name="Show routing and output signal status" />
+						<controls:RtaimeButton Content="CANVAS / MAPPING"
+							Command="{Binding ShowCanvasModeCommand}" IsCompact="True" Margin="0,0,6,4"
+							AutomationProperties.Name="Show governed output canvas editor" />
+						<controls:RtaimeButton Content="TECHNICAL DETAILS"
+							Command="{Binding ToggleTechnicalDetailsCommand}" IsCompact="True"
+							AutomationProperties.Name="Toggle output health and transport diagnostics" />
+					</WrapPanel>
+					<TextBlock Text="{Binding SelectedOutput.DeliveryEvidence}" Style="{StaticResource OperatorValue}"
+						TextWrapping="Wrap" Margin="0,4,0,0" />
+					<TextBlock Text="{Binding SelectedOutput.OutputKind}" Style="{StaticResource OperatorLabel}"
+						TextWrapping="Wrap" Margin="0,2,0,0" />
+				</StackPanel>
+			</Border>
+			<StackPanel x:Name="RoutingModeSurface">
+				<StackPanel.Style>
+					<Style TargetType="StackPanel">
+						<Setter Property="Visibility" Value="Visible" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding IsCanvasMode}" Value="True">
+								<Setter Property="Visibility" Value="Collapsed" />
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</StackPanel.Style>
+
 
 			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 				<StackPanel>
@@ -191,7 +228,13 @@
 				</StackPanel>
 			</Border>
 
-			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+			<Border Margin="0,0,0,14">
+				<Border.Style><Style TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+					<Setter Property="Visibility" Value="Collapsed" />
+					<Style.Triggers><DataTrigger Binding="{Binding ShowTechnicalDetails}" Value="True">
+						<Setter Property="Visibility" Value="Visible" />
+					</DataTrigger></Style.Triggers>
+				</Style></Border.Style>
 				<StackPanel>
 					<TextBlock Text="SYSTEM HEALTH" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
 					<ItemsControl ItemsSource="{Binding SystemHealth}" ItemTemplate="{StaticResource HealthRowTemplate}" />
@@ -261,7 +304,13 @@
 				</StackPanel>
 			</Border>
 
-			<Border Style="{StaticResource OperatorPanel}">
+			<Border>
+				<Border.Style><Style TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+					<Setter Property="Visibility" Value="Collapsed" />
+					<Style.Triggers><DataTrigger Binding="{Binding ShowTechnicalDetails}" Value="True">
+						<Setter Property="Visibility" Value="Visible" />
+					</DataTrigger></Style.Triggers>
+				</Style></Border.Style>
 				<StackPanel>
 					<TextBlock Text="PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
 					<Grid Margin="0,0,0,8">
@@ -316,6 +365,7 @@
 					<TextBlock Text="Unavailable telemetry remains explicitly UNAVAILABLE. No local probing or extra sampling loop is introduced." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
 				</StackPanel>
 			</Border>
+			</StackPanel>
 		</StackPanel>
 	</Grid>
 </UserControl>
