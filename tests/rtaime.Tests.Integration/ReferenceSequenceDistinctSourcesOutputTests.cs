@@ -86,7 +86,7 @@ public sealed class ReferenceSequenceDistinctSourcesOutputTests
                     kind == SequenceMediaKind.Audio ? "program" : null,
                     0, 0,
                     opacity == 255 ? null : SequenceTransitionKind.Dissolve,
-                    0, opacity == 255 ? 0 : 20 * 4800, opacity != 255);
+                    0, opacity == 255 ? 0 : 8 * 4800, opacity != 255);
             // Different native H.264 sources enter a simultaneous upper/lower
             // compositor with an explicit dissolve contribution. The audio
             // sources carry separate frequencies rather than duplicate PCM.
@@ -96,7 +96,7 @@ public sealed class ReferenceSequenceDistinctSourcesOutputTests
                 [new SequenceExecutionSlice(0, 20 * 4800,
                 [
                     Clip(0, SequenceMediaKind.Video, 0),
-                    Clip(1, SequenceMediaKind.Video, 1),
+                    Clip(1, SequenceMediaKind.Video, 1, opacity: 128),
                     Clip(0, SequenceMediaKind.Audio, 2),
                     Clip(1, SequenceMediaKind.Audio, 3)
                 ])]);
@@ -115,10 +115,14 @@ public sealed class ReferenceSequenceDistinctSourcesOutputTests
 
             await using var monitor = runtime.MonitoringHub.Subscribe(
                 capacity: 4, requiresCpuFallback: true);
-            var first = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
-            Assert.True(first.Published, first.FailureCode);
-            using (var previewBoundary = runtime.ProcessNextBoundary())
+            // The video dissolve ramps from red to blue over eight exact
+            // Program frames. Sampling through slot four provides an actual
+            // mixed red/blue frame on the monitor's bounded stride.
+            for (var previewSlot = 0; previewSlot <= 4; previewSlot++)
             {
+                var source = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+                Assert.True(source.Published, source.FailureCode);
+                using var previewBoundary = runtime.ProcessNextBoundary();
                 decks.ObserveSequenceProgramBoundary(previewBoundary);
                 Assert.NotEqual(mediaB, previewBoundary.CommittedProgramSourceId);
             }
@@ -128,22 +132,22 @@ public sealed class ReferenceSequenceDistinctSourcesOutputTests
             using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
             {
                 MonitoringFrame? preview = null;
-                for (var index = 0; index < 4; index++)
+                for (var index = 0; index < 8; index++)
                 {
                     var captured = await monitor.ReadAsync(timeout.Token);
-                    if (captured.Descriptor.StreamKind == MonitoringStreamKind.Source &&
-                        captured.Descriptor.SourceId == mediaB)
+                    if (captured.Descriptor.StreamKind != MonitoringStreamKind.Source ||
+                        captured.Descriptor.SourceId != mediaB ||
+                        !captured.HasFallbackPayload)
+                        continue;
+                    var candidate = captured.Pixels.Span;
+                    if (candidate.Length >= 4 && candidate[0] > 30 &&
+                        candidate[2] > 30 && candidate[1] < 80)
                     {
                         preview = captured;
                         break;
                     }
                 }
                 Assert.NotNull(preview);
-                Assert.True(preview!.HasFallbackPayload);
-                var rgba = preview.Pixels.Span;
-                Assert.True(rgba.Length >= 4);
-                Assert.True(rgba[0] > 30 && rgba[2] > 30,
-                    "The native Preview contribution must contain both red and blue source pixels.");
             }
 
             var before = control.State.Revision;
