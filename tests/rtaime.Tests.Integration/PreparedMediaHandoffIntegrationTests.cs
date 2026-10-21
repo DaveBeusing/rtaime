@@ -132,19 +132,24 @@ public sealed class PreparedMediaHandoffIntegrationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
     public void Prepared_GO_media_play_acknowledges_existing_autoplay_without_a_decoder_restart(
-        bool reachEndBeforeCue)
+        bool reachEndBeforeCue, bool use5994)
     {
-        if (!OperatingSystem.IsWindows()) return;
-        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        if (!OperatingSystem.IsWindows() || use5994 && !ReferenceMediaTestAsset.IsRegressionEnabled) return;
+        using var bundled = use5994 ? null : LocalMediaTestAsset.ExtractReference1080p50();
+        using var generated = use5994 ? ReferenceMediaTestAsset.Generate(ReferenceMediaProfile.Hd5994) : null;
+        var assetPath = use5994 ? generated!.Path : bundled!.Path;
         var a = MediaSourceId.New();
         var b = MediaSourceId.New();
-        using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8, 2, [a, b]);
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var deck = new LocalMediaDeckRuntimeService(format, 2, [a, b]);
         deck.ObserveProgramSource(a);
-        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(asset.Path)));
-        var opened = deck.Preload(new(MediaContractVersion.Current, b, asset.Path), Prepared(deck, b), hash);
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assetPath)));
+        var opened = deck.Preload(new(MediaContractVersion.Current, b, assetPath), Prepared(deck, b), hash);
         Assert.Equal(MediaDeckState.Ready, opened.State);
         var prepared = deck.PrepareLoadedNext(b, opened.Probe!.AssetId);
         var generation = prepared.DecodeGeneration;
@@ -159,8 +164,8 @@ public sealed class PreparedMediaHandoffIntegrationTests
 
         if (reachEndBeforeCue)
         {
-            // The bundled 1080p50 clip is only one second long. A delayed final
-            // rundown MediaPlay can arrive after its Program-edge autoplay ended.
+            // A delayed final rundown MediaPlay may arrive after Program-edge
+            // autoplay reached OUT. The bundled 50-fps clip is only one second.
             var deadline = Stopwatch.StartNew();
             while (deck.GetSnapshot(b).Transport!.State != MediaTransportState.Ended &&
                    deadline.Elapsed < TimeSpan.FromSeconds(10))
