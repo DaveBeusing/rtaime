@@ -266,10 +266,24 @@ public sealed partial class LocalMediaDeckRuntimeService
             {
                 var session = _sequenceOutput;
                 if (session is null || session.Reference != reference ||
-                    session.SourceId != sequenceSource ||
-                    session.AuthorityRevision != previousRevision.Value ||
-                    session.ProgramAuthorized)
-                    throw new InvalidOperationException("Sequence Take owner was changed or already consumed.");
+                    session.SourceId != sequenceSource)
+                    throw new InvalidOperationException("Sequence Take owner identity changed.");
+                if (session.ProgramAuthorized)
+                {
+                    // Recovery may observe this exact already-confirmed Take.
+                    // Never commit Program again or increment its revision.
+                    lock (_sequenceGate)
+                    {
+                        if (session.AuthorityRevision == committedRevision.Value &&
+                            _sequenceOwners is { } confirmed &&
+                            confirmed.AuthorityRevision == committedRevision.Value &&
+                            confirmed.PreparedExecution.ToString() == reference.PreparedExecutionId)
+                            return;
+                    }
+                    throw new InvalidOperationException("An unrelated sequence Take is already active.");
+                }
+                if (session.AuthorityRevision != previousRevision.Value)
+                    throw new InvalidOperationException("Sequence Take authority is stale.");
                 lock (_sequenceGate)
                 {
                     var prepared = _sequenceOwners;
