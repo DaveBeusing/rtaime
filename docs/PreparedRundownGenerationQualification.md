@@ -63,9 +63,11 @@ The first subsequent scoped MediaPlay:
 - rejects invalid transport states normally and does not change authority,
   prepared-ticket, catalogue, revision, expiration or preroll checks.
 
-Stop, seek, configuration changes, jumps, steps, close and replacement clear
-any pending cue acknowledgement and preserve their existing prepared-ticket
-invalidation. Prepared playback's early-EOF guard remains active until a
+Stop, seek, configuration changes, jumps, steps, close, replacement and a
+subsequent observed exit from Program clear any pending cue acknowledgement and
+preserve existing prepared-ticket invalidation semantics. Observations of the
+old Program source before the prepared target first enters Program do not revoke
+the acknowledgement armed by an authorized TAKE. Prepared playback's early-EOF guard remains active until a
 deliberate later transport operation, and failed owner cleanup remains
 quarantined. No retries, additional worker, polling or per-frame trace
 were introduced.
