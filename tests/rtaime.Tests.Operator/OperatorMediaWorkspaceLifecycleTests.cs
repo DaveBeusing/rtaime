@@ -75,7 +75,7 @@ public sealed class OperatorMediaWorkspaceLifecycleTests
     }
 
     private static FieldInfo Field(object instance, string name) =>
-        Assert.IsType<FieldInfo>(instance.GetType().GetField(name,
+        Assert.IsAssignableFrom<FieldInfo>(instance.GetType().GetField(name,
             BindingFlags.Instance | BindingFlags.NonPublic));
 
     private static void DrainDispatcher()
