@@ -148,16 +148,32 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal(0, unapprovedCommitAttempts);
         Assert.Equal(new MediaSourceId(sourceA.Value), runtime.CommittedProgramSourceId);
 
-        var committed = decks.CommitArmedSequenceTake(takeCommand, preparedCut.PreparedExecution,
-            () => runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
-                preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
-                () => decks.AuthorizeSequenceProgram(reference, mediaB,
-                    authority.ProductionId.Value, previous,
-                    preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
-        Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
-            committed.Prepare.Failure?.Message);
-        Assert.True(control.ConfirmRuntimeCommit(
-            preparedCut.PreparedExecution.PreparedExecutionId, committed.Commit!).Committed);
+        // A completed Preview-era boundary may be observed only after TAKE.
+        // Its old Program frame must neither confirm nor fail the new sink.
+        var inFlightPreview = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(inFlightPreview.Published, inFlightPreview.FailureCode);
+        using (var delayedPreview = runtime.ProcessNextBoundary())
+        {
+            Assert.Equal(new MediaSourceId(sourceA.Value), delayedPreview.CommittedProgramSourceId);
+            Assert.Equal(takeCommand, decks.RequireArmedSequenceTake(
+                preparedCut.PreparedExecution, preparedCut.ProgramTransition));
+
+            var committed = decks.CommitArmedSequenceTake(takeCommand, preparedCut.PreparedExecution,
+                () => runtime.ApplyArmedSequenceTake(preparedCut.PreparedExecution,
+                    preparedCut.ProgramSinkId, preparedCut.ProgramTransition,
+                    () => decks.AuthorizeSequenceProgram(reference, mediaB,
+                        authority.ProductionId.Value, previous,
+                        preparedCut.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
+            Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
+                committed.Prepare.Failure?.Message);
+            Assert.True(control.ConfirmRuntimeCommit(
+                preparedCut.PreparedExecution.PreparedExecutionId, committed.Commit!).Committed);
+            decks.ObserveSequenceProgramBoundary(delayedPreview);
+            var awaitingRealProgram = decks.GetSequenceOutput(reference, host);
+            Assert.Equal("TAKE_COMMITTED", awaitingRealProgram.OutputState);
+            Assert.Null(awaitingRealProgram.LastProgramSlot);
+            Assert.Equal(previous.Value + 1, awaitingRealProgram.ProductionRevision);
+        }
 
         var program = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
         Assert.True(program.Published, program.FailureCode);
@@ -185,6 +201,44 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Throws<InvalidOperationException>(() => decks.ArmSequenceTake(
             takeCommand with { TransactionId = Guid.NewGuid() },
             authority.ProductionId.Value, committedRevision, runtime, host));
+
+        // A substituted same-slot result from a different Runtime lifetime
+        // cannot prove this Program sink. Once failed, fresh native ingress
+        // must not silently restore a previous PROGRAM_CONFIRMED state.
+        await using (var foreignRuntime = new RuntimeProgramExecutionService(
+            new MediaSourceId(sourceA.Value), mediaB, format, new NoopRecordingWriter()))
+        {
+            await using var foreignJournal = new BoundedProductionJournal(64);
+            var foreignControl = new ControlHostService(
+                spec, foreignRuntime.ProviderDescriptors, foreignJournal);
+            Confirm(foreignControl, foreignRuntime, foreignControl.Initialize());
+            var inFlightSlot = runtime.NextSequenceOutputSlot;
+            while (foreignRuntime.NextSequenceOutputSlot < inFlightSlot)
+            {
+                using var discarded = foreignRuntime.ProcessNextBoundary();
+            }
+            var inFlight = decks.PresentSequenceBoundary(runtime, inFlightSlot);
+            Assert.True(inFlight.Published, inFlight.FailureCode);
+            using (var foreignBoundary = foreignRuntime.ProcessNextBoundary())
+            {
+                Assert.Equal(inFlightSlot, foreignBoundary.SequenceNumber);
+                Assert.NotEqual(mediaB, foreignBoundary.CommittedProgramSourceId);
+                decks.ObserveSequenceProgramBoundary(foreignBoundary);
+            }
+            var failedSink = decks.GetSequenceOutput(reference, host);
+            Assert.Equal("FAILED", failedSink.OutputState);
+            Assert.Equal("runtime.sequence.program_sink_unconfirmed", failedSink.FailureCode);
+            var suppressed = decks.PresentSequenceBoundary(
+                runtime, runtime.NextSequenceOutputSlot);
+            Assert.False(suppressed.Published);
+            Assert.Equal("FAILED", suppressed.State);
+            Assert.Equal(failedSink.FailureCode, suppressed.FailureCode);
+            using var degraded = runtime.ProcessNextBoundary();
+            Assert.Equal(mediaB, degraded.CommittedProgramSourceId);
+            Assert.Equal((byte)0, degraded.ProgramPixels.Span[0]);
+            Assert.Equal((byte)0, degraded.ProgramPixels.Span[1]);
+            Assert.Equal((byte)0, degraded.ProgramPixels.Span[2]);
+        }
 
         // A subsequent ordinary committed Preview mutation must not keep
         // publishing the old sequence on Program with an outdated authority
