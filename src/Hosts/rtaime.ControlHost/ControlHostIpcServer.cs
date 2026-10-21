@@ -3110,9 +3110,14 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		$"{format.Width}×{format.Height} {format.FrameRate}";
 
 
-	private async ValueTask<WireEnvelope> MutateAsync(WireEnvelope request, MutationKind kind, CancellationToken cancellationToken)
+	private async ValueTask<WireEnvelope> MutateAsync(
+        WireEnvelope request, MutationKind kind, CancellationToken cancellationToken,
+        bool mutationGateAlreadyHeld = false)
 	{
-		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // A sequence Take holds the mutation gate across saved-authoring and
+        // catalogue revision validation. Reacquiring it here would deadlock.
+        if (!mutationGateAlreadyHeld)
+            await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
 			var control = _controlAccessor();
@@ -3249,7 +3254,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		}
 		finally
 		{
-			_mutationGate.Release();
+            if (!mutationGateAlreadyHeld)
+                _mutationGate.Release();
 		}
 	}
 
