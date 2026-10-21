@@ -82,6 +82,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal string OutputState { get; set; } = "UNAVAILABLE";
         internal string? FailureCode { get; set; }
         internal bool ProgramAuthorized { get; set; }
+        internal SequenceOutputCommand? ArmedTake { get; set; }
         internal ulong AuthorityRevision { get; set; }
     }
 
@@ -233,7 +234,9 @@ public sealed partial class LocalMediaDeckRuntimeService
 
                 session.LastPublishedSlot = programSlot;
                 session.PublishedBoundaries++;
-                session.OutputState = session.ProgramAuthorized ? "TAKE_COMMITTED" : "PREVIEW_READY";
+                session.OutputState = session.ProgramAuthorized
+                    ? "TAKE_COMMITTED"
+                    : session.ArmedTake is not null ? "TAKE_PENDING" : "PREVIEW_READY";
                 session.FailureCode = null;
                 return (true, session.OutputState, null, programSlot);
             }
@@ -273,6 +276,98 @@ public sealed partial class LocalMediaDeckRuntimeService
             _sequenceOutput = null;
             try { session.Runtime.MarkSequenceInputUnavailable(session.SourceId); }
             catch (ObjectDisposedException) { } // A completed Runtime shutdown owns final teardown.
+        }
+    }
+
+    /// <summary>
+    /// Arm a previously proven Preview sequence without touching committed
+    /// Program. This owner reservation is checked again by Runtime's
+    /// existing PreparedExecution commit under its single boundary gate.
+    /// </summary>
+    internal SequenceOutputObservation ArmSequenceTake(
+        SequenceOutputCommand command, Identity authorityId, Revision revision,
+        RuntimeProgramExecutionService runtime, string hostEpoch)
+    {
+        command.Validate();
+        lock (_management)
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != command.Preparation ||
+                session.SourceId.ToString() != command.PreviewSourceId ||
+                session.AuthorityRevision != command.ExpectedProductionRevision ||
+                session.AuthorityRevision != revision.Value ||
+                session.ProgramAuthorized ||
+                session.OutputState is not ("PREVIEW_READY" or "TAKE_PENDING") ||
+                session.LastPreviewSlot is null ||
+                session.LastPreviewSlot != session.LastPublishedSlot ||
+                !runtime.IsCommittedSequencePreviewSource(session.SourceId))
+                throw new InvalidOperationException("Only confirmed native Preview pixels and PCM may arm Program Take.");
+            lock (_sequenceGate)
+            {
+                if (_sequenceOwners is not { } prepared ||
+                    prepared.PreparedExecution.ToString() != command.Preparation.PreparedExecutionId ||
+                    prepared.AuthorityStateId != authorityId ||
+                    prepared.AuthorityRevision != revision.Value ||
+                    prepared.Generation != _sequenceShuttleMap?.Generation)
+                    throw new InvalidOperationException("Native Sequence Take owner/generation is no longer authoritative.");
+            }
+
+            if (session.ArmedTake is not null && session.ArmedTake != command)
+                throw new InvalidOperationException("Another sequence Take is already armed.");
+            session.ArmedTake = command;
+            session.OutputState = "TAKE_PENDING";
+            return GetSequenceOutput(command.Preparation, hostEpoch);
+        }
+    }
+
+    internal void DisarmSequenceTake(SequenceOutputCommand command)
+    {
+        command.Validate();
+        lock (_sequenceOutputGate)
+        {
+            if (_sequenceOutput is not { } session || session.Reference != command.Preparation ||
+                session.ArmedTake != command || session.ProgramAuthorized)
+                return;
+            session.ArmedTake = null;
+            session.OutputState = session.LastPreviewSlot == session.LastPublishedSlot
+                ? "PREVIEW_READY" : "BUFFERING";
+        }
+    }
+
+    /// <summary>
+    /// A bound sequence source is reserved for explicit, source-fenced Take.
+    /// A generic source CUT cannot accidentally activate staged decoder data.
+    /// </summary>
+    internal bool IsBoundSequenceProgramTarget(MediaSourceId? targetSource)
+    {
+        lock (_sequenceOutputGate)
+            return targetSource is { } source &&
+                _sequenceOutput is { ProgramAuthorized: false } current &&
+                current.SourceId == source;
+    }
+
+    internal SequenceOutputCommand RequireArmedSequenceTake(
+        PreparedExecutionContract candidate, RuntimeProgramTransitionIntent? transition)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput ?? throw new InvalidOperationException(
+                "Program attempted to commit an unavailable sequence source.");
+            var command = session.ArmedTake ?? throw new InvalidOperationException(
+                "Sequence Program requires a separately armed, revision-bound Take.");
+            if (session.ProgramAuthorized ||
+                session.OutputState != "TAKE_PENDING" ||
+                session.LastPreviewSlot is null ||
+                session.LastPreviewSlot != session.LastPublishedSlot ||
+                candidate.AuthoritySnapshot.Revision.Value !=
+                    checked(command.ExpectedProductionRevision + 1) ||
+                transition?.Kind != RuntimeProgramTransitionKind.Cut ||
+                transition.ToSourceId != session.SourceId)
+                throw new InvalidOperationException(
+                    "Program successor, transition or Preview source changed since Take was armed.");
+            return command;
         }
     }
 
