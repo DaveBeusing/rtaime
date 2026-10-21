@@ -44,6 +44,8 @@ $startedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
 $stage = "INITIAL"
 $previousReference = $env:RTAIME_REFERENCE_MEDIA_REGRESSION
 $previousEncoder = $env:RTAIME_FFMPEG_PATH
+$previousSource = $env:RTAIME_SOURCE_COMMIT
+$previousDecoderDiagnostics = $env:RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS
 $previousPath = $env:PATH
 
 function Single-File {
@@ -134,6 +136,26 @@ try {
     & ./build/testmedia/Install-ReferenceMediaEncoder.ps1
     if ($LASTEXITCODE -ne 0) { throw "Reference media encoder installer failed." }
     $env:RTAIME_REFERENCE_MEDIA_REGRESSION = "1"
+    $env:RTAIME_SOURCE_COMMIT = $source
+    $env:RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS = "1"
+    $stage = "ISOLATED_NATIVE_DECODE_AND_WORKER_COPY_DIAGNOSTICS"
+    $decoderDir = Join-Path $root "native-copy"
+    [void][IO.Directory]::CreateDirectory($decoderDir)
+    $copyFilter = "FullyQualifiedName~Native_decoder_copy_stages_report_source_bound_allocations_and_runtime_input_copy|FullyQualifiedName~Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames"
+    $copyLog = Join-Path $decoderDir "copy-diagnostics.log"
+    & dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build -m:1 --filter $copyFilter --logger "console;verbosity=detailed" --logger "trx;LogFileName=copy.trx" --results-directory $decoderDir *>&1 |
+        Tee-Object -FilePath $copyLog
+    if ($LASTEXITCODE -ne 0) { throw "Actual native decoder copy diagnostics failed." }
+    $copyTrx = Join-Path $decoderDir "copy.trx"
+    Require-Trx $copyTrx @(
+        "Native_decoder_copy_stages_report_source_bound_allocations_and_runtime_input_copy",
+        "Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames")
+    $copyText = Get-Content -LiteralPath $copyLog -Raw
+    if (-not $copyText.Contains("NATIVE DECODE COPY SOFTWARE PROFILE: ") -or
+        -not $copyText.Contains("NATIVE WORKER SLOT COPY SOFTWARE PROFILE: ")) {
+        throw "Native reader and worker did not publish both measured copy summaries."
+    }
+    $env:RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS = $previousDecoderDiagnostics
     $sequenceDir = Join-Path $root "distinct-sequence"
     [void][IO.Directory]::CreateDirectory($sequenceDir)
     $filter = "FullyQualifiedName~ReferenceSequenceDistinctSourcesOutputTests|FullyQualifiedName~SequenceNativeProgramOutputIntegrationTests|FullyQualifiedName~RuntimeMemoryBoundednessTests|FullyQualifiedName~RuntimeResourceCapacityAdmissionTests"
@@ -213,6 +235,13 @@ try {
         completion = "SOFTWARE_COLLECTION_VERIFIED_NOT_REALTIME_APPROVAL"
         program = $program
         managedManifest = Artifact $managedPath
+        nativeDecodeCopy = [ordered]@{
+            status = "ISOLATED_H264_AAC_DECODER_AND_WORKER_NOT_COMMITTED_PROGRAM"
+            trx = Artifact $copyTrx
+            log = Artifact $copyLog
+            sourceCommit = $source
+            physicalGpuTransfer = "UNVERIFIED"
+        }
         distinctNativeSequence = [ordered]@{
             status = "SOURCE_BOUND_INTEGRATION_ASSERTIONS"
             trx = Artifact $seqTrx
@@ -264,6 +293,8 @@ try {
 } finally {
     $env:RTAIME_REFERENCE_MEDIA_REGRESSION = $previousReference
     $env:RTAIME_FFMPEG_PATH = $previousEncoder
+    $env:RTAIME_SOURCE_COMMIT = $previousSource
+    $env:RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS = $previousDecoderDiagnostics
     $env:PATH = $previousPath
     Pop-Location
 }
