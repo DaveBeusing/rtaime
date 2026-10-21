@@ -264,7 +264,7 @@ public sealed partial class LocalMediaDeckRuntimeService
     /// Cancellation of a taken Program sequence must never leave a falsely
     /// healthy frozen frame or silently rebind the previous source.
     /// </summary>
-    private void RetireSequenceOutput(string code)
+    private void RetireSequenceOutput()
     {
         lock (_sequenceOutputGate)
         {
