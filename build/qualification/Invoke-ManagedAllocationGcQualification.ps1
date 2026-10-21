@@ -193,13 +193,17 @@ try {
         crossProductLayersAndTransitions = "UNVERIFIED"
         capturedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
     }
+    # A manifest only becomes publicly named after both the source-bound
+    # verifier and its negative smoke regressions have completed. An aborted
+    # writer must not leave a manifest.json claiming a successful run.
+    $pendingManifestPath = Join-Path $runRoot "manifest.pending.json"
     $manifestPath = Join-Path $runRoot "manifest.json"
     $manifest | ConvertTo-Json -Depth 32 |
-        Set-Content -LiteralPath $manifestPath -Encoding utf8
+        Set-Content -LiteralPath $pendingManifestPath -Encoding utf8
 
     $comparisonPath = Join-Path $runRoot "comparison.json"
     $verify = @{
-        EvidencePath = $manifestPath
+        EvidencePath = $pendingManifestPath
         DescriptorPath = $descriptorPath
         ExpectedSourceCommit = $source
         ComparisonOutputPath = $comparisonPath
@@ -213,7 +217,7 @@ try {
     & ./build/qualification/Test-ManagedAllocationGcEvidence.ps1 @verify
     if (-not $?) { throw "Managed allocation/GC source-bound verification failed." }
     if ($Profile -eq "smoke") {
-        & ./build/qualification/Test-ManagedAllocationGcVerifierRegressions.ps1 -EvidencePath $manifestPath -ExpectedSourceCommit $source -DescriptorPath $descriptorPath
+        & ./build/qualification/Test-ManagedAllocationGcVerifierRegressions.ps1 -EvidencePath $pendingManifestPath -ExpectedSourceCommit $source -DescriptorPath $descriptorPath
         if (-not $?) { throw "Source-bound verifier negative regression qualification failed." }
     }
     # Presentation-only projection. Every numeric value is read back from a
@@ -275,6 +279,7 @@ try {
     }
     $summary | ConvertTo-Json -Depth 32 |
         Set-Content -LiteralPath (Join-Path $runRoot "subsystem-summary.json") -Encoding utf8
+    Move-Item -LiteralPath $pendingManifestPath -Destination $manifestPath -ErrorAction Stop
     Write-Host "Source-bound Program / GC software qualification complete: $runRoot"
     Write-Host "Physical hardware, complete ETW object allocations and full Operator UI latency remain UNVERIFIED."
 }
