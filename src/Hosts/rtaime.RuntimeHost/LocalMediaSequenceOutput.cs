@@ -195,13 +195,16 @@ public sealed partial class LocalMediaDeckRuntimeService
                 }
 
                 var audioPosition = checked((ulong)(position.Tick / 5));
-                var nextTick = checked((long)((Int128)(programSlot + 1) *
-                    SequenceContract.TicksPerSecond * runtime.Format.FrameRate.Denominator /
+                // Decoder samples are positioned in the authored sequence
+                // timeline, not the absolute Program frame number. A prepared
+                // seek or Preroll reanchors the sequence at a later Program
+                // slot without advancing the source PCM clock.
+                var nextSourceTick = checked((long)((Int128)position.Tick +
+                    (Int128)SequenceContract.TicksPerSecond *
+                    runtime.Format.FrameRate.Denominator /
                     runtime.Format.FrameRate.Numerator));
-                var currentTick = checked((long)((Int128)programSlot *
-                    SequenceContract.TicksPerSecond * runtime.Format.FrameRate.Denominator /
-                    runtime.Format.FrameRate.Numerator));
-                var sampleCount = checked((uint)(nextTick / 5 - currentTick / 5));
+                var sampleCount = checked((uint)(
+                    nextSourceTick / 5 - position.Tick / 5));
                 if (sampleCount == 0 || sampleCount > SequenceFrameComposition.MaximumAudioSamples)
                     throw new InvalidOperationException("Sequence Program PCM window exceeds bounded stereo sample capacity.");
 
