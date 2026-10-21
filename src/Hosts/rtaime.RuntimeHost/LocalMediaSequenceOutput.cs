@@ -151,7 +151,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (session is null)
                 return (false, "UNAVAILABLE", null, ulong.MaxValue);
             if (!runtime.IsCommittedSequenceOutputSource(
-                session.SourceId, session.ProgramAuthorized))
+                session.SourceId, session.ProgramAuthorized, session.AuthorityRevision))
             {
                 session.OutputState = "STALE";
                 session.FailureCode = "runtime.sequence.route_changed";
