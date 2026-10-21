@@ -372,7 +372,10 @@ public sealed class GpuDrawingSurfaceTests
 				for (var pass = 0; pass < 30; pass++)
 				{
 					window.UpdateLayout();
-					monitor.UpdatePresentationViewport(viewport.ActualWidth, viewport.ActualHeight, 1.5, 1.5);
+					var viewportDpi = VisualTreeHelper.GetDpi(viewport);
+					monitor.UpdatePresentationViewport(
+						viewport.ActualWidth, viewport.ActualHeight,
+						viewportDpi.DpiScaleX, viewportDpi.DpiScaleY);
 					surface.Invalidate();
 					await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
 					Assert.InRange(viewport.ActualHeight, 1, 900);
@@ -381,8 +384,17 @@ public sealed class GpuDrawingSurfaceTests
 				}
 			}
 			await ReadyAsync(surface, dispatcher);
-			Assert.Equal(checked((int)Math.Ceiling(surface.ActualWidth * 1.5)), surface.TextureWidth);
-			Assert.Equal(checked((int)Math.Ceiling(surface.ActualHeight * 1.5)), surface.TextureHeight);
+			// The native target must follow the actual GPU visual DPI, not a simulated
+			// 150% MonitorView scale injected into an otherwise 100% Windows runner.
+			var surfaceDpi = VisualTreeHelper.GetDpi(surface);
+			Assert.True(OperatorSurfaceTargetPolicy.TryMeasure(
+				surface.ActualWidth, surface.ActualHeight,
+				surfaceDpi.DpiScaleX, surfaceDpi.DpiScaleY,
+				16384, 16384, out var physical, out var reason), reason);
+			Assert.Equal(physical.Width, surface.TextureWidth);
+			Assert.Equal(physical.Height, surface.TextureHeight);
+			Assert.Equal(checked((int)monitor.ViewportPixelWidth), surface.TextureWidth);
+			Assert.Equal(checked((int)monitor.ViewportPixelHeight), surface.TextureHeight);
 			var creates = surface.TargetCreateCount;
 			for (var pass = 0; pass < 30; pass++)
 			{
@@ -390,7 +402,7 @@ public sealed class GpuDrawingSurfaceTests
 				await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
 			}
 			Assert.Equal(creates, surface.TargetCreateCount);
-			Console.WriteLine("GPU VIEWPORT PASS: scroll measure, hidden workspaces, normal/maximized layout, 150% physical targets, stable allocations.");
+			Console.WriteLine("GPU VIEWPORT PASS: scroll measure, hidden workspaces, normal/maximized layout, targets follow the actual WPF DPI, stable allocations; simulated 150% scaling is separately qualified.");
 		}
 		finally
 		{

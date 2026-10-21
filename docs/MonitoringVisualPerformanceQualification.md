@@ -39,7 +39,7 @@ Software-only CI must never promote physical evidence from `UNVERIFIED` to `PASS
 | ROI geometry / bounded statistics | `MediaPixelInspectionTests`, `GpuChannelAndRoiInspectionTests` | Semantic / performance | Qualified |
 | Histogram / waveform / RGB parade / vectorscope | `MediaScopeAnalysisTests`, `GpuScopesAndFrameComparisonTests` | Semantic / performance | Qualified |
 | Split / wipe / Difference | `GpuScopesAndFrameComparisonTests`, `MediaScopeAnalysisTests` | Semantic | Qualified |
-| Shared-resource replacement / cleanup | `OperatorMonitoringPlaneTests`, `MonitoringSustainedQualificationTests` | Failure/recovery / performance | Qualified |
+| Shared-resource replacement / cleanup | `OperatorMonitoringPlaneTests`, `MonitoringSustainedQualificationTests`, `MediaViewportVisualQualityQualificationTests` | Failure/recovery / performance / identity semantics | Qualified in software |
 | Named-pipe disconnect / reconnect | `MonitoringSustainedQualificationTests` | Failure/recovery | Qualified |
 | Graphics open / draw failure fallback | `MediaViewportVisualQualityQualificationTests`, GPU inspection/scope policy tests | Failure/recovery | Qualified structurally |
 | Sustained resource churn | `MonitoringSustainedQualificationTests` | Performance / recovery | Qualified in software |
@@ -64,7 +64,7 @@ The software qualification envelope is intentionally deterministic and hardware-
 - Monitoring diagnostics HUD refresh is bounded to a 200 ms cadence.
 - Preview plus Program shared monitoring ownership is bounded to two published shared resources per active monitoring tap.
 - The GPU provider permits at most four active monitoring leases: the current published pair plus one complete replacement pair. This fixed headroom is required so replacement does not fail merely because the previous pair is still published.
-- Replaced shared monitoring resources must be released; after replacement settles the active provider count returns to two, and disconnect returns it to zero.
+- Replaced shared monitoring resources must be released; unchanged descriptor and lifetime identity reuses the opened Operator texture, while replaced provider/handle/lease identity cannot reuse it. After replacement settles the active provider count returns to two, and disconnect returns it to zero.
 - Geometry and target-stabilization qualification uses allocation measurements after warmup and rejects material steady-state managed growth.
 - Monitoring subscriptions are bounded and latest-wins under pressure rather than blocking Program.
 
@@ -74,7 +74,7 @@ Measured GPU shader execution duration is diagnostic evidence only. It is not a 
 
 The WPF fallback and GPU presentation paths derive their destination from the same physical viewport size and the same `MediaPresentationGeometry` semantics.
 
-The qualified representative DPI set is 100%, 125%, 150% and 200%. Additional existing cases may remain in the viewport matrix. Pixel Perfect means one source pixel maps to one physical destination pixel; no surrounding `Viewbox` or second presentation resample is permitted.
+The qualified representative DPI set is 100%, 125%, 150%, 175% and 200%. The viewport matrix additionally covers small and fractional-DIP containers, portrait, square and nonstandard source aspect ratios. Pixel Perfect means one available source pixel maps to one physical destination pixel; the 320×180 CPU fallback never claims the full native GPU source detail. Nearest-neighbor filtering is used only for exactly integral fallback enlargement and 100%; Fit/Fill/fractional fallback scaling retain high-quality interpolation. No surrounding `Viewbox` or second presentation resample is permitted.
 
 The checkerboard, pixel grid and ROI overlay are projected from the same presentation width, height, offsets and source dimensions as the media surface. They are presentation-only.
 
