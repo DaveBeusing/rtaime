@@ -461,6 +461,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly ProductionCgTextRenderer _productionCgRenderer = new();
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
+	private Task<RecordingStopResult>? _recordingStopTask;
+	private RecordingSessionId? _recordingStopSession;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
 	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
 	private readonly IProfileConfigurableProgramRecordingWriter? _profileRecordingTargetWriter;
@@ -2677,9 +2679,38 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		return result;
 	}
 
-	public async ValueTask<RecordingStopResult> StopRecordingAsync(CancellationToken cancellationToken = default)
+	public ValueTask<RecordingStopResult> StopRecordingAsync(CancellationToken cancellationToken = default)
 	{
-		var result = await _recorder.StopAsync(cancellationToken).ConfigureAwait(false);
+		cancellationToken.ThrowIfCancellationRequested();
+		return new ValueTask<RecordingStopResult>(BeginRecordingStopAsync().WaitAsync(cancellationToken));
+	}
+
+	// A disconnected or cancelled requester cannot revoke an already admitted recorder STOP.
+	// The active session owns its one finalization task; a later session gets a new task.
+	internal Task<RecordingStopResult> BeginRecordingStopAsync()
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			var session = _recorder.Snapshot.SessionId;
+			if (_recordingStopTask is not null && _recordingStopSession == session)
+				return _recordingStopTask;
+
+			_recordingStopSession = session;
+			_recordingStopTask = CompleteRecordingStopAsync();
+			return _recordingStopTask;
+		}
+	}
+
+	internal RuntimeHostRecordingOperatorSnapshot ReadRecordingOperatorSnapshot()
+	{
+		lock (_gate)
+			return RecordingOperatorSnapshotUnsafe();
+	}
+
+	private async Task<RecordingStopResult> CompleteRecordingStopAsync()
+	{
+		var result = await _recorder.StopAsync(CancellationToken.None).ConfigureAwait(false);
 		lock (_gate)
 		{
 			if (result.Status == RecordingStopStatus.Stopped)
