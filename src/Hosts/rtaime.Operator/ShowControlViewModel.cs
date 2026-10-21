@@ -354,7 +354,7 @@ public sealed partial class ShowControlViewModel : INotifyPropertyChanged
 			if (_serverExecutionState != ShowControlExecutionState.Failed)
 				Failure = "NONE";
 		}
-		catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or IOException or TimeoutException or NotSupportedException)
+		catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or IOException or TimeoutException or OperationCanceledException or NotSupportedException)
 		{
 			// Any lost or rejected response needs a new Control observation.
             // Never reuse the prior Armed state to issue a duplicate GO.
