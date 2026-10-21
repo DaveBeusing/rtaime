@@ -354,17 +354,18 @@ public sealed partial class ControlHostIpcServer
             var latest = await _showProjectStore.LoadSequencesAsync(baseline, cancellationToken)
                 .ConfigureAwait(false);
             var latestControl = _controlAccessor();
-            var latestRuntime = await _runtimeTransport.GetSnapshotAsync(cancellationToken)
-                .ConfigureAwait(false);
+            // Runtime's committed authority can only advance through the
+            // Control-owned commit path. Re-reading the Runtime snapshot here
+            // risks blocking behind an unrelated control IPC request while
+            // the native preparation gate is held. The initial exact Runtime
+            // authority and final Control revision/host identity fence both
+            // remain mandatory.
             var latestCatalogue = await _mediaAssetCatalog.GetSnapshotAsync(
                 refreshAvailability: false, cancellationToken).ConfigureAwait(false);
             if (latest.Revision == library.Revision &&
                 latestControl is { HasAuthoritativeState: true } &&
                 latestControl.State.ProductionId.Value == authority.ProductionId.Value &&
                 latestControl.State.Revision == authority.Revision &&
-                latestRuntime.AuthorityStateId == authority.ProductionId.Value &&
-                latestRuntime.AuthorityRevision == authority.Revision &&
-                latestRuntime.HostInstanceId == request.ExpectedRuntimeHostInstanceId &&
                 latestCatalogue.Revision == catalog.Revision &&
                 _runtimeTransport.HostInstanceId == request.ExpectedRuntimeHostInstanceId)
                 return Success(message, message.MessageType + ".response", admitted);
