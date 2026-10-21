@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 
@@ -110,21 +111,31 @@ public sealed partial class CompositingGraphNodeViewModel
 public sealed partial class CompositingGraphViewModel
 {
     private string _searchText = "";
-    private bool _showLayers = true, _selectingLayers, _reviewingLayers;
+    private bool _showLayers = true, _showAdvancedGraph, _selectingLayers, _reviewingLayers;
     private string? _missingSelectedNodeId;
     private List<string>? _orderDraft;
     private readonly Dictionary<string, string> _removedDrafts = new(StringComparer.Ordinal);
     private string _workspaceNotice = "";
     private double _workspaceWidth = 700;
     private bool _layerDraftInputsValid = true;
-    public double LayerPanelWidth => Math.Min(220, Math.Max(0, _workspaceWidth * 0.38));
-    public void UpdateWorkspaceWidth(double width) { if (double.IsFinite(width) && width > 0) { _workspaceWidth = width; OnPropertyChanged(nameof(LayerPanelWidth)); } }
+    public double LayerPanelWidth => !ShowLayers ? 0 : ShowAdvancedGraph
+        ? Math.Min(220, Math.Max(0, _workspaceWidth * 0.38))
+        : Math.Max(0, _workspaceWidth - 12);
+    public GridLength AdvancedGraphColumnWidth => ShowAdvancedGraph
+        ? new(1, GridUnitType.Star) : new(0);
+    public void UpdateWorkspaceWidth(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0 || Math.Abs(_workspaceWidth - width) < .5) return;
+        _workspaceWidth = width;
+        OnPropertyChanged(nameof(LayerPanelWidth));
+    }
     public bool LayerDraftInputsValid { get => _layerDraftInputsValid; set { _layerDraftInputsValid = value; SynchronizeSelectedLayerDraft(); } }
     public ICommand RecallSceneCommand => _operator.ActivateSceneCommand;
     public ObservableCollection<CompositingGraphNodeViewModel> Layers { get; } = [];
     public ObservableCollection<CompositingGraphNodeViewModel> VisibleNodes { get; } = [];
     public ObservableCollection<CompositingGraphConnectionViewModel> VisibleConnections { get; } = [];
     public ICommand ToggleLayerListCommand { get; private set; } = null!;
+    public ICommand ToggleAdvancedGraphCommand { get; private set; } = null!;
     public ICommand CollapseLayerCommand { get; private set; } = null!;
     public ICommand ApplyLayerDraftCommand { get; private set; } = null!;
     public ICommand DiscardLayerDraftCommand { get; private set; } = null!;
@@ -132,7 +143,23 @@ public sealed partial class CompositingGraphViewModel
     public ICommand ApplyOrderDraftCommand { get; private set; } = null!;
     public ICommand DiscardOrderDraftCommand { get; private set; } = null!;
     public bool ExtendSelection { get; set; }
-    public bool ShowLayers { get => _showLayers; set => Set(ref _showLayers, value); }
+    public bool ShowLayers
+    {
+        get => _showLayers;
+        set { if (Set(ref _showLayers, value)) OnPropertyChanged(nameof(LayerPanelWidth)); }
+    }
+    public bool ShowAdvancedGraph
+    {
+        get => _showAdvancedGraph;
+        set
+        {
+            if (!Set(ref _showAdvancedGraph, value)) return;
+            if (!value) ShowLayers = true;
+            OnPropertyChanged(nameof(AdvancedGraphColumnWidth));
+            OnPropertyChanged(nameof(LayerPanelWidth));
+            RefreshViewportProjection();
+        }
+    }
     public string SearchText
     {
         get => _searchText;
@@ -141,6 +168,11 @@ public sealed partial class CompositingGraphViewModel
     public int SelectedLayerCount => Layers.Count(layer => layer.IsSelected);
     public CompositingGraphNodeViewModel? SelectedLayerRow => SelectedLayerCount == 1 ? Layers.First(layer => layer.IsSelected) : null;
     public string WorkspaceNotice { get => _workspaceNotice; private set => Set(ref _workspaceNotice, value); }
+    public string LayerStackOverview => (_operator.IsStale || !_operator.IsConnected
+        ? "STALE / DISCONNECTED · NO LIVE CONFIRMATION" : "RUNTIME OBSERVED") +
+        $" · {_operator.CompositingLayers.Count} layers" +
+        $" · {_operator.CompositingLayers.Count(layer => layer.Visible && layer.Opacity != 0)} contributing" +
+        $" · {_operator.CompositingLayers.Sum(layer => layer.ProcessingStack.Count)} FX nodes";
     public string SceneDeclaration => _operator.SelectedScene is { } scene
         ? $"SCENE DESIRED · {scene.Name} · {scene.DesiredLayerCount} declared layers" : "SCENE DESIRED · none selected";
     public string RuntimeEvidence => $"{(_operator.IsStale || !_operator.IsConnected ? "STALE / DISCONNECTED" : "RUNTIME OBSERVED")} · {_operator.CompositingLayers.Count} layers · active scene: {_operator.ActiveSceneName}";
@@ -156,7 +188,12 @@ public sealed partial class CompositingGraphViewModel
     public InspectorPropertyDefinition OpacityDefinition { get; } = new("compositing.opacity", "Opacity", 0, 255, 255, 1, "8-bit", true);
     private void InitializeLayerWorkspace()
     {
-        ToggleLayerListCommand = new CompositingGraphCommand(_ => ShowLayers = !ShowLayers);
+        ToggleLayerListCommand = new CompositingGraphCommand(_ =>
+        {
+            ShowLayers = !ShowLayers;
+            if (!ShowLayers) ShowAdvancedGraph = true;
+        });
+        ToggleAdvancedGraphCommand = new CompositingGraphCommand(_ => ShowAdvancedGraph = !ShowAdvancedGraph);
         CollapseLayerCommand = new CompositingGraphCommand(value =>
         {
             if (value is CompositingGraphNodeViewModel row) { row.IsCollapsed = !row.IsCollapsed; RefreshViewportProjection(); }
@@ -238,7 +275,8 @@ public sealed partial class CompositingGraphViewModel
             _inspector.SelectCompositingNode(remaining.Projection);
         }
         SynchronizeSelectedLayerDraft();
-        foreach (var property in new[] { nameof(SceneDeclaration), nameof(RuntimeEvidence), nameof(OrderEvidence) }) OnPropertyChanged(property);
+        foreach (var property in new[] { nameof(SceneDeclaration), nameof(RuntimeEvidence),
+            nameof(LayerStackOverview), nameof(OrderEvidence) }) OnPropertyChanged(property);
         (ApplyOrderDraftCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
     private void SynchronizeSelectedLayerDraft()
@@ -272,6 +310,13 @@ public sealed partial class CompositingGraphViewModel
     private void RefreshViewportProjection()
     {
         if (Nodes is null) return;
+        if (!ShowAdvancedGraph)
+        {
+            Reconcile(VisibleNodes, Array.Empty<CompositingGraphNodeViewModel>());
+            Reconcile(VisibleConnections, Array.Empty<CompositingGraphConnectionViewModel>());
+            foreach (var layer in Layers) layer.MatchesSearch = Matches(layer);
+            return;
+        }
         var left = -PanX / Zoom - 32; var top = -PanY / Zoom - 32;
         var right = left + _viewportWidth / Zoom + 64; var bottom = top + _viewportHeight / Zoom + 64;
         foreach (var layer in Layers) layer.MatchesSearch = Matches(layer);
