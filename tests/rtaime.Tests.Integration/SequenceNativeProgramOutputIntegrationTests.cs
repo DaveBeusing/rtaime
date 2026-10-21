@@ -95,6 +95,7 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
 
         var preview = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
         Assert.True(preview.Published, preview.FailureCode);
+        Assert.Equal("UNAVAILABLE", decks.GetSequenceOutput(reference, host).OutputState);
         using (var first = runtime.ProcessNextBoundary())
         {
             decks.ObserveSequenceProgramBoundary(first);
