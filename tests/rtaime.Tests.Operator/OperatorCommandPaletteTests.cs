@@ -309,7 +309,7 @@ public sealed class OperatorCommandPaletteTests
 			Assert.Equal(program, ((OperatorViewModel)main.DataContext).ProgramSourceId);
             main.CommandPalette.Query = "sequence take";
             var nativeTake = main.CommandPalette.Results.Single(entry => entry.Id == "sequence-take");
-            Assert.True(nativeTake.RequiresExplicitButton);
+            Assert.True(nativeTake.Descriptor.RequiresExplicitButton);
             Assert.False(nativeTake.IsAvailable); // Offline window cannot authorize a native Program Take.
             Assert.False(main.CommandPalette.ExecuteSelected(false));
             Assert.Equal(program, ((OperatorViewModel)main.DataContext).ProgramSourceId);
