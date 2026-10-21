@@ -25,7 +25,10 @@ public sealed partial class WorkspacePresentationTemplateTests
         {
             shell.SelectWorkspaceCommand.Execute(destination.Id);
             Assert.Equal(destination.Id, shell.SelectedWorkspace);
-            Assert.Single(shell.NavigationGroups.SelectMany(g => g.Items), i => i.IsActive);
+            Assert.Single(shell.NavigationGroups.Concat(shell.SecondaryNavigationGroups)
+                .SelectMany(g => g.Items), link => link.IsActive);
+            Assert.Equal(OperatorWorkspaceRegistry.IsSecondaryWorkspace(destination.Id),
+                shell.IsSecondaryWorkspaceSelected);
         }
         shell.SelectWorkspace("GRAPHICS"); Assert.Equal("COMPOSITING", shell.SelectedWorkspace);
         shell.SelectWorkspace("SYSTEM"); Assert.Equal("SETTINGS", shell.SelectedWorkspace);
@@ -33,6 +36,51 @@ public sealed partial class WorkspacePresentationTemplateTests
         await shell.SaveAsync();
         Assert.Equal(470, store.Load().Workspaces["FUTURE_EDITOR"].LeftPanelWidth);
     }
+    [Theory]
+    [InlineData(960,500)] [InlineData(1280,720)] [InlineData(1920,1080)]
+    public async Task Media_server_navigation_preserves_secondary_layouts_and_stable_id_selection(
+        double width, double height)
+    {
+        await using var fixture = await Fixture.Create(false);
+        var store = new OperatorLayoutStore(Path.Combine(fixture.Directory, "media-server-navigation.json"));
+        var seeded = OperatorLayoutSettings.Default with { SelectedWorkspace = "COMPOSITING" };
+        seeded.Workspaces["COMPOSITING"] = seeded.Workspaces["COMPOSITING"] with { LeftPanelWidth = 470 };
+        await store.SaveAsync(seeded);
+        var shell = new OperatorShellViewModel(store, _ => { });
+        shell.UpdateViewportSize(width, height);
+        Assert.Equal(7, OperatorLayoutSettings.CurrentVersion);
+        Assert.Equal("COMPOSITING", shell.SelectedWorkspace);
+        Assert.True(shell.IsSecondaryWorkspaceSelected);
+        Assert.Contains("Compositing", shell.SecondaryNavigationDescription);
+
+        var primary = shell.NavigationGroups.SelectMany(group => group.Items).ToArray();
+        Assert.Equal(new[] { "LIVE", "MEDIA", "EDIT", "OUTPUTS" }, primary.Select(link => link.Id));
+        Assert.Equal("Timeline", primary.Single(link => link.Id == "EDIT").Label);
+        var secondary = shell.SecondaryNavigationGroups.SelectMany(group => group.Items).ToArray();
+        Assert.Equal(new[] { "SCENES", "MULTIVIEW", "COMPOSITING", "HEALTH", "AI", "SETTINGS" },
+            secondary.Select(link => link.Id));
+        Assert.Equal(new[] { "LIVE TOOLS", "CREATION", "SYSTEM" },
+            shell.SecondaryNavigationGroups.Select(group => group.Label));
+        Assert.Equal(OperatorWorkspaceNames.All.Count, primary.Length + secondary.Length);
+        Assert.Equal(OperatorWorkspaceNames.All.Order(), primary.Concat(secondary).Select(link => link.Id).Order());
+
+        foreach (var destination in OperatorWorkspaceRegistry.Destinations)
+        {
+            shell.SelectWorkspaceCommand.Execute(destination.Id);
+            Assert.Equal(destination.Id, shell.SelectedWorkspace);
+            Assert.Single(primary.Concat(secondary), link => link.IsActive);
+        }
+        shell.SelectWorkspace("EDIT");
+        Assert.Equal("TIMELINE WORKSPACE", shell.WorkspaceTitle);
+        Assert.False(shell.IsSecondaryWorkspaceSelected);
+        shell.SelectWorkspace("COMPOSITING");
+        await shell.SaveAsync();
+        var loaded = new OperatorShellViewModel(store, _ => { });
+        Assert.Equal("COMPOSITING", loaded.SelectedWorkspace);
+        Assert.Equal(470, loaded.LeftPanelWidth);
+        Assert.Equal(OperatorWorkspaceNames.All.Count, loaded.Workspaces.Count);
+    }
+
     [Theory]
     [InlineData(1920,1080)] [InlineData(1600,900)] [InlineData(1536,864)] [InlineData(1280,720)] [InlineData(960,540)]
     public async Task Live_media_allocation_and_compact_bus_switch_preserve_reference_intent(double width, double height)

@@ -26,6 +26,22 @@ introduces a monitoring reader, decoder, model, production command registry or
 Runtime authority. Mapping is a navigation group name; an unavailable editor is
 not registered as a productive tab.
 
+The default rail contains LIVE, MEDIA, Timeline (`EDIT`) and OUTPUTS in
+that order. More opens the six existing secondary workspaces, grouped into
+Live tools (SCENES, MULTIVIEW), Creation (COMPOSITING), and System (HEALTH,
+AI, SETTINGS). No workspace is deleted or made ephemeral by this change:
+the registered selection command, active-state links, title, window/docked
+layout, templates and Ctrl+K command palette remain shared. The More entry is
+an accessible custom navigation button with a custom keyboard-addressable
+menu, not a separate shell or second selection model.
+
+The top bar still exposes readiness/incident navigation, authoritative
+Program source and observed network output status on every workspace. Its
+small recording indicator is shown for actual RECORDING, FINALIZING or FAILED
+states; the health and output workspaces retain detailed diagnosis. Narrow
+layouts keep the same primary and More controls without requiring a scroll
+operation to uncover a secondary destination.
+
 Future contributions require a productive view at the existing composition
 connection, a unique stable registry ID, canonical defaults and qualification.
 There is no eight-destination array/viewport ceiling. Layout storage is bounded
@@ -64,6 +80,12 @@ format version 1 and records layout schema 7. Unsupported future layout/template
 versions are rejected explicitly. Older executables cannot consume schema 7.
 
 ## Qualification boundaries
+
+The registered navigation and WPF combined visual tests additionally cover
+primary/secondary partitioning, More menu command targets, active secondary
+selection, 960×500 compact reachability, Timeline/EDIT palette aliases,
+schema-7 secondary layout round-trips and unchanged Program/Preview identity.
+These are Windows software tests, not evidence of physical monitor hotplug.
 
 OperatorDockLayoutTests (extended in OperatorShellPersistenceTests.cs) covers supported-version, future-file, malformed
 version, oversized-file and interrupted-temporary-write cases. The existing

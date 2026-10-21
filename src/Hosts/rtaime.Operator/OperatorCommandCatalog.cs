@@ -44,8 +44,14 @@ public static class OperatorCommandCatalog
 		commands.Add(new("pane-library", "Show or hide Library pane", "Navigation", shell.ToggleLeftPanelCommand));
         commands.Add(new("pane-inspector", "Show or hide Inspector pane", "Navigation", shell.ToggleRightPanelCommand));
         commands.Add(new("workspace-restore", "Restore current workspace defaults", "Navigation", shell.ResetLayoutCommand));
-		foreach (var workspace in OperatorWorkspaceNames.All)
-			commands.Add(new("workspace-" + workspace.ToLowerInvariant(), "Workspace " + workspace, "Workspaces", shell.SelectWorkspaceCommand, workspace));
+        foreach (var destination in OperatorWorkspaceRegistry.Destinations)
+        {
+            // The EDIT ID remains stable; Timeline is the operator-facing label.
+            var label = destination.Id == OperatorWorkspaceNames.Edit
+                ? destination.Label + " (EDIT)" : destination.Label;
+            commands.Add(new("workspace-" + destination.Id.ToLowerInvariant(),
+                "Workspace " + label, "Workspaces", shell.SelectWorkspaceCommand, destination.Id));
+        }
 		void Add(string id, string label, ICommand command, bool management = false) =>
 			commands.Add(new(id, label, "Media Library", command, RequiresExplicitButton: management,
 				UnavailableReason: management ? () => !owner.IsConnected ? "Disconnected: catalogue action unavailable." :
