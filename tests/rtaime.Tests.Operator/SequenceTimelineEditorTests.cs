@@ -361,6 +361,59 @@ public sealed class SequenceTimelineEditorTests
         Assert.Equal("SAVED · NOT PREPARED", playout.Status);
     }
 
+    [Fact]
+    public async Task Long_native_prepare_keeps_original_Preview_fence_and_requires_explicit_release()
+    {
+        var saved = new RetainedSequenceTransport(Sequence());
+        using var editor = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(saved));
+        await editor.RefreshAsync(); await editor.LoadAsync();
+        var source = Guid.NewGuid().ToString();
+        var authority = new SequenceOperatorAuthority(true, false, false, true,
+            source, Guid.NewGuid().ToString(), 4);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var native = new SequencePlayoutFixture(editor.Sequence!.SequenceId, source, 5, 4)
+        {
+            PreparationGate = gate
+        };
+        editor.AttachPlayout(new SequenceOperatorPlayoutViewModel(editor,
+            new SequenceAuthoringClient(saved), new SequencePreparationClient(native),
+            new SequenceShuttleClient(native), new SequenceOutputClient(native),
+            () => authority));
+        var pending = editor.Playout.PrepareAsync();
+        Assert.Equal("PREPARING", editor.Playout.Status);
+        authority = authority with { PreviewSourceId = Guid.NewGuid().ToString(), Revision = 5 };
+        gate.SetResult();
+        await pending;
+        Assert.Equal("STALE", editor.Playout.Status);
+        Assert.Contains(source, editor.Playout.NativeOwner);
+        Assert.False(editor.Playout.CanActivate);
+        Assert.False(editor.Playout.CanTake);
+        await editor.Playout.CancelAsync();
+        Assert.Equal(1, native.CancelCount);
+    }
+
+    [Fact]
+    public async Task Unsupported_native_profile_surfaces_actual_rejection_without_Preview_or_Take()
+    {
+        var saved = new RetainedSequenceTransport(Sequence());
+        using var editor = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(saved));
+        await editor.RefreshAsync(); await editor.LoadAsync();
+        var native = new SequencePlayoutFixture(editor.Sequence!.SequenceId,
+            Guid.NewGuid().ToString(), 5, 3) { RejectPrepare = true };
+        var authority = new SequenceOperatorAuthority(true, false, false, true,
+            native.SourceId, Guid.NewGuid().ToString(), 3);
+        editor.AttachPlayout(new SequenceOperatorPlayoutViewModel(editor,
+            new SequenceAuthoringClient(saved), new SequencePreparationClient(native),
+            new SequenceShuttleClient(native), new SequenceOutputClient(native),
+            () => authority));
+        await editor.Playout.PrepareAsync();
+        Assert.Equal("REJECTED", editor.Playout.Status);
+        Assert.Contains("sequence.native.profile_unsupported", editor.Playout.Detail);
+        Assert.False(editor.Playout.CanActivate);
+        Assert.False(editor.Playout.CanTake);
+        Assert.Equal(0, native.TakeCount);
+    }
+
     private sealed class SequencePlayoutFixture(Guid sequenceId, string sourceId, ulong revision, ulong productionRevision)
         : ISequencePreparationTransport, ISequenceShuttleTransport, ISequenceOutputTransport
     {
@@ -371,6 +424,9 @@ public sealed class SequenceTimelineEditorTests
         private string _shuttleState = "STOPPED";
         public bool PreviewFramesAvailable { get; set; }
         public bool DropTakeReply { get; set; }
+        public bool RejectPrepare { get; set; }
+        public TaskCompletionSource? PreparationGate { get; set; }
+        public string SourceId => sourceId;
         public int TakeCount { get; private set; }
         public int CancelCount { get; private set; }
         public int RecoveryCount { get; private set; }
@@ -380,13 +436,19 @@ public sealed class SequenceTimelineEditorTests
         public ValueTask<SequencePreparationContext> GetSequencePreparationContextAsync(
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new SequencePreparationContext(SequencePreparationContract.Version, _epoch, revision));
-        public ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
+        public async ValueTask<SequencePreparationStatus> PrepareSequenceAsync(
             SequencePreparationRequest request, CancellationToken cancellationToken = default)
         {
             Assert.Equal(sequenceId, request.SequenceId);
             Assert.Equal(revision, request.ExpectedAuthoringRevision);
+            if (PreparationGate is not null)
+                await PreparationGate.Task.WaitAsync(cancellationToken);
+            if (RejectPrepare)
+                return new(SequencePreparationContract.Version, sequenceId, revision, _epoch,
+                    "", 1, 0, "REJECTED", "sequence.native.profile_unsupported",
+                    "Native provider profile does not support the requested sequence.");
             _reference = new(SequencePreparationContract.Version, sequenceId, revision, _epoch, _prepared, 1);
-            return ValueTask.FromResult(Prepared());
+            return Prepared();
         }
         public ValueTask<SequencePreparationStatus> GetSequencePreparationAsync(
             SequencePreparationReference reference, CancellationToken cancellationToken = default)
