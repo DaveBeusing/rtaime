@@ -311,6 +311,10 @@ public sealed partial class LocalMediaDeckRuntimeService
                 _sequenceShuttleMap = null;
                 _sequenceShuttleRevision = 0;
             }
+            // Retire the source signal even when the native workers were
+            // already lost during a failed preroll. A committed Program
+            // route must not retain an apparently healthy stale frame.
+            RetireSequenceOutput();
             if (prepared is null) return;
             var error = CleanupSequenceOwners(prepared.Owners);
             if (error is not null)
