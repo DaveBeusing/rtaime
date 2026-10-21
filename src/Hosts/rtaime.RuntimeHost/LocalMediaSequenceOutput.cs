@@ -371,6 +371,37 @@ public sealed partial class LocalMediaDeckRuntimeService
     }
 
     /// <summary>
+    /// A transport mutation invalidates previously sampled Preview evidence
+    /// and any armed Take before native seek/repreroll can begin. This runs
+    /// only on the management path; the existing Program cadence is not held
+    /// across native worker operations.
+    /// </summary>
+    internal void InvalidateSequenceOutputOnShuttleMutation(SequencePreparationReference reference)
+    {
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != reference)
+                return;
+            // A terminal sink failure or stale authority cannot be
+            // requalified by a transport command.
+            if (session.OutputState is "FAILED" or "STALE")
+            {
+                session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return;
+            }
+            session.ArmedTake = null;
+            session.LastPreviewSlot = null;
+            session.LastProgramSlot = null;
+            session.LastPublishedSlot = ulong.MaxValue;
+            session.OutputState = session.ProgramAuthorized
+                ? "TAKE_COMMITTED" : "UNAVAILABLE";
+            session.FailureCode = null;
+            session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
+        }
+    }
+
+    /// <summary>
     /// A bound sequence source is reserved for explicit, source-fenced Take.
     /// A generic source CUT cannot accidentally activate staged decoder data.
     /// </summary>
