@@ -102,6 +102,45 @@ public sealed class ReferenceMediaPlaybackAllocationDiagnosticsTests
     }
 
     [Fact]
+    public void Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames()
+    {
+        if (Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") != "1") return;
+        Assert.True(OperatingSystem.IsWindows());
+        using var asset = LocalMediaTestAsset.ExtractReference1080p50();
+        var opened = new LocalMediaFileProvider(VideoFormat.Hd1080p50Rgba8)
+            .TryOpen(asset.Path, MediaSourceId.New());
+        Assert.True(opened.Succeeded, opened.Failure?.Message);
+        using var worker = new LocalMediaDecodeWorker(opened.Source!);
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(15)), worker.Snapshot.Failure?.Message);
+        var snapshot = worker.Measurements;
+        Assert.True(snapshot.CopyDiagnosticsEnabled);
+        Assert.True(snapshot.WorkerSlotVideoCopy.Operations >= 3);
+        Assert.True(snapshot.WorkerSlotAudioCopy.Operations > 0);
+        Assert.Equal(snapshot.WorkerSlotVideoCopy.Operations *
+            (ulong)checked((int)(VideoFormat.Hd1080p50Rgba8.Width *
+                VideoFormat.Hd1080p50Rgba8.Height * 4)),
+            snapshot.WorkerSlotVideoCopy.PayloadBytes);
+
+        using var retained = worker.TakeDue(long.MaxValue, out _, out var failure);
+        Assert.Null(failure);
+        Assert.NotNull(retained);
+        var original = SHA256.HashData(retained.Frame.RgbaPixels.Span);
+        Assert.True(worker.WaitForPreroll(TimeSpan.FromSeconds(15)), worker.Snapshot.Failure?.Message);
+        Assert.Equal(original, SHA256.HashData(retained.Frame.RgbaPixels.Span));
+        Assert.InRange(worker.Snapshot.QueuedFrames, 1, LocalMediaDecodeWorker.QueueCapacity);
+        Console.WriteLine("NATIVE WORKER SLOT COPY SOFTWARE PROFILE: " + JsonSerializer.Serialize(new
+        {
+            sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT") ?? "UNAVAILABLE",
+            videoCopy = worker.Measurements.WorkerSlotVideoCopy,
+            audioCopy = worker.Measurements.WorkerSlotAudioCopy,
+            poolCapacity = 10, queueCapacity = LocalMediaDecodeWorker.QueueCapacity,
+            retainedSlotStillUnchanged = true,
+            runtimeInputCopy = "NOT_MEASURED_ON_WORKER_THREAD",
+            hardware = "UNVERIFIED"
+        }));
+    }
+
+    [Fact]
     public void Isolated_native_reader_probe_separates_callback_resources_from_Runtime_and_Replay()
     {
         if (Environment.GetEnvironmentVariable("RTAIME_LOCAL_ALLOCATION_DIAGNOSTICS") != "1") return;
