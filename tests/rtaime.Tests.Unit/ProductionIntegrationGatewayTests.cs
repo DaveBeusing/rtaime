@@ -177,6 +177,117 @@ public sealed class ProductionIntegrationGatewayTests
 		Assert.Equal("ControlHost snapshot synchronization recovered.", gateway.Health.Detail);
 	}
 
+
+	[Fact]
+	public async Task Gateway_cancellation_during_initial_sync_never_publishes_healthy_state()
+	{
+		var transport = new ProbeTransport();
+		transport.BlockNextSnapshot();
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(new PassiveAdapter("reference"));
+		using var cancellation = new CancellationTokenSource();
+
+		var starting = gateway.StartAsync(cancellation.Token).AsTask();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			Assert.Equal("STARTING", gateway.Health.State);
+
+			cancellation.Cancel();
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await starting);
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+	}
+
+	[Fact]
+	public async Task Gateway_delayed_cancelled_startup_cannot_stop_a_new_lifecycle()
+	{
+		var transport = new ProbeTransport();
+		transport.BlockNextSnapshot(ignoreCancellation: true);
+		var adapter = new PassiveAdapter("reference");
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+
+		var firstStart = gateway.StartAsync().AsTask();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			await gateway.StopAsync();
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+
+			var restarted = gateway.StartAsync().AsTask();
+			transport.ReleaseSnapshot.TrySetResult();
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await firstStart);
+			await restarted.WaitAsync(TimeSpan.FromSeconds(3));
+
+			Assert.Equal("HEALTHY", gateway.Health.State);
+			Assert.NotNull(gateway.CurrentFeedback);
+			Assert.Equal(2, adapter.StartCount);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+	}
+
+	[Fact]
+	public async Task Gateway_stop_cancels_blocked_snapshot_pump_without_healthy_republication()
+	{
+		var transport = new ProbeTransport();
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(new PassiveAdapter("reference"));
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+
+		transport.BlockNextSnapshot();
+		try
+		{
+			await transport.SnapshotBlocked.Task.WaitAsync(TimeSpan.FromSeconds(3));
+			await gateway.StopAsync();
+			Assert.Equal("STOPPED", gateway.Health.State);
+			Assert.Null(gateway.CurrentFeedback);
+		}
+		finally
+		{
+			transport.ReleaseSnapshot.TrySetResult();
+		}
+
+		await gateway.StartAsync();
+		Assert.Equal("HEALTHY", gateway.Health.State);
+		Assert.NotNull(gateway.CurrentFeedback);
+	}
+
+	[Fact]
+	public async Task Gateway_preserves_feedback_adapter_degradation_across_healthy_control_snapshots()
+	{
+		var transport = new ProbeTransport();
+		var adapter = new FaultingFeedbackAdapter("reference");
+		await using var gateway = new IntegrationGateway(
+			GatewayOptions(Adapter("reference")),
+			new OperatorControlClient(transport));
+		gateway.RegisterAdapter(adapter);
+
+		await gateway.StartAsync();
+		Assert.Equal("DEGRADED", gateway.Health.State);
+		await WaitUntilAsync(() => adapter.FeedbackAttempts >= 2);
+
+		Assert.Equal("DEGRADED", gateway.Health.State);
+		Assert.StartsWith("Feedback to adapter 'reference' failed", gateway.Health.Detail, StringComparison.Ordinal);
+		Assert.True(transport.GetSnapshotCalls >= 2);
+	}
+
 	[Fact]
 	public async Task Gateway_can_stop_restart_and_resnapshot_without_reusing_completed_lifecycle_state()
 	{
@@ -445,6 +556,37 @@ public sealed class ProductionIntegrationGatewayTests
 		}
 	}
 
+
+	private sealed class FaultingFeedbackAdapter : IntegrationAdapterBase
+	{
+		private int _feedbackAttempts;
+
+		public FaultingFeedbackAdapter(string id)
+			: base(id, IntegrationAdapterKind.Discrete, false)
+		{
+		}
+
+		public int FeedbackAttempts => Volatile.Read(ref _feedbackAttempts);
+
+		public override ValueTask StartAsync(IntegrationInputSink input, CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Healthy, "Reference adapter is active.");
+			return ValueTask.CompletedTask;
+		}
+
+		public override ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken)
+		{
+			Interlocked.Increment(ref _feedbackAttempts);
+			throw new IOException("Simulated adapter feedback failure.");
+		}
+
+		public override ValueTask StopAsync(CancellationToken cancellationToken)
+		{
+			SetHealth(IntegrationAdapterState.Stopped, "Reference adapter is stopped.");
+			return ValueTask.CompletedTask;
+		}
+	}
+
 	private sealed class BurstAdapter : IntegrationAdapterBase
 	{
 		private readonly int _count;
@@ -489,7 +631,12 @@ public sealed class ProductionIntegrationGatewayTests
 		private int _blockNextSnapshot;
 		public TaskCompletionSource SnapshotBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource ReleaseSnapshot { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-		public void BlockNextSnapshot() => Interlocked.Exchange(ref _blockNextSnapshot, 1);
+		private int _ignoreBlockedSnapshotCancellation;
+		public void BlockNextSnapshot(bool ignoreCancellation = false)
+		{
+			Interlocked.Exchange(ref _ignoreBlockedSnapshotCancellation, ignoreCancellation ? 1 : 0);
+			Interlocked.Exchange(ref _blockNextSnapshot, 1);
+		}
 
 		public ProbeTransport(int delayMilliseconds = 0, int snapshotFailures = 0)
 		{
@@ -526,7 +673,10 @@ public sealed class ProductionIntegrationGatewayTests
 				if (Interlocked.Exchange(ref _blockNextSnapshot, 0) != 0)
 				{
 					SnapshotBlocked.TrySetResult();
-					await ReleaseSnapshot.Task.WaitAsync(cancellationToken);
+					var waitToken = Interlocked.Exchange(ref _ignoreBlockedSnapshotCancellation, 0) != 0
+						? CancellationToken.None
+						: cancellationToken;
+					await ReleaseSnapshot.Task.WaitAsync(waitToken);
 				}
 				lock (_gate)
 				{
