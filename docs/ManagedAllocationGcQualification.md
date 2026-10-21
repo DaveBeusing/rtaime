@@ -212,6 +212,27 @@ trees, manifest/JSON/TRX hashes and runner inventory. GitHub-hosted
 reference comparisons are not a substitute for a permanent hardware
 performance baseline.
 
+## Production subsystem decision and physical dependency matrix
+
+| Subsystem | Accepted current software scope | Missing evidence and responsible qualification |
+| --- | --- | --- |
+| Runtime Program / GC | 50 and 59.94 fps × 8 consumer masks, 12 measured boundaries per case, strict manifest/TRX and P99/bytes/GC counters | Same-runner reference/head comparison reports deltas only; a managed regression budget needs explicit policy approval, and longer sustained producer load needs independent profiling |
+| Native decoder / SSD | `repeat` invokes the preexisting isolated H.264/AAC decoder and worker assertions | Actual simultaneous two-deck SSD throughput, A/B switching and sustained read latency require [SSD playback qualification](../.github/workflows/ssd-playback-qualification.yml) on self-hosted `rtaime-ssd` |
+| GPU transfer / VRAM | Managed-reference logical readback and zero retained lease assertions | CUDA device, driver, real HtoD/DtoH, fences and reference GPU performance require [CUDA reference qualification](../.github/workflows/cuda-reference-qualification.yml) on self-hosted `rtaime-cuda-reference` |
+| Professional output / AV sync | Software output assertions and independent renderer/recording factor tests, not physical sinks | AJA/SDI and independent output require [Media I/O qualification](../.github/workflows/media-io-reference-qualification.yml); clock/latency/soak require [Timing reference qualification](../.github/workflows/timing-reference-qualification.yml), both on self-hosted `rtaime-media-io-reference` |
+| Operator WPF / viewer | Separate Windows real-WPF visual/Dispatcher qualification and scalar HUD allocation guard | P99 for a simultaneous Program viewer + runtime/monitoring workload and real monitor hotplug are not captured by this producer; separate [GPU viewer qualification](OperatorGpuViewerShutdownQualification.md) does not promote them to this measurement scope |
+| Replay / network / multitrack transitions | Independent existing feature and correctness guards only | No combined 0/2/8-layer × CUT/DISSOLVE × consumer-mask and actual replay/network sink producer exists in this profile; retain `UNVERIFIED` rather than filling cases with synthetic timing |
+| Complete GC allocation attribution | Gen0/1/2 counters, pause deltas and last-GC heap/LOH/POH snapshots | Full source-correlated EventPipe/ETW object allocation stacks, long-running collection coverage and attribution remain `UNVERIFIED`; isolated EventListener samples cannot stand in for complete events |
+
+The self-hosted workflows above are **existing opt-in hardware routes**, not
+automatically executed by a hosted PR job. The dedicated runner label
+alone does not prove the physical device is currently available.
+Only completed evidence with device/runner identities, exact candidate
+source SHA, independent sink/clock metrics and verified raw artifacts can
+change an individual hardware domain from `UNVERIFIED`. An inaccessible
+runner, missing signal or unqualified physical component remains
+`BLOCKED/UNVERIFIED`, never a software-simulated PASS.
+
 ## Evidence limits and release acceptance
 
 A green hosted test only verifies its own named software case and
