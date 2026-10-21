@@ -129,11 +129,15 @@ an observed Preview thumbnail can skip those conditions.
 
 ## Operator and compatibility
 
-Prepared media rows display NEXT READY and the confirmed deadline in the existing
-Rundown detail area. Failure reasons remain ordinary confirmed rundown failures.
-GO is authoritative; the UI never directly routes the prepared source. Preparation
-observations can become stale after another operator changes a deck, so the Runtime
-fence is always checked again at commit.
+Rundown NOW/NEXT separates the confirmed candidate from the locally selected item.
+A row may display **HOST NEXT_READY** only with corresponding ControlHost preparation
+evidence, alongside separate Library asset availability and an explicit **RECHECK AT
+GO** qualifier. An observed expiry displays **PREPARE AGAIN** instead of a false
+ready state and disables GO until new confirmed preparation. The native Runtime
+remains authoritative for the current monotonic deadline, source and decode
+generation. HOLD, stale source or uncertain command responses cannot turn an old
+observation into another GO. A successful Library preflight or visible thumbnail
+still does not create a resident Rundown ticket.
 
 Matched upgraded Control/Runtime hosts are required for resident preparation.
 New preload and guarded-apply operation names fail closed on older Runtime peers;
