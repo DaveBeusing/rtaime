@@ -36,6 +36,38 @@ A buffer is eligible for reuse only after the last GpuReadbackLease reference is
 
 ProgramBoundaryResult owns the primary Program readback lease and is disposable. Production callers must dispose it deterministically. RuntimeHostProcess scopes every processed boundary with using.
 
+## Frame lookup and audio-copy ownership
+
+`RuntimeProgramExecutionService` retains two finite managed lookup maps,
+`_boundaryFrameScratch` and `_boundaryGpuScratch`, allocated once per
+service. They are exclusively mutated under `_boundaryExecutionGate`,
+bounded by the admitted input-source registry, and emptied at every completed
+or rejected boundary. This changes the allocation of the *lookup containers*,
+not the identity, lifetime or mutability of their per-boundary descriptors.
+All uploaded source `GpuFrame` instances remain boundary-owned and are
+released after composite/output submission or during fault cleanup. Native
+backend failures remain diagnosable, and a cleanup exception cannot grant
+an output or resource-health PASS.
+
+Audio mixing still uses per-service writable float work buffers. Program
+audio returned through `ProgramBoundaryResult.ProgramAudioPayload` remains
+an independent `byte[]` owned by its returned result; its contents must
+remain valid even if later boundaries overwrite the mix buffers. Recorder
+and replay PCM snapshots are copied only when a configured replay consumer
+or an active recording payload writer actually requires them. Aux-network
+PCM snapshots are copied only when an Aux network source is admitted at that
+boundary. The ordinary Aux video provider does not consume this PCM copy.
+No per-frame audio scratch is passed to asynchronous recording, replay,
+monitoring or network workers; existing read-only payload and lease contracts
+remain unchanged.
+
+The scope is limited to avoiding unnecessary managed objects/copies. It
+does not imply a zero-allocation Program pipeline: frame descriptor identities,
+returned Program audio and asynchronous monitoring/recording/network
+subscriptions still incur bounded work. The software baseline and exact-head
+measurement limits are recorded in
+[Program Cadence Allocation Qualification](ProgramCadenceAllocationQualification.md).
+
 ## Bounded readback pool
 
 GpuProcessingProvider owns a fixed-capacity GpuReadbackBufferPool.

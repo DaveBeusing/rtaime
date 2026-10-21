@@ -413,6 +413,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly object _boundaryExecutionGate = new();
 	private RuntimeTimingQualificationProbe? _pipelineTiming;
 	private readonly object _boundaryCaptureGate = new();
+	// Only the _boundaryExecutionGate owner touches these bounded, short-lived maps.
+	// Consumers retain independent descriptors, audio snapshots or readback leases.
+	private readonly Dictionary<MediaSourceId, FrameDescriptor> _boundaryFrameScratch = new(AudioProductionLimits.MaximumSources);
+	private readonly Dictionary<MediaSourceId, GpuFrame> _boundaryGpuScratch = new(AudioProductionLimits.MaximumSources);
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
@@ -1047,6 +1051,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			using var executionHold = pipelineTiming?.MeasureStage(RuntimePipelineTimingStage.ExecutionLockHold, _nextSequenceNumber) ?? default;
 			GpuFrame? gpuA = null;
 			GpuFrame? gpuB = null;
+			Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
 			GpuFrame? previewMonitoringFrame = null;
 			IReadOnlyList<MaterializedCompositingLayer>? materializedLayers = null;
 			try
@@ -1087,8 +1092,6 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				Failure? auxFailure;
 				MediaSourceId? auxNetworkSource = null;
 				FrameDescriptor? auxNetworkFrame = null;
-				Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
-
 				var captureStarted = pipelineTiming is null ? 0 : Stopwatch.GetTimestamp();
 				lock (_boundaryCaptureGate)
 				{
@@ -1103,19 +1106,34 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
 						var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
 						programSinkId = programSink;
-						var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
-							?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
-						committedSource = programBinding.MediaSourceId
+						// Keep the exact committed binding cardinalities while avoiding a
+						// captured predicate and preview array on every Program boundary.
+						MediaSourceId? programSource = null;
+						MediaSourceId? previewSource = null;
+						var programBindingCount = 0;
+						var previewBindingCount = 0;
+						foreach (var binding in execution.PreparedExecution.Bindings)
+						{
+							if (binding.MediaSinkId == programSink)
+							{
+								programBindingCount++;
+								programSource = binding.MediaSourceId;
+							}
+							if (binding.OutputRoleId is null &&
+							binding.MediaSourceId is { } sourceId &&
+							binding.MediaSinkId is not null)
+							{
+								previewBindingCount++;
+								previewSource = sourceId;
+							}
+						}
+						if (programBindingCount != 1)
+							throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
+						committedSource = programSource
 							?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
-						var previewBindings = execution.PreparedExecution.Bindings
-							.Where(binding =>
-								binding.OutputRoleId is null &&
-								binding.MediaSourceId is not null &&
-								binding.MediaSinkId is not null)
-							.ToArray();
-						if (previewBindings.Length != 1)
+						if (previewBindingCount != 1)
 							throw new InvalidOperationException("Committed execution must contain exactly one Preview route binding.");
-						committedPreviewSource = previewBindings[0].MediaSourceId!.Value;
+						committedPreviewSource = previewSource!.Value;
 						programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
 						routedAudioSource = _audio.ResolveAudioSource(committedSource);
 						avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
@@ -1137,11 +1155,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 
 					frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
 					frameB = ProcessTimedInput(_virtualMedia.SourceB, _sourceBPipeline, sequence);
-					var frames = new Dictionary<MediaSourceId, FrameDescriptor>
-					{
-						[frameA.SourceId] = frameA,
-						[frameB.SourceId] = frameB
-					};
+					var frames = _boundaryFrameScratch;
+					frames.Clear();
+					frames.Add(frameA.SourceId, frameA);
+					frames.Add(frameB.SourceId, frameB);
 					foreach (var external in _externalSourcePipelines)
 						frames[external.Key] = ProcessExternalTimedInput(external.Key, external.Value, sequence);
 					auxFailure = WriteAuxFrame(execution.PreparedExecution, frames);
@@ -1178,20 +1195,30 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						NeedsMappedSource(frameB.SourceId)
 						? MaterializeInput(frameB, contentB)
 						: null;
-					gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+					gpuFrames = _boundaryGpuScratch;
+					gpuFrames.Clear();
 					if (gpuA is not null)
-						gpuFrames.Add(frameA.SourceId, gpuA);
-					if (gpuB is not null)
-						gpuFrames.Add(frameB.SourceId, gpuB);
-					foreach (var externalFrame in frames.Values.Where(frame =>
-						frame.SourceId != frameA.SourceId && frame.SourceId != frameB.SourceId))
 					{
+						gpuFrames.Add(frameA.SourceId, gpuA);
+						gpuA = null; // ownership passed to the boundary map
+					}
+					if (gpuB is not null)
+					{
+						gpuFrames.Add(frameB.SourceId, gpuB);
+						gpuB = null;
+					}
+					foreach (var externalFrame in frames.Values)
+					{
+						if (externalFrame.SourceId == frameA.SourceId || externalFrame.SourceId == frameB.SourceId)
+							continue;
 						if (RequiresGpuSourceUnsafe(externalFrame.SourceId, committedSource) ||
 							externalFrame.SourceId == committedPreviewSource ||
 							(auxNetworkSource is { } configuredExternalAux && externalFrame.SourceId == configuredExternalAux) ||
 							NeedsMappedSource(externalFrame.SourceId))
 						{
-							gpuFrames.Add(externalFrame.SourceId, MaterializeInput(externalFrame, ResolveInputContent(externalFrame)));
+							var externalGpuFrame = MaterializeInput(externalFrame, ResolveInputContent(externalFrame));
+							try { gpuFrames.Add(externalFrame.SourceId, externalGpuFrame); }
+							catch { externalGpuFrame.Dispose(); throw; }
 						}
 					}
 					if (monitoringSources is not null)
@@ -1279,9 +1306,15 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					var requiredProgramAudioValues = checked((int)(
 						programRecordingAudioBuffer.Timing.SampleCount * programRecordingAudioBuffer.Format.ChannelCount));
 					var recordingBusResult = _lastAudioProductionResults[AudioBusId.Program];
+					// An asynchronous payload snapshot is necessary only for the real
+					// recording payload writer or configured replay consumer. The
+					// authoritative Program output has its own independently owned payload.
+					var captureRecordingAudio = _replay is not null ||
+						(recordingActive && _recordingPayloadWriter is not null);
 					programRecordingAudioPayload =
-						audio.Status == AudioFollowVideoStatus.Underrun &&
-						recordingBusResult.ActiveSourceCount == 0
+						!captureRecordingAudio ||
+						(audio.Status == AudioFollowVideoStatus.Underrun &&
+						 recordingBusResult.ActiveSourceCount == 0)
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
 								AudioBusSamplesUnsafe(AudioBusId.Program, requiredProgramAudioValues)).ToArray();
@@ -1292,7 +1325,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
 								AudioBusSamplesUnsafe(programOutputBusId, requiredProgramAudioValues)).ToArray();
-					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null)
+					// The regular Aux provider consumes the frame descriptor, not an
+					// owned PCM byte array. Only an admitted Aux network route retains audio.
+					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null &&
+						auxNetworkSource is not null)
 					{
 						var auxResult = _lastAudioProductionResults[selectedAuxBus];
 						auxAudioPayload =
@@ -1461,8 +1497,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					output.Dispose();
 					if (gpuFrames is not null)
 					{
-						foreach (var inputFrame in gpuFrames.Values)
-							inputFrame.Dispose();
+						ReleaseGpuFrameScratch(gpuFrames);
 						gpuFrames = null;
 					}
 					gpuB = null;
@@ -1519,13 +1554,33 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			}
 			finally
 			{
+				Exception? cleanupFailure = null;
 				if (materializedLayers is not null)
 				{
 					foreach (var materialized in materializedLayers)
-						materialized.Frame.Dispose();
+					{
+						try { materialized.Frame.Dispose(); }
+						catch (Exception exception) { cleanupFailure ??= exception; }
+					}
 				}
-				gpuB?.Dispose();
-				gpuA?.Dispose();
+				if (gpuFrames is not null)
+				{
+					try { ReleaseGpuFrameScratch(gpuFrames); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
+				}
+				if (gpuB is not null)
+				{
+					try { gpuB.Dispose(); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
+				}
+				if (gpuA is not null)
+				{
+					try { gpuA.Dispose(); }
+					catch (Exception exception) { cleanupFailure ??= exception; }
+				}
+				_boundaryFrameScratch.Clear();
+				if (cleanupFailure is not null)
+					System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanupFailure).Throw();
 			}
 		}
 	}
@@ -2698,6 +2753,23 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		if (readback.ActiveBuffers == 0 && sharedMonitoring.ActiveResources == 0)
 			Release(_gpu.Dispose);
 		Release(_hardwareTelemetry.Dispose);
+		if (failure is not null)
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+	}
+
+	private static void ReleaseGpuFrameScratch(Dictionary<MediaSourceId, GpuFrame> frames)
+	{
+		Exception? failure = null;
+		try
+		{
+			foreach (var frame in frames.Values)
+			{
+				try { frame.Dispose(); }
+				catch (Exception exception) { failure ??= exception; }
+			}
+		}
+		finally { frames.Clear(); }
+
 		if (failure is not null)
 			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
