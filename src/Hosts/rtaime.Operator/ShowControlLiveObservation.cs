@@ -7,10 +7,31 @@ public sealed partial class ShowControlViewModel
 {
     private readonly OperatorViewModel? _operator;
     private ShowControlWorkspaceSnapshot? _confirmedLiveSnapshot;
-    private bool LiveAuthorityAvailable => _operator?.CanOperateLive ?? true;
+    private bool _requiresFreshControlObservation;
+    private bool LiveAuthorityAvailable =>
+        !_requiresFreshControlObservation && (_operator?.CanOperateLive ?? true);
     public bool CanEditAuthoring => !IsBusy && _serverExecutionState is not
         (ShowControlExecutionState.Armed or ShowControlExecutionState.Executing or
          ShowControlExecutionState.Waiting or ShowControlExecutionState.RecoveryRequired);
+    // The selected editor row is not the cue executing in ControlHost.
+    public string LocalCueSelection => SelectedCue?.Name ?? "NONE";
+    public string CueRunStatus => _requiresFreshControlObservation
+        ? "UNVERIFIED · SYNCHRONIZE BEFORE ANOTHER GO"
+        : _confirmedLiveSnapshot is null ? "NO CONFIRMED CUE OBSERVATION" :
+        _serverExecutionState switch
+        {
+            ShowControlExecutionState.Armed => "ARMED · ACTION NOT EXECUTED",
+            ShowControlExecutionState.Executing => "EXECUTING · CONTROL CONFIRMED",
+            ShowControlExecutionState.Waiting => "WAITING · RUNTIME FRAME TARGET",
+            ShowControlExecutionState.Completed => "COMPLETED · NO CUE ARMED",
+            ShowControlExecutionState.Cancelled => "CANCELLED · NO CUE ARMED",
+            ShowControlExecutionState.Failed => "FAILED · EXECUTION HALTED",
+            ShowControlExecutionState.RecoveryRequired => "RECOVERY REQUIRED · GO BLOCKED",
+            _ => "IDLE · SELECT AND ARM SAVED CUE LIST"
+        };
+    public string NextCueStatus => NextCue == "NONE"
+        ? "NO CONFIRMED NEXT CUE"
+        : "SAVED FOLLOW-ON CANDIDATE · NOT ARMED";
     public string NextCue
     {
         get
@@ -22,7 +43,9 @@ public sealed partial class ShowControlViewModel
             return list is not null && next >= 0 && next < list.Cues.Count ? list.Cues[next].Name : "NONE";
         }
     }
-    public string LiveActionDetail => !LiveAuthorityAvailable ? _operator?.LiveAvailability ?? "Synchronize first." :
+    public string LiveActionDetail => _requiresFreshControlObservation
+        ? "Control command response is unverified; synchronize before repeating a live cue."
+        : !LiveAuthorityAvailable ? _operator?.LiveAvailability ?? "Synchronize first." :
         IsBusy ? "Show Control command pending; wait for confirmation." :
         RequiresAcknowledgement ? "Review Program, then explicitly Resume or Cancel recovery." :
         CanGo() ? $"SHOW GO → {CurrentCue} · {CurrentAction}" :
@@ -56,6 +79,7 @@ public sealed partial class ShowControlViewModel
             snapshot.Execution.ExecutionRevision < previous.Execution.ExecutionRevision) return;
         if (previous is null) { ApplyConfirmedSnapshot(snapshot); return; }
         // Live observations update execution only. Text edits, local cue selection and editor rows survive.
+        _requiresFreshControlObservation = false;
         _confirmedLiveSnapshot = snapshot;
         _serverSelectedCueListId = snapshot.SelectedCueListId;
         ApplyExecution(snapshot);
