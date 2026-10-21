@@ -139,7 +139,7 @@ The Operator provides:
 
 The editor exposes only the supported action union and typed bounded fields. It is not a scripting environment. Server-side validation remains authoritative even when the Operator performs immediate local shape validation.
 
-The Operator renders confirmed Show Control snapshots delivered through the same synchronization flow used by the production workspace. Local row selection does not mutate production state.
+The Operator renders confirmed Show Control snapshots delivered through the same synchronization flow used by the production workspace. The RUN panel distinguishes the **confirmed armed/executing/waiting cue and action**, the **saved follow-on candidate** (not automatically armed), and the locally selected editor row. Local row selection does not mutate production state. ARM is a separate ControlHost action; F9 executes only an armed cue, and CANCEL CUE is not a direct Program STOP. After an unverified command response (including interrupted transport), another ARM/GO is disabled until fresh ControlHost observation. Restart recovery requires explicit acknowledgement rather than automatic cue replay.
 
 ## Operational behavior
 
