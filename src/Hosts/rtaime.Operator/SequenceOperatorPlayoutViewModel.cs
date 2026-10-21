@@ -261,12 +261,20 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
 
     public Task ArmAsync() => RunAsync(async ct =>
     {
-        if (Status != "PREVIEW READY" || !RealPreview || _reference is null || _authoring is null) return;
+        if (Status != "PREVIEW READY" || !RealPreview || _reference is null ||
+            _authoring is null || _preparation is null) return;
         var saved = await _authoring.GetAsync(_reference.SequenceId, ct);
+        var context = await _preparation.ContextAsync(ct);
         if (saved.AuthoringRevision != _reference.AuthoringRevision ||
-            !saved.Validation.IsValid || !CurrentPreview)
+            !saved.Validation.IsValid || !CurrentPreview ||
+            context.AuthoringRevision != _reference.AuthoringRevision ||
+            context.RuntimeHostInstanceId != _reference.RuntimeHostInstanceId)
         {
-            Status = "STALE"; Detail = "Saved revision or Preview route changed. Reprepare.";
+            _armed = false;
+            _output = null;
+            Changed(nameof(OutputEvidence));
+            Status = "STALE";
+            Detail = "Saved revision, Preview route or RuntimeHost instance changed. RELEASE and reprepare.";
             return;
         }
         _take = new(SequenceOutputContract.Version, _reference, _source, _revision, Guid.NewGuid());
@@ -277,8 +285,22 @@ public sealed class SequenceOperatorPlayoutViewModel : INotifyPropertyChanged, I
     public Task TakeAsync() => RunAsync(async ct =>
     {
         if (Status != "TAKE ARMED" || !_armed || _submitted ||
-            _take is null || !RealPreview || _outputClient is null) return;
+            _take is null || !RealPreview || _outputClient is null || _preparation is null) return;
         var command = _take;
+        // A restart can preserve apparent routing/revision while retiring its
+        // native owner. Recheck the actual Runtime epoch before first submission.
+        var context = await _preparation.ContextAsync(ct);
+        if (_reference is null ||
+            context.RuntimeHostInstanceId != _reference.RuntimeHostInstanceId ||
+            context.AuthoringRevision != _reference.AuthoringRevision || !RealPreview)
+        {
+            _armed = false;
+            _output = null;
+            Changed(nameof(OutputEvidence));
+            Status = "STALE";
+            Detail = "Saved revision or RuntimeHost instance changed before TAKE. No mutation was sent.";
+            return;
+        }
         _armed = false;
         // Never retry an ambiguous authority mutation, even if the IPC reply is lost.
         _submitted = true;
