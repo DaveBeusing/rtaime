@@ -2,6 +2,7 @@
 
 using System.Buffers.Binary;
 using System.IO.Pipes;
+using System.Diagnostics;
 using System.Text.Json;
 using rtaime.Core;
 using rtaime.Control.Contracts;
@@ -18,6 +19,10 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
+	// Only the response wait is bounded. The admitted recorder operation remains owned
+	// by RuntimeHost and continues until its actual terminal state.
+	private static readonly TimeSpan RecordingStopResponseBudget = TimeSpan.FromSeconds(1);
+	private static readonly ActivitySource RecordingStopActivity = new("rtaime.RuntimeHost.RecordingStop");
 	private readonly string _endpoint;
 	private readonly Func<RuntimeProgramExecutionService?> _runtimeAccessor;
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
@@ -578,14 +583,53 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		RuntimeProgramExecutionService runtime,
 		CancellationToken cancellationToken)
 	{
-		var result = await runtime.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+		cancellationToken.ThrowIfCancellationRequested();
+		using var trace = RecordingStopActivity.StartActivity("runtime.recording.stop");
+		trace?.SetTag("ipc.request_id", request.RequestId);
+		trace?.SetTag("ipc.correlation_id", request.CorrelationId);
+		trace?.SetTag("recording.session_id", runtime.ReadRecordingStopSessionId()?.ToString());
+		trace?.AddEvent(new ActivityEvent("request.received"));
+
+		// One completion per recording session, even when the requesting pipe disconnects.
+		var completion = runtime.BeginRecordingStopAsync();
+		trace?.AddEvent(new ActivityEvent("recorder.stop.admitted"));
+		RecordingStopResult? result = null;
+		try
+		{
+			result = await completion.WaitAsync(RecordingStopResponseBudget, cancellationToken).ConfigureAwait(false);
+		}
+		catch (TimeoutException) when (!completion.IsFaulted)
+		{
+			// If the completion races the observation deadline, inspect the terminal
+			// task below rather than turning a late successful result into an error.
+		}
+		if (result is null && completion.IsCompletedSuccessfully)
+			result = completion.Result;
+
+		var snapshot = runtime.ReadRecordingOperatorSnapshot();
 		AdvanceStateVersion();
+		if (result is null)
+		{
+			trace?.AddEvent(new ActivityEvent("recorder.finalization.unconfirmed"));
+			var sessionId = runtime.ReadRecordingStopSessionId()?.ToString() ?? "none";
+			return Success(
+				request,
+				"runtime.recording.command.response",
+				new WireRecordingCommandResult(
+					false,
+					ToWire(snapshot),
+					new WireFailure(
+						"recording.stop.completion_unknown",
+						$"STOP accepted for recording session '{sessionId}' (request '{request.RequestId}'), but file finalization is not yet confirmed. Refresh recording state before any further command; do not retry an uncertain STOP.")));
+		}
+
+		trace?.AddEvent(new ActivityEvent("recorder.finalization.terminal"));
 		return Success(
 			request,
 			"runtime.recording.command.response",
 			new WireRecordingCommandResult(
 				result.Status != RecordingStopStatus.Failed,
-				ToWire(runtime.Snapshot.RecordingOperator),
+				ToWire(snapshot),
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 

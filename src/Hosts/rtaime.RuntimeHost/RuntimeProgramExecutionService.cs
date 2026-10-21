@@ -461,6 +461,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly ProductionCgTextRenderer _productionCgRenderer = new();
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
+	private Task<RecordingStopResult>? _recordingStopTask;
+	private RecordingSessionId? _recordingStopSession;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
 	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
 	private readonly IProfileConfigurableProgramRecordingWriter? _profileRecordingTargetWriter;
@@ -2677,14 +2679,54 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		return result;
 	}
 
-	public async ValueTask<RecordingStopResult> StopRecordingAsync(CancellationToken cancellationToken = default)
+	public ValueTask<RecordingStopResult> StopRecordingAsync(CancellationToken cancellationToken = default)
 	{
-		var result = await _recorder.StopAsync(cancellationToken).ConfigureAwait(false);
+		cancellationToken.ThrowIfCancellationRequested();
+		return new ValueTask<RecordingStopResult>(BeginRecordingStopAsync().WaitAsync(cancellationToken));
+	}
+
+	// A disconnected or cancelled requester cannot revoke an already admitted recorder STOP.
+	// The active session owns its one finalization task; a later session gets a new task.
+	internal Task<RecordingStopResult> BeginRecordingStopAsync()
+	{
 		lock (_gate)
 		{
-			if (result.Status == RecordingStopStatus.Stopped)
-				_recordingCompletedAtUtc = DateTimeOffset.UtcNow;
-			Observe($"recording.stop:{result.Status}");
+			ThrowIfDisposed();
+			var session = _recorder.Snapshot.SessionId;
+			if (_recordingStopTask is not null && _recordingStopSession == session)
+				return _recordingStopTask;
+
+			_recordingStopSession = session;
+			_recordingStopTask = CompleteRecordingStopAsync(session);
+			return _recordingStopTask;
+		}
+	}
+
+	internal RuntimeHostRecordingOperatorSnapshot ReadRecordingOperatorSnapshot()
+	{
+		lock (_gate)
+			return RecordingOperatorSnapshotUnsafe();
+	}
+
+	internal RecordingSessionId? ReadRecordingStopSessionId()
+	{
+		lock (_gate)
+			return _recorder.Snapshot.SessionId;
+	}
+
+	private async Task<RecordingStopResult> CompleteRecordingStopAsync(RecordingSessionId? session)
+	{
+		var result = await _recorder.StopAsync(CancellationToken.None).ConfigureAwait(false);
+		lock (_gate)
+		{
+			// A new session may have started after the previous recorder reached terminal state.
+			// Late completion metadata belongs only to the session that initiated STOP.
+			if (_recorder.Snapshot.SessionId == session)
+			{
+				if (result.Status == RecordingStopStatus.Stopped)
+					_recordingCompletedAtUtc = DateTimeOffset.UtcNow;
+				Observe($"recording.stop:{result.Status}");
+			}
 		}
 		return result;
 	}

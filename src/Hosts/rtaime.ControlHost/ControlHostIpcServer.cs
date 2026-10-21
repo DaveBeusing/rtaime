@@ -2,6 +2,7 @@
 
 using System.Buffers.Binary;
 using System.IO.Pipes;
+using System.Diagnostics;
 using System.Text.Json;
 using rtaime.Control.Contracts;
 using rtaime.Core;
@@ -27,6 +28,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
 	private static readonly TimeSpan DefaultSessionDrainTimeout = HostIpcSessionTracker.MaximumDrainInterval;
+	private static readonly ActivitySource RecordingStopActivity = new("rtaime.ControlHost.RecordingStop");
 	private readonly string _endpoint;
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
@@ -1978,7 +1980,12 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> StopRecordingAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
+		using var trace = RecordingStopActivity.StartActivity("control.recording.stop");
+		trace?.SetTag("ipc.request_id", request.RequestId);
+		trace?.SetTag("ipc.correlation_id", request.CorrelationId);
+		trace?.AddEvent(new ActivityEvent("request.received"));
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		trace?.AddEvent(new ActivityEvent("mutation_gate.acquired"));
 		try
 		{
 			var control = _controlAccessor();
@@ -1989,18 +1996,24 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 
 			try
 			{
+				trace?.AddEvent(new ActivityEvent("runtime.request.sent"));
 				var result = await _runtimeTransport.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+				trace?.AddEvent(new ActivityEvent("runtime.response.received"));
+				trace?.SetTag("recording.state", result.Snapshot.State);
+				trace?.SetTag("recording.outcome", result.Failure?.Code ?? (result.Succeeded ? "confirmed" : "unconfirmed"));
 				NotifyObservableStateChanged();
 				return Success(request, "control.recording.command.response", ToWire(result));
 			}
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
+				trace?.AddEvent(new ActivityEvent("runtime.response.error"));
 				return Error(request, "control.recording.stop.rejected", exception.Message);
 			}
 		}
 		finally
 		{
 			_mutationGate.Release();
+			trace?.AddEvent(new ActivityEvent("mutation_gate.released"));
 		}
 	}
 
