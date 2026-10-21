@@ -74,6 +74,12 @@ The AI workspace reuses governed model/provider approval and the shared Program 
 Existing output routing and AI controls remain available. A 3D stage, new driver,
 commercial codec or additional physical-support claim is not implicitly delivered. Preview remains green and Program red, with explicit role labels; cyan is for selection/navigation/focus. The normal dual-view order remains Preview left and Program right. Mockup values, extra outputs and codec/HDR badges are not capability evidence.
 
+### LIVE playout surface
+
+LIVE retains one Operator production state and composes the existing Media Library at left, full shared Preview (green, left) and Program (red, right) viewers in the bounded center, contextual Inspector at right, and the persistent Rundown and timeline below. MEDIA, EDIT, MULTIVIEW, SCENES and other existing destinations retain their own workflows and layout identities. The dedicated LIVE action strip is a single horizontally scrollable row instead of a wrapping toolbar: the video viewport retains its assigned height even at compact sizes. LIBRARY, INSPECTOR and RESTORE remain reachable from the same row, with the existing shortcut/navigation and persisted-layout recovery paths unchanged.
+
+The LIVE row distinguishes **SELECTED** source intent, the current **NEXT / PVW** identity and **LIVE / PGM** identity, and the separately observed availability of each displayed monitor. **SET PVW**, **CUT** and **AUTO** remain the original guarded Operator commands; the displayed authority detail reports current eligibility and pending/rejected conditions, never optimistic Program advancement. **NEXT CUE** comes from the existing Rundown's authoritative pending-next projection and does not arm or execute that item. The row also projects the measured Program network-transmission status, Runtime recording state and observed Program audio levels. A recent network send is not proof of physical scan-out, and FINALIZING is not a saved recording. Detailed provider/health/diagnostic information stays in OUTPUTS, HEALTH and existing specialist workspaces. The left Library retains selection and analysis semantics without automatically changing routing; no new decoder, monitoring subscription, control transport or Program clock is created.
+
 ## Shared feature integration boundary
 
 The [joint Operator integration qualification](OperatorExperienceIntegrationQualification.md)

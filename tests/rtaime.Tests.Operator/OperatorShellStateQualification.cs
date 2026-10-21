@@ -133,7 +133,7 @@ public sealed partial class OperatorCombinedVisualQualification
             window.Shell.SelectWorkspace("LIVE");
             await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
             window.Activate();
-            var strip=Assert.IsAssignableFrom<FrameworkElement>(window.FindName("LiveActionStrip"));
+            var strip=Assert.IsAssignableFrom<ScrollViewer>(window.FindName("LiveActionStrip"));
             var library=Descendants(strip).OfType<ButtonBase>().Single(b => ReferenceEquals(b.Command,window.Shell.ToggleLeftPanelCommand));
             Assert.True(library.Focus());
             Assert.True(window.Shortcuts.TryApplyProfile(OperatorShortcutProfile.Defaults,out _));
@@ -143,9 +143,26 @@ public sealed partial class OperatorCombinedVisualQualification
             Assert.False(window.Shortcuts.TryHandle(space));
             window.Shell.ToggleLeftPanelCommand.Execute(null);
             await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
-            foreach (var action in Descendants(strip).OfType<ButtonBase>().Where(button => button.IsVisible))
-                Assert.True(Fits(action.TransformToAncestor(strip).TransformBounds(new Rect(action.RenderSize)),strip.RenderSize),
-                    "Compact LIVE actions must remain visible with Library open.");
+            Assert.True(strip.IsVisible && strip.ActualWidth > 0 && strip.ActualHeight >= 24,
+                "Compact LIVE action strip must remain allocated while the Library is open.");
+            Assert.InRange(strip.ScrollableHeight, 0, 1);
+            // A bounded single-row toolbar deliberately scrolls horizontally at compact
+            // sizes. Every original action must be individually reachable and wholly
+            // visible after the standard WPF BringIntoView keyboard/pointer path.
+            // The themed horizontal ScrollBar also owns zero-width internal repeat
+            // buttons; only the actual Operator action controls are playout commands.
+            var actions = Descendants(strip).OfType<RtaimeButton>().Where(button => button.IsVisible).ToArray();
+            Assert.NotEmpty(actions);
+            foreach (var action in actions)
+            {
+                action.BringIntoView();
+                await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+                var bounds = action.TransformToAncestor(strip).TransformBounds(new Rect(action.RenderSize));
+                Assert.True(Fits(bounds, strip.RenderSize),
+                    $"Compact LIVE action '{action.Content}' must be fully reachable by horizontal scrolling with the Library open; bounds={bounds}, strip={strip.RenderSize}, offset={strip.HorizontalOffset}.");
+            }
+            strip.ScrollToHorizontalOffset(0);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             var mediaList = Descendants(window.MediaLibraryView).OfType<ListBox>().First(list => list.IsVisible);
             Assert.True(mediaList.Focus());
             foreach (var key in new[] { Key.Enter, Key.Space, Key.Up, Key.Down, Key.Delete })

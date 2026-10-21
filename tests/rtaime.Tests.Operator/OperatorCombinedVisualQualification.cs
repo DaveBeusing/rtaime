@@ -255,6 +255,32 @@ public sealed partial class OperatorCombinedVisualQualification
         var actions = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("LiveActionStrip"));
         Assert.True(actions.IsVisible && actions.ActualHeight >= 24);
         Assert.True(Fits(actions.TransformToAncestor(root).TransformBounds(new Rect(actions.RenderSize)), root.RenderSize));
+        // The LIVE action surface is a single horizontal, locally scrollable row.
+        // It cannot wrap several rows and displace the physical Preview/Program area.
+        var liveStrip = Assert.IsAssignableFrom<ScrollViewer>(actions);
+        Assert.InRange(liveStrip.ScrollableHeight, 0, 1);
+        Assert.InRange(actions.ActualHeight, 24, 72);
+        Assert.Equal(owner.PreviewSourceName,
+            Assert.IsType<TextBlock>(window.FindName("LiveNextIdentity")).Text);
+        Assert.Equal(owner.ProgramSourceName,
+            Assert.IsType<TextBlock>(window.FindName("LiveProgramIdentity")).Text);
+        Assert.Equal(window.Monitoring.PreviewState,
+            Assert.IsType<TextBlock>(window.FindName("LivePreviewEvidence")).Text);
+        Assert.Equal(window.Monitoring.ProgramState,
+            Assert.IsType<TextBlock>(window.FindName("LiveProgramEvidence")).Text);
+        Assert.Equal(window.Rundown.PendingNext,
+            Assert.IsType<TextBlock>(window.FindName("LiveCueIdentity")).Text);
+        Assert.Equal(owner.PreviewTakeDetail,
+            Assert.IsType<TextBlock>(window.FindName("LiveAuthorityDetail")).Text);
+        Assert.Equal(window.OutputHealth.ProgramTransmissionState,
+            Assert.IsType<TextBlock>(window.FindName("LiveSendEvidence")).Text);
+        Assert.Equal(owner.RecordingStatus,
+            Assert.IsType<TextBlock>(window.FindName("LiveRecordingEvidence")).Text);
+        Assert.Equal(owner.AudioLeftDb,
+            Assert.IsType<TextBlock>(window.FindName("LiveAudioLeftEvidence")).Text);
+        Assert.True(Descendants(root).OfType<RtaimeButton>().Any(button =>
+            button.IsVisible && Equals(button.Content, "RESTORE") &&
+            ReferenceEquals(button.Command, window.Shell.ResetLayoutCommand)));
         var playback = Descendants(root).OfType<System.Windows.Controls.Primitives.ButtonBase>()
             .Count(button => button.IsVisible && ReferenceEquals(button.Command, window.MediaDeck.TogglePlayPauseCommand));
         Assert.Equal(previews.Length, playback);
