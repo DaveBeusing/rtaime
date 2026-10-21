@@ -431,6 +431,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 			IOException or
 			FormatException or
 			TimeoutException or
+            OperationCanceledException or
 			NotSupportedException)
 		{
 			Failure = exception.Message;
