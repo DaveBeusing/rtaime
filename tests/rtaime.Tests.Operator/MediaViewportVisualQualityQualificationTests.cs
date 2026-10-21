@@ -191,6 +191,28 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.DoesNotContain(integralZoom, value => value is "FIT" or "FILL" or "25%" or "50%" or "FREE");
 	}
 
+
+	[Theory]
+	[InlineData(1.00)]
+	[InlineData(1.25)]
+	[InlineData(1.50)]
+	[InlineData(1.75)]
+	[InlineData(2.00)]
+	public void Subpixel_layout_changes_reuse_allocated_gpu_pixels_but_dpi_transitions_do_not(double dpi)
+	{
+		var target = MediaRenderTarget.Create(800.1, 450.1, dpi, dpi, MediaScalingPath.GpuProvider);
+		Assert.True(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1, 450.1, dpi, dpi));
+		Assert.True(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1001, 450.1001, dpi, dpi));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 802, 452, dpi, dpi));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 800.1, 450.1, dpi + 0.25, dpi + 0.25));
+		Assert.False(GpuMonitorPresentationSurface.MatchesViewportPixels(
+			target.PixelWidth, target.PixelHeight, 0, 450.1, dpi, dpi));
+	}
+
 	[Fact]
 	public void Shared_gpu_resource_reuse_is_fenced_by_full_identity_and_lifetime()
 	{
