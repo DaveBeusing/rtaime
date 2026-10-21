@@ -352,7 +352,25 @@ public sealed partial class MediaPoolInspectorViewModel
         if (!CanOpenLibraryPreview || SelectedItem is not { } item) return;
         if (item.Kind == MediaPoolItemKind.Source)
         {
-            await DropToPreviewAsync(item);
+            // Source selection is immediate but still uses the existing
+            // Control-owned Preview command. Do not dereference a vanished
+            // source after the selected item has been reprojected.
+            var source = _operator.Sources.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, item.ReferenceId, StringComparison.Ordinal));
+            if (source is null || SelectedItem?.Key != item.Key ||
+                !_operator.IsConnected || _operator.IsStale || !_operator.SetPreviewCommand.CanExecute(null))
+            {
+                LibraryJourneyNotice("SOURCE UNAVAILABLE · refresh current sources and retry Preview.");
+                return;
+            }
+            _operator.SelectedSource = source;
+            if (!_operator.SetPreviewCommand.CanExecute(null))
+            {
+                LibraryJourneyNotice("PREVIEW REJECTED · Control is no longer ready for routing.");
+                return;
+            }
+            _operator.SetPreviewCommand.Execute(null);
+            LibraryJourneyNotice("PREVIEW REQUESTED · awaiting authoritative source routing; no Program Take.");
             return;
         }
         if (!Guid.TryParse(item.ReferenceId, out var id) || item.LocalPath is not { } path ||
