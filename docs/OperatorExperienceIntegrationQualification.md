@@ -116,7 +116,7 @@ The Operator workspace implementation retains the existing monitoring and produc
 
 | Test or qualification | Required observation | Evidence boundary |
 | --- | --- | --- |
-| `SequenceTimelineEditorTests` | True measured ruler width, repeat-viewport row identity, first 256 correctly ordered visible clips and bounded snapping allocations | Managed model and WPF collection behavior; no native GPU output |
+| `SequenceTimelineEditorTests` | True scrollbar-adjusted ruler/track viewport width, repeat-viewport row identity, first 256 correctly ordered visible clips and bounded snapping allocations | Managed model and WPF collection behavior; no native GPU output |
 | `OperatorMediaWorkspaceLifecycleTests` | Cancelled monitoring ROI is restored on view replacement; loaded Output Canvas detaches its draft-editor event subscription on unload | Windows STA/WPF lifecycle; actual native graphic devices not qualified |
 | `MediaViewportVisualQualityQualificationTests` and `MonitoringVisualPerformanceQualificationTests` | 100/125/150/175/200% geometry, Fit/Fill/100% behavior and unmodified GPU versus truthful CPU fallback basis | Existing software evidence; real multi-monitor topology and screen-reader testing remain separate |
 | Existing real XAML and docking qualifications | 1920×1080 through compact, focus/cinema and floating workspace layouts without incorrect crop or overwritten authoring state | Exact runner/source screenshots require human review; `D3DImage` may not appear in bitmap captures |
