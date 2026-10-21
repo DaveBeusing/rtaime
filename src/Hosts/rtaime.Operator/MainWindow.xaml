@@ -296,6 +296,9 @@
                             <TextBlock x:Name="LiveNextIdentity" Text="{Binding PreviewSourceName}"
                                 MaxWidth="110" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                 ToolTip="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+                            <TextBlock x:Name="LivePreviewEvidence"
+                                Text="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="5,0,0,0"/>
                         </StackPanel>
                         <controls:RtaimeButton Content="PGM" IsCompact="True" Height="30"
                             Command="{Binding Shell.SelectCompactBusCommand, ElementName=RootWindow}" CommandParameter="PROGRAM"
@@ -306,6 +309,9 @@
                             <TextBlock x:Name="LiveProgramIdentity" Text="{Binding ProgramSourceName}"
                                 MaxWidth="110" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                 ToolTip="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
+                            <TextBlock x:Name="LiveProgramEvidence"
+                                Text="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="5,0,0,0"/>
                         </StackPanel>
 
                         <controls:RtaimeButton Content="SET PVW" IsCompact="True" Height="30"
