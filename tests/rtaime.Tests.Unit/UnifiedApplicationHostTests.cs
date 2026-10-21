@@ -937,7 +937,12 @@ public sealed class UnifiedApplicationHostTests
 		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
 		Assert.Equal("startup.deadline.expired", document.RootElement.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
 		Assert.Equal("Stop signal storage unavailable.", document.RootElement.GetProperty("shutdownFailureReason").GetString());
-		Assert.False(platform.FileExists(options.ShutdownEvidencePath));
+        using var shutdown = JsonDocument.Parse(platform.ReadAllText(options.ShutdownEvidencePath));
+        Assert.Equal("FAIL", shutdown.RootElement.GetProperty("status").GetString());
+        Assert.True(shutdown.RootElement.GetProperty("forcedTermination").GetBoolean());
+        Assert.False(shutdown.RootElement.GetProperty("graceful").GetBoolean());
+        Assert.Equal("IOException", shutdown.RootElement.GetProperty("stopSignalFailure").GetString());
+        Assert.False(platform.IsProcessAlive(platform.LastControlProcessId!.Value));
 	}
 
 	[Fact]
