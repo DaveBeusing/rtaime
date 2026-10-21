@@ -164,6 +164,29 @@ The lifecycle evidence publishes the stable ControlHost diagnostic path when App
 
 Once the first complete production qualification succeeds, the startup completion latch is permanent for the Operator session. Later RuntimeHost, AIHost or ControlHost loss is therefore represented by the normal workspace health, notification and recovery surfaces; it does not re-open the initial startup splash.
 
+### Operator-ready is not playout-ready
+
+The interactive splash now calls successful initial AppHost qualification
+**ENGINE HOSTS READY · REVIEW SHOW AND OUTPUTS**, rather than claiming
+an available production media/output path. Its displayed stage names
+translate the existing stage IDs into actionable startup milestones.
+Technical stage identity, PID/IPC evidence, timestamps, requirement
+classes and the completion/failure latch remain unchanged.
+
+Show checks display the **current**, fresh ControlHost Show project
+identity and only its authoritative `LOADED`, `SAVED`, `RESTORED`,
+`STALE` or `RECOVERY_REQUIRED` status. If the Control snapshot is
+missing, stale, disconnected or older than 10 seconds, project identity
+is **UNVERIFIED**, not a remembered show from local UI state.
+Review Media, Outputs and Health remain read-only navigation.
+The existing Show workspace provides governed template create/import,
+dependency preview and explicit commit; there is no generic project-file
+replacement or automatic ARM, GO, CUT, Preview or Take on startup.
+
+Exporting support diagnostics and startup help remains available behind
+Advanced Tools in Show checks. This presentation change introduces no
+additional host supervisor, polling loop or media processor.
+
 ## Production readiness contract
 
 Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost deliberately separates **initial production qualification** from **steady-state readiness observation**.
