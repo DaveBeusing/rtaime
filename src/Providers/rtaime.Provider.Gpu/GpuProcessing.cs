@@ -1264,6 +1264,15 @@ public sealed class GpuProcessingProvider : IDisposable
                         new Failure("gpu.output_mapping.source_stale",
                             "One or more mapping sources have stale identities or incompatible formats."),
                         stopwatch.Elapsed, inputs.Count);
+                // Output mapping is an observation of the current Program
+                // boundary. Reusable upload surfaces can have another lifetime
+                // generation, but their frame reference must belong to this
+                // exact Program sequence, never a previously captured source.
+                if (item.Frame.Descriptor.Timing.SequenceNumber != program.Descriptor.Timing.SequenceNumber)
+                    return GpuProcessingResult.Rejected(
+                        new Failure("gpu.output_mapping.sequence_stale",
+                            "One or more mapping inputs do not belong to the current Program boundary."),
+                        stopwatch.Elapsed, inputs.Count);
                 try { item.Surface.Validate(); }
                 catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
                 {
@@ -1287,7 +1296,11 @@ public sealed class GpuProcessingProvider : IDisposable
                     target, format, _backend.StorageDomain,
                     SurfaceOwnership.ProducerOwned,
                     new SurfaceLifetimeDescriptor(new Generation(ordinal), target.Value),
-                    new OpaqueSurfaceHandle("rtaime.gpu.reference.output-mapping", target.ToString()));
+                    new OpaqueSurfaceHandle(
+                        _backend.Info.HardwareAccelerated
+                            ? "rtaime.gpu.hardware.output-mapping"
+                            : "rtaime.gpu.reference.output-mapping",
+                        target.ToString()));
                 var entry = new ActiveSurfaceEntry(descriptor, retainedForReuse: false);
                 var frame = CreateFrameReferenceUnsafe(entry, program.Descriptor.SourceId,
                     program.Descriptor.Timing);
@@ -2224,6 +2237,14 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend, IGpuOutp
 {
     private const int MaxPooledAllocations = 8;
 
+    private readonly Func<SurfaceId, ReadOnlyMemory<byte>> _mappingSourceResolver;
+
+    public ManagedReferenceGpuBackend()
+    {
+        // One delegate for the backend lifetime, not one closure per frame.
+        _mappingSourceResolver = ResolveMappedSource;
+    }
+
     private readonly object _gate = new();
     private readonly Dictionary<SurfaceId, Allocation> _surfaces = new();
     private readonly Dictionary<int, Stack<byte[]>> _freeAllocations = new();
@@ -2366,13 +2387,8 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend, IGpuOutp
             try
             {
                 GpuOutputMappingRaster.Render(
-                    format, target, surfaces,
-                    id =>
-                    {
-                        if (!_surfaces.TryGetValue(id, out var allocation))
-                            throw new InvalidOperationException("Output mapping input surface was retired.");
-                        return allocation.Pixels;
-                    }, opaqueProgramSink: true);
+                    format, target, surfaces, _mappingSourceResolver,
+                    opaqueProgramSink: true);
                 _surfaces.Add(outputSurfaceId, new Allocation(format, target));
             }
             catch
@@ -2381,6 +2397,13 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend, IGpuOutp
                 throw;
             }
         }
+    }
+
+    private ReadOnlyMemory<byte> ResolveMappedSource(SurfaceId id)
+    {
+        if (!_surfaces.TryGetValue(id, out var allocation))
+            throw new InvalidOperationException("Output mapping input surface was retired.");
+        return allocation.Pixels;
     }
 
     public byte[] Readback(SurfaceId surfaceId, VideoFormat format)
