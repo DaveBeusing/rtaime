@@ -16,6 +16,56 @@ namespace rtaime.Tests.Operator;
 
 public sealed class ShowReadinessOperatorTests
 {
+    [Fact]
+    public void Current_authoritative_show_identity_never_promotes_saved_or_recoverable_content_to_live()
+    {
+        var saved = new OperatorShowProjectDescriptor("show-id", "Weekend production", "SAVED", "Durable authored state.");
+        var notObserved = ShowProjectEntry.FromAuthority(saved, fresh: false);
+        Assert.Equal("UNVERIFIED", notObserved.State);
+        Assert.DoesNotContain("Weekend production", notObserved.Title);
+        var available = ShowProjectEntry.FromAuthority(saved, fresh: true);
+        Assert.Equal("Weekend production", available.Title);
+        Assert.Equal("SAVED", available.State);
+        Assert.Contains("do not confirm live Program", available.NextStep);
+
+        var recovered = ShowProjectEntry.FromAuthority(new("show-id", "Weekend production", "RESTORED", "Restored project."), true);
+        Assert.Equal("RESTORED", recovered.State);
+        Assert.Contains("previous GO", recovered.NextStep);
+        var pending = ShowProjectEntry.FromAuthority(new("show-id", "Weekend production", "RECOVERY_REQUIRED", "Uncertain cue."), true);
+        Assert.Equal("RECOVERY REQUIRED", pending.State);
+        Assert.Contains("Do not replay", pending.NextStep);
+        Assert.Contains("Uncertain cue", pending.Detail);
+        Assert.Equal("STALE", ShowProjectEntry.FromAuthority(new("show-id", "Weekend production", "STALE", "Changed."), true).State);
+        Assert.Equal("UNVERIFIED", ShowProjectEntry.FromAuthority(OperatorShowProjectDescriptor.Unavailable, true).State);
+    }
+
+    [Fact]
+    public async Task Project_navigation_and_advanced_tools_do_not_mutate_production_or_refresh_server()
+    {
+        await using var owner = new OperatorViewModel();
+        var client = new OperatorControlClient(new Transport());
+        var context = new QueuedContext();
+        using var notifications = new OperatorNotificationCenterViewModel(new NotificationService(), owner, context);
+        var provider = new Provider();
+        var visits = new List<string>();
+        using var model = new ShowReadinessViewModel(client, owner, provider, notifications, visits.Add, context);
+        Assert.Equal("UNVERIFIED", model.ProjectState);
+        Assert.Contains("UNVERIFIED", model.MediaEvidence);
+        Assert.Contains("UNVERIFIED", model.OutputEvidence);
+        Assert.Equal(Visibility.Collapsed, model.AdvancedVisibility);
+        model.ToggleAdvancedCommand.Execute(null);
+        Assert.Equal(Visibility.Visible, model.AdvancedVisibility);
+        model.ToggleAdvancedCommand.Execute(null);
+        Assert.Equal(Visibility.Collapsed, model.AdvancedVisibility);
+        model.OpenShowWorkspaceCommand.Execute(null);
+        model.ReviewMediaCommand.Execute(null);
+        model.ReviewOutputsCommand.Execute(null);
+        model.ReviewHealthCommand.Execute(null);
+        Assert.Equal(new[] { "SCENES", "MEDIA", "OUTPUTS", "HEALTH" }, visits);
+        Assert.Equal(OperatorProgramSafetyStates.Unknown, owner.ProgramSafety);
+        Assert.Empty(model.History);
+    }
+
 	[Fact]
 	public async Task Slow_dispatcher_coalesces_evidence_and_history_without_unbounded_work_or_persisted_state()
 	{
