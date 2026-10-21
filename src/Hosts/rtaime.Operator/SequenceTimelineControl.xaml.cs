@@ -18,14 +18,21 @@ public partial class SequenceTimelineControl : UserControl
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        Editor?.SetViewport(Math.Max(100, ActualWidth - 190));
+        UpdateRulerViewport();
         if (_initialized) return;
         _initialized = true;
         if (Editor is { } model) await model.RefreshAsync();
     }
 
-    private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e) =>
-        Editor?.SetViewport(Math.Max(100, e.NewSize.Width - 190));
+    private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e) => UpdateRulerViewport();
+
+    private void UpdateRulerViewport()
+    {
+        // The ruler owns the same horizontal coordinate system as the clips.
+        // Parent widths include the track label column and may include dock chrome.
+        if (Editor is { } editor && SequenceRuler.ActualWidth > 0)
+            editor.SetViewport(SequenceRuler.ActualWidth);
+    }
 
     private void OnRulerClick(object sender, MouseButtonEventArgs e)
     {
@@ -82,7 +89,7 @@ public partial class SequenceTimelineControl : UserControl
 
     private async void OnCapturedMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_gestureActive) return;
+        if (!_gestureActive || e.ChangedButton != MouseButton.Left) return;
         _gestureActive = false;
         ReleaseMouseCapture();
         if (Editor is { } model) await model.CompleteGestureAsync();
