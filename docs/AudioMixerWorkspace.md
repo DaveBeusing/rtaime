@@ -10,7 +10,9 @@ the number fitting the current viewport does not alter the configuration.
 ## Compact live operation
 
 The Mixer starts in **COMPACT** with one bounded, scrollable panel of the
-existing authoritative Program/Aux bus and source-strip projections. Bus cards
+existing authoritative Program/Aux bus and source-strip projections. The
+Program bus is presented **first**, ahead of alphabetically sorted Aux/other
+buses, without changing the authoritative bus order or strip identities. Bus cards
 display the current bus role assignment, explicitly labeled L/R Runtime
 sample-peak bars, confirmed gain, local draft state, clipping/missing-signal
 warnings and gain/mute **draft → Apply / Discard** controls. Source cards
