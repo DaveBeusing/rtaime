@@ -17,6 +17,14 @@ public sealed partial class NamedPipeRuntimeHostTransport
         SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
         SequenceOutputCommandAsync("runtime.sequence.output.take", command, cancellationToken);
 
+    public ValueTask<SequenceOutputObservation> ArmSequenceTakeAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        SequenceOutputCommandAsync("runtime.sequence.output.arm_take", command, cancellationToken);
+
+    public ValueTask<SequenceOutputObservation> DisarmSequenceTakeAsync(
+        SequenceOutputCommand command, CancellationToken cancellationToken = default) =>
+        SequenceOutputCommandAsync("runtime.sequence.output.disarm_take", command, cancellationToken);
+
     public async ValueTask<SequenceOutputObservation> GetSequenceOutputAsync(
         SequencePreparationReference reference, CancellationToken cancellationToken = default)
     {
