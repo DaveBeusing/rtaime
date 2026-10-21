@@ -59,7 +59,7 @@
 										<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
 										<TextBlock Text="{Binding Summary}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 									</StackPanel>
-									<TextBlock Grid.Column="2" Text="SELECT"
+									<TextBlock Grid.Column="2" Text="LOCAL"
 										Style="{StaticResource OperatorLabel}"
 										FontSize="{StaticResource OperatorFontSizeMicro}"
 										VerticalAlignment="Center" />
@@ -76,7 +76,7 @@
 							<ColumnDefinition Width="4" />
 							<ColumnDefinition Width="*" />
 						</Grid.ColumnDefinitions>
-						<controls:RtaimeButton Content="ARM" Command="{Binding ArmCommand}" IsCompact="True" />
+						<controls:RtaimeButton Content="ARM" Command="{Binding ArmCommand}" IsCompact="True" ToolTip="Arm the saved cue list in ControlHost. Selection alone cannot execute Program." />
 						<controls:RtaimeButton Grid.Column="2"
 							Content="SHOW GO · F9"
 							Command="{Binding GoCommand}"
@@ -85,7 +85,7 @@
 							BorderBrush="{DynamicResource OperatorAccentBrush}"
 							Foreground="{DynamicResource OperatorBackgroundBrush}"
 							ToolTip="{Binding LiveActionDetail}" ToolTipService.ShowOnDisabled="True" />
-						<controls:RtaimeButton Grid.Column="4" Content="CANCEL" Command="{Binding CancelCommand}" IsCompact="True" />
+						<controls:RtaimeButton Grid.Column="4" Content="CANCEL CUE" Command="{Binding CancelCommand}" IsCompact="True" ToolTip="Cancel governed cue execution; does not issue a direct Program STOP." />
 					</Grid>
 
 					<Border Grid.Row="3"
@@ -100,11 +100,14 @@
 								<TextBlock Text="{Binding ExecutionState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
 								<TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</DockPanel>
-							<TextBlock Text="{Binding NextCue, StringFormat=NEXT CUE · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							<TextBlock Text="{Binding CueRunStatus}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" TextWrapping="Wrap" AutomationProperties.Name="Confirmed Show Control cue status" />
+                            <TextBlock Text="{Binding NextCue, StringFormat=NEXT SAVED CUE · {0}}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding NextCueStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding LocalCueSelection, StringFormat=LOCAL EDITOR SELECTION · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
-								<Run Text="CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
+								<Run Text="CONFIRMED CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
 							<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
 								<controls:RtaimeButton Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />
