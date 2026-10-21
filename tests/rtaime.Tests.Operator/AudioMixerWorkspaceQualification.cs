@@ -93,7 +93,7 @@ internal static class AudioMixerWorkspaceQualification
         }
         finally
         {
-            mixer.Sources.Clear(); mixer.Buses.Clear(); mixer.SelectedSource=null;
+            mixer.Sources.Clear(); mixer.Buses.Clear(); mixer.CompactBuses.Clear(); mixer.SelectedSource=null;
             mixer.SetEvidenceAvailability("UNAVAILABLE");
             mixer.CompactPresentationCommand.Execute(null);
             window.Shell.ResetLayoutCommand.Execute(null);
