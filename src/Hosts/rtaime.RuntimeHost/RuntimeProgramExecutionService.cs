@@ -419,8 +419,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, GpuFrame> _boundaryGpuScratch = new(AudioProductionLimits.MaximumSources);
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
-	private readonly MediaFramePipeline _sourceAPipeline;
-	private readonly MediaFramePipeline _sourceBPipeline;
+	private MediaFramePipeline _sourceAPipeline;
+	private MediaFramePipeline _sourceBPipeline;
 	private readonly IGpuProcessingBackend _gpuBackend;
 	private readonly GpuProcessingProvider _gpu;
 	private readonly TransactionalRuntime _runtime;
@@ -1552,6 +1552,15 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					throw;
 				}
 			}
+			catch
+			{
+				// An unsuccessful Program boundary must not leave the source
+				// pipelines expecting a slot that the single Program clock never
+				// committed. Recovery runs only on the exceptional management
+				// path, never on a successful real-time frame.
+				ResetInputPipelinesAfterFailedBoundary();
+				throw;
+			}
 			finally
 			{
 				Exception? cleanupFailure = null;
@@ -2528,7 +2537,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 
 			_backgrounds.Add(sourceId, RgbaFrameBuffer.Solid(_format, 0, 0, 0));
 			_inputSignals.Add(sourceId, RuntimeInputSignalState.Recovering);
-			_externalSourcePipelines.Add(sourceId, CreatePipeline());
+			// A source registered mid-show joins the one current Program slot;
+			// it must not restart its independent input sequence at zero.
+			_externalSourcePipelines.Add(sourceId, CreatePipeline(_nextSequenceNumber));
 			_audioStreams.Add(sourceId, stream);
 			_audioMeters.Add(sourceId, new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: true));
 			_externalAudioQueues.Add(sourceId, new Queue<float>());
@@ -2774,8 +2785,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
 	}
 
-	private MediaFramePipeline CreatePipeline() =>
-		new(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
+	private static MediaFramePipeline CreatePipeline(ulong initialSequenceNumber = 0) =>
+		new(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming,
+			initialSequenceNumber: initialSequenceNumber));
 
 	private FrameDescriptor ProcessTimedInput(
 		VirtualSyntheticVideoSource source,
