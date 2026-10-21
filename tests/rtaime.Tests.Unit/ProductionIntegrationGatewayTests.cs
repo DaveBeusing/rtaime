@@ -171,9 +171,11 @@ public sealed class ProductionIntegrationGatewayTests
 		await gateway.StartAsync();
 
 		Assert.Equal("DEGRADED", gateway.Health.State);
+		await adapter.FirstFeedbackReceived.Task.WaitAsync(TimeSpan.FromSeconds(3));
 		await WaitUntilAsync(() => gateway.CurrentFeedback is not null && gateway.Health.State == "HEALTHY");
 
 		Assert.True(transport.GetSnapshotCalls >= 3);
+		Assert.Equal(1, transport.MaxConcurrentCalls);
 		Assert.Equal("ControlHost snapshot synchronization recovered.", gateway.Health.Detail);
 	}
 
@@ -524,16 +526,36 @@ public sealed class ProductionIntegrationGatewayTests
 		Assert.True(condition(), $"Condition did not become true within {timeoutMilliseconds} ms.");
 	}
 
+
 	private sealed class PassiveAdapter : IntegrationAdapterBase
 	{
+		private readonly object _feedbackGate = new();
+		private readonly List<string> _readinessHistory = new();
+		private int _feedbackCount;
+		private int _blockNextFeedback;
+		private IntegrationFeedbackSnapshot? _lastFeedback;
+
 		public PassiveAdapter(string id)
 			: base(id, IntegrationAdapterKind.Discrete, false)
 		{
 		}
 
 		public int StartCount { get; private set; }
-		public int FeedbackCount { get; private set; }
-		public IntegrationFeedbackSnapshot? LastFeedback { get; private set; }
+		public int FeedbackCount => Volatile.Read(ref _feedbackCount);
+		public IntegrationFeedbackSnapshot? LastFeedback => Volatile.Read(ref _lastFeedback);
+		public TaskCompletionSource FeedbackBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public TaskCompletionSource ReleaseFeedback { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public TaskCompletionSource FirstFeedbackReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public IReadOnlyList<string> ReadinessHistory
+		{
+			get
+			{
+				lock (_feedbackGate)
+					return _readinessHistory.ToArray();
+			}
+		}
+
+		public void BlockNextFeedback() => Interlocked.Exchange(ref _blockNextFeedback, 1);
 
 		public override ValueTask StartAsync(IntegrationInputSink input, CancellationToken cancellationToken)
 		{
@@ -542,11 +564,19 @@ public sealed class ProductionIntegrationGatewayTests
 			return ValueTask.CompletedTask;
 		}
 
-		public override ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken)
+		public override async ValueTask EmitFeedbackAsync(IntegrationFeedbackSnapshot snapshot, CancellationToken cancellationToken)
 		{
-			FeedbackCount++;
-			LastFeedback = snapshot;
-			return ValueTask.CompletedTask;
+			if (Interlocked.Exchange(ref _blockNextFeedback, 0) != 0)
+			{
+				FeedbackBlocked.TrySetResult();
+				await ReleaseFeedback.Task.WaitAsync(cancellationToken);
+			}
+
+			lock (_feedbackGate)
+				_readinessHistory.Add(snapshot.RuntimeReadiness);
+			Volatile.Write(ref _lastFeedback, snapshot);
+			Interlocked.Increment(ref _feedbackCount);
+			FirstFeedbackReceived.TrySetResult();
 		}
 
 		public override ValueTask StopAsync(CancellationToken cancellationToken)
@@ -555,7 +585,6 @@ public sealed class ProductionIntegrationGatewayTests
 			return ValueTask.CompletedTask;
 		}
 	}
-
 
 	private sealed class FaultingFeedbackAdapter : IntegrationAdapterBase
 	{
@@ -629,6 +658,8 @@ public sealed class ProductionIntegrationGatewayTests
 		private int _snapshotFailuresRemaining;
 		private int _activeCalls;
 		private int _blockNextSnapshot;
+		private readonly Dictionary<int, TaskCompletionSource> _snapshotCallWaiters = new();
+		public bool StampSnapshotCallNumber { get; set; }
 		public TaskCompletionSource SnapshotBlocked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource ReleaseSnapshot { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		private int _ignoreBlockedSnapshotCancellation;
@@ -665,6 +696,21 @@ public sealed class ProductionIntegrationGatewayTests
 		public string? LastMacroId { get; private set; }
 		public int MaxConcurrentCalls { get; private set; }
 
+		public Task WaitForSnapshotCallAsync(int count)
+		{
+			lock (_gate)
+			{
+				if (GetSnapshotCalls >= count)
+					return Task.CompletedTask;
+				if (!_snapshotCallWaiters.TryGetValue(count, out var completion))
+				{
+					completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+					_snapshotCallWaiters.Add(count, completion);
+				}
+				return completion.Task;
+			}
+		}
+
 		public async ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
 		{
 			await EnterAsync(cancellationToken);
@@ -680,13 +726,15 @@ public sealed class ProductionIntegrationGatewayTests
 				}
 				lock (_gate)
 				{
-					GetSnapshotCalls++;
+					var call = ++GetSnapshotCalls;
+					if (_snapshotCallWaiters.Remove(call, out var reached))
+						reached.TrySetResult();
 					if (_snapshotFailuresRemaining > 0)
 					{
 						_snapshotFailuresRemaining--;
 						throw new IOException("Simulated ControlHost snapshot outage.");
 					}
-					return Snapshot(_state);
+					return Snapshot(_state, StampSnapshotCallNumber ? $"Snapshot-{call}" : "Ready");
 				}
 			}
 			finally
@@ -768,13 +816,13 @@ public sealed class ProductionIntegrationGatewayTests
 				_activeCalls--;
 		}
 
-		private static OperatorStatusSnapshot Snapshot(AuthoritativeProductionState state)
+		private static OperatorStatusSnapshot Snapshot(AuthoritativeProductionState state, string runtimeStatus)
 		{
 			var sourceIds = new[] { state.Routing.PreviewSourceId, state.Routing.ProgramSourceId }.Distinct().ToArray();
 			return new OperatorStatusSnapshot(
 				state,
 				sourceIds.Select((id, index) => new OperatorSourceDescriptor(id.ToString(), $"Input {index + 1}")).ToArray(),
-				"Ready",
+				runtimeStatus,
 				"Locked",
 				"Valid",
 				"Optional",
