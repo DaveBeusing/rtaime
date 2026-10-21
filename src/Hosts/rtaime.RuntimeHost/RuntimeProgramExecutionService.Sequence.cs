@@ -42,12 +42,15 @@ public sealed partial class RuntimeProgramExecutionService
     internal bool IsCommittedSequencePreviewSource(MediaSourceId sourceId) =>
         IsCommittedSequenceOutputSource(sourceId, allowProgram: false);
 
-    internal bool IsCommittedSequenceOutputSource(MediaSourceId sourceId, bool allowProgram)
+    internal bool IsCommittedSequenceOutputSource(
+        MediaSourceId sourceId, bool allowProgram, ulong? expectedAuthorityRevision = null)
     {
         lock (_gate)
         {
             var active = _runtime.ActiveExecution?.PreparedExecution;
-            if (active is null || !_backgrounds.ContainsKey(sourceId))
+            if (active is null || !_backgrounds.ContainsKey(sourceId) ||
+                (expectedAuthorityRevision is { } expected &&
+                    active.AuthoritySnapshot.Revision.Value != expected))
                 return false;
             var preview = active.Bindings.SingleOrDefault(binding =>
                 binding.OutputRoleId is null &&
