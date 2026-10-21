@@ -556,8 +556,9 @@ public sealed partial class LocalMediaDeckRuntimeService
         lock (_sequenceOutputGate)
         {
             var session = _sequenceOutput;
-            if (session is null || session.LastPublishedSlot != boundary.SequenceNumber)
-                return;
+            if (session is null || session.LastPublishedSlot != boundary.SequenceNumber ||
+                session.OutputState is "FAILED" or "STALE")
+                return; // Late feedback cannot revive terminal owner/authority loss.
             if (session.ProgramAuthorized)
             {
                 // The boundary may have finished before Take but be reported
