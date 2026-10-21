@@ -191,9 +191,9 @@ See the [format matrix](LocalMediaFileSource.md#container-probes-and-format-qual
 
 ## Selecting A/B decks
 
-Choose A or B in the existing production source bank, then use **SELECT SOURCE
-DECK** to load that source's confirmed deck state. **OPEN MEDIA** opens into the
-selected production source. Opening the other source retains the first session.
+Choose A or B in the existing production source bank, then use
+**SELECT DECK** to load that source's confirmed deck state. **OPEN FILE**
+opens into the selected production source. Opening the other source retains the first session.
 The displayed source identity, readiness, transport, timeline, markers and faults
 belong to the selected deck; Play/Stop/Seek/Close remain bound to that source even
 when the other deck contains the same asset. Deck selection does not change
@@ -205,6 +205,31 @@ accepts its own state and ignores the other source, so progress and faults keep
 updating after deck selection. The source bank retains both deck presentations.
 No additional polling timer or independent preview renderer is created. After a Host restart, reopen each file through the normal supported path;
 this change does not add automatic replay or alter saved productions.
+
+## Compact transport and optional details
+
+The productive Media Deck displays resident clip name, source slot,
+confirmed deck state, effective countdown, the existing routed Preview
+observation and explicit **PLAY**, **PAUSE**, **STOP** and **REFRESH**
+buttons without requiring a metadata workspace. Space still toggles
+play/pause, while the existing stop and cue keyboard mappings remain
+available. Play/Pause/Stop are separately gated by the controller's
+confirmed transport state; their display does not predict success or
+change the Program route.
+
+**DETAILS / POLICY** is a local presentation toggle that exposes
+resolution, frame rate, codecs and current/duration/remaining values
+alongside the existing Auto Play on Program and End Behavior controls.
+Hiding that area gives the Preview monitor more of its allocated
+container; it does not disable an authored playback policy, discard
+markers or change a single managed/native resource owner. IN/OUT and
+cue add/jump/delete stay visible in the main deck operation area.
+
+The monitoring image belongs to the **confirmed routed Preview**,
+which can be different from the independently selected resident deck.
+The UI explicitly labels this distinction. A visible Preview image,
+resident `READY` transport and successful catalogue preflight are
+separate observations; none alone proves Program Take or physical output.
 
 ## File-deck capacity boundary
 
