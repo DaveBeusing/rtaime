@@ -1189,6 +1189,44 @@ public sealed class UnifiedApplicationHostTests
         Assert.True(platform.StopSignalWritten);
     }
 
+    [Fact]
+    public async Task Windows_service_withdraws_PASS_on_first_unreadable_snapshot_before_presentation_grace_expires()
+    {
+        var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine,
+            ApplicationLifecycleOwnership.PersistentEngine, windowsService: true,
+            runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+        using var cancellation = new CancellationTokenSource();
+        var platform = new FakeApplicationHostPlatform(options)
+        {
+            PublishReadinessOnControlStart = true
+        };
+        var host = new UnifiedApplicationHost(options, platform);
+        var states = new List<ApplicationLifecycleState>();
+        host.StateChanged += states.Add;
+        var delays = 0;
+        var serviceEvidenceWithdrawn = false;
+        platform.OnDelay = () =>
+        {
+            delays++;
+            if (delays == 1)
+                platform.UnreadableReadinessReadsRemaining = 1;
+            if (delays == 2)
+            {
+                serviceEvidenceWithdrawn = !platform.FileExists(options.ServiceReadinessEvidencePath);
+                cancellation.Cancel();
+            }
+        };
+
+        var result = await host.RunAsync(cancellation.Token);
+
+        Assert.True(result.Success);
+        Assert.True(serviceEvidenceWithdrawn,
+            "One share-denied ControlHost readiness read must withdraw service PASS immediately.");
+        Assert.DoesNotContain(ApplicationLifecycleState.Degraded, states);
+        Assert.Equal(3, platform.PipeProbeCount);
+        Assert.True(platform.StopSignalWritten);
+    }
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
