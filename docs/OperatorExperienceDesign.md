@@ -84,6 +84,10 @@ The visual hierarchy is Program identity and evidence, confirmed Preview, the ne
 
 The confirmed Program name and bus state must remain visible when optional panes collapse or a different workspace is selected. Clean Program and Cinema remain monitoring views, not physical output controllers.
 
+### Implemented LIVE presentation boundary
+
+The main LIVE workspace uses its existing Media Library, production Preview/Program viewers, contextual Inspector and persistent Rundown/timeline rather than introducing another media or authority pipeline. The action row now projects selected source, confirmed Preview and Program identities, NEXT rundown context, the already-governed SET PVW/CUT/AUTO commands and the current Preview Take eligibility detail. It remains one locally horizontally scrollable row, with navigation/restore affordances, preventing toolbar wrapping from competing with the real media viewport. Network send, recording and observed audio are compact evidence only; network transmission does not establish hardware scan-out and an in-progress recording does not establish a finalized file. Full WPF, hardware and operator review acceptance still depends on their separate evidence and is not inferred from this layout.
+
 ### Required LIVE target and measurable acceptance
 
 This is the **TO IMPLEMENT** composition; current LIVE uses scene/cue selection,
