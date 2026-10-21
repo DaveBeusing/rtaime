@@ -107,6 +107,7 @@ function Verify-Evidence {
         [string]$manifest.crossProductLayersAndTransitions -ceq "UNVERIFIED") "Unmeasured workload combinations were incorrectly qualified."
 
     $scenarioResults = [Collections.Generic.List[object]]::new()
+    $producerInstances = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $iteration = 0
     foreach ($run in @($manifest.runs)) {
         $iteration++
@@ -130,6 +131,12 @@ function Verify-Evidence {
             [int]$producer.logicalProcessors -eq [int]$manifest.runner.logicalProcessors) "Producer executed on an inconsistent runner."
         $null = Finite $producer.processPrivateBytesAfterSessions "process private bytes"
         $null = Finite $producer.processHandlesAfterSessions "process handles"
+        $observedStart = [DateTimeOffset]::Parse([string]$producer.startedAtUtc,
+            [Globalization.CultureInfo]::InvariantCulture)
+        $observedEnd = [DateTimeOffset]::Parse([string]$producer.completedAtUtc,
+            [Globalization.CultureInfo]::InvariantCulture)
+        Require ($observedStart -le $observedEnd -and
+            $producerInstances.Add(("$($producer.testhostProcessId)/$($observedStart.ToUnixTimeMilliseconds())"))) "Producer testhost instances were duplicated or have invalid time provenance."
         $null = Finite $producer.lastGcHeapBytes "last GC heap snapshot"
         $null = Finite $producer.lastGcFragmentedBytes "last GC fragmentation"
 
