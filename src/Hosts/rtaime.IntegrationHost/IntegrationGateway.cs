@@ -139,6 +139,7 @@ public sealed record IntegrationGatewayHealthSnapshot(
 public sealed class IntegrationGateway : IAsyncDisposable
 {
 	private sealed record MappingState(DateTimeOffset LastAcceptedAtUtc);
+	private sealed record ControlObservation(OperatorStatusSnapshot Snapshot, ulong Version);
 
 	private readonly object _gate = new();
 	private readonly IntegrationGatewayOptions _options;
@@ -155,11 +156,15 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	private Task? _snapshotWorker;
 	private IntegrationFeedbackSnapshot? _feedback;
 	private ulong _feedbackSequence;
+	private ulong _controlObservationVersion;
+	private ulong _latestControlObservationVersion;
+	private ulong _latestPublishedFeedbackVersion;
 	private ulong _droppedInputs;
 	private string _state = "STOPPED";
 	private string _detail = "Gateway is stopped.";
 	private DateTimeOffset _updatedAtUtc = DateTimeOffset.UtcNow;
 	private bool _started;
+	private bool _stopping;
 
 	public IntegrationGateway(IntegrationGatewayOptions options, OperatorControlClient client)
 	{
@@ -240,12 +245,15 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
+
 	public async ValueTask StartAsync(CancellationToken cancellationToken = default)
 	{
 		Channel<IntegrationTrigger> inputs;
 		CancellationTokenSource lifetime;
 		lock (_gate)
 		{
+			if (_stopping)
+				throw new InvalidOperationException("The integration gateway is still stopping.");
 			if (_started) return;
 			_started = true;
 			_mappingState.Clear();
@@ -259,15 +267,18 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			_updatedAtUtc = DateTimeOffset.UtcNow;
 		}
 
+		using var startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
+		var startupToken = startupCancellation.Token;
 		try
 		{
 			foreach (var adapter in SnapshotAdapters())
 			{
+				startupToken.ThrowIfCancellationRequested();
 				try
 				{
-					await adapter.StartAsync(TryEnqueue, cancellationToken).ConfigureAwait(false);
+					await adapter.StartAsync(TryEnqueue, startupToken).ConfigureAwait(false);
 				}
-				catch when (!adapter.Required)
+				catch (Exception) when (!adapter.Required && !startupToken.IsCancellationRequested)
 				{
 				}
 			}
@@ -277,30 +288,49 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			if (failedRequired is not null)
 				throw new InvalidOperationException($"Required integration adapter '{failedRequired.Id}' failed to start: {failedRequired.Health.Detail}");
 
+			// Resolve the first snapshot before starting the recurring pump.
 			try
 			{
-				var initial = await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
-				await PublishFeedbackAsync(initial, cancellationToken).ConfigureAwait(false);
-				SetGatewayState("HEALTHY", "Integration gateway is active.");
+				var initial = await SynchronizeClientAsync(
+					lifetime,
+					"ControlHost unavailable at startup; automatic resynchronization remains active",
+					startupToken).ConfigureAwait(false);
+				if (await PublishFeedbackAsync(initial, lifetime, startupToken).ConfigureAwait(false))
+					MarkControlSynchronized(lifetime, initial.Version);
 			}
-			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			catch (OperationCanceledException) when (startupToken.IsCancellationRequested)
 			{
 				throw;
 			}
 			catch (Exception exception)
 			{
-				SetGatewayState("DEGRADED", $"ControlHost unavailable at startup; automatic resynchronization remains active: {exception.Message}");
+				SetGatewayStateIfActive(
+					lifetime,
+					"DEGRADED",
+					$"ControlHost unavailable at startup; automatic resynchronization remains active: {exception.Message}");
 			}
 
-			// Initial synchronization settles before the periodic snapshot pump begins.
-			var token = lifetime.Token;
-			_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
-			_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(token), CancellationToken.None);
+			startupToken.ThrowIfCancellationRequested();
+			lock (_gate)
+			{
+				if (!IsActiveInLock(lifetime))
+					return;
+				var token = lifetime.Token;
+				_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
+				_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(lifetime), CancellationToken.None);
+			}
 		}
-		catch
+		catch (Exception exception)
 		{
 			await StopAsync(CancellationToken.None).ConfigureAwait(false);
-			SetGatewayState("FAILED", "Integration gateway failed during startup.");
+			if (exception is not OperationCanceledException && !lifetime.IsCancellationRequested)
+			{
+				lock (_gate)
+				{
+					if (!_started && !_stopping)
+						UpdateGatewayStateInLock("FAILED", "Integration gateway failed during startup.");
+				}
+			}
 			throw;
 		}
 	}
@@ -314,6 +344,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		lock (_gate)
 		{
 			if (!_started) return;
+			_stopping = true;
 			_started = false;
 			lifetime = _lifetime;
 			inputs = _inputs;
@@ -323,25 +354,38 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			_inputs = null;
 			_inputWorker = null;
 			_snapshotWorker = null;
+			_feedback = null;
+			UpdateGatewayStateInLock("STOPPING", "Stopping the integration gateway.");
 		}
 
 		lifetime?.Cancel();
 		inputs?.Writer.TryComplete();
-		var workers = new[] { inputWorker, snapshotWorker }.Where(task => task is not null).Cast<Task>().ToArray();
-		if (workers.Length > 0)
+		try
 		{
-			try { await Task.WhenAll(workers).WaitAsync(cancellationToken).ConfigureAwait(false); }
-			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-			catch (OperationCanceledException) when (lifetime?.IsCancellationRequested == true) { }
-		}
+			var workers = new[] { inputWorker, snapshotWorker }.Where(task => task is not null).Cast<Task>().ToArray();
+			if (workers.Length > 0)
+			{
+				try { await Task.WhenAll(workers).WaitAsync(cancellationToken).ConfigureAwait(false); }
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+				catch (OperationCanceledException) when (lifetime?.IsCancellationRequested == true) { }
+			}
 
-		foreach (var adapter in SnapshotAdapters().Reverse())
-		{
-			try { await adapter.StopAsync(cancellationToken).ConfigureAwait(false); }
-			catch { }
+			foreach (var adapter in SnapshotAdapters().Reverse())
+			{
+				try { await adapter.StopAsync(cancellationToken).ConfigureAwait(false); }
+				catch { }
+			}
 		}
-		lifetime?.Dispose();
-		SetGatewayState("STOPPED", "Integration gateway is stopped.");
+		finally
+		{
+			lifetime?.Dispose();
+			lock (_gate)
+			{
+				_stopping = false;
+				if (!_started)
+					UpdateGatewayStateInLock("STOPPED", "Integration gateway is stopped.");
+			}
+		}
 	}
 
 	private async Task RunInputsAsync(ChannelReader<IntegrationTrigger> reader, CancellationToken cancellationToken)
@@ -376,14 +420,20 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
+
 	private async ValueTask ExecuteMappingAsync(
 		IntegrationMappingOptions mapping,
 		IntegrationTrigger trigger,
 		CancellationToken cancellationToken)
 	{
+		CancellationTokenSource? lifetime;
+		lock (_gate) lifetime = _lifetime;
+		if (lifetime is null)
+			return;
+
 		if (_options.DryRun)
 		{
-			SetGatewayState("HEALTHY", $"Dry-run accepted mapping '{mapping.Id}' without Production mutation.");
+			SetGatewayStateIfActive(lifetime, "HEALTHY", $"Dry-run accepted mapping '{mapping.Id}' without Production mutation.");
 			return;
 		}
 
@@ -391,20 +441,25 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		{
 			try
 			{
-				OperatorStatusSnapshot snapshot;
+				ControlObservation observation;
 				await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 				try
 				{
 					await ExecuteActionAsync(mapping.Action, trigger, cancellationToken).ConfigureAwait(false);
-					snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+					var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+					observation = RecordSuccessfulObservation(lifetime, snapshot);
 				}
 				finally
 				{
 					_clientGate.Release();
 				}
 
-				await PublishFeedbackAsync(snapshot, cancellationToken).ConfigureAwait(false);
-				SetGatewayState("HEALTHY", $"Mapping '{mapping.Id}' completed through rtaime.Client.");
+				if (await PublishFeedbackAsync(observation, lifetime, cancellationToken).ConfigureAwait(false))
+					SetGatewayStateIfCurrent(
+						lifetime,
+						observation.Version,
+						"HEALTHY",
+						$"Mapping '{mapping.Id}' completed through rtaime.Client.");
 				return;
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -413,11 +468,27 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			}
 			catch (Exception exception) when (attempt == 0 && IsRetryable(exception))
 			{
-				await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
+				try
+				{
+					await SynchronizeClientAsync(
+						lifetime,
+						"ControlHost snapshot refresh failed",
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+				{
+					throw;
+				}
+				catch (Exception synchronizationException)
+				{
+					SetGatewayStateIfActive(lifetime, "DEGRADED",
+						$"Mapping '{mapping.Id}' resynchronization failed: {synchronizationException.Message}");
+					return;
+				}
 			}
 			catch (Exception exception)
 			{
-				SetGatewayState("DEGRADED", $"Mapping '{mapping.Id}' failed: {exception.Message}");
+				SetGatewayStateIfActive(lifetime, "DEGRADED", $"Mapping '{mapping.Id}' failed: {exception.Message}");
 				return;
 			}
 		}
@@ -505,18 +576,24 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		return Math.Clamp(scaled, action.TriggerMinimum, action.TriggerMaximum);
 	}
 
-	private async Task RunSnapshotPumpAsync(CancellationToken cancellationToken)
+
+	private async Task RunSnapshotPumpAsync(CancellationTokenSource lifetime)
 	{
+		var cancellationToken = lifetime.Token;
 		try
 		{
 			while (!cancellationToken.IsCancellationRequested)
 			{
 				await Task.Delay(TimeSpan.FromMilliseconds(_options.SnapshotMinimumIntervalMs), cancellationToken).ConfigureAwait(false);
+				ControlObservation? observation = null;
 				try
 				{
-					var snapshot = await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
-					await PublishFeedbackAsync(snapshot, cancellationToken).ConfigureAwait(false);
-					MarkControlSynchronized();
+					observation = await SynchronizeClientAsync(
+						lifetime,
+						"ControlHost snapshot refresh failed",
+						cancellationToken).ConfigureAwait(false);
+					if (await PublishFeedbackAsync(observation, lifetime, cancellationToken).ConfigureAwait(false))
+						MarkControlSynchronized(lifetime, observation.Version);
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
@@ -524,7 +601,13 @@ public sealed class IntegrationGateway : IAsyncDisposable
 				}
 				catch (Exception exception)
 				{
-					SetGatewayState("DEGRADED", $"ControlHost snapshot refresh failed: {exception.Message}");
+					// Synchronization failures update health inside the serialized client boundary.
+					if (observation is not null)
+						SetGatewayStateIfCurrent(
+							lifetime,
+							observation.Version,
+							"DEGRADED",
+							$"ControlHost snapshot refresh failed: {exception.Message}");
 				}
 			}
 		}
@@ -533,38 +616,59 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask PublishFeedbackAsync(OperatorStatusSnapshot snapshot, CancellationToken cancellationToken)
+	private async ValueTask<bool> PublishFeedbackAsync(
+		ControlObservation observation,
+		CancellationTokenSource lifetime,
+		CancellationToken cancellationToken)
 	{
 		await _feedbackGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			var snapshot = observation.Snapshot;
 			var outputs = snapshot.OutputRoles.ToDictionary(role => role.RoleId, role => role.HealthState, StringComparer.Ordinal);
-			var feedback = new IntegrationFeedbackSnapshot(
-			checked(++_feedbackSequence),
-			DateTimeOffset.UtcNow,
-			snapshot.Production.Routing.PreviewSourceId.ToString(),
-			snapshot.Production.Routing.ProgramSourceId.ToString(),
-			snapshot.Production.ActiveSceneId?.ToString(),
-			snapshot.Recording.State,
-			$"{snapshot.Health.Runtime.State}:{snapshot.RuntimeStatus}",
-			snapshot.MediaDeck.State.ToString().ToUpperInvariant(),
-			snapshot.ShowControl.Execution.State.ToString().ToUpperInvariant(),
-			new ReadOnlyDictionary<string, string>(outputs));
-		lock (_gate) _feedback = feedback;
+			IntegrationFeedbackSnapshot feedback;
+			lock (_gate)
+			{
+				if (!IsActiveInLock(lifetime) ||
+					observation.Version != _latestControlObservationVersion ||
+					observation.Version <= _latestPublishedFeedbackVersion)
+					return false;
 
-		foreach (var adapter in SnapshotAdapters())
-		{
-			if (adapter.Health.State is IntegrationAdapterState.Failed or IntegrationAdapterState.Stopped)
-				continue;
-			try
-			{
-				await adapter.EmitFeedbackAsync(feedback, cancellationToken).ConfigureAwait(false);
+				feedback = new IntegrationFeedbackSnapshot(
+					checked(++_feedbackSequence),
+					DateTimeOffset.UtcNow,
+					snapshot.Production.Routing.PreviewSourceId.ToString(),
+					snapshot.Production.Routing.ProgramSourceId.ToString(),
+					snapshot.Production.ActiveSceneId?.ToString(),
+					snapshot.Recording.State,
+					$"{snapshot.Health.Runtime.State}:{snapshot.RuntimeStatus}",
+					snapshot.MediaDeck.State.ToString().ToUpperInvariant(),
+					snapshot.ShowControl.Execution.State.ToString().ToUpperInvariant(),
+					new ReadOnlyDictionary<string, string>(outputs));
+				_feedback = feedback;
+				_latestPublishedFeedbackVersion = observation.Version;
 			}
-			catch (Exception exception)
+
+			foreach (var adapter in SnapshotAdapters())
 			{
-				SetGatewayState("DEGRADED", $"Feedback to adapter '{adapter.Id}' failed: {exception.Message}");
+				if (!IsActive(lifetime))
+					return false;
+				if (adapter.Health.State is IntegrationAdapterState.Failed or IntegrationAdapterState.Stopped)
+					continue;
+				try
+				{
+					await adapter.EmitFeedbackAsync(feedback, cancellationToken).ConfigureAwait(false);
+				}
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+				{
+					throw;
+				}
+				catch (Exception exception)
+				{
+					SetGatewayStateIfActive(lifetime, "DEGRADED", $"Feedback to adapter '{adapter.Id}' failed: {exception.Message}");
+				}
 			}
-		}
+			return true;
 		}
 		finally
 		{
@@ -572,12 +676,32 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask<OperatorStatusSnapshot> SynchronizeClientAsync(CancellationToken cancellationToken)
+	private async ValueTask<ControlObservation> SynchronizeClientAsync(
+		CancellationTokenSource lifetime,
+		string failureDetail,
+		CancellationToken cancellationToken)
 	{
 		await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			return await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+			try
+			{
+				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				return RecordSuccessfulObservation(lifetime, snapshot);
+			}
+			catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+			{
+				lock (_gate)
+				{
+					var version = checked(++_controlObservationVersion);
+					if (IsActiveInLock(lifetime))
+					{
+						_latestControlObservationVersion = version;
+						UpdateGatewayStateInLock("DEGRADED", $"{failureDetail}: {exception.Message}");
+					}
+				}
+				throw;
+			}
 		}
 		finally
 		{
@@ -585,18 +709,60 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		}
 	}
 
-	private void MarkControlSynchronized()
+	private ControlObservation RecordSuccessfulObservation(CancellationTokenSource lifetime, OperatorStatusSnapshot snapshot)
 	{
 		lock (_gate)
 		{
-			if (_state != "DEGRADED" ||
-				!(_detail.StartsWith("ControlHost unavailable", StringComparison.Ordinal) ||
-				  _detail.StartsWith("ControlHost snapshot refresh failed", StringComparison.Ordinal)))
-				return;
+			var version = checked(++_controlObservationVersion);
+			if (IsActiveInLock(lifetime))
+				_latestControlObservationVersion = version;
+			return new ControlObservation(snapshot, version);
+		}
+	}
 
-			_state = "HEALTHY";
-			_detail = "ControlHost snapshot synchronization recovered.";
-			_updatedAtUtc = DateTimeOffset.UtcNow;
+	private bool IsActive(CancellationTokenSource lifetime)
+	{
+		lock (_gate)
+			return IsActiveInLock(lifetime);
+	}
+
+	private bool IsActiveInLock(CancellationTokenSource lifetime) =>
+		_started && ReferenceEquals(_lifetime, lifetime) && !lifetime.IsCancellationRequested;
+
+	private void MarkControlSynchronized(CancellationTokenSource lifetime, ulong version)
+	{
+		lock (_gate)
+		{
+			if (!IsActiveInLock(lifetime) || _latestControlObservationVersion != version)
+				return;
+			if (_state == "STARTING")
+			{
+				UpdateGatewayStateInLock("HEALTHY", "Integration gateway is active.");
+			}
+			else if (_state == "DEGRADED" &&
+				(_detail.StartsWith("ControlHost unavailable", StringComparison.Ordinal) ||
+				 _detail.StartsWith("ControlHost snapshot refresh failed", StringComparison.Ordinal)))
+			{
+				UpdateGatewayStateInLock("HEALTHY", "ControlHost snapshot synchronization recovered.");
+			}
+		}
+	}
+
+	private void SetGatewayStateIfActive(CancellationTokenSource lifetime, string state, string detail)
+	{
+		lock (_gate)
+		{
+			if (IsActiveInLock(lifetime))
+				UpdateGatewayStateInLock(state, detail);
+		}
+	}
+
+	private void SetGatewayStateIfCurrent(CancellationTokenSource lifetime, ulong version, string state, string detail)
+	{
+		lock (_gate)
+		{
+			if (IsActiveInLock(lifetime) && _latestControlObservationVersion == version)
+				UpdateGatewayStateInLock(state, detail);
 		}
 	}
 
@@ -609,11 +775,14 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	private void SetGatewayState(string state, string detail)
 	{
 		lock (_gate)
-		{
-			_state = state;
-			_detail = detail;
-			_updatedAtUtc = DateTimeOffset.UtcNow;
-		}
+			UpdateGatewayStateInLock(state, detail);
+	}
+
+	private void UpdateGatewayStateInLock(string state, string detail)
+	{
+		_state = state;
+		_detail = detail;
+		_updatedAtUtc = DateTimeOffset.UtcNow;
 	}
 
 	private static bool IsRetryable(Exception exception) =>
