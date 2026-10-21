@@ -599,7 +599,7 @@ public sealed class MediaLibraryBrowsingTests
                             entry.Header?.ToString() == "Prepare selected assets…").IsEnabled);
                         Assert.False(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
                             entry.Header?.ToString() == "Add Cue at Playhead").IsEnabled);
-                        Assert.Equal(owner.MediaPool.CanDropToPreview((MediaPoolItemViewModel)browser.Items[0]),
+                        Assert.Equal(owner.MediaPool.CanOpenLibraryPreviewItem((MediaPoolItemViewModel)browser.Items[0]),
                             menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
                                 entry.Header?.ToString() == "Open in Preview").IsEnabled);
                         Assert.True(menu.Items.OfType<RtaimeMenuItem>().Single(entry =>
