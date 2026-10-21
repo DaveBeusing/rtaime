@@ -145,6 +145,19 @@ The Media Library provides virtualized grid/list browsing, typed search, named S
 
 Explicit asset preparation uses the integrated bounded non-Program verification path. File availability, a current representative conditional observation and actual resident deck readiness remain distinct. Prepare/Retry/Cancel reflect real capability and failure state; an expired observation or catalogue entry must not be presented as resident READY. Preparation does not route Program or change saved production.
 
+The Library's primary selection strip exposes Import, Inspect, optional
+representative Prepare, guarded Open Preview and contextual Relink without
+opening diagnostic screens. The advanced catalogue controls are collapsed
+until requested, keeping the virtualized asset area prominent. The
+selected asset's state is a read-only projection from catalogue,
+preflight, resident deck and connected Control evidence; it is never a
+second playback session or optimistic Program confirmation. The compact
+Media Deck presents explicit Play/Pause/Stop and countdown; codec details
+and playback policy expand on demand without changing their applied state.
+The shared routed Preview monitor may show a different source than the
+selected Deck, which is identified explicitly. This composition reuses
+the existing workspace destination and layout persistence.
+
 NDI SOURCES projects bounded Runtime/provider discovery through Client and ControlHost. REFRESH is observational. ADOPT explicitly adds stable source identity to the durable production source catalog without changing Preview/Program. Selection never routes or takes. The Operator hosts no NDI finder, receiver, decoder or audio path; input lifecycle is confirmed Runtime/provider evidence.
 
 ## SCENES
