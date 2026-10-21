@@ -288,7 +288,9 @@
                             <WrapPanel>
                                 <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyLayerDraftCommand}" IsCompact="True" />
                                 <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardLayerDraftCommand}" IsCompact="True" />
-                                <controls:RtaimeButton Content="REVIEW" Command="{Binding ReviewLayerDraftCommand}" IsCompact="True" ToolTip="Review retained values against newer Runtime confirmation before applying." />
+                                <controls:RtaimeButton Content="REVIEW" Command="{Binding ReviewLayerDraftCommand}"
+                                    IsEnabled="{Binding SelectedLayerRow.CanReviewStateDraft}" IsCompact="True"
+                                    ToolTip="Reconcile a same-content draft after a newer Runtime revision. Replaced content must be discarded." />
                                 <controls:RtaimeButton Content="RECALL SCENE" Command="{Binding RecallSceneCommand}" IsCompact="True" />
                             </WrapPanel>
                         </StackPanel>
