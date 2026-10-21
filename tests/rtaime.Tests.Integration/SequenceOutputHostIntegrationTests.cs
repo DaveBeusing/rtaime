@@ -74,8 +74,10 @@ public sealed partial class ExternalControlIntegrationTests
         var grpcOutput = new SequenceOutputClient(grpc);
         var activation = await localOutput.ActivatePreviewAsync(command);
         Assert.Equal(sourceB.ToString(), activation.PreviewSourceId);
-        Assert.Equal("UNAVAILABLE",
-            (await grpcOutput.GetAsync(reference)).OutputState);
+        // The Runtime cadence may already have reported BUFFERING while
+        // the native shuttle remains stopped; neither state proves Preview.
+        Assert.Contains((await grpcOutput.GetAsync(reference)).OutputState,
+            new[] { "UNAVAILABLE", "BUFFERING" });
 
         // Source identity, Runtime lifetime and production revision are
         // independently checked by the real ControlHost gRPC boundary.
