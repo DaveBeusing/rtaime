@@ -110,9 +110,13 @@ a committed or accepted performance budget.
 
 A previous **verified**, same-format, same-profile, same-runner artifact
 may be provided with `-BaselineEvidencePath`. The verifier checks
-the complete baseline, its source/build SHA and every retained raw
-artifact hash, then emits per-scenario P99, producer-thread
-bytes/frame and approximate process-byte deltas to `comparison.json`.
+the complete baseline, its source/build SHA, the exact producer/guard
+test identities within each passing TRX and every retained raw artifact
+hash, then emits per-scenario P99, producer-thread bytes/frame,
+approximate process bytes/frame and GC-pause deltas to `comparison.json`.
+The per-frame allocation results are not interchangeable with a process
+allocation inventory. Absolute thread/process byte deltas are emitted
+even for a zero-allocation baseline, where relative percentages are null.
 A missing baseline is `UNVERIFIED/NO_APPROVED_BASELINE`. Two otherwise
 comparable software profiles without an approved numerical threshold
 remain `UNVERIFIED/NO_APPROVED_MANAGED_REGRESSION_THRESHOLD`;
@@ -141,6 +145,73 @@ or nonmonotonic latency, inconsistent bytes/frame denominators,
 live readback/monitoring leases, queue overcapacity, and false claims
 of complete GC events or hardware qualification.
 
+## Source-bound same-runner reference comparison
+
+The dedicated path-scoped Windows workflow preserves its original,
+unchanged `Windows software producer smoke` job. On qualifying pull
+requests, a **separate** `Windows same-runner reference and repeat` job
+checks out the exact event `pull_request.base.sha` and
+`pull_request.head.sha` into isolated directories on **one** Windows
+x64 `windows-2025` runner. It first confirms both full checkout SHAs
+and the profile descriptor SHA-256. Only when descriptors are
+byte-identical does it:
+
+1. Execute the existing `smoke` producer from the PR-base commit,
+   capturing its own verified manifest, raw JSON, testhost TRX and
+   hashes in a separate non-overwritten baseline directory.
+2. Execute the same `smoke` profile from the PR-head commit on the
+   **same runner**, passing the verified baseline manifest to
+   `-BaselineEvidencePath`.
+3. Execute `repeat` from the PR head: three independent producer
+   testhosts plus the already-owned isolated native reader/worker
+   assertions, with their own verified manifest and raw/TRX artifacts.
+4. Validate both candidate manifests, the 16 rate/mask comparison
+   entries, source identities, separate processes and `repeat` native
+   assertion status. Archive baseline and candidate data even if
+   qualification fails, but only name a manifest successful when the
+   producer and verifier actually completed.
+
+This is an **exact-PR-base vs exact-PR-head** software comparison, not
+an assumption that a previously retained artifact from a different
+GitHub-hosted VM is physically comparable. Running on one job VM
+avoids confusing two identically named `windows-2025` runner *images*
+with the same actual machine. It does **not** assert that two
+different GitHub Actions jobs or separate hosted workflow runs use
+the same CPU/VM. Baseline and candidate are compared by source SHA,
+profile hash, runner ID, machine name, Windows version, processor ID,
+architecture, processor count, formats, and consumer masks; raw
+artifacts and TRX are verified independently on both sides. If the
+descriptor changed, the baseline comparison is **UNVERIFIED** rather
+than silently comparing different workloads; candidate `smoke` and
+`repeat` still run as independent qualifications.
+
+The comparison JSON records baseline/head SHAs, the runner/profile
+identity, per-scenario P99 and allocation bytes per boundary, absolute
+and percentage deltas (where the denominator is nonzero), and observed
+GC-pause deltas. Its result remains
+`UNVERIFIED/NO_APPROVED_MANAGED_REGRESSION_THRESHOLD` without a
+separately authorized, descriptor-/runner-bound policy. A successful
+job therefore proves comparable **measurement integrity**, not that
+the P99 or byte growth meets an unapproved target. Each run retains
+its own actual event timestamp, testhost PID and source identity;
+repeatability is limited to the tested run and runner.
+
+The existing verifier's negative fixtures now also reject a
+passing TRX substituted from an unrelated test, a missing producer
+or scalar-guard test identity, a missing TRX, an invalid testhost PID,
+a nonexistent baseline, an approved-policy claim without a baseline,
+and an allocation increase that exceeds the **fixture-only**
+zero-growth policy. These negative fixtures are discarded immediately
+and are **not** actual measurements or accepted performance budgets.
+
+For a qualified *persistent* Windows reference machine, perform
+`smoke` and `repeat` against each exact source checkout in succession
+on the same identified host. Carry forward the first `manifest.json`
+to the second source using `-BaselineEvidencePath`; retain both source
+trees, manifest/JSON/TRX hashes and runner inventory. GitHub-hosted
+reference comparisons are not a substitute for a permanent hardware
+performance baseline.
+
 ## Evidence limits and release acceptance
 
 A green hosted test only verifies its own named software case and
@@ -165,8 +236,12 @@ source-bound raw reports, TRXs, comparison and manifest as Actions artifacts.
 It checks out the exact PR head and does not change the five Required Gates.
 An absent, skipped, queued or failed hosted run is not qualification PASS;
 read the exact commit, run, job and immutable evidence before accepting it.
-The longer `repeat` profile, a comparable before/after run on one controlled
-physical machine, full ETW coverage, hardware latency and future mandatory
-gate integration remain separately scheduled and **UNVERIFIED**.
+The companion PR job executes the opt-in `repeat` profile and same-job
+before/after software comparison without changing the original `smoke`
+gate. Their outcome must be taken from that **exact final-head** run,
+not presumed from workflow configuration. An independent repeat
+on a persistent reference workstation, full ETW coverage, hardware
+latency and future mandatory gate integration remain separately
+**UNVERIFIED** without the requisite source-bound equipment evidence.
 Broader native/replay/network/Operator cross-products still require their
 own verified producers and clear ownership.
