@@ -75,6 +75,11 @@ public sealed partial class OperatorShellViewModel
     private string _compactBus = "PROGRAM";
     private bool _compactAuxiliary;
     public IReadOnlyList<OperatorWorkspaceGroup> NavigationGroups { get; private set; } = [];
+    public IReadOnlyList<OperatorWorkspaceGroup> SecondaryNavigationGroups { get; private set; } = [];
+    public bool IsSecondaryWorkspaceSelected => OperatorWorkspaceRegistry.IsSecondaryWorkspace(SelectedWorkspace);
+    public string SecondaryNavigationDescription => IsSecondaryWorkspaceSelected
+        ? "More workspaces · " + OperatorWorkspaceRegistry.Destinations.Single(destination => destination.Id == SelectedWorkspace).Label
+        : "More workspaces · Live tools, Creation and System (Ctrl+K for commands)";
     public bool IsAiWorkspace => SelectedWorkspace == OperatorWorkspaceNames.Ai;
     public bool IsMultiviewWorkspace => SelectedWorkspace == OperatorWorkspaceNames.Multiview;
     public string LayoutPersistenceStatus => _store.LastSaveError ?? _store.LoadWarning ?? "Layout preferences available.";
@@ -90,8 +95,24 @@ public sealed partial class OperatorShellViewModel
     public ICommand SelectCompactBusCommand { get; private set; } = null!;
     private void InitializeNavigation()
     {
-        NavigationGroups = OperatorWorkspaceRegistry.Destinations.GroupBy(d => d.Group)
-            .Select(g => new OperatorWorkspaceGroup(g.Key, g.Select(d => new OperatorWorkspaceLink(this, d)).ToArray())).ToArray();
+        // All destinations share one live shell and one registry. The rail is deliberately
+        // limited to the four production workflows; More owns the remaining links.
+        var links = OperatorWorkspaceRegistry.Destinations
+            .Select(destination => new OperatorWorkspaceLink(this, destination)).ToArray();
+        NavigationGroups =
+        [
+            new("MEDIA SERVER", links.Where(link =>
+                link.Destination.NavigationSection == OperatorWorkspaceNavigationSection.Primary).ToArray())
+        ];
+        SecondaryNavigationGroups =
+        [
+            new("LIVE TOOLS", links.Where(link =>
+                link.Destination.NavigationSection == OperatorWorkspaceNavigationSection.LiveTools).ToArray()),
+            new("CREATION", links.Where(link =>
+                link.Destination.NavigationSection == OperatorWorkspaceNavigationSection.Creation).ToArray()),
+            new("SYSTEM", links.Where(link =>
+                link.Destination.NavigationSection == OperatorWorkspaceNavigationSection.System).ToArray())
+        ];
         SelectCompactAuxiliaryCommand = new OperatorShellCommand(p =>
         {
             _compactAuxiliary = p?.ToString() == "DETAILS";

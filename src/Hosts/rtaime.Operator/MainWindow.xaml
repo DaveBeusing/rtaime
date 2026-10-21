@@ -188,6 +188,16 @@
                             </controls:RtaimeContextMenu>
                         </controls:RtaimeNavigationItem.ContextMenu>
                     </controls:RtaimeNavigationItem>
+                    <controls:RtaimeNavigationItem x:Name="MoreNavigationButton"
+                        DockPanel.Dock="Bottom"
+                        Label="More"
+                        IconData="{StaticResource RtaimeIconGridGeometry}"
+                        Click="OnMoreNavigationClick"
+                        IsActive="{Binding Shell.IsSecondaryWorkspaceSelected, ElementName=RootWindow}"
+                        ToolTip="{Binding Shell.SecondaryNavigationDescription, ElementName=RootWindow}"
+                        AutomationProperties.Name="More workspaces: Live tools, Creation and System"
+                        MinHeight="42"
+                        Width="{Binding Shell.NavigationRailWidth, ElementName=RootWindow}" />
                     <controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding Shell.NavigationGroups, ElementName=RootWindow}">
                             <ItemsControl.ItemTemplate><DataTemplate>

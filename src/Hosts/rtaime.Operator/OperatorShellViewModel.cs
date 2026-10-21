@@ -930,7 +930,10 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	{
         _productionViewportHeight = double.NaN;
         RaiseAdaptivePresentationChanged();
-        foreach (var link in NavigationGroups.SelectMany(g => g.Items)) link.Refresh();
+        foreach (var link in NavigationGroups.Concat(SecondaryNavigationGroups).SelectMany(g => g.Items))
+            link.Refresh();
+        OnPropertyChanged(nameof(IsSecondaryWorkspaceSelected));
+        OnPropertyChanged(nameof(SecondaryNavigationDescription));
 		OnPropertyChanged(nameof(TemplateCaptureWorkspace));
 		OnPropertyChanged(nameof(WorkspaceTitle));
 		OnPropertyChanged(nameof(HasLeftRegion));
