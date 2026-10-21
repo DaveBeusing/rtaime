@@ -11,6 +11,8 @@ public sealed record OperatorSafeSessionState(string SelectedWorkspace)
 		"MEDIA",
 		"EDIT",
 		"LIVE",
+        "MULTIVIEW",
+        "AI",
 		"SCENES",
 		"COMPOSITING",
 		"OUTPUTS",
@@ -39,6 +41,7 @@ public sealed record OperatorSessionRecoveryResult(
 public sealed class OperatorSessionRecoveryStore
 {
 	private const int CurrentVersion = 1;
+    private const int MaximumSessionBytes = 64 * 1024;
 
 	private static readonly JsonSerializerOptions SerializerOptions = new()
 	{
@@ -103,7 +106,21 @@ public sealed class OperatorSessionRecoveryStore
 			if (!File.Exists(_path))
 				return null;
 
-			var json = File.ReadAllText(_path);
+            // UI recovery is one bounded local workspace hint, not a project
+            // or production checkpoint. Never parse unbounded persisted input.
+            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (stream.Length is <= 0 or > MaximumSessionBytes)
+            {
+                corrupted = true;
+                return null;
+            }
+            using var reader = new StreamReader(stream);
+            var json = reader.ReadToEnd();
+            if (json.Length > MaximumSessionBytes)
+            {
+                corrupted = true;
+                return null;
+            }
 			var envelope = JsonSerializer.Deserialize<OperatorSessionEnvelope>(json, SerializerOptions);
 			if (envelope is null || envelope.Version != CurrentVersion || envelope.SafeState is null)
 			{

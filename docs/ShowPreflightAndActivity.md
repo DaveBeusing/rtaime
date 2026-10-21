@@ -3,6 +3,31 @@
 
 Open **Show checks** in the navigation rail, or search for **Show preflight** in Commands (Ctrl+K). This modeless view combines advisory evidence, recent Control requests and the existing notification service. Tab navigates its controls; Escape closes it and returns focus. Review links close the view and navigate to the owning workspace. It uses existing custom controls and dark resources, and scrolls at compact sizes without creating another monitor or Program renderer.
 
+## Startup Show and safe project entry
+
+**Show checks and activity** starts with the current engine startup
+milestone and the latest *fresh, authoritative* Show identity from
+ControlHost. A previous local session/workspace does not supply or
+confirm a Show project. The status is explicitly `UNVERIFIED` when
+Control has not synchronized or the snapshot is stale; a saved/restored
+Show is authored content, not confirmed media/output playout.
+
+The visible **Show / Templates**, **Review Media**, **Review Outputs**
+and **Recovery / Health** controls navigate to the existing owning
+workspaces without sending a production mutation. Template creation
+or import occurs only in the existing Show workspace and requires
+dependency preflight followed by explicit commit; it does not open or
+replace an arbitrary durable Show project. There is no automatic replay
+of uncertain cue, GO, CUT or output actions after a crash.
+
+Short media/playback, output/Program and saved-Show/cue summaries reuse
+the existing ten advisory checks and their `FAIL`, `WARNING`,
+`UNVERIFIED`, `NOT APPLICABLE` or `PASS` outcomes. Review links
+expose the detailed observed cause. Offline assets and unqualified
+physical outputs are never silently promoted to `READY`.
+Advanced Tools holds the existing Help and support bundle export; the
+notification and correlated request-history lists remain accessible.
+
 ## Existing authority and diagnostics
 
 Health Center remains the incident and recovery service. Support bundles and startup diagnostics retain their existing capture paths. Show template dependency/conflict preview remains the established template preflight. Saved show state and journal recovery are unchanged. ARM/GO, rundown, macros, audio, effects and output changes still pass through Client and ControlHost; no check in this view enables a show launch or grants a local ready flag.

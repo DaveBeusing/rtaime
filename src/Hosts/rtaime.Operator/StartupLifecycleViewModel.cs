@@ -146,8 +146,8 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		: HasStartupDegradation
 			? "STARTUP DEGRADED"
 			: HasCompletedInitialStartup
-				? "PRODUCTION RUNTIME READY"
-				: "STARTING PRODUCTION RUNTIME";
+				? "ENGINE HOSTS READY · REVIEW SHOW AND OUTPUTS"
+                : "STARTING MEDIA ENGINE";
 	public string StartupVisualState => !HasEvidence ? "UNKNOWN" : HasStartupFailure
 		? "FAILED"
 		: HasStartupDegradation
@@ -372,12 +372,17 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			? null
 			: parsed.FirstOrDefault(stage => string.Equals(stage.Id, _latchedFailureStageId, StringComparison.Ordinal));
 
-		ActiveStageName = _latchedFailureStageId is not null
-			? _latchedFailureStageName ?? latchedStage?.DisplayName ?? "Startup Failure"
-			: activeStage?.DisplayName ??
-				failedStage?.DisplayName ??
-				degradedStage?.DisplayName ??
-				"Production Readiness";
+		ActiveStageName = _initialStartupCompleted
+            ? "Review show and outputs"
+            : _latchedFailureStageId is not null
+                ? OperatorStageName(_latchedFailureStageId, _latchedFailureStageName ?? latchedStage?.DisplayName)
+                : activeStage is not null
+                    ? OperatorStageName(activeStage.Id, activeStage.DisplayName)
+                    : failedStage is not null
+                        ? OperatorStageName(failedStage.Id, failedStage.DisplayName)
+                        : degradedStage is not null
+                            ? OperatorStageName(degradedStage.Id, degradedStage.DisplayName)
+                            : "Checking media engine readiness";
 		Summary = _latchedFailureStageId is not null
 			? ResolveLatchedFailureSummary(latchedStage)
 			: failedStage is not null
@@ -396,6 +401,18 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 		RaiseProgressiveStateProperties();
 	}
+
+	private static string OperatorStageName(string? stageId, string? fallback) => stageId switch
+    {
+        "application-bootstrap" => "Starting application",
+        "configuration" => "Loading startup configuration",
+        "operator-interface" => "Opening media workspace",
+        "control-host" => "Connecting control services",
+        "runtime-host" => "Starting media engine",
+        "ai-host" => "Checking AI services",
+        "production-readiness" => "Validating engine readiness",
+        _ => fallback ?? "Checking startup readiness"
+    };
 
 	private void ReadReadinessFailure(JsonElement root)
 	{
@@ -522,7 +539,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		StartupLifecycleStageViewModel? latchedStage)
 	{
 		if (_initialStartupCompleted)
-			return "Initial production qualification completed. Later runtime changes stay in the workspace recovery surfaces.";
+			return "Engine host readiness is confirmed. Review the current Show, Media Library and Outputs before playout. A restored project does not automatically route Program.";
 
 		if (_latchedFailureStageId is not null)
 		{

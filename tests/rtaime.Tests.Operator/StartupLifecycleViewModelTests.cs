@@ -30,7 +30,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.False(viewModel.HasCompletedInitialStartup);
-		Assert.Equal("ControlHost", viewModel.ActiveStageName);
+		Assert.Equal("Connecting control services", viewModel.ActiveStageName);
 		Assert.Contains("ControlHost failed to start.", viewModel.Summary, StringComparison.Ordinal);
 	}
 
@@ -47,7 +47,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.False(viewModel.HasCompletedInitialStartup);
-		Assert.Equal("AIHost", viewModel.ActiveStageName);
+		Assert.Equal("Checking AI services", viewModel.ActiveStageName);
 		Assert.Contains("Required AIHost failed.", viewModel.Summary, StringComparison.Ordinal);
 	}
 
@@ -63,7 +63,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.False(viewModel.HasCompletedInitialStartup);
-		Assert.Equal("Production Readiness", viewModel.ActiveStageName);
+		Assert.Equal("Validating engine readiness", viewModel.ActiveStageName);
 		Assert.Contains("Production readiness timed out.", viewModel.Summary, StringComparison.Ordinal);
 	}
 
@@ -89,7 +89,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.True(viewModel.HasStartupFailure);
-		Assert.Equal("RuntimeHost", viewModel.ActiveStageName);
+		Assert.Equal("Starting media engine", viewModel.ActiveStageName);
 		Assert.Contains("Runtime qualification failed.", viewModel.Summary, StringComparison.Ordinal);
 
 		WriteEvidence(CreateStages(runtimeStatus: "STARTING"), ApplicationLifecycleStages.RuntimeHost);
@@ -130,7 +130,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
 
 		Assert.True(viewModel.HasStartupFailure);
-		Assert.Equal("RuntimeHost", viewModel.ActiveStageName);
+		Assert.Equal("Starting media engine", viewModel.ActiveStageName);
 		Assert.Contains("Runtime qualification failed.", viewModel.Summary, StringComparison.Ordinal);
 		Assert.DoesNotContain("Production readiness failed.", viewModel.Summary, StringComparison.Ordinal);
 	}
@@ -143,7 +143,9 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 
 		Assert.True(viewModel.HasCompletedInitialStartup);
 		Assert.False(viewModel.HasStartupFailure);
-		Assert.Equal("PRODUCTION RUNTIME READY", viewModel.StartupPhaseLabel);
+		Assert.Equal("ENGINE HOSTS READY · REVIEW SHOW AND OUTPUTS", viewModel.StartupPhaseLabel);
+        Assert.Equal("Review show and outputs", viewModel.ActiveStageName);
+        Assert.Contains("restored project does not automatically route Program", viewModel.NextStep);
 	}
 
 	[Fact]

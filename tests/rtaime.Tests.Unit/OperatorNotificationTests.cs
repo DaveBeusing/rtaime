@@ -216,6 +216,59 @@ public sealed class OperatorNotificationTests
 		}
 	}
 
+    [Theory]
+    [InlineData("MULTIVIEW")]
+    [InlineData("AI")]
+    public void Crash_recovery_retains_registered_workspace_but_no_live_production_values(string workspace)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var path = Path.Combine(root, "operator-session.json");
+            var first = new OperatorSessionRecoveryStore(path);
+            var initial = first.BeginSession(new OperatorSafeSessionState(workspace));
+            Assert.Equal(workspace, initial.SafeState.SelectedWorkspace);
+            Assert.True(initial.PersistenceAvailable);
+            var next = new OperatorSessionRecoveryStore(path)
+                .BeginSession(new OperatorSafeSessionState("LIVE"));
+            Assert.True(next.PreviousSessionEndedUnexpectedly);
+            Assert.False(next.StateWasCorrupted);
+            Assert.Equal(workspace, next.SafeState.SelectedWorkspace);
+            Assert.Single(typeof(OperatorSafeSessionState).GetProperties(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Oversized_or_unsupported_session_document_cannot_restore_prior_workspace_or_live_actions()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var path = Path.Combine(root, "operator-session.json");
+            File.WriteAllText(path, new string('x', 64 * 1024 + 1));
+            var recovery = new OperatorSessionRecoveryStore(path)
+                .BeginSession(new OperatorSafeSessionState("MEDIA"));
+            Assert.True(recovery.StateWasCorrupted);
+            Assert.False(recovery.PreviousSessionEndedUnexpectedly);
+            Assert.Equal("MEDIA", recovery.SafeState.SelectedWorkspace);
+            Assert.True(recovery.PersistenceAvailable);
+
+            File.WriteAllText(path, "{\"Version\":99,\"CleanShutdown\":false,\"SafeState\":{\"SelectedWorkspace\":\"OUTPUTS\"},\"UpdatedAtUtc\":\"2026-10-21T12:00:00Z\"}");
+            var future = new OperatorSessionRecoveryStore(path)
+                .BeginSession(new OperatorSafeSessionState("HEALTH"));
+            Assert.True(future.StateWasCorrupted);
+            Assert.False(future.PreviousSessionEndedUnexpectedly);
+            Assert.Equal("HEALTH", future.SafeState.SelectedWorkspace);
+            Assert.True(future.PersistenceAvailable);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
 	[Fact]
 	public void Repeated_fault_and_reconnect_keep_one_persistent_notification_per_condition()
 	{

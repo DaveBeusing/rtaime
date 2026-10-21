@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 
@@ -50,6 +51,32 @@ public sealed record OperatorActionHistoryRow(OperatorActionObservation Observat
 		$"response production revision {Observation.ResponseProductionRevision?.ToString(CultureInfo.InvariantCulture) ?? "not exposed"}";
 }
 
+// A presentation-only project identity, sourced from the current Control snapshot.
+// It must never be derived from a previous UI session or unlock production commands.
+public sealed record ShowProjectEntry(string Title, string State, string Detail, string NextStep)
+{
+    public static ShowProjectEntry FromAuthority(OperatorShowProjectDescriptor? project, bool fresh)
+    {
+        if (!fresh || project is null)
+            return new("Show not verified", "UNVERIFIED",
+                "No fresh authoritative show project is available; retained UI selection is not a live Show.",
+                "Reconnect Control and refresh Show checks before considering any playout action.");
+
+        return project.State switch
+        {
+            "SAVED" or "RESTORED" or "LOADED" => new(project.Name,
+                project.State, project.Detail,
+                "Review Media Library and Outputs. Saved content and restored authorship do not confirm live Program or restart a previous GO."),
+            "RECOVERY_REQUIRED" => new(project.Name, "RECOVERY REQUIRED", project.Detail,
+                "Review Health and the durable Show recovery reason. Do not replay any uncertain GO, CUT or output action."),
+            "STALE" => new(project.Name, "STALE", project.Detail,
+                "Inspect the stale Show in Health; synchronize authoritative state before explicit preparation."),
+            _ => new("No available Show", "UNVERIFIED", project.Detail,
+                "Use the existing Show workspace to create or import a governed template, review dependencies and commit explicitly. No project replacement or automatic Take.")
+        };
+    }
+}
+
 public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 {
 	private readonly OperatorControlClient _client;
@@ -61,6 +88,8 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 	private readonly object _gate = new();
 	private readonly Timer _timer;
 	private bool _queued, _disposed;
+    private bool _advancedVisible;
+    private ShowProjectEntry _project = ShowProjectEntry.FromAuthority(null, false);
 	private DateTimeOffset _catalogueEpochStartUtc = DateTimeOffset.MinValue;
 	private IReadOnlyList<OperatorActionObservation> _previousHistory = [];
 	public ShowReadinessViewModel(OperatorControlClient client, OperatorViewModel owner,
@@ -72,6 +101,16 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 		_client = client; _operator = owner; _health = health; Notifications = notifications; _navigate = navigate;
 		_context = context ?? SynchronizationContext.Current;
 		RefreshChecksCommand = new NotificationCommand(QueueRefresh, () => !_disposed);
+        OpenShowWorkspaceCommand = new NotificationCommand(() => _navigate("SCENES"), () => !_disposed);
+        ReviewMediaCommand = new NotificationCommand(() => _navigate("MEDIA"), () => !_disposed);
+        ReviewOutputsCommand = new NotificationCommand(() => _navigate("OUTPUTS"), () => !_disposed);
+        ReviewHealthCommand = new NotificationCommand(() => _navigate("HEALTH"), () => !_disposed);
+        ToggleAdvancedCommand = new NotificationCommand(() =>
+        {
+            _advancedVisible = !_advancedVisible;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AdvancedVisibility)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AdvancedActionLabel)));
+        }, () => !_disposed);
 		_client.ActionHistory.Changed += Changed;
 		_client.SnapshotChanged += Changed;
 		_health.Changed += HealthChanged;
@@ -84,6 +123,29 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 	public ObservableCollection<OperatorActionHistoryRow> History { get; } = [];
 	public OperatorNotificationCenterViewModel Notifications { get; }
 	public ICommand RefreshChecksCommand { get; }
+    public ICommand OpenShowWorkspaceCommand { get; }
+    public ICommand ReviewMediaCommand { get; }
+    public ICommand ReviewOutputsCommand { get; }
+    public ICommand ReviewHealthCommand { get; }
+    public ICommand ToggleAdvancedCommand { get; }
+    public Visibility AdvancedVisibility => _advancedVisible ? Visibility.Visible : Visibility.Collapsed;
+    public string AdvancedActionLabel => _advancedVisible ? "HIDE ADVANCED TOOLS" : "ADVANCED TOOLS";
+    public string ProjectTitle => _project.Title;
+    public string ProjectState => _project.State;
+    public string ProjectDetail => _project.Detail;
+    public string ProjectNextStep => _project.NextStep;
+    public string MediaEvidence => FormatEvidence("assets", "asset-playback");
+    public string OutputEvidence => FormatEvidence("outputs", "program-output");
+    public string ShowEvidence => FormatEvidence("durable", "cues");
+    private string FormatEvidence(string primary, string secondary)
+    {
+        var first = Checks.FirstOrDefault(check => check.Id == primary);
+        var second = Checks.FirstOrDefault(check => check.Id == secondary);
+        return first is null || second is null
+            ? "UNVERIFIED · current authoritative checks are not available."
+            : $"{first.Label}: {first.State} · {second.Label}: {second.State}. " +
+              (first.State is "FAIL" or "UNVERIFIED" ? first.Detail : second.Detail);
+    }
 	public string ReadStatus => _mediaPool?.CatalogObservedAtUtc is { } at
 		? $"Media Library evidence received {at:HH:mm:ss} UTC. Refresh checks performs no server request. Use Media Library to refresh availability."
 		: "UNKNOWN · Media Library catalogue evidence has not been received.";
@@ -120,6 +182,7 @@ public sealed class ShowReadinessViewModel : INotifyPropertyChanged, IDisposable
 		var fresh = _operator.IsConnected && !_operator.IsStale && _client.SnapshotObservedAtUtc is { } observed &&
 			now >= observed && now - observed <= TimeSpan.FromSeconds(10);
 		var catalogueCurrent = _mediaPool?.CatalogObservedAtUtc is { } catalogueAt && catalogueAt >= _catalogueEpochStartUtc;
+		_project = ShowProjectEntry.FromAuthority(_client.Snapshot?.ShowProject, fresh);
 		var current = ShowPreflightSummary.Build(_client.Snapshot, fresh,
 			catalogueCurrent && _mediaPool?.IsLoading == false ? _mediaPool?.CatalogEvidence : null,
 			_mediaPool?.CatalogObservedAtUtc, _health.GetCurrent(), now, fresh && catalogueCurrent ? _mediaPool?.PreflightEvidence : null);

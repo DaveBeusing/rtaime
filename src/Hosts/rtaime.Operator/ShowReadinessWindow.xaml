@@ -13,15 +13,56 @@
    <TextBlock Text="SHOW CHECKS AND ACTIVITY" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,4"/>
    <controls:RtaimeButton x:Name="RefreshChecksButton" Content="Refresh checks" Command="{Binding RefreshChecksCommand}"
     IsCompact="True" Margin="0,0,8,4" AutomationProperties.Name="Refresh local checks without sending a server request"/>
-   <controls:RtaimeButton Content="Getting started / Help" IsCompact="True" Margin="0,0,8,4"
-    Command="{Binding Owner.OpenInlineHelpCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-    AutomationProperties.Name="Open nonmodal preparation help without running production actions"/>
-   <controls:RtaimeButton x:Name="ExportChecksSupportButton" Content="Export support bundle" IsCompact="True" Margin="0,0,8,4"
-    Command="{Binding Owner.Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-    AutomationProperties.Name="Export diagnostics through the existing support bundle workflow"/>
+   <controls:RtaimeButton x:Name="ToggleShowChecksAdvancedButton" Content="{Binding AdvancedActionLabel}"
+     Command="{Binding ToggleAdvancedCommand}" IsCompact="True" Margin="0,0,8,4"
+     AutomationProperties.Name="Toggle advanced startup and diagnostic tools"/>
+   <WrapPanel Visibility="{Binding AdvancedVisibility}">
+    <controls:RtaimeButton Content="Getting started / Help" IsCompact="True" Margin="0,0,8,4"
+     Command="{Binding Owner.OpenInlineHelpCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+     AutomationProperties.Name="Open nonmodal preparation help without running production actions"/>
+    <controls:RtaimeButton x:Name="ExportChecksSupportButton" Content="Export support bundle" IsCompact="True" Margin="0,0,8,4"
+     Command="{Binding Owner.Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+     AutomationProperties.Name="Export diagnostics through the existing support bundle workflow"/>
+   </WrapPanel>
   </WrapPanel>
   <controls:RtaimeScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
    <StackPanel>
+    <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+     BorderThickness="1" Padding="10" Margin="0,0,0,10">
+     <StackPanel>
+      <TextBlock Text="STARTUP AND CURRENT SHOW" Style="{StaticResource OperatorSectionTitle}"/>
+      <TextBlock Text="{Binding Owner.Startup.StartupPhaseLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+       Foreground="{DynamicResource OperatorAccentBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,5,0,0"/>
+      <TextBlock Text="{Binding Owner.Startup.NextStep, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+       Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,10"/>
+      <TextBlock Text="{Binding ProjectTitle}" FontWeight="SemiBold"
+       FontSize="{StaticResource OperatorFontSizeMediaTitle}" TextTrimming="CharacterEllipsis"
+       AutomationProperties.Name="Current authoritative Show project"/>
+      <TextBlock Text="{Binding ProjectState}" FontWeight="Bold"
+       Foreground="{DynamicResource OperatorAccentBrush}" AutomationProperties.LiveSetting="Polite"/>
+      <TextBlock Text="{Binding ProjectDetail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}"/>
+      <TextBlock Text="{Binding ProjectNextStep}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,4,0,7"/>
+      <WrapPanel>
+       <controls:RtaimeButton x:Name="ReviewCurrentShowButton" Content="Show / Templates" Command="{Binding OpenShowWorkspaceCommand}"
+        IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review current Show and governed templates"/>
+       <controls:RtaimeButton Content="Review Media" Command="{Binding ReviewMediaCommand}"
+        IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review missing media and playback evidence"/>
+       <controls:RtaimeButton Content="Review Outputs" Command="{Binding ReviewOutputsCommand}"
+        IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review authoritative output routing"/>
+       <controls:RtaimeButton Content="Recovery / Health" Command="{Binding ReviewHealthCommand}"
+        IsCompact="True" Margin="0,0,6,4" AutomationProperties.Name="Review Show recovery and incidents"/>
+      </WrapPanel>
+     </StackPanel>
+    </Border>
+    <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+     Padding="8" Margin="0,0,0,10">
+     <StackPanel>
+      <TextBlock Text="LIVE READINESS · ADVISORY ONLY" Style="{StaticResource OperatorSectionTitle}"/>
+      <TextBlock Text="{Binding MediaEvidence}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,5,0,2"/>
+      <TextBlock Text="{Binding OutputEvidence}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,0,0,2"/>
+      <TextBlock Text="{Binding ShowEvidence}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}"/>
+     </StackPanel>
+    </Border>
     <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
     <TextBlock Text="{Binding Owner.Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
     <TextBlock Text="{Binding Revision}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>

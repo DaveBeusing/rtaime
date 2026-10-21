@@ -55,6 +55,25 @@ The sidecar write order is deliberate:
 
 A failed project update therefore preserves the previously valid durable project. An unreferenced new sidecar is safe to remove and cannot become production truth by itself.
 
+## Current project versus recovered UI session
+
+After a restart, the Show checks panel reads the **current ControlHost
+ShowProject descriptor** only when its authority snapshot is fresh.
+It never uses the local Operator session file as a source of Show,
+Program or routing truth. The local session continues to remember at
+most a safe workspace identifier, and corrupt/future/oversized
+(over 64 KiB) session documents are rejected and replaced by the
+current safe workspace choice.
+
+`RECOVERY_REQUIRED` and `STALE` require review of the existing
+Health and Show evidence. `SAVED` or `RESTORED` confirms durable
+authored state only, not a READY decoder, connected hardware or
+replayed live operation. The user may navigate to the existing
+Show-Template workspace to create/import an authored recipe and review
+its dependencies; there is no new project database or uncontrolled
+project-file open path. The existing ControlHost restore transaction
+and schema/migration policy remain authoritative.
+
 ## Startup and recovery ordering
 
 ControlHost startup uses the following ordering:
