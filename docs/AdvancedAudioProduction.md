@@ -289,7 +289,23 @@ Editable EQ/dynamics values are UI drafts only. Ordinary 200 ms meter refreshes 
 
 Source and bus gain controls include the existing custom slider and numeric editor over 0..4x. Arrow keys adjust the draft by 0.01x; Page Up/Down adjust by 0.1x. Linear and dB gain are displayed separately from the confirmed gain. Zero gain is −∞ dB. Editing never submits automatically, and pending strip editors are disabled until completion. Apply and Discard remain accessible in both presentation modes.
 
-Compact and Detailed are two fixed session-only presentation presets. Compact hides EQ/dynamics editors while retaining meters, confirmed routing/processing labels and Apply/Discard. Neither preset changes audio configuration, stores a mix, recalls production state or creates another layout-persistence mechanism. Existing workspace Save Layout/Reset Layout remains the presentation persistence path. A production Solo command is not exposed because the current audio contract has no such operation.
+Compact and Advanced are two session-only presentations over the **same**
+source/bus and configuration owners. Compact is the default: each bounded
+source/Program/Aux bus shows current Runtime sample peaks and status, confirmed
+gain/routing, separately marked local gain/mute drafts, and explicit Apply/Discard.
+The top strip retains governed Follow Video/Breakaway with confirmed routing.
+Advanced opens the existing complete bus matrix, EQ, dynamics and diagnostic
+surface. Visible compact sample-peak confidence is never equivalent to a
+qualified physical output, and stale, missing, invalid or clipping evidence
+remains explicit. The current Mixer does not acquire additional DSP, a second
+poller, a new signal clock or independent Program authority.
+
+Both modes preserve all local drafts, source selection, pending/rejected
+mutation state and controller revision requirements. Neither preset changes
+audio configuration, stores a mix, recalls production state or creates another
+layout-persistence mechanism. Existing workspace Save Layout/Reset Layout
+remains the presentation persistence path. A production Solo command is not
+exposed because the current audio contract has no such operation.
 
 Absent bus observations show UNAVAILABLE rather than healthy zero meters or idle processors. Retained observations are marked STALE/OFFLINE/UNVERIFIED when the Control connection or Runtime readiness cannot support current evidence. Source meter data remains unavailable when its input descriptor is missing. Source routing labels describe confirmed mute, zero gain, bus inclusion and routed-source eligibility; they do not claim a sample was executed merely from configuration. Bus role labels describe confirmed Program/Aux bus mapping; current execution is separate Runtime meter evidence. Ducking identifies its confirmed bus/sidechain and reports unavailable sidechain explicitly. Peak text is dBFS; limiter hits are retained counters rather than new transient events.
 
