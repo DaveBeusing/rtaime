@@ -126,6 +126,16 @@ public sealed partial class ControlHostIpcServer
                 return Error(message, "sequence.output.preview_not_ready",
                     "Real revision-bound Preview pixels and PCM must be presented before Take.");
 
+            // Admit a native source only after confirmed Preview pixels/PCM.
+            // The ordinary Runtime Program commit now requires this exact arm
+            // before it can target the sequence source, and promotion runs
+            // under the same existing Program boundary lock as the commit.
+            var armed = await _runtimeTransport.ArmSequenceTakeAsync(
+                command, cancellationToken).ConfigureAwait(false);
+            if (armed.OutputState != "TAKE_PENDING")
+                return Error(message, "sequence.output.take_not_armed",
+                    "Runtime did not confirm a pending source/revision-bound Take.");
+
             // Use precisely the existing Control staged->Runtime prepared/commit
             // ->Control confirmed operation. No separate Program mutator exists.
             var cut = new WireControlCommand(
@@ -141,8 +151,18 @@ public sealed partial class ControlHostIpcServer
                 MutationKind.Cut, cancellationToken).ConfigureAwait(false);
             var failure = ReadMutationFailure(outcome);
             if (failure is not null)
+            {
+                if (failure.Value.Code != "runtime.transport.failed")
+                {
+                    // A confirmed pre-commit rejection retires the reversible
+                    // native arm, not the prepared decoder owners or Program.
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    _ = await _runtimeTransport.DisarmSequenceTakeAsync(
+                        command, cleanup.Token).ConfigureAwait(false);
+                }
                 return Error(message, "sequence.output.take_rejected",
                     "The existing production transaction rejected Take: " + failure.Value.Code);
+            }
 
             var after = _controlAccessor()?.State;
             if (after is null || after.ProductionId.Value != binding.AuthorityStateId ||
