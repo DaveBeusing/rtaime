@@ -170,12 +170,53 @@ public sealed class OutputCanvasEditorWorkflowTests
         Assert.True(editor.ApplyOutcomeUnconfirmed);
         Assert.Equal(1, gateway.Applies);
 
+        // An old UNMAPPED observation cannot prove that uncertain APPLY was rejected.
+        gateway.ReturnStaleUnmapped = true;
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
+        gateway.ReturnStaleUnmapped = false;
         gateway.ConfirmMapping();
         await editor.ObserveBoundaryAsync();
         Assert.False(editor.ApplyOutcomeUnconfirmed);
         Assert.True(editor.IsActiveMappingConfirmed);
         Assert.Equal(1, gateway.Applies);
         Assert.Equal("RUNTIME CONFIRMED · ACTIVE MAPPING", editor.WorkflowStage);
+    }
+
+    [Fact]
+    public async Task Lost_disable_reply_does_not_authorize_retry_from_a_retained_active_snapshot()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.ConfirmMapping();
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.IsActiveMappingConfirmed);
+
+        gateway.DropDisableResponse = true;
+        await editor.DisableAsync();
+        Assert.Equal(2, gateway.Applies);
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.DisableCommand.CanExecute(null));
+
+        gateway.ReturnStaleActive = true;
+        await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.Equal(2, gateway.Applies);
+
+        gateway.ReturnStaleActive = false;
+        gateway.ConfirmDisable();
+        await editor.ObserveBoundaryAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.Equal("UNMAPPED", editor.ActivationState);
+        Assert.Equal("UNVERIFIED", editor.ActiveRevision);
+        Assert.Equal(2, gateway.Applies);
     }
 
     [Fact]
@@ -245,6 +286,9 @@ public sealed class OutputCanvasEditorWorkflowTests
         public string? RejectWith { get; set; }
         public bool DropSaveResponse { get; set; }
         public bool DropApplyResponse { get; set; }
+        public bool DropDisableResponse { get; set; }
+        public bool ReturnStaleUnmapped { get; set; }
+        public bool ReturnStaleActive { get; set; }
 
         public ValueTask<OutputCanvasSnapshot> GetAsync(CancellationToken token = default) =>
             ValueTask.FromResult(new OutputCanvasSnapshot(Stored,Stored.EditRevision,
@@ -253,7 +297,8 @@ public sealed class OutputCanvasEditorWorkflowTests
                     "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
 
         public ValueTask<OutputCanvasActivationResult> EvidenceAsync(CancellationToken token = default) =>
-            ValueTask.FromResult(_runtime);
+            ValueTask.FromResult(ReturnStaleUnmapped ? new OutputCanvasActivationResult(null,null,"UNMAPPED") :
+                ReturnStaleActive ? new OutputCanvasActivationResult(Stored.EditRevision,null,"ACTIVE") : _runtime);
 
         public ValueTask<OutputCanvasValidation> ValidateAsync(OutputCanvasConfiguration draft,
             CancellationToken token = default)
@@ -286,7 +331,10 @@ public sealed class OutputCanvasEditorWorkflowTests
             Assert.Equal(Stored.EditRevision,request.ExpectedSavedRevision);
             _runtime = _runtime with { ActivationState="PENDING_BOUNDARY",
                 PendingRenderRevision=request.Enabled?Stored.EditRevision:null, FailureCode=null };
-            if (DropApplyResponse) throw new TimeoutException("Apply response lost after Runtime accepted the request.");
+            if (request.Enabled && DropApplyResponse)
+                throw new TimeoutException("Apply response lost after Runtime accepted the request.");
+            if (!request.Enabled && DropDisableResponse)
+                throw new TimeoutException("Disable response lost after Runtime accepted the request.");
             return ValueTask.FromResult(_runtime);
         }
 
