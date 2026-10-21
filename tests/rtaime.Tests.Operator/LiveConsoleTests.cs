@@ -183,6 +183,33 @@ public sealed class LiveConsoleTests
     }
 
     [Fact]
+    public async Task Interrupted_rundown_observation_retracts_old_ready_state_without_replaying_GO()
+    {
+        var transport = new ReadOnlyTransport { CancelRundownReads = true };
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client);
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var pool = new MediaPoolInspectorViewModel(owner, deck);
+        var model = new RundownViewModel(client, owner, pool);
+        var item = new RundownHoldItem(RundownItemId.New(), "Prepared hold", 25);
+        var definition = new RundownDefinition(RundownContractVersion.Current,
+            RundownId.New(), "Show", [item]);
+        var prepared = RundownExecutionSnapshot.Idle with
+        {
+            RundownId = definition.RundownId, State = RundownExecutionState.Prepared,
+            PreparedItemId = item.ItemId, Revision = 5
+        };
+        model.ApplyConfirmedObservation(new(definition, prepared, 1));
+        Assert.Equal("PREPARED", model.State);
+        await model.RefreshAsync(); // Cancellation is not proof that Program was unchanged.
+        Assert.Equal("UNVERIFIED", model.State);
+        Assert.Equal("UNVERIFIED", model.NowItemName);
+        Assert.Contains("SYNC REQUIRED", model.NextItemStatus);
+        Assert.False(model.GoCommand.CanExecute(null));
+        Assert.Equal(0, transport.Mutations);
+    }
+
+    [Fact]
     public void Show_control_run_target_is_confirmed_and_never_the_unsaved_selected_editor_cue()
     {
         var transport = new ReadOnlyTransport();
@@ -217,6 +244,11 @@ public sealed class LiveConsoleTests
     private sealed class ReadOnlyTransport : IOperatorControlTransport
     {
         public int Mutations { get; private set; }
+        public bool CancelRundownReads { get; init; }
+        public ValueTask<RundownWorkspaceSnapshot> GetRundownSnapshotAsync(CancellationToken cancellationToken = default) =>
+            CancelRundownReads
+                ? ValueTask.FromException<RundownWorkspaceSnapshot>(new OperationCanceledException("Control observation interrupted."))
+                : ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException());
         public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
         public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) { Mutations++; throw new NotSupportedException(); }
