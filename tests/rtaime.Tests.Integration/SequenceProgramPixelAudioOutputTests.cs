@@ -6,6 +6,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Persistence;
+using rtaime.Provider.Gpu;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
 using Xunit;
