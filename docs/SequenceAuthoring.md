@@ -14,7 +14,13 @@ its reserved lanes editable. See [Layered Timeline](LayeredTimeline.md) and
 Control owns validation, revision assignment and durable writes. Runtime remains the only
 execution and clock authority. List/Get return `UNAVAILABLE` for playback and Get returns a
 null active execution revision. There is no play, arm, take, seek or decoder operation in this
-API. A future execution package must explicitly validate and admit an authored revision.
+API. A separate opt-in `SequencePreparationClient` and
+`SequenceOutputClient` now stage real native media, authorize Preview,
+arm an exact production Take and allow read-only output inspection or
+explicit recovery after a lost Take acknowledgement. They never reinterpret
+an editor draft as an executing revision. The authoring API still does
+not itself play or take Program; see [Sequence Playback](SequencePlayback.md)
+for the exact native output support boundaries and current qualification.
 
 ## Canonical model
 
@@ -133,6 +139,12 @@ strict unknown-member and duplicate-property rejection. Retained history has a 1
 subdocument cap; each retained library is validated against the same limits.
 The [definition schema](../schemas/sequence/v1/Sequence.schema.json) documents serialized
 shape; Control validation additionally enforces arithmetic and reference semantics.
+
+The additive native-output operations occupy external Control tags 126–129
+without altering these six authoring tags, persisted Show v1/v2/v3, stable
+source IDs or editor undo history. Source revision, catalogue fingerprint,
+prepared owner, Preview output and committed Program boundary are separate
+validity decisions. An interrupted Take is not replayed via authoring history.
 
 ## Qualification
 
