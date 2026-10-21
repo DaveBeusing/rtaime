@@ -281,8 +281,8 @@
                            Text="{Binding SelectedItemName, StringFormat=LOCAL SELECTION · {0}}"
                            Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}"
                            TextTrimming="CharacterEllipsis" />
-				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding CurrentItemName, StringFormat=CONFIRMED CURRENT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock MaxHeight="{Binding StatusMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding PreparedItemName}" Text="{Binding PreparedItemName, StringFormat=PREPARED · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding NowItemName, StringFormat=CONFIRMED NOW · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock MaxHeight="{Binding StatusMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding NextItemStatus}" Text="{Binding NextItemName, StringFormat=CONFIRMED NEXT · {0}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock MaxHeight="{Binding DetailMaximumHeight, ElementName=RundownRoot}" ToolTip="{Binding LiveActionDetail}" Text="{Binding LiveActionDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Visibility="{Binding AuthoringVisibility, ElementName=RundownRoot}" Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
