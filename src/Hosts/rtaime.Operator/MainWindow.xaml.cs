@@ -67,6 +67,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
         SequenceTimeline = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(controlTransport), client);
+        ConfigureSequencePlayout(controlTransport, viewModel);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		Replay = new ReplayViewModel(client, MediaDeck);
@@ -149,7 +150,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand, SequenceTimeline.Playout),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel);
 		Monitoring.Start();
@@ -258,7 +259,7 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell, ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync), Docking, OpenCommandPaletteCommand);
 		CommandPalette = new OperatorCommandPaletteViewModel(Shortcuts,
-			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand),
+			OperatorCommandCatalog.Create(Shortcuts, viewModel, MediaDeck, Shell, MediaPool, OpenShowChecksCommand, OpenLibraryCommand, OpenInlineHelpCommand, OpenWorkspaceTemplatesCommand, SequenceTimeline.Playout),
 			@operator: viewModel, importPicker: PickShortcutImport, exportPicker: PickShortcutExport);
         InitializeLibrary(viewModel, libraryPreferenceStore);
 		viewModel.StartAudioMetering();

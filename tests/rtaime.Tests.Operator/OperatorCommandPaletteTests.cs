@@ -307,6 +307,14 @@ public sealed class OperatorCommandPaletteTests
 			search.RaiseEvent(enter);
 			Assert.True(enter.Handled);
 			Assert.Equal(program, ((OperatorViewModel)main.DataContext).ProgramSourceId);
+            main.CommandPalette.Query = "sequence take";
+            var nativeTake = main.CommandPalette.Results.Single(entry => entry.Id == "sequence-take");
+            Assert.True(nativeTake.Descriptor.RequiresExplicitButton);
+            Assert.False(nativeTake.IsAvailable); // Offline window cannot authorize a native Program Take.
+            Assert.False(main.CommandPalette.ExecuteSelected(false));
+            Assert.Equal(program, ((OperatorViewModel)main.DataContext).ProgramSourceId);
+            main.CommandPalette.Query = "sequence recover";
+            Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "sequence-recover");
 			main.CommandPalette.Query = "workspace timeline";
             Assert.Contains(main.CommandPalette.Results, entry => entry.Id == "workspace-edit");
             main.CommandPalette.Query = "workspace edit";

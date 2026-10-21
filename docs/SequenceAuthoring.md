@@ -42,6 +42,22 @@ An unchanged-content relink retains sequence validity. Catalogue revision leases
 catalogue mutation during validation/save. Static graphics use an explicit source range
 bounded to the authoring horizon; they have no decoded frame duration.
 
+## Native sequence playout in Operator
+
+The existing Sequence Timeline keeps its saved authoring identity and local editing
+cursor. Switch its toolbar to **PLAYOUT** for the independent native Prepare,
+Preview, Shuttle and Program Take path. Native playout is an explicit
+`SequenceOperatorPlayoutViewModel` composition using the existing ControlHost
+transport and the same saved authoring revision. It does not reinterpret the
+legacy List/Get `PlaybackState=UNAVAILABLE` as an output state.
+
+See [Sequence Operator Playout](SequenceOperatorPlayout.md) for the exact
+Preview-ready requirement, arm/Take transaction identity, explicit lost-reply
+recovery and unsupported-profile/fingerprint failure conditions. The
+[Sequence Playback](SequencePlayback.md) implementation remains owned by the
+ControlHost/RuntimeHost native sink; no Operator edit or selection authorizes a
+Program mutation.
+
 ## Time and boundaries
 
 The sole authoring unit is an integer tick at exactly **240000 ticks/second**.
