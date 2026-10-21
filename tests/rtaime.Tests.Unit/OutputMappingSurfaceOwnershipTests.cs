@@ -106,18 +106,39 @@ public sealed class OutputMappingSurfaceOwnershipTests
     }
 
     [Fact]
-    public void Output_mapping_budget_rejects_over_UHD_without_allocating_a_new_frame()
+    public void Oversized_mapping_source_is_rejected_before_allocating_an_extra_output_surface()
     {
-        var large = new VideoFormat(2048, 2049, FrameRate.Fps50,
+        // Source ownership is independent of the mapping-output budget.
+        // 2048x2049 RGBA8 is only one scanline above the 16 MiB limit.
+        var format = new VideoFormat(2048, 2049, FrameRate.Fps50,
             PixelFormat.Rgba8, ScanMode.Progressive);
-        Assert.True((ulong)large.Width * large.Height * 4UL > 16UL * 1024 * 1024);
-        // This is a source-only regression of the geometry cap; no 16-MiB
-        // native mapping buffer is allocated in this test.
-        var providerSource = new GpuOutputMappingSurface(
-            new SurfaceId(Identity.New()), large, 0, 0, 1, 1,
-            new(0, 0), new(2048, 0), new(2048, 2049), new(0, 2049),
-            GpuOutputEdgeBlend.None, 0);
-        providerSource.Validate();
+        Assert.True((ulong)format.Width * format.Height * 4UL > 16UL * 1024 * 1024);
+        var backend = new ManagedReferenceGpuBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var frame = provider.Upload(MediaSourceId.New(),
+            new RgbaFrameBuffer(format, new byte[RgbaFrameBuffer.RequiredByteLength(format)]),
+            new FrameTiming(0, 0, new Timebase(1, 50)),
+            Generation.Initial, "oversized-mapping-budget");
+        try
+        {
+            var mapping = new GpuOutputMappingSurface(
+                frame.SurfaceId, format, 0, 0, 1, 1,
+                new(0, 0), new(2048, 0), new(2048, 2049), new(0, 2049),
+                GpuOutputEdgeBlend.None, 0);
+            Assert.Equal(1, backend.ActiveAllocationCount);
+            var result = provider.MapOutput(frame, [new GpuOutputMappingInput(frame, mapping)]);
+            Assert.False(result.Succeeded);
+            Assert.Equal("gpu.output_mapping.capacity", result.Failure?.Code);
+            Assert.Equal(1, backend.ActiveAllocationCount);
+            Assert.Equal(1, provider.ActiveSurfaceCount);
+            Assert.Equal((ulong)0, provider.MemoryTransferStatistics.ReadbackOperations);
+        }
+        finally
+        {
+            frame.Dispose();
+        }
+        Assert.Equal(0, backend.ActiveAllocationCount);
     }
 
     private static VideoFormat Format(bool use5994) =>
