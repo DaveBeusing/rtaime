@@ -115,7 +115,7 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (!runtime.IsCommittedSequencePreviewSource(previewSource))
                 throw new InvalidOperationException(
                     "Sequence output may only replace the exact committed Preview source, never Program.");
-            if (GetSnapshot(previewSource).IsLoaded)
+            if (GetSnapshot(previewSource).State != MediaDeckState.Unloaded)
                 throw new InvalidOperationException(
                     "Sequence output cannot overwrite an already loaded native media deck.");
             var session = new SequenceOutputSession(reference, previewSource, snapshot, runtime)
