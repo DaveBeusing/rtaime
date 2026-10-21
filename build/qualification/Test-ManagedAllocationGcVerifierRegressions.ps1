@@ -31,7 +31,7 @@ function Check-Fails {
     param([string]$Name, [scriptblock]$Mutation, [string]$Baseline, [string]$Policy)
     $fixture = Join-Path $temporary $Name
     Copy-Item -LiteralPath $sourceRoot -Destination $fixture -Recurse
-    $manifestPath = Join-Path $fixture "manifest.json"
+    $manifestPath = Join-Path $fixture ([IO.Path]::GetFileName($EvidencePath))
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     & $Mutation $manifest $fixture
     Write-Json $manifestPath $manifest
