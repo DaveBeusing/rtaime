@@ -82,6 +82,30 @@ for ($i = 0; $i -lt 2; $i++) {
   Require ([bool]$row.sampledCpuP99ExceedsNominalFramePeriod -eq
       ([double]$row.maximumObservedCpuP99Milliseconds -gt $period)) "False deadline comparison."
 }
+Require ($e.nativeDecodeCopy.status -ceq "ISOLATED_H264_AAC_DECODER_AND_WORKER_NOT_COMMITTED_PROGRAM" -and
+  $e.nativeDecodeCopy.sourceCommit -ceq $ExpectedSourceCommit -and
+  $e.nativeDecodeCopy.physicalGpuTransfer -ceq "UNVERIFIED") "Native copy is not a physical/Program qualification."
+Check-Trx (Bound-File $e.nativeDecodeCopy.trx) @(
+  "Native_decoder_copy_stages_report_source_bound_allocations_and_runtime_input_copy",
+  "Native_decode_worker_attributes_slot_copies_without_releasing_retained_frames")
+$copyLog = Get-Content -LiteralPath (Bound-File $e.nativeDecodeCopy.log) -Raw
+foreach ($label in @("NATIVE DECODE COPY SOFTWARE PROFILE: ", "NATIVE WORKER SLOT COPY SOFTWARE PROFILE: ")) {
+  $matching = @($copyLog -split "[
+]+" | Where-Object { $_.Contains($label) })
+  Require ($matching.Count -eq 1) "Missing or duplicated native decoder copy summary."
+  $json = $matching[0].Substring($matching[0].IndexOf($label, [StringComparison]::Ordinal) + $label.Length) | ConvertFrom-Json
+  Require ($json.sourceCommit -ceq $ExpectedSourceCommit) "Native reader/worker source identity mismatch."
+  if ($label.StartsWith("NATIVE DECODE", [StringComparison]::Ordinal)) {
+    Require ([ulong]$json.rgb32ToScratch.Operations -gt 0 -and
+      [ulong]$json.rgbaSwizzle.Operations -gt 0 -and
+      [ulong]$json.nativePcmPacket.Operations -gt 0 -and
+      [ulong]$json.reproducedRuntimeSourceCopy.Operations -eq 32) "Native reader pixel/audio copy counts are incomplete."
+  } else {
+    Require ([ulong]$json.videoCopy.Operations -gt 0 -and
+      [ulong]$json.audioCopy.Operations -gt 0 -and
+      $json.hardware -ceq "UNVERIFIED") "Native worker copies were not evidenced."
+  }
+}
 Require ($e.distinctNativeSequence.status -ceq "SOURCE_BOUND_INTEGRATION_ASSERTIONS" -and
   $e.distinctNativeSequence.actualSourceFormat -ceq "1080p50" -and
   (@($e.distinctNativeSequence.independentToneFrequenciesHz) -join ",") -ceq "440,880") "Incorrect native source scope."
