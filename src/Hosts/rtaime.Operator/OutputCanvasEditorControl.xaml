@@ -5,7 +5,17 @@
     xmlns:controls="clr-namespace:rtaime.Operator.Controls"
     UseLayoutRounding="True" SnapsToDevicePixels="True"
     AutomationProperties.Name="Output mapping editor and authoritative Runtime evidence">
-    <Border Style="{StaticResource OperatorPanel}" Padding="12">
+    <Border Padding="12">
+        <Border.Style>
+            <Style TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsWorkspaceVisible}" Value="True">
+                        <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <StackPanel>
             <DockPanel Margin="0,0,0,8">
                 <StackPanel>
