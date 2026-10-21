@@ -15,6 +15,7 @@ public sealed class MonitoringVisualPerformanceQualificationTests
 		yield return [1.00];
 		yield return [1.25];
 		yield return [1.50];
+		yield return [1.75];
 		yield return [2.00];
 	}
 
