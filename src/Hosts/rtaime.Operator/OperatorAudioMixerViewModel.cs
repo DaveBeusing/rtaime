@@ -40,8 +40,11 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		get => _selectedSource;
 		set
 		{
-			if (!Set(ref _selectedSource, value))
+			var previous = _selectedSource;
+		if (!Set(ref _selectedSource, value))
 				return;
+        previous?.NotifyMixerSelection();
+        value?.NotifyMixerSelection();
 			if (value is not null)
 			{
 				var input = _owner.AudioInputs.FirstOrDefault(candidate =>
@@ -500,6 +503,11 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 		}, () => MutationState != "PENDING");
 		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
 		ToggleContributionCommand = new AsyncRelayCommand(() => { FollowRoutedSource = !FollowRoutedSource; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
+        SelectSourceCommand = new AsyncRelayCommand(() =>
+        {
+            _owner.SelectedSource = this;
+            return Task.CompletedTask;
+        });
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -535,6 +543,9 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 	public ICommand ToggleMuteCommand { get; }
 	public ICommand DiscardDraftCommand { get; }
 	public ICommand ToggleContributionCommand { get; }
+    public ICommand SelectSourceCommand { get; }
+    public string MixerSelectionLabel => ReferenceEquals(_owner.SelectedSource, this) ? "SELECTED" : "SELECT";
+    internal void NotifyMixerSelection() => OnPropertyChanged(nameof(MixerSelectionLabel));
 
 	public double Gain { get => _gain; set { if (Set(ref _gain, Clamp(value, 0, 4, _gain))) DraftChanged(); } }
 	public bool Muted { get => _muted; set { if (Set(ref _muted, value)) DraftChanged(); } }
