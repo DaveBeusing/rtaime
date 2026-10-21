@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
 
@@ -10,7 +11,10 @@ public sealed partial class CompositingGraphNodeViewModel
     private OperatorCompositingLayerDescriptor? _layer;
     private bool _collapsed, _matchesSearch = true, _visibleDraft;
     private double _opacityDraft = 255;
-    private bool _stateDirty, _stateConflict;
+    private bool _stateDirty, _stateConflict, _sourceChanged;
+    private ulong _observedRevision, _draftRevision;
+    private int _draftKind;
+    private string? _draftContentIdentity;
     public bool IsCollapsed { get => _collapsed; set => Set(ref _collapsed, value); }
     public bool MatchesSearch { get => _matchesSearch; internal set => Set(ref _matchesSearch, value); }
     public int ConfirmedOrder => _layer?.Order ?? 0;
@@ -18,6 +22,22 @@ public sealed partial class CompositingGraphNodeViewModel
         $"RUNTIME #{_layer.Order + 1} · {(_layer.Visible ? "VISIBLE" : "HIDDEN")} · {_layer.Opacity}/255 · {_layer.ContentIdentity}";
     public bool HasStateDraft => _stateDirty;
     public bool StateConflict => _stateConflict;
+    public bool SourceChanged => _sourceChanged;
+    public bool CanReviewStateDraft => _stateDirty && _stateConflict && !_sourceChanged;
+    public bool IsDraftCurrent => _stateDirty && !_stateConflict &&
+        !_sourceChanged && _layer is not null &&
+        _layer.ContentIdentity == _draftContentIdentity && _layer.Kind == _draftKind &&
+        _draftRevision == _observedRevision;
+    public string LayerEffectEvidence => _layer is null ? "NO CURRENT LAYER" :
+        _layer.ProcessingStack.Count == 0 ? "FX NONE · CONFIRMED" :
+        "FX " + string.Join(" → ", _layer.ProcessingStack.Select(node =>
+            (node.Kind == 1 ? "GRADE" : "CHROMA KEY") + (node.Enabled ? "" : " OFF"))) +
+        " · CONFIRMED";
+    public string DraftEvidence => _sourceChanged
+        ? "SOURCE CHANGED · DISCARD REQUIRED"
+        : _stateConflict ? "DRAFT CONFLICT · REVIEW REQUIRED"
+        : _stateDirty ? "LOCAL DRAFT · NOT ON PROGRAM"
+        : "RUNTIME CONFIRMED";
     public bool VisibleDraft { get => _visibleDraft; set { if (Set(ref _visibleDraft, value)) ChangedStateDraft(); } }
     public double OpacityDraft
     {
@@ -31,47 +51,97 @@ public sealed partial class CompositingGraphNodeViewModel
     }
     private void ChangedStateDraft()
     {
+        var wasDirty = _stateDirty;
         _stateDirty = _layer is not null && (_layer.Visible != _visibleDraft || _layer.Opacity != _opacityDraft);
-        OnPropertyChanged(nameof(HasStateDraft));
+        if (_stateDirty && !wasDirty)
+        {
+            _draftRevision = _observedRevision;
+            _draftContentIdentity = _layer!.ContentIdentity;
+            _draftKind = _layer.Kind;
+        }
+        if (!_stateDirty)
+        {
+            _sourceChanged = false;
+            _stateConflict = false;
+            _draftContentIdentity = null;
+        }
+        foreach (var name in new[] { nameof(HasStateDraft), nameof(StateConflict),
+            nameof(SourceChanged), nameof(IsDraftCurrent), nameof(CanReviewStateDraft), nameof(DraftEvidence) })
+            OnPropertyChanged(name);
     }
-    internal void ObserveLayer(OperatorCompositingLayerDescriptor layer)
+    internal void ObserveLayer(OperatorCompositingLayerDescriptor layer, ulong revision)
     {
         var stateChanged = _layer is not null && (_layer.Visible != layer.Visible || _layer.Opacity != layer.Opacity);
+        var contentChanged = _stateDirty &&
+            (_draftContentIdentity != layer.ContentIdentity || _draftKind != layer.Kind);
         _layer = layer;
-        if (!_stateDirty || _visibleDraft == layer.Visible && _opacityDraft == layer.Opacity) ResetStateDraft();
-        else if (stateChanged) { _stateConflict = true; OnPropertyChanged(nameof(StateConflict)); }
+        _observedRevision = revision;
+        if (!_stateDirty || !contentChanged &&
+            _visibleDraft == layer.Visible && _opacityDraft == layer.Opacity)
+            ResetStateDraft();
+        else if (stateChanged || contentChanged || _draftRevision != revision)
+        {
+            _sourceChanged |= contentChanged;
+            _stateConflict = true;
+            foreach (var name in new[] { nameof(StateConflict), nameof(SourceChanged),
+                nameof(IsDraftCurrent), nameof(CanReviewStateDraft), nameof(DraftEvidence) })
+                OnPropertyChanged(name);
+        }
         OnPropertyChanged(nameof(LayerEvidence));
+        OnPropertyChanged(nameof(LayerEffectEvidence));
         OnPropertyChanged(nameof(ConfirmedOrder));
     }
     internal void ResetStateDraft()
     {
         if (_layer is null) return;
         _visibleDraft = _layer.Visible; _opacityDraft = _layer.Opacity;
-        _stateDirty = false; _stateConflict = false;
-        foreach (var name in new[] { nameof(VisibleDraft), nameof(OpacityDraft), nameof(HasStateDraft), nameof(StateConflict) })
+        _stateDirty = false; _stateConflict = false; _sourceChanged = false;
+        _draftContentIdentity = null; _draftKind = _layer.Kind; _draftRevision = _observedRevision;
+        foreach (var name in new[] { nameof(VisibleDraft), nameof(OpacityDraft), nameof(HasStateDraft),
+            nameof(StateConflict), nameof(SourceChanged), nameof(IsDraftCurrent),
+            nameof(CanReviewStateDraft), nameof(DraftEvidence) })
             OnPropertyChanged(name);
     }
-    internal void ReviewStateDraft() { _stateConflict = false; OnPropertyChanged(nameof(StateConflict)); }
+    internal void ReviewStateDraft()
+    {
+        if (!CanReviewStateDraft) return; // Replaced content can only be discarded, never rebased.
+        _draftRevision = _observedRevision;
+        _stateConflict = false;
+        foreach (var name in new[] { nameof(StateConflict), nameof(IsDraftCurrent),
+            nameof(CanReviewStateDraft), nameof(DraftEvidence) }) OnPropertyChanged(name);
+    }
 }
 
 public sealed partial class CompositingGraphViewModel
 {
     private string _searchText = "";
-    private bool _showLayers = true, _selectingLayers, _reviewingLayers;
+    private bool _showLayers = true, _showAdvancedGraph, _selectingLayers, _reviewingLayers;
     private string? _missingSelectedNodeId;
     private List<string>? _orderDraft;
+    private string[]? _orderBaseline;
+    private ulong? _orderBaselineRevision;
     private readonly Dictionary<string, string> _removedDrafts = new(StringComparer.Ordinal);
     private string _workspaceNotice = "";
     private double _workspaceWidth = 700;
     private bool _layerDraftInputsValid = true;
-    public double LayerPanelWidth => Math.Min(220, Math.Max(0, _workspaceWidth * 0.38));
-    public void UpdateWorkspaceWidth(double width) { if (double.IsFinite(width) && width > 0) { _workspaceWidth = width; OnPropertyChanged(nameof(LayerPanelWidth)); } }
+    public double LayerPanelWidth => !ShowLayers ? 0 : ShowAdvancedGraph
+        ? Math.Min(220, Math.Max(0, _workspaceWidth * 0.38))
+        : Math.Max(0, _workspaceWidth - 12);
+    public GridLength AdvancedGraphColumnWidth => ShowAdvancedGraph
+        ? new(1, GridUnitType.Star) : new(0);
+    public void UpdateWorkspaceWidth(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0 || Math.Abs(_workspaceWidth - width) < .5) return;
+        _workspaceWidth = width;
+        OnPropertyChanged(nameof(LayerPanelWidth));
+    }
     public bool LayerDraftInputsValid { get => _layerDraftInputsValid; set { _layerDraftInputsValid = value; SynchronizeSelectedLayerDraft(); } }
     public ICommand RecallSceneCommand => _operator.ActivateSceneCommand;
     public ObservableCollection<CompositingGraphNodeViewModel> Layers { get; } = [];
     public ObservableCollection<CompositingGraphNodeViewModel> VisibleNodes { get; } = [];
     public ObservableCollection<CompositingGraphConnectionViewModel> VisibleConnections { get; } = [];
     public ICommand ToggleLayerListCommand { get; private set; } = null!;
+    public ICommand ToggleAdvancedGraphCommand { get; private set; } = null!;
     public ICommand CollapseLayerCommand { get; private set; } = null!;
     public ICommand ApplyLayerDraftCommand { get; private set; } = null!;
     public ICommand DiscardLayerDraftCommand { get; private set; } = null!;
@@ -79,7 +149,23 @@ public sealed partial class CompositingGraphViewModel
     public ICommand ApplyOrderDraftCommand { get; private set; } = null!;
     public ICommand DiscardOrderDraftCommand { get; private set; } = null!;
     public bool ExtendSelection { get; set; }
-    public bool ShowLayers { get => _showLayers; set => Set(ref _showLayers, value); }
+    public bool ShowLayers
+    {
+        get => _showLayers;
+        set { if (Set(ref _showLayers, value)) OnPropertyChanged(nameof(LayerPanelWidth)); }
+    }
+    public bool ShowAdvancedGraph
+    {
+        get => _showAdvancedGraph;
+        set
+        {
+            if (!Set(ref _showAdvancedGraph, value)) return;
+            if (!value) ShowLayers = true;
+            OnPropertyChanged(nameof(AdvancedGraphColumnWidth));
+            OnPropertyChanged(nameof(LayerPanelWidth));
+            RefreshViewportProjection();
+        }
+    }
     public string SearchText
     {
         get => _searchText;
@@ -88,22 +174,37 @@ public sealed partial class CompositingGraphViewModel
     public int SelectedLayerCount => Layers.Count(layer => layer.IsSelected);
     public CompositingGraphNodeViewModel? SelectedLayerRow => SelectedLayerCount == 1 ? Layers.First(layer => layer.IsSelected) : null;
     public string WorkspaceNotice { get => _workspaceNotice; private set => Set(ref _workspaceNotice, value); }
+    public string LayerStackOverview => (_operator.IsStale || !_operator.IsConnected
+        ? "STALE / DISCONNECTED · NO LIVE CONFIRMATION" : "RUNTIME OBSERVED") +
+        $" · {_operator.CompositingLayers.Count} layers" +
+        $" · {_operator.CompositingLayers.Count(layer => layer.Visible && layer.Opacity != 0)} contributing" +
+        $" · {_operator.CompositingLayers.Sum(layer => layer.ProcessingStack.Count)} FX nodes";
     public string SceneDeclaration => _operator.SelectedScene is { } scene
         ? $"SCENE DESIRED · {scene.Name} · {scene.DesiredLayerCount} declared layers" : "SCENE DESIRED · none selected";
     public string RuntimeEvidence => $"{(_operator.IsStale || !_operator.IsConnected ? "STALE / DISCONNECTED" : "RUNTIME OBSERVED")} · {_operator.CompositingLayers.Count} layers · active scene: {_operator.ActiveSceneName}";
     public bool CanStageLayerDraft => SelectedLayerCount == 1 && SelectedLayer() is { Kind: 2 or 3 };
-    public string SelectionEvidence => SelectedLayerCount == 1 && !CanStageLayerDraft ? "READ ONLY · layer state capability is unavailable" : SelectedLayerCount > 1
+    public string SelectionEvidence => SelectedLayerRow is { SourceChanged: true }
+        ? "SOURCE CHANGED · DISCARD the old layer draft before editing replacement content"
+        : SelectedLayerCount == 1 && !CanStageLayerDraft ? "READ ONLY · layer state capability is unavailable" : SelectedLayerCount > 1
         ? $"{SelectedLayerCount} layers · common-property review only; no atomic batch edit"
         : SelectedLayerRow is { StateConflict: true } ? "DRAFT CONFLICT · Runtime changed; REVIEW before APPLY"
         : SelectedLayerRow is { HasStateDraft: true } ? "LOCAL DRAFT · APPLY confirms; graph remains Runtime evidence"
         : "Select a Layer / Transform / Processing node; detailed edits use the shared Inspector.";
-    public string OrderEvidence => _orderDraft is null ? "RUNTIME ORDER" :
-        (_orderDraft.ToHashSet(StringComparer.Ordinal).SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId))
-            ? "LOCAL ORDER DRAFT · " : "STALE ORDER DRAFT · layer set changed; discard and restage · ") + string.Join(" → ", _orderDraft);
+    public string OrderEvidence => _orderDraft is null ? "RUNTIME ORDER · CONFIRMED" :
+        (OrderBaselineCurrent && _orderDraft.ToHashSet(StringComparer.Ordinal)
+            .SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId))
+            ? "LOCAL ORDER DRAFT · APPLY ORDER required · "
+            : "STALE ORDER DRAFT · Runtime revision, layer order or content changed · ") +
+        string.Join(" → ", _orderDraft);
     public InspectorPropertyDefinition OpacityDefinition { get; } = new("compositing.opacity", "Opacity", 0, 255, 255, 1, "8-bit", true);
     private void InitializeLayerWorkspace()
     {
-        ToggleLayerListCommand = new CompositingGraphCommand(_ => ShowLayers = !ShowLayers);
+        ToggleLayerListCommand = new CompositingGraphCommand(_ =>
+        {
+            ShowLayers = !ShowLayers;
+            if (!ShowLayers) ShowAdvancedGraph = true;
+        });
+        ToggleAdvancedGraphCommand = new CompositingGraphCommand(_ => ShowAdvancedGraph = !ShowAdvancedGraph);
         CollapseLayerCommand = new CompositingGraphCommand(value =>
         {
             if (value is CompositingGraphNodeViewModel row) { row.IsCollapsed = !row.IsCollapsed; RefreshViewportProjection(); }
@@ -113,9 +214,15 @@ public sealed partial class CompositingGraphViewModel
             var row = SelectedLayerRow;
             var layer = SelectedLayer();
             if (row is null || layer is null || !CanApplyLayerDraft()) return;
+            var visible = row.VisibleDraft;
+            var opacity = checked((byte)row.OpacityDraft);
             LayerCommandStatus = "APPLYING";
-            await _operator.SetCompositingLayerStateAsync(layer.LayerId, row.VisibleDraft, checked((byte)row.OpacityDraft));
-            LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED · draft retained";
+            await _operator.SetCompositingLayerStateAsync(layer.LayerId, visible, opacity);
+            var confirmed = _operator.LastError is null && _operator.CompositingLayers.Any(current =>
+                current.LayerId == layer.LayerId && current.ContentIdentity == layer.ContentIdentity &&
+                current.Visible == visible && current.Opacity == opacity);
+            LayerCommandStatus = confirmed ? "CONFIRMED · RUNTIME OBSERVED"
+                : "REJECTED / UNCONFIRMED · draft retained";
             SynchronizeSelectedLayerDraft();
         }, CanApplyLayerDraft);
         DiscardLayerDraftCommand = new CompositingGraphCommand(_ => { SelectedLayerRow?.ResetStateDraft(); SynchronizeSelectedLayerDraft(); });
@@ -126,24 +233,78 @@ public sealed partial class CompositingGraphViewModel
             var submitted = _orderDraft!.ToArray();
             LayerCommandStatus = "APPLYING";
             await _operator.ReorderCompositingLayersAsync(submitted);
-            if (_operator.LastError is null) _orderDraft = null;
-            LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED · order draft retained";
+            var confirmed = _operator.LastError is null && _operator.CompositingLayers
+                .OrderBy(layer => layer.Order).ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+                .Select(layer => layer.LayerId).SequenceEqual(submitted);
+            if (confirmed) ClearOrderDraft();
+            LayerCommandStatus = confirmed ? "CONFIRMED · RUNTIME OBSERVED"
+                : "REJECTED / UNCONFIRMED · order draft retained";
             SynchronizeLayers();
         }, CanApplyOrderDraft);
-        DiscardOrderDraftCommand = new CompositingGraphCommand(_ => { _orderDraft = null; SynchronizeLayers(); });
+        DiscardOrderDraftCommand = new CompositingGraphCommand(_ =>
+        {
+            ClearOrderDraft();
+            LayerCommandStatus = "LOCAL ORDER DISCARDED";
+            SynchronizeLayers();
+        });
     }
     private bool CanApplyLayerDraft() => LayerDraftInputsValid && CanEditSelectedLayer() &&
-        SelectedLayerRow is { HasStateDraft: true, StateConflict: false };
-    private bool CanApplyOrderDraft() => _operator.CanManageCompositingLayers() && _orderDraft is not null &&
+        SelectedLayerRow is { IsDraftCurrent: true };
+    private string[] CurrentOrderKeys() => _operator.CompositingLayers
+        .OrderBy(layer => layer.Order).ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+        .Select(layer => layer.LayerId + "|" + layer.Kind + "|" + layer.ContentIdentity).ToArray();
+    private bool OrderBaselineCurrent => _orderBaseline is not null &&
+        _orderBaselineRevision == _operator.Client?.Snapshot?.Production.Revision.Value &&
+        _orderBaseline.SequenceEqual(CurrentOrderKeys());
+    private bool CanApplyOrderDraft() => _operator.CanManageCompositingLayers() &&
+        _orderDraft is not null && OrderBaselineCurrent &&
         _orderDraft.Count == _operator.CompositingLayers.Count &&
-        _orderDraft.ToHashSet(StringComparer.Ordinal).SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId));
+        _orderDraft.ToHashSet(StringComparer.Ordinal).SetEquals(_operator.CompositingLayers.Select(layer => layer.LayerId)) &&
+        !_orderDraft.SequenceEqual(_operator.CompositingLayers.OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal).Select(layer => layer.LayerId));
+    private void CaptureOrderBaseline()
+    {
+        _orderBaseline = CurrentOrderKeys();
+        _orderBaselineRevision = _operator.Client?.Snapshot?.Production.Revision.Value;
+    }
+    private void ClearOrderDraft()
+    {
+        _orderDraft = null; _orderBaseline = null; _orderBaselineRevision = null;
+    }
     public void StageLayerOrder(string sourceId, string targetId)
     {
-        var ids = (_orderDraft ?? _operator.CompositingLayers.OrderBy(layer => layer.Order).Select(layer => layer.LayerId).ToList()).ToList();
+        if (!_operator.CanManageCompositingLayers() || _orderDraft is not null && !OrderBaselineCurrent)
+        {
+            LayerCommandStatus = "STALE / UNAVAILABLE · order not submitted";
+            return;
+        }
+        var ids = (_orderDraft ?? _operator.CompositingLayers.OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal).Select(layer => layer.LayerId).ToList()).ToList();
         if (sourceId == targetId || !ids.Contains(sourceId) || !ids.Contains(targetId)) return;
+        if (_orderDraft is null) CaptureOrderBaseline();
         ids.Remove(sourceId);
         ids.Insert(ids.IndexOf(targetId), sourceId);
         _orderDraft = ids;
+        LayerCommandStatus = "LOCAL ORDER DRAFT · APPLY ORDER required";
+        SynchronizeLayers();
+    }
+    internal void StageLayerMove(int delta)
+    {
+        if (!_operator.CanManageCompositingLayers() || _orderDraft is not null && !OrderBaselineCurrent)
+        {
+            LayerCommandStatus = "STALE / UNAVAILABLE · order not submitted";
+            return;
+        }
+        var selected = SelectedLayer();
+        if (selected is null) return;
+        var ids = (_orderDraft ?? _operator.CompositingLayers.OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal).Select(layer => layer.LayerId).ToList()).ToList();
+        var index = ids.IndexOf(selected.LayerId);
+        if (index < 0 || index + delta < 0 || index + delta >= ids.Count) return;
+        if (_orderDraft is null) CaptureOrderBaseline();
+        (ids[index], ids[index + delta]) = (ids[index + delta], ids[index]);
+        _orderDraft = ids;
+        LayerCommandStatus = "LOCAL ORDER DRAFT · APPLY ORDER required";
         SynchronizeLayers();
     }
     public void SelectLayers(IEnumerable<CompositingGraphNodeViewModel> selection)
@@ -170,7 +331,8 @@ public sealed partial class CompositingGraphViewModel
         var ordered = _operator.CompositingLayers.OrderBy(layer =>
             _orderDraft is not null && _orderDraft.Contains(layer.LayerId) ? _orderDraft.IndexOf(layer.LayerId) : layer.Order).ToArray();
         foreach (var layer in ordered)
-            Nodes.FirstOrDefault(node => node.Id == "layer:" + layer.LayerId)?.ObserveLayer(layer);
+            Nodes.FirstOrDefault(node => node.Id == "layer:" + layer.LayerId)?.ObserveLayer(
+                layer, _operator.Client?.Snapshot?.Production.Revision.Value ?? 0);
         Reconcile(Layers, ordered.Select(layer => Nodes.First(node => node.Id == "layer:" + layer.LayerId)).ToArray());
         if (SelectedLayerCount > 1)
         {
@@ -184,7 +346,8 @@ public sealed partial class CompositingGraphViewModel
             _inspector.SelectCompositingNode(remaining.Projection);
         }
         SynchronizeSelectedLayerDraft();
-        foreach (var property in new[] { nameof(SceneDeclaration), nameof(RuntimeEvidence), nameof(OrderEvidence) }) OnPropertyChanged(property);
+        foreach (var property in new[] { nameof(SceneDeclaration), nameof(RuntimeEvidence),
+            nameof(LayerStackOverview), nameof(OrderEvidence) }) OnPropertyChanged(property);
         (ApplyOrderDraftCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
     private void SynchronizeSelectedLayerDraft()
@@ -218,6 +381,13 @@ public sealed partial class CompositingGraphViewModel
     private void RefreshViewportProjection()
     {
         if (Nodes is null) return;
+        if (!ShowAdvancedGraph)
+        {
+            Reconcile(VisibleNodes, Array.Empty<CompositingGraphNodeViewModel>());
+            Reconcile(VisibleConnections, Array.Empty<CompositingGraphConnectionViewModel>());
+            foreach (var layer in Layers) layer.MatchesSearch = Matches(layer);
+            return;
+        }
         var left = -PanX / Zoom - 32; var top = -PanY / Zoom - 32;
         var right = left + _viewportWidth / Zoom + 64; var bottom = top + _viewportHeight / Zoom + 64;
         foreach (var layer in Layers) layer.MatchesSearch = Matches(layer);

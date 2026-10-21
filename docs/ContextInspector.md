@@ -27,7 +27,7 @@ Invalid text remains visible for correction and does not replace the last valid 
 
 Typed, stepped, scrubbed, reset and pasted values are local drafts. Apply uses the existing validated Client mutation and confirmation path. Pending, stale, disconnected and rejected state remains visible; unavailable mutation commands stay disabled. Confirmed metadata and Program/Preview source identities are not replaced by local edits.
 
-Transform drafts survive periodic status refreshes while the confirmed transform is unchanged. A changed confirmation or revision rebases the editor while retaining typed intent in the local review card. Returning to an unchanged cached context retains its draft. Processing drafts retain their signature-based confirmation behavior and the same explicit review boundary.
+Transform drafts survive periodic status refreshes while the confirmed transform is unchanged. A changed confirmation or revision rebases the editor while retaining typed intent in the local review card. In the COMPOSITING live layer stack, staged visibility and opacity additionally retain exact confirmed production revision and layer content identity. A newer revision requires an explicit REVIEW before Apply, whereas content replacement makes the old draft non-reviewable: DISCARD and edit the new asset. Layer reorder drafts similarly retain the original confirmed order and content identities; stale order cannot be submitted. Returning to an unchanged cached context retains its draft. Processing drafts retain their signature-based confirmation behavior and the same explicit review boundary.
 
 ## Compatible attributes
 

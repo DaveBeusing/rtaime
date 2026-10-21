@@ -8,7 +8,7 @@
 
 ## Purpose
 
-The COMPOSITING workspace presents the observable production path as a compact, read-only-first node graph. It is an Operator projection over existing source, routing, graphics, Runtime health, monitoring and recording state; it is not a second execution or routing authority.
+The COMPOSITING workspace presents the observed, Runtime-confirmed **live layer stack first**. The existing, read-only-first node graph is available on demand through **ADVANCED GRAPH** for detailed Transform, Color Grade, Chroma Key and source/sink inspection. Both presentations use the same Operator node identities, shared Inspector and production observation; this is not a second execution or routing authority.
 
 ## Reference composition
 
@@ -21,6 +21,40 @@ Inside the 1070×700 reference center surface, COMPOSITING uses the reference **
 - approximately 36% for the Preview and System & Performance stack.
 
 The right stack reuses the established Preview monitor at 390 px high, followed by a 6 px gap and the compact System & Performance panel. No second Preview monitor transport, decoder or timeline is created.
+
+## Primary live layer and effects workflow
+
+By default the confirmed layer list receives the available COMPOSITING viewport.
+The advanced graph column is collapsed and its offscreen node/connection
+presentations are not realized. **ADVANCED GRAPH** opens the original bounded
+graph with the existing proportional layer-list column. Closing the advanced
+graph restores the spacious live layer overview without changing selection,
+node IDs, Program/Preview routing, playback or any persisted layout. The
+shared Preview monitor and runtime status remain in their existing owners.
+
+The live overview displays only observed layer order, visible/contributing
+state, content identity and the ordered **confirmed** FX chain. A closed
+processing node is identified as **GRADE** or **CHROMA KEY**, including
+explicit **OFF** state. Source and layer selection are read-only operations;
+they do not automatically render, seek, activate, recall a Scene or modify Program.
+
+The quick **ORDER DRAFT**, **VISIBILITY DRAFT** and opacity +/- controls
+create local intent only. **APPLY** commits an explicitly reviewed state draft
+and **APPLY ORDER** submits a distinct staged order, both through the existing
+Operator → Client → ControlHost → RuntimeHost mutation. **DISCARD / UNDO ORDER**
+removes local changes. `APPLYING` is not a confirmation; only matching
+Runtime-observed layer state or layer order can be labeled **CONFIRMED**.
+Rejected or ambiguous results retain the local draft rather than projecting
+it into Program.
+
+Layer state drafts retain the production revision and content identity first
+observed when editing began. Concurrent Runtime mutation invalidates implicit
+Apply until an explicit **REVIEW**, and a replaced content identity cannot be
+review-rebased at all; discard and edit the replacement instead. Order drafts
+also retain the ordered layer IDs, kind, content identity and production
+revision. Any mismatch forbids APPLY ORDER until DISCARD and restaging.
+Unsupported kinds, invalid numeric input, stale/disconnected/busy Runtime
+and unavailable mutation capability remain fail-closed.
 
 ## Node graph visual contract
 
@@ -60,15 +94,15 @@ The graph uses stable node identities. Ordinary status refreshes update the exis
 
 SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
 
-Arbitrary source/routing topology rewiring is not exposed by the current contracts and the graph still provides no decorative REWIRE action. The toolbar identifies the **CONFIRMED LAYER STACK** and adds only bounded layer operations that are backed by the existing authority path:
+Arbitrary source/routing topology rewiring is not exposed by the current contracts and the graph still provides no decorative REWIRE action. The toolbar identifies the **CONFIRMED LAYER STACK** as read-only Runtime evidence. Its fast bounded commands stage, but do not apply, these values:
 
-- move the selected active layer one position lower or higher;
-- toggle visibility for bitmap graphics or Production CG;
-- decrease or increase opacity for bitmap graphics or Production CG.
+- propose moving the selected active layer one position lower or higher;
+- propose toggling visibility for bitmap graphics or Production CG;
+- adjust the locally staged 8-bit opacity for bitmap graphics or Production CG.
 
 The LAYERS panel shares the same node identities and selection as the graph. It displays confirmed order, visibility, opacity, content and health. Search and per-layer collapse are local presentation state. Ctrl/Shift selection provides a read-only common/mixed review in the shared Inspector; single-layer editing resumes after selecting one layer. Dragging a layer stages a local insert-before order; APPLY ORDER submits it and UNDO ORDER discards it. Visibility and integral 0..255 opacity fields also remain local until APPLY LAYER; invalid numeric input disables submission. Rejection preserves the draft and its confirmed comparison. REVIEW LAYER selects its existing Inspector entry.
 
-Layer selection remains presentation-only. A toolbar or Inspector mutation sends an explicit client command through ControlHost to RuntimeHost, displays the existing in-flight state and refreshes the graph only from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
+Layer selection and quick-toolbar draft commands remain presentation-only. Only an explicit APPLY, APPLY ORDER or governed Inspector mutation sends the existing client command through ControlHost to RuntimeHost, displays the in-flight state and refreshes the graph from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
 
 The authoritative model supports an ordered stack of 0..4 typed processing nodes per supported layer. Selecting a Processing graph node resolves its owning layer and stable node identity into the shared Inspector. The Inspector can add Color Grade or Chroma Key nodes while capacity remains, edit and enable/disable the selected typed node, move it earlier or later, and remove it. Color Grade exposes Brightness in -1..1 and Contrast/Saturation in 0..2; Chroma Key exposes 8-bit key RGB plus normalized Tolerance, Softness and Spill Suppression. Each operation derives a validated next stack from the last confirmed stack and submits that complete stack through the existing Client → ControlHost → RuntimeHost mutation path. Dedicated Program-pixel color picking, arbitrary shader/plugin configuration and free graph rewiring remain unsupported.
 
