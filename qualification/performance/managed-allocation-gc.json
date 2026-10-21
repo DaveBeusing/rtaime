@@ -1,0 +1,52 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-managed-allocation-gc-software",
+  "sourceProducer": "ProgramPipelineMeasurementBaselineTests.Program_service_load_matrix_reports_consumers_separately_from_physical_output",
+  "sourceScope": "REAL_RUNTIME_PROCESS_NEXT_BOUNDARY_MANAGED_REFERENCE_WITH_OPTIONAL_SYNTHETIC_OUTPUT_COPY",
+  "sdk": "10.0.401",
+  "formats": [
+    "1080p50",
+    "1080p59.94"
+  ],
+  "gpuBackend": "ManagedReferenceGpuBackend",
+  "consumerDimensions": [
+    "monitoringEnabled",
+    "recordingEnabled",
+    "outputCopyEnabled"
+  ],
+  "warmupBoundaries": 3,
+  "measuredBoundaries": 12,
+  "casesPerFormat": 8,
+  "profiles": [
+    {
+      "name": "smoke",
+      "repetitions": 1,
+      "includeNativeDiagnostic": false
+    },
+    {
+      "name": "repeat",
+      "repetitions": 3,
+      "includeNativeDiagnostic": true
+    }
+  ],
+  "sourceEvidence": {
+    "program": "REAL_SOFTWARE_SERVICE_BOUNDARY",
+    "gpuReadback": "LOGICAL_MANAGED_PROVIDER_READBACK_LEASE",
+    "operator": "SCALAR_OBSERVATION_GUARD_ONLY",
+    "nativeDecoder": "OPTIONAL_ISOLATED_H264_AAC_READER_AND_WORKER",
+    "previewCutDissolve": "FACTOR_REGRESSION_ONLY_NOT_COMBINED_MATRIX",
+    "layers0_2_8": "FACTOR_REGRESSION_ONLY_NOT_COMBINED_MATRIX",
+    "replayAndNetwork": "UNVERIFIED_NOT_IN_PROFILE",
+    "physicalOutput": "UNVERIFIED",
+    "hardwareGpu": "UNVERIFIED",
+    "physicalDeviceBandwidth": "UNVERIFIED"
+  },
+  "comparisonPolicy": {
+    "matchingRunnerAndProfileRequired": true,
+    "missingBaseline": "UNVERIFIED",
+    "unapprovedNumericalThreshold": "UNVERIFIED",
+    "externallyApprovedThresholdsOnly": true,
+    "approvedPolicySchema": "rtaime-managed-allocation-gc-regression-policy/1.0"
+  }
+}

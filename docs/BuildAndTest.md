@@ -251,6 +251,27 @@ dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --con
 
 A passing performance test project is managed evidence only. It does not replace physical reference-platform latency, GPU, media-I/O or long-soak qualification.
 
+For **source-bound Program allocation, GC and P50/P95/P99 comparisons**, use the
+isolated Windows x64 qualification. It builds Release at the exact clean
+source SHA, executes the existing measured Program service for 50/59.94 and
+all eight CPU-monitoring/recording/synthetic-output-copy masks, validates
+raw artifact hashes, and runs negative evidence-verifier regressions:
+
+```powershell
+./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 -Profile smoke
+./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 -Profile repeat
+```
+
+The repeat profile uses three isolated testhost runs and optional
+isolated native decoder/worker diagnostics. A comparable approved
+baseline can be supplied with `-BaselineEvidencePath`; numerical
+regression limits require a separately approved source-profile and
+runner-bound `-ApprovedPolicyPath`. Without such approval, recorded
+deltas remain `UNVERIFIED`, not assumed PASS. See
+[Managed Allocation & GC Qualification](ManagedAllocationGcQualification.md).
+This software path cannot qualify complete ETW samples, physical CUDA,
+real Operator render latency, live replay/network output or SSD soak.
+
 ### List or filter tests
 
 List tests in a project:

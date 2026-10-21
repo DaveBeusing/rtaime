@@ -1,0 +1,56 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: Managed allocation and GC software qualification
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - .github/workflows/managed-allocation-gc-qualification.yml
+      - build/qualification/Invoke-ManagedAllocationGcQualification.ps1
+      - build/qualification/Test-ManagedAllocationGcEvidence.ps1
+      - build/qualification/Test-ManagedAllocationGcVerifierRegressions.ps1
+      - qualification/performance/managed-allocation-gc.json
+      - tests/rtaime.Tests.Performance/ManagedAllocationGcEvidenceTests.cs
+      - tests/rtaime.Tests.Performance/ProgramPipelineMeasurementBaselineTests.cs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-allocation-gc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  software-smoke:
+    name: Windows software producer smoke
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Setup pinned .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Capture and verify source-bound Program and GC smoke
+        shell: pwsh
+        run: ./build/qualification/Invoke-ManagedAllocationGcQualification.ps1 -Profile smoke
+      - name: Require published verified evidence
+        shell: pwsh
+        run: |
+          $manifests = @(Get-ChildItem -Path artifacts/qualification/managed-allocation-gc -Filter manifest.json -Recurse -File)
+          if ($manifests.Count -ne 1) { throw 'Expected exactly one verified final source-bound manifest.' }
+          Write-Host "Verified manifest: $($manifests[0].FullName)"
+      - name: Preserve raw evidence on success and failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-managed-allocation-gc-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/managed-allocation-gc/
+          if-no-files-found: error
