@@ -109,8 +109,9 @@ try {
                 }
             }
         }
-        if ($cases.Count -ne 8 * @($managed.runs).Count) {
-            throw "Actual managed Program consumer cases are missing for $format."
+        if ($cases.Count -ne 8 * @($managed.runs).Count -or
+            @($cases | Where-Object { [int]$_.samples -ne 12 }).Count -ne 0) {
+            throw "Actual managed Program consumer cases/samples are missing for $format."
         }
         $p99 = @($cases | ForEach-Object { Read-Metric $_.p99Milliseconds "CPU P99" })
         $alloc = @($cases | ForEach-Object {
@@ -119,7 +120,7 @@ try {
         $budget = if ($format -eq "1080p50") { 20.0 } else { 1001.0 / 60.0 }
         $program += [ordered]@{
             format = $format; consumerCases = $cases.Count
-            samplesPerCase = [int]$descriptor.sourceScenarios.Count * 0 + 12
+            samplesPerCase = 12
             frameBudgetMilliseconds = $budget
             maximumObservedCpuP99Milliseconds = ($p99 | Measure-Object -Maximum).Maximum
             maximumObservedCallerThreadBytesPerBoundary = ($alloc | Measure-Object -Maximum).Maximum
