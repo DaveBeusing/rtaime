@@ -141,6 +141,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private readonly Action<string> _copyText;
 	private HealthCenterSubsystemViewModel? _selectedSubsystem;
 	private bool _technicalDetailsVisible;
+	private bool _telemetryOverviewVisible;
 	private string _diagnosticActionStatus = string.Empty;
 	private readonly object _updateGate = new();
 	private IReadOnlyList<SubsystemHealthSnapshot>? _pendingSnapshots;
@@ -171,7 +172,14 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 				TechnicalDetailsVisible = !TechnicalDetailsVisible;
 				return Task.CompletedTask;
 			},
-			() => SelectedSubsystem is not null);
+			() => !_disposed && SelectedSubsystem is not null);
+		ToggleTelemetryOverviewCommand = new AsyncRelayCommand(
+			() =>
+			{
+				TelemetryOverviewVisible = !TelemetryOverviewVisible;
+				return Task.CompletedTask;
+			},
+			() => !_disposed && Overview.Count > 0);
 
 		_provider.Changed += ProviderChanged;
 		_readiness.Changed += ReadinessChanged;
@@ -187,6 +195,18 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	public ICommand RecoverCommand { get; }
 	public ICommand CopyIncidentSummaryCommand { get; }
 	public ICommand ToggleTechnicalDetailsCommand { get; }
+	public ICommand ToggleTelemetryOverviewCommand { get; }
+
+	public bool TelemetryOverviewVisible
+	{
+		get => _telemetryOverviewVisible;
+		private set
+		{
+			if (Set(ref _telemetryOverviewVisible, value))
+				OnPropertyChanged(nameof(TelemetryOverviewAction));
+		}
+	}
+	public string TelemetryOverviewAction => TelemetryOverviewVisible ? "HIDE TELEMETRY" : "SHOW TELEMETRY";
 
 	public HealthCenterSubsystemViewModel? SelectedSubsystem
 	{
@@ -242,6 +262,8 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		_provider.Changed -= ProviderChanged;
 		_readiness.Changed -= ReadinessChanged;
 		_synchronizeCommand.CanExecuteChanged -= SynchronizeCanExecuteChanged;
+		(ToggleTelemetryOverviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleTechnicalDetailsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 
@@ -328,6 +350,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		OnPropertyChanged(nameof(AttentionCount));
 		OnPropertyChanged(nameof(FailedCount));
 		(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleTelemetryOverviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private Task RecoverSelectedAsync()
