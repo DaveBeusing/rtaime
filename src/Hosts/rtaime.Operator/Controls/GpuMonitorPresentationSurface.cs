@@ -134,12 +134,34 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 	private static void OnPresentationChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var surface = (GpuMonitorPresentationSurface)dependencyObject;
-		surface.CloseSharedResource();
-		surface.ResetAnalysisEvidence();
+		// Monitoring frames may advance their sequence while referencing the same
+		// owned shared texture. Reopening that texture per frame creates needless
+		// D3D interop churn and can momentarily replace sharp GPU presentation.
+		if (eventArgs.Property == MonitorProperty ||
+			eventArgs.Property == GpuFrameProperty &&
+			!SameSharedResource(
+				(eventArgs.OldValue as OperatorGpuMonitoringFrame)?.Resource,
+				(eventArgs.NewValue as OperatorGpuMonitoringFrame)?.Resource))
+			surface.CloseSharedResource();
+		if (eventArgs.Property == GpuFrameProperty)
+			surface.ResetAnalysisEvidence();
 		surface.Invalidate();
 		if (surface.GpuFrame is null)
 			surface.Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
 	}
+
+	internal static bool SameSharedResource(
+		MonitoringSharedResourceDescriptor? previous,
+		MonitoringSharedResourceDescriptor? current) =>
+		previous is not null && current is not null &&
+		previous.ResourceId == current.ResourceId &&
+		previous.ProviderInstanceId == current.ProviderInstanceId &&
+		previous.SurfaceId == current.SurfaceId &&
+		previous.Format == current.Format &&
+		previous.StorageDomain == current.StorageDomain &&
+		previous.AccessMode == current.AccessMode &&
+		previous.Lifetime == current.Lifetime &&
+		previous.Interop == current.Interop;
 
 	private static void OnInspectionChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
@@ -294,10 +316,7 @@ public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 			return false;
 		}
 
-		if (_sharedTexture is not null && _openedResource is { } opened &&
-			_openedResourceId == frame.Resource.ResourceId && opened.ProviderInstanceId == frame.Resource.ProviderInstanceId &&
-			opened.Lifetime.Generation == frame.Resource.Lifetime.Generation && opened.Format == frame.Resource.Format &&
-			opened.Interop.AdapterLuid == interop.AdapterLuid && opened.Interop.SharedHandle == interop.SharedHandle)
+		if (_sharedTexture is not null && SameSharedResource(_openedResource, frame.Resource))
 			return true;
 		CloseSharedResource();
 		try
