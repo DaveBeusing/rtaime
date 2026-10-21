@@ -307,13 +307,17 @@ public sealed partial class AudioMixerOperatorSurfaceTests
 	public async Task Presentation_presets_change_only_local_visibility_and_keep_all_drafts()
 	{
 		await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
-		Assert.True(owner.AudioMixer.ShowProcessing);
-		owner.AudioMixer.CompactPresentationCommand.Execute(null);
-		Assert.False(owner.AudioMixer.ShowProcessing);
-		Assert.Contains("LOCAL VIEW ONLY", owner.AudioMixer.PresentationLabel, StringComparison.Ordinal);
-		Assert.Equal("UNAVAILABLE", owner.AudioMixer.Availability);
-		owner.AudioMixer.DetailedPresentationCommand.Execute(null);
-		Assert.True(owner.AudioMixer.ShowProcessing);
+        Assert.False(owner.AudioMixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, owner.AudioMixer.CompactVisibility);
+        Assert.Equal(System.Windows.Visibility.Collapsed, owner.AudioMixer.AdvancedVisibility);
+        Assert.Contains("LOCAL VIEW ONLY", owner.AudioMixer.PresentationLabel, StringComparison.Ordinal);
+        Assert.Equal("UNAVAILABLE", owner.AudioMixer.Availability);
+        owner.AudioMixer.DetailedPresentationCommand.Execute(null);
+        Assert.True(owner.AudioMixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Visible, owner.AudioMixer.AdvancedVisibility);
+        owner.AudioMixer.CompactPresentationCommand.Execute(null);
+        Assert.False(owner.AudioMixer.ShowProcessing);
+        Assert.Equal(System.Windows.Visibility.Collapsed, owner.AudioMixer.AdvancedVisibility);
 	}
 
 	[Fact]
