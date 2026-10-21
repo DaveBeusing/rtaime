@@ -1151,8 +1151,7 @@ Assert-Condition ($compositingGraphViewModel -match 'StageSelectedLayerVisibilit
     $compositingLayerWorkspace -match '_operator\.SetCompositingLayerStateAsync' -and
     $compositingLayerWorkspace -match '_operator\.ReorderCompositingLayersAsync' -and
     $compositingLayerWorkspace -match 'OrderBaselineCurrent' -and
-    $compositingLayerWorkspace -match 'IsDraftCurrent')
-    "Compositing toolbar must stage local intent only; explicit APPLY must retain Runtime authority, source/revision fences and pending confirmation."
+    $compositingLayerWorkspace -match 'IsDraftCurrent') "Compositing toolbar must stage local intent only; explicit APPLY must retain Runtime authority, source/revision fences and pending confirmation."
 Assert-Condition ($compositingGraphProjection -match 'CompositingGraphNodeKind' -and $compositingGraphProjection -match 'CanRewire = false' -and $compositingGraphProjection -match '"program-output"' -and $compositingGraphProjection -match '"recorder"') "Client graph projection must expose stable read-only source/routing/composite/output/recorder semantics."
 Assert-Condition ($mediaPool -match 'SelectCompositingNode' -and $mediaPool -match '"graph\.node\.status"' -and $mediaPool -match '"graph\.node\.rewire"') "Graph node selection must project into the existing shared Inspector."
 Assert-Condition ($compositingWorkspaceSurface -match '<local:PreviewViewer' -and $compositingWorkspaceSurface -match 'Monitoring\.PreviewImage' -and $compositingWorkspaceSurface -match 'MediaDeck\.TogglePlayPauseCommand' -and $previewViewer -match '<controls:RtaimeMonitorPresentation' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorPresentation"') "Compositing Preview must reuse the shared monitor presentation and existing monitoring/transport paths."
