@@ -188,6 +188,19 @@ ControlHost only reaches Ready/Healthy after its existing Runtime authority init
 
 A running process or Windows service state alone is never treated as engine readiness, and a stale readiness document cannot qualify dead process identities or mismatched endpoints.
 
+AppHost rejects unreadable, malformed, over-64-Ki-character, invalid-process-identity
+or excessively nested ControlHost readiness documents as **unqualified**
+observations, not proof of engine health. A transient Windows file-sharing
+failure in the steady-state monitor enters the existing readiness-loss grace
+instead of aborting the AppHost process. The lifecycle stage reports an
+explicit `readiness.evidence.missing`, `readiness.evidence.invalid`,
+`readiness.evidence.unreadable` or `readiness.evidence.unqualified`
+reason, and the same reason accompanies a recovery timeout. No stale JSON
+or last-known READY status is silently substituted. A malformed legacy
+readiness-path pointer cannot override the configured primary path or
+start another ControlHost. Only fresh qualified state and matching live
+host/process/endpoint evidence can restore the existing Healthy state.
+
 ## Adoption and ControlHost replacement
 
 A lifecycle is adopted only when the same readiness rules used for a newly started lifecycle pass.
@@ -203,6 +216,14 @@ Stale intent is not replayed automatically.
 ## Ownership and shutdown
 
 AppHost records process ownership only for a ControlHost it starts itself.
+An AppHost instance may run one lifecycle only; subsequent or concurrent
+`RunAsync` attempts fail without starting another engine or overwriting
+its session evidence. The system platform tracks its own ControlHost
+process handle and remembers its exit rather than following a bare numeric
+PID on forced cleanup. Termination is allowed only for the still-owned
+live process, not an adopted external engine or another process that
+reused the old PID. The Operator and child-host supervisor remain separate
+existing owners.
 
 `EphemeralLocal` may stop that owned lifecycle when the interactive session ends.
 
