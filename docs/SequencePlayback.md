@@ -344,6 +344,64 @@ denial of output after native seek/generation replacement. This is an
 internal source-to-image/audio proof, **not** two distinct externally
 authored media sources committed to Program or a real Preview/Take.
 
+## Preview/Program native source integration (qualification pending)
+
+A separately negotiated `rtaime.sequence-output.v1` capability now authorizes a
+**previously prepared and revision-bound native sequence** for the current
+Preview route through ControlHost. Native `PREPARED` and shuttle `PLAYING`
+never implicitly activate a source. The Operator must first select an
+existing otherwise-unused Preview source through the established ControlHost
+source-selection transaction; native output activation is rejected when
+that source already has a loaded media deck or is active on Program.
+
+The bounded Runtime source adapter selects the exact compiled clips at
+the existing Runtime Program frame slot, composes admitted genuine native
+RGBA via the retained GPU provider and mixes decoded stereo 48-kHz
+Float32 through the existing AudioProductionEngine. It feeds the resulting
+pixels and PCM into the established Runtime source buffers. The existing
+Program compositor, route, output-mapping, recorder, network, replay and
+monitoring consumers remain the only downstream production path.
+A supported silent video/audio gap results in a real black frame and
+sample-exact silence; native source failures fence stale generations and
+mark the source unavailable rather than manufacturing frames.
+
+An explicit Preview-to-Program CUT uses the same Control
+`Stage -> Runtime Prepare/Commit -> Control Confirm` mutation as normal
+production sources. Before invoking that mutation Control requires
+confirmed Preview output and an exact source/revision/generation arm in the
+Runtime; an ordinary CUT to a bound sequence without the arm is rejected.
+The native promotion and the normal Runtime commit execute within one
+existing Program-boundary lock, so a frame cannot interleave between those
+two operations. Control's follow-up Runtime confirmation is idempotent.
+A lost response must be resolved using the read-only output observation
+and explicit `RecoverTake` for the already committed successor; Take
+itself is never replayed or retried with a new command identity.
+Only actual ProgramBoundaryResult readback pixels plus a produced PCM
+payload can report `PROGRAM_CONFIRMED`.
+
+The additive external Control operations reserve tags 126–129 for
+Preview activation, Take, output observation and explicit recovery.
+Named Pipe and authenticated gRPC clients use the same ControlHost
+authority; Observer is read-only, Operator/Administrator may mutate.
+Older peers reject unknown capabilities, with no changes to saved Show
+or authoring formats. `SequenceList/Get.PlaybackState` remains
+`UNAVAILABLE` pending complete acceptance and migration of that
+public status contract.
+
+**Current admitted limits:** software reference format RGBA 1080p50,
+at most four native owner requests per frame, eight video layers and
+eight 48-kHz audio tracks, program-bus audio only. The playout hook
+currently rejects Graphics clips and unsupported bus mappings instead
+of publishing an incomplete show. Reverse/multirate shuttle, reliable
+automatic native loop repreroll, long-running real-time cadence headroom,
+physical SDI/NDI/GPU hardware activation and source-format expansion
+remain separate qualification obligations. The existing Preview source
+is temporarily reused as the bound sequence identity; a dedicated
+catalogued production sequence source is not yet a proven durable
+migration. This stage must remain **Draft / NO-GO** until exact-head
+Windows, actual two-distinct-source RGB/PCM and failure/recovery E2E
+results pass and all five Required Gates are green.
+
 ## Required productive execution integration
 
 These are **open acceptance obligations**, not simulated features:
