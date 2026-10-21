@@ -45,10 +45,18 @@ public sealed partial class LocalMediaDeckRuntimeService
                 throw new NotSupportedException(
                     "The admitted native playout supports at most eight video and eight audio layers; graphics require an output asset binding.");
 
-            var sources = audioClips.Select(clip =>
-                new AudioProductionSourceConfiguration(
-                    new MediaSourceId(new Identity(clip.ClipId)), 1, false, false,
-                    [AudioBusId.Program])).ToArray();
+            // The shared AudioProductionEngine requires a nonempty source
+            // configuration. A video-only saved sequence has no decoded PCM
+            // tracks; retain one silent, muted, never-supplied placeholder
+            // channel rather than rejecting valid Preview video or inventing
+            // synthetic audio samples.
+            var sources = audioClips.Length == 0
+                ? [new AudioProductionSourceConfiguration(
+                    sourceId, 0, true, false, [AudioBusId.Program])]
+                : audioClips.Select(clip =>
+                    new AudioProductionSourceConfiguration(
+                        new MediaSourceId(new Identity(clip.ClipId)), 1, false, false,
+                        [AudioBusId.Program])).ToArray();
             var mixer = new AudioProductionEngine(new AudioProductionConfiguration(0,
                 [new AudioProductionBusConfiguration(AudioBusId.Program, 1, false)],
                 sources));
