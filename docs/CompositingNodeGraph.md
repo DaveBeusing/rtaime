@@ -8,7 +8,7 @@
 
 ## Purpose
 
-The COMPOSITING workspace presents the observed, Runtime-confirmed **live layer stack first**. The existing, read-only-first node graph is available on demand through **ADVANCED GRAPH** for detailed Transform, Color Grade, Chroma Key and source/sink inspection. Both presentations use the same Operator node identities, shared Inspector and production observation. Neither is a second execution or routing authority.
+The COMPOSITING workspace presents the observed, Runtime-confirmed **live layer stack first**. The existing, read-only-first node graph is available on demand through **ADVANCED GRAPH** for detailed Transform, Color Grade, Chroma Key and source/sink inspection. Both presentations use the same Operator node identities, shared Inspector and production observation; this is not a second execution or routing authority.
 
 ## Reference composition
 
