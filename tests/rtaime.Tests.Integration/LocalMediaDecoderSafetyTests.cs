@@ -114,6 +114,132 @@ public sealed class LocalMediaDecoderSafetyTests
     }
 
     [Fact]
+    public void Native_PCM_packet_scratch_reuses_capacity_and_rejects_invalid_extents()
+    {
+        var scratch = new LocalMediaPcmPacketScratch();
+        var payload = new byte[4_096];
+        for (var i = 0; i < payload.Length; i++)
+            payload[i] = (byte)(i * 31 + 7);
+
+        scratch.CopyFrom(payload);
+        var firstCapacity = scratch.Capacity;
+        Assert.Equal(payload, scratch.Payload.ToArray());
+        Assert.InRange(firstCapacity, payload.Length, 192_000);
+
+        // Audio packets may be shorter or longer than a frame. Keep the
+        // unread extent separate from capacity and never expose stale tails.
+        var shorter = payload.AsSpan(0, 1_024).ToArray();
+        scratch.CopyFrom(shorter);
+        Assert.Equal(shorter, scratch.Payload.ToArray());
+        Assert.Equal(firstCapacity, scratch.Capacity);
+        scratch.Reset();
+        Assert.Empty(scratch.Payload.ToArray());
+        Assert.Equal(firstCapacity, scratch.Capacity);
+
+        var native = Marshal.AllocHGlobal(payload.Length);
+        try
+        {
+            Marshal.Copy(payload, 0, native, payload.Length);
+            Assert.Equal(payload.Length, scratch.CopyFromNative(native, (uint)payload.Length, (uint)payload.Length));
+            Assert.Equal(payload, scratch.Payload.ToArray());
+            Assert.Equal(firstCapacity, scratch.Capacity);
+            Assert.Equal("media.file.audio_payload_invalid", Assert.Throws<LocalMediaDecodeException>(() =>
+                scratch.CopyFromNative(native, 4_100, 4_096)).Code);
+            Assert.Empty(scratch.Payload.ToArray());
+            Assert.Equal("media.file.audio_payload_invalid", Assert.Throws<LocalMediaDecodeException>(() =>
+                scratch.CopyFromNative(IntPtr.Zero, (uint)payload.Length, (uint)payload.Length)).Code);
+        }
+        finally { Marshal.FreeHGlobal(native); }
+
+        var maximum = new byte[192_000];
+        scratch.CopyFrom(maximum);
+        Assert.Equal(maximum.Length, scratch.Length);
+        Assert.InRange(scratch.Capacity, maximum.Length, 192_000);
+        Assert.Equal("media.file.audio_payload_invalid", Assert.Throws<LocalMediaDecodeException>(() =>
+            scratch.CopyFrom(new byte[192_004])).Code);
+        Assert.Empty(scratch.Payload.ToArray());
+    }
+
+    [Fact]
+    public void Decoder_local_packet_reuse_eliminates_repeated_PCM_array_allocations()
+    {
+        const int packetBytes = 4_096, samples = 128;
+        var source = new byte[packetBytes];
+        for (var i = 0; i < source.Length; i++) source[i] = (byte)(i * 17 + 3);
+        var native = Marshal.AllocHGlobal(packetBytes);
+        try
+        {
+            Marshal.Copy(source, 0, native, packetBytes);
+            var scratch = new LocalMediaPcmPacketScratch();
+            scratch.CopyFromNative(native, packetBytes, packetBytes);
+            var beforeReuse = GC.GetAllocatedBytesForCurrentThread();
+            var reuseStarted = Stopwatch.GetTimestamp();
+            for (var i = 0; i < samples; i++)
+                scratch.CopyFromNative(native, packetBytes, packetBytes);
+            var reusedElapsed = Stopwatch.GetElapsedTime(reuseStarted);
+            var reusedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeReuse;
+
+            byte[]? finalAllocated = null;
+            var beforeAllocating = GC.GetAllocatedBytesForCurrentThread();
+            var oldStarted = Stopwatch.GetTimestamp();
+            for (var i = 0; i < samples; i++)
+            {
+                finalAllocated = new byte[packetBytes];
+                Marshal.Copy(native, finalAllocated, 0, packetBytes);
+            }
+            var oldElapsed = Stopwatch.GetElapsedTime(oldStarted);
+            var oldBytes = GC.GetAllocatedBytesForCurrentThread() - beforeAllocating;
+
+            Assert.Equal(source, scratch.Payload.ToArray());
+            Assert.Equal(source, finalAllocated);
+            Assert.InRange(reusedBytes, 0, 4_096);
+            Assert.True(oldBytes >= packetBytes * samples,
+                $"The allocating control should allocate at least {packetBytes * samples} bytes.");
+            Console.WriteLine($"Decoder PCM native packet copy reference: bytes={packetBytes} samples={samples}; " +
+                $"allocatingBytes={oldBytes} reusedBytes={reusedBytes}; " +
+                $"allocatingWallMs={oldElapsed.TotalMilliseconds:0.###} reusedWallMs={reusedElapsed.TotalMilliseconds:0.###}; " +
+                "test-only memory control, not whole-player or hardware throughput.");
+        }
+        finally { Marshal.FreeHGlobal(native); }
+    }
+
+    [Fact]
+    public void Positive_tight_RGB32_rows_match_row_by_row_reference_and_preserve_bottom_up_path()
+    {
+        const int width = 16, height = 9, rowBytes = width * 4;
+        var native = Marshal.AllocHGlobal(rowBytes * height);
+        try
+        {
+            var contents = new byte[rowBytes * height];
+            for (var i = 0; i < contents.Length; i++) contents[i] = (byte)(i * 23 + 7);
+            Marshal.Copy(contents, 0, native, contents.Length);
+            var fast = new byte[contents.Length];
+            var reference = new byte[contents.Length];
+            WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                native, rowBytes, width, height, fast);
+            for (var y = 0; y < height; y++)
+                Marshal.Copy(IntPtr.Add(native, y * rowBytes), reference, y * rowBytes, rowBytes);
+            Assert.Equal(reference, fast);
+            WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(fast);
+            WindowsMediaFoundationLocalMediaDecoder.SwizzleRgb32(reference);
+            Assert.Equal(reference, fast);
+
+            // Negative pitch has a different start row and must not take the
+            // contiguous top-down fast path.
+            var bottomUp = new byte[contents.Length];
+            WindowsMediaFoundationLocalMediaDecoder.CopyRgb32Rows(
+                IntPtr.Add(native, rowBytes * (height - 1)), -rowBytes,
+                width, height, bottomUp);
+            var expected = new byte[contents.Length];
+            for (var y = 0; y < height; y++)
+                Marshal.Copy(IntPtr.Add(native, (height - 1 - y) * rowBytes),
+                    expected, y * rowBytes, rowBytes);
+            Assert.Equal(expected, bottomUp);
+        }
+        finally { Marshal.FreeHGlobal(native); }
+    }
+
+    [Fact]
     public void Terminal_failure_never_retries_or_seeks_the_damaged_reader()
     {
         using var decoder = new FaultDecoder();
