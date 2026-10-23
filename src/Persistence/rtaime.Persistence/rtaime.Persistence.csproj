@@ -7,4 +7,8 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Data.Sqlite" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="rtaime.Tests.Integration" />
+	</ItemGroup>
 </Project>

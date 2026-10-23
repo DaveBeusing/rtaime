@@ -531,6 +531,9 @@ jobs:
       - name: Build
         run: dotnet build rtaime.slnx --configuration Release --no-restore
 
+      - name: Persistent-state recovery regressions
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~PersistentStateRecoveryIntegrationTests|FullyQualifiedName~StateMaintenanceCliIntegrationTests" --logger "console;verbosity=detailed"
+
       - name: Architecture tests
         run: dotnet test tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj --configuration Release --no-build
 

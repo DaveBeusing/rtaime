@@ -35,6 +35,19 @@ public sealed record SqliteMigrationResult(
 /// </summary>
 public sealed class SqliteStateMaintenance
 {
+	private readonly Action<string, string> _moveFile;
+	private readonly Action<string> _deleteFile;
+
+	public SqliteStateMaintenance() : this(File.Move, File.Delete)
+	{
+	}
+
+	internal SqliteStateMaintenance(Action<string, string> moveFile, Action<string> deleteFile)
+	{
+		_moveFile = moveFile ?? throw new ArgumentNullException(nameof(moveFile));
+		_deleteFile = deleteFile ?? throw new ArgumentNullException(nameof(deleteFile));
+	}
+
 	public async ValueTask<IReadOnlyList<SqliteSchemaState>> InspectSchemaAsync(
 		string databasePath,
 		CancellationToken cancellationToken = default)
@@ -126,6 +139,7 @@ public sealed class SqliteStateMaintenance
 		Directory.CreateDirectory(parent);
 		var stagePath = Path.Combine(parent, $".{Path.GetFileName(targetPath)}.restore-stage-{Guid.NewGuid():N}");
 		var previousPath = Path.Combine(parent, $".{Path.GetFileName(targetPath)}.restore-previous-{Guid.NewGuid():N}");
+		var recoveryLocations = $"Target: '{targetPath}'; previous: '{previousPath}'; stage: '{stagePath}'; backup: '{backupPath}'.";
 		var previousMoved = false;
 		var activated = false;
 
@@ -140,11 +154,11 @@ public sealed class SqliteStateMaintenance
 			{
 				await CheckpointWalAsync(targetPath, cancellationToken).ConfigureAwait(false);
 				DeleteSidecars(targetPath);
-				File.Move(targetPath, previousPath);
+				_moveFile(targetPath, previousPath);
 				previousMoved = true;
 			}
 
-			File.Move(stagePath, targetPath);
+			_moveFile(stagePath, targetPath);
 			activated = true;
 			var restoredSchema = await InspectSchemaAsync(targetPath, cancellationToken).ConfigureAwait(false);
 			if (!SchemasEqual(snapshot.Schema, restoredSchema))
@@ -152,23 +166,51 @@ public sealed class SqliteStateMaintenance
 			var restoredHash = await ComputeSha256Async(targetPath, cancellationToken).ConfigureAwait(false);
 			if (!string.Equals(restoredHash, snapshot.BackupSha256, StringComparison.Ordinal))
 				throw new InvalidDataException("Restored SQLite database hash differs from snapshot evidence.");
-
-			if (previousMoved && File.Exists(previousPath))
-				DeleteDatabaseFiles(previousPath);
 		}
-		catch
+		catch (Exception restoreFailure)
 		{
-			if (activated)
-				DeleteDatabaseFiles(targetPath);
-			if (previousMoved && File.Exists(previousPath))
-				File.Move(previousPath, targetPath);
+			try
+			{
+				if (activated)
+					DeleteDatabaseFiles(targetPath);
+				if (previousMoved)
+					_moveFile(previousPath, targetPath);
+			}
+			catch (Exception rollbackFailure)
+			{
+				// Neither the previous database nor an unactivated stage may be discarded after failed recovery.
+				throw new AggregateException(
+					$"SQLite restore failed and previous-state recovery also failed. Remaining recovery files have been retained. {recoveryLocations}",
+					restoreFailure,
+					rollbackFailure);
+			}
+
+			try
+			{
+				DeleteDatabaseFiles(stagePath);
+			}
+			catch (Exception cleanupFailure)
+			{
+				throw new AggregateException(
+					$"SQLite restore failed. Previous-state recovery completed, but staged-file cleanup also failed. {recoveryLocations}",
+					restoreFailure,
+					cleanupFailure);
+			}
 			throw;
 		}
-		finally
+
+		// Cleanup belongs to the verified restore, not its compensation. A cleanup failure must not undo it.
+		try
 		{
 			DeleteDatabaseFiles(stagePath);
-			if (File.Exists(previousPath))
+			if (previousMoved)
 				DeleteDatabaseFiles(previousPath);
+		}
+		catch (Exception cleanupFailure)
+		{
+			throw new IOException(
+				$"SQLite restore was verified, but recovery-file cleanup failed. The restored database remains active. {recoveryLocations}",
+				cleanupFailure);
 		}
 	}
 
@@ -377,17 +419,17 @@ public sealed class SqliteStateMaintenance
 		return Convert.ToHexString(hash).ToLowerInvariant();
 	}
 
-	private static void DeleteSidecars(string path)
+	private void DeleteSidecars(string path)
 	{
 		foreach (var sidecar in new[] { $"{path}-wal", $"{path}-shm" })
 		{
-			if (File.Exists(sidecar)) File.Delete(sidecar);
+			if (File.Exists(sidecar)) _deleteFile(sidecar);
 		}
 	}
 
-	private static void DeleteDatabaseFiles(string path)
+	private void DeleteDatabaseFiles(string path)
 	{
-		if (File.Exists(path)) File.Delete(path);
+		if (File.Exists(path)) _deleteFile(path);
 		DeleteSidecars(path);
 	}
 }
