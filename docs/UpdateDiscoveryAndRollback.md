@@ -281,6 +281,8 @@ rollback slot = version that was active immediately before rollback
 
 This allows an operator to reverse the rollback if required while preserving exactly one rollback slot.
 
+On software rollback failure, compensation restores and re-verifies both installation slots. If compensation cannot complete, every remaining installation directory, including the generated `.<install-name>.rtaime-rollback-swap-<id>` directory, is retained. A sibling `<swap>.failure.json` receipt records the original failure, recovery failures and paths; the terminating error also reports these details. Keep processes stopped and preserve these directories until recovery is verified. Recovery status `RESTORED` confirms compensation only; the rollback operation itself remains `FAIL`.
+
 ## Update workspace ownership
 
 Coordinated updates create a new workspace for each run. The default is a sibling of the installation named `<InstallPath>.coordinated-update-state-<id>`. Earlier workspaces and their evidence remain available; a later update never purges them automatically.
@@ -324,7 +326,7 @@ Instead `Test-UpdateFoundation.ps1` uses the existing QUALIFICATION offline bund
 
 This qualifies mechanics without promoting TEST_EPHEMERAL trust to production trust.
 
-`Test-CoordinatedUpgradeWorkspaceSafety.ps1` independently checks path admission with disposable installation/state sentinels, existing-workspace preservation, consecutive default runs, reparse points and Windows path aliases. This test runs in the Quality gate without requiring a completed release bundle and complements the signed-bundle qualification; it does not establish production signing trust.
+`Test-CoordinatedUpgradeWorkspaceSafety.ps1` independently checks path admission with disposable installation/state sentinels, existing-workspace preservation, consecutive default runs, reparse points and Windows path aliases. `Test-SoftwareRollbackRecovery.ps1` injects activation, verification and compensation failures into real disposable installation trees and verifies that their bytes remain recoverable. Both run in the Quality gate without requiring a completed release bundle. They complement the signed-bundle qualification; they do not establish production signing trust.
 
 `Test-CoordinatedStateUpgradeQualification.ps1` then qualifies the composed software/state path from the same generated bundle. It uses only disposable qualification state and a separately signed qualification-only catalog to prove:
 

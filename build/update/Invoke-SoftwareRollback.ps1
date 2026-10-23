@@ -24,6 +24,13 @@ function Verify-Install {
 	if ($Qualification) { & $verifier -BundlePath $Path } else { & $verifier -BundlePath $Path -RequireTrustedProductionKey }
 }
 
+function Move-Installation {
+	param([string]$Source, [string]$Destination)
+	Assert-Condition (Test-Path -LiteralPath $Source -PathType Container) "Installation to move was not found at '$Source'."
+	Assert-Condition (-not (Test-Path -LiteralPath $Destination)) "Installation move destination '$Destination' already exists; existing recovery material will not be overwritten."
+	Move-Item -LiteralPath $Source -Destination $Destination
+}
+
 function Test-PathWithin {
 	param([string]$Path, [string]$Root)
 	$fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
@@ -61,14 +68,16 @@ if ((Test-PathWithin -Path $originalLocation -Root $target) -or (Test-PathWithin
 $swap = Join-Path $parent ('.{0}.rtaime-rollback-swap-{1}' -f [System.IO.Path]::GetFileName($target), [Guid]::NewGuid().ToString('N'))
 $targetMoved = $false
 $rollbackActivated = $false
+$previousRetainedInRollback = $false
 try {
-	Move-Item -LiteralPath $target -Destination $swap
+	Move-Installation -Source $target -Destination $swap
 	$targetMoved = $true
-	Move-Item -LiteralPath $rollback -Destination $target
+	Move-Installation -Source $rollback -Destination $target
 	$rollbackActivated = $true
 	Verify-Install -Path $target -Qualification $QualificationMode
-	Move-Item -LiteralPath $swap -Destination $rollback
+	Move-Installation -Source $swap -Destination $rollback
 	$targetMoved = $false
+	$previousRetainedInRollback = $true
 	Verify-Install -Path $rollback -Qualification $QualificationMode
 
 	Write-Host "Software rollback PASS"
@@ -77,15 +86,59 @@ try {
 	Write-Host "Persistent state migration performed: false"
 } catch {
 	$originalError = $_
-	if ($rollbackActivated -and (Test-Path -LiteralPath $target -PathType Container) -and -not (Test-Path -LiteralPath $rollback)) {
-		Move-Item -LiteralPath $target -Destination $rollback
+	$recoveryErrors = [System.Collections.Generic.List[Exception]]::new()
+	$recoveryStatus = 'FAILED'
+	try {
+		if ($previousRetainedInRollback) {
+			Move-Installation -Source $rollback -Destination $swap
+			$targetMoved = $true
+			$previousRetainedInRollback = $false
+		}
+		if ($rollbackActivated) {
+			Move-Installation -Source $target -Destination $rollback
+			$rollbackActivated = $false
+		}
+		if ($targetMoved) {
+			Move-Installation -Source $swap -Destination $target
+			$targetMoved = $false
+		}
+		Verify-Install -Path $target -Qualification $QualificationMode
+		Verify-Install -Path $rollback -Qualification $QualificationMode
+		$recoveryStatus = 'RESTORED'
+	} catch {
+		$recoveryErrors.Add($_.Exception)
 	}
-	if ($targetMoved -and (Test-Path -LiteralPath $swap -PathType Container) -and -not (Test-Path -LiteralPath $target)) {
-		Move-Item -LiteralPath $swap -Destination $target
+
+	$receiptPath = "$swap.failure.json"
+	$receipt = [ordered]@{
+		copyright = 'Copyright (c) Dave Beusing <david.beusing@gmail.com>.'
+		schemaVersion = '1.0'
+		operation = 'SOFTWARE_ROLLBACK'
+		status = 'FAIL'
+		recoveryStatus = $recoveryStatus
+		installPath = $target
+		rollbackPath = $rollback
+		swapPath = $swap
+		originalError = $originalError.Exception.Message
+		recoveryErrors = @($recoveryErrors | ForEach-Object { $_.Message })
+		completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
 	}
-	throw $originalError
+	$receiptDetail = "Failure receipt: '$receiptPath'."
+	try {
+		[System.IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 16) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+	} catch {
+		$recoveryErrors.Add($_.Exception)
+		$receiptDetail = "Failure receipt could not be written to '$receiptPath': $($_.Exception.Message)."
+	}
+	$failureExceptions = [System.Collections.Generic.List[Exception]]::new()
+	$failureExceptions.Add($originalError.Exception)
+	foreach ($recoveryError in $recoveryErrors) { $failureExceptions.Add($recoveryError) }
+	$recoveryDetail = if ($recoveryErrors.Count -eq 0) { 'Previous active and rollback installations were restored and verified.' } else { 'Recovery errors: ' + (($recoveryErrors | ForEach-Object { $_.Message }) -join '; ') }
+	$message = "Software rollback failed. Original error: $($originalError.Exception.Message). Recovery status: $recoveryStatus. $recoveryDetail Active path: '$target'; rollback path: '$rollback'; retained swap path: '$swap'. $receiptDetail"
+	throw [System.AggregateException]::new($message, $failureExceptions.ToArray())
 } finally {
-	if (Test-Path -LiteralPath $swap -PathType Container) { Remove-Item -LiteralPath $swap -Recurse -Force }
+	# A remaining swap may be the only copy of the previous active installation.
+	# Successful activation or compensation moves it into a verified installation slot.
 	if ($relocatedLocation) {
 		if (Test-Path -LiteralPath $originalLocation -PathType Container) { Set-Location -LiteralPath $originalLocation } else { Set-Location -LiteralPath $parent }
 	}
