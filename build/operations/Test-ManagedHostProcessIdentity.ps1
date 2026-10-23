@@ -327,6 +327,56 @@ try {
         foreach ($process in $f.Processes.Values) { Assert-IdentityTest ($process.WaitForExit(10000)) 'Owned process remained after forced Stop.' }
         Assert-IdentityTest (-not $bystander.HasExited) 'Forced Stop terminated an unrelated owned test fixture.'
     } -IgnoreStop
+    Invoke-IdentityCase 'ExitDuringIdentityVerification' {
+        param($f)
+        $bystander = Start-OwnHelper $f 'bystander' -IgnoreStop
+        & {
+            param($fixture, $unrelatedProcess)
+            $parseErrors = $null
+            $tokens = $null
+            $ast = [Management.Automation.Language.Parser]::ParseFile($fixture.Controller, [ref]$tokens, [ref]$parseErrors)
+            Assert-IdentityTest ($parseErrors.Count -eq 0) 'Could not parse the controller for the exit-race test.'
+            foreach ($name in @('Assert-Condition', 'Get-PropertyValue', 'Assert-ProcessIdentity',
+                'Test-SamePath', 'Get-ProcessExecutablePath', 'Open-VerifiedProcess',
+                'Wait-ForExit', 'Stop-ProcessTreeForcefully')) {
+                $definitions = @($ast.EndBlock.Statements | Where-Object {
+                    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq $name
+                })
+                Assert-IdentityTest ($definitions.Count -eq 1) "Expected one production definition of $name."
+                . ([scriptblock]::Create($definitions[0].Extent.Text))
+            }
+            $realImageGetter = (Get-Item Function:Get-ProcessExecutablePath).ScriptBlock
+            $ownedControl = $fixture.Processes.Control
+            $observation = [pscustomobject]@{ Calls = 0; Process = $null }
+            # Exit after the real image observation, before ownership verification returns.
+            # This override exists only inside this isolated invocation scope.
+            function Get-ProcessExecutablePath {
+                param([Diagnostics.Process]$Process)
+                $imagePath = & $realImageGetter -Process $Process
+                Assert-IdentityTest ($Process.Id -eq $ownedControl.Id) 'The exit hook received an unexpected process.'
+                $observation.Calls++
+                $observation.Process = $Process
+                $ownedControl.Kill($true)
+                Assert-IdentityTest ($ownedControl.WaitForExit(10000)) 'Owned Control did not exit during identity verification.'
+                return $imagePath
+            }
+            $verified = $null
+            try {
+                $verified = Open-VerifiedProcess -Identity $fixture.State.controlIdentity -ProcessId $ownedControl.Id -HostPath $fixture.Hosts.Control -RunId $fixture.RunId -LaunchId $fixture.RunId
+                Assert-IdentityTest ($observation.Calls -eq 1) 'The process did not exit at the intended verification boundary.'
+                if ($null -ne $verified) {
+                    Assert-IdentityTest ([object]::ReferenceEquals($verified, $observation.Process)) 'Verification replaced the observed process instance.'
+                    Assert-IdentityTest $verified.HasExited 'Verification returned a live process after the observed exit.'
+                    Assert-IdentityTest (Wait-ForExit -Process $verified -TimeoutMs 1000) 'Waiting on the retained exited process did not complete.'
+                    Stop-ProcessTreeForcefully -Process $verified -TimeoutMs 1000
+                }
+                $unrelatedProcess.Refresh()
+                Assert-IdentityTest (-not $unrelatedProcess.HasExited) 'Exit-race handling terminated an unrelated owned test fixture.'
+            } finally {
+                if ($null -ne $verified) { $verified.Dispose() }
+            }
+        } $f $bystander
+    }
     Write-Host "Managed host process identity qualification PASS ($script:passed cases)."
 } finally {
     Stop-OwnHelpers
