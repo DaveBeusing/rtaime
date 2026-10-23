@@ -190,7 +190,10 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         }
         var observed = decks.GetSequenceOutput(reference, host);
         Assert.Equal("PROGRAM_CONFIRMED", observed.OutputState);
-        Assert.Equal(2UL, observed.PublishedSourceFrames);
+        // Initial Preview, in-flight Preview before TAKE, then committed Program.
+        // PublishedSourceFrames includes all successfully submitted source inputs;
+        // only LastProgramSlot confirms the authorized Program sink.
+        Assert.Equal(3UL, observed.PublishedSourceFrames);
         Assert.NotNull(observed.LastProgramSlot);
         Assert.Equal(control.State.Revision.Value, observed.ProductionRevision);
         var committedRevision = control.State.Revision;
