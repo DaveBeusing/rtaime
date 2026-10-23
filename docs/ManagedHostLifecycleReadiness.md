@@ -113,6 +113,20 @@ ControlHost does not publish readiness evidence while it is `Degraded`. Because 
 
 The transient readiness document is removed again when ControlHost drops out of Ready/Healthy or begins shutdown. Process identity is recorded in the evidence so a stale file cannot qualify a replacement process.
 
+## Durable ownership and stale lifecycle state
+
+Every managed launch records a durable process identity: PID, exact UTC process creation time (ticks encoded as a string), executable image path, installed host path, unique launch ID and lifecycle run ID. The controller obtains ControlHost identity from the original `Process.Start` result; the child supervisor does the same for each owned RuntimeHost and AIHost. Adopted external processes have no owned identity.
+
+The controller passes `RTAIME_LIFECYCLE_RUN_ID` to ControlHost and its children. ControlHost readiness includes that run ID and the current child identities. A child replacement republishes readiness even if the observation loop sees Healthy before and after the replacement. Latest correlated readiness therefore supersedes the initial child identities saved at Start.
+
+Status and Stop verify the installation, instance, endpoint set and run-specific readiness/stop paths, then open and retain a process handle before checking creation time and executable image. Waiting and emergency termination use those same verified process instances. A numeric PID alone never authorizes a stop or a successful readiness result.
+
+All recorded hosts are checked before the controller writes a stop signal or terminates any process. Missing identities, a reused PID, another executable, an unexpected host/run or mismatched readiness yield `STALE_PROCESS_IDENTITY`. Status reports FAIL; Stop and Restart fail before acting. The lifecycle state and readiness evidence remain available for investigation. A recorded process that has already exited is harmless, provided its durable identity and run context are valid.
+
+State written by an older controller has no durable identities and deliberately fails closed. Preserve the state and receipt, independently identify the actual managed hosts, and complete the installation's controlled manual shutdown/recovery procedure. Only after confirming those hosts are stopped should the old lifecycle work directory be archived and a fresh Start performed. Do not replace an old PID with a currently running PID or fabricate identity fields.
+
+Forced termination remains FAIL and retains recovery state; Restart cannot continue from that failure. A failed Start also retains any ownership evidence and reports cleanup errors separately. A later explicit Stop removes the run's transient files and lifecycle state only after validated graceful completion or confirmation that all recorded processes have exited.
+
 ## Child restart and readiness-recovery semantics
 
 RuntimeHost and AIHost continue to use `LocalProcessSupervisor`.

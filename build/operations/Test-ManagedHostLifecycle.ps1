@@ -16,6 +16,24 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
+function Assert-DurableManagedIdentity {
+	param([Parameter(Mandatory)][string]$LifecycleWorkRoot)
+	$state = Get-Content -LiteralPath (Join-Path $LifecycleWorkRoot 'lifecycle-state.json') -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$state.runId -match '^[a-fA-F0-9]{32}$') 'Lifecycle state has no unique run identity.'
+	foreach ($role in @('control', 'runtime', 'ai')) {
+		$identity = $state.($role + 'Identity')
+		Assert-Condition ($null -ne $identity) "Lifecycle state has no durable $role identity."
+		Assert-Condition ([int]$identity.processId -eq [int]$state.($role + 'ProcessId')) "Recorded $role PID does not match its identity."
+		Assert-Condition ([long]$identity.creationTimeUtcTicks -gt 0) "Recorded $role identity has no creation time."
+		Assert-Condition ([System.IO.Path]::IsPathFullyQualified([string]$identity.executablePath)) "Recorded $role image path is not absolute."
+		Assert-Condition ([System.IO.Path]::IsPathFullyQualified([string]$identity.hostPath)) "Recorded $role host path is not absolute."
+		Assert-Condition ([string]$identity.lifecycleRunId -ceq [string]$state.runId) "Recorded $role identity belongs to another lifecycle run."
+		Assert-Condition ([string]$identity.launchId -match '^[a-fA-F0-9]{32}$') "Recorded $role identity has no launch ID."
+	}
+	Assert-Condition ([string]$state.controlIdentity.launchId -ceq [string]$state.runId) 'ControlHost launch identity does not match the lifecycle run.'
+	return $state
+}
+
 function Wait-ForStableManagedReadiness {
 	param(
 		[Parameter(Mandatory)][string]$LifecycleWorkRoot,
@@ -153,8 +171,11 @@ try {
 	Assert-Condition ([string]$start.runtimeReadiness -eq 'PASS') "Managed lifecycle Start did not qualify runtime readiness."
 	Assert-Condition ([int]$start.controlProcessId -gt 0 -and [int]$start.runtimeProcessId -gt 0 -and [int]$start.aiProcessId -gt 0) "Managed lifecycle Start did not record all service-host process identities."
 
+	$stateBeforeRestart = Assert-DurableManagedIdentity -LifecycleWorkRoot $workRoot
+
 	$statusBeforeRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$statusBeforeRestart.status -eq 'PASS') "Managed lifecycle Status before restart did not return PASS."
+	Assert-Condition ($statusBeforeRestart.checks.processIdentityVerified -eq $true) 'Status did not verify process ownership before restart.'
 	Assert-Condition ([string]$statusBeforeRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status before restart did not return runtimeReadiness PASS."
 
 	$restart = & $lifecycle -Action Restart -InstallPath $install -StateRoot $stateRoot -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
@@ -162,9 +183,17 @@ try {
 	Assert-Condition ([string]$restart.runtimeReadiness -eq 'PASS') "Managed lifecycle Restart did not re-qualify runtime readiness."
 	Assert-Condition ([int]$restart.controlProcessId -ne [int]$start.controlProcessId) "Managed lifecycle Restart did not create a new ControlHost process identity."
 
+	$stateAfterRestart = Assert-DurableManagedIdentity -LifecycleWorkRoot $workRoot
+	Assert-Condition ([string]$stateAfterRestart.runId -cne [string]$stateBeforeRestart.runId) 'Restart reused the previous lifecycle run identity.'
+	foreach ($role in @('control', 'runtime', 'ai')) {
+		Assert-Condition ([string]$stateAfterRestart.($role + 'Identity').launchId -cne [string]$stateBeforeRestart.($role + 'Identity').launchId) "Restart reused the previous $role launch identity."
+		Assert-Condition ([string]$stateAfterRestart.($role + 'Identity').creationTimeUtcTicks -cne [string]$stateBeforeRestart.($role + 'Identity').creationTimeUtcTicks) "Restart reused the previous $role process creation time."
+	}
+
 	Wait-ForStableManagedReadiness -LifecycleWorkRoot $workRoot -ExpectedControlProcessId ([int]$restart.controlProcessId)
 	$statusAfterRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS after stable readiness evidence. Last checks: $($statusAfterRestart.checks | ConvertTo-Json -Compress)."
+	Assert-Condition ($statusAfterRestart.checks.processIdentityVerified -eq $true) 'Status did not verify process ownership after restart.'
 	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS after stable readiness evidence."
 
 	$stop = & $lifecycle -Action Stop -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode

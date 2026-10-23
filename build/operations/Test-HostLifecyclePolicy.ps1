@@ -16,6 +16,7 @@ function Assert-Condition {
 $policyPath = Join-Path $PSScriptRoot 'host-lifecycle-policy.json'
 $controllerPath = Join-Path $PSScriptRoot 'Invoke-ManagedHostLifecycle.ps1'
 $qualificationPath = Join-Path $PSScriptRoot 'Test-ManagedHostLifecycle.ps1'
+$identityQualificationPath = Join-Path $PSScriptRoot 'Test-ManagedHostProcessIdentity.ps1'
 $controlProgramPath = Join-Path $repositoryRoot 'src/Hosts/rtaime.ControlHost/Program.cs'
 $runtimeProgramPath = Join-Path $repositoryRoot 'src/Hosts/rtaime.RuntimeHost/Program.cs'
 $aiProgramPath = Join-Path $repositoryRoot 'src/Hosts/rtaime.AIHost/Program.cs'
@@ -24,7 +25,7 @@ $bundlePolicyPath = Join-Path $repositoryRoot 'build/release/offline-bundle-poli
 $workflowPath = Join-Path $repositoryRoot '.github/workflows/required-gates.yml'
 $recoveryTestsPath = Join-Path $repositoryRoot 'tests/rtaime.Tests.Integration/ProcessSupervisionRecoveryTests.cs'
 
-foreach ($path in @($policyPath, $controllerPath, $qualificationPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $supervisorPath, $bundlePolicyPath, $workflowPath, $recoveryTestsPath)) {
+foreach ($path in @($policyPath, $controllerPath, $qualificationPath, $identityQualificationPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $supervisorPath, $bundlePolicyPath, $workflowPath, $recoveryTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required managed-host lifecycle file is missing: '$path'."
 }
 
@@ -52,12 +53,12 @@ Assert-Condition ([string]$policy.readiness.runtimeReadinessOnPass -eq 'PASS') "
 Assert-Condition ($policy.readiness.automaticWindowsServiceRegistration -eq $false) "Managed host lifecycle must not register Windows services automatically."
 
 $controller = Get-Content -LiteralPath $controllerPath -Raw
-foreach ($token in @('Start', 'Stop', 'Restart', 'Status', 'Test-NamedPipeEndpoint', 'RTAIME_RUNTIME_EXECUTABLE', 'RTAIME_AI_EXECUTABLE', 'runtimeReadiness = ''PASS''', 'fallbackKillIsPass')) {
+foreach ($token in @('Start', 'Stop', 'Restart', 'Status', 'Test-NamedPipeEndpoint', 'RTAIME_RUNTIME_EXECUTABLE', 'RTAIME_AI_EXECUTABLE', 'runtimeReadiness = ''PASS''', 'fallbackKillIsPass', 'RTAIME_LIFECYCLE_RUN_ID', 'Get-VerifiedOwnership', 'Open-VerifiedProcess', 'SafeHandle', 'creationTimeUtcTicks', 'STALE_PROCESS_IDENTITY')) {
 	Assert-Condition ($controller -match [Regex]::Escape($token)) "Managed lifecycle controller is missing required marker '$token'."
 }
 
 $controlProgram = Get-Content -LiteralPath $controlProgramPath -Raw
-foreach ($token in @('RTAIME_HOST_READINESS_FILE', 'RTAIME_HOST_STOP_FILE', 'runtimeSupervision', 'aiSupervision', 'ControlHostProcessState.Ready')) {
+foreach ($token in @('RTAIME_HOST_READINESS_FILE', 'RTAIME_HOST_STOP_FILE', 'runtimeSupervision', 'aiSupervision', 'ControlHostProcessState.Ready', 'RTAIME_LIFECYCLE_RUN_ID', 'processIdentity =', 'publishedRuntimeIdentity', 'publishedAIIdentity')) {
 	Assert-Condition ($controlProgram -match [Regex]::Escape($token)) "ControlHost managed lifecycle bridge is missing '$token'."
 }
 Assert-Condition ($controlProgram -match 'runtime\.State\s*==\s*LocalProcessSupervisionState\.Healthy' -and $controlProgram -match 'ai\.State\s*==\s*LocalProcessSupervisionState\.Healthy') "ControlHost readiness must remain fail-closed while either required child supervisor is non-Healthy."
@@ -83,6 +84,7 @@ foreach ($test in @(
 	'Owned_child_transient_readiness_loss_recovers_without_restart',
 	'Adopted_external_readiness_loss_is_non_destructive',
 	'Repeated_post_healthy_readiness_loss_stops_at_existing_start_budget'
+	'Managed_readiness_refreshes_owned_child_identity_after_restart'
 )) {
 	Assert-Condition ($recoveryTests -match [Regex]::Escape($test)) "Process supervision recovery coverage is missing '$test'."
 }
@@ -95,6 +97,7 @@ foreach ($tool in @('build/operations/host-lifecycle-policy.json', 'build/operat
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
 Assert-Condition ($workflow -match 'Test-HostLifecyclePolicy\.ps1') "Quality gate must validate managed host lifecycle policy."
 Assert-Condition ($workflow -match 'Test-ManagedHostLifecycle\.ps1') "Packaged E2E must execute managed host lifecycle qualification."
+Assert-Condition ($workflow -match 'Test-ManagedHostProcessIdentity\.ps1') "Quality gate must exercise stale process identity and owned shutdown regressions."
 
 Write-Host 'Managed host lifecycle policy PASS'
 Write-Host 'Top-level host: ControlHost'
