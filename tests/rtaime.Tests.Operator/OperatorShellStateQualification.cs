@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -19,6 +20,11 @@ public sealed partial class OperatorCombinedVisualQualification
 {
     internal static async Task VerifyShellStatesAsync(MainWindow? main, Dispatcher dispatcher, bool stressOnly)
     {
+        var elapsed = Stopwatch.StartNew();
+        void ReportPhase(string detail) => Console.WriteLine(
+            $"SHELL WINDOW PHASE [{(stressOnly ? "stress" : "states")}] {detail}; utc={DateTime.UtcNow:O}; elapsedMs={elapsed.ElapsedMilliseconds}; pid={Environment.ProcessId}");
+
+        ReportPhase("Setup BEGIN");
         var directory = Path.Combine(Path.GetTempPath(), "rtaime-shell-states-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var transport = new ShellStateTransport();
@@ -38,6 +44,7 @@ public sealed partial class OperatorCombinedVisualQualification
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             await UntilShellState(() => !model.IsBusy);
             foreach (var surface in Descendants(window).OfType<OperatorDrawingSurface>()) surfaces.Add(surface);
+            ReportPhase("Setup PASS");
             if (stressOnly)
             {
                 var stressRoot = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
@@ -46,20 +53,29 @@ public sealed partial class OperatorCombinedVisualQualification
                 window.Shell.SelectWorkspace("LIVE");
                 window.Shell.UpdateViewportSize(1600,900);
                 await dispatcher.InvokeAsync(window.UpdateLayout,DispatcherPriority.Loaded);
+                ReportPhase("100 cycles BEGIN");
                 await VerifyRepeatedShellMovesAsync(window,dispatcher);
+                ReportPhase("100 cycles PASS");
+                ReportPhase("Metrics BEGIN");
                 var stressMetrics = await MeasureSettledAsync(window,stressRoot,dispatcher);
                 Console.WriteLine("SHELL UI METRICS: " + JsonSerializer.Serialize(stressMetrics));
+                ReportPhase("Metrics PASS");
                 foreach (var surface in Descendants(window).OfType<OperatorDrawingSurface>()) surfaces.Add(surface);
                 Assert.Equal(0,transport.MutationCalls);
                 if (!string.IsNullOrWhiteSpace(evidence))
+                {
+                    ReportPhase("Evidence BEGIN");
                     File.WriteAllText(Path.Combine(evidence,"shell-stress.json"),JsonSerializer.Serialize(new {
                         sourceCommit=Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                         scope="100 real visible workspace/float/dock cycles on retained owners; controlled Client presentation, no hardware acceptance.",
                         stressCycles=100, stressMetrics },new JsonSerializerOptions { WriteIndented=true }));
+                    ReportPhase("Evidence PASS");
+                }
                 return;
             }
             async Task CaptureState(string state)
             {
+                ReportPhase($"State {state} BEGIN");
                 var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
                 var identity = (model.PreviewSourceId, model.ProgramSourceId);
                 var monitoring = window.Monitoring;
@@ -101,6 +117,7 @@ public sealed partial class OperatorCombinedVisualQualification
                             SaveImage(root,size.Width,size.Height,1,Path.Combine(evidence,$"shell-{state}-{size.Width:0}.png"));
                     }
                 }
+                ReportPhase($"State {state} PASS");
             }
             Assert.False(model.IsConnected);
             Console.WriteLine("SHELL STATES BEGIN: " + DateTime.UtcNow.ToString("O"));
@@ -120,10 +137,14 @@ public sealed partial class OperatorCombinedVisualQualification
             await UntilShellState(() => model.IsStale && !model.IsBusy);
             await CaptureState("stale");
             if (!string.IsNullOrWhiteSpace(evidence))
+            {
+                ReportPhase("Evidence BEGIN");
                 File.WriteAllText(Path.Combine(evidence,"shell-states.json"),JsonSerializer.Serialize(new {
                     sourceCommit=Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                     scope="Real compiled MainWindow with controlled Client responses; presentation only, no real-media/device/readiness certification.",
                     cases=observations },new JsonSerializerOptions { WriteIndented=true }));
+                ReportPhase("Evidence PASS");
+            }
             Assert.Equal(80,observations.Count);
             Assert.Equal(0,transport.MutationCalls);
             // The shared router must leave Enter on a focused shell button to that explicit button.
@@ -179,15 +200,35 @@ public sealed partial class OperatorCombinedVisualQualification
             if(window is not null)
             {
                 var closed=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                window.Closed+=(_,_)=>closed.TrySetResult();
-                window.Close(); await closed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                window.Closed+=(_,_)=>
+                {
+                    ReportPhase("Window Closed event");
+                    closed.TrySetResult();
+                };
+                ReportPhase("Window Close BEGIN");
+                window.Close();
+                ReportPhase("Window Close returned; awaiting Closed");
+                await closed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                ReportPhase("Window Close PASS");
+                ReportPhase("ContextIdle BEGIN");
                 await dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
+                ReportPhase("ContextIdle PASS");
+                ReportPhase("Subscription assertions BEGIN");
                 Assert.All(surfaces,s=>Assert.Equal(0,s.RenderingSubscriptionBalance));
                 Assert.Equal(0,window.InspectorView.InspectorSubscriptionCount);
+                ReportPhase("Subscription assertions PASS");
             }
-            else await model.DisposeAsync();
+            else
+            {
+                ReportPhase("Model disposal BEGIN");
+                await model.DisposeAsync();
+                ReportPhase("Model disposal PASS");
+            }
+            ReportPhase("Temporary directory cleanup BEGIN");
             if(Directory.Exists(directory)) Directory.Delete(directory,true);
+            ReportPhase("Temporary directory cleanup PASS");
             main?.Activate();
+            ReportPhase("Window qualification EXIT");
         }
     }
     private static async Task UntilShellState(Func<bool> condition)

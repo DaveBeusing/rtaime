@@ -132,6 +132,7 @@ internal static class Program
 	{
 		var readinessValue = Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE");
 		var stopValue = Environment.GetEnvironmentVariable("RTAIME_HOST_STOP_FILE");
+		var lifecycleRunId = Environment.GetEnvironmentVariable("RTAIME_LIFECYCLE_RUN_ID") ?? string.Empty;
 		var readinessPath = string.IsNullOrWhiteSpace(readinessValue) ? null : Path.GetFullPath(readinessValue);
 		var stopPath = string.IsNullOrWhiteSpace(stopValue) ? null : Path.GetFullPath(stopValue);
 		if (readinessPath is not null)
@@ -142,6 +143,10 @@ internal static class Program
 		}
 
 		var publishedReady = false;
+		LocalProcessIdentity? publishedRuntimeIdentity = null;
+		LocalProcessIdentity? publishedAIIdentity = null;
+		int? publishedRuntimeStartAttempts = null;
+		int? publishedAIStartAttempts = null;
 		var lastReady = false;
 		ControlHostProcessState? lastState = null;
 		ControlHostHealthState? lastHealth = null;
@@ -246,7 +251,12 @@ internal static class Program
 					endpointReadiness = null;
 				}
 
-				if (readinessPath is not null && ready && !publishedReady)
+				if (readinessPath is not null && ready &&
+					(!publishedReady ||
+					 runtime?.OwnedProcessIdentity != publishedRuntimeIdentity ||
+					 ai?.OwnedProcessIdentity != publishedAIIdentity ||
+					 runtime?.StartAttempts != publishedRuntimeStartAttempts ||
+					 ai?.StartAttempts != publishedAIStartAttempts))
 				{
 					var aiEndpoint = Environment.GetEnvironmentVariable("RTAIME_AI_ENDPOINT");
 					if (string.IsNullOrWhiteSpace(aiEndpoint)) aiEndpoint = "rtaime.v1.ai.default";
@@ -256,6 +266,7 @@ internal static class Program
 						schemaVersion = "1.0",
 						host = "ControlHost",
 						processId = Environment.ProcessId,
+						lifecycleRunId,
 						state = lifecycle.State.ToString().ToUpperInvariant(),
 						health = lifecycle.Health.ToString().ToUpperInvariant(),
 						controlEndpoint = options.ListenEndpoint,
@@ -265,18 +276,24 @@ internal static class Program
 						{
 							state = runtime.State.ToString().ToUpperInvariant(),
 							processId = runtime.OwnedProcessId,
+							processIdentity = runtime.OwnedProcessIdentity,
 							startAttempts = runtime.StartAttempts
 						},
 						aiSupervision = ai is null ? null : new
 						{
 							state = ai.State.ToString().ToUpperInvariant(),
 							processId = ai.OwnedProcessId,
+							processIdentity = ai.OwnedProcessIdentity,
 							startAttempts = ai.StartAttempts
 						},
 						readyAtUtc = DateTimeOffset.UtcNow
 					};
 					WriteJsonAtomic(readinessPath, payload);
 					publishedReady = true;
+					publishedRuntimeIdentity = runtime?.OwnedProcessIdentity;
+					publishedAIIdentity = ai?.OwnedProcessIdentity;
+					publishedRuntimeStartAttempts = runtime?.StartAttempts;
+					publishedAIStartAttempts = ai?.StartAttempts;
 				}
 				else if (readinessPath is not null && !ready && publishedReady)
 				{

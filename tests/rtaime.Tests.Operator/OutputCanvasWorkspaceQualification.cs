@@ -35,11 +35,16 @@ internal static class OutputCanvasWorkspaceQualification
 
             var editors = Descendants<OutputCanvasEditorControl>(window).ToArray();
             var editor = Assert.Single(editors);
+            var output = Assert.Single(Descendants<OutputRoutingHealthControl>(window),
+                control => !control.CompactMode);
+            var routing = Assert.IsAssignableFrom<FrameworkElement>(output.FindName("RoutingModeSurface"));
+            var stage = Assert.Single(Descendants<OutputCanvasStageSurface>(editor));
             window.OutputHealth.ShowRoutingModeCommand.Execute(null);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.False(window.OutputHealth.IsCanvasMode);
             Assert.False(window.OutputHealth.CanvasEditor.IsWorkspaceVisible);
-            Assert.False(Assert.Single(Descendants<OutputCanvasStageSurface>(editor)).IsVisible);
+            Assert.True(routing.IsVisible);
+            Assert.False(stage.IsVisible);
 
             var savedRevision = window.OutputHealth.CanvasEditor.SavedRevision;
             var wasDirty = window.OutputHealth.CanvasEditor.IsDirty;
@@ -51,8 +56,10 @@ internal static class OutputCanvasWorkspaceQualification
             Assert.Equal(wasDirty, window.OutputHealth.CanvasEditor.IsDirty);
             Assert.Same(window.OutputHealth.CanvasEditor, editor.DataContext);
             Assert.Equal(Visibility.Visible, editor.Visibility);
+            Assert.False(routing.IsVisible);
+            Assert.True(stage.IsVisible,
+                "Selecting CANVAS must update the nested visibility binding before measuring the stage.");
 
-            var stage = Assert.Single(Descendants<OutputCanvasStageSurface>(editor));
             // In compact OUTPUTS the editor lives inside the existing scrolling
             // details region. Its stage must be scrolled into the actual viewport
             // before asserting native layout dimensions.
@@ -68,6 +75,21 @@ internal static class OutputCanvasWorkspaceQualification
             Assert.True(stage.ActualHeight >= 180);
             Assert.False(window.OutputHealth.CanvasEditor.ApplyCommand.CanExecute(null));
             Assert.Equal("UNVERIFIED", window.OutputHealth.CanvasEditor.ActiveRevision);
+
+            // Both transitions must reach the existing bound controls. A true
+            // view-model flag alone does not make a collapsed ancestor visible.
+            window.OutputHealth.ShowRoutingModeCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.True(routing.IsVisible);
+            Assert.False(stage.IsVisible);
+            window.OutputHealth.ShowCanvasModeCommand.Execute(null);
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            Assert.False(routing.IsVisible);
+            Assert.True(stage.IsVisible);
+            Assert.True(stage.ActualWidth > 100);
+            Assert.True(stage.ActualHeight >= 180);
+            Assert.Equal(savedRevision, window.OutputHealth.CanvasEditor.SavedRevision);
+            Assert.Equal(wasDirty, window.OutputHealth.CanvasEditor.IsDirty);
 
             // The compact/dual-monitor output surfaces must not create separate
             // editors or a WPF production compositor while hidden.

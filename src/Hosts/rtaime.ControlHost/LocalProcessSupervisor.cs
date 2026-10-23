@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.ExceptionServices;
 using rtaime.Core;
 
 namespace rtaime.ControlHost;
@@ -25,7 +26,10 @@ public sealed record LocalProcessSupervisionSnapshot(
 	int StartAttempts,
 	int? OwnedProcessId,
 	string Detail,
-	DateTimeOffset UpdatedAt);
+	DateTimeOffset UpdatedAt)
+{
+	public LocalProcessIdentity? OwnedProcessIdentity { get; init; }
+}
 
 public sealed record LocalProcessSupervisionOptions(
 	string Name,
@@ -74,6 +78,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private CancellationTokenSource? _linkedStop;
 	private Task? _loop;
 	private Process? _ownedProcess;
+	private LocalProcessIdentity? _ownedProcessIdentity;
 	private string? _ownedStopFilePath;
 	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
@@ -121,10 +126,12 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		_stop.Cancel();
 		Task? loop;
 		lock (_gate) loop = _loop;
+		ExceptionDispatchInfo? loopFailure = null;
 		if (loop is not null)
 		{
 			try { await loop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
+			catch (Exception exception) { loopFailure = ExceptionDispatchInfo.Capture(exception); }
 		}
 
 		Process? owned;
@@ -136,6 +143,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			stopFile = _ownedStopFilePath;
 			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
+			_ownedProcessIdentity = null;
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
@@ -165,6 +173,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		Update(LocalProcessSupervisionState.Stopped, "Supervisor stopped.");
 		_linkedStop?.Dispose();
 		_stop.Dispose();
+		loopFailure?.Throw();
 	}
 
 	private async Task RunLoopAsync(CancellationToken cancellationToken)
@@ -298,7 +307,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_startAttempts++;
 			try
 			{
-				StartOwnedProcess();
+				await StartOwnedProcessAsync().ConfigureAwait(false);
 				Update(LocalProcessSupervisionState.Starting, $"Started supervised process attempt {_startAttempts} of {_options.MaxStartAttempts}; awaiting managed readiness.");
 			}
 			catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -335,7 +344,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 	}
 
-	private void StartOwnedProcess()
+	private async Task StartOwnedProcessAsync()
 	{
 		var fullPath = Path.GetFullPath(_options.ExecutablePath);
 		var isDll = string.Equals(Path.GetExtension(fullPath), ".dll", StringComparison.OrdinalIgnoreCase);
@@ -364,10 +373,42 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		lock (_gate)
 		{
 			_ownedProcess = process;
+			_ownedProcessIdentity = null;
 			_ownedStopFilePath = stopFile;
 			_ownedReadinessFilePath = readinessFile;
 			_ownedProcessReady = false;
 			_ownedReadinessLostSince = null;
+		}
+		try
+		{
+			startInfo.Environment.TryGetValue("RTAIME_LIFECYCLE_RUN_ID", out var lifecycleRunId);
+			var identity = LocalProcessIdentity.Capture(process, fullPath, instanceId, lifecycleRunId);
+			lock (_gate) _ownedProcessIdentity = identity;
+		}
+		catch (Exception identityFailure)
+		{
+			try
+			{
+				await StopOwnedProcessAsync(process, stopFile).ConfigureAwait(false);
+			}
+			catch (Exception stopFailure)
+			{
+				// Retain the actual owned process for disposal if immediate cleanup itself fails.
+				throw new AggregateException("Owned process identity capture and cleanup both failed.", identityFailure, stopFailure);
+			}
+			lock (_gate)
+			{
+				_ownedProcess = null;
+				_ownedProcessIdentity = null;
+				_ownedStopFilePath = null;
+				_ownedReadinessFilePath = null;
+				_ownedProcessReady = false;
+				_ownedReadinessLostSince = null;
+			}
+			process.Dispose();
+			CleanupManagedFile(stopFile);
+			CleanupManagedFile(readinessFile);
+			throw new InvalidOperationException("Owned process identity could not be captured; the launched process was stopped.", identityFailure);
 		}
 	}
 
@@ -516,6 +557,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				if (ReferenceEquals(_ownedProcess, process))
 				{
 					_ownedProcess = null;
+					_ownedProcessIdentity = null;
 					_ownedStopFilePath = null;
 					_ownedReadinessFilePath = null;
 					_ownedProcessReady = false;
@@ -578,6 +620,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			stopFile = _ownedStopFilePath;
 			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
+			_ownedProcessIdentity = null;
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
@@ -608,7 +651,10 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				_startAttempts,
 				processId,
 				detail,
-				DateTimeOffset.UtcNow);
+				DateTimeOffset.UtcNow)
+			{
+				OwnedProcessIdentity = processId is null ? null : _ownedProcessIdentity
+			};
 		}
 	}
 

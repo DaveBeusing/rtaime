@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using System.Text.Json;
 using rtaime.Client;
@@ -96,14 +97,130 @@ public sealed class ProcessSupervisionRecoveryTests
 		await using var supervisor = Supervisor("AIHost", endpoint, assembly);
 		await supervisor.StartAsync();
 		await WaitUntilAsync(() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, ProcessRecoveryTimeoutMilliseconds);
-		var firstPid = supervisor.Snapshot.OwnedProcessId!.Value;
+		var firstIdentity = AssertOwnedProcessIdentity(supervisor.Snapshot, assembly);
 
-		Kill(firstPid);
+		Kill(firstIdentity.ProcessId);
 		await WaitUntilAsync(
-			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null } snapshot && snapshot.OwnedProcessId != firstPid,
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessIdentity: not null } snapshot &&
+				snapshot.OwnedProcessIdentity.LaunchId != firstIdentity.LaunchId,
 			ProcessRecoveryTimeoutMilliseconds);
 
-		Assert.NotEqual(firstPid, supervisor.Snapshot.OwnedProcessId);
+		var replacementIdentity = AssertOwnedProcessIdentity(supervisor.Snapshot, assembly);
+		Assert.NotEqual(firstIdentity.LaunchId, replacementIdentity.LaunchId);
+		Assert.NotEqual(firstIdentity.CreationTimeUtcTicks, replacementIdentity.CreationTimeUtcTicks);
+		Assert.Equal(firstIdentity.LifecycleRunId, replacementIdentity.LifecycleRunId);
+	}
+
+	[Fact]
+	public async Task Managed_readiness_refreshes_owned_child_identity_after_restart()
+	{
+		var root = TempDirectory();
+		try
+		{
+			var controlEndpoint = Endpoint("control-identity-refresh");
+			var runtimeEndpoint = Endpoint("runtime-identity-refresh");
+			var aiEndpoint = Endpoint("ai-identity-refresh");
+			var readyPath = Path.Combine(root, "readiness.json");
+			var stopPath = Path.Combine(root, "stop.signal");
+			var lifecycleRunId = Guid.NewGuid().ToString("N");
+			var runtimeAssembly = HostAssembly("rtaime.RuntimeHost");
+			var aiAssembly = HostAssembly("rtaime.AIHost");
+			var start = new ProcessStartInfo("dotnet")
+			{
+				UseShellExecute = false,
+				CreateNoWindow = true
+			};
+			start.ArgumentList.Add(HostAssembly("rtaime.ControlHost"));
+			start.ArgumentList.Add($"--listen-endpoint={controlEndpoint}");
+			start.ArgumentList.Add($"--runtime-endpoint={runtimeEndpoint}");
+			start.ArgumentList.Add($"--durability-root={Path.Combine(root, "state")}");
+			start.Environment["RTAIME_RUNTIME_EXECUTABLE"] = runtimeAssembly;
+			start.Environment["RTAIME_AI_EXECUTABLE"] = aiAssembly;
+			start.Environment["RTAIME_AI_ENDPOINT"] = aiEndpoint;
+			start.Environment["RTAIME_HOST_READINESS_FILE"] = readyPath;
+			start.Environment["RTAIME_HOST_STOP_FILE"] = stopPath;
+			start.Environment["RTAIME_LIFECYCLE_RUN_ID"] = lifecycleRunId;
+			start.Environment["RTAIME_LOG_ROOT"] = Path.Combine(root, "logs");
+			using var process = Process.Start(start) ?? throw new InvalidOperationException("ControlHost did not start.");
+			var children = new List<Process>();
+			Exception? testFailure = null;
+			try
+			{
+				_ = process.SafeHandle;
+				var initial = await WaitForManagedReadinessAsync(readyPath, process, static _ => true);
+				Assert.Equal(process.Id, initial.GetProperty("processId").GetInt32());
+				Assert.Equal(lifecycleRunId, initial.GetProperty("lifecycleRunId").GetString());
+				var runtimeIdentity = ReadPublishedIdentity(initial, "runtimeSupervision");
+				var firstAIIdentity = ReadPublishedIdentity(initial, "aiSupervision");
+				var runtime = RetainPublishedChildProcess(runtimeIdentity, runtimeAssembly, lifecycleRunId);
+				children.Add(runtime);
+				var firstAI = RetainPublishedChildProcess(firstAIIdentity, aiAssembly, lifecycleRunId);
+				children.Add(firstAI);
+				Assert.Equal(lifecycleRunId, runtimeIdentity.LifecycleRunId);
+				Assert.Equal(lifecycleRunId, firstAIIdentity.LifecycleRunId);
+				Assert.NotEqual(runtimeIdentity.LaunchId, firstAIIdentity.LaunchId);
+				var firstAttempts = initial.GetProperty("aiSupervision").GetProperty("startAttempts").GetInt32();
+
+				firstAI.Kill(entireProcessTree: true);
+				Assert.True(firstAI.WaitForExit(5000), "The original AIHost did not exit before recovery.");
+				var refreshed = await WaitForManagedReadinessAsync(readyPath, process, evidence =>
+					ReadPublishedIdentity(evidence, "aiSupervision").LaunchId != firstAIIdentity.LaunchId);
+				var replacementIdentity = ReadPublishedIdentity(refreshed, "aiSupervision");
+				var replacementAI = RetainPublishedChildProcess(replacementIdentity, aiAssembly, lifecycleRunId);
+				children.Add(replacementAI);
+				Assert.Equal(lifecycleRunId, refreshed.GetProperty("lifecycleRunId").GetString());
+				Assert.Equal(lifecycleRunId, replacementIdentity.LifecycleRunId);
+				Assert.NotEqual(firstAIIdentity.CreationTimeUtcTicks, replacementIdentity.CreationTimeUtcTicks);
+				Assert.Equal(firstAttempts + 1, refreshed.GetProperty("aiSupervision").GetProperty("startAttempts").GetInt32());
+				Assert.Equal(runtimeIdentity, ReadPublishedIdentity(refreshed, "runtimeSupervision"));
+			}
+			catch (Exception exception)
+			{
+				testFailure = exception;
+				throw;
+			}
+			finally
+			{
+				var cleanupFailures = new List<Exception>();
+				try
+				{
+					if (!process.HasExited)
+					{
+						await File.WriteAllTextAsync(stopPath, "stop");
+						await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+					}
+					Assert.Equal((int)ControlHostExitCode.Success, process.ExitCode);
+					foreach (var child in children)
+						Assert.True(child.HasExited, $"Owned child process {child.Id} survived regular ControlHost shutdown.");
+				}
+				catch (Exception exception) { cleanupFailures.Add(exception); }
+
+				// A failed ControlHost exit cannot prevent cleanup of the retained child generations.
+				foreach (var owned in children.Prepend(process))
+				{
+					try
+					{
+						if (!owned.HasExited)
+						{
+							owned.Kill(entireProcessTree: true);
+							await owned.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+						}
+					}
+					catch (Exception exception) { cleanupFailures.Add(exception); }
+				}
+				foreach (var child in children)
+				{
+					try { child.Dispose(); }
+					catch (Exception exception) { cleanupFailures.Add(exception); }
+				}
+				if (cleanupFailures.Count > 0)
+				{
+					if (testFailure is not null) cleanupFailures.Insert(0, testFailure);
+					throw new AggregateException("Managed readiness test shutdown or owned-process cleanup failed.", cleanupFailures);
+				}
+			}
+		}
+		finally { DeleteDirectory(root); }
 	}
 
 	[Fact]
@@ -234,13 +351,16 @@ public sealed class ProcessSupervisionRecoveryTests
 				await WaitUntilAsync(() => supervisor.Snapshot is
 					{ State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null },
 					ProcessRecoveryTimeoutMilliseconds);
-				pid = supervisor.Snapshot.OwnedProcessId;
-				Assert.True(ProcessIsAlive(pid!.Value));
+				var identity = AssertOwnedProcessIdentity(supervisor.Snapshot, assembly);
+				Assert.Equal(Environment.GetEnvironmentVariable("RTAIME_LIFECYCLE_RUN_ID") ?? string.Empty, identity.LifecycleRunId);
+				pid = identity.ProcessId;
+				Assert.True(ProcessIsAlive(pid.Value));
 				Assert.True(LocalEndpointLease.IsHeld(endpoint));
 				Assert.True(LocalEndpointReadinessLease.IsHeld(endpoint));
 			}
 			Assert.Equal(LocalProcessSupervisionState.Stopped, supervisor.Snapshot.State);
 			Assert.Null(supervisor.Snapshot.OwnedProcessId);
+			Assert.Null(supervisor.Snapshot.OwnedProcessIdentity);
 			if (pid is { } id) Assert.False(ProcessIsAlive(id));
 			Assert.False(LocalEndpointLease.IsHeld(endpoint));
 			Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
@@ -261,6 +381,7 @@ public sealed class ProcessSupervisionRecoveryTests
 				await supervisor.StartAsync();
 				await WaitUntilAsync(() => supervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, ProcessRecoveryTimeoutMilliseconds);
 				Assert.Null(supervisor.Snapshot.OwnedProcessId);
+				Assert.Null(supervisor.Snapshot.OwnedProcessIdentity);
 				Assert.Contains("Adopted explicitly ready external endpoint", supervisor.Snapshot.Detail);
 			}
 			Assert.False(external.HasExited);
@@ -369,6 +490,7 @@ public sealed class ProcessSupervisionRecoveryTests
 			Assert.True(LocalEndpointLease.IsHeld(endpoint));
 			Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
 			Assert.Null(supervisor.Snapshot.OwnedProcessId);
+			Assert.Null(supervisor.Snapshot.OwnedProcessIdentity);
 			Assert.Equal(0, supervisor.Snapshot.StartAttempts);
 
 			using var restoredReadiness = LocalEndpointReadinessLease.Acquire(endpoint);
@@ -419,6 +541,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		Assert.Equal(2, attemptsAfterFailure);
 		Assert.Equal(attemptsAfterFailure, supervisor.Snapshot.StartAttempts);
 		Assert.Null(supervisor.Snapshot.OwnedProcessId);
+		Assert.Null(supervisor.Snapshot.OwnedProcessIdentity);
 	}
 
 	[Fact]
@@ -449,6 +572,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		Assert.Equal(attemptsAfterFailure, supervisor.Snapshot.StartAttempts);
 		Assert.Equal(LocalProcessSupervisionState.Failed, supervisor.Snapshot.State);
 		Assert.Null(supervisor.Snapshot.OwnedProcessId);
+		Assert.Null(supervisor.Snapshot.OwnedProcessIdentity);
 	}
 
 	[Fact]
@@ -900,6 +1024,80 @@ public sealed class ProcessSupervisionRecoveryTests
 			await Task.Delay(25);
 		}
 		throw new TimeoutException($"Managed readiness file for {hostName} process {processId} was not found.");
+	}
+
+	private static LocalProcessIdentity AssertOwnedProcessIdentity(LocalProcessSupervisionSnapshot snapshot, string hostPath)
+	{
+		var identity = Assert.IsType<LocalProcessIdentity>(snapshot.OwnedProcessIdentity);
+		Assert.Equal(snapshot.OwnedProcessId, identity.ProcessId);
+		AssertProcessIdentity(identity, hostPath);
+		return identity;
+	}
+
+	private static void AssertProcessIdentity(LocalProcessIdentity identity, string hostPath)
+	{
+		using var process = Process.GetProcessById(identity.ProcessId);
+		_ = process.SafeHandle;
+		Assert.False(process.HasExited);
+		Assert.Equal(process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture), identity.CreationTimeUtcTicks);
+		Assert.Equal(Path.GetFullPath(process.MainModule!.FileName), identity.ExecutablePath);
+		Assert.Equal(Path.GetFullPath(hostPath), identity.HostPath);
+		Assert.True(Guid.TryParseExact(identity.LaunchId, "N", out var launchId));
+		Assert.NotEqual(Guid.Empty, launchId);
+	}
+
+	private static Process RetainPublishedChildProcess(LocalProcessIdentity identity, string hostPath, string lifecycleRunId)
+	{
+		Assert.Equal(lifecycleRunId, identity.LifecycleRunId);
+		var process = Process.GetProcessById(identity.ProcessId);
+		try
+		{
+			_ = process.SafeHandle;
+			Assert.False(process.HasExited);
+			Assert.Equal(process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture), identity.CreationTimeUtcTicks);
+			Assert.Equal(Path.GetFullPath(process.MainModule!.FileName), identity.ExecutablePath);
+			Assert.Equal(Path.GetFullPath(hostPath), identity.HostPath);
+			Assert.True(Guid.TryParseExact(identity.LaunchId, "N", out var launchId));
+			Assert.NotEqual(Guid.Empty, launchId);
+			return process;
+		}
+		catch
+		{
+			process.Dispose();
+			throw;
+		}
+	}
+
+	private static LocalProcessIdentity ReadPublishedIdentity(JsonElement evidence, string childProperty)
+	{
+		var child = evidence.GetProperty(childProperty);
+		Assert.Equal("HEALTHY", child.GetProperty("state").GetString());
+		var identity = JsonSerializer.Deserialize<LocalProcessIdentity>(child.GetProperty("processIdentity").GetRawText());
+		Assert.NotNull(identity);
+		Assert.Equal(child.GetProperty("processId").GetInt32(), identity.ProcessId);
+		return identity;
+	}
+
+	private static async Task<JsonElement> WaitForManagedReadinessAsync(string path, Process control, Func<JsonElement, bool> predicate)
+	{
+		JsonElement result = default;
+		await WaitUntilAsync(() =>
+		{
+			Assert.False(control.HasExited, "ControlHost exited before publishing the expected managed readiness.");
+			try
+			{
+				using var document = JsonDocument.Parse(File.ReadAllText(path));
+				var evidence = document.RootElement;
+				if (evidence.GetProperty("state").GetString() != "READY" || !predicate(evidence)) return false;
+				result = evidence.Clone();
+				return true;
+			}
+			catch (Exception exception) when (exception is IOException or JsonException)
+			{
+				return false;
+			}
+		}, ProcessRecoveryTimeoutMilliseconds);
+		return result;
 	}
 
 	private static bool ProcessIsAlive(int processId)

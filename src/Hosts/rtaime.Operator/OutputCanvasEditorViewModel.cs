@@ -142,7 +142,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     // Visibility is presentation-only. Hiding the canvas preserves its current
     // unsaved draft, transaction fence and Runtime confirmation evidence.
     public bool IsWorkspaceVisible => _workspaceVisible;
-    internal void SetWorkspaceVisible(bool visible) => Set(ref _workspaceVisible, visible);
+    internal void SetWorkspaceVisible(bool visible) => Set(ref _workspaceVisible, visible, nameof(IsWorkspaceVisible));
     public bool CanEdit => _session is not null && !_busy && !_saveOutcomeUnknown && !_applyOutcomeUnknown;
     public bool CanSubmit => _session is not null && !_busy && _gateway is not null &&
         _owner.IsConnected && !_owner.IsStale && !_owner.IsBusy &&
