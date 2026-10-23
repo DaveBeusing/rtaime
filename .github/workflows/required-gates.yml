@@ -397,6 +397,10 @@ jobs:
         shell: pwsh
         run: ./build/update/Test-CoordinatedUpgradePolicy.ps1
 
+      - name: Qualify update workspace safety
+        shell: pwsh
+        run: ./build/update/Test-CoordinatedUpgradeWorkspaceSafety.ps1
+
       - name: Verify managed host lifecycle policy
         shell: pwsh
         run: ./build/operations/Test-HostLifecyclePolicy.ps1
