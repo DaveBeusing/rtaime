@@ -137,7 +137,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private void SelectCanvasMode(bool canvas)
 	{
-		if (!Set(ref _isCanvasMode, canvas)) return;
+		if (!Set(ref _isCanvasMode, canvas, nameof(IsCanvasMode))) return;
 		CanvasEditor.SetWorkspaceVisible(canvas);
 		OnPropertyChanged(nameof(IsRoutingMode));
 	}
