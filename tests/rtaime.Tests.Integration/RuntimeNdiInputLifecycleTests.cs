@@ -328,6 +328,7 @@ public sealed class RuntimeNdiInputLifecycleTests
         private readonly PreparedExecutionContract _baseline;
         private readonly ProviderDescriptor _ndi;
         private readonly MediaSinkId _sink;
+        private readonly Identity _inputNodeId = Identity.New();
         private long _revision;
         public RuntimeProgramExecutionService Runtime { get; }
         public MediaSourceId InputSource { get; } = MediaSourceId.New();
@@ -359,21 +360,41 @@ public sealed class RuntimeNdiInputLifecycleTests
             _sink = Assert.Single(_baseline.Bindings, binding => binding.OutputRoleId == "program").MediaSinkId!.Value;
         }
 
-        public RuntimeNdiInputBinding Owner =>
-            GetField<Dictionary<MediaSourceId, RuntimeNdiInputBinding>>(Runtime, "_committedNdiInputs")[InputSource];
+        public RuntimeNdiInputBinding Owner
+        {
+            get
+            {
+                var owners = GetField<Dictionary<MediaSourceId, RuntimeNdiInputBinding>>(Runtime, "_committedNdiInputs");
+                Assert.True(owners.TryGetValue(InputSource, out var owner),
+                    "The committed fixture execution must contain the expected NDI input owner.");
+                return owner!;
+            }
+        }
 
-        public Receiver Receiver(NdiDiscoveredSourceEndpoint endpoint) => Receivers[NdiDiscoveryService.CreateStableId(endpoint.NdiName)];
+        public Receiver Receiver(NdiDiscoveredSourceEndpoint endpoint)
+        {
+            Assert.True(Receivers.TryGetValue(NdiDiscoveryService.CreateStableId(endpoint.NdiName), out var receiver),
+                "The committed fixture NDI binding must have created its expected receiver.");
+            return receiver!;
+        }
 
         public RuntimeHostApplyResult Apply(NdiDiscoveredSourceEndpoint? endpoint)
         {
-            var bindings = _baseline.Bindings.Select(binding => endpoint is not null &&
-                binding.MediaSourceId == InputSource && binding.MediaSinkId is null
-                ? new PreparedExecutionBinding(binding.LogicalNodeId,
-                    Assert.Single(_ndi.Capabilities, capability => capability.Kind == MediaSourceCapabilityKinds.Input).CapabilityId,
-                    Assert.Single(_ndi.Resources, resource => resource.Kind == MediaSourceCapabilityKinds.Input),
-                    InputSource, null, externalSourceId: NdiDiscoveryService.CreateStableId(endpoint.NdiName).Value,
-                    safeSourceIdentity: "ndi://" + endpoint.NdiName)
-                : binding).ToArray();
+            // Unbound virtual sources have route requirements only. Add the input
+            // requirement explicitly instead of assuming a source-only binding exists.
+            IReadOnlyList<PreparedExecutionBinding> bindings = endpoint is null
+                ? _baseline.Bindings
+                : _baseline.Bindings.Append(InputBinding(InputSource, endpoint)).ToArray();
+            var ndiBindings = bindings.Where(IsNdiInputBinding).ToArray();
+            if (endpoint is null)
+                Assert.Empty(ndiBindings);
+            else
+            {
+                var input = Assert.Single(ndiBindings);
+                Assert.Equal(InputSource, input.MediaSourceId);
+                Assert.Equal(NdiDiscoveryService.CreateStableId(endpoint.NdiName).Value, input.ExternalSourceId);
+                Assert.Null(input.MediaSinkId);
+            }
             return ApplyBindings(bindings);
         }
 
@@ -382,13 +403,20 @@ public sealed class RuntimeNdiInputLifecycleTests
             var bindings = _baseline.Bindings.Select(binding => binding.OutputRoleId == "program"
                 ? new PreparedExecutionBinding(binding.LogicalNodeId, binding.CapabilityId, binding.Resource,
                     sourceId, binding.MediaSinkId, binding.OutputRoleId, binding.AudioBusId)
-                : binding).Append(new PreparedExecutionBinding(Identity.New(),
-                    Assert.Single(_ndi.Capabilities, capability => capability.Kind == MediaSourceCapabilityKinds.Input).CapabilityId,
-                    Assert.Single(_ndi.Resources, resource => resource.Kind == MediaSourceCapabilityKinds.Input),
-                    sourceId, null, externalSourceId: NdiDiscoveryService.CreateStableId(endpoint.NdiName).Value,
-                    safeSourceIdentity: "ndi://" + endpoint.NdiName)).ToArray();
+                : binding).Append(InputBinding(sourceId, endpoint)).ToArray();
+            Assert.Equal(sourceId, Assert.Single(bindings.Where(IsNdiInputBinding)).MediaSourceId);
             return ApplyBindings(bindings);
         }
+
+        private bool IsNdiInputBinding(PreparedExecutionBinding binding) =>
+            binding.Resource.ProviderId == _ndi.ProviderId && binding.Resource.Kind == MediaSourceCapabilityKinds.Input;
+
+        private PreparedExecutionBinding InputBinding(MediaSourceId sourceId, NdiDiscoveredSourceEndpoint endpoint) =>
+            new(_inputNodeId,
+                Assert.Single(_ndi.Capabilities, capability => capability.Kind == MediaSourceCapabilityKinds.Input).CapabilityId,
+                Assert.Single(_ndi.Resources, resource => resource.Kind == MediaSourceCapabilityKinds.Input),
+                sourceId, null, externalSourceId: NdiDiscoveryService.CreateStableId(endpoint.NdiName).Value,
+                safeSourceIdentity: "ndi://" + endpoint.NdiName);
 
         private RuntimeHostApplyResult ApplyBindings(IReadOnlyList<PreparedExecutionBinding> bindings)
         {
