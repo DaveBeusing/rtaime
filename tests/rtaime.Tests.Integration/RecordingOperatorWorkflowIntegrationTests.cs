@@ -146,14 +146,16 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(
 				controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
 			await client.SynchronizeAsync();
-			var initialRevision = client.Snapshot!.Production.Revision;
 			var graphics = await client.LoadGraphicsOverlayAsync(
 				new OperatorGraphicsAsset("stop-graphic.rgba", 1, 1, new byte[] { 255, 0, 0, 255 }));
 			Assert.True(graphics.AssetLoaded);
 			Assert.True((await client.SetGraphicsOverlayAsync(true, 0, 0, 1)).Visible);
+			// Graphics setup legitimately advances authority; recording must preserve this baseline.
+			var revisionBeforeRecording = client.Snapshot!.Production.Revision;
 
 			var started = await client.StartRecordingAsync(destination, "stop-qualified");
 			Assert.True(started.Succeeded, started.Failure?.ToString());
+			Assert.Equal(revisionBeforeRecording, client.Snapshot!.Production.Revision);
 			await WaitUntilAsync(() => runtime.Runtime?.Snapshot.Recording.Statistics.Accepted >= 1);
 			var sessionId = runtime.Runtime!.Snapshot.Recording.SessionId?.ToString();
 			Assert.False(string.IsNullOrWhiteSpace(sessionId));
@@ -165,7 +167,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.Equal("recording.stop.completion_unknown", first.Failure?.Code);
 			Assert.Contains(sessionId!, first.Failure!.Value.Message, StringComparison.Ordinal);
 			Assert.Equal("FINALIZING", client.Snapshot!.Recording.State);
-			Assert.Equal(initialRevision, client.Snapshot.Production.Revision);
+			Assert.Equal(revisionBeforeRecording, client.Snapshot.Production.Revision);
 			Assert.Equal(1, writer.FinalizeCount);
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime.Snapshot.Runtime.Status);
 
@@ -193,13 +195,14 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 				(failFinalize ? RecordingLifecycleState.Failed : RecordingLifecycleState.Completed));
 			var terminal = await client.SynchronizeAsync();
 			Assert.Equal(failFinalize ? "FAILED" : "COMPLETED", terminal.Recording.State);
-			Assert.Equal(initialRevision, terminal.Production.Revision);
+			Assert.Equal(revisionBeforeRecording, terminal.Production.Revision);
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime.Snapshot.Runtime.Status);
 			Assert.InRange(runtime.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
 				0, RuntimeProgramExecutionService.ProgramReadbackBufferCapacity);
 
 			var repeated = await client.StopRecordingAsync();
 			Assert.Equal(!failFinalize, repeated.Succeeded);
+			Assert.Equal(revisionBeforeRecording, client.Snapshot!.Production.Revision);
 			Assert.Equal(1, writer.FinalizeCount);
 			if (failFinalize)
 			{
