@@ -4,140 +4,154 @@ using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.Ndi;
-using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
 
 /// <summary>
-/// Runtime-owned NDI discovery/input bridge. Discovery is observational; receive sessions are created only
-/// for provider-bound sources present in an already prepared/committed execution.
+/// Runtime-owned NDI discovery/input bridge. Native lifecycle work is serialized independently
+/// of Program execution; every publication is fenced by the committed input binding owner.
 /// </summary>
 internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
 {
     private readonly object _gate = new();
-    private readonly NdiNetworkOutputProvider _provider;
+    private readonly object _discoveryGate = new();
+    private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly RuntimeProgramExecutionService _runtime;
     private readonly NdiDiscoveryService _discovery;
+    private readonly Func<NdiInputConfiguration, NdiInputSession> _sessionFactory;
+    private readonly Action<MediaSourceId, NdiInputMediaKind>? _beforePublication;
     private readonly Dictionary<MediaSourceId, SessionState> _sessions = [];
+    private ulong _synchronizedGeneration;
     private bool _disposed;
+    private Task? _disposeTask;
 
-    public RuntimeNdiInputBridge(NdiNetworkOutputProvider provider, RuntimeProgramExecutionService runtime)
+    public RuntimeNdiInputBridge(
+        NdiNetworkOutputProvider provider,
+        RuntimeProgramExecutionService runtime,
+        INdiDiscoveryBackend? discoveryBackend = null,
+        Func<NdiInputConfiguration, NdiInputSession>? sessionFactory = null,
+        Action<MediaSourceId, NdiInputMediaKind>? beforePublication = null)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        ArgumentNullException.ThrowIfNull(provider);
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        _discovery = _provider.CreateDiscoveryService();
+        _discovery = provider.CreateDiscoveryService(discoveryBackend);
+        _sessionFactory = sessionFactory ?? (configuration => provider.CreateInputSession(configuration));
+        _beforePublication = beforePublication;
     }
 
-    public MediaSourceDiscoverySnapshot RefreshDiscovery() =>
-        _discovery.Refresh(new UtcTimestamp(DateTimeOffset.UtcNow));
-
-    public IReadOnlyList<MediaInputHealthSnapshot> InputHealth
+    public MediaSourceDiscoverySnapshot RefreshDiscovery()
     {
-        get
+        lock (_discoveryGate)
         {
-            lock (_gate)
-                return Array.AsReadOnly(_sessions.Values.Select(state => state.Session.Snapshot).ToArray());
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+            return _discovery.Refresh(new UtcTimestamp(DateTimeOffset.UtcNow));
         }
     }
 
-    public void SynchronizeCommittedBindings(IReadOnlyList<PreparedExecutionBinding> bindings)
+    public IReadOnlyList<MediaInputHealthSnapshot> InputHealth =>
+        Array.AsReadOnly(SnapshotSessions()
+            .Where(state => _runtime.IsNdiInputCurrent(state.Owner))
+            .Select(state => state.Session.Snapshot).ToArray());
+
+    // The caller must release Runtime state/capture/execution locks before entering.
+    public void SynchronizeCommittedBindings(RuntimeNdiBindingSnapshot committed)
     {
-        ArgumentNullException.ThrowIfNull(bindings);
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        var required = bindings
-            .Where(binding =>
-                binding.MediaSourceId is not null &&
-                binding.ExternalSourceId is not null &&
-                binding.Resource.ProviderId == _provider.Descriptor.ProviderId &&
-                string.Equals(binding.Resource.Kind, MediaSourceCapabilityKinds.Input, StringComparison.Ordinal))
-            .GroupBy(binding => binding.MediaSourceId!.Value)
-            .Select(group => group.First())
-            .ToArray();
-
-        var requiredIds = required.Select(binding => binding.MediaSourceId!.Value).ToHashSet();
-        foreach (var state in SnapshotSessions().Where(pair => !requiredIds.Contains(pair.Key)))
-            TryRemoveSession(state.Key, state.Value);
-
-        if (required.Length == 0)
-            return;
-
+        ArgumentNullException.ThrowIfNull(committed);
+        _lifecycleGate.Wait();
         try
         {
-            _ = RefreshDiscovery();
-        }
-        catch
-        {
-            // Discovery is observational. A provider/discovery failure after Runtime commit must not
-            // invalidate already committed production authority.
-        }
+            if (Volatile.Read(ref _disposed) || committed.Generation <= _synchronizedGeneration)
+                return;
+            _synchronizedGeneration = committed.Generation;
 
-        foreach (var binding in required)
-        {
-            var sourceId = binding.MediaSourceId!.Value;
-            if (HasSession(sourceId))
-                continue;
-
-            try
+            var required = committed.Bindings
+                .Where(_runtime.IsNdiInputCurrent)
+                .ToDictionary(owner => owner.SourceId);
+            foreach (var state in SnapshotSessions())
             {
-                _runtime.RegisterExternalSource(sourceId);
-                var discoveredId = new DiscoveredMediaSourceId(binding.ExternalSourceId!.Value);
-                if (!_discovery.TryResolve(discoveredId, out var endpoint) || endpoint is null)
-                {
-                    MarkUnavailable(sourceId);
+                if (required.TryGetValue(state.Owner.SourceId, out var current) &&
+                    ReferenceEquals(current, state.Owner))
                     continue;
-                }
+                lock (_gate) _sessions.Remove(state.Owner.SourceId);
+                try { RetireSessionAsync(state).GetAwaiter().GetResult(); }
+                catch { /* Retirement cannot invalidate committed production authority. */ }
+            }
 
-                var configuration = new NdiInputConfiguration(
-                    sourceId,
-                    discoveredId,
-                    binding.SafeSourceIdentity!,
-                    endpoint);
-                var session = _provider.CreateInputSession(configuration);
-                var stop = new CancellationTokenSource();
-                var pump = Task.Run(() => PumpAsync(session, sourceId, stop.Token));
-                lock (_gate)
-                    _sessions.Add(sourceId, new SessionState(session, stop, pump));
-            }
-            catch
+            if (required.Count == 0)
+                return;
+            try { _ = RefreshDiscovery(); }
+            catch { /* Discovery remains observational after commit. */ }
+
+            foreach (var owner in required.Values)
             {
-                MarkUnavailable(sourceId);
+                lock (_gate)
+                    if (_sessions.ContainsKey(owner.SourceId))
+                        continue;
+                try
+                {
+                    if (!_runtime.TryRegisterNdiSource(owner))
+                        continue;
+                    var discoveredId = new DiscoveredMediaSourceId(owner.Binding.ExternalSourceId!.Value);
+                    if (!_discovery.TryResolve(discoveredId, out var endpoint) || endpoint is null)
+                    {
+                        MarkUnavailable(owner);
+                        continue;
+                    }
+
+                    var configuration = new NdiInputConfiguration(
+                        owner.SourceId, discoveredId, owner.Binding.SafeSourceIdentity!, endpoint);
+                    var session = _sessionFactory(configuration);
+                    var state = new SessionState(owner, session);
+                    if (Volatile.Read(ref _disposed) || !_runtime.IsNdiInputCurrent(owner))
+                    {
+                        try { RetireSessionAsync(state).GetAwaiter().GetResult(); }
+                        catch { /* A superseded receiver remains outside production authority. */ }
+                        continue;
+                    }
+                    lock (_gate)
+                    {
+                        _sessions.Add(owner.SourceId, state);
+                        state.Pump = Task.Run(() => PumpAsync(state));
+                    }
+                }
+                catch
+                {
+                    MarkUnavailable(owner);
+                }
             }
+        }
+        finally
+        {
+            _lifecycleGate.Release();
         }
     }
 
-    private async Task PumpAsync(NdiInputSession session, MediaSourceId sourceId, CancellationToken cancellationToken)
+    private async Task PumpAsync(SessionState state)
     {
+        var cancellationToken = state.Stop.Token;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 var drained = false;
-                while (session.TryDequeue(out var sample) && sample is not null)
+                while (!cancellationToken.IsCancellationRequested &&
+                    state.Session.TryDequeue(out var sample) && sample is not null)
                 {
                     drained = true;
+                    _beforePublication?.Invoke(state.Owner.SourceId, sample.Kind);
                     if (sample.Kind == NdiInputMediaKind.Video)
-                    {
-                        var video = sample.Video!;
-                        _runtime.SetExternalInputContent(sourceId, video.RgbaPixels.Span, RuntimeInputSignalState.Valid);
-                    }
+                        _runtime.TrySetNdiInputContent(state.Owner, sample.Video!.RgbaPixels.Span);
                     else
-                    {
-                        var audio = sample.Audio!;
-                        _runtime.SetExternalAudioInput(sourceId, audio.InterleavedFloat32.Span, available: true);
-                    }
+                        _runtime.TrySetNdiAudioInput(state.Owner, sample.Audio!.InterleavedFloat32.Span);
                 }
 
-                var health = session.Snapshot;
+                var health = state.Session.Snapshot;
                 if (!health.Connected)
                 {
-                    _runtime.SetInputSignalState(
-                        sourceId,
+                    _runtime.TrySetNdiInputHealth(state.Owner,
                         health.Lifecycle is MediaInputLifecycleState.Lost or MediaInputLifecycleState.Faulted
                             ? RuntimeInputSignalState.Lost
                             : RuntimeInputSignalState.Recovering);
-                    if (health.Lifecycle is MediaInputLifecycleState.Lost or MediaInputLifecycleState.Faulted)
-                        _runtime.ClearExternalAudioMeter(sourceId);
                 }
 
                 if (!drained)
@@ -149,75 +163,78 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
         }
         catch
         {
-            MarkUnavailable(sourceId);
+            MarkUnavailable(state.Owner);
         }
     }
 
-    private bool HasSession(MediaSourceId sourceId)
+    private SessionState[] SnapshotSessions()
     {
         lock (_gate)
-            return _sessions.ContainsKey(sourceId);
+            return _sessions.Values.ToArray();
     }
 
-    private KeyValuePair<MediaSourceId, SessionState>[] SnapshotSessions()
+    private void MarkUnavailable(RuntimeNdiInputBinding owner)
+    {
+        try { _runtime.TrySetNdiInputHealth(owner, RuntimeInputSignalState.Lost); }
+        catch { /* Input failure cannot change committed routing or a replacement owner. */ }
+    }
+
+    private static async Task RetireSessionAsync(SessionState state)
+    {
+        Exception? failure = null;
+        try { state.Stop.Cancel(); }
+        catch (Exception exception) { failure = exception; }
+        try { await state.Pump.ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { failure ??= exception; }
+        try { await state.Session.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception exception) { failure ??= exception; }
+        state.Stop.Dispose();
+        if (failure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    public ValueTask DisposeAsync()
     {
         lock (_gate)
-            return _sessions.ToArray();
+        {
+            _disposed = true;
+            // Runtime disposal may begin under its admission locks. Native cleanup and
+            // worker joins start on the management pool and never inherit those locks.
+            return new ValueTask(_disposeTask ??= Task.Run(DisposeCoreAsync));
+        }
     }
 
-    private void MarkUnavailable(MediaSourceId sourceId)
+    private async Task DisposeCoreAsync()
     {
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            _runtime.RegisterExternalSource(sourceId);
-            _runtime.SetInputSignalState(sourceId, RuntimeInputSignalState.Lost);
-            _runtime.ClearExternalAudioMeter(sourceId);
-        }
-        catch
-        {
-            // Input/provider failures remain observational after the committed Runtime transition.
-        }
-    }
-
-    private void TryRemoveSession(MediaSourceId sourceId, SessionState state)
-    {
-        lock (_gate)
-        {
-            if (!_sessions.Remove(sourceId))
-                return;
-        }
-
-        try
-        {
-            state.Stop.Cancel();
-            try { state.Pump.GetAwaiter().GetResult(); } catch (OperationCanceledException) { }
-            state.Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
-        catch
-        {
-            // Session retirement cannot invalidate production authority or reroute a committed source.
+            Exception? failure = null;
+            foreach (var state in SnapshotSessions())
+            {
+                lock (_gate) _sessions.Remove(state.Owner.SourceId);
+                try { await RetireSessionAsync(state).ConfigureAwait(false); }
+                catch (Exception exception) { failure ??= exception; }
+            }
+            try { lock (_discoveryGate) _discovery.Dispose(); }
+            catch (Exception exception) { failure ??= exception; }
+            if (failure is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         }
         finally
         {
-            state.Stop.Dispose();
+            // A commit that already released Runtime admission may still be waiting here.
+            // Let it observe _disposed instead of disposing the semaphore under its waiter.
+            _lifecycleGate.Release();
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private sealed class SessionState(RuntimeNdiInputBinding owner, NdiInputSession session)
     {
-        if (_disposed)
-            return;
-        _disposed = true;
-        foreach (var pair in SnapshotSessions())
-        {
-            lock (_gate) _sessions.Remove(pair.Key);
-            pair.Value.Stop.Cancel();
-            try { await pair.Value.Pump.ConfigureAwait(false); } catch (OperationCanceledException) { }
-            await pair.Value.Session.DisposeAsync().ConfigureAwait(false);
-            pair.Value.Stop.Dispose();
-        }
-        _discovery.Dispose();
+        public RuntimeNdiInputBinding Owner { get; } = owner;
+        public NdiInputSession Session { get; } = session;
+        public CancellationTokenSource Stop { get; } = new();
+        public Task Pump { get; set; } = Task.CompletedTask;
     }
-
-    private sealed record SessionState(NdiInputSession Session, CancellationTokenSource Stop, Task Pump);
 }

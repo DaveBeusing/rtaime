@@ -42,6 +42,16 @@ Source loss preserves the adopted production source identity. Runtime health mov
 
 NDI provider or runtime failure is observational relative to production authority. A failure after a Runtime commit cannot roll back, reroute or invalidate the committed production state.
 
+## Commit and receiver lifetime
+
+Each successful Runtime commit records the required NDI binding owners under the normal capture-before-state lock order. It also admits each new source's bounded managed frame and audio registry before Program execution can observe the new route; source-capacity rejection happens before commit. An unchanged binding keeps its owner and receiver across unrelated commits. Removing a source or changing its external binding revokes the previous owner immediately and clears its buffered audio. New or replacement owners start with black video and unavailable audio, so delayed discovery cannot expose an unknown source or the previous receiver's pixels.
+
+Discovery, native receiver creation and worker retirement run after the commit releases its Runtime and Program-boundary locks. These management operations are serialized independently and cannot retain a lock needed by a receiving worker or a Program boundary. A slow native operation may delay completion of its management request; already committed Program execution can continue.
+
+Every registration, video frame, PCM block and health update rechecks the exact committed owner at the existing Runtime input seam. A receiver created for a superseded commit is disposed without publishing; delayed lifecycle synchronization cannot reinstall an older generation. Shutdown joins all retained input pumps and receive sessions, and repeated disposal shares the same completion.
+
+`RuntimeNdiInputLifecycleTests` uses deterministic fake receivers and publication barriers to cover removal, same-source replacement, unchanged-binding reuse, superseded receiver creation, a newly admitted external Program source during blocked discovery, Program progress while retirement waits, and bounded shutdown. These software tests do not establish native NDI peer interoperability.
+
 ## Operator workflow
 
 The MEDIA workspace exposes a custom NDI SOURCES panel backed exclusively by Client → ControlHost → Runtime evidence.

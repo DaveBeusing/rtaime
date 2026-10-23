@@ -565,7 +565,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs,
 		RuntimeReplayService? replayService,
 		RuntimeTimingQualificationProbe? pipelineTimingProbe,
-		IRuntimeNetworkOutputProviderRegistry? networkOutputProviderRegistry)
+		IRuntimeNetworkOutputProviderRegistry? networkOutputProviderRegistry,
+		INdiDiscoveryBackend? ndiDiscoveryBackend = null,
+		Func<NdiInputConfiguration, NdiInputSession>? ndiInputSessionFactory = null,
+		Action<MediaSourceId, NdiInputMediaKind>? beforeNdiPublication = null)
 	{
 		_pipelineTiming = pipelineTimingProbe;
 		_format = format;
@@ -658,7 +661,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		_networkOutputBridge = new RuntimeNetworkOutputBridge(
 			configuredNetworkOutputs,
 			networkOutputProviderRegistry ?? new RuntimeNetworkOutputProviderRegistry(ndi: _ndiProvider));
-		_ndiInputBridge = new RuntimeNdiInputBridge(_ndiProvider, this);
+		_ndiInputBridge = new RuntimeNdiInputBridge(
+			_ndiProvider, this, ndiDiscoveryBackend, ndiInputSessionFactory, beforeNdiPublication);
 		_replay = replayService;
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(
@@ -858,9 +862,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition = null)
 	{
+		RuntimeHostApplyResult result;
+		RuntimeNdiBindingSnapshot ndiBindings;
 		lock (_boundaryExecutionGate)
 		{
 			ArgumentNullException.ThrowIfNull(preparedExecution);
+			lock (_boundaryCaptureGate)
 			lock (_gate)
 			{
 			ThrowIfDisposed();
@@ -899,6 +906,16 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						failure),
 					null,
 					null);
+			}
+
+			var sourceCapacityFailure = ValidateNdiSourceCapacityUnsafe(preparedExecution.Bindings);
+			if (sourceCapacityFailure is not null)
+			{
+				Observe($"runtime.prepare.rejected:{sourceCapacityFailure.Value.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId, RuntimePrepareStatus.Rejected, null, sourceCapacityFailure),
+					null, null);
 			}
 
 			var audioMappingFailure = ValidatePreparedOutputAudioMappingsUnsafe(preparedExecution, _audioProduction.Configuration);
@@ -1028,14 +1045,19 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				Observe($"compositing.scene.applied:{string.Join(",", preparedExecution.CompositingState!.Layers.Select(layer => layer.LayerId))}");
 			if (_activeOutputMapping is not null || _pendingOutputMapping is not null || _preparedOutputMapping is not null)
 				InvalidateOutputMappingUnsafe("mapping.execution_recommitted");
-			_ndiInputBridge.SynchronizeCommittedBindings(preparedExecution.Bindings);
+			ndiBindings = CommitNdiBindingsUnsafe(preparedExecution.Bindings, commit.ExecutionRevision.Value);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
 
-			return new RuntimeHostApplyResult(prepare, commit, _nextSequenceNumber);
+			result = new RuntimeHostApplyResult(prepare, commit, _nextSequenceNumber);
 			}
 		}
+
+		// Native discovery, receiver creation and worker joins must never own a Runtime or
+		// Program-boundary lock. Committed binding identities fence all later callbacks.
+		_ndiInputBridge.SynchronizeCommittedBindings(ndiBindings);
+		return result;
 	}
 
 	public void EnablePipelineTiming(RuntimeTimingQualificationProbe probe) =>
