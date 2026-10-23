@@ -35,8 +35,8 @@ internal static class OutputCanvasWorkspaceQualification
 
             var editors = Descendants<OutputCanvasEditorControl>(window).ToArray();
             var editor = Assert.Single(editors);
-            var output = Assert.Single(Descendants<OutputRoutingHealthControl>(window)
-                .Where(control => !control.CompactMode));
+            var output = Assert.Single(Descendants<OutputRoutingHealthControl>(window),
+                control => !control.CompactMode);
             var routing = Assert.IsAssignableFrom<FrameworkElement>(output.FindName("RoutingModeSurface"));
             var stage = Assert.Single(Descendants<OutputCanvasStageSurface>(editor));
             window.OutputHealth.ShowRoutingModeCommand.Execute(null);
