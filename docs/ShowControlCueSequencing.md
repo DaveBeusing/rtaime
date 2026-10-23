@@ -145,6 +145,8 @@ The Operator renders confirmed Show Control snapshots delivered through the same
 
 Show Control performs no per-frame work while idle. A frame wait starts a bounded timing observer only for the duration of the active wait.
 
+Operator polling collects production and Show Control state under the existing mutation serialization. If a cue action or frame-wait continuation owns Show Control, polling releases mutation ownership before waiting for that cue operation. It then recollects the complete snapshot, so an earlier production observation is never returned with a later execution cursor. Server-side cancellation, including host shutdown, interrupts that wait and releases the outstanding request.
+
 Cue-list limits, cue limits, action limits, duration limits and persisted workspace limits are contract- or persistence-bounded to prevent unbounded scheduler behavior and uncontrolled journal/state growth.
 
 ## Non-goals

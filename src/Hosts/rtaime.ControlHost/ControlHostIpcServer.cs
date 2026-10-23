@@ -2859,18 +2859,28 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> GetSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
-		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-		try
+		while (true)
 		{
-			return await GetSnapshotWithinMutationAsync(request, cancellationToken).ConfigureAwait(false);
-		}
-		finally
-		{
-			_mutationGate.Release();
+			WireEnvelope? snapshot;
+			await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
+			{
+				snapshot = await GetSnapshotWithinMutationAsync(request, cancellationToken).ConfigureAwait(false);
+			}
+			finally
+			{
+				_mutationGate.Release();
+			}
+			if (snapshot is not null)
+				return snapshot;
+
+			// A cue owns the Show Control gate and may need the mutation gate to finish.
+			// Wait only after releasing mutation ownership, then recollect the entire snapshot.
+			await _showControl!.WaitForSnapshotAvailabilityAsync(cancellationToken).ConfigureAwait(false);
 		}
 	}
 
-	private async ValueTask<WireEnvelope> GetSnapshotWithinMutationAsync(WireEnvelope request, CancellationToken cancellationToken)
+	private async ValueTask<WireEnvelope?> GetSnapshotWithinMutationAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
@@ -2931,7 +2941,14 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		WireShowControlWorkspace? showControl = null;
 		if (_showControl is not null)
 		{
-			try { showControl = ToWire(await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)); }
+			try
+			{
+				var workspace = await _showControl.TryGetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				if (workspace is null)
+					return null;
+				showControl = ToWire(workspace);
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
 			catch { showControl = null; }
 		}
 

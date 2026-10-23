@@ -65,6 +65,29 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 	public ValueTask<ShowControlFrameObservation> ObserveFrameAsync(CancellationToken cancellationToken = default) =>
 		_frameObserver(cancellationToken);
 
+	internal async ValueTask<ShowControlWorkspaceSnapshot?> TryGetSnapshotAsync(CancellationToken cancellationToken)
+	{
+		// Operator snapshot collection may already hold the production mutation gate.
+		// Never wait here: GO and frame-wait continuation acquire that gate while owning this one.
+		if (!await _gate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+			return null;
+		try
+		{
+			await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false);
+			return WorkspaceSnapshot();
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	internal async ValueTask WaitForSnapshotAvailabilityAsync(CancellationToken cancellationToken)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		_gate.Release();
+	}
+
 	public async ValueTask<ShowControlWorkspaceSnapshot> SaveCueListAsync(
 		ShowControlCueList cueList,
 		CancellationToken cancellationToken = default)
