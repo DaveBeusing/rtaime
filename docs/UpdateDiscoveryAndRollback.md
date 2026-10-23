@@ -281,6 +281,18 @@ rollback slot = version that was active immediately before rollback
 
 This allows an operator to reverse the rollback if required while preserving exactly one rollback slot.
 
+On software rollback failure, compensation restores and re-verifies both installation slots. If compensation cannot complete, every remaining installation directory, including the generated `.<install-name>.rtaime-rollback-swap-<id>` directory, is retained. A sibling `<swap>.failure.json` receipt records the original failure, recovery failures and paths; the terminating error also reports these details. Keep processes stopped and preserve these directories until recovery is verified. Recovery status `RESTORED` confirms compensation only; the rollback operation itself remains `FAIL`.
+
+## Update workspace ownership
+
+Coordinated updates create a new workspace for each run. The default is a sibling of the installation named `<InstallPath>.coordinated-update-state-<id>`. Earlier workspaces and their evidence remain available; a later update never purges them automatically.
+
+An explicit `-WorkPath` must not already exist, and its parent directory must exist. Both files and directories at the requested path cause an admission failure. The workspace is created exclusively, so another run cannot silently reuse the same directory.
+
+Before creating the workspace, the coordinator checks that it neither equals, contains nor is contained by the installation, persistent-state root, rollback slot or coordinated-recovery root. It compares normalized paths and resolved filesystem paths, including existing Windows short-name and SUBST drive aliases. Prefixes without a directory boundary are distinct, so a sibling such as `state-work` does not overlap `state`.
+
+Update paths must use local filesystem names without reparse points in any existing ancestor. Windows UNC/device namespaces, alternate data streams and ambiguous trailing-dot or trailing-space components are rejected. Path-resolution or permission failures stop admission; they do not authorize cleanup. Use the actual local directory paths and a new workspace under an existing parent.
+
 ## Persistent application state boundary
 
 The atomic software replacement primitive still covers the software installation root only. Persistent operational/application state is handled by the separate coordinated maintenance transaction rather than by the atomic filesystem swap itself.
@@ -313,6 +325,8 @@ Instead `Test-UpdateFoundation.ps1` uses the existing QUALIFICATION offline bund
 - a target key not enrolled by the current installation is rejected.
 
 This qualifies mechanics without promoting TEST_EPHEMERAL trust to production trust.
+
+`Test-CoordinatedUpgradeWorkspaceSafety.ps1` independently checks path admission with disposable installation/state sentinels, existing-workspace preservation, consecutive default runs, reparse points and Windows path aliases. `Test-SoftwareRollbackRecovery.ps1` injects activation, verification and compensation failures into real disposable installation trees and verifies that their bytes remain recoverable. Both run in the Quality gate without requiring a completed release bundle. They complement the signed-bundle qualification; they do not establish production signing trust.
 
 `Test-CoordinatedStateUpgradeQualification.ps1` then qualifies the composed software/state path from the same generated bundle. It uses only disposable qualification state and a separately signed qualification-only catalog to prove:
 

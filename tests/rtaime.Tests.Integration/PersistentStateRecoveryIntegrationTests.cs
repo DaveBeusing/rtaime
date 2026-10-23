@@ -5,7 +5,7 @@ using rtaime.Persistence;
 
 namespace rtaime.Tests.Integration;
 
-public sealed class PersistentStateRecoveryIntegrationTests
+public sealed partial class PersistentStateRecoveryIntegrationTests
 {
 	[Fact]
 	public async Task Verified_backup_can_restore_previous_management_state()
@@ -34,6 +34,7 @@ public sealed class PersistentStateRecoveryIntegrationTests
 			}
 
 			await maintenance.RestoreBackupAsync(snapshot, databasePath, acknowledgeExclusiveAccess: true);
+			Assert.Empty(Directory.EnumerateFileSystemEntries(root, "*.restore-*"));
 			await using var restored = new SqliteManagementStore(databasePath);
 			var document = await restored.GetDocumentAsync("configuration", "control");
 			Assert.NotNull(document);

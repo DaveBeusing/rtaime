@@ -27,6 +27,183 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
+function Initialize-UpgradePathSafety {
+	if ('Rtaime.Maintenance.UpgradePaths' -as [type]) { return }
+	Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
+using Microsoft.Win32.SafeHandles;
+
+namespace Rtaime.Maintenance
+{
+    public static class UpgradePaths
+    {
+        private static readonly StringComparison Comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern SafeFileHandle CreateFileW(string path, uint access, uint share,
+            IntPtr security, uint disposition, uint flags, IntPtr template);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle,
+            StringBuilder path, uint capacity, uint flags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CreateDirectoryW(string path, IntPtr security);
+
+        [DllImport("libc", EntryPoint = "mkdir", SetLastError = true)]
+        private static extern int MakeDirectory([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
+
+        public static string Normalize(string path)
+        {
+            if (String.IsNullOrWhiteSpace(path)) throw new ArgumentException("Maintenance path is empty.");
+            if (path.Contains("::", StringComparison.Ordinal))
+                throw new ArgumentException("Maintenance paths must use the local filesystem, not a provider path.");
+            if (OperatingSystem.IsWindows())
+            {
+                path = path.Replace('/', '\\');
+                if (path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith(@"\??\", StringComparison.Ordinal))
+                    throw new ArgumentException("Maintenance paths must be local Windows paths; UNC and device paths are not supported.");
+                int colon = path.IndexOf(':');
+                if (colon >= 0 && (colon != 1 || !Char.IsAsciiLetter(path[0]) || path.Length < 3 ||
+                    path[2] != '\\' || path.IndexOf(':', 2) >= 0))
+                    throw new ArgumentException("Maintenance paths do not support alternate streams, provider paths or drive-relative paths.");
+                foreach (string part in path.Split('\\', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (part == "." || part == ".." || (part.Length == 2 && part[1] == ':')) continue;
+                    if (part.EndsWith(".", StringComparison.Ordinal) || part.EndsWith(" ", StringComparison.Ordinal) ||
+                        part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                        Regex.IsMatch(part, @"^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                        throw new ArgumentException("Maintenance path contains an unsupported Windows name: '" + part + "'.");
+                }
+            }
+            else if (path.IndexOf(':') >= 0)
+            {
+                throw new ArgumentException("Maintenance paths must use the local filesystem, not a provider path.");
+            }
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+
+        private static bool TryAttributes(string path, out FileAttributes attributes)
+        {
+            try { attributes = File.GetAttributes(path); return true; }
+            catch (FileNotFoundException) { attributes = 0; return false; }
+            catch (DirectoryNotFoundException) { attributes = 0; return false; }
+        }
+
+        public static bool Exists(string path)
+        {
+            return TryAttributes(path, out _);
+        }
+
+        public static string Resolve(string path)
+        {
+            path = Normalize(path);
+            string existing = null;
+            var missing = new List<string>();
+            string current = path;
+            while (current != null)
+            {
+                if (TryAttributes(current, out FileAttributes attributes))
+                {
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("Maintenance path contains a reparse point: '" + current + "'.");
+                    if ((attributes & FileAttributes.Directory) == 0)
+                        throw new IOException("Maintenance path already exists as a non-directory: '" + current + "'.");
+                    if (existing == null) existing = current;
+                }
+                else if (existing == null)
+                {
+                    missing.Add(Path.GetFileName(current));
+                }
+                else
+                {
+                    throw new IOException("Maintenance path parent disappeared during validation: '" + current + "'.");
+                }
+                current = Directory.GetParent(current)?.FullName;
+            }
+            if (existing == null) throw new DirectoryNotFoundException("Maintenance path has no existing parent: '" + path + "'.");
+
+            string resolved = OperatingSystem.IsWindows() ? ResolveWindowsDirectory(existing) : new DirectoryInfo(existing).FullName;
+            for (int i = missing.Count - 1; i >= 0; --i) resolved = Path.Combine(resolved, missing[i]);
+            return Normalize(resolved);
+        }
+
+        private static string ResolveWindowsDirectory(string path)
+        {
+            // Resolve directory identity through a handle so 8.3 and SUBST aliases
+            // cannot bypass the separate lexical containment check.
+            using (SafeFileHandle handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero))
+            {
+                if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot resolve maintenance directory '" + path + "'.");
+                var result = new StringBuilder(512);
+                while (true)
+                {
+                    uint length = GetFinalPathNameByHandleW(handle, result, (uint)result.Capacity, 0);
+                    if (length == 0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot resolve maintenance directory '" + path + "'.");
+                    if (length >= result.Capacity)
+                    {
+                        if (length > 32768) throw new IOException("Resolved maintenance path exceeds the supported Windows path length.");
+                        result = new StringBuilder(checked((int)length + 1));
+                        continue;
+                    }
+                    string resolved = result.ToString();
+                    if (!resolved.StartsWith(@"\\?\", StringComparison.Ordinal) || resolved.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+                        throw new IOException("Maintenance paths must resolve to a local Windows volume.");
+                    resolved = resolved.Substring(4);
+                    if (resolved.Length < 3 || !Char.IsAsciiLetter(resolved[0]) || resolved[1] != ':' || resolved[2] != '\\')
+                        throw new IOException("Maintenance paths must resolve to a local Windows volume.");
+                    return resolved;
+                }
+            }
+        }
+
+        private static bool Contains(string root, string path)
+        {
+            return path.Equals(root, Comparison) || path.StartsWith(
+                Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, Comparison);
+        }
+
+        public static bool Overlaps(string first, string second)
+        {
+            return Contains(first, second) || Contains(second, first);
+        }
+
+        public static void CreateWorkspace(string path, string expectedResolvedPath)
+        {
+            if (Exists(path)) throw new IOException("WorkPath already exists; use a new workspace: '" + path + "'.");
+            string parent = Path.GetDirectoryName(path);
+            if (parent == null || !TryAttributes(parent, out FileAttributes attributes) || (attributes & FileAttributes.Directory) == 0)
+                throw new DirectoryNotFoundException("WorkPath parent must already exist: '" + parent + "'.");
+            if (!Resolve(path).Equals(expectedResolvedPath, Comparison))
+                throw new IOException("WorkPath parent changed during validation: '" + parent + "'.");
+
+            bool created;
+            if (OperatingSystem.IsWindows()) created = CreateDirectoryW(path, IntPtr.Zero);
+            else if (OperatingSystem.IsLinux()) created = MakeDirectory(path, 448) == 0;
+            else throw new PlatformNotSupportedException("Exclusive maintenance workspace creation requires Windows or Linux.");
+            if (!created)
+            {
+                int error = Marshal.GetLastWin32Error();
+                if ((OperatingSystem.IsWindows() && (error == 80 || error == 183)) || (OperatingSystem.IsLinux() && error == 17))
+                    throw new IOException("WorkPath already exists; use a new workspace: '" + path + "'.");
+                throw new Win32Exception(error, "Cannot create exclusive WorkPath '" + path + "'.");
+            }
+            if (!Resolve(path).Equals(expectedResolvedPath, Comparison))
+                throw new IOException("WorkPath parent changed during creation; workspace retained at '" + path + "'.");
+        }
+    }
+}
+'@
+}
+
 function Write-JsonFile {
 	param(
 		[Parameter(Mandatory)]$Value,
@@ -148,8 +325,11 @@ function Get-MigrationChain {
 }
 
 Assert-Condition $AcknowledgeProcessesStopped "Coordinated upgrade requires explicit acknowledgement that all rtaime processes/services using software or persistent state are stopped."
-$installRoot = [System.IO.Path]::GetFullPath($InstallPath)
-$stateRootFull = [System.IO.Path]::GetFullPath($StateRoot)
+Initialize-UpgradePathSafety
+$installRoot = [Rtaime.Maintenance.UpgradePaths]::Normalize($InstallPath)
+$stateRootFull = [Rtaime.Maintenance.UpgradePaths]::Normalize($StateRoot)
+$resolvedInstallRoot = [Rtaime.Maintenance.UpgradePaths]::Resolve($installRoot)
+$resolvedStateRoot = [Rtaime.Maintenance.UpgradePaths]::Resolve($stateRootFull)
 Assert-Condition (Test-Path -LiteralPath $installRoot -PathType Container) "Existing installation was not found at '$installRoot'."
 Assert-Condition (Test-Path -LiteralPath $stateRootFull -PathType Container) "Persistent-state root was not found at '$stateRootFull'."
 
@@ -166,12 +346,28 @@ $updatePolicy = Get-Content -LiteralPath $updatePolicyPath -Raw | ConvertFrom-Js
 Assert-Condition ([string]$updatePolicy.replacement.persistentStateMigration -eq 'COORDINATED_ONLY') "Update policy does not permit coordinated persistent-state migration."
 Assert-Condition ($QualificationMode -or $QualificationFailurePoint -eq 'NONE') "Qualification failure injection is permitted only in QualificationMode."
 
-if ([string]::IsNullOrWhiteSpace($WorkPath)) { $WorkPath = "$installRoot$([string]$coordinatorPolicy.workStateSuffix)" }
-$workRoot = [System.IO.Path]::GetFullPath($WorkPath)
-$recoveryRoot = "$installRoot$([string]$coordinatorPolicy.recoveryStateSuffix)"
-Assert-Condition (-not (Test-Path -LiteralPath $recoveryRoot)) "Coordinated recovery evidence already exists at '$recoveryRoot'. Resolve it before another coordinated upgrade."
-if (Test-Path -LiteralPath $workRoot) { Remove-Item -LiteralPath $workRoot -Recurse -Force }
-New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
+if ([string]::IsNullOrWhiteSpace($WorkPath)) {
+	$WorkPath = "$installRoot$([string]$coordinatorPolicy.workStateSuffix)-$([Guid]::NewGuid().ToString('N'))"
+}
+$workRoot = [Rtaime.Maintenance.UpgradePaths]::Normalize($WorkPath)
+$rollbackRoot = [Rtaime.Maintenance.UpgradePaths]::Normalize("$installRoot$([string]$updatePolicy.replacement.rollbackSlotSuffix)")
+$recoveryRoot = [Rtaime.Maintenance.UpgradePaths]::Normalize("$installRoot$([string]$coordinatorPolicy.recoveryStateSuffix)")
+$protectedPaths = @(
+	@{ name = 'installation'; path = $installRoot; resolved = $resolvedInstallRoot },
+	@{ name = 'persistent state'; path = $stateRootFull; resolved = $resolvedStateRoot },
+	@{ name = 'software rollback'; path = $rollbackRoot; resolved = [Rtaime.Maintenance.UpgradePaths]::Resolve($rollbackRoot) },
+	@{ name = 'coordinated recovery'; path = $recoveryRoot; resolved = [Rtaime.Maintenance.UpgradePaths]::Resolve($recoveryRoot) }
+)
+foreach ($protected in $protectedPaths) {
+	Assert-Condition (-not [Rtaime.Maintenance.UpgradePaths]::Overlaps($workRoot, $protected.path)) "WorkPath overlap with $($protected.name) path '$($protected.path)' is not allowed."
+}
+$resolvedWorkRoot = [Rtaime.Maintenance.UpgradePaths]::Resolve($workRoot)
+foreach ($protected in $protectedPaths) {
+	Assert-Condition (-not [Rtaime.Maintenance.UpgradePaths]::Overlaps($resolvedWorkRoot, $protected.resolved)) "WorkPath overlap with resolved $($protected.name) path '$($protected.path)' is not allowed."
+}
+Assert-Condition (-not [Rtaime.Maintenance.UpgradePaths]::Exists($recoveryRoot)) "Coordinated recovery evidence already exists at '$recoveryRoot'. Resolve it before another coordinated upgrade."
+[Rtaime.Maintenance.UpgradePaths]::CreateWorkspace($workRoot, $resolvedWorkRoot)
+Write-Host "Coordinated upgrade workspace: $workRoot"
 
 $currentControlHost = Resolve-ControlHostDll -Root $installRoot
 $currentControlHostRelative = [System.IO.Path]::GetRelativePath($installRoot, $currentControlHost)

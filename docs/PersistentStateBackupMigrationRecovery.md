@@ -129,7 +129,13 @@ Restore requires explicit acknowledgement that processes using the database have
 
 Before active replacement, WAL state is checkpointed. The verified backup is staged beside the active database, activated by same-volume file movement and verified again after activation.
 
-If activation verification fails, the previous active file is restored.
+If activation or its verification fails, restore attempts to put the previous active file back. The previous file is eligible for deletion only after the replacement passes its integrity, schema and SHA-256 checks. Successful compensation moves the previous file back to the active path and rethrows the original restore failure.
+
+If removal of the failed replacement or movement of the previous file fails, remaining `.restore-previous-*` and `.restore-stage-*` files are retained. An `AggregateException` reports both the restore failure and the recovery failure, together with the active, previous, staged and backup paths. These are the operation's locations; a stage already moved into place will no longer exist at its original path. A snapshot can be older than the pre-restore database, so retaining the snapshot alone does not preserve the latest state.
+
+Cleanup after a verified restore is separate from compensation. A cleanup failure reports that the restored database remains active and identifies the remaining recovery-file locations; it does not undo the verified replacement. If staged-file cleanup fails after successful compensation, both the original restore failure and the cleanup failure are reported.
+
+Keep database users stopped after a recovery failure. Preserve the reported files and any sidecars before manual repair, resolve the underlying I/O or access failure, and verify integrity, schema and the intended data generation before reactivating a retained database. Do not delete recovery files merely because an older snapshot is available or infer successful recovery from the presence of the active path alone.
 
 ## Relationship to coordinated update
 
@@ -165,11 +171,21 @@ because state mutation must remain an explicit maintenance action, not a side ef
 `PersistentStateRecoveryIntegrationTests` covers:
 
 - verified management database backup and restore,
+- post-activation verification failure followed by successful compensation, preserving the exact newer database bytes,
+- target-deletion and rollback-rename failures that retain the newer previous database and report both errors and recovery paths,
+- failed activation plus failed compensation that retains both the previous database and the unactivated stage,
+- cleanup failures that preserve the primary failure or leave a verified restored database active,
 - registered transactional forward migration,
 - post-migration verification failure with automatic snapshot restore,
 - unknown migration rejection before mutation,
 - tampered backup rejection without modifying active state,
 - mandatory exclusive-access acknowledgement.
+
+Restore failure tests use real SQLite databases and file operations with a narrow internal failure-injection boundary for file movement and deletion. Post-activation verification failures are produced by corrupting only the disposable activated copy. They do not depend on filesystem-watcher timing or platform-specific file-lock races. After the pinned-SDK Release build, run the focused regression selection with:
+
+```powershell
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build -m:1 --filter "FullyQualifiedName~PersistentStateRecoveryIntegrationTests|FullyQualifiedName~StateMaintenanceCliIntegrationTests"
+```
 
 `StateMaintenanceCliIntegrationTests` additionally launches the built ControlHost process and qualifies the operational CLI bridge used by coordinated updates.
 
