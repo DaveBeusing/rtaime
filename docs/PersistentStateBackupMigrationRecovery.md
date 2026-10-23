@@ -123,6 +123,10 @@ steps are accepted. A larger target requires a complete registered chain.
 
 Migration SQL and the matching `schema_metadata` advancement run in the same SQLite transaction.
 
+Cancellation during migration or post-migration verification remains a failed operation. Once a verified backup exists, required snapshot compensation uses its own two-minute cooperative recovery deadline, independent of the caller's cancellation token. A verifier that returns after cancelling the operation cannot turn the migration into success. Compensation is awaited before the original cancellation or failure is rethrown.
+
+The recovery deadline is observed by the existing cancellable hashing and SQLite validation boundaries; it does not forcibly interrupt synchronous filesystem calls. If recovery itself times out or fails, both failures and the database/backup locations are reported, and the backup remains available. Keep database users stopped until the intended schema and payload have been verified; cancellation alone is not evidence that restoration completed.
+
 ## Recovery semantics
 
 Restore requires explicit acknowledgement that processes using the database have stopped.
@@ -177,6 +181,8 @@ because state mutation must remain an explicit maintenance action, not a side ef
 - cleanup failures that preserve the primary failure or leave a verified restored database active,
 - registered transactional forward migration,
 - post-migration verification failure with automatic snapshot restore,
+- cancellation after a committed migration and while asynchronous verification is pending, restoring the prior schema and payload before reporting cancellation,
+- independent recovery deadline and I/O failures, retaining both failures and the verified backup,
 - unknown migration rejection before mutation,
 - tampered backup rejection without modifying active state,
 - mandatory exclusive-access acknowledgement.

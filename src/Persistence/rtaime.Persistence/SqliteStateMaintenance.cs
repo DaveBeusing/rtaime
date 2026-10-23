@@ -35,17 +35,23 @@ public sealed record SqliteMigrationResult(
 /// </summary>
 public sealed class SqliteStateMaintenance
 {
+	private static readonly TimeSpan MigrationRecoveryTimeout = TimeSpan.FromMinutes(2);
 	private readonly Action<string, string> _moveFile;
 	private readonly Action<string> _deleteFile;
+	private readonly TimeProvider _recoveryTimeProvider;
 
 	public SqliteStateMaintenance() : this(File.Move, File.Delete)
 	{
 	}
 
-	internal SqliteStateMaintenance(Action<string, string> moveFile, Action<string> deleteFile)
+	internal SqliteStateMaintenance(
+		Action<string, string> moveFile,
+		Action<string> deleteFile,
+		TimeProvider? recoveryTimeProvider = null)
 	{
 		_moveFile = moveFile ?? throw new ArgumentNullException(nameof(moveFile));
 		_deleteFile = deleteFile ?? throw new ArgumentNullException(nameof(deleteFile));
+		_recoveryTimeProvider = recoveryTimeProvider ?? TimeProvider.System;
 	}
 
 	public async ValueTask<IReadOnlyList<SqliteSchemaState>> InspectSchemaAsync(
@@ -275,6 +281,7 @@ public sealed class SqliteStateMaintenance
 				throw new InvalidDataException($"SQLite migration completed with schema version {migratedVersion}, expected {targetVersion}.");
 			if (postMigrationVerifier is not null)
 				await postMigrationVerifier(path, cancellationToken).ConfigureAwait(false);
+			cancellationToken.ThrowIfCancellationRequested();
 
 			return new SqliteMigrationResult(true, component, current, migratedVersion, snapshot);
 		}
@@ -282,11 +289,16 @@ public sealed class SqliteStateMaintenance
 		{
 			try
 			{
-				await RestoreBackupAsync(snapshot, path, acknowledgeExclusiveAccess: true, cancellationToken).ConfigureAwait(false);
+				// Recovery owns its deadline: cancelling the requested migration cannot cancel its compensation.
+				using var recovery = new CancellationTokenSource(MigrationRecoveryTimeout, _recoveryTimeProvider);
+				await RestoreBackupAsync(snapshot, path, acknowledgeExclusiveAccess: true, recovery.Token).ConfigureAwait(false);
 			}
 			catch (Exception restoreFailure)
 			{
-				throw new AggregateException("SQLite migration failed and snapshot restoration also failed.", migrationFailure, restoreFailure);
+				throw new AggregateException(
+					$"SQLite migration failed and snapshot restoration also failed. Keep database users stopped and retain recovery evidence. Database: '{path}'; backup: '{snapshot.BackupPath}'.",
+					migrationFailure,
+					restoreFailure);
 			}
 			throw;
 		}
