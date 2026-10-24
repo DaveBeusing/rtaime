@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Buffers.Binary;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using rtaime.Core;
@@ -21,6 +22,7 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 	private IntPtr _byteStream;
 	private IMFAttributes? _attributes;
 	private IMFSinkWriter? _sinkWriter;
+	private IMFMediaSink? _mediaSink;
 	private uint _videoStream;
 	private uint _audioStream;
 	private bool _mediaFoundationStarted;
@@ -75,11 +77,11 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 
 	private void InitializeSink(NetworkOutputConfiguration configuration, NetworkOutputProgramSample firstSample)
 	{
-		IMFSinkWriter? sink = null;
 		IMFMediaType? videoOutput = null;
 		IMFMediaType? videoInput = null;
 		IMFMediaType? audioOutput = null;
 		IMFMediaType? audioInput = null;
+		Exception? failure = null;
 		try
 		{
 			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFStartup(MediaFoundationNetwork.MfVersion, MediaFoundationNetwork.MfStartupFull));
@@ -93,51 +95,48 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 			if ((byteStreamCapabilities & requiredCapabilities) != requiredCapabilities)
 				throw new InvalidOperationException($"The Media Foundation mux byte stream must be readable and writable; native capabilities: 0x{byteStreamCapabilities:X8}.");
 			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateAttributes(out _attributes, 2));
-			var containerKey = MediaFoundationNetwork.MfTranscodeContainerType;
-			var containerValue = MediaFoundationNetwork.MfTranscodeContainerTypeMpeg2;
-			MediaFoundationNetwork.ThrowIfFailed(_attributes.SetGUID(ref containerKey, ref containerValue));
-
-			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateSinkWriterFromURL(
-				null,
-				_byteStream,
-				_attributes,
-				out sink), $"MFCreateSinkWriterFromURL (MPEG-2 TS; byte stream capabilities 0x{byteStreamCapabilities:X8})");
+			var timecodeKey = MediaFoundationNetwork.MfMtMpeg2Timecode;
+			var contentPacketKey = MediaFoundationNetwork.MfMtMpeg2ContentPacket;
+			MediaFoundationNetwork.ThrowIfFailed(_attributes.SetUINT32(ref timecodeKey, 0), "Set MPEG-2 transport timecode=0");
+			MediaFoundationNetwork.ThrowIfFailed(_attributes.SetUINT32(ref contentPacketKey, 0), "Set MPEG-2 transport content packet=0");
+			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateMuxSink(
+				MediaFoundationNetwork.MfStreamFormatMpeg2Transport, _attributes, _byteStream, out _mediaSink),
+				$"MFCreateMuxSink (MPEG-2 transport; timecode=0; content packet=0; byte stream capabilities 0x{byteStreamCapabilities:X8})");
+			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateSinkWriterFromMediaSink(
+				_mediaSink, null, out _sinkWriter), nameof(MediaFoundationNetwork.MFCreateSinkWriterFromMediaSink));
 
 			videoOutput = CreateVideoOutputType(configuration);
-			MediaFoundationNetwork.ThrowIfFailed(sink.AddStream(videoOutput, out _videoStream));
+			MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.AddStream(videoOutput, out _videoStream), "AddStream (H.264 video)");
 			videoInput = CreateVideoInputType(configuration.VideoFormat);
-			MediaFoundationNetwork.ThrowIfFailed(sink.SetInputMediaType(_videoStream, videoInput, null));
+			MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.SetInputMediaType(_videoStream, videoInput, null), "SetInputMediaType (NV12 video)");
 
 			audioOutput = CreateAudioOutputType(configuration);
-			MediaFoundationNetwork.ThrowIfFailed(sink.AddStream(audioOutput, out _audioStream));
+			MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.AddStream(audioOutput, out _audioStream), "AddStream (AAC audio)");
 			audioInput = CreateAudioInputType(configuration.AudioFormat);
-			MediaFoundationNetwork.ThrowIfFailed(sink.SetInputMediaType(_audioStream, audioInput, null));
+			MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.SetInputMediaType(_audioStream, audioInput, null), "SetInputMediaType (PCM16 audio)");
 
-			MediaFoundationNetwork.ThrowIfFailed(sink.BeginWriting());
+			MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.BeginWriting(), "IMFSinkWriter.BeginWriting");
 
 			var videoTime = ToHundredNanoseconds(firstSample.VideoTiming.PresentationTimestamp, firstSample.VideoTiming.Timebase);
 			var audioTime = ToHundredNanoseconds(firstSample.AudioTiming.PresentationTimestamp, firstSample.AudioTiming.Timebase);
 			_originHundredNanoseconds = Math.Min(videoTime, audioTime);
 			_nv12Buffer = new byte[checked((int)((long)configuration.VideoFormat.Width * configuration.VideoFormat.Height * 3 / 2))];
-
-			_sinkWriter = sink;
-			sink = null;
-			_started = true;
 		}
-		catch
+		catch (Exception exception)
 		{
-			if (sink is not null)
-				MediaFoundationNetwork.ReleaseComObject(sink);
-			Release();
-			throw;
+			failure = exception;
 		}
-		finally
+		failure = MediaFoundationNetwork.ReleaseResources(failure,
+			videoOutput is null ? null : () => MediaFoundationNetwork.ReleaseComObject(videoOutput),
+			videoInput is null ? null : () => MediaFoundationNetwork.ReleaseComObject(videoInput),
+			audioOutput is null ? null : () => MediaFoundationNetwork.ReleaseComObject(audioOutput),
+			audioInput is null ? null : () => MediaFoundationNetwork.ReleaseComObject(audioInput));
+		if (failure is not null)
 		{
-			if (videoOutput is not null) MediaFoundationNetwork.ReleaseComObject(videoOutput);
-			if (videoInput is not null) MediaFoundationNetwork.ReleaseComObject(videoInput);
-			if (audioOutput is not null) MediaFoundationNetwork.ReleaseComObject(audioOutput);
-			if (audioInput is not null) MediaFoundationNetwork.ReleaseComObject(audioInput);
+			failure = Release(failure);
+			ExceptionDispatchInfo.Capture(failure!).Throw();
 		}
+		_started = true;
 	}
 
 	private static void ValidatePayload(NetworkOutputConfiguration configuration, NetworkOutputProgramSample sample)
@@ -390,44 +389,46 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 		return checked((long)((numerator + (denominator / 2)) / denominator));
 	}
 
-	private void Release()
+	private Exception? Release(Exception? primaryFailure = null)
 	{
-		var sink = _sinkWriter;
+		var writer = _sinkWriter;
+		var mediaSink = _mediaSink;
+		var attributes = _attributes;
+		var byteStream = _byteStream;
+		var stream = _stream;
+		var mediaFoundationStarted = _mediaFoundationStarted;
 		_sinkWriter = null;
-		_started = false;
-		if (sink is not null) MediaFoundationNetwork.ReleaseComObject(sink);
-		if (_attributes is not null)
-		{
-			MediaFoundationNetwork.ReleaseComObject(_attributes);
-			_attributes = null;
-		}
-		if (_byteStream != IntPtr.Zero)
-		{
-			Marshal.Release(_byteStream);
-			_byteStream = IntPtr.Zero;
-		}
-		_stream?.Dispose();
+		_mediaSink = null;
+		_attributes = null;
+		_byteStream = IntPtr.Zero;
 		_stream = null;
+		_mediaFoundationStarted = false;
+		_started = false;
 		_nv12Buffer = null;
 		_pcm16Buffer = null;
-		if (_mediaFoundationStarted)
-		{
-			_mediaFoundationStarted = false;
-			MediaFoundationNetwork.MFShutdown();
-		}
+		// FromMediaSink leaves Shutdown ownership with the caller; release the writer first.
+		return MediaFoundationNetwork.ReleaseResources(primaryFailure,
+			writer is null ? null : () => MediaFoundationNetwork.ReleaseComObject(writer),
+			mediaSink is null ? null : () => MediaFoundationNetwork.ThrowIfFailed(mediaSink.Shutdown(), "IMFMediaSink.Shutdown"),
+			mediaSink is null ? null : () => MediaFoundationNetwork.ReleaseComObject(mediaSink),
+			attributes is null ? null : () => MediaFoundationNetwork.ReleaseComObject(attributes),
+			byteStream == IntPtr.Zero ? null : () => Marshal.Release(byteStream),
+			stream is null ? null : stream.Dispose,
+			mediaFoundationStarted ? () => MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFShutdown(), "MFShutdown") : null);
 	}
 
 	public ValueTask DisposeAsync()
 	{
 		if (_disposed) return ValueTask.CompletedTask;
 		_disposed = true;
+		Exception? failure = null;
 		if (_sinkWriter is not null)
 		{
-			try { MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.FinalizeWriter()); }
-			catch { }
+			try { MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.FinalizeWriter(), "IMFSinkWriter.Finalize"); }
+			catch (Exception exception) { failure = exception; }
 		}
-		Release();
-		return ValueTask.CompletedTask;
+		failure = Release(failure);
+		return failure is null ? ValueTask.CompletedTask : ValueTask.FromException(failure);
 	}
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
@@ -455,8 +456,9 @@ internal static class MediaFoundationNetwork
 	public static readonly Guid MfMtAudioBlockAlignment = new("322de230-9eeb-43bd-ab7a-ff412251541d");
 	public static readonly Guid MfMtAudioBitsPerSample = new("f2deb57f-40fa-4764-aa33-ed4f2d1ff669");
 	public static readonly Guid MfMtMpeg2Profile = new("ad76a80b-2d5c-4e0b-b375-64e520137036");
-	public static readonly Guid MfTranscodeContainerType = new("150FF23F-4ABC-478B-AC4F-E1916FBA1CCA");
-	public static readonly Guid MfTranscodeContainerTypeMpeg2 = new("BFC2DBF9-7BB4-4F8F-AFDE-E112C44BA882");
+	public static readonly Guid MfStreamFormatMpeg2Transport = new("E06D8023-DB46-11CF-B4D1-00805F6CBBEA");
+	public static readonly Guid MfMtMpeg2Timecode = new("5229BA10-E29D-4F80-A59C-DF4F180207D2");
+	public static readonly Guid MfMtMpeg2ContentPacket = new("825D55E4-4F12-4197-9EB3-59B6E4710F06");
 
 	public static readonly Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00aa00389b71");
 	public static readonly Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00aa00389b71");
@@ -473,10 +475,15 @@ internal static class MediaFoundationNetwork
 	[DllImport("mfplat.dll", ExactSpelling = true)] public static extern int MFCreateAttributes(out IMFAttributes attributes, uint initialSize);
 	[DllImport("mfplat.dll", ExactSpelling = true)]
 	public static extern int MFCreateMFByteStreamOnStream([MarshalAs(UnmanagedType.Interface)] IStream stream, out IntPtr byteStream);
-	[DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-	public static extern int MFCreateSinkWriterFromURL(
-		[MarshalAs(UnmanagedType.LPWStr)] string? outputUrl,
+	[DllImport("mf.dll", ExactSpelling = true)]
+	public static extern int MFCreateMuxSink(
+		Guid outputSubtype,
+		IMFAttributes? outputAttributes,
 		IntPtr byteStream,
+		out IMFMediaSink mediaSink);
+	[DllImport("mfreadwrite.dll", ExactSpelling = true)]
+	public static extern int MFCreateSinkWriterFromMediaSink(
+		IMFMediaSink mediaSink,
 		IMFAttributes? attributes,
 		out IMFSinkWriter sinkWriter);
 
@@ -508,6 +515,37 @@ internal static class MediaFoundationNetwork
 	{
 		if (OperatingSystem.IsWindows() && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
 	}
+
+	public static Exception? ReleaseResources(Exception? primaryFailure, params Action?[] releases)
+	{
+		List<Exception>? failures = null;
+		foreach (var release in releases)
+		{
+			try { release?.Invoke(); }
+			catch (Exception exception) { (failures ??= []).Add(exception); }
+		}
+		if (failures is null) return primaryFailure;
+		if (primaryFailure is null)
+			return failures.Count == 1 ? failures[0] : new AggregateException("Media Foundation cleanup failed.", failures);
+		const string cleanupFailureKey = "MediaFoundationCleanupFailure";
+		if (primaryFailure.Data[cleanupFailureKey] is Exception previous) failures.Insert(0, previous);
+		primaryFailure.Data[cleanupFailureKey] = new AggregateException("Additional Media Foundation cleanup failures.", failures);
+		return primaryFailure;
+	}
+}
+
+[ComImport, Guid("6EF2A660-47C0-4666-B13D-CBB717F2FA2C"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IMFMediaSink
+{
+	[PreserveSig] int GetCharacteristics(out uint characteristics);
+	[PreserveSig] int AddStreamSink(uint streamIdentifier, IMFMediaType? mediaType, out IntPtr streamSink);
+	[PreserveSig] int RemoveStreamSink(uint streamIdentifier);
+	[PreserveSig] int GetStreamSinkCount(out uint count);
+	[PreserveSig] int GetStreamSinkByIndex(uint index, out IntPtr streamSink);
+	[PreserveSig] int GetStreamSinkById(uint streamIdentifier, out IntPtr streamSink);
+	[PreserveSig] int SetPresentationClock(IntPtr clock);
+	[PreserveSig] int GetPresentationClock(out IntPtr clock);
+	[PreserveSig] int Shutdown();
 }
 
 // GetCapabilities is the first method after IUnknown in IMFByteStream's native vtable.

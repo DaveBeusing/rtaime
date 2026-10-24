@@ -31,9 +31,33 @@ requires readable and writable access before creating the sink writer. Factory
 failures retain the operation, HRESULT and actual native capability mask, so a
 stream-access failure can be distinguished from a codec or container failure.
 The [`STATSTG` contract](https://learn.microsoft.com/en-us/windows/win32/api/objidl/ns-objidl-statstg)
-defines the stream access mode, and
-[`MFCreateSinkWriterFromURL`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-mfcreatesinkwriterfromurl)
-requires a writable byte stream.
+defines the stream access mode. The previous URL-based factory,
+[`MFCreateSinkWriterFromURL`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-mfcreatesinkwriterfromurl),
+also required a writable byte stream.
+
+The mux is selected explicitly with `MFCreateMuxSink` and
+`MFStreamFormat_MPEG2Transport`. Its MFT output attributes set
+`MF_MT_MPEG2_TIMECODE=0` and `MF_MT_MPEG2_CONTENT_PACKET=0`, requesting transport
+packets without additional timecode or Content Packet headers. The generic
+`MFTranscodeContainerType_MPEG2` selection produced MPEG Program Stream in the
+[native run](https://github.com/DaveBeusing/rtaime/actions/runs/40136536356) at
+`396e25f45f635435d7714540602f11bb7aab7618`: the first nonempty drain
+was 1,645,057 bytes and began with pack/system/program-map/PES start codes
+`000001BA`, `000001BB`, `000001BC` and `000001E0`. That output is not accepted as
+188-byte transport packets. No bytes are stripped or resynchronized to disguise
+the format mismatch. The explicit mux still requires a successful native run for
+both formats before qualification can be claimed.
+
+The [mux factory](https://learn.microsoft.com/en-us/windows/win32/api/mfidl/nf-mfidl-mfcreatemuxsink)
+accepts the MFT output subtype and attributes. Microsoft documents the
+[timecode](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-mpeg2-timecode)
+and [Content Packet](https://learn.microsoft.com/en-us/windows/win32/medfound/mf-mt-mpeg2-content-packet)
+zero values. The encoder owns the resulting media sink, releases the sink writer
+before calling the sink's `Shutdown`, and attempts all remaining cleanup even if
+a stage fails. Initialization errors retain secondary cleanup errors, and normal
+disposal reports finalization or shutdown failure. This follows the ownership
+contract of
+[`MFCreateSinkWriterFromMediaSink`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-mfcreatesinkwriterfrommediasink).
 
 `PacketsSent` counts messages accepted by the native transport, and `BytesSent`
 counts their payload bytes. `SentSamples` advances for a processed encoder drain
@@ -53,7 +77,7 @@ After the canonical pinned-SDK Release build:
 ```powershell
 dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj `
     --configuration Release --no-build `
-    --filter "FullyQualifiedName~SrtTransportPacketizationTests|FullyQualifiedName~SrtMuxStreamTests"
+    --filter "FullyQualifiedName~SrtTransportPacketizationTests|FullyQualifiedName~SrtMuxStreamTests|FullyQualifiedName~SrtMediaFoundationCleanupTests"
 ```
 
 The packetization suite covers large drains at 50 and 60000/1001 fps, splits
@@ -93,6 +117,13 @@ the real SRT listening/receive API. For both rates it requires:
 - exact byte totals and matching SHA-256 hashes between encoder output and receiver input;
 - no dropped samples or reconnects during the qualification;
 - successful native/encoder teardown before writing PASS evidence.
+
+The 90 samples are submitted inputs, not a receiver-decoded or end-of-stream
+complete frame count. Byte totals and hashes cover only bytes actually returned
+by `EncodeAsync` during live submission. The current stop path calls the sink
+writer's `Flush` and discards encoder tail output; complete graceful final drain
+is a separate unresolved issue. This profile does not establish delivery of
+encoder-delayed terminal samples, even when finalization and shutdown succeed.
 
 The retained JSON files bind source commit, actual native runtime version and DLL
 SHA-256 to each format's encoder/message statistics and payload hash. The TRX

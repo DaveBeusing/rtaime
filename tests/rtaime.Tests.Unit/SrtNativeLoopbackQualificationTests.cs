@@ -109,12 +109,12 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		var evidence = new
 		{
 			schemaVersion = "1.0", status = "PASS", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
-			scope = "Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
+			scope = "Live EncodeAsync output: Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
 			format = formatName, frames, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
 			maximumEncoderDrain = encoder.MaximumDrain, encodedBytes = encoder.EncodedBytes,
 			messagesReceived = receiver.MessagesReceived, maximumMessage = receiver.MaximumMessage,
 			payloadSha256 = encodedHash, statistics,
-			limits = "Local peer only; external receiver decode, WAN, encryption and physical latency remain UNVERIFIED."
+			limits = "Frame count is submitted input, not decoded or end-of-stream completeness; bytes/hash cover only live EncodeAsync output. Complete final drain, external decode, WAN, encryption and physical latency remain UNVERIFIED."
 		};
 		await receiver.DisposeAsync();
 		await session.DisposeAsync();
