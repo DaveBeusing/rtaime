@@ -94,3 +94,34 @@ External receiver decoding, WAN behavior, encryption, physical network latency
 and long-duration hardware qualification remain separate evidence obligations.
 No provider capability or release-readiness status is promoted by adding this
 profile.
+
+## Automated Windows loopback
+
+`.github/workflows/srt-native-qualification.yml` runs the same explicit profile
+on `windows-2022` for relevant pull requests to `master`, pushes to `master`,
+and manual dispatch. It checks out the exact PR head rather than the synthetic
+merge commit. Generated evidence is ignored by Git; native sources and build
+outputs live under the runner's temporary directory, preserving the clean-source
+requirement.
+
+The job builds the official [Haivision SRT v1.5.7 source](https://github.com/Haivision/srt/tree/899348d8318eb9a3c5a5b6ec43c4a1114288773a)
+at commit `899348d8318eb9a3c5a5b6ec43c4a1114288773a` using Visual Studio 2022 x64
+and the `srt_shared` Release target. Encryption is disabled and C++ standard
+library synchronization is enabled, so this plaintext loopback requires neither
+OpenSSL nor pthread DLLs. The hosted Windows system and MSVC runtime supply the
+remaining dependencies; the job retains the DLL import list, CMake configuration,
+build logs and a native-build identity containing the source pin and DLL SHA-256.
+
+The job checks `Server-Media-Foundation`, installs that Windows feature if needed,
+and records its state, runner image and runtime DLL versions. Unavailable features,
+a required reboot or missing core MF DLLs fail the job. Feature presence is only
+a prerequisite: the real H.264/AAC encoder, MPEG-TS sink and SRT listener must all
+complete the existing two-format qualification. Unsupported codecs or containers
+fail the test; they are never converted to a skip or qualification PASS.
+
+The retained artifact `rtaime-srt-native-<run-id>-<attempt>` contains both format
+JSON files and the TRX only when produced by the tests, alongside build and
+prerequisite diagnostics even on failure. A green result establishes source-bound
+software loopback on that runner. It does not establish encrypted transport,
+external decoding, WAN behavior, physical latency or hardware performance, and it
+does not replace any of the five Required Gates.
