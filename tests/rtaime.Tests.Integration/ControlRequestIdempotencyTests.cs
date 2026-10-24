@@ -22,6 +22,7 @@ public sealed class ControlRequestIdempotencyTests
 
 	[Theory]
 	[InlineData(false, false)]
+	[InlineData(false, true)]
 	[InlineData(true, true)]
 	[InlineData(true, false)]
 	public async Task Concurrent_Go_reserves_one_cue_and_rejects_conflicting_in_flight_payloads(bool ownerPipe, bool duplicatePipe)
@@ -33,7 +34,7 @@ public sealed class ControlRequestIdempotencyTests
 		var first = fixture.SendAsync(ownerPipe, "control.show_control.go", requestId, correlationId, "{}");
 		await barrier.Entered.Task.WaitAsync(Deadline);
 		var replays = fixture.Server.RequestCacheSnapshot.Replays;
-		var duplicateCorrelation = duplicatePipe ? correlationId : Identity.New().ToString();
+		var duplicateCorrelation = Identity.New().ToString();
 		var duplicate = fixture.SendAsync(duplicatePipe, "control.show_control.go", requestId, duplicateCorrelation, "{}");
 		await WaitUntilAsync(() => fixture.Server.RequestCacheSnapshot.Replays == replays + 1);
 		Assert.False(duplicate.IsCompleted);
@@ -47,6 +48,7 @@ public sealed class ControlRequestIdempotencyTests
 		var original = await first.WaitAsync(Deadline);
 		var replay = await duplicate.WaitAsync(Deadline);
 		Assert.Equal("control.show_control.snapshot.response", original.ResponseType);
+		Assert.Equal(correlationId, original.CorrelationId);
 		Assert.Equal(original.Sequence, replay.Sequence);
 		Assert.Equal(original.StateVersion, replay.StateVersion);
 		Assert.Equal(original.PayloadJson, replay.PayloadJson);
@@ -55,9 +57,12 @@ public sealed class ControlRequestIdempotencyTests
 		var workspace = await fixture.Commands.GetShowControlSnapshotAsync();
 		Assert.Equal(ShowControlExecutionState.Armed, workspace.Execution.State);
 		Assert.Equal(1, workspace.Execution.CueIndex);
-		var completedReplay = await fixture.SendAsync(false, "control.show_control.go", requestId, Identity.New().ToString(), "{}");
+		var completedCorrelation = Identity.New().ToString();
+		var completedReplay = await fixture.SendAsync(duplicatePipe, "control.show_control.go", requestId, completedCorrelation, "{}");
 		Assert.Equal(original.Sequence, completedReplay.Sequence);
+		Assert.Equal(original.StateVersion, completedReplay.StateVersion);
 		Assert.Equal(original.PayloadJson, completedReplay.PayloadJson);
+		Assert.Equal(completedCorrelation, completedReplay.CorrelationId);
 		Assert.Equal(1, fixture.Runtime.RouteCalls);
 	}
 
@@ -106,9 +111,11 @@ public sealed class ControlRequestIdempotencyTests
 
 		var unknown = await duplicate.WaitAsync(Deadline);
 		Assert.Equal("ipc.request_outcome_unknown", unknown.ErrorCode);
-		var later = await fixture.SendAsync(false, "control.audio.routing.set", requestId, Identity.New().ToString(), payload);
+		var laterCorrelation = Identity.New().ToString();
+		var later = await fixture.SendAsync(true, "control.audio.routing.set", requestId, laterCorrelation, payload);
 		Assert.Equal(unknown.Sequence, later.Sequence);
 		Assert.Equal(unknown.PayloadJson, later.PayloadJson);
+		Assert.Equal(laterCorrelation, later.CorrelationId);
 		Assert.Equal(1, fixture.Runtime.RouteAttempts);
 		Assert.Equal(1, fixture.Runtime.RouteCalls);
 		Assert.Equal(0, fixture.Server.RequestCacheSnapshot.InFlight);
@@ -120,10 +127,12 @@ public sealed class ControlRequestIdempotencyTests
 		await using var fixture = await Fixture.CreateAsync();
 		var requestId = Identity.New().ToString();
 		var first = await fixture.SendAsync(false, "control.audio.routing.set", requestId, Identity.New().ToString(), "{\"mode\":99}");
-		var second = await fixture.SendAsync(true, "control.audio.routing.set", requestId, first.CorrelationId, "{\"mode\":99}");
+		var secondCorrelation = Identity.New().ToString();
+		var second = await fixture.SendAsync(true, "control.audio.routing.set", requestId, secondCorrelation, "{\"mode\":99}");
 		Assert.Equal("control.audio.routing.mode.invalid", first.ErrorCode);
 		Assert.Equal(first.Sequence, second.Sequence);
 		Assert.Equal(first.PayloadJson, second.PayloadJson);
+		Assert.Equal(secondCorrelation, second.CorrelationId);
 		Assert.Equal(0, fixture.Runtime.RouteAttempts);
 	}
 

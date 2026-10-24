@@ -412,6 +412,10 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 					catch (IOException) { return; }
 
 					var serialized = await ExecuteReservedRequestAsync(request, cancellationToken).ConfigureAwait(false);
+					var retained = JsonSerializer.Deserialize<WireEnvelope>(serialized, Wire.JsonOptions)
+						?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+					if (!string.Equals(retained.CorrelationId, request.CorrelationId, StringComparison.Ordinal))
+						serialized = Wire.Serialize(retained with { CorrelationId = request.CorrelationId });
 					await Wire.WriteRawAsync(pipe, serialized, cancellationToken).ConfigureAwait(false);
 				}
 			}
