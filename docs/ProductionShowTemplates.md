@@ -42,6 +42,8 @@ ControlHost preflight uses fresh Runtime input/output observations. Unavailable 
 
 The import compares both the show-project storage version and Show Control workspace version, under the existing serialization gates. A concurrent macro, rundown, audio, scene or cue write makes the preview stale. The project write atomically stores both appended scenes and the new cue list before publishing their in-memory authored catalogs. Existing scenes, active scene, Program routing, selected cue list and execution state remain intact. Capacity is bounded at 128 total scenes and 32 persisted cue lists. Armed, executing, waiting and recovery-required Show Control states block import.
 
+Template export, preflight and import acquire Show Control ownership before production mutation ownership, matching GO and frame-wait continuation. A single owned workspace snapshot and storage version remain stable through dependency checks and any atomic import; the template service does not re-enter the coordinator. Waiting for Show Control never retains production mutation ownership. Cancellation while acquiring mutation releases the coordinator, and shutdown cancels queued authoring operations through the existing session lifetime. Import is executed once without a contention retry; stale versions still require a fresh preview.
+
 On a rejection, preserve the local draft, resolve the reason and preview again. After a timeout or lost response, refresh the show and check for the new show name before retrying: a durable commit may have succeeded before feedback was lost. Duplicate names prevent a blind retry from adding another instance. Restart restores committed definitions through normal durable project loading and never replays imported actions.
 
 ## Packaging limits
@@ -53,5 +55,7 @@ The reference local Operator named-pipe transport exposes create, preflight and 
 ## Validation and evidence
 
 Contract regressions cover version/corruption/unknown-field rejection, private recording-destination rejection, fresh identities and action parameter rebinding. Coordinator regressions exercise dry-run immutability, atomic authored import, restart without replay, duplicate names, stale concurrent edits, absent sources/provider conflicts and cancellation. Operator regressions cover draft-only actions, edits during preflight, conflict gating and rejection recovery. Required Gates run focused template regressions before broader solution tests.
+
+Barrier-controlled host regressions overlap all three template operations with GO and WaitFrames continuation, verify cancellation at both ownership boundaries, and compare persisted and in-memory authored catalogs. Competing imports commit exactly one instance; cancellation during preflight leaves both catalogs unchanged. Named-pipe shutdown coverage verifies session drain without a late cue action or partial import.
 
 Canonical local build remains `./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release`. Hosted validation uses the pinned SDK and repository Release build path. Physical media hardware, external provider interoperability, long-soak continuity and physical mixed-monitor DPI remain UNVERIFIED.
