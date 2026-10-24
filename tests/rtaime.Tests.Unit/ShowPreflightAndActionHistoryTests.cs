@@ -140,7 +140,9 @@ public sealed class ShowPreflightAndActionHistoryTests
 		var transport = new Transport { FailRefresh = true };
 		var client = new OperatorControlClient(transport);
 		await client.SynchronizeAsync();
-		await Assert.ThrowsAsync<IOException>(() => client.CutPreviewAsync().AsTask());
+		var failure = await Assert.ThrowsAsync<ControlActionObservationException>(() => client.CutPreviewAsync().AsTask());
+		Assert.IsType<IOException>(failure.InnerException);
+		Assert.Equal(1, transport.Mutations);
 		var observation = Assert.Single(client.ActionHistory.Current);
 		Assert.Equal(OperatorActionOutcome.Confirmed, observation.Outcome);
 		Assert.Equal(2UL, observation.ResponseProductionRevision);

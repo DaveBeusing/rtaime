@@ -12,7 +12,7 @@ using rtaime.IntegrationHost;
 
 namespace rtaime.Tests.Unit;
 
-public sealed class ProductionIntegrationGatewayTests
+public sealed partial class ProductionIntegrationGatewayTests
 {
 	[Fact]
 	public void Configuration_rejects_unbounded_or_unknown_mapping_targets()
@@ -792,6 +792,11 @@ public sealed class ProductionIntegrationGatewayTests
 
 		public int GetSnapshotCalls { get; private set; }
 		public int CutCalls { get; private set; }
+		public int CutAttempts { get; private set; }
+		public Exception? BeforeCutFailure { get; set; }
+		public Exception? AfterCutFailure { get; set; }
+		public Exception? AfterCutSnapshotFailure { get; set; }
+		public int AfterCutSnapshotFailureCountdown { get; set; }
 		public int MacroCalls { get; private set; }
 		public string? LastMacroId { get; private set; }
 		public int MaxConcurrentCalls { get; private set; }
@@ -829,6 +834,9 @@ public sealed class ProductionIntegrationGatewayTests
 				lock (_gate)
 				{
 					var call = ++GetSnapshotCalls;
+					if (CutCalls > 0 && AfterCutSnapshotFailureCountdown > 0 && --AfterCutSnapshotFailureCountdown == 0 &&
+						AfterCutSnapshotFailure is { } refreshFailure)
+						throw refreshFailure;
 					if (_snapshotCallWaiters.Remove(call, out var reached))
 						reached.TrySetResult();
 					if (_snapshotFailuresRemaining > 0)
@@ -859,6 +867,12 @@ public sealed class ProductionIntegrationGatewayTests
 			{
 				lock (_gate)
 				{
+					CutAttempts++;
+					if (BeforeCutFailure is { } beforeFailure)
+					{
+						BeforeCutFailure = null;
+						throw beforeFailure;
+					}
 					CutCalls++;
 					var result = ControlDomainEngine.Apply(_specification, _state, command);
 					if (!result.Committed)
@@ -867,6 +881,11 @@ public sealed class ProductionIntegrationGatewayTests
 							result.AuthoritativeState,
 							new Failure("integration.test.cut_rejected", "Test CUT command was rejected."));
 					_state = result.AuthoritativeState;
+					if (AfterCutFailure is { } afterFailure)
+					{
+						AfterCutFailure = null;
+						throw afterFailure;
+					}
 					return new OperatorMutationResponse(true, _state, null);
 				}
 			}

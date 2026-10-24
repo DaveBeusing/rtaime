@@ -85,8 +85,8 @@ public sealed partial class GrpcOperatorControlTransport : ISequencePreparationT
         rpcRequest.PrepareSequence = Raw(request);
         var timeout = _options.RequestTimeout > TimeSpan.FromSeconds(45)
             ? _options.RequestTimeout : TimeSpan.FromSeconds(45);
-        var reply = await _client.ExecuteAsync(rpcRequest, Headers(),
-            DateTime.UtcNow + timeout, cancellationToken).ResponseAsync.ConfigureAwait(false);
+        var reply = await SendRequestAsync(rpcRequest,
+            DateTime.UtcNow + timeout, cancellationToken).ConfigureAwait(false);
         ValidateReply(rpcRequest, reply, snapshot: false);
         var status = SequenceJson.Read<SequencePreparationStatus>(reply.PayloadJson.ToStringUtf8(), 16 * 1024);
         status.Validate();

@@ -449,6 +449,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 
 		for (var attempt = 0; attempt < 2; attempt++)
 		{
+			var actionCompleted = false;
 			try
 			{
 				ControlObservation observation;
@@ -456,6 +457,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 				try
 				{
 					await ExecuteActionAsync(mapping.Action, trigger, cancellationToken).ConfigureAwait(false);
+					actionCompleted = true;
 					var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
 					observation = RecordSuccessfulObservation(lifetime, snapshot);
 				}
@@ -476,7 +478,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			{
 				throw;
 			}
-			catch (Exception exception) when (attempt == 0 && IsRetryable(exception))
+			catch (Exception exception) when (!actionCompleted && attempt == 0 && IsRetryable(exception))
 			{
 				try
 				{
@@ -498,7 +500,9 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			}
 			catch (Exception exception)
 			{
-				SetGatewayStateIfActive(lifetime, "DEGRADED", $"Mapping '{mapping.Id}' failed: {exception.Message}");
+				var phase = actionCompleted || exception is ControlActionObservationException
+					? "completed, but observation failed" : "failed";
+				SetGatewayStateIfActive(lifetime, "DEGRADED", $"Mapping '{mapping.Id}' {phase}: {exception.Message}");
 				return;
 			}
 		}
@@ -795,12 +799,9 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	}
 
 	private static bool IsRetryable(Exception exception) =>
-		exception is RemoteHostSessionChangedException ||
-		exception is ExternalControlRequestException external &&
-			(external.Code.Contains("revision", StringComparison.OrdinalIgnoreCase) ||
-			 external.Code.Contains("conflict", StringComparison.OrdinalIgnoreCase)) ||
-		exception is InvalidOperationException invalid &&
-			invalid.Message.Contains("snapshot", StringComparison.OrdinalIgnoreCase);
+		exception is RemoteHostSessionChangedException { RequestWasDispatched: false } or ControlSnapshotRequiredException ||
+		exception is ExternalControlRequestException { RequestMayHaveExecuted: false } external &&
+			external.Code is "control.host_epoch_mismatch" or "control.audio.routing.revision_conflict" or "control.audio.production.revision_conflict";
 
 	private Channel<IntegrationTrigger> CreateInputChannel() =>
 		Channel.CreateBounded<IntegrationTrigger>(new BoundedChannelOptions(_options.QueueCapacity)
