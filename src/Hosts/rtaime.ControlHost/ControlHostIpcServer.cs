@@ -45,7 +45,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	private readonly HostIpcSessionTracker _sessions = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly TimeSpan _sessionDrainTimeout;
-	private readonly BoundedRequestCache _requestCache = new(256);
+	private readonly ControlRequestCache _requestCache = new(256);
 	private static readonly TimeSpan RuntimeObservationRetention = TimeSpan.FromSeconds(2);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private readonly object _runtimeObservationGate = new();
@@ -150,6 +150,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _acceptLoop is { IsCompleted: false };
 	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
+	internal ControlRequestCacheSnapshot RequestCacheSnapshot => _requestCache.Snapshot;
 
 	public Task StartAsync(CancellationToken cancellationToken = default)
 	{
@@ -410,19 +411,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 					catch (EndOfStreamException) { return; }
 					catch (IOException) { return; }
 
-					var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
-					if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
-					{
-						if (conflict)
-							await WriteErrorAsync(pipe, request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.", cancellationToken).ConfigureAwait(false);
-						else
-							await Wire.WriteRawAsync(pipe, cached!, cancellationToken).ConfigureAwait(false);
-						continue;
-					}
-
-					var response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
-					var serialized = Wire.Serialize(response);
-					_requestCache.Add(request.RequestId, canonical, serialized);
+					var serialized = await ExecuteReservedRequestAsync(request, cancellationToken).ConfigureAwait(false);
 					await Wire.WriteRawAsync(pipe, serialized, cancellationToken).ConfigureAwait(false);
 				}
 			}
@@ -470,30 +459,10 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			0,
 			document.RootElement.Clone());
 
-		var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
-		WireEnvelope response;
-		if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
-		{
-			if (conflict)
-			{
-				response = Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.");
-			}
-			else
-			{
-				var replay = JsonSerializer.Deserialize<WireEnvelope>(cached!, Wire.JsonOptions)
-					?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
-				response = replay with
-				{
-					CorrelationId = request.CorrelationId,
-					SentAtUtc = DateTimeOffset.UtcNow
-				};
-			}
-		}
-		else
-		{
-			response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
-			_requestCache.Add(request.RequestId, canonical, Wire.Serialize(response));
-		}
+		var serialized = await ExecuteReservedRequestAsync(request, cancellationToken).ConfigureAwait(false);
+		var retained = JsonSerializer.Deserialize<WireEnvelope>(serialized, Wire.JsonOptions)
+			?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+		var response = retained with { CorrelationId = request.CorrelationId };
 
 		string? errorCode = null;
 		string? errorMessage = null;
@@ -515,6 +484,34 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			response.Payload.GetRawText(),
 			errorCode,
 			errorMessage);
+	}
+
+	private async ValueTask<byte[]> ExecuteReservedRequestAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
+		var disposition = _requestCache.Reserve(request.RequestId, canonical, out var reservation);
+		if (disposition == ControlRequestReservation.Conflict)
+			return Wire.Serialize(Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload."));
+		if (disposition == ControlRequestReservation.CapacityExceeded)
+			return Wire.Serialize(Error(request, "ipc.request_capacity_exceeded", "ControlHost request capacity is occupied by in-flight operations. This request was not dispatched."));
+		if (disposition == ControlRequestReservation.Replay)
+			return await reservation!.Response.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var response = Wire.Serialize(await DispatchAsync(request, cancellationToken).ConfigureAwait(false));
+			_requestCache.Complete(reservation!, response);
+			return response;
+		}
+		catch
+		{
+			// A failed/cancelled dispatch may already have changed authority. Retain its
+			// identity until normal completed-entry eviction; never admit it as new work.
+			_requestCache.Complete(reservation!, Wire.Serialize(Error(request, "ipc.request_outcome_unknown",
+				"The original request did not complete normally. Synchronize authoritative state before deciding on another action; do not replay it under a new identity.")));
+			throw;
+		}
 	}
 
 	private async ValueTask<WireEnvelope> DispatchAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -4267,46 +4264,6 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null, MediaDeckPreparation? Preparation = null, bool ConsumePreparation = false);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 	private sealed record RetainedGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
-
-	private sealed class BoundedRequestCache
-	{
-		private readonly int _capacity;
-		private readonly object _gate = new();
-		private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
-		private readonly Queue<string> _order = new();
-
-		public BoundedRequestCache(int capacity) => _capacity = capacity;
-
-		public bool TryGet(string requestId, string canonical, out byte[]? response, out bool conflict)
-		{
-			lock (_gate)
-			{
-				if (!_entries.TryGetValue(requestId, out var entry))
-				{
-					response = null;
-					conflict = false;
-					return false;
-				}
-				response = entry.Response;
-				conflict = !string.Equals(entry.Canonical, canonical, StringComparison.Ordinal);
-				return true;
-			}
-		}
-
-		public void Add(string requestId, string canonical, byte[] response)
-		{
-			lock (_gate)
-			{
-				if (_entries.ContainsKey(requestId)) return;
-				_entries.Add(requestId, new Entry(canonical, response));
-				_order.Enqueue(requestId);
-				while (_entries.Count > _capacity)
-					_entries.Remove(_order.Dequeue());
-			}
-		}
-
-		private sealed record Entry(string Canonical, byte[] Response);
-	}
 
 	private static class Wire
 	{
