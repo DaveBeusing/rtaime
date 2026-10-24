@@ -11,6 +11,33 @@ namespace rtaime.Tests.Unit;
 
 public sealed class SrtMuxStreamTests
 {
+	[Theory]
+	[InlineData(0)]
+	[InlineData(1)]
+	public void Stat_advertises_the_read_write_access_required_by_native_media_sinks(int statFlags)
+	{
+		using var mux = new Mux();
+		mux.Stream.Stat(out var emptyStatus, statFlags);
+		Assert.Equal(2, emptyStatus.type); // STGTY_STREAM
+		Assert.Equal(2, emptyStatus.grfMode & 3); // STGM_READWRITE, not the zero/default STGM_READ
+		Assert.Equal(0, emptyStatus.cbSize);
+
+		mux.Stream.Write([1, 2, 3], 3, IntPtr.Zero);
+		mux.Stream.Seek(0, 0, IntPtr.Zero);
+		var read = new byte[3];
+		mux.Stream.Read(read, read.Length, IntPtr.Zero);
+		Assert.Equal(new byte[] { 1, 2, 3 }, read);
+		Assert.Equal(read, mux.Drain());
+		mux.Stream.Write([4], 1, IntPtr.Zero);
+		mux.Stream.Seek(3, 0, IntPtr.Zero);
+		mux.Stream.Read(read, 1, IntPtr.Zero);
+		Assert.Equal(4, read[0]);
+		mux.Stream.Stat(out var currentStatus, statFlags);
+		Assert.Equal(2, currentStatus.grfMode & 3);
+		Assert.Equal(4, currentStatus.cbSize);
+		Assert.Equal(4, mux.Position);
+	}
+
 	[Fact]
 	public void Sustained_write_drain_releases_history_and_preserves_absolute_offsets()
 	{

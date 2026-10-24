@@ -24,6 +24,17 @@ their byte and packet accounting even when a later message in the same encoder
 drain fails. Connection teardown clears residual packet bytes before a new
 encoder/connection epoch starts.
 
+The mux `IStream.Stat` advertises `STGM_READWRITE`; leaving the access mode at its
+zero default incorrectly describes a read-only stream. After the native MF
+wrapper is created, the encoder reads back `IMFByteStream.GetCapabilities` and
+requires readable and writable access before creating the sink writer. Factory
+failures retain the operation, HRESULT and actual native capability mask, so a
+stream-access failure can be distinguished from a codec or container failure.
+The [`STATSTG` contract](https://learn.microsoft.com/en-us/windows/win32/api/objidl/ns-objidl-statstg)
+defines the stream access mode, and
+[`MFCreateSinkWriterFromURL`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-mfcreatesinkwriterfromurl)
+requires a writable byte stream.
+
 `PacketsSent` counts messages accepted by the native transport, and `BytesSent`
 counts their payload bytes. `SentSamples` advances for a processed encoder drain
 that emits at least one message and finishes without failure. Codec buffering

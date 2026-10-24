@@ -141,7 +141,9 @@ internal sealed class ChunkedComStream : IStream, IDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			pstatstg = new STATSTG { cbSize = checked(_publishedLength + _stream.Length), type = 2 };
+			// STGM_READWRITE is required when Media Foundation wraps this IStream for a media sink.
+			// The default value, STGM_READ, describes a read-only stream despite Write being implemented.
+			pstatstg = new STATSTG { cbSize = checked(_publishedLength + _stream.Length), type = 2, grfMode = 2 };
 		}
 	}
 	public void Clone(out IStream ppstm) => throw new COMException("Clone is not supported.", unchecked((int)0x80004001));

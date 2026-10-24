@@ -86,7 +86,12 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 			_mediaFoundationStarted = true;
 
 			_stream = new ChunkedComStream();
-			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateMFByteStreamOnStream(_stream, out _byteStream));
+			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateMFByteStreamOnStream(_stream, out _byteStream),
+				nameof(MediaFoundationNetwork.MFCreateMFByteStreamOnStream));
+			var byteStreamCapabilities = MediaFoundationNetwork.GetByteStreamCapabilities(_byteStream);
+			const uint requiredCapabilities = MediaFoundationNetwork.MfByteStreamIsReadable | MediaFoundationNetwork.MfByteStreamIsWritable;
+			if ((byteStreamCapabilities & requiredCapabilities) != requiredCapabilities)
+				throw new InvalidOperationException($"The Media Foundation mux byte stream must be readable and writable; native capabilities: 0x{byteStreamCapabilities:X8}.");
 			MediaFoundationNetwork.ThrowIfFailed(MediaFoundationNetwork.MFCreateAttributes(out _attributes, 2));
 			var containerKey = MediaFoundationNetwork.MfTranscodeContainerType;
 			var containerValue = MediaFoundationNetwork.MfTranscodeContainerTypeMpeg2;
@@ -96,7 +101,7 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 				null,
 				_byteStream,
 				_attributes,
-				out sink));
+				out sink), $"MFCreateSinkWriterFromURL (MPEG-2 TS; byte stream capabilities 0x{byteStreamCapabilities:X8})");
 
 			videoOutput = CreateVideoOutputType(configuration);
 			MediaFoundationNetwork.ThrowIfFailed(sink.AddStream(videoOutput, out _videoStream));
@@ -434,6 +439,8 @@ internal static class MediaFoundationNetwork
 	public const int MfStartupFull = 0;
 	public const uint MfVideoInterlaceProgressive = 2;
 	public const uint H264MainProfile = 77;
+	public const uint MfByteStreamIsReadable = 0x00000001;
+	public const uint MfByteStreamIsWritable = 0x00000002;
 
 	public static readonly Guid MfMtMajorType = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
 	public static readonly Guid MfMtSubtype = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");
@@ -473,14 +480,41 @@ internal static class MediaFoundationNetwork
 		IMFAttributes? attributes,
 		out IMFSinkWriter sinkWriter);
 
-	public static void ThrowIfFailed(int hresult)
+	public static uint GetByteStreamCapabilities(IntPtr byteStream)
 	{
-		if (hresult < 0) Marshal.ThrowExceptionForHR(hresult);
+		if (!OperatingSystem.IsWindows())
+			throw new PlatformNotSupportedException("Media Foundation byte-stream capabilities require Windows.");
+		var wrapper = Marshal.GetObjectForIUnknown(byteStream);
+		try
+		{
+			ThrowIfFailed(((IMFByteStreamCapabilities)wrapper).GetCapabilities(out var capabilities), "IMFByteStream.GetCapabilities");
+			return capabilities;
+		}
+		finally
+		{
+			// The caller retains its original MFCreateMFByteStreamOnStream reference.
+			ReleaseComObject(wrapper);
+		}
+	}
+
+	public static void ThrowIfFailed(int hresult, string? operation = null)
+	{
+		if (hresult >= 0) return;
+		if (operation is not null)
+			throw new COMException($"Media Foundation {operation} failed (HRESULT 0x{hresult:X8}): {Marshal.GetExceptionForHR(hresult)?.Message}", hresult);
+		Marshal.ThrowExceptionForHR(hresult);
 	}
 	public static void ReleaseComObject(object value)
 	{
 		if (OperatingSystem.IsWindows() && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
 	}
+}
+
+// GetCapabilities is the first method after IUnknown in IMFByteStream's native vtable.
+[ComImport, Guid("AD4C1B00-4BF7-422F-9175-756693D9130D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IMFByteStreamCapabilities
+{
+	[PreserveSig] int GetCapabilities(out uint capabilities);
 }
 
 [ComImport, Guid("2CD2D921-C447-44A7-A13C-4ADABFC247E3"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
