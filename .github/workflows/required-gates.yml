@@ -70,7 +70,7 @@ jobs:
         run: |
           dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProductionIntegrationGatewayTests|FullyQualifiedName~ShowPreflightAndActionHistoryTests" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Gateway action outcome regression failed." }
-          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlRequestIdempotencyTests|FullyQualifiedName~ShowTemplateConcurrencyTests|FullyQualifiedName~ExternalControlIntegrationTests.Gateway_|FullyQualifiedName~Server_epoch_fence|FullyQualifiedName~Grpc_uncertain_action" --logger "console;verbosity=detailed"
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlRequestIdempotencyTests|FullyQualifiedName~ControlTransportFaultQualificationTests|FullyQualifiedName~ShowTemplateConcurrencyTests|FullyQualifiedName~ExternalControlIntegrationTests.Gateway_|FullyQualifiedName~Server_epoch_fence|FullyQualifiedName~Grpc_uncertain_action" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Control request and template ownership regression failed." }
 
       - name: Live console authority, draft and real-host interaction regressions
