@@ -28,13 +28,20 @@ public sealed class ShowTemplateService
 
 	public async ValueTask<string> CreateAsync(string name, string? cueListId, CancellationToken cancellationToken)
 	{
+		using var ownership = await _showControl.AcquireTemplateAuthoringAsync(cancellationToken).ConfigureAwait(false);
+		return await CreateAsync(name, cueListId, ownership, cancellationToken).ConfigureAwait(false);
+	}
+
+	internal async ValueTask<string> CreateAsync(string name, string? cueListId,
+		ShowControlCoordinator.TemplateAuthoringOwnership ownership, CancellationToken cancellationToken)
+	{
+		ownership.ValidateOwner(_showControl);
 		var control = RequireControl();
 		var project = await _projects.LoadAsync(control.Specification, cancellationToken).ConfigureAwait(false);
 		ShowControlCueList list;
 		if (cueListId is not null)
 		{
-			var workspace = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-			list = workspace.CueLists.FirstOrDefault(candidate => candidate.CueListId.ToString() == cueListId)
+			list = ownership.Snapshot.CueLists.FirstOrDefault(candidate => candidate.CueListId.ToString() == cueListId)
 				?? throw new InvalidDataException("Save the selected cue list before creating its template.");
 		}
 		else
@@ -105,10 +112,18 @@ public sealed class ShowTemplateService
 
 	public async ValueTask<ShowTemplatePreflight> PreflightAsync(ShowTemplateRequest request, CancellationToken cancellationToken)
 	{
+		using var ownership = await _showControl.AcquireTemplateAuthoringAsync(cancellationToken).ConfigureAwait(false);
+		return await PreflightAsync(request, ownership, cancellationToken).ConfigureAwait(false);
+	}
+
+	internal async ValueTask<ShowTemplatePreflight> PreflightAsync(ShowTemplateRequest request,
+		ShowControlCoordinator.TemplateAuthoringOwnership ownership, CancellationToken cancellationToken)
+	{
+		ownership.ValidateOwner(_showControl);
 		var control = RequireControl();
 		var project = await _projects.LoadAsync(control.Specification, cancellationToken).ConfigureAwait(false);
-		var workspace = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		var version = await _showControl.GetStorageVersionAsync(cancellationToken).ConfigureAwait(false);
+		var workspace = ownership.Snapshot;
+		var version = ownership.StorageVersion;
 		var conflicts = new List<string>();
 		(ShowTemplateDocument Document, IReadOnlyList<ProductionSceneSpecification> Scenes, ShowControlCueList CueList) prepared;
 		try { prepared = Prepare(request, control); }
@@ -153,12 +168,20 @@ public sealed class ShowTemplateService
 
 	public async ValueTask<ShowControlWorkspaceSnapshot> InstantiateAsync(ShowTemplateRequest request, CancellationToken cancellationToken)
 	{
+		using var ownership = await _showControl.AcquireTemplateAuthoringAsync(cancellationToken).ConfigureAwait(false);
+		return await InstantiateAsync(request, ownership, cancellationToken).ConfigureAwait(false);
+	}
+
+	internal async ValueTask<ShowControlWorkspaceSnapshot> InstantiateAsync(ShowTemplateRequest request,
+		ShowControlCoordinator.TemplateAuthoringOwnership ownership, CancellationToken cancellationToken)
+	{
+		ownership.ValidateOwner(_showControl);
 		if (request.ExpectedProjectVersion is null || request.ExpectedWorkspaceVersion is null)
 			throw new InvalidOperationException("Preview the template before committing.");
-		var preflight = await PreflightAsync(request, cancellationToken).ConfigureAwait(false);
+		var preflight = await PreflightAsync(request, ownership, cancellationToken).ConfigureAwait(false);
 		if (!preflight.CanCommit) throw new InvalidOperationException(string.Join("\n", preflight.Conflicts));
 		var prepared = Prepare(request, RequireControl());
-		return await _showControl.ImportTemplateAsync(prepared.CueList, prepared.Scenes,
+		return await ownership.ImportAsync(prepared.CueList, prepared.Scenes,
 			preflight.ProjectVersion, preflight.WorkspaceVersion, cancellationToken).ConfigureAwait(false);
 	}
 
