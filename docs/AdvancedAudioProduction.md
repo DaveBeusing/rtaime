@@ -317,6 +317,31 @@ Existing FOLLOW VIDEO/BREAKAWAY, equal-power crossfade, bounded ducking and gene
 
 Missing source payloads contribute silence for that source and increment missing-source evidence.
 
+External PCM input has an explicit sample-backed mode, separate from the
+meter-only reference input and generated diagnostic signals. A PCM source never
+falls back to a waveform derived from its last peak. At each Program boundary,
+Runtime consumes the available stereo frames for that exact window and fills
+the missing suffix with zeros. A partial packet is consumed immediately; it is
+not retained until a later complete window or replayed after recovery. Input
+unavailability discards queued PCM before another packet can re-enable the
+source. The existing half-second input queue bound remains in effect.
+
+A partial block can contribute captured audio while also reporting one missing
+source in each eligible bus. A completely empty input contributes no active
+source. Routed partial and complete starvation both report AFV underrun, and
+source meters describe the samples actually consumed in the current window.
+Healthy silence remains distinct from missing PCM. The final mixed payload has
+the full window length even when every sample is zero, so physical Program,
+recording, replay and network consumers receive the same clock-aligned silence
+and do not need to synthesize an unrelated signal.
+
+`ExternalPcmUnderrunIntegrationTests` exercises 50 and 59.94 fps windows with a
+packet crossing into a partial next block, complete starvation and recovery.
+It compares final Program PCM with persisted reference-recording bytes and the
+actual replay/network provider submission payloads. This is deterministic
+software payload evidence; it does not qualify a native encoder or physical
+audio output.
+
 An unavailable ducking sidechain is reported explicitly and releases the ducking envelope toward unity.
 
 Invalid or stale configuration is rejected before becoming Runtime audio truth.
@@ -377,3 +402,4 @@ Hosted software qualification does not convert physical embedded-audio continuit
 `AudioMixerOperatorSurfaceTests` covers bounded topology, retained drafts, source-loss/stale meter evidence, stable strip/cell selection, persistent rejection, confirmed versus draft processing, local presentation presets and 5,000 slow-consumer updates. `AudioMixerMutationTests` exercises the existing Client command seam with delayed confirmation, rejection and reconnect, including preservation of independent drafts. `AudioMixerInteractionTests` verifies named controls, custom fader command increments and evidence-aware meters. Existing AFV/breakaway, engine continuity, allocation and output-backpressure suites remain required.
 
 These deterministic software checks do not qualify physical mixed-monitor interaction, hardware audio latency or sustained hardware continuity; those remain UNVERIFIED.
+
