@@ -52,7 +52,7 @@ Mappings are versioned configuration, not Production state. Trigger keys resolve
 
 Mappings use stable rtaime identities, never Operator control names. There is no scripting engine, arbitrary user code or macro language.
 
-The gateway owns one bounded multi-producer/single-consumer input queue. Excess events are dropped rather than expanding memory without limit. Each mapping has independent debounce and minimum-interval controls. All access to the stateful `OperatorControlClient`, including snapshot refresh, is serialized so periodic feedback refresh cannot race Production commands. One deliberate resynchronization/retry is permitted only for stale-session/revision conflicts.
+The gateway owns one bounded multi-producer/single-consumer input queue. Excess events are dropped rather than expanding memory without limit. Each mapping has independent debounce and minimum-interval controls. All access to the stateful `OperatorControlClient`, including snapshot refresh, is serialized so periodic feedback refresh cannot race Production commands. One deliberate resynchronization/retry is permitted only for a typed pre-dispatch snapshot requirement or a known pre-execution host/revision rejection with no earlier transport uncertainty. A host change discovered in a successful mutation response, an uncertain original outcome, and request-identity conflicts do not permit a fresh action. Snapshot refresh and feedback failures after a completed action degrade observation without replaying that action; this includes the client's own post-action snapshot refresh.
 
 ## Feedback model
 

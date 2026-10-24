@@ -159,7 +159,7 @@ This discovery surface is intentionally specific to the gRPC transport. Producti
 
 The first external API is `rtaime.external_control.v1`, with API version `1.0`.
 
-Every request carries API version, request identity, correlation identity, declared client name and declared client version.
+Every request carries API version, request identity, correlation identity, declared client name and declared client version. API 1.0 also accepts an additive `expected_host_instance_id` context field. The current client captures its last full-snapshot host identity once per non-snapshot request; the server rejects a nonempty mismatched identity before dispatch. Older API 1.0 clients that omit this field retain their existing behavior.
 
 Production mutations additionally retain the existing Control contract version, stable command identity, Production identity and expected Production Revision.
 
@@ -171,7 +171,7 @@ Rundown automation continues to use the existing bounded rundown operations and 
 
 External mutations reuse the same stable request/command identity and ControlHost request-result cache as local control.
 
-If a network outcome is uncertain, the client may retry once with the same request identity. ControlHost atomically reserves the identity and canonical operation/payload before dispatch. A concurrent duplicate waits for the original result; a completed duplicate receives that retained result, including its original state version and sequence. Reusing the identity with different content fails closed even while the original operation is running. The external response preserves the current caller's correlation identity.
+The gRPC client automatically retries only full snapshots after transport uncertainty. It does not resend non-snapshot requests: the original host may already have executed them, and an older replacement host may ignore the additive epoch fence. ControlHost atomically reserves the identity and canonical operation/payload before dispatch. A concurrent duplicate waits for the original result; a completed duplicate receives that retained result, including its original state version and sequence. Reusing the identity with different content fails closed even while the original operation is running. The external response preserves the current caller's correlation identity.
 
 The shared local/external cache is bounded to 256 identities. Capacity pressure evicts only completed entries; it never evicts in-flight work. If every slot is occupied by an in-flight operation, a new identity receives `ipc.request_capacity_exceeded` without dispatch, while duplicates can still join their existing operation. A duplicate caller cancelling its wait does not cancel the original operation. If the original dispatch fails or is cancelled, subsequent duplicates receive the retained `ipc.request_outcome_unknown` result instead of re-executing possibly completed effects. The client must synchronize authoritative state before deciding on further action and must not invent a new identity to replay an uncertain action.
 
@@ -179,7 +179,7 @@ Retention is bounded, not a durable exactly-once ledger. Clients must not replay
 
 Expected Production Revision conflicts remain Control-layer concurrency conflicts. The external transport does not bypass or replace the authoritative revision checks.
 
-The idempotency cache is process-local. After ControlHost replacement, clients must resynchronize from a full snapshot before continuing mutations.
+The idempotency cache is process-local. After ControlHost replacement, clients must resynchronize from a full snapshot before continuing mutations. A successful reply from an unexpected host (including an older server that ignores the optional fence) requires resynchronization but never automatic action replay. A network loss or `ipc.request_outcome_unknown` response likewise fences further commands until an authoritative refresh; a fresh snapshot does not prove that an uncertain earlier action never executed.
 
 ## State synchronization
 
