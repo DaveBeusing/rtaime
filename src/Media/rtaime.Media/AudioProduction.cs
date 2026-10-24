@@ -7,7 +7,8 @@ namespace rtaime.Media;
 public readonly record struct AudioProductionSourceBuffer(
 	MediaSourceId SourceId,
 	ReadOnlyMemory<float> Samples,
-	bool Available = true);
+	bool Available = true,
+	bool Underrun = false);
 
 public readonly record struct AudioProductionBlockResult(
 	AudioBusId BusId,
@@ -140,6 +141,8 @@ public sealed class AudioProductionEngine
 					if (sourceBuffers[bufferIndex].Samples.Length < requiredValues)
 						throw new ArgumentException($"Audio source '{source.SourceId}' payload is shorter than the requested stereo block.", nameof(sourceBuffers));
 					activeSources++;
+					if (sourceBuffers[bufferIndex].Underrun)
+						missingSources++;
 				}
 				else
 				{
@@ -476,3 +479,4 @@ public sealed class AudioProductionEngine
 	}
 
 }
+

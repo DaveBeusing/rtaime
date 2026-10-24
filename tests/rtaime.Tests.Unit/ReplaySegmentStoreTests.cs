@@ -101,7 +101,7 @@ public sealed class ReplaySegmentStoreTests
 			bool discontinuityBefore = false)
 		{
 			var path = Path.Combine(_root, $"segment-{firstSequence}.mp4");
-			File.WriteAllBytes(path, [1, 2, 3, 4]);
+			File.WriteAllBytes(path, new byte[checked((int)bytes)]);
 			return new ReplaySegmentDescriptor(
 				ReplaySegmentId.New(),
 				path,
@@ -122,3 +122,4 @@ public sealed class ReplaySegmentStoreTests
 		}
 	}
 }
+

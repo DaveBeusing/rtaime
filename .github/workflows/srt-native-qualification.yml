@@ -1,0 +1,201 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: SRT native qualification
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/srt-native-qualification.yml"
+      - "build/qualification/Invoke-SrtNativeQualification.ps1"
+      - "docs/SrtTransportQualification.md"
+      - "src/Providers/rtaime.Provider.Srt/**"
+      - "src/Contracts/rtaime.Media.Contracts/**"
+      - "src/Contracts/rtaime.Provider.Contracts/**"
+      - "src/Media/**"
+      - "src/rtaime.Core/**"
+      - "tests/rtaime.Tests.Unit/Srt*.cs"
+      - "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj"
+      - "Directory.Build.*"
+      - "Directory.Packages.props"
+      - "global.json"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/srt-native-qualification.yml"
+      - "build/qualification/Invoke-SrtNativeQualification.ps1"
+      - "docs/SrtTransportQualification.md"
+      - "src/Providers/rtaime.Provider.Srt/**"
+      - "src/Contracts/rtaime.Media.Contracts/**"
+      - "src/Contracts/rtaime.Provider.Contracts/**"
+      - "src/Media/**"
+      - "src/rtaime.Core/**"
+      - "tests/rtaime.Tests.Unit/Srt*.cs"
+      - "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj"
+      - "Directory.Build.*"
+      - "Directory.Packages.props"
+      - "global.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: srt-native-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-loopback:
+    name: Native SRT and MF 50 and 59.94 loopback
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      SRT_SOURCE_COMMIT: 899348d8318eb9a3c5a5b6ec43c4a1114288773a
+
+    steps:
+      - name: Checkout exact source candidate
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup pinned .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Prepare and record Media Foundation prerequisites
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/qualification/srt-native"
+          New-Item -ItemType Directory -Path $evidenceRoot -Force | Out-Null
+          $state = [ordered]@{
+            status = "FAIL"
+            sourceCommit = (git rev-parse HEAD).Trim()
+            imageOS = $env:ImageOS
+            imageVersion = $env:ImageVersion
+            os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+            architecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+            featureBefore = $null
+            featureAfter = $null
+            installation = $null
+            dlls = @()
+            error = $null
+          }
+          try {
+            if (-not $IsWindows -or $state.architecture -ne "X64") { throw "Windows x64 is required." }
+            Import-Module ServerManager -ErrorAction Stop
+            $feature = Get-WindowsFeature -Name Server-Media-Foundation -ErrorAction Stop
+            if ($null -eq $feature) { throw "The runner does not expose Server-Media-Foundation." }
+            $state.featureBefore = $feature.InstallState.ToString()
+            if (-not $feature.Installed) {
+              $installed = Install-WindowsFeature -Name Server-Media-Foundation -ErrorAction Stop
+              $state.installation = [ordered]@{
+                success = $installed.Success
+                restartNeeded = $installed.RestartNeeded.ToString()
+                exitCode = $installed.ExitCode.ToString()
+              }
+              if (-not $installed.Success -or $installed.RestartNeeded.ToString() -ne "No") {
+                throw "Media Foundation installation failed or requires a runner restart."
+              }
+            }
+            $feature = Get-WindowsFeature -Name Server-Media-Foundation -ErrorAction Stop
+            $state.featureAfter = $feature.InstallState.ToString()
+            if (-not $feature.Installed) { throw "Media Foundation is unavailable on this runner." }
+            $required = @("mf.dll", "mfplat.dll", "mfreadwrite.dll")
+            foreach ($name in ($required + @("mfh264enc.dll", "msmpeg2venc.dll", "mfaacenc.dll"))) {
+              $path = Join-Path ([Environment]::SystemDirectory) $name
+              $file = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+              $state.dlls += [ordered]@{
+                name = $name
+                present = ($null -ne $file)
+                version = $(if ($null -ne $file) { $file.VersionInfo.FileVersion } else { $null })
+              }
+              if ($name -in $required -and $null -eq $file) { throw "Missing Media Foundation runtime: $name" }
+            }
+            # Installed features are prerequisites; only the actual encoder/receiver test can qualify them.
+            $state.status = "READY"
+          }
+          catch {
+            $state.error = $_.Exception.Message
+            throw
+          }
+          finally {
+            $state | ConvertTo-Json -Depth 8 |
+              Set-Content -LiteralPath (Join-Path $evidenceRoot "windows-media-foundation.json") -Encoding utf8
+          }
+
+      - name: Build official pinned SRT shared library
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/qualification/srt-native"
+          $sourceRoot = Join-Path $env:RUNNER_TEMP "rtaime-srt-source"
+          $buildRoot = Join-Path $env:RUNNER_TEMP "rtaime-srt-build"
+          git init $sourceRoot
+          if ($LASTEXITCODE -ne 0) { throw "Unable to initialize the SRT source checkout." }
+          git -C $sourceRoot remote add origin https://github.com/Haivision/srt.git
+          if ($LASTEXITCODE -ne 0) { throw "Unable to configure the official SRT source." }
+          git -C $sourceRoot fetch --depth 1 origin $env:SRT_SOURCE_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw "Unable to fetch the pinned official SRT commit." }
+          git -C $sourceRoot checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Unable to check out the pinned SRT source." }
+          $resolved = (git -C $sourceRoot rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $resolved -ne $env:SRT_SOURCE_COMMIT) { throw "SRT source identity mismatch." }
+          $options = @(
+            "-DENABLE_SHARED=ON", "-DENABLE_STATIC=OFF", "-DENABLE_APPS=OFF",
+            "-DENABLE_UNITTESTS=OFF", "-DENABLE_TESTING=OFF",
+            "-DENABLE_ENCRYPTION=OFF", "-DENABLE_STDCXX_SYNC=ON"
+          )
+          cmake -S $sourceRoot -B $buildRoot -G "Visual Studio 17 2022" -A x64 @options 2>&1 |
+            Tee-Object -FilePath (Join-Path $evidenceRoot "srt-configure.log")
+          if ($LASTEXITCODE -ne 0) { throw "Pinned SRT configuration failed." }
+          cmake --build $buildRoot --config Release --target srt_shared --parallel 2 2>&1 |
+            Tee-Object -FilePath (Join-Path $evidenceRoot "srt-build.log")
+          if ($LASTEXITCODE -ne 0) { throw "Pinned SRT shared-library build failed." }
+          $library = Join-Path $buildRoot "Release/srt.dll"
+          if (-not (Test-Path -LiteralPath $library -PathType Leaf)) { throw "The SRT build did not produce Release/srt.dll." }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+          $visualStudio = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($visualStudio)) { throw "Unable to locate the MSVC tools." }
+          $toolset = (Get-Content -LiteralPath (Join-Path $visualStudio "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt") -Raw).Trim()
+          $dumpbin = Join-Path $visualStudio "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/dumpbin.exe"
+          & $dumpbin /dependents $library | Tee-Object -FilePath (Join-Path $evidenceRoot "srt-dll-dependencies.txt")
+          if ($LASTEXITCODE -ne 0) { throw "Unable to record the native DLL dependencies." }
+          Copy-Item -LiteralPath (Join-Path $buildRoot "CMakeCache.txt") -Destination $evidenceRoot
+          [ordered]@{
+            repository = "https://github.com/Haivision/srt"
+            tag = "v1.5.7"
+            sourceCommit = $resolved
+            productSourceCommit = (git rev-parse HEAD).Trim()
+            librarySha256 = (Get-FileHash -LiteralPath $library -Algorithm SHA256).Hash
+            generator = "Visual Studio 17 2022"
+            architecture = "x64"
+            configuration = "Release"
+            target = "srt_shared"
+            cmakeVersion = (cmake --version | Select-Object -First 1)
+            msvcToolset = $toolset
+            options = $options
+            encryption = "DISABLED; encrypted transport remains UNVERIFIED"
+            synchronization = "C++ standard library; no pthread dependency"
+          } | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath (Join-Path $evidenceRoot "srt-native-build-identity.json") -Encoding utf8
+          "RTAIME_BUILT_SRT_LIBRARY=$library" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Qualify real MF encoder and native SRT loopback
+        run: |
+          ./build/qualification/Invoke-SrtNativeQualification.ps1 `
+            -LibraryPath $env:RTAIME_BUILT_SRT_LIBRARY `
+            -OutputDirectory artifacts/qualification/srt-native
+
+      - name: Preserve native qualification evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-srt-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/srt-native
+          if-no-files-found: error

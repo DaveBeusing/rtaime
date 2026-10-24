@@ -40,6 +40,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		using var muted = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(muted.Audio.Muted);
 		Assert.Equal(0, muted.Audio.PeakLevel);
+		Assert.Equal(checked((int)(muted.Audio.SampleCount * 2U * sizeof(float))), muted.ProgramAudioPayload.Length);
 		Assert.All(
 			Enumerable.Range(0, muted.ProgramAudioPayload.Length / sizeof(float)),
 			index => Assert.Equal(0f, ReadFloat(muted.ProgramAudioPayload, index)));
@@ -60,12 +61,20 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		using var silence = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(silence.Audio.Emitted);
 		Assert.Equal(0, silence.Audio.PeakLevel);
+		Assert.Equal(checked((int)(silence.Audio.SampleCount * 2U * sizeof(float))), silence.ProgramAudioPayload.Length);
+		Assert.All(
+			Enumerable.Range(0, silence.ProgramAudioPayload.Length / sizeof(float)),
+			index => Assert.Equal(0f, ReadFloat(silence.ProgramAudioPayload, index)));
 		Assert.Equal(RuntimeAudioHealthState.Silence, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		fixture.Runtime.SetExternalAudioMeter(fixture.SourceA, 0, 0, available: false);
 		using var underrun = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(AudioFollowVideoStatus.Underrun, underrun.Audio.Status);
-		Assert.Empty(underrun.ProgramAudioPayload);
+		Assert.Equal(960U, underrun.Audio.SampleCount);
+		Assert.Equal(checked((int)(underrun.Audio.SampleCount * 2U * sizeof(float))), underrun.ProgramAudioPayload.Length);
+		Assert.All(
+			Enumerable.Range(0, underrun.ProgramAudioPayload.Length / sizeof(float)),
+			index => Assert.Equal(0f, ReadFloat(underrun.ProgramAudioPayload, index)));
 		Assert.Equal(RuntimeAudioHealthState.Underrun, fixture.Runtime.Snapshot.AudioProgram.Health);
 
 		Commit(
@@ -198,6 +207,7 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		using var boundary = fixture.Runtime.ProcessNextBoundary();
 		Assert.True(boundary.Audio.Emitted);
 		Assert.Equal(0, boundary.Audio.PeakLevel);
+		Assert.Equal(checked((int)(boundary.Audio.SampleCount * 2U * sizeof(float))), boundary.ProgramAudioPayload.Length);
 		Assert.All(
 			Enumerable.Range(0, boundary.ProgramAudioPayload.Length / sizeof(float)),
 			index => Assert.Equal(0f, ReadFloat(boundary.ProgramAudioPayload, index)));

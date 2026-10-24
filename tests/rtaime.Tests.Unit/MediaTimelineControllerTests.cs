@@ -175,6 +175,119 @@ public sealed class MediaTimelineControllerTests
 		Assert.Equal(40, MediaTimelineGeometry.SnapFrame(38, snapFrames, 2));
 	}
 
+	[Theory]
+	[InlineData("io")]
+	[InlineData("timeout")]
+	[InlineData("session")]
+	[InlineData("snapshot")]
+	public async Task Unconfirmed_seek_preserves_confirmed_frame_and_rejects_passive_snapshot_recovery(string kind)
+	{
+		var failure = kind switch
+		{
+			"io" => (Exception)new IOException("Lost reply"),
+			"timeout" => new TimeoutException("Request deadline elapsed"),
+			"session" => new RemoteHostSessionChangedException("old", "new"),
+			_ => new ControlSnapshotRequiredException("Full snapshot required")
+		};
+		var calls = 0;
+		await using var controller = new MediaTimelineController((_, _) =>
+		{
+			calls++;
+			return ValueTask.FromException<MediaTransportCommandResult>(failure);
+		});
+		controller.ApplyConfirmedSnapshot(Snapshot(10, 100, MediaTransportState.Paused));
+		controller.BeginPointerSeek();
+		await Assert.ThrowsAsync(failure.GetType(), () => controller.CompletePointerSeekAsync(80).AsTask());
+		Assert.Equal(10, controller.State.ConfirmedFrame);
+		Assert.Equal(10, controller.State.DisplayFrame);
+		Assert.False(controller.State.HasPendingSeek);
+		Assert.False(controller.State.CanSeek);
+		Assert.True(controller.RequiresSynchronization);
+		Assert.Contains("UNCONFIRMED", controller.State.Failure);
+		await controller.SeekToEndAsync();
+		Assert.Equal(1, calls);
+		controller.ApplyConfirmedSnapshot(Snapshot(42, 100, MediaTransportState.Paused));
+		Assert.Equal(10, controller.State.ConfirmedFrame);
+		Assert.False(controller.State.CanSeek);
+		Assert.True(controller.RequiresSynchronization);
+		Assert.Contains("UNCONFIRMED", controller.State.Failure);
+		Assert.Equal(1, calls);
+	}
+
+	[Fact]
+	public async Task Failed_drag_drops_queued_targets_and_fault_is_observed_during_disposal()
+	{
+		var calls = 0;
+		await using var controller = new MediaTimelineController((_, _) =>
+		{
+			Interlocked.Increment(ref calls);
+			return ValueTask.FromException<MediaTransportCommandResult>(new IOException("Disconnected"));
+		}, TimeSpan.FromMilliseconds(1));
+		controller.ApplyConfirmedSnapshot(Snapshot(10, 100, MediaTransportState.Paused));
+		controller.BeginPointerSeek();
+		controller.PreviewPointerSeek(20);
+		controller.PreviewPointerSeek(30);
+		await Assert.ThrowsAsync<IOException>(() => controller.FlushPendingSeekAsync().AsTask());
+		controller.PreviewPointerSeek(40);
+		await controller.CompletePointerSeekAsync(50);
+		Assert.Equal(1, calls);
+		Assert.Equal(10, controller.State.DisplayFrame);
+		Assert.True(controller.RequiresSynchronization);
+	}
+
+	[Fact]
+	public async Task Passive_snapshot_does_not_replay_a_seek_queued_before_the_failed_request()
+	{
+		var firstReply = new TaskCompletionSource<MediaTransportCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var calls = 0;
+		await using var controller = new MediaTimelineController((_, _) =>
+		{
+			Interlocked.Increment(ref calls);
+			return new ValueTask<MediaTransportCommandResult>(firstReply.Task);
+		});
+		controller.ApplyConfirmedSnapshot(Snapshot(10, 100, MediaTransportState.Paused));
+		var first = controller.SeekToFrameAsync(20).AsTask();
+		var queued = controller.SeekToFrameAsync(30).AsTask();
+		controller.StateChanged += (_, _) =>
+		{
+			if (controller.RequiresSynchronization)
+				controller.ApplyConfirmedSnapshot(Snapshot(42, 100, MediaTransportState.Paused));
+		};
+		firstReply.SetException(new TimeoutException("Lost acknowledgement"));
+		await Assert.ThrowsAsync<TimeoutException>(() => first);
+		await queued;
+		Assert.Equal(1, calls);
+		Assert.Equal(10, controller.State.ConfirmedFrame);
+		Assert.False(controller.State.CanSeek);
+	}
+
+	[Fact]
+	public async Task Disposal_cancels_and_drains_a_direct_seek_before_disposing_its_send_gate()
+	{
+		var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var controller = new MediaTimelineController(async (_, token) =>
+		{
+			started.SetResult();
+			await Task.Delay(Timeout.Infinite, token);
+			throw new InvalidOperationException("Cancelled send unexpectedly continued.");
+		});
+		controller.ApplyConfirmedSnapshot(Snapshot(10, 100, MediaTransportState.Paused));
+		var request = controller.SeekToFrameAsync(20).AsTask();
+		await started.Task;
+		await controller.DisposeAsync();
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+	}
+
+	[Fact]
+	public async Task Unexpected_sender_fault_is_not_classified_as_a_recoverable_transport_failure()
+	{
+		await using var controller = new MediaTimelineController((_, _) =>
+			ValueTask.FromException<MediaTransportCommandResult>(new InvalidOperationException("Invariant failed")));
+		controller.ApplyConfirmedSnapshot(Snapshot(10, 100, MediaTransportState.Paused));
+		await Assert.ThrowsAsync<InvalidOperationException>(() => controller.SeekToStartAsync().AsTask());
+		Assert.False(controller.RequiresSynchronization);
+	}
+
 	private static MediaTransportSnapshot Snapshot(
 		long currentFrame,
 		long totalFrames,
@@ -210,3 +323,4 @@ public sealed class MediaTimelineControllerTests
 	private static Identity Id(int value) =>
 		Identity.Parse($"43000000-0000-0000-0000-{value:000000000000}");
 }
+

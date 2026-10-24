@@ -44,24 +44,34 @@ public sealed class MediaDeckController : IAsyncDisposable
 		}
 	}
 
-	public async ValueTask<MediaDeckSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
+	public ValueTask<MediaDeckSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+		ReadSnapshotAsync(_selectedSource, select: false, cancellationToken);
+
+	public ValueTask<MediaDeckSnapshot> SelectAsync(MediaSourceId source, CancellationToken cancellationToken = default) =>
+		ReadSnapshotAsync(source, select: true, cancellationToken);
+
+	private async ValueTask<MediaDeckSnapshot> ReadSnapshotAsync(MediaSourceId? source, bool select, CancellationToken cancellationToken)
 	{
 		ThrowIfDisposed();
-		var snapshot = _selectedSource is { } source
-            ? await _client.GetMediaDeckSnapshotAsync(source, cancellationToken).ConfigureAwait(false)
-            : await _client.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(snapshot);
-		return snapshot;
+		var synchronization = Timeline.CaptureSynchronizationState();
+		try
+		{
+			if (synchronization.Required)
+				await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+			var snapshot = source is { } selected
+				? await _client.GetMediaDeckSnapshotAsync(selected, cancellationToken).ConfigureAwait(false)
+				: await _client.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			cancellationToken.ThrowIfCancellationRequested();
+			if (ApplySnapshot(snapshot, synchronization.Generation, synchronization.Required) && select)
+				_selectedSource = source;
+			return snapshot;
+		}
+		catch (Exception exception) when (MediaTimelineController.IsRecoverableTransportFailure(exception))
+		{
+			Timeline.SuspendUntilSynchronization(exception.Message);
+			throw;
+		}
 	}
-
-    public async ValueTask<MediaDeckSnapshot> SelectAsync(MediaSourceId source, CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        var snapshot = await _client.GetMediaDeckSnapshotAsync(source, cancellationToken).ConfigureAwait(false);
-        _selectedSource = source;
-        ApplySnapshot(snapshot);
-        return snapshot;
-    }
 
 	public ValueTask<MediaDeckSnapshot> OpenAsync(
 		string path,
@@ -77,8 +87,11 @@ public sealed class MediaDeckController : IAsyncDisposable
 	{
 		ThrowIfDisposed();
         _selectedSource = sourceId;
-		var snapshot = await _client.OpenMediaDeckAsync(path, sourceId, assetId, cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(snapshot);
+		var generation = Timeline.CaptureSynchronizationState().Generation;
+		var snapshot = await RequestMutationAsync(
+			() => _client.OpenMediaDeckAsync(path, sourceId, assetId, cancellationToken),
+			generation, cancellationToken).ConfigureAwait(false);
+		ApplySnapshot(snapshot, generation);
 		return snapshot;
 	}
 
@@ -99,24 +112,30 @@ public sealed class MediaDeckController : IAsyncDisposable
 		if (!Enum.IsDefined(typeof(MediaDeckEndBehavior), endBehavior))
 			throw new ArgumentOutOfRangeException(nameof(endBehavior));
 		var snapshot = RequireLoaded();
+		var generation = Timeline.CaptureSynchronizationState().Generation;
 		var command = new MediaTransportCommand(
 			MediaContractVersion.Current,
 			snapshot.Probe!.AssetId,
 			MediaTransportCommandKind.ConfigurePlayback,
 			autoPlayOnProgram: autoPlayOnProgram,
 			endBehavior: endBehavior) { SourceId = snapshot.SourceId };
-		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(response);
+		var response = await RequestMutationAsync(
+			() => _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken),
+			generation, cancellationToken).ConfigureAwait(false);
+		ApplySnapshot(response, generation);
 		return response;
 	}
 
 	public async ValueTask<MediaDeckSnapshot> CloseAsync(CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
-		var snapshot = _selectedSource is { } source
-            ? await _client.CloseMediaDeckAsync(source, cancellationToken).ConfigureAwait(false)
-            : await _client.CloseMediaDeckAsync(cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(snapshot);
+		var generation = Timeline.CaptureSynchronizationState().Generation;
+		var snapshot = await RequestMutationAsync(
+			() => _selectedSource is { } source
+				? _client.CloseMediaDeckAsync(source, cancellationToken)
+				: _client.CloseMediaDeckAsync(cancellationToken),
+			generation, cancellationToken).ConfigureAwait(false);
+		ApplySnapshot(snapshot, generation);
 		return snapshot;
 	}
 
@@ -125,14 +144,16 @@ public sealed class MediaDeckController : IAsyncDisposable
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ThrowIfDisposed();
         if (_selectedSource is { } source && snapshot.SourceId != source) return;
-		ApplySnapshot(snapshot);
+		ApplySnapshot(snapshot, Timeline.CaptureSynchronizationState().Generation);
 	}
 
 	public async ValueTask DisposeAsync()
 	{
-		if (_disposed)
-			return;
-		_disposed = true;
+		lock (_gate)
+		{
+			if (_disposed) return;
+			_disposed = true;
+		}
 		await Markers.DisposeAsync().ConfigureAwait(false);
 		await Timeline.DisposeAsync().ConfigureAwait(false);
 	}
@@ -142,12 +163,15 @@ public sealed class MediaDeckController : IAsyncDisposable
 		CancellationToken cancellationToken)
 	{
 		var snapshot = RequireLoaded();
+		var generation = Timeline.CaptureSynchronizationState().Generation;
 		var command = new MediaTransportCommand(
 			MediaContractVersion.Current,
 			snapshot.Probe!.AssetId,
 			kind) { SourceId = snapshot.SourceId };
-		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(response);
+		var response = await RequestMutationAsync(
+			() => _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken),
+			generation, cancellationToken).ConfigureAwait(false);
+		ApplySnapshot(response, generation);
 		return response;
 	}
 
@@ -158,9 +182,11 @@ public sealed class MediaDeckController : IAsyncDisposable
 		MediaTransportSnapshot previous;
 		lock (_gate)
 			previous = _snapshot.Transport ?? throw new MediaDeckTransportUnavailableException();
+		var generation = Timeline.CaptureSynchronizationState().Generation;
 
 		var response = await _client.ApplyMediaDeckTransportAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(response);
+		cancellationToken.ThrowIfCancellationRequested();
+		ApplySnapshot(response, generation);
 		if (response.Transport is not null && response.State != MediaDeckState.Error)
 			return MediaTransportCommandResult.Accepted(response.Transport);
 
@@ -177,9 +203,11 @@ public sealed class MediaDeckController : IAsyncDisposable
 		MediaMarkerSnapshot previous;
 		lock (_gate)
 			previous = _snapshot.Markers ?? throw new MediaDeckMarkersUnavailableException();
+		var generation = Timeline.CaptureSynchronizationState().Generation;
 
 		var response = await _client.ApplyMediaDeckMarkerAsync(command with { SourceId = _selectedSource ?? command.SourceId }, cancellationToken).ConfigureAwait(false);
-		ApplySnapshot(response);
+		cancellationToken.ThrowIfCancellationRequested();
+		ApplySnapshot(response, generation);
 		if (response.Markers is not null && response.State != MediaDeckState.Error)
 			return MediaMarkerCommandResult.Applied(response.Markers);
 
@@ -189,20 +217,43 @@ public sealed class MediaDeckController : IAsyncDisposable
 		return MediaMarkerCommandResult.Rejected(previous, failure.Code, failure.Message);
 	}
 
-	private void ApplySnapshot(MediaDeckSnapshot snapshot)
+	private async ValueTask<MediaDeckSnapshot> RequestMutationAsync(
+		Func<ValueTask<MediaDeckSnapshot>> send, long generation, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		if (!Timeline.IsCommandGenerationCurrent(generation))
+			throw new ControlSnapshotRequiredException("Media state must be synchronized before another command.");
+		try
+		{
+			var response = await send().ConfigureAwait(false);
+			cancellationToken.ThrowIfCancellationRequested();
+			return response;
+		}
+		catch (OperationCanceledException)
+		{
+			Timeline.SuspendUntilSynchronization("The media action was cancelled after dispatch; its outcome is unknown.");
+			throw;
+		}
+		catch (Exception exception) when (MediaTimelineController.IsRecoverableTransportFailure(exception))
+		{
+			Timeline.SuspendUntilSynchronization(exception.Message);
+			throw;
+		}
+	}
+
+	private bool ApplySnapshot(MediaDeckSnapshot snapshot, long generation, bool synchronized = false)
 	{
 		lock (_gate)
+			if (_disposed) return false;
+		if (!Timeline.ApplyObservedSnapshot(snapshot.Transport, generation, synchronized)) return false;
+		lock (_gate)
+		{
+			if (_disposed) return false;
 			_snapshot = snapshot;
-
-		if (snapshot.Transport is not null)
-			Timeline.ApplyConfirmedSnapshot(snapshot.Transport);
-		else
-			Timeline.ClearConfirmedSnapshot();
-		if (snapshot.Markers is not null)
-			Markers.ApplyConfirmedSnapshot(snapshot.Markers);
-		else
-			Markers.ClearConfirmedSnapshot();
+		}
+		if (!Markers.ApplyObservedSnapshot(snapshot.Markers)) return false;
 		StateChanged?.Invoke(this, EventArgs.Empty);
+		return true;
 	}
 
 	private MediaDeckSnapshot RequireLoaded()
@@ -218,3 +269,4 @@ public sealed class MediaDeckController : IAsyncDisposable
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 }
+
