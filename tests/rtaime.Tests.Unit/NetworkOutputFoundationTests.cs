@@ -485,7 +485,7 @@ public sealed class NetworkOutputFoundationTests
         public int Disposals { get; private set; }
         public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => ValueTask.CompletedTask;
         public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
-            ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 0x47 });
+            ValueTask.FromResult<ReadOnlyMemory<byte>>(TransportPacket());
         public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token) => ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
         public ValueTask DisposeAsync()
         {
@@ -781,6 +781,16 @@ public sealed class NetworkOutputFoundationTests
 		public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 	}
 
+	private static byte[] TransportPacket()
+	{
+		var packet = new byte[188];
+		packet[0] = 0x47;
+		packet[1] = 0x1f;
+		packet[2] = 0xff;
+		packet[3] = 0x10;
+		return packet;
+	}
+
 	private sealed class PassThroughEncoder(bool failInitialization = false) : ISrtPayloadEncoder
 	{
 		public int DisposeCount { get; private set; }
@@ -794,7 +804,7 @@ public sealed class NetworkOutputFoundationTests
 		public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken cancellationToken)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			return ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 0x47, 0x40, 0x00, 0x10 });
+			return ValueTask.FromResult<ReadOnlyMemory<byte>>(TransportPacket());
 		}
 		public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken cancellationToken) =>
 			ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
@@ -805,3 +815,4 @@ public sealed class NetworkOutputFoundationTests
 		}
 	}
 }
+
