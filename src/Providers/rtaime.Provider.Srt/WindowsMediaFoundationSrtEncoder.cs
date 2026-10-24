@@ -401,7 +401,10 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 			Marshal.Release(_byteStream);
 			_byteStream = IntPtr.Zero;
 		}
+		_stream?.Dispose();
 		_stream = null;
+		_nv12Buffer = null;
+		_pcm16Buffer = null;
 		if (_mediaFoundationStarted)
 		{
 			_mediaFoundationStarted = false;
@@ -423,105 +426,6 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 	}
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
-}
-
-[ComVisible(true)]
-[ClassInterface(ClassInterfaceType.None)]
-internal sealed class ChunkedComStream : IStream
-{
-	private readonly MemoryStream _stream = new();
-	private long _drainedLength;
-
-	public byte[] Drain()
-	{
-		lock (_stream)
-		{
-			if (_stream.Length <= _drainedLength)
-				return Array.Empty<byte>();
-			var count = checked((int)(_stream.Length - _drainedLength));
-			var result = new byte[count];
-			var position = _stream.Position;
-			_stream.Position = _drainedLength;
-			_ = _stream.Read(result, 0, count);
-			_drainedLength = _stream.Length;
-			_stream.Position = position;
-			return result;
-		}
-	}
-
-	public void Read(byte[] pv, int cb, IntPtr pcbRead)
-	{
-		lock (_stream)
-		{
-			var read = _stream.Read(pv, 0, cb);
-			if (pcbRead != IntPtr.Zero) Marshal.WriteInt32(pcbRead, read);
-		}
-	}
-
-	public void Write(byte[] pv, int cb, IntPtr pcbWritten)
-	{
-		lock (_stream)
-		{
-			_stream.Write(pv, 0, cb);
-			if (pcbWritten != IntPtr.Zero) Marshal.WriteInt32(pcbWritten, cb);
-		}
-	}
-
-	public void Seek(long dlibMove, int dwOrigin, IntPtr plibNewPosition)
-	{
-		lock (_stream)
-		{
-			var origin = dwOrigin switch
-			{
-				0 => SeekOrigin.Begin,
-				1 => SeekOrigin.Current,
-				2 => SeekOrigin.End,
-				_ => throw new ArgumentOutOfRangeException(nameof(dwOrigin))
-			};
-			var position = _stream.Seek(dlibMove, origin);
-			if (position < _drainedLength)
-				throw new IOException("Streaming container attempted to rewrite already published bytes.");
-			if (plibNewPosition != IntPtr.Zero) Marshal.WriteInt64(plibNewPosition, position);
-		}
-	}
-
-	public void SetSize(long libNewSize)
-	{
-		lock (_stream)
-		{
-			if (libNewSize < _drainedLength)
-				throw new IOException("Streaming container attempted to truncate already published bytes.");
-			_stream.SetLength(libNewSize);
-		}
-	}
-
-	public void CopyTo(IStream pstm, long cb, IntPtr pcbRead, IntPtr pcbWritten)
-	{
-		var buffer = new byte[Math.Min(64 * 1024, checked((int)Math.Min(cb, int.MaxValue)))];
-		long total = 0;
-		while (total < cb)
-		{
-			var count = checked((int)Math.Min(buffer.Length, cb - total));
-			int read;
-			lock (_stream) read = _stream.Read(buffer, 0, count);
-			if (read == 0) break;
-			pstm.Write(buffer, read, IntPtr.Zero);
-			total += read;
-		}
-		if (pcbRead != IntPtr.Zero) Marshal.WriteInt64(pcbRead, total);
-		if (pcbWritten != IntPtr.Zero) Marshal.WriteInt64(pcbWritten, total);
-	}
-
-	public void Commit(int grfCommitFlags) { }
-	public void Revert() => throw new COMException("Revert is not supported.", unchecked((int)0x80004001));
-	public void LockRegion(long libOffset, long cb, int dwLockType) { }
-	public void UnlockRegion(long libOffset, long cb, int dwLockType) { }
-	public void Stat(out STATSTG pstatstg, int grfStatFlag)
-	{
-		lock (_stream)
-			pstatstg = new STATSTG { cbSize = _stream.Length, type = 2 };
-	}
-	public void Clone(out IStream ppstm) => throw new COMException("Clone is not supported.", unchecked((int)0x80004001));
 }
 
 internal static class MediaFoundationNetwork
@@ -728,3 +632,4 @@ internal interface IMFSinkWriter
 	[PreserveSig] int GetServiceForStream(uint streamIndex, ref Guid service, ref Guid riid, out IntPtr value);
 	[PreserveSig] int GetStatistics(uint streamIndex, IntPtr statistics);
 }
+

@@ -59,6 +59,25 @@ Legacy Runtime descriptors that omit `protocol` continue to resolve as SRT.
 
 Listener and rendezvous configuration values remain explicit but are not qualified by the first native SRT reference transport.
 
+The live Message API, bounded TS packetization, per-message accounting and explicit
+Windows/native peer profile are documented in [SRT transport qualification](SrtTransportQualification.md).
+
+The Media Foundation mux stream retains only unpublished output. Logical COM
+length and seek positions remain absolute after each drain; rewrites, reads or
+truncation of already published bytes fail without moving the cursor. Pending
+output, including sparse seeks and `SetSize`, is bounded to 16 MiB per encoder.
+A drain transfers an independent payload and compacts the pending window to zero,
+retaining at most 64 KiB of reusable capacity. Encoder teardown disposes the stream
+and releases conversion scratch buffers. Memory therefore depends on pending mux
+output and the current drain, rather than elapsed broadcast duration.
+
+`SrtMuxStreamTests` writes and drains 256 MiB while checking exact payload order,
+absolute offsets, empty pending length and the retained-capacity bound after every
+drain. It also covers all seek origins, resize/cursor behavior, sparse bounds,
+failed-operation atomicity and disposal. Exceeding the pending limit follows the
+existing isolated encoder failure/reconnect path; it never expands storage without
+a bound or changes Program authority.
+
 ## NDI software path
 
 `rtaime.Provider.Ndi` adds an NDI High Bandwidth software-output boundary for the current qualified software baseline:
@@ -288,3 +307,4 @@ Runtime video uses a rational frame clock (1/50 or 1001/60000); audio uses the 1
 Repeated NDI/SRT Dispose calls join one worker/native cleanup operation. Cancellation stops new admission; every queued lease is returned even if native cleanup fails. The Runtime bridge attempts every session cleanup before propagating the first failure, and repeated bridge disposal reports that same completion/failure. Runtime also drains the other consumers before reporting a cleanup failure; GPU teardown still requires zero active readback and shared monitoring owners.
 
 The mixed-consumer qualification exercises real session queues with simulated NDI/SRT backends. It proves bounded admission and recovery behavior, not peer interoperability, encoder quality or native shutdown latency.
+
