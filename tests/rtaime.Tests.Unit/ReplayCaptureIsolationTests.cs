@@ -10,6 +10,44 @@ namespace rtaime.Tests.Unit;
 public sealed class ReplayCaptureIsolationTests
 {
     [Fact]
+    public async Task Capture_restart_reclaims_previous_physical_segments_before_opening_a_new_writer()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-replay-restart-" + Guid.NewGuid().ToString("N"));
+        using var gpu = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        gpu.Start();
+        using var frame = gpu.Upload(MediaSourceId.New(),
+            RgbaFrameBuffer.Solid(new VideoFormat(2, 1, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive), 1, 2, 3),
+            new FrameTiming(0, 0, new Timebase(1, 50)), Generation.Initial, "replay-restart");
+        var audio = new AudioBufferDescriptor(MediaContractVersion.Current, AudioStreamId.New(),
+            AudioFormat.Stereo48kFloat32, Identity.New(),
+            new AudioBufferTiming(0, 960, 0, new Timebase(1, 50)), new OpaqueAudioHandle("replay-restart", "0"));
+        string? previous = null;
+        try
+        {
+            for (var session = 0; session < 6; session++)
+            {
+                var writer = new Writer();
+                writer.Release.TrySetResult();
+                await using var capture = new ReplayCaptureEngine(root, () => writer);
+                var lease = new Lease();
+                Assert.True(capture.TryEnqueue(MediaSinkId.New(), frame.Descriptor, audio, lease, new byte[7680]).Accepted);
+                await capture.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(1, lease.Disposals);
+                Assert.Null(capture.Snapshot.Failure);
+                Assert.Single(capture.Snapshot.Segments);
+                Assert.Single(Directory.GetFiles(root, "replay-*.mp4"));
+                Assert.Equal(new FileInfo(writer.FinalPath!).Length, capture.Snapshot.Statistics.RetainedBytes);
+                if (previous is not null) Assert.False(File.Exists(previous));
+                previous = writer.FinalPath;
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task Every_stop_waits_for_the_same_worker_and_cancellation_does_not_abandon_drain()
     {
         var root = Path.Combine(Path.GetTempPath(), "rtaime-replay-drain-" + Guid.NewGuid().ToString("N"));
@@ -76,6 +114,8 @@ public sealed class ReplayCaptureIsolationTests
             Assert.Equal(1, writer.Aborts);
             Assert.Equal(1, lease.Disposals);
             Assert.Equal(1UL, capture.Snapshot.Statistics.DroppedSamples);
+            Assert.Empty(Directory.GetFiles(root, "replay-*"));
+            Assert.Equal(0, capture.Snapshot.Statistics.RetainedBytes);
         }
         finally
         {
@@ -107,7 +147,12 @@ public sealed class ReplayCaptureIsolationTests
         }
         public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken token)
         {
-            if (FailOpen) throw new IOException("Partial writer initialization failed.");
+            if (FailOpen)
+            {
+                var partial = Path.Combine(Path.GetDirectoryName(FinalPath!)!, Path.GetFileNameWithoutExtension(FinalPath!) + ".partial.mp4");
+                File.WriteAllBytes(partial, new byte[] { 7, 8, 9 });
+                throw new IOException("Partial writer initialization failed.");
+            }
             return ValueTask.CompletedTask;
         }
         public void StagePayload(ulong sequence, IProgramRecordingPayloadLease payload, ReadOnlyMemory<byte> audio) => _payload = payload;
@@ -132,3 +177,4 @@ public sealed class ReplayCaptureIsolationTests
         }
     }
 }
+

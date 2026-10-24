@@ -28,7 +28,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	private readonly BoundedDiagnosticHistory<ReplayObservation> _observations = new(RetainedObservationCapacity);
 	private readonly Task _worker;
 
-	private ReplayCaptureState _state = ReplayCaptureState.Capturing;
+	private ReplayCaptureState _state = ReplayCaptureState.Starting;
 	private Failure? _failure;
 	private bool _stopping;
 	private bool _disposed;
@@ -76,8 +76,11 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	{
 		get
 		{
+			// Storage reclamation can involve slow filesystem operations. Capture
+			// its coherent metadata before taking the Program producer's gate.
+			var storage = _store.CaptureSnapshot();
 			lock (_gate)
-				return SnapshotUnsafe();
+				return SnapshotUnsafe(storage);
 		}
 	}
 
@@ -162,6 +165,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		if (retained.Count == 0)
 			throw new InvalidOperationException("Replay history is empty.");
 
+		ReplayRange selection;
 		lock (_gate)
 		{
 			var latest = retained[^1].End;
@@ -171,11 +175,11 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 				_markIn = latest - DefaultLookback < earliest ? earliest : latest - DefaultLookback;
 			}
 			_markOut = latest;
-			var selection = new ReplayRange(_markIn.Value, _markOut.Value);
-			if (!_store.ContainsRange(selection))
-				throw new InvalidOperationException("Replay selection crosses expired or discontinuous history.");
-			return selection;
+			selection = new ReplayRange(_markIn.Value, _markOut.Value);
 		}
+		if (!_store.ContainsRange(selection))
+			throw new InvalidOperationException("Replay selection crosses expired or discontinuous history.");
+		return selection;
 	}
 
 	public ReplayRange SelectRange(ReplayRange range)
@@ -247,6 +251,25 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 
 	private async Task WorkerAsync()
 	{
+		try
+		{
+			_store.PrepareForCapture(_rootDirectory);
+			lock (_gate)
+			{
+				if (_state == ReplayCaptureState.Starting)
+					_state = ReplayCaptureState.Capturing;
+			}
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			lock (_gate)
+			{
+				_state = ReplayCaptureState.Degraded;
+				_failure = new Failure("replay.storage.unavailable", $"Replay storage preparation failed: {exception.Message}");
+				ObserveUnsafe("replay.storage.unavailable", _failure.Value.Message, null);
+			}
+		}
+
 		SegmentSession? segment = null;
 		while (true)
 		{
@@ -335,7 +358,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 
 	private async ValueTask<SegmentSession> StartSegmentAsync(QueuedSample first)
 	{
-		Directory.CreateDirectory(_rootDirectory);
+		_store.PrepareForCapture(_rootDirectory);
 		var id = ReplaySegmentId.New();
 		var outputId = new RecordingOutputId(id.Value);
 		var writer = _writerFactory();
@@ -353,6 +376,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		{
 			try { await writer.AbortAsync(CancellationToken.None).ConfigureAwait(false); }
 			catch { }
+			ReclaimAbandonedFiles();
 			throw;
 		}
 
@@ -400,33 +424,43 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		}
 	}
 
-	private static async ValueTask AbortSegmentAsync(SegmentSession segment)
+	private async ValueTask AbortSegmentAsync(SegmentSession segment)
 	{
 		try { await segment.Writer.AbortAsync(CancellationToken.None).ConfigureAwait(false); }
 		catch { }
+		ReclaimAbandonedFiles();
 	}
 
-	private ReplayBufferSnapshot SnapshotUnsafe()
+	private void ReclaimAbandonedFiles()
 	{
-		var segments = _store.Snapshot();
+		try { _store.PrepareForCapture(_rootDirectory); }
+		catch (IOException) { }
+		catch (UnauthorizedAccessException) { }
+	}
+
+	private ReplayBufferSnapshot SnapshotUnsafe(RollingReplaySegmentStore.StoreSnapshot storage)
+	{
+		var storageFailure = storage.StorageFailure;
+		var state = storageFailure is not null && _state is ReplayCaptureState.Starting or ReplayCaptureState.Capturing
+			? ReplayCaptureState.Degraded : _state;
 		ReplayRange? selection = null;
 		if (_markIn is { } @in && _markOut is { } @out && @out > @in)
 			selection = new ReplayRange(@in, @out);
 		return new ReplayBufferSnapshot(
 			ReplayContractVersion.Current,
-			_state,
+			state,
 			selection is null ? ReplayClipState.Idle : ReplayClipState.Marked,
 			_store.Policy,
-			segments,
+			storage.Segments,
 			selection,
 			new ReplayStatistics(
 				_accepted,
 				_dropped,
 				_finalized,
-				_store.EvictedSegments,
+				storage.EvictedSegments,
 				_discontinuities,
-				_store.RetainedBytes),
-			_failure);
+				storage.RetainedBytes),
+			storageFailure ?? _failure);
 	}
 
 	private void ObserveUnsafe(string code, string message, ulong? sequence, ReplaySegmentId? segmentId = null) =>
@@ -491,3 +525,4 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		public void Dispose() { }
 	}
 }
+
