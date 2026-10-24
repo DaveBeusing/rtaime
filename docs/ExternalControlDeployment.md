@@ -171,7 +171,11 @@ Rundown automation continues to use the existing bounded rundown operations and 
 
 External mutations reuse the same stable request/command identity and ControlHost request-result cache as local control.
 
-If a network outcome is uncertain, the client may retry once with the same request identity. A duplicate request with the same canonical content receives the cached result. Reusing the same request identity with different content fails closed.
+If a network outcome is uncertain, the client may retry once with the same request identity. ControlHost atomically reserves the identity and canonical operation/payload before dispatch. A concurrent duplicate waits for the original result; a completed duplicate receives that retained result, including its original state version and sequence. Reusing the identity with different content fails closed even while the original operation is running. The external response preserves the current caller's correlation identity.
+
+The shared local/external cache is bounded to 256 identities. Capacity pressure evicts only completed entries; it never evicts in-flight work. If every slot is occupied by an in-flight operation, a new identity receives `ipc.request_capacity_exceeded` without dispatch, while duplicates can still join their existing operation. A duplicate caller cancelling its wait does not cancel the original operation. If the original dispatch fails or is cancelled, subsequent duplicates receive the retained `ipc.request_outcome_unknown` result instead of re-executing possibly completed effects. The client must synchronize authoritative state before deciding on further action and must not invent a new identity to replay an uncertain action.
+
+Retention is bounded, not a durable exactly-once ledger. Clients must not replay old identities after cache eviction or across a host replacement.
 
 Expected Production Revision conflicts remain Control-layer concurrency conflicts. The external transport does not bypass or replace the authoritative revision checks.
 
