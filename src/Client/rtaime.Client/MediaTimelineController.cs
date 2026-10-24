@@ -226,6 +226,8 @@ public sealed class MediaTimelineController : IAsyncDisposable
 	private Task? _drainTask;
 	private bool _isDragging;
 	private bool _disposed;
+	private string? _unconfirmedFailure;
+	private long _commandGeneration;
 
 	public MediaTimelineController(
 		MediaTransportCommandSender? sender = null,
@@ -239,6 +241,28 @@ public sealed class MediaTimelineController : IAsyncDisposable
 
 	public event EventHandler? StateChanged;
 
+	public bool RequiresSynchronization
+	{
+		get { lock (_gate) return _unconfirmedFailure is not null; }
+	}
+
+	public void SuspendUntilSynchronization(string reason)
+	{
+		lock (_gate)
+		{
+			_unconfirmedFailure = $"MEDIA ACTION UNCONFIRMED · Refresh authoritative state before another command. {reason}";
+			_commandGeneration++;
+			_isDragging = false;
+			_previewFrame = null;
+			_queuedFrame = null;
+		}
+		RaiseStateChanged();
+	}
+
+	internal static bool IsRecoverableTransportFailure(Exception exception) =>
+		exception is IOException or TimeoutException or RemoteHostSessionChangedException or
+			ControlSnapshotRequiredException or Grpc.Core.RpcException;
+
 	public MediaTimelineState State
 	{
 		get
@@ -248,30 +272,51 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		}
 	}
 
+	internal (long Generation, bool Required) CaptureSynchronizationState()
+	{
+		lock (_gate) return (_commandGeneration, _unconfirmedFailure is not null);
+	}
+
+	internal bool IsCommandGenerationCurrent(long generation)
+	{
+		lock (_gate)
+			return !_disposed && _unconfirmedFailure is null && generation == _commandGeneration;
+	}
+
 	public void ApplyConfirmedSnapshot(MediaTransportSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ThrowIfDisposed();
+		ApplyObservedSnapshot(snapshot, CaptureSynchronizationState().Generation);
+	}
+
+	internal bool ApplyObservedSnapshot(MediaTransportSnapshot? snapshot, long generation, bool synchronized = false)
+	{
 		lock (_gate)
 		{
+			if (_disposed) return false;
+			// Only a read begun for this exact uncertainty generation may reconcile it.
+			// Passive snapshots and late command responses cannot withdraw the barrier.
+			if (generation != _commandGeneration || (_unconfirmedFailure is not null && !synchronized))
+				return false;
+			var contextChanged = _confirmed?.AssetId != snapshot?.AssetId || _confirmed?.SourceId != snapshot?.SourceId;
 			_confirmed = snapshot;
-			if (!_isDragging)
-				_previewFrame = null;
+			if (synchronized) _unconfirmedFailure = null;
+			if (contextChanged)
+			{
+				_commandGeneration++;
+				_isDragging = false;
+				_queuedFrame = null;
+			}
+			if (!_isDragging || snapshot is null) _previewFrame = null;
 		}
 		RaiseStateChanged();
+		return true;
 	}
 
 	internal void ClearConfirmedSnapshot()
 	{
-		ThrowIfDisposed();
-		lock (_gate)
-		{
-			_confirmed = null;
-			_previewFrame = null;
-			_queuedFrame = null;
-			_isDragging = false;
-		}
-		RaiseStateChanged();
+		ApplyObservedSnapshot(null, CaptureSynchronizationState().Generation);
 	}
 
 	public void BeginPointerSeek()
@@ -279,7 +324,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		ThrowIfDisposed();
 		lock (_gate)
 		{
-			if (_confirmed is null || _sender is null)
+			if (_confirmed is null || _sender is null || _unconfirmedFailure is not null)
 				return;
 			_isDragging = true;
 			_previewFrame = _confirmed.Position.CurrentFrame;
@@ -300,7 +345,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		var shouldStartDrain = false;
 		lock (_gate)
 		{
-			if (!_isDragging || _confirmed is null || _sender is null)
+			if (!_isDragging || _confirmed is null || _sender is null || _unconfirmedFailure is not null)
 				return;
 
 			var clamped = ClampFrame(targetFrame, _confirmed.Position.TotalFrames);
@@ -324,7 +369,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		long clamped;
 		lock (_gate)
 		{
-			if (_confirmed is null || _sender is null)
+			if (_confirmed is null || _sender is null || _unconfirmedFailure is not null)
 			{
 				_isDragging = false;
 				_previewFrame = null;
@@ -354,7 +399,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		long target;
 		lock (_gate)
 		{
-			if (_confirmed is null || _sender is null)
+			if (_confirmed is null || _sender is null || _unconfirmedFailure is not null)
 				return;
 			target = ClampFrame(checked(_confirmed.Position.CurrentFrame + frameDelta), _confirmed.Position.TotalFrames);
 		}
@@ -375,7 +420,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		long target;
 		lock (_gate)
 		{
-			if (_confirmed is null || _sender is null)
+			if (_confirmed is null || _sender is null || _unconfirmedFailure is not null)
 				return;
 			target = _confirmed.Position.TotalFrames - 1;
 		}
@@ -394,9 +439,11 @@ public sealed class MediaTimelineController : IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
-		if (_disposed)
-			return;
-		_disposed = true;
+		lock (_gate)
+		{
+			if (_disposed) return;
+			_disposed = true;
+		}
 		_dispose.Cancel();
 		Task? drain;
 		lock (_gate)
@@ -405,7 +452,10 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		{
 			try { await drain.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
+			catch (Exception exception) when (IsRecoverableTransportFailure(exception)) { }
 		}
+		// Direct keyboard/release requests can still own the semaphore after drag disposal.
+		await _sendGate.WaitAsync().ConfigureAwait(false);
 		_dispose.Dispose();
 		_sendGate.Dispose();
 	}
@@ -441,17 +491,21 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		if (drain is null)
 			return;
 		try { await drain.ConfigureAwait(false); }
-		catch (OperationCanceledException) when (_dispose.IsCancellationRequested) { }
+		catch (OperationCanceledException) { }
+		catch (Exception exception) when (IsRecoverableTransportFailure(exception)) { }
 	}
 
 	private async ValueTask SendSeekAsync(long targetFrame, CancellationToken cancellationToken)
 	{
 		MediaTransportSnapshot? snapshot;
 		MediaTransportCommandSender? sender;
+		long generation;
 		lock (_gate)
 		{
+			if (_unconfirmedFailure is not null) return;
 			snapshot = _confirmed;
 			sender = _sender;
+			generation = _commandGeneration;
 		}
 		if (snapshot is null || sender is null)
 			return;
@@ -460,15 +514,30 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		await _sendGate.WaitAsync(linked.Token).ConfigureAwait(false);
 		try
 		{
+			// A failure invalidates every queued gesture, even if synchronization finishes before it acquires the gate.
+			lock (_gate)
+				if (_unconfirmedFailure is not null || generation != _commandGeneration) return;
 			var command = new MediaTransportCommand(
 				MediaContractVersion.Current,
 				snapshot.AssetId,
 				MediaTransportCommandKind.Seek,
 				ClampFrame(targetFrame, snapshot.Position.TotalFrames));
 			MediaTransportCommandResult result;
+			linked.Token.ThrowIfCancellationRequested();
 			try
 			{
 				result = await sender(command, linked.Token).ConfigureAwait(false);
+				linked.Token.ThrowIfCancellationRequested();
+			}
+			catch (OperationCanceledException)
+			{
+				SuspendUntilSynchronization("The media seek was cancelled after dispatch; its outcome is unknown.");
+				throw;
+			}
+			catch (Exception exception) when (IsRecoverableTransportFailure(exception))
+			{
+				SuspendUntilSynchronization(exception.Message);
+				throw;
 			}
 			catch (MediaDeckTransportUnavailableException)
 			{
@@ -477,6 +546,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 			}
 			lock (_gate)
 			{
+				if (_disposed || _unconfirmedFailure is not null || generation != _commandGeneration) return;
 				_confirmed = result.Snapshot;
 				if (!_isDragging)
 					_previewFrame = null;
@@ -492,14 +562,14 @@ public sealed class MediaTimelineController : IAsyncDisposable
 	private MediaTimelineState CreateState()
 	{
 		if (_confirmed is null)
-			return MediaTimelineState.Empty;
+			return MediaTimelineState.Empty with { Failure = _unconfirmedFailure };
 
 		var position = _confirmed.Position;
 		var displayFrame = _previewFrame ?? position.CurrentFrame;
 		var progress = position.TotalFrames <= 1
 			? 0
 			: (double)displayFrame / (position.TotalFrames - 1);
-		var canSeek = _sender is not null &&
+		var canSeek = _unconfirmedFailure is null && _sender is not null &&
 			_confirmed.State is MediaTransportState.Ready or MediaTransportState.Playing or MediaTransportState.Paused or MediaTransportState.Ended;
 		return new MediaTimelineState(
 			true,
@@ -514,7 +584,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 			position.FrameRate.ToString(),
 			canSeek,
 			_previewFrame is not null && _previewFrame.Value != position.CurrentFrame,
-			_confirmed.Failure?.Message);
+			_unconfirmedFailure ?? _confirmed.Failure?.Message);
 	}
 
 	private static long ClampFrame(long frame, long totalFrames) =>
@@ -524,3 +594,4 @@ public sealed class MediaTimelineController : IAsyncDisposable
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 }
+

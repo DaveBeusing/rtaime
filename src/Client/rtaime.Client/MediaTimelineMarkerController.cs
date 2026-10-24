@@ -61,18 +61,21 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ThrowIfDisposed();
-		lock (_gate)
-			_confirmed = snapshot;
-		RaiseStateChanged();
+		ApplyObservedSnapshot(snapshot);
 	}
 
-	internal void ClearConfirmedSnapshot()
+	internal bool ApplyObservedSnapshot(MediaMarkerSnapshot? snapshot)
 	{
-		ThrowIfDisposed();
 		lock (_gate)
-			_confirmed = null;
+		{
+			if (_disposed) return false;
+			_confirmed = snapshot;
+		}
 		RaiseStateChanged();
+		return true;
 	}
+
+	internal void ClearConfirmedSnapshot() => ApplyObservedSnapshot(null);
 
 	public ValueTask<bool> SetInAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
 		SetInAtFrameAsync(_timeline.State.ConfirmedFrame, cancellationToken);
@@ -200,16 +203,17 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		return true;
 	}
 
-	public ValueTask DisposeAsync()
+	public async ValueTask DisposeAsync()
 	{
-		if (_disposed)
-			return ValueTask.CompletedTask;
-
-		_disposed = true;
+		lock (_gate)
+		{
+			if (_disposed) return;
+			_disposed = true;
+		}
 		_dispose.Cancel();
+		await _sendGate.WaitAsync().ConfigureAwait(false);
 		_dispose.Dispose();
 		_sendGate.Dispose();
-		return ValueTask.CompletedTask;
 	}
 
 	private ValueTask<bool> SendAtFrameAsync(
@@ -237,25 +241,44 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		MediaMarkerSnapshot? snapshot;
 		lock (_gate)
 			snapshot = _confirmed;
-		if (snapshot is null || _sender is null || !_timeline.State.IsLoaded)
+		var generation = _timeline.CaptureSynchronizationState().Generation;
+		if (snapshot is null || _sender is null || !_timeline.State.IsLoaded || !_timeline.IsCommandGenerationCurrent(generation))
 			return false;
 
 		using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _dispose.Token);
 		await _sendGate.WaitAsync(linked.Token).ConfigureAwait(false);
 		try
 		{
+			if (!_timeline.IsCommandGenerationCurrent(generation)) return false;
+			var command = commandFactory(snapshot);
+			linked.Token.ThrowIfCancellationRequested();
 			MediaMarkerCommandResult result;
 			try
 			{
-				result = await _sender(commandFactory(snapshot), linked.Token).ConfigureAwait(false);
+				result = await _sender(command, linked.Token).ConfigureAwait(false);
+				linked.Token.ThrowIfCancellationRequested();
+			}
+			catch (OperationCanceledException)
+			{
+				_timeline.SuspendUntilSynchronization("The media marker action was cancelled after dispatch; its outcome is unknown.");
+				throw;
+			}
+			catch (Exception exception) when (MediaTimelineController.IsRecoverableTransportFailure(exception))
+			{
+				_timeline.SuspendUntilSynchronization(exception.Message);
+				throw;
 			}
 			catch (MediaDeckMarkersUnavailableException)
 			{
 				ClearConfirmedSnapshot();
 				return false;
 			}
+			if (!_timeline.IsCommandGenerationCurrent(generation)) return false;
 			lock (_gate)
+			{
+				if (_disposed) return false;
 				_confirmed = result.Snapshot;
+			}
 			RaiseStateChanged();
 			return result.Succeeded;
 		}
@@ -275,3 +298,4 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 }
+

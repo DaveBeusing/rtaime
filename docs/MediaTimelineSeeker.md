@@ -14,13 +14,32 @@ Media Timeline Seeker adds a professional, frame-oriented media timeline to the 
 
 `MediaTimelineController` lives in `rtaime.Client` and is the presentation/client seam between a confirmed `MediaTransportSnapshot` and a `MediaTransportCommand` sender. Its confirmed position is always derived from the latest transport snapshot. Pointer drag may expose a temporary preview frame for immediate visual feedback, but the preview never replaces the confirmed transport state.
 
-Every completed seek is reconciled with the snapshot returned by the command sender. External transport updates may replace the confirmed snapshot at any time. While a pointer drag is active, an external update changes the confirmed position without stealing the visible drag position; completing the drag sends the requested frame and then displays the returned confirmed snapshot.
+Every completed seek is reconciled with the snapshot returned by the command sender. External transport updates may replace the confirmed snapshot while command authority is current. While a pointer drag is active, an external update changes the confirmed position without stealing the visible drag position; completing the drag sends the requested frame and then displays the returned confirmed snapshot.
 
 The WPF `MediaTimelineControl` contains input mapping and presentation only. It does not decode media, own playback state, or connect directly to RuntimeHost. The established Operator → ControlHost → RuntimeHost authority direction remains unchanged. Media Deck Operator can bind the controller to the live media-deck transport seam when the deck composition is completed.
 
+## Recoverable command failures
+
+I/O loss, request deadlines and ControlHost session/full-snapshot faults leave the last confirmed
+position intact. Operator presents `MEDIA ACTION UNCONFIRMED`, discards the temporary drag
+position and all unsent seek intent, and disables media mutations until an authoritative snapshot
+is restored by an explicit full synchronization and deck refresh begun after that failure.
+Passive snapshots and late responses cannot clear a newer uncertainty generation.
+An already dispatched operation may have executed; it is never automatically replayed.
+A snapshot can reveal the requested position or a different position without claiming the lost
+acknowledgement was successful.
+
+The timeline controller records the uncertainty before propagating a direct request failure to its
+presentation boundary. Keyboard, cue, IN/OUT, explicit edit-cursor, pointer-release and trim paths
+contain the expected failure. Coalesced drag and marker failures are recorded before releasing their send gates and stop queued work.
+Cancellation after dispatch is also an unknown outcome; cancellation before dispatch sends no mutation.
+Programmer/invariant faults retain the normal fatal-error behavior. Teardown cancels and drains
+in-flight direct and coalesced seeks before releasing synchronization resources. A successful reply
+racing cancellation remains cancelled, and late replies cannot publish into disposed controllers.
+
 ## Interaction model
 
-The timeline supports click/drag seeking, one-frame backward/forward keyboard movement, and Home/End clip-boundary navigation. Drag updates are coalesced on a 40 ms default cadence so high-rate mouse movement does not create a command flood. Pointer release always sends the exact final target frame.
+The timeline supports click/drag seeking, one-frame backward/forward keyboard movement, and Home/End clip-boundary navigation. Drag updates are coalesced on a 40 ms default cadence so high-rate mouse movement does not create a command flood. Pointer release sends the exact final target frame while transport authority remains current; uncertainty cancels unsent intent.
 
 The WPF layout uses device-independent units. Pointer-to-frame mapping is defined in `MediaTimelineGeometry`; explicit tests cover 100%, 125% and 150% DPI equivalence. The seeker exposes an automation name and help text, while all transport buttons remain keyboard-focusable.
 
@@ -54,3 +73,4 @@ Repository acceptance still requires the normal Release solution build, architec
 ## Handover to Media Markers
 
 Media Markers may build persisted IN/OUT and cue-point markers on the stable frame-based timeline coordinate system. It must not change the authority rule: marker presentation may originate in Operator, but persisted media metadata and effective runtime ranges remain model/control concerns.
+
