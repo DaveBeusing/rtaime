@@ -16,7 +16,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="rtaime.Tests.Integration" />
     <InternalsVisibleTo Include="rtaime.Tests.Performance" />
-    <InternalsVisibleTo Include="rtaime.Tests.Integration" />
   </ItemGroup>
 
   <ItemGroup>
