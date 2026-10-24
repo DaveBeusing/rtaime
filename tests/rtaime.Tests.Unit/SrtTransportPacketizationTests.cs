@@ -124,6 +124,7 @@ public sealed class SrtTransportPacketizationTests
 		await SubmitAsync(session, 1);
 		Assert.Equal(interrupted[..188], Assert.Single(firstTransport.Messages));
 		Assert.Equal(1UL, session.Snapshot.Statistics.DroppedSamples);
+		Assert.Contains("messageBytes=376; packetOffset=0; expectedSync=0x47; actualSync=0x00", session.Snapshot.Failure!.Value.Message);
 		await SubmitAsync(session, 2);
 		Assert.Equal(next, Assert.Single(nextTransport.Messages));
 		Assert.Null(session.Snapshot.Failure);

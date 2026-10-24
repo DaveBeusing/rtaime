@@ -10,6 +10,7 @@ internal sealed class SrtTransportPacketizer
 	private readonly byte[] _residual = new byte[TransportPacketSize];
 	private int _residualLength;
 	private bool _failed;
+	public string? AlignmentFailure { get; private set; }
 
 	public async ValueTask<int> SendAsync(
 		ISrtTransport transport,
@@ -56,7 +57,7 @@ internal sealed class SrtTransportPacketizer
 		}
 	}
 
-	private static async ValueTask SendMessageAsync(
+	private async ValueTask SendMessageAsync(
 		ISrtTransport transport,
 		ReadOnlyMemory<byte> message,
 		Action<int> messageSent,
@@ -64,7 +65,10 @@ internal sealed class SrtTransportPacketizer
 	{
 		for (var offset = 0; offset < message.Length; offset += TransportPacketSize)
 			if (message.Span[offset] != 0x47)
-				throw new InvalidDataException("Encoded output does not contain aligned MPEG-TS packets.");
+			{
+				AlignmentFailure = $"MPEG-TS alignment failed: messageBytes={message.Length}; packetOffset={offset}; expectedSync=0x47; actualSync=0x{message.Span[offset]:X2}.";
+				throw new InvalidDataException(AlignmentFailure);
+			}
 		var sent = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 		if (sent != message.Length)
 			throw new IOException($"SRT live transport accepted {sent} of {message.Length} message bytes.");
@@ -75,6 +79,7 @@ internal sealed class SrtTransportPacketizer
 	{
 		_residualLength = 0;
 		_failed = false;
+		AlignmentFailure = null;
 		Array.Clear(_residual);
 	}
 }

@@ -241,12 +241,13 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				catch (Exception exception)
 				{
+					var alignmentContext = _packetizer.AlignmentFailure is { } alignmentFailure ? $" {alignmentFailure}" : string.Empty;
 					DropSample(
 						sample,
 						"network.output.send_failed",
 						$"Network output sample failed without interrupting Program: {exception.GetType().Name}.");
 					await ResetConnectionAsync(
-						new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}."))
+						new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}.{alignmentContext}"))
 						.ConfigureAwait(false);
 				}
 				finally

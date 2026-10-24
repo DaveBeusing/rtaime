@@ -75,8 +75,24 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 				lease, MemoryMarshal.AsBytes(pcm.AsSpan()).ToArray());
 			Assert.True(session.TrySubmit(sample).Accepted);
 			await lease.Returned.Task.WaitAsync(timeout.Token);
-			Assert.True(session.Snapshot.Statistics.DroppedSamples == 0,
-				$"Native output failed: {session.Snapshot.Failure}; encoder: {encoder.LastFailure}");
+			var current = session.Snapshot;
+			if (current.Statistics.DroppedSamples != 0)
+			{
+				// These bytes come exclusively from the synthetic qualification fixture, never live Program input.
+				var diagnostic = JsonSerializer.Serialize(new
+				{
+					schemaVersion = "1.0", status = "FAIL", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
+					format = formatName, sequence, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
+					failure = current.Failure?.ToString(), encoderFailure = encoder.LastFailure?.ToString(),
+					encoder.EncodedBytes, encoder.MaximumDrain, encoder.EncodeCalls,
+					firstNonEmptyDrain = encoder.FirstNonEmptyDrain, latestNonEmptyDrain = encoder.LatestNonEmptyDrain,
+					current.Statistics
+				}, new JsonSerializerOptions { WriteIndented = true });
+				File.WriteAllText(Path.Combine(evidenceRoot, $"srt-native-{formatName}-failure.json"), diagnostic);
+				output.WriteLine(diagnostic);
+			}
+			Assert.True(current.Statistics.DroppedSamples == 0,
+				$"Native output failed: {current.Failure}; encoder: {encoder.LastFailure}");
 		}
 		Assert.True(encoder.MaximumDrain > 1316, "Native encoder never produced a drain larger than one SRT payload.");
 		Assert.True(encoder.EncodedBytes > 1316);
@@ -125,6 +141,9 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		private bool _disposed;
 		public long EncodedBytes { get; private set; }
 		public int MaximumDrain { get; private set; }
+		public int EncodeCalls { get; private set; }
+		public DrainDiagnostic? FirstNonEmptyDrain { get; private set; }
+		public DrainDiagnostic? LatestNonEmptyDrain { get; private set; }
 		public Exception? LastFailure { get; private set; }
 		public string PayloadHash => Convert.ToHexString(_hash.GetCurrentHash());
 		public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => _inner.InitializeAsync(configuration, token);
@@ -133,6 +152,12 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 			try
 			{
 				var encoded = await _inner.EncodeAsync(sample, token);
+				EncodeCalls++;
+				if (!encoded.IsEmpty)
+				{
+					LatestNonEmptyDrain = DescribeDrain(encoded.Span);
+					FirstNonEmptyDrain ??= LatestNonEmptyDrain;
+				}
 				EncodedBytes += encoded.Length;
 				MaximumDrain = Math.Max(MaximumDrain, encoded.Length);
 				_hash.AppendData(encoded.Span);
@@ -148,6 +173,30 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 			try { await _inner.DisposeAsync(); }
 			finally { _hash.Dispose(); }
 		}
+	}
+
+	private sealed record DrainDiagnostic(int Length, int ScannedBytes, string PrefixHex, int[] SyncOffsets, SyncStride[] Strides);
+	private sealed record SyncStride(int PacketBytes, int FirstSyncOffset, int CheckedPositions, int MatchingSyncBytes);
+
+	private static DrainDiagnostic DescribeDrain(ReadOnlySpan<byte> bytes)
+	{
+		var scanned = Math.Min(bytes.Length, 8192);
+		var offsets = new List<int>();
+		for (var offset = 0; offset < scanned && offsets.Count < 32; offset++)
+			if (bytes[offset] == 0x47) offsets.Add(offset);
+		var strides = new List<SyncStride>();
+		foreach (var (size, first) in new[] { (188, 0), (192, 0), (192, 4), (204, 0) })
+		{
+			var positions = 0;
+			var matches = 0;
+			for (var offset = first; offset < scanned; offset += size)
+			{
+				positions++;
+				if (bytes[offset] == 0x47) matches++;
+			}
+			strides.Add(new SyncStride(size, first, positions, matches));
+		}
+		return new DrainDiagnostic(bytes.Length, scanned, Convert.ToHexString(bytes[..Math.Min(bytes.Length, 256)]), offsets.ToArray(), strides.ToArray());
 	}
 
 	private sealed class LoopbackReceiver : IAsyncDisposable
