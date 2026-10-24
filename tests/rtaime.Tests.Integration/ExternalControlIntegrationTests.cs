@@ -579,6 +579,11 @@ public sealed partial class ExternalControlIntegrationTests
 		public ControlHostProcess Control => _control;
 		public string ControlEndpoint { get; }
 		public int Port { get; }
+		public Metadata AuthenticatedHeaders => new()
+		{
+			{ "x-rtaime-client-id", "test-client" },
+			{ "authorization", "Bearer " + _token }
+		};
 
 		public static async Task<ExternalFixture> StartAsync(
 			ExternalControlRole role,

@@ -94,8 +94,8 @@ public sealed partial class GrpcOperatorControlTransport : ISequenceOutputTransp
         // Transport uncertainty must be resolved by an explicit observation
         // and, if a committed successor exists, Recover; never by RPC retry.
         var deadline = DateTime.UtcNow + _options.RequestTimeout;
-        var reply = await _client.ExecuteAsync(
-            request, Headers(), deadline, cancellationToken).ResponseAsync.ConfigureAwait(false);
+        var reply = await SendRequestAsync(
+            request, deadline, cancellationToken).ConfigureAwait(false);
         ValidateReply(request, reply, snapshot: false);
         var result = NamedPipeOperatorControlTransport.VerifySequenceOutput(
             command.Preparation, reply.PayloadJson.ToStringUtf8());

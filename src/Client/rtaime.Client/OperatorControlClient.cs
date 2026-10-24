@@ -1390,7 +1390,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var command = new SelectPreviewCommand(Metadata(current.Production), sourceId);
         var result = await ObserveOperationAsync("SelectPreviewAsync", () => _transport.SelectPreviewAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
-            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+            await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1405,7 +1405,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var command = new ActivateSceneCommand(Metadata(current.Production), sceneId);
         var result = await ObserveOperationAsync("ActivateSceneAsync", () => _transport.ActivateSceneAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
-            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+            await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1435,7 +1435,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var command = new RouteOutputRoleCommand(Metadata(current.Production), roleId, sourceId, audioBusId);
         var result = await ObserveOperationAsync("RouteOutputRoleAsync", () => _transport.RouteOutputRoleAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
-            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+            await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1453,7 +1453,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var command = new CutProgramCommand(Metadata(current.Production), sourceId);
         var result = await ObserveOperationAsync("CutAsync", () => _transport.CutProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
-            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+            await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1477,7 +1477,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var command = new DissolveProgramCommand(Metadata(current.Production), sourceId, durationFrames);
         var result = await ObserveOperationAsync("DissolveAsync", () => _transport.DissolveProgramAsync(command, cancellationToken), command.Metadata.CommandId.ToString(), command.Metadata.ExpectedRevision.Value).ConfigureAwait(false);
         if (result.Accepted)
-            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+            await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1496,7 +1496,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetAudioInputStateAsync", () => _transport
             .SetAudioInputStateAsync(sourceId.Trim(), gain, muted, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1520,7 +1520,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
                 current.AudioProgram.RoutingRevision,
                 cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1542,7 +1542,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetAudioProductionAsync", () => _transport
             .SetAudioProductionAsync(configuration, confirmed.Configuration.Revision, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1567,7 +1567,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetAudioTestSignalAsync", () => _transport
             .SetAudioTestSignalAsync(sourceId.Trim(), enabled, mode, frequencyHz, peakLevel, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1590,7 +1590,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetBroadcastTestPatternAsync", () => _transport
             .SetBroadcastTestPatternAsync(sourceId.Trim(), enabled, motionTiming, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1600,7 +1600,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         ArgumentNullException.ThrowIfNull(asset);
         var result = await ObserveOperationAsync("LoadGraphicsOverlayAsync", () => _transport.LoadGraphicsOverlayAsync(asset, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1610,7 +1610,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         ArgumentNullException.ThrowIfNull(definition);
         var result = await ObserveOperationAsync("ApplyProductionCgTextAsync", () => _transport.ApplyProductionCgTextAsync(definition, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1622,14 +1622,14 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         CancellationToken cancellationToken = default)
     {
         var result = await ObserveOperationAsync("SetGraphicsOverlayAsync", () => _transport.SetGraphicsOverlayAsync(visible, positionX, positionY, scale, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
     public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
     {
         var result = await ObserveOperationAsync("ClearGraphicsOverlayAsync", () => _transport.ClearGraphicsOverlayAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1645,7 +1645,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetCompositingLayerStateAsync", () => _transport
             .SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1679,7 +1679,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
             cropRight,
             cropBottom,
             cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1708,7 +1708,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetCompositingLayerProcessingStackAsync", () => _transport
             .SetCompositingLayerProcessingStackAsync(layerId.Trim(), processingStack, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1721,7 +1721,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("ReorderCompositingLayersAsync", () => _transport
             .ReorderCompositingLayersAsync(orderedLayerIds, cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1750,7 +1750,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
                 string.IsNullOrWhiteSpace(profileId) ? null : profileId.Trim(),
                 cancellationToken)
             , null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1758,7 +1758,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("StopRecordingAsync", () => _transport.StopRecordingAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1787,7 +1787,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
             throw new ArgumentException("Replay clip name is required.", nameof(name));
         RequireSnapshot();
         var result = await ObserveOperationAsync("CreateReplayClipAsync", () => _transport.CreateReplayClipAsync(name.Trim(), cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1804,7 +1804,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await ObserveOperationAsync("SetAIShowcaseEnabledAsync", () => enabled
             ? _transport.SetAIShowcaseApprovedAsync(true, snapshot.Production.Revision.Value, cancellationToken)
             : _transport.SetAIShowcaseEnabledAsync(false, cancellationToken)).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1822,7 +1822,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
             throw new ArgumentException("Discovered source identity is required.", nameof(discoveredSourceId));
         var before = RequireSnapshot();
         var result = await ObserveOperationAsync("AdoptMediaSourceAsync", () => _transport.AdoptMediaSourceAsync(discoveredSourceId.Trim(), cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         var after = RequireSnapshot();
         if (before.Production.Routing != after.Production.Routing)
         {
@@ -1931,7 +1931,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     public async ValueTask<ShowControlWorkspaceSnapshot> InstantiateShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default)
     {
         var result = await ObserveOperationAsync("InstantiateShowTemplateAsync", () => _transport.InstantiateShowTemplateAsync(request, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1945,7 +1945,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         ArgumentNullException.ThrowIfNull(cueList);
         RequireSnapshot();
         var result = await ObserveOperationAsync("SaveShowControlCueListAsync", () => _transport.SaveShowControlCueListAsync(cueList, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1955,7 +1955,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("SelectShowControlCueListAsync", () => _transport.SelectShowControlCueListAsync(cueListId, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1963,7 +1963,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("ArmShowControlAsync", () => _transport.ArmShowControlAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1971,7 +1971,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("GoShowControlAsync", () => _transport.GoShowControlAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1979,7 +1979,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("CancelShowControlAsync", () => _transport.CancelShowControlAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -1989,7 +1989,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("AcknowledgeShowControlRecoveryAsync", () => _transport.AcknowledgeShowControlRecoveryAsync(resume, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2004,7 +2004,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         ArgumentNullException.ThrowIfNull(rundown);
         RequireSnapshot();
         var result = await ObserveOperationAsync("SaveRundownAsync", () => _transport.SaveRundownAsync(rundown, expectedStorageVersion, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2014,7 +2014,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("PrepareRundownItemAsync", () => _transport.PrepareRundownItemAsync(itemId, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2022,7 +2022,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("GoRundownAsync", () => _transport.GoRundownAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2030,7 +2030,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("NextRundownAsync", () => _transport.NextRundownAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2038,7 +2038,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("PreviousRundownAsync", () => _transport.PreviousRundownAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2046,7 +2046,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("HoldRundownAsync", () => _transport.HoldRundownAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2056,7 +2056,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("AcknowledgeRundownRecoveryAsync", () => _transport.AcknowledgeRundownRecoveryAsync(resume, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2084,7 +2084,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         ArgumentNullException.ThrowIfNull(macro);
         RequireSnapshot();
         var result = await ObserveOperationAsync("SaveProductionMacroAsync", () => _transport.SaveProductionMacroAsync(macro, expectedStorageVersion, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2095,7 +2095,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("DeleteProductionMacroAsync", () => _transport.DeleteProductionMacroAsync(macroId, expectedStorageVersion, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2114,7 +2114,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("ExecuteProductionMacroAsync", () => _transport.ExecuteProductionMacroAsync(macroId, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2122,7 +2122,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("CancelProductionMacroAsync", () => _transport.CancelProductionMacroAsync(cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -2132,10 +2132,26 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await ObserveOperationAsync("AcknowledgeProductionMacroRecoveryAsync", () => _transport.AcknowledgeProductionMacroRecoveryAsync(resume, cancellationToken), null).ConfigureAwait(false);
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAfterActionAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
+
+    private async ValueTask SynchronizeAfterActionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new ControlActionObservationException(exception);
+        }
+    }
 
     private async ValueTask<T> ObserveOperationAsync<T>(string operation, Func<ValueTask<T>> send, string? commandId = null, ulong? expectedRevision = null)
     {
@@ -2185,7 +2201,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     }
 
     private OperatorStatusSnapshot RequireSnapshot() =>
-        _snapshot ?? throw new InvalidOperationException("Operator client must synchronize authoritative state before issuing commands.");
+        _snapshot ?? throw new ControlSnapshotRequiredException("Operator client must synchronize authoritative state before issuing commands.");
 
     private static ProductionSourceId ParseSourceId(string sourceId) =>
         new(Identity.Parse(sourceId));

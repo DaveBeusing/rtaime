@@ -45,7 +45,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	private readonly HostIpcSessionTracker _sessions = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly TimeSpan _sessionDrainTimeout;
-	private readonly BoundedRequestCache _requestCache = new(256);
+	private readonly ControlRequestCache _requestCache = new(256);
 	private static readonly TimeSpan RuntimeObservationRetention = TimeSpan.FromSeconds(2);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private readonly object _runtimeObservationGate = new();
@@ -150,6 +150,7 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _acceptLoop is { IsCompleted: false };
 	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
+	internal ControlRequestCacheSnapshot RequestCacheSnapshot => _requestCache.Snapshot;
 
 	public Task StartAsync(CancellationToken cancellationToken = default)
 	{
@@ -410,19 +411,11 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 					catch (EndOfStreamException) { return; }
 					catch (IOException) { return; }
 
-					var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
-					if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
-					{
-						if (conflict)
-							await WriteErrorAsync(pipe, request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.", cancellationToken).ConfigureAwait(false);
-						else
-							await Wire.WriteRawAsync(pipe, cached!, cancellationToken).ConfigureAwait(false);
-						continue;
-					}
-
-					var response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
-					var serialized = Wire.Serialize(response);
-					_requestCache.Add(request.RequestId, canonical, serialized);
+					var serialized = await ExecuteReservedRequestAsync(request, cancellationToken).ConfigureAwait(false);
+					var retained = JsonSerializer.Deserialize<WireEnvelope>(serialized, Wire.JsonOptions)
+						?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+					if (!string.Equals(retained.CorrelationId, request.CorrelationId, StringComparison.Ordinal))
+						serialized = Wire.Serialize(retained with { CorrelationId = request.CorrelationId });
 					await Wire.WriteRawAsync(pipe, serialized, cancellationToken).ConfigureAwait(false);
 				}
 			}
@@ -470,30 +463,10 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			0,
 			document.RootElement.Clone());
 
-		var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
-		WireEnvelope response;
-		if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
-		{
-			if (conflict)
-			{
-				response = Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.");
-			}
-			else
-			{
-				var replay = JsonSerializer.Deserialize<WireEnvelope>(cached!, Wire.JsonOptions)
-					?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
-				response = replay with
-				{
-					CorrelationId = request.CorrelationId,
-					SentAtUtc = DateTimeOffset.UtcNow
-				};
-			}
-		}
-		else
-		{
-			response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
-			_requestCache.Add(request.RequestId, canonical, Wire.Serialize(response));
-		}
+		var serialized = await ExecuteReservedRequestAsync(request, cancellationToken).ConfigureAwait(false);
+		var retained = JsonSerializer.Deserialize<WireEnvelope>(serialized, Wire.JsonOptions)
+			?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+		var response = retained with { CorrelationId = request.CorrelationId };
 
 		string? errorCode = null;
 		string? errorMessage = null;
@@ -515,6 +488,34 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 			response.Payload.GetRawText(),
 			errorCode,
 			errorMessage);
+	}
+
+	private async ValueTask<byte[]> ExecuteReservedRequestAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
+		var disposition = _requestCache.Reserve(request.RequestId, canonical, out var reservation);
+		if (disposition == ControlRequestReservation.Conflict)
+			return Wire.Serialize(Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload."));
+		if (disposition == ControlRequestReservation.CapacityExceeded)
+			return Wire.Serialize(Error(request, "ipc.request_capacity_exceeded", "ControlHost request capacity is occupied by in-flight operations. This request was not dispatched."));
+		if (disposition == ControlRequestReservation.Replay)
+			return await reservation!.Response.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var response = Wire.Serialize(await DispatchAsync(request, cancellationToken).ConfigureAwait(false));
+			_requestCache.Complete(reservation!, response);
+			return response;
+		}
+		catch
+		{
+			// A failed/cancelled dispatch may already have changed authority. Retain its
+			// identity until normal completed-entry eviction; never admit it as new work.
+			_requestCache.Complete(reservation!, Wire.Serialize(Error(request, "ipc.request_outcome_unknown",
+				"The original request did not complete normally. Synchronize authoritative state before deciding on another action; do not replay it under a new identity.")));
+			throw;
+		}
 	}
 
 	private async ValueTask<WireEnvelope> DispatchAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -2404,89 +2405,97 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> RunShowTemplateAsync(WireEnvelope request, string operation, CancellationToken cancellationToken)
 	{
-		if (_showProjectStore is null || _showControl is null || _controlAccessor() is not { HasAuthoritativeState: true } control)
+		if (_showProjectStore is null || _showControl is null)
 			return Error(request, "control.show_template.unavailable", "Canonical show project and Show Control must be available.");
-		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			if (operation == "create")
+			// GO and frame-wait continuation own Show Control before production mutation.
+			// Keep that order for the entire authoring operation, including preflight and commit.
+			using var ownership = await _showControl.AcquireTemplateAuthoringAsync(cancellationToken).ConfigureAwait(false);
+			await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
 			{
-				var create = request.Payload.Deserialize<WireShowTemplateCreate>(Wire.JsonOptions)
-					?? throw new InvalidDataException("Template creation request is required.");
-				var exporter = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl,
-					(_, _, _) => ValueTask.FromResult<string?>(null));
-				return Success(request, "control.show_template.create.response",
-					new WireShowTemplateJson(await exporter.CreateAsync(create.Name, create.CueListId, cancellationToken).ConfigureAwait(false)));
-			}
-			var import = request.Payload.Deserialize<ShowTemplateRequest>(ShowTemplateSerializer.Options)
-				?? throw new InvalidDataException("Template import request is required.");
-			var document = ShowTemplateSerializer.Deserialize(import.TemplateJson);
-			var observation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
-			var runtime = observation.Fresh ? observation.Snapshot : null;
-			var needsMedia = document.Content.Dependencies.Any(d => d.Kind is "media" or "mediaCue");
-			var catalog = needsMedia && _mediaAssetCatalog is not null
-				? await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false) : null;
-			var deck = needsMedia && _mediaDeck is not null
-				? await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false) : null;
-			var outputs = ProjectOutputRoles(control.State, runtime, observation.Fresh);
-			ValueTask<string?> Check(ShowTemplateDependency dependency, string target, CancellationToken token)
-			{
-				token.ThrowIfCancellationRequested();
-				string? conflict = dependency.Kind switch
+				if (_controlAccessor() is not { HasAuthoritativeState: true } control)
+					return Error(request, "control.show_template.unavailable", "ControlHost authority is unavailable.");
+				if (operation == "create")
 				{
-					"source" => CheckSource(dependency, target),
-					"output" => outputs.FirstOrDefault(role => role.RoleId == target) is not { } output
-						? "Output role is absent."
-						: !string.IsNullOrEmpty(dependency.Compatibility) && !string.Equals(output.RoleKind, dependency.Compatibility, StringComparison.OrdinalIgnoreCase)
-							? "Output role kind is incompatible."
-							: output.HealthState != "PASS" || !output.AuthoritativeActive
-								? "Output provider has no fresh healthy active confirmation." : null,
-					"media" => catalog?.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == target) is not { } asset
-						? "Media is absent; import or relink it in the local Media Library."
-						: asset.Availability != MediaAssetAvailability.Online ? "Media is offline or missing." : null,
-					"mediaCue" => deck?.Markers?.CuePoints.Any(cue => cue.Id.ToString() == target) != true ||
-						ShowControlCanonicalSerializer.Deserialize(document.Content.CueListJson).Cues.SelectMany(cue => cue.Actions)
-							.Where(action => action.MediaCuePointId == dependency.ReferenceId)
-							.Any(action => import.Bindings.FirstOrDefault(binding => binding.Kind == "media" && binding.ReferenceId == action.MediaAssetId)?.TargetId != deck?.Markers?.AssetId.ToString())
-						? "Media cue is unavailable in the locally loaded Media Deck." : null,
-					"layer" => control.State.CompositingState?.Layers.FirstOrDefault(layer => layer.LayerId == target) is not { } layer
-						? "Prepare the matching local graphics layer first."
-						: !string.IsNullOrEmpty(dependency.Compatibility) && ShowTemplateService.Digest(layer.ContentIdentity) != dependency.Compatibility
-							? "Local graphics content does not match this template." : null,
-					_ => "Unsupported dependency."
-				};
-				return ValueTask.FromResult(conflict);
+					var create = request.Payload.Deserialize<WireShowTemplateCreate>(Wire.JsonOptions)
+						?? throw new InvalidDataException("Template creation request is required.");
+					var exporter = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl,
+						(_, _, _) => ValueTask.FromResult<string?>(null));
+					return Success(request, "control.show_template.create.response",
+						new WireShowTemplateJson(await exporter.CreateAsync(create.Name, create.CueListId, ownership, cancellationToken).ConfigureAwait(false)));
+				}
+				var import = request.Payload.Deserialize<ShowTemplateRequest>(ShowTemplateSerializer.Options)
+					?? throw new InvalidDataException("Template import request is required.");
+				var document = ShowTemplateSerializer.Deserialize(import.TemplateJson);
+				var observation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
+				var runtime = observation.Fresh ? observation.Snapshot : null;
+				var needsMedia = document.Content.Dependencies.Any(d => d.Kind is "media" or "mediaCue");
+				var catalog = needsMedia && _mediaAssetCatalog is not null
+					? await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false) : null;
+				var deck = needsMedia && _mediaDeck is not null
+					? await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false) : null;
+				var outputs = ProjectOutputRoles(control.State, runtime, observation.Fresh);
+				ValueTask<string?> Check(ShowTemplateDependency dependency, string target, CancellationToken token)
+				{
+					token.ThrowIfCancellationRequested();
+					string? conflict = dependency.Kind switch
+					{
+						"source" => CheckSource(dependency, target),
+						"output" => outputs.FirstOrDefault(role => role.RoleId == target) is not { } output
+							? "Output role is absent."
+							: !string.IsNullOrEmpty(dependency.Compatibility) && !string.Equals(output.RoleKind, dependency.Compatibility, StringComparison.OrdinalIgnoreCase)
+								? "Output role kind is incompatible."
+								: output.HealthState != "PASS" || !output.AuthoritativeActive
+									? "Output provider has no fresh healthy active confirmation." : null,
+						"media" => catalog?.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == target) is not { } asset
+							? "Media is absent; import or relink it in the local Media Library."
+							: asset.Availability != MediaAssetAvailability.Online ? "Media is offline or missing." : null,
+						"mediaCue" => deck?.Markers?.CuePoints.Any(cue => cue.Id.ToString() == target) != true ||
+							ShowControlCanonicalSerializer.Deserialize(document.Content.CueListJson).Cues.SelectMany(cue => cue.Actions)
+								.Where(action => action.MediaCuePointId == dependency.ReferenceId)
+								.Any(action => import.Bindings.FirstOrDefault(binding => binding.Kind == "media" && binding.ReferenceId == action.MediaAssetId)?.TargetId != deck?.Markers?.AssetId.ToString())
+							? "Media cue is unavailable in the locally loaded Media Deck." : null,
+						"layer" => control.State.CompositingState?.Layers.FirstOrDefault(layer => layer.LayerId == target) is not { } layer
+							? "Prepare the matching local graphics layer first."
+							: !string.IsNullOrEmpty(dependency.Compatibility) && ShowTemplateService.Digest(layer.ContentIdentity) != dependency.Compatibility
+								? "Local graphics content does not match this template." : null,
+						_ => "Unsupported dependency."
+					};
+					return ValueTask.FromResult(conflict);
+				}
+				string? CheckSource(ShowTemplateDependency dependency, string target)
+				{
+					var source = control.Specification.Sources.FirstOrDefault(source => source.SourceId.ToString() == target);
+					if (source is null) return "Adopt the local source before import.";
+					if (dependency.Compatibility != (source.ProviderBinding?.CapabilityKind ?? ""))
+						return "Source provider capability is incompatible.";
+					if (runtime is null) return "Runtime source availability is stale or unavailable.";
+					var health = ToWireSource(source, runtime, deck).Health;
+					if (health is not ("VALID" or "READY")) return "Source hardware/input is not ready: " + health;
+					if (source.ProviderBinding is not null &&
+						!runtime.InputSignals.ContainsKey(new MediaSourceId(source.SourceId.Value)))
+						return "Adopted hardware/input has no fresh Runtime signal evidence.";
+					return null;
+				}
+				var service = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl, Check);
+				if (operation == "preflight")
+					return Success(request, "control.show_template.preflight.response",
+						await service.PreflightAsync(import, ownership, cancellationToken).ConfigureAwait(false));
+				var snapshot = await service.InstantiateAsync(import, ownership, cancellationToken).ConfigureAwait(false);
+				_showProject = await _showProjectStore.LoadAsync(control.Specification, CancellationToken.None).ConfigureAwait(false);
+				SetShowProjectState("SAVED", $"Template '{import.InstanceName}' committed as authored definitions; Program was not activated.");
+				NotifyObservableStateChanged();
+				return Success(request, "control.show_control.snapshot.response", ToWire(snapshot));
 			}
-			string? CheckSource(ShowTemplateDependency dependency, string target)
-			{
-				var source = control.Specification.Sources.FirstOrDefault(source => source.SourceId.ToString() == target);
-				if (source is null) return "Adopt the local source before import.";
-				if (dependency.Compatibility != (source.ProviderBinding?.CapabilityKind ?? ""))
-					return "Source provider capability is incompatible.";
-				if (runtime is null) return "Runtime source availability is stale or unavailable.";
-				var health = ToWireSource(source, runtime, deck).Health;
-				if (health is not ("VALID" or "READY")) return "Source hardware/input is not ready: " + health;
-				if (source.ProviderBinding is not null &&
-					!runtime.InputSignals.ContainsKey(new MediaSourceId(source.SourceId.Value)))
-					return "Adopted hardware/input has no fresh Runtime signal evidence.";
-				return null;
-			}
-			var service = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl, Check);
-			if (operation == "preflight")
-				return Success(request, "control.show_template.preflight.response",
-					await service.PreflightAsync(import, cancellationToken).ConfigureAwait(false));
-			var snapshot = await service.InstantiateAsync(import, cancellationToken).ConfigureAwait(false);
-			_showProject = await _showProjectStore.LoadAsync(control.Specification, CancellationToken.None).ConfigureAwait(false);
-			SetShowProjectState("SAVED", $"Template '{import.InstanceName}' committed as authored definitions; Program was not activated.");
-			NotifyObservableStateChanged();
-			return Success(request, "control.show_control.snapshot.response", ToWire(snapshot));
+			finally { _mutationGate.Release(); }
 		}
 		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or
 			NotSupportedException or FormatException or JsonException or IOException)
 		{
 			return Error(request, "control.show_template.rejected", exception.Message);
 		}
-		finally { _mutationGate.Release(); }
 	}
 
 	private sealed record WireShowTemplateCreate(string Name, string? CueListId);
@@ -4267,46 +4276,6 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null, MediaDeckPreparation? Preparation = null, bool ConsumePreparation = false);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 	private sealed record RetainedGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
-
-	private sealed class BoundedRequestCache
-	{
-		private readonly int _capacity;
-		private readonly object _gate = new();
-		private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
-		private readonly Queue<string> _order = new();
-
-		public BoundedRequestCache(int capacity) => _capacity = capacity;
-
-		public bool TryGet(string requestId, string canonical, out byte[]? response, out bool conflict)
-		{
-			lock (_gate)
-			{
-				if (!_entries.TryGetValue(requestId, out var entry))
-				{
-					response = null;
-					conflict = false;
-					return false;
-				}
-				response = entry.Response;
-				conflict = !string.Equals(entry.Canonical, canonical, StringComparison.Ordinal);
-				return true;
-			}
-		}
-
-		public void Add(string requestId, string canonical, byte[] response)
-		{
-			lock (_gate)
-			{
-				if (_entries.ContainsKey(requestId)) return;
-				_entries.Add(requestId, new Entry(canonical, response));
-				_order.Enqueue(requestId);
-				while (_entries.Count > _capacity)
-					_entries.Remove(_order.Dequeue());
-			}
-		}
-
-		private sealed record Entry(string Canonical, byte[] Response);
-	}
 
 	private static class Wire
 	{

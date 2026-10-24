@@ -36,6 +36,7 @@ public sealed record GrpcOperatorControlOptions
 	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(5);
 	public int MaxRequestBytes { get; init; } = 1024 * 1024;
 	public int MaxResponseBytes { get; init; } = 4 * 1024 * 1024;
+	/// <summary>Retry full-snapshot reads once. Uncertain non-snapshot requests are never automatically resent.</summary>
 	public bool RetryNetworkUncertaintyOnce { get; init; } = true;
 
 	public void Validate()
@@ -61,8 +62,16 @@ public sealed record GrpcOperatorControlOptions
 
 public sealed class ExternalControlRequestException : IOException
 {
-	public ExternalControlRequestException(string code, string message) : base(message) => Code = code;
+	public ExternalControlRequestException(string code, string message)
+		: this(code, message, requestMayHaveExecuted: false) { }
+
+	public ExternalControlRequestException(string code, string message, bool requestMayHaveExecuted) : base(message)
+	{
+		Code = code;
+		RequestMayHaveExecuted = requestMayHaveExecuted;
+	}
 	public string Code { get; }
+	public bool RequestMayHaveExecuted { get; }
 }
 
 public sealed record ExternalControlStateNotification(
@@ -725,7 +734,8 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 		RequestId = requestId,
 		CorrelationId = Identity.New().ToString(),
 		ClientName = _options.ClientName,
-		ClientVersion = _options.ClientVersion
+		ClientVersion = _options.ClientVersion,
+		ExpectedHostInstanceId = _synchronizer.HostInstanceId ?? string.Empty
 	};
 
 	private Metadata Headers()
@@ -744,15 +754,20 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 	private async ValueTask<ExternalControlReply> ExecuteAsync(ExternalControlRequest request, bool snapshot, CancellationToken cancellationToken)
 	{
 		if (!snapshot) EnsureSnapshotNotRequired();
+		// Non-snapshot requests retain the authority captured with their identity.
+		// A snapshot must remain readable after the remote authority changes.
+		if (snapshot) request.Context.ExpectedHostInstanceId = string.Empty;
 		RpcException? last = null;
-		var attempts = _options.RetryNetworkUncertaintyOnce ? 2 : 1;
+		// An older replacement host can ignore the optional epoch field. Only
+		// snapshots can be retried after an ambiguous transport failure.
+		var attempts = snapshot && _options.RetryNetworkUncertaintyOnce ? 2 : 1;
 		for (var attempt = 0; attempt < attempts; attempt++)
 		{
 			try
 			{
 				var deadline = DateTime.UtcNow + _options.RequestTimeout;
-				var reply = await _client.ExecuteAsync(request, Headers(), deadline, cancellationToken).ResponseAsync.ConfigureAwait(false);
-				ValidateReply(request, reply, snapshot);
+				var reply = await SendRequestAsync(request, deadline, cancellationToken, snapshot).ConfigureAwait(false);
+				ValidateReply(request, reply, snapshot, requestMayHaveExecuted: last is not null);
 				return reply;
 			}
 			catch (RpcException exception) when (attempt + 1 < attempts && exception.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
@@ -764,7 +779,23 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 		throw new IOException("External control request failed without a response.");
 	}
 
-	private void ValidateReply(ExternalControlRequest request, ExternalControlReply reply, bool snapshot)
+	private async ValueTask<ExternalControlReply> SendRequestAsync(
+		ExternalControlRequest request, DateTime deadline, CancellationToken cancellationToken, bool snapshot = false)
+	{
+		try
+		{
+			return await _client.ExecuteAsync(request, Headers(), deadline, cancellationToken).ResponseAsync.ConfigureAwait(false);
+		}
+		catch (RpcException exception) when (!snapshot &&
+			exception.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.Cancelled)
+		{
+			_synchronizer.Reset();
+			lock (_gate) _requiresFullSnapshot = true;
+			throw;
+		}
+	}
+
+	private void ValidateReply(ExternalControlRequest request, ExternalControlReply reply, bool snapshot, bool requestMayHaveExecuted = false)
 	{
 		if (!string.Equals(reply.ApiVersion, ApiVersion, StringComparison.Ordinal))
 			throw new InvalidDataException("External control response API version is incompatible.");
@@ -772,11 +803,20 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 			!string.Equals(reply.CorrelationId, request.Context.CorrelationId, StringComparison.Ordinal))
 			throw new InvalidDataException("External control response correlation is invalid.");
 		if (reply.Error is not null && !string.IsNullOrWhiteSpace(reply.Error.Code))
-			throw new ExternalControlRequestException(reply.Error.Code, reply.Error.Message);
+		{
+			if (reply.Error.Code is "control.host_epoch_mismatch" or "ipc.request_outcome_unknown")
+			{
+				_synchronizer.Reset();
+				lock (_gate) _requiresFullSnapshot = true;
+			}
+			throw new ExternalControlRequestException(reply.Error.Code, reply.Error.Message,
+				requestMayHaveExecuted || reply.Error.Code == "ipc.request_outcome_unknown");
+		}
 		if (string.IsNullOrWhiteSpace(reply.HostInstanceId) || reply.StateVersion == 0)
 			throw new InvalidDataException("External control response state identity is invalid.");
 
-		var previousHost = _synchronizer.HostInstanceId;
+		var previousHost = string.IsNullOrEmpty(request.Context.ExpectedHostInstanceId)
+			? _synchronizer.HostInstanceId : request.Context.ExpectedHostInstanceId;
 		if (previousHost is not null && !string.Equals(previousHost, reply.HostInstanceId, StringComparison.Ordinal))
 		{
 			_synchronizer.Reset();
@@ -788,7 +828,7 @@ public sealed partial class GrpcOperatorControlTransport : IOperatorControlTrans
 	private void EnsureSnapshotNotRequired()
 	{
 		if (RequiresFullSnapshot)
-			throw new InvalidOperationException("External ControlHost state requires a full snapshot before another mutation.");
+			throw new ControlSnapshotRequiredException("External ControlHost state requires a full snapshot before another mutation.");
 	}
 
 	private static JsonPayloadRequest Raw(object payload) =>

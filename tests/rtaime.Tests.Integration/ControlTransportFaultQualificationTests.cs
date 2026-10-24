@@ -64,7 +64,7 @@ public sealed class ControlTransportFaultQualificationTests
 				control.Control.State.Routing.ProgramSourceId);
 
 			// A handshake with the same host must not authorize stale UI intent.
-			await Assert.ThrowsAsync<InvalidOperationException>(() => client.CutPreviewAsync().AsTask());
+			await Assert.ThrowsAsync<ControlSnapshotRequiredException>(() => client.CutPreviewAsync().AsTask());
 			Assert.Equal(1, proxy.TakeRequests);
 			Assert.Equal(expectedRevision, control.Control.State.Revision.Value);
 			Assert.True(transport.RequiresFullSnapshot);

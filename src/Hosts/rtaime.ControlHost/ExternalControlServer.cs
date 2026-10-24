@@ -684,6 +684,25 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		try
 		{
 			using var lease = await AcquireWithAuditAsync(principal, operation, operationToken).ConfigureAwait(false);
+			if (!string.IsNullOrEmpty(request.Context.ExpectedHostInstanceId) &&
+				!string.Equals(request.Context.ExpectedHostInstanceId, _dispatcher.HostInstanceId, StringComparison.Ordinal))
+			{
+				const string code = "control.host_epoch_mismatch";
+				const string detail = "ControlHost identity changed before dispatch. A full authoritative snapshot is required.";
+				AuditContextRejection(principal, code, detail);
+				return new ExternalControlReply
+				{
+					ApiVersion = ExternalControlServerOptions.ApiVersion,
+					ResponseType = "error",
+					RequestId = request.Context.RequestId,
+					CorrelationId = request.Context.CorrelationId,
+					HostInstanceId = _dispatcher.HostInstanceId,
+					StateVersion = _dispatcher.StateVersion,
+					AuthenticatedClientId = principal.ClientId,
+					AuthenticatedRole = principal.Role.ToString(),
+					Error = new ExternalControlError { Code = code, Message = detail }
+				};
+			}
 			var result = await _dispatcher.DispatchExternalAsync(
 				operation,
 				request.Context.RequestId,
@@ -989,6 +1008,11 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		{
 			AuditContextRejection(principal, "client.metadata.oversized", "External control client metadata exceeds configured bounds.");
 			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control client metadata exceeds configured bounds."));
+		}
+		if (!string.IsNullOrEmpty(context.ExpectedHostInstanceId) && !Guid.TryParse(context.ExpectedHostInstanceId, out _))
+		{
+			AuditContextRejection(principal, "request.host_identity.invalid", "Expected ControlHost identity must be a GUID when supplied.");
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "Expected ControlHost identity must be a GUID when supplied."));
 		}
 	}
 

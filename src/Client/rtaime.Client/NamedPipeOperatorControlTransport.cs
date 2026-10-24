@@ -1238,8 +1238,8 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 					hostReplaced = _previousHostInstanceId is not null;
 				}
 				if (hostReplaced)
-					throw new RemoteHostSessionChangedException(oldHost, currentHost);
-				throw new InvalidOperationException("Operator must synchronize a full authoritative snapshot after ControlHost transport loss before issuing another command.");
+					throw new RemoteHostSessionChangedException(oldHost, currentHost, requestWasDispatched: false);
+				throw new ControlSnapshotRequiredException("Operator must synchronize a full authoritative snapshot after ControlHost transport loss before issuing another command.");
 			}
 
 			var requestId = Identity.New().ToString();
