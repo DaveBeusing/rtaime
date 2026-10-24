@@ -10,10 +10,11 @@ using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Operator;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace rtaime.Tests.Operator;
 
-public sealed class MediaTransportFailureOperatorTests
+public sealed class MediaTransportFailureOperatorTests(ITestOutputHelper output)
 {
 	[Theory]
 	[InlineData("io")]
@@ -29,6 +30,7 @@ public sealed class MediaTransportFailureOperatorTests
 				"policy", "set-in", "set-out", "clear-in", "clear-out", "add-cue", "rename-cue", "delete-cue",
 				"pointer-release", "trim-in", "trim-out" })
 			{
+				output.WriteLine($"Media command failure case: failure={failure}, action={action}");
 				var transport = new FaultingTransport(failure) { Current = Snapshot(30, action == "pause") };
 				await using var controller = new MediaDeckController(new OperatorControlClient(transport));
 				await using var model = new MediaDeckViewModel(controller, () => @"C:\media\reference.mp4", () => Source.ToString());
@@ -58,11 +60,12 @@ public sealed class MediaTransportFailureOperatorTests
 					command.Execute(null);
 				}
 
-				await UntilAsync(() => model.RequiresSynchronization || unhandled.Count > 0);
+				// Uncertainty is published before the command continuation posts its busy cleanup.
+				await UntilAsync(() => (model.RequiresSynchronization && !model.IsBusy) || unhandled.Count > 0);
 				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
 				Assert.Empty(unhandled);
 				Assert.True(model.RequiresSynchronization, action);
-				Assert.False(model.IsBusy);
+				Assert.False(model.IsBusy, $"failure={failure}, action={action}: command cleanup is incomplete");
 				Assert.Contains("UNCONFIRMED", model.LastError);
 				Assert.Same(confirmed, controller.Snapshot);
 				Assert.Equal(30, model.Timeline.ConfirmedFrame);
@@ -82,8 +85,12 @@ public sealed class MediaTransportFailureOperatorTests
 				transport.Current = Snapshot(42);
 				Assert.True(model.RefreshCommand.CanExecute(null));
 				model.RefreshCommand.Execute(null);
-				await UntilAsync(() => !model.IsBusy && !model.RequiresSynchronization);
+				// Relay execution flags unwind after the view-model task completes.
+				await UntilAsync(() => (!model.IsBusy && !model.RequiresSynchronization &&
+					model.RefreshCommand.CanExecute(null) && model.PlayCommand.CanExecute(null) &&
+					model.Timeline.StepForwardCommand.CanExecute(null)) || unhandled.Count > 0);
 				await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+				Assert.Empty(unhandled);
 				Assert.Equal(new[] { "full", "deck" }, transport.Reads);
 				Assert.Equal(42, model.Timeline.ConfirmedFrame);
 				Assert.True(model.PlayCommand.CanExecute(null));
