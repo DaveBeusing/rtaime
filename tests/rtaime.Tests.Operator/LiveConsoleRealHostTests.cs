@@ -52,10 +52,11 @@ public sealed class LiveConsoleRealHostTests
             using var binding = new LiveConsoleBinding(owner, rundown, show);
             var initialProgram = owner.ProgramSourceId;
             var next = owner.Sources.Single(source => source.Id != initialProgram);
+            var deckSource = new MediaSourceId(Identity.Parse(next.Id));
             Assert.True((await client.ImportMediaAssetsAsync([assetPath])).Succeeded);
             var catalog = await client.GetMediaAssetCatalogAsync();
             var asset = Assert.Single(catalog.Assets);
-            var opened = await client.OpenMediaDeckAsync(assetPath, new MediaSourceId(Identity.Parse(next.Id)));
+            var opened = await client.OpenMediaDeckAsync(assetPath, deckSource);
             Assert.True(opened.IsLoaded, opened.Failure?.Message);
             await Execute(owner.SynchronizeCommand, () => owner.IsBusy);
             owner.SelectedSource = owner.Sources.Single(source => source.Id == next.Id);
@@ -76,9 +77,26 @@ public sealed class LiveConsoleRealHostTests
             Assert.Equal(initialProgram, runtime.Runtime.CommittedProgramSourceId.ToString());
 
             var stopped = await client.ApplyMediaDeckTransportAsync(new(MediaContractVersion.Current,
-                opened.Probe!.AssetId, MediaTransportCommandKind.Stop) { SourceId = new MediaSourceId(Identity.Parse(next.Id)) });
+                opened.Probe!.AssetId, MediaTransportCommandKind.Stop) { SourceId = deckSource });
             Assert.Null(stopped.Failure);
             Assert.True(stopped.IsLoaded);
+            // Stop accepts the seek before its decoder generation has finished prerolling.
+            var stoppedObservation = stopped;
+            await UntilAsync(async () => {
+                stoppedObservation = await client.GetMediaDeckSnapshotAsync(deckSource);
+                Assert.Null(stoppedObservation.Failure);
+                Assert.Equal(deckSource, stoppedObservation.SourceId);
+                Assert.NotNull(stoppedObservation.Probe);
+                Assert.Equal(opened.Probe.AssetId, stoppedObservation.Probe.AssetId);
+                Assert.NotNull(stoppedObservation.Transport);
+                return stoppedObservation.State == MediaDeckState.Ready &&
+                    stoppedObservation.Transport.State == MediaTransportState.Ready &&
+                    !stoppedObservation.Transport.IsOnProgram &&
+                    stoppedObservation.Transport.Position.CurrentFrame == 0;
+            }, () => $"Stopped media deck did not become ready: source={stoppedObservation.SourceId}, " +
+                $"asset={stoppedObservation.Probe?.AssetId}, state={stoppedObservation.State}, " +
+                $"transport={stoppedObservation.Transport?.State}, onProgram={stoppedObservation.Transport?.IsOnProgram}, " +
+                $"frame={stoppedObservation.Transport?.Position.CurrentFrame}, failure={stoppedObservation.Failure}.");
             var item = new RundownMediaItem(RundownItemId.New(), "Prepared clip", asset.AssetId.Value,
                 new ProductionSourceId(Identity.Parse(next.Id)), dissolve ? RundownTransition.Dissolve(2) : RundownTransition.Cut);
             var previous = await client.GetRundownSnapshotAsync();
@@ -135,11 +153,11 @@ public sealed class LiveConsoleRealHostTests
         await Until(() => !busy());
     }
     private static Task Until(Func<bool> predicate) => UntilAsync(() => Task.FromResult(predicate()));
-    private static async Task UntilAsync(Func<Task<bool>> predicate)
+    private static async Task UntilAsync(Func<Task<bool>> predicate, Func<string>? failureDetail = null)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (!await predicate()) {
-            if (DateTime.UtcNow >= deadline) throw new TimeoutException("Live console condition did not settle.");
+            if (DateTime.UtcNow >= deadline) throw new TimeoutException(failureDetail?.Invoke() ?? "Live console condition did not settle.");
             await Task.Delay(25);
         }
     }
