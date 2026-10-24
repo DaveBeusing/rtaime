@@ -17,6 +17,8 @@ $provider = Get-Content -LiteralPath (Join-Path $root "src/Providers/rtaime.Prov
 $discovery = Get-Content -LiteralPath (Join-Path $root "src/Providers/rtaime.Provider.Ndi/NdiDiscovery.cs") -Raw
 $input = Get-Content -LiteralPath (Join-Path $root "src/Providers/rtaime.Provider.Ndi/NdiInputProvider.cs") -Raw
 $bridge = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.RuntimeHost/RuntimeNdiInputBridge.cs") -Raw
+$publication = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.RuntimeHost/RuntimeProgramExecutionService.NdiInput.cs") -Raw
+$lifecycleTests = Get-Content -LiteralPath (Join-Path $root "tests/rtaime.Tests.Integration/RuntimeNdiInputLifecycleTests.cs") -Raw
 $control = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.ControlHost/MediaSourceDiscoveryAdoptionService.cs") -Raw
 $operator = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.Operator/NdiSourceDiscoveryViewModel.cs") -Raw
 $operatorControl = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.Operator/NdiSourceDiscoveryControl.xaml") -Raw
@@ -28,7 +30,9 @@ Assert-Condition ($contracts -match 'MaximumRetainedResults' -and $contracts -ma
 Assert-Condition ($provider -match 'MediaSourceCapabilityKinds\.Discovery' -and $provider -match 'MediaSourceCapabilityKinds\.Input') "The shared NDI provider must expose discovery and input capabilities."
 Assert-Condition ($discovery -match 'maximumRetainedResults' -and $discovery -match 'expiry' -and $discovery -match 'Take\(') "NDI discovery must retain bounded refresh/expiry semantics."
 Assert-Condition ($input -match 'QueueCapacity' -and $input -match '_queue\.Dequeue' -and $input -match '_dropped\+\+' -and $input -match 'MarkLost' -and $input -match '_reconnects\+\+') "NDI input must retain bounded live buffering and source-loss/reconnect evidence."
-Assert-Condition ($bridge -match 'RegisterExternalSource' -and $bridge -match 'SetExternalInputContent' -and $bridge -match 'SetExternalAudioInput') "Runtime NDI input must feed the existing Runtime source/audio seams."
+Assert-Condition ($publication -match 'RegisterExternalSource' -and $publication -match 'SetExternalInputContent' -and $publication -match 'SetExternalAudioInput') "Runtime NDI input must feed the existing Runtime source/audio seams."
+Assert-Condition ($publication -match 'IsNdiInputCurrentUnsafe' -and $publication -match 'ReferenceEquals\(current, owner\)' -and $bridge -match 'TrySetNdiInputContent' -and $bridge -match 'TrySetNdiAudioInput' -and $bridge -match 'TrySetNdiInputHealth') "NDI media and health publication must retain committed binding ownership fences."
+Assert-Condition ($lifecycleTests -match 'Removal_and_replacement' -and $lifecycleTests -match 'Superseded_registration' -and $lifecycleTests -match 'New_external_Program_source' -and $lifecycleTests -match 'Shutdown_joins_paused_publication') "NDI lifecycle coverage must include blocked publication, new-source admission, replacement and shutdown."
 Assert-Condition ($bridge -notmatch 'SelectPreview|CutProgram|DissolveProgram|RouteOutputRole') "Runtime NDI input must never mutate production routing."
 Assert-Condition ($control -match 'AdoptAsync' -and $control -match 'AdoptSourceAsync' -and $control -match 'routingBefore') "External-source adoption must remain explicit, durable and routing-neutral."
 Assert-Condition ($operator -match 'OperatorControlClient' -and $operator -notmatch 'rtaime\.Provider\.Ndi|NativeNdi|NDIlib_') "Operator discovery must consume management evidence and never host NDI provider/native code."
