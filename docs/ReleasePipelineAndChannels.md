@@ -132,10 +132,6 @@ An externally controlled Preview Candidate whose key is active `SOFTWARE_RELEASE
 
 An explicit RC dispatch reserves `vX.Y.Z-rc.N`, resolves `RELEASE_CANDIDATE`, and requires production signing trust and the existing explicit release-readiness PASS gate. RC output is retained as candidate artifacts; it does not enter automated Preview/Stable update discovery.
 
-### RC
-
-An explicit RC dispatch reserves vX.Y.Z-rc.N and uses RELEASE_CANDIDATE stage. It requires production signing trust and the existing explicit release-readiness PASS gate. RC output is retained as candidate artifacts and does not enter Preview/Stable update discovery.
-
 ### STABLE
 
 Resolved build state, passed by the release pipeline:
