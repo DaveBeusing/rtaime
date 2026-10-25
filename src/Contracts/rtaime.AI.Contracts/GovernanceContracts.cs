@@ -319,8 +319,8 @@ public sealed record InferenceProviderExecutionResult
         if (!Enum.IsDefined(typeof(InferenceExecutionStatus), status)) throw new ArgumentOutOfRangeException(nameof(status));
         ArgumentNullException.ThrowIfNull(outputs);
         if (outputs.Any(item => item is null)) throw new ArgumentException("Provider outputs must not contain null values.", nameof(outputs));
-        if (confidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(confidence));
-        if (uncertainty is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(uncertainty));
+        if (!double.IsFinite(confidence) || confidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(confidence));
+        if (!double.IsFinite(uncertainty) || uncertainty is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(uncertainty));
         if (freshness.Ticks < 0) throw new ArgumentOutOfRangeException(nameof(freshness));
         if (status == InferenceExecutionStatus.Succeeded)
         {
@@ -385,8 +385,8 @@ public sealed record InferenceResultMetadata
     {
         if (string.IsNullOrWhiteSpace(modelVersion)) throw new ArgumentException("Result model version is required.", nameof(modelVersion));
         if (freshness.Ticks < 0) throw new ArgumentOutOfRangeException(nameof(freshness));
-        if (confidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(confidence));
-        if (uncertainty is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(uncertainty));
+        if (!double.IsFinite(confidence) || confidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(confidence));
+        if (!double.IsFinite(uncertainty) || uncertainty is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(uncertainty));
 
         ResultId = resultId;
         CapabilityId = capabilityId;

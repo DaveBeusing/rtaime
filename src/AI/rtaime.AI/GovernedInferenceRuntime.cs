@@ -84,7 +84,7 @@ public static class AIResultUsePolicy
     {
         ArgumentNullException.ThrowIfNull(executionResult);
         if (maximumFreshness.Ticks < 0) throw new ArgumentOutOfRangeException(nameof(maximumFreshness));
-        if (minimumConfidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(minimumConfidence));
+        if (!double.IsFinite(minimumConfidence) || minimumConfidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(minimumConfidence));
 
         if (executionResult.Result.Status != InferenceExecutionStatus.Succeeded || executionResult.Metadata is null)
         {
