@@ -75,10 +75,33 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
+		List<Exception>? failures = null;
 		if (_ai is not null)
-			await _ai.DisposeAsync().ConfigureAwait(false);
+		{
+			try
+			{
+				await _ai.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception exception)
+			{
+				(failures ??= []).Add(exception);
+			}
+		}
+
 		if (_runtime is not null)
-			await _runtime.DisposeAsync().ConfigureAwait(false);
+		{
+			try
+			{
+				await _runtime.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception exception)
+			{
+				(failures ??= []).Add(exception);
+			}
+		}
+
+		if (failures is { Count: > 0 })
+			throw new AggregateException("One or more managed child supervisors failed to dispose.", failures);
 	}
 
 	private static LocalProcessSupervisor? Create(
