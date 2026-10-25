@@ -57,6 +57,10 @@ production-journal   schema version 1
 
 No production schema version is incremented merely to exercise migration logic.
 
+Ordinary store initialization first inspects the database identity and component version inside a serialized SQLite transaction. An unsupported version, a missing component identity, or an unrecognized nonempty database is rejected before bootstrap DDL or journal-mode changes. Opening future state with an older binary therefore preserves its schema and data, including tables that the future schema retired.
+
+Only an empty database with no application objects, application ID or user version can receive the initial schema. Its tables, indexes, metadata and initial journal head are created in one transaction; failed initialization rolls back the entire bootstrap. Existing supported stores are validated and opened without replaying bootstrap DDL. Missing required tables require explicit recovery instead of silently creating empty replacement tables. Upgrades continue to require the registered maintenance migration path; both production schema versions remain at 1.
+
 ## Legacy Control authority compatibility
 
 Control contract 1.0 authority checkpoints are interpreted compatibly when loaded by the current 1.1 production specification. Recovery preserves production IDs, revision, routes, Scene/output configuration and compositing. The original stored checkpoint is not upgraded in place, and unsupported contracts do not trigger a fresh empty production.

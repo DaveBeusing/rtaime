@@ -309,16 +309,9 @@ public sealed class SqliteManagementStore : IProductionCheckpointBatchStore, IAs
 			Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_path)!);
 			await using var connection = CreateConnection();
 			await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			await SqliteStoreSchema.EnsureAsync(connection, "management", SchemaVersion, SchemaSql,
+				["management_documents", "production_checkpoints"], cancellationToken).ConfigureAwait(false);
 			await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
-			await using var command = connection.CreateCommand();
-			command.CommandText = SchemaSql;
-			await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-			await using var version = connection.CreateCommand();
-			version.CommandText = "SELECT schema_version FROM schema_metadata WHERE component = 'management';";
-			var value = await version.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-			if (Convert.ToInt32(value, CultureInfo.InvariantCulture) != SchemaVersion)
-				throw new NotSupportedException("Unsupported management persistence schema version.");
 			_initialized = true;
 		}
 		finally
