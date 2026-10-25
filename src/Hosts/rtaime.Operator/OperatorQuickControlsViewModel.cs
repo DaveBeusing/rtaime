@@ -44,7 +44,7 @@ public sealed class OperatorQuickControlStore
 			var settings = JsonSerializer.Deserialize<OperatorQuickControlSettings>(
 				File.ReadAllText(_path),
 				SerializerOptions);
-			if (settings is null || settings.Version != OperatorQuickControlSettings.CurrentVersion)
+			if (settings is null || settings.Version != OperatorQuickControlSettings.CurrentVersion || settings.PropertyIds is null)
 				return [];
 
 			return settings.PropertyIds
