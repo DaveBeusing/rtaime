@@ -242,7 +242,8 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 	public ICommand FitCommand { get; }
 
 	public bool IsLoaded => _state.IsLoaded;
-	public bool CanSeek => _state.CanSeek;
+	// Apply the controller's uncertainty barrier before its queued UI projection arrives.
+	public bool CanSeek => !RequiresSynchronization && _state.CanSeek;
 	public bool RequiresSynchronization => _controller.RequiresSynchronization;
 	public bool HasPendingSeek => _state.HasPendingSeek;
 	public string TransportState => _state.TransportState;

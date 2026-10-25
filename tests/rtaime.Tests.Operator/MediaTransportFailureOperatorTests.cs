@@ -100,6 +100,59 @@ public sealed class MediaTransportFailureOperatorTests(ITestOutputHelper output)
 			}
 		});
 
+	[Fact]
+	public Task Unconfirmed_seek_disables_commands_before_queued_timeline_projection_is_delivered() =>
+		RunDispatcherAsync(async (_, unhandled) =>
+		{
+			var transport = new FaultingTransport("rpc") { Current = Snapshot(30) };
+			await using var controller = new MediaDeckController(new OperatorControlClient(transport));
+			var heldContext = new HeldSynchronizationContext();
+			var previousContext = SynchronizationContext.Current;
+			MediaDeckViewModel model;
+			try
+			{
+				SynchronizationContext.SetSynchronizationContext(heldContext);
+				model = new MediaDeckViewModel(controller, () => null, () => Source.ToString());
+			}
+			finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+			await using var modelLifetime = model;
+			controller.ApplyConfirmedSnapshot(transport.Current);
+			heldContext.DeliverAll();
+			Assert.True(model.CanSeek);
+			Assert.True(model.JumpInCommand.CanExecute(null));
+
+			await Assert.ThrowsAsync<Grpc.Core.RpcException>(() => controller.Markers.JumpToInAsync().AsTask());
+			Assert.True(heldContext.PendingCount > 0);
+			Assert.True(model.RequiresSynchronization);
+			Assert.False(model.IsBusy);
+			Assert.Null(model.Timeline.Failure); // The previous healthy projection is deliberately still visible.
+			Assert.Equal(30, model.Timeline.ConfirmedFrame);
+			Assert.False(model.CanSeek);
+			Assert.False(model.JumpInCommand.CanExecute(null));
+			Assert.False(model.JumpOutCommand.CanExecute(null));
+			Assert.False(model.Timeline.StepForwardCommand.CanExecute(null));
+			model.JumpInCommand.Execute(null);
+			model.Timeline.StepForwardCommand.Execute(null);
+			Assert.Equal(1, transport.Mutations);
+
+			heldContext.DeliverAll();
+			Assert.Contains("UNCONFIRMED", model.Timeline.Failure);
+			transport.Failure = null;
+			transport.Current = Snapshot(42);
+			await controller.RefreshAsync();
+			Assert.False(model.RequiresSynchronization);
+			Assert.True(heldContext.PendingCount > 0);
+			Assert.False(model.CanSeek); // Re-enable only after the confirmed projection is delivered.
+			heldContext.DeliverAll();
+			Assert.Equal(new[] { "full", "deck" }, transport.Reads);
+			Assert.Equal(42, model.Timeline.ConfirmedFrame);
+			Assert.True(model.CanSeek);
+			Assert.True(model.JumpInCommand.CanExecute(null));
+			Assert.True(model.Timeline.StepForwardCommand.CanExecute(null));
+			Assert.Equal(1, transport.Mutations);
+			Assert.Empty(unhandled);
+		});
+
 	[Theory]
 	[InlineData("step-forward", false)]
 	[InlineData("play", false)]
@@ -166,6 +219,37 @@ public sealed class MediaTransportFailureOperatorTests(ITestOutputHelper output)
 	{
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 		while (!condition()) await Task.Delay(1, timeout.Token);
+	}
+
+	private sealed class HeldSynchronizationContext : SynchronizationContext
+	{
+		private readonly object _gate = new();
+		private readonly Queue<(SendOrPostCallback Callback, object? State)> _pending = [];
+		public int PendingCount { get { lock (_gate) return _pending.Count; } }
+
+		public override void Post(SendOrPostCallback callback, object? state)
+		{
+			lock (_gate) _pending.Enqueue((callback, state));
+		}
+
+		public void DeliverAll()
+		{
+			var previous = Current;
+			SetSynchronizationContext(this);
+			try
+			{
+				while (true)
+				{
+					(SendOrPostCallback Callback, object? State) pending;
+					lock (_gate)
+					{
+						if (!_pending.TryDequeue(out pending)) return;
+					}
+					pending.Callback(pending.State);
+				}
+			}
+			finally { SetSynchronizationContext(previous); }
+		}
 	}
 
 	private static async Task RunDispatcherAsync(Func<Dispatcher, List<Exception>, Task> action)
