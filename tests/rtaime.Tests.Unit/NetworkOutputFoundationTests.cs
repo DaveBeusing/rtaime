@@ -434,6 +434,8 @@ public sealed class NetworkOutputFoundationTests
             Assert.True(session.TrySubmit(samples[2]).Accepted);
             Assert.Equal(2, session.Snapshot.Statistics.QueueDepth);
             first = session.DisposeAsync().AsTask();
+            // SRT orderly stop finishes accepted input before encoder finalization and native cleanup.
+            if (!ndi) transport.ReleaseSend.TrySetResult();
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             second = session.DisposeAsync().AsTask();
             Assert.False(second.IsCompleted);
@@ -447,6 +449,7 @@ public sealed class NetworkOutputFoundationTests
         }
         finally
         {
+            transport.ReleaseSend.TrySetResult();
             release.TrySetResult();
             try { await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)); }
             catch (IOException) { }
@@ -525,10 +528,11 @@ public sealed class NetworkOutputFoundationTests
             return ValueTask.CompletedTask;
         }
         public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseSend { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken token)
         {
             SendStarted.TrySetResult();
-            if (stall) await Task.Delay(Timeout.Infinite, token);
+            if (stall) await ReleaseSend.Task.WaitAsync(token);
             return payload.Length;
         }
         public async ValueTask DisposeAsync()

@@ -217,6 +217,89 @@ function Get-State {
 	return Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
 }
 
+function Assert-MatchingIdentity {
+	param($Actual, $Expected, [string]$Context)
+	Assert-ProcessIdentity ($null -ne $Actual -and $null -ne $Expected) "$Context has no durable identity."
+	foreach ($field in @('processId', 'creationTimeUtcTicks', 'launchId', 'lifecycleRunId')) {
+		Assert-ProcessIdentity ([string](Get-PropertyValue $Actual $field) -ceq [string](Get-PropertyValue $Expected $field)) "$Context disagrees with the durable ownership journal ($field)."
+	}
+	foreach ($field in @('hostPath', 'executablePath')) {
+		Assert-ProcessIdentity (Test-SamePath ([string](Get-PropertyValue $Actual $field)) ([string](Get-PropertyValue $Expected $field))) "$Context disagrees with the durable ownership journal ($field)."
+	}
+}
+
+function Read-ChildOwnershipJournal {
+	param([Parameter(Mandatory)]$State, [Parameter(Mandatory)][string]$RunRoot)
+	$runId = [string](Get-PropertyValue $State 'runId')
+	$ownershipDirectory = Join-Path $RunRoot 'child-ownership'
+	$ownershipPath = Join-Path $ownershipDirectory 'ownership.json'
+	Assert-ProcessIdentity (Test-SamePath ([string](Get-PropertyValue $State 'childOwnershipPath')) $ownershipPath) 'Lifecycle state has no run-bound child ownership journal; replacement children cannot be ruled out.'
+	Assert-ProcessIdentity (Test-Path -LiteralPath $ownershipPath -PathType Leaf) 'Durable child ownership is missing; readiness and initial PIDs cannot prove complete shutdown.'
+	$directoryInfo = Get-Item -LiteralPath $ownershipDirectory -Force
+	$fileInfo = Get-Item -LiteralPath $ownershipPath -Force
+	Assert-ProcessIdentity (($directoryInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and ($fileInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) 'Durable child ownership must not redirect outside its run directory.'
+	Assert-ProcessIdentity ($fileInfo.Length -gt 0 -and $fileInfo.Length -le 4MB) 'Durable child ownership is empty or exceeds the 4 MiB evidence limit.'
+	# Share deletion so a live supervisor can atomically publish the next complete journal while
+	# this observation retains the previous file instance. Stop rereads after that writer exits.
+	$stream = [IO.FileStream]::new($ownershipPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+	try {
+		Assert-ProcessIdentity ($stream.Length -gt 0 -and $stream.Length -le 4MB) 'Opened child ownership evidence exceeds the bounded read limit.'
+		$reader = [IO.StreamReader]::new($stream, [Text.UTF8Encoding]::new($false, $true), $false, 4096, $true)
+		try { $journal = $reader.ReadToEnd() | ConvertFrom-Json -Depth 32 }
+		finally { $reader.Dispose() }
+	} finally { $stream.Dispose() }
+	Assert-ProcessIdentity ([string](Get-PropertyValue $journal 'schemaVersion') -ceq '1.0' -and [string](Get-PropertyValue $journal 'lifecycleRunId') -ceq $runId) 'Child ownership journal belongs to another schema or lifecycle run.'
+	Assert-MatchingIdentity (Get-PropertyValue $journal 'controlIdentity') (Get-PropertyValue $State 'controlIdentity') 'Child ownership ControlHost owner'
+	$definitions = @{}
+	$children = @(Get-PropertyValue $journal 'children')
+	Assert-ProcessIdentity ($children.Count -eq 2) 'Child ownership must declare RuntimeHost and AIHost.'
+	foreach ($child in $children) {
+		$role = [string](Get-PropertyValue $child 'role')
+		Assert-ProcessIdentity ($role -cin @('runtime', 'ai') -and -not $definitions.ContainsKey($role)) 'Child ownership has an unexpected or duplicate role.'
+		$hostName = if ($role -eq 'runtime') { 'rtaime.RuntimeHost.dll' } else { 'rtaime.AIHost.dll' }
+		$hostPath = Find-HostAssembly -InstallRoot $installRoot -Name $hostName
+		Assert-ProcessIdentity (Test-SamePath ([string](Get-PropertyValue $child 'hostPath')) $hostPath) "Child ownership $role belongs to another installed host."
+		Assert-ProcessIdentity ([string](Get-PropertyValue $child 'endpoint') -ceq [string]$endpoints[$role]) "Child ownership $role belongs to another endpoint."
+		Assert-ProcessIdentity ([int](Get-PropertyValue $child 'maxStartAttempts') -gt 0) "Child ownership $role has no bounded launch budget."
+		$definitions[$role] = $child
+	}
+	$generationProperty = $journal.PSObject.Properties['generations']
+	Assert-ProcessIdentity ($null -ne $generationProperty -and $generationProperty.Value -is [Array]) 'Child ownership has no complete generation collection.'
+	$generations = @($generationProperty.Value)
+	$launches = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+	$attempts = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+	$records = @{}
+	foreach ($generation in $generations) {
+		$role = [string](Get-PropertyValue $generation 'role')
+		$launchId = [string](Get-PropertyValue $generation 'launchId')
+		$attempt = [int](Get-PropertyValue $generation 'attempt')
+		Assert-ProcessIdentity ($role -cin @('runtime', 'ai') -and $definitions.ContainsKey($role)) 'Child generation has an undeclared role.'
+		Assert-ProcessIdentity ($launchId -cmatch '^[a-f0-9]{32}$' -and $launches.Add($launchId)) 'Child generation has an invalid or duplicate launch ID.'
+		Assert-ProcessIdentity ($attempt -gt 0 -and $attempt -le [int](Get-PropertyValue $definitions[$role] 'maxStartAttempts') -and $attempts.Add("${role}:$attempt")) 'Child generation exceeds or duplicates the lifetime launch budget.'
+		$generationState = [string](Get-PropertyValue $generation 'state')
+		Assert-ProcessIdentity ($generationState -cin @('RUNNING', 'EXITED', 'NOT_STARTED')) "Child launch $role/$launchId has an incomplete outcome; retain recovery evidence."
+		$identity = Get-PropertyValue $generation 'processIdentity'
+		if ($generationState -ceq 'RUNNING') { Assert-ProcessIdentity ($null -ne $identity) "Running child $role/$launchId has no durable identity." }
+		if ($null -ne $identity) {
+			Assert-ProcessIdentity ([string](Get-PropertyValue $identity 'launchId') -ceq $launchId -and [string](Get-PropertyValue $identity 'lifecycleRunId') -ceq $runId) 'Child identity does not belong to its recorded launch/run.'
+			Assert-ProcessIdentity (Test-SamePath ([string](Get-PropertyValue $identity 'hostPath')) ([string](Get-PropertyValue $definitions[$role] 'hostPath'))) 'Child identity does not belong to its declared installed host.'
+		}
+		$records[$launchId] = $generation
+	}
+	foreach ($role in @('runtime', 'ai')) {
+		Assert-ProcessIdentity (@($generations | Where-Object { $_.role -ceq $role -and $_.state -ceq 'RUNNING' }).Count -le 1) "Child ownership contains overlapping active $role generations."
+		$identity = Get-PropertyValue $State ($role + 'Identity')
+		$processId = [int](Get-PropertyValue $State ($role + 'ProcessId'))
+		if ($null -ne $identity -or $processId -gt 0) {
+			$launchId = [string](Get-PropertyValue $identity 'launchId')
+			Assert-ProcessIdentity ($records.ContainsKey($launchId) -and [string](Get-PropertyValue $records[$launchId] 'role') -ceq $role) "Initial $role ownership is missing from the durable journal."
+			Assert-MatchingIdentity $identity (Get-PropertyValue $records[$launchId] 'processIdentity') "Initial $role identity"
+			Assert-ProcessIdentity ($processId -eq [int](Get-PropertyValue $identity 'processId')) "Initial $role PID and identity disagree."
+		}
+	}
+	return [pscustomobject]@{ definitions = $definitions; records = $records; generations = $generations; directory = $ownershipDirectory }
+}
+
 function Get-VerifiedOwnership {
 	param([Parameter(Mandatory)]$State)
 	$opened = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
@@ -242,40 +325,52 @@ function Get-VerifiedOwnership {
 			$readiness = Get-Content -LiteralPath $readinessPath -Raw | ConvertFrom-Json
 			Assert-ProcessIdentity ([int](Get-PropertyValue $readiness 'processId') -eq $controlPid -and [string](Get-PropertyValue $readiness 'lifecycleRunId') -ceq $runId) 'Readiness evidence belongs to another ControlHost generation.'
 		}
+		$journal = Read-ChildOwnershipJournal -State $State -RunRoot $runRoot
 		$children = @{}
 		$identities = @{}
+		$ownedChildren = [Collections.Generic.List[object]]::new()
+		$readinessMatchesCurrent = $null -ne $readiness
 		$processIds = [System.Collections.Generic.HashSet[int]]::new()
 		$null = $processIds.Add($controlPid)
+		foreach ($generation in @($journal.generations | Sort-Object { [int]$_.attempt })) {
+			$role = [string]$generation.role
+			$identity = Get-PropertyValue $generation 'processIdentity'
+			$identities[$role] = $identity
+			if ([string]$generation.state -cne 'RUNNING') { continue }
+			$childPid = [int](Get-PropertyValue $identity 'processId')
+			Assert-ProcessIdentity ($processIds.Add($childPid)) 'Active managed host generations must not share a recorded process ID.'
+			$hostPath = [string](Get-PropertyValue $journal.definitions[$role] 'hostPath')
+			$child = Open-VerifiedProcess -Identity $identity -ProcessId $childPid -HostPath $hostPath -RunId $runId -LaunchId ([string]$generation.launchId)
+			if ($null -ne $child) {
+				$opened.Add($child)
+				$children[$role] = $child
+				$childStopPath = Join-Path $journal.directory ("$role-$($generation.launchId).stop")
+				$existingStop = Get-Item -LiteralPath $childStopPath -Force -ErrorAction SilentlyContinue
+				Assert-ProcessIdentity ($null -eq $existingStop -or (-not $existingStop.PSIsContainer -and ($existingStop.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) 'Child stop signal is redirected or is not a regular file.'
+				$ownedChildren.Add([pscustomobject]@{ process = $child; stopPath = $childStopPath; identity = $identity })
+			}
+		}
 		foreach ($role in @('runtime', 'ai')) {
-			$identity = Get-PropertyValue $State ($role + 'Identity')
-			$childPid = [int](Get-PropertyValue $State ($role + 'ProcessId'))
 			if ($null -ne $readiness) {
 				$supervision = Get-PropertyValue $readiness ($role + 'Supervision')
-				$identity = Get-PropertyValue $supervision 'processIdentity'
-				$childPid = [int](Get-PropertyValue $supervision 'processId')
-				Assert-ProcessIdentity ($null -ne $identity -and $childPid -gt 0) "Readiness does not prove owned $role process identity."
+				$publishedIdentity = Get-PropertyValue $supervision 'processIdentity'
+				$launchId = [string](Get-PropertyValue $publishedIdentity 'launchId')
+				Assert-ProcessIdentity ($null -ne $publishedIdentity -and $journal.records.ContainsKey($launchId) -and [string](Get-PropertyValue $journal.records[$launchId] 'role') -ceq $role) "Readiness has no journalled $role launch ownership."
+				Assert-MatchingIdentity $publishedIdentity (Get-PropertyValue $journal.records[$launchId] 'processIdentity') "Readiness $role identity"
+				Assert-ProcessIdentity ([int](Get-PropertyValue $supervision 'processId') -eq [int](Get-PropertyValue $publishedIdentity 'processId')) "Readiness $role PID and identity disagree."
+				if ($launchId -cne [string](Get-PropertyValue $identities[$role] 'launchId')) { $readinessMatchesCurrent = $false }
 			}
-			$child = $null
-			if ($childPid -gt 0 -or $null -ne $identity) {
-				Assert-ProcessIdentity ($processIds.Add($childPid)) 'Different managed hosts must not share the same recorded process ID.'
-				$hostName = if ($role -eq 'runtime') { 'rtaime.RuntimeHost.dll' } else { 'rtaime.AIHost.dll' }
-				$hostPath = Find-HostAssembly -InstallRoot $installRoot -Name $hostName
-				$child = Open-VerifiedProcess -Identity $identity -ProcessId $childPid -HostPath $hostPath -RunId $runId
-				if ($null -ne $child) { $opened.Add($child) }
-			} else {
-				Assert-ProcessIdentity $false "Lifecycle state has no $role identity; unrecorded children may still be running."
-			}
-			$children[$role] = $child
-			$identities[$role] = $identity
 		}
 		return [pscustomobject]@{
 			control = $control
 			runtime = $children['runtime']
 			ai = $children['ai']
+			ownedChildren = $ownedChildren.ToArray()
 			processes = $opened.ToArray()
 			runtimeIdentity = $identities['runtime']
 			aiIdentity = $identities['ai']
 			readiness = $readiness
+			readinessMatchesCurrent = $readinessMatchesCurrent
 			readinessPath = $readinessPath
 			stopPath = $stopPath
 		}
@@ -323,7 +418,7 @@ function Invoke-StatusInternal {
 			$controlRunning = $null -ne $ownership.control -and -not $ownership.control.HasExited
 			$childrenRunning = $null -ne $ownership.runtime -and $null -ne $ownership.ai -and -not $ownership.runtime.HasExited -and -not $ownership.ai.HasExited
 			$readiness = $ownership.readiness
-			$readinessValid = $null -ne $readiness -and
+			$readinessValid = $null -ne $readiness -and $ownership.readinessMatchesCurrent -and
 				[string](Get-PropertyValue $readiness 'state') -eq 'READY' -and
 				[string](Get-PropertyValue $readiness 'health') -eq 'HEALTHY' -and
 				[string](Get-PropertyValue (Get-PropertyValue $readiness 'runtimeSupervision') 'state') -eq 'HEALTHY' -and
@@ -388,6 +483,7 @@ function Invoke-StopInternal {
 		instanceId = $InstanceId
 		runId = [string](Get-PropertyValue $state 'runId')
 		graceful = $false
+		recoveredOwnedChildren = 0
 		reasonCode = $null
 		detail = $null
 		completedAtUtc = $null
@@ -404,10 +500,20 @@ function Invoke-StopInternal {
 				Stop-ProcessTreeForcefully -Process $ownership.control -TimeoutMs ([int]$policy.shutdown.timeoutMs)
 			}
 		}
-		foreach ($child in @($ownership.ai, $ownership.runtime)) {
-			if ($null -ne $child -and -not $child.HasExited) {
-				$forced = $true
-				Stop-ProcessTreeForcefully -Process $child -TimeoutMs ([int]$policy.shutdown.timeoutMs)
+		# A replacement may have been launched after the first observation. ControlHost has exited,
+		# so its durable generation journal is now stable and must be read again before proving Stop.
+		Close-VerifiedOwnership -Ownership $ownership
+		$ownership = $null
+		$ownership = Get-VerifiedOwnership -State $state
+		foreach ($ownedChild in $ownership.ownedChildren) {
+			$child = $ownedChild.process
+			if (-not $child.HasExited) {
+				$receipt.recoveredOwnedChildren++
+				[IO.File]::WriteAllText($ownedChild.stopPath, "stopRequestedAtUtc=$([DateTimeOffset]::UtcNow.ToString('O'))$([Environment]::NewLine)")
+				if (-not (Wait-ForExit -Process $child -TimeoutMs ([int]$policy.shutdown.timeoutMs))) {
+					$forced = $true
+					Stop-ProcessTreeForcefully -Process $child -TimeoutMs ([int]$policy.shutdown.timeoutMs)
+				}
 			}
 		}
 		if ($forced) {
@@ -449,6 +555,7 @@ function Invoke-StartInternal {
 	New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 	$readinessPath = Join-Path $runRoot 'readiness.json'
 	$stopPath = Join-Path $runRoot 'stop.signal'
+	$childOwnershipPath = Join-Path (Join-Path $runRoot 'child-ownership') 'ownership.json'
 	$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 	$startInfo.FileName = 'dotnet'
 	$startInfo.UseShellExecute = $false
@@ -464,6 +571,7 @@ function Invoke-StartInternal {
 	$startInfo.Environment['RTAIME_HOST_READINESS_FILE'] = $readinessPath
 	$startInfo.Environment['RTAIME_HOST_STOP_FILE'] = $stopPath
 	$startInfo.Environment['RTAIME_LIFECYCLE_RUN_ID'] = $runId
+	$startInfo.Environment['RTAIME_CHILD_OWNERSHIP_FILE'] = $childOwnershipPath
 	$startInfo.Environment['RTAIME_SUPERVISION_PROBE_TIMEOUT_MS'] = [string]$policy.startup.probeTimeoutMs
 	$startInfo.Environment['RTAIME_SUPERVISION_PROBE_INTERVAL_MS'] = [string]$policy.startup.probeIntervalMs
 	$startInfo.Environment['RTAIME_SUPERVISION_RESTART_BACKOFF_MS'] = [string]$policy.startup.childRestartBackoffMs
@@ -488,6 +596,7 @@ function Invoke-StartInternal {
 			aiProcessId = $null
 			readinessPath = $readinessPath
 			stopPath = $stopPath
+			childOwnershipPath = $childOwnershipPath
 			endpoints = $endpoints
 			startedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
 			readyAtUtc = $null

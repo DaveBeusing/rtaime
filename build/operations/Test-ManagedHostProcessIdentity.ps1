@@ -37,14 +37,15 @@ function Stop-OwnHelpers {
 }
 
 function Start-OwnHelper {
-    param($Fixture, [string]$Name, [switch]$IgnoreStop, [string]$Children = '')
+	param($Fixture, [string]$Name, [switch]$IgnoreStop, [string]$Children = '', [string]$StopFile = '')
     $readyFile = Join-Path $Fixture.Root ($Name + '.ready')
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $shellPath
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
-    foreach ($argument in @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $helperPath,
-        '-StopFile', $Fixture.StopPath, '-ReadyFile', $readyFile)) {
+	if (-not $StopFile) { $StopFile = $Fixture.StopPath }
+	foreach ($argument in @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $helperPath,
+		'-StopFile', $StopFile, '-ReadyFile', $readyFile)) {
         $info.ArgumentList.Add($argument)
     }
     if ($IgnoreStop) { $info.ArgumentList.Add('-IgnoreStop') }
@@ -89,7 +90,7 @@ function New-IdentityFixture {
     $work = Join-Path $root 'work'
     $runId = [Guid]::NewGuid().ToString('N')
     $runRoot = Join-Path (Join-Path $work 'runs') $runId
-    New-Item -ItemType Directory -Path $tools, $runRoot, (Join-Path $root 'state') -Force | Out-Null
+    New-Item -ItemType Directory -Path $tools, $runRoot, (Join-Path $runRoot 'child-ownership'), (Join-Path $root 'state') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Invoke-ManagedHostLifecycle.ps1') -Destination $tools
     $policy = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'host-lifecycle-policy.json') -Raw | ConvertFrom-Json
     $policy.shutdown.timeoutMs = 3000
@@ -115,8 +116,9 @@ throw 'The identity regression must not start a new installation.'
         StatePath = (Join-Path $work 'lifecycle-state.json')
         ReadinessPath = (Join-Path $runRoot 'readiness.json')
         StopPath = (Join-Path $runRoot 'stop.signal')
+        OwnershipPath = (Join-Path (Join-Path $runRoot 'child-ownership') 'ownership.json')
         ReceiptPath = (Join-Path $work 'operational-receipt-latest.json')
-        Hosts = $hosts; State = $null; Readiness = $null; Processes = @{}; MalformedReadiness = $false
+        Hosts = $hosts; State = $null; Readiness = $null; Journal = $null; Processes = @{}; MalformedReadiness = $false
     }
     $runtime = Start-OwnHelper $fixture 'runtime' -IgnoreStop:$IgnoreStop
     $ai = Start-OwnHelper $fixture 'ai' -IgnoreStop:$IgnoreStop
@@ -135,6 +137,7 @@ throw 'The identity regression must not start a new installation.'
         controlProcessId = $control.Id; runtimeProcessId = $runtime.Id; aiProcessId = $ai.Id
         controlIdentity = $controlIdentity; runtimeIdentity = $runtimeIdentity; aiIdentity = $aiIdentity
         readinessPath = $fixture.ReadinessPath; stopPath = $fixture.StopPath; endpoints = $endpoints
+        childOwnershipPath = $fixture.OwnershipPath
         startedAtUtc = [DateTimeOffset]::UtcNow.ToString('O'); readyAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
     }
     $fixture.Readiness = [ordered]@{
@@ -142,6 +145,19 @@ throw 'The identity regression must not start a new installation.'
         runtimeSupervision = [ordered]@{ processId = $runtime.Id; state = 'HEALTHY'; startAttempts = 1; processIdentity = $runtimeIdentity }
         aiSupervision = [ordered]@{ processId = $ai.Id; state = 'HEALTHY'; startAttempts = 1; processIdentity = $aiIdentity }
     }
+    $journal = [ordered]@{
+        schemaVersion = '1.0'; lifecycleRunId = $runId; controlIdentity = $controlIdentity
+        children = @(
+            [ordered]@{ role = 'runtime'; name = 'RuntimeHost'; endpoint = $endpoints.runtime; hostPath = $hosts.Runtime; maxStartAttempts = 5 },
+            [ordered]@{ role = 'ai'; name = 'AIHost'; endpoint = $endpoints.ai; hostPath = $hosts.AI; maxStartAttempts = 5 }
+        )
+        generations = @(
+            [ordered]@{ role = 'runtime'; launchId = $runtimeIdentity.launchId; attempt = 1; state = 'RUNNING'; processIdentity = $runtimeIdentity },
+            [ordered]@{ role = 'ai'; launchId = $aiIdentity.launchId; attempt = 1; state = 'RUNNING'; processIdentity = $aiIdentity }
+        )
+    }
+    # Independent copies keep corrupt startup/readiness fixtures from changing authoritative launch evidence.
+    $fixture.Journal = $journal | ConvertTo-Json -Depth 32 | ConvertFrom-Json -Depth 32
     return $fixture
 }
 
@@ -150,6 +166,7 @@ function Save-IdentityFixture {
     Write-TestJson $Fixture.State $Fixture.StatePath
     if ($Fixture.MalformedReadiness) { [IO.File]::WriteAllText($Fixture.ReadinessPath, '{invalid') }
     else { Write-TestJson $Fixture.Readiness $Fixture.ReadinessPath }
+    Write-TestJson $Fixture.Journal $Fixture.OwnershipPath
 }
 
 function Invoke-FixtureLifecycle {
@@ -266,7 +283,7 @@ try {
         $f.MalformedReadiness = $true
         Assert-StaleIdentityRejected $f
     }
-    Invoke-IdentityCase 'StartingWithoutChildEvidence' {
+    Invoke-IdentityCase 'StartingWithoutChildOwnershipJournal' {
         param($f)
         $f.State.status = 'STARTING'
         foreach ($role in @('runtime', 'ai')) {
@@ -275,6 +292,7 @@ try {
         }
         Save-IdentityFixture $f
         Remove-Item -LiteralPath $f.ReadinessPath
+        Remove-Item -LiteralPath $f.OwnershipPath
         $f.Processes.Control.Kill($true)
         Assert-IdentityTest ($f.Processes.Control.WaitForExit(10000)) 'Owned Control fixture did not exit.'
         $stateHash = (Get-FileHash -LiteralPath $f.StatePath -Algorithm SHA256).Hash
@@ -290,6 +308,97 @@ try {
             $f.Processes[$role].Refresh()
             Assert-IdentityTest (-not $f.Processes[$role].HasExited) 'Stop terminated a child without recorded ownership evidence.'
         }
+    }
+    Invoke-IdentityCase 'ReplacementRecoveredWithoutReadinessAfterControlCrash' {
+        param($f)
+        $replacementLaunch = [Guid]::NewGuid().ToString('N')
+        $replacementStop = Join-Path (Split-Path -Parent $f.OwnershipPath) ("runtime-$replacementLaunch.stop")
+        $replacement = Start-OwnHelper $f 'runtime-replacement' -StopFile $replacementStop
+        $replacementIdentity = New-Identity $replacement $f.Hosts.Runtime $f.RunId $replacementLaunch
+        foreach ($role in @('Runtime', 'AI', 'Control')) {
+            $f.Processes[$role].Kill($false)
+            Assert-IdentityTest ($f.Processes[$role].WaitForExit(10000)) "Initial $role fixture did not exit."
+        }
+        foreach ($generation in $f.Journal.generations) { $generation.state = 'EXITED' }
+        $f.Journal.generations += [pscustomobject]@{ role = 'runtime'; launchId = $replacementLaunch; attempt = 2; state = 'RUNNING'; processIdentity = $replacementIdentity }
+        Save-IdentityFixture $f
+        Remove-Item -LiteralPath $f.ReadinessPath
+        $bystander = Start-OwnHelper $f 'unrelated' -IgnoreStop
+        $receipt = Invoke-FixtureLifecycle $f 'Stop'
+        Assert-IdentityTest ($replacement.WaitForExit(10000)) 'Owned replacement remained alive after successful recovery.'
+        Assert-IdentityTest ([string]$receipt.status -eq 'PASS' -and $receipt.recoveredOwnedChildren -eq 1) 'Stop did not recover the journalled replacement after readiness and owner loss.'
+        Assert-IdentityTest (-not $bystander.HasExited) 'Recovery terminated an unrelated process.'
+        Assert-IdentityTest (-not (Test-Path -LiteralPath $f.StatePath)) 'Successful recovery retained active lifecycle state.'
+        Assert-IdentityTest (Test-Path -LiteralPath $f.OwnershipPath) 'Recovery discarded the durable generation audit.'
+    }
+    Invoke-IdentityCase 'IncompleteLaunchOutcomeCannotProveShutdown' {
+        param($f)
+        $replacementLaunch = [Guid]::NewGuid().ToString('N')
+        $replacement = Start-OwnHelper $f 'unrecorded-replacement' -IgnoreStop
+        $f.Journal.generations += [pscustomobject]@{ role = 'runtime'; launchId = $replacementLaunch; attempt = 2; state = 'LAUNCH_PENDING'; processIdentity = $null }
+        foreach ($role in @('Runtime', 'AI', 'Control')) {
+            $f.Processes[$role].Kill($false)
+            Assert-IdentityTest ($f.Processes[$role].WaitForExit(10000)) "Initial $role fixture did not exit."
+        }
+        Assert-StaleIdentityRejected $f
+        Assert-IdentityTest (-not $replacement.HasExited) 'An unknown launch outcome authorized process termination.'
+        Assert-IdentityTest (Test-Path -LiteralPath $f.StatePath) 'Unknown launch outcome discarded recovery state.'
+    }
+    Invoke-IdentityCase 'ReplacementIdentityProtectsUnrelatedLiveProcess' {
+        param($f)
+        $f.Processes.Runtime.Kill($false)
+        Assert-IdentityTest ($f.Processes.Runtime.WaitForExit(10000)) 'Initial Runtime fixture did not exit.'
+        $f.Journal.generations[0].state = 'EXITED'
+        $bystander = Start-OwnHelper $f 'reused-replacement-id' -IgnoreStop
+        $launch = [Guid]::NewGuid().ToString('N')
+        $identity = New-Identity $bystander $f.Hosts.Runtime $f.RunId $launch
+        $identity.creationTimeUtcTicks = ([long]$identity.creationTimeUtcTicks - 1).ToString([Globalization.CultureInfo]::InvariantCulture)
+        $f.Journal.generations += [pscustomobject]@{ role = 'runtime'; launchId = $launch; attempt = 2; state = 'RUNNING'; processIdentity = $identity }
+        Assert-StaleIdentityRejected $f
+        Assert-IdentityTest (-not $bystander.HasExited) 'Replacement recovery killed a reused PID with mismatched creation identity.'
+    }
+    Invoke-IdentityCase 'OldReadinessCannotQualifyReplacement' {
+        param($f)
+        $f.Processes.Runtime.Kill($false)
+        Assert-IdentityTest ($f.Processes.Runtime.WaitForExit(10000)) 'Initial Runtime fixture did not exit.'
+        $f.Journal.generations[0].state = 'EXITED'
+        $launch = [Guid]::NewGuid().ToString('N')
+        $stop = Join-Path (Split-Path -Parent $f.OwnershipPath) ("runtime-$launch.stop")
+        $replacement = Start-OwnHelper $f 'current-runtime' -StopFile $stop
+        $identity = New-Identity $replacement $f.Hosts.Runtime $f.RunId $launch
+        $f.Journal.generations += [pscustomobject]@{ role = 'runtime'; launchId = $launch; attempt = 2; state = 'RUNNING'; processIdentity = $identity }
+        Save-IdentityFixture $f
+        $status = Invoke-FixtureLifecycle $f 'Status'
+        Assert-IdentityTest ($status.checks.processIdentityVerified -and $status.checks.childProcessesRunning) 'The replacement process identities were not observable.'
+        Assert-IdentityTest (-not $status.checks.controlReadinessEvidence) 'Readiness for the exited generation qualified its replacement.'
+        $receipt = Invoke-FixtureLifecycle $f 'Stop'
+        Assert-IdentityTest ([string]$receipt.status -eq 'PASS' -and $replacement.WaitForExit(10000)) 'Stale but correlated readiness prevented verified replacement cleanup.'
+    }
+    Invoke-IdentityCase 'OwnershipJournalParentMismatch' {
+        param($f)
+        $f.Journal.controlIdentity.creationTimeUtcTicks = ([long]$f.Journal.controlIdentity.creationTimeUtcTicks - 1).ToString([Globalization.CultureInfo]::InvariantCulture)
+        Assert-StaleIdentityRejected $f
+    }
+    Invoke-IdentityCase 'OwnershipJournalRoleCannotEscapeRun' {
+        param($f)
+        $f.Journal.generations[0].role = '../../foreign'
+        Assert-StaleIdentityRejected $f
+    }
+    Invoke-IdentityCase 'OwnershipJournalRejectsDuplicateAttempt' {
+        param($f)
+        $f.Journal.generations += [pscustomobject]@{ role = 'runtime'; launchId = [Guid]::NewGuid().ToString('N'); attempt = 1; state = 'NOT_STARTED'; processIdentity = $null }
+        Assert-StaleIdentityRejected $f
+    }
+    Invoke-IdentityCase 'OwnershipJournalRejectsOversizedEvidence' {
+        param($f)
+        $f.Journal | Add-Member -NotePropertyName diagnostic -NotePropertyValue ('x' * (4MB))
+        Assert-StaleIdentityRejected $f
+    }
+    Invoke-IdentityCase 'ChildStopSignalMustBeRegularFile' {
+        param($f)
+        $path = Join-Path (Split-Path -Parent $f.OwnershipPath) ("runtime-$($f.State.runtimeIdentity.launchId).stop")
+        New-Item -ItemType Directory -Path $path | Out-Null
+        Assert-StaleIdentityRejected $f
     }
     Invoke-IdentityCase 'AllRecordedProcessesExited' {
         param($f)

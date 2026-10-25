@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -33,7 +34,14 @@ public sealed class RuntimeConsumerIsolationTests
         var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var root = Path.Combine(Path.GetTempPath(), "rtaime-consumer-isolation-" + Guid.NewGuid().ToString("N"));
         var recordingWriter = new StalledWriter();
-        var replayWriter = new StalledWriter();
+        var replayWriter = new WriterSignals();
+        var replayWriters = new ConcurrentQueue<StalledWriter>();
+        StalledWriter CreateReplayWriter()
+        {
+            var writer = new StalledWriter(replayWriter);
+            replayWriters.Enqueue(writer);
+            return writer;
+        }
         var ndiSender = new StalledNdiSender();
         var transport = new StalledTransport();
         var aiTransport = new TimedOutAI();
@@ -49,7 +57,7 @@ public sealed class RuntimeConsumerIsolationTests
                 NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc, 12_000_000, 192_000,
                 120, queueCapacity: 2))
         };
-        var replay = new RuntimeReplayService(root, format, writerFactory: () => replayWriter, queueCapacity: 2);
+        var replay = new RuntimeReplayService(root, format, writerFactory: CreateReplayWriter, queueCapacity: 2);
         var period = TimeSpan.FromSeconds((double)format.FrameRate.Denominator / format.FrameRate.Numerator);
         var probe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(period,
             TimeSpan.FromTicks(period.Ticks / 4), period, 4096));
@@ -230,7 +238,28 @@ public sealed class RuntimeConsumerIsolationTests
             Assert.Equal(0, network.Ndi.Snapshot.Statistics.QueueDepth);
             Assert.Equal(0, network.Srt.Snapshot.Statistics.QueueDepth);
             Assert.Equal(1, recordingWriter.Finalizations);
-            Assert.Equal(1, replayWriter.Finalizations);
+            var replaySegments = replay.Snapshot.Segments;
+            var completedWriters = replayWriters.ToArray();
+            var writtenReplaySequences = completedWriters.SelectMany(writer => writer.WrittenSequences).ToArray();
+            Assert.NotEmpty(writtenReplaySequences);
+            var expectedSegments = 1 + writtenReplaySequences.Zip(writtenReplaySequences.Skip(1))
+                .Count(pair => pair.Second != pair.First + 1);
+            Assert.Equal(expectedSegments, completedWriters.Length);
+            Assert.Equal(expectedSegments, replaySegments.Count);
+            Assert.Equal((ulong)expectedSegments, replay.Snapshot.Statistics.FinalizedSegments);
+            Assert.Equal(replay.Snapshot.Statistics.AcceptedSamples, (ulong)writtenReplaySequences.Length);
+            Assert.Equal(completedWriters.Length, completedWriters.Select(writer => writer.FinalPath).Distinct().Count());
+            Assert.Null(replay.Snapshot.Failure);
+            Assert.All(completedWriters, writer =>
+            {
+                Assert.Equal(1, writer.Finalizations);
+                var segment = Assert.Single(replaySegments, item => item.Path == writer.FinalPath);
+                var written = writer.WrittenSequences;
+                Assert.NotEmpty(written);
+                Assert.Equal(written[0], segment.FirstProgramSequence);
+                Assert.Equal(written[^1], segment.LastProgramSequence);
+                Assert.All(written.Zip(written.Skip(1)), pair => Assert.Equal(pair.First + 1, pair.Second));
+            });
             var ordered = durations.Order().ToArray();
             double P(double rank) => ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * rank) - 1, 0, ordered.Length - 1)];
             var evidence = new
@@ -524,15 +553,26 @@ public sealed class RuntimeConsumerIsolationTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class StalledWriter : IReplaySegmentWriter
+    private sealed class WriterSignals
     {
-        private readonly object _gate = new();
-        private readonly Dictionary<ulong, IProgramRecordingPayloadLease> _staged = new();
-        private IProgramRecordingPayloadLease? _current;
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Finalizing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource FinalizeRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class StalledWriter(WriterSignals? signals = null) : IReplaySegmentWriter
+    {
+        private readonly object _gate = new();
+        private readonly Dictionary<ulong, IProgramRecordingPayloadLease> _staged = new();
+        private readonly List<ulong> _written = new();
+        private readonly WriterSignals _signals = signals ?? new();
+        private IProgramRecordingPayloadLease? _current;
+        public TaskCompletionSource Started => _signals.Started;
+        public TaskCompletionSource Release => _signals.Release;
+        public TaskCompletionSource Finalizing => _signals.Finalizing;
+        public TaskCompletionSource FinalizeRelease => _signals.FinalizeRelease;
+        public ulong[] WrittenSequences { get { lock (_gate) return _written.ToArray(); } }
         public int Finalizations { get; private set; }
         public string? FinalPath { get; private set; }
         public string ConfigureTarget(string directory, string name) { FinalPath = Path.Combine(directory, name); return name; }
@@ -551,7 +591,11 @@ public sealed class RuntimeConsumerIsolationTests
             IProgramRecordingPayloadLease payload;
             lock (_gate) { payload = _staged[sample.SequenceNumber]; _staged.Remove(sample.SequenceNumber); _current = payload; }
             Started.TrySetResult();
-            try { await Release.Task.WaitAsync(token); }
+            try
+            {
+                await Release.Task.WaitAsync(token);
+                lock (_gate) _written.Add(sample.SequenceNumber);
+            }
             finally { lock (_gate) { _current = null; payload.Dispose(); } }
         }
         public async ValueTask FinalizeAsync(CancellationToken token)

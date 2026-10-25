@@ -131,7 +131,10 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 					"Replay encoder queue is full; sample was dropped without blocking Program."));
 			}
 
-			_queue.Enqueue(new QueuedSample(programSinkId, video, audio, videoPayload, audioPayload));
+			// A producer-side rejection belongs before the next admitted sample,
+			// never before older samples already waiting in the bounded queue.
+			_queue.Enqueue(new QueuedSample(programSinkId, video, audio, videoPayload, audioPayload, _discontinuityPending));
+			_discontinuityPending = false;
 			_maximumQueueDepth = Math.Max(_maximumQueueDepth, _queue.Count);
 			_accepted++;
 			_signal.Release();
@@ -271,6 +274,8 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		}
 
 		SegmentSession? segment = null;
+		FrameDescriptor? previous = null;
+		bool captureFailurePending = false;
 		while (true)
 		{
 			await _signal.WaitAsync().ConfigureAwait(false);
@@ -287,7 +292,22 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 			{
 				try
 				{
-					segment ??= await StartSegmentAsync(sample).ConfigureAwait(false);
+					var adjacent = previous is null || AreAdjacent(previous, sample.Video);
+					var discontinuity = sample.DiscontinuityBefore || captureFailurePending || !adjacent;
+					if (!adjacent && !sample.DiscontinuityBefore && !captureFailurePending)
+					{
+						lock (_gate)
+						{
+							_discontinuities++;
+							ObserveUnsafe("replay.capture.discontinuity", "Program sequence or presentation timing is not adjacent to the previous captured sample.", sample.Video.Timing.SequenceNumber);
+						}
+					}
+					if (discontinuity && segment is not null)
+					{
+						await FinalizeSegmentAsync(segment).ConfigureAwait(false);
+						segment = null;
+					}
+					segment ??= await StartSegmentAsync(sample, discontinuity).ConfigureAwait(false);
 					var recordingSample = new RecordingProgramSample(
 						RecordingContractVersion.Current,
 						segment.OutputId,
@@ -297,6 +317,8 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 					sample = sample with { VideoPayload = NullPayloadLease.Instance };
 					await segment.Writer.WriteAsync(recordingSample, CancellationToken.None).ConfigureAwait(false);
 					segment.Observe(sample.Video);
+					previous = sample.Video;
+					captureFailurePending = false;
 					if (segment.Duration >= _store.Policy.SegmentDuration)
 					{
 						await FinalizeSegmentAsync(segment).ConfigureAwait(false);
@@ -304,12 +326,13 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 					}
 					lock (_gate)
 					{
-						if (_state == ReplayCaptureState.Degraded && !_discontinuityPending)
+						if (_state == ReplayCaptureState.Degraded && !_discontinuityPending && !_queue.Any(item => item.DiscontinuityBefore))
 							_state = ReplayCaptureState.Capturing;
 					}
 				}
 				catch (Exception exception)
 				{
+					captureFailurePending = true;
 					sample.VideoPayload.Dispose();
 					if (segment is not null)
 					{
@@ -319,7 +342,6 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 					lock (_gate)
 					{
 						_dropped++;
-						_discontinuityPending = true;
 						_discontinuities++;
 						_state = ReplayCaptureState.Degraded;
 						_failure = new Failure("replay.capture.encoder_failure", $"Replay encoder/storage failure: {exception.Message}");
@@ -356,7 +378,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask<SegmentSession> StartSegmentAsync(QueuedSample first)
+	private async ValueTask<SegmentSession> StartSegmentAsync(QueuedSample first, bool discontinuity)
 	{
 		_store.PrepareForCapture(_rootDirectory);
 		var id = ReplaySegmentId.New();
@@ -380,13 +402,25 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 			throw;
 		}
 
-		bool discontinuity;
-		lock (_gate)
-		{
-			discontinuity = _discontinuityPending;
-			_discontinuityPending = false;
-		}
 		return new SegmentSession(id, outputId, writer, discontinuity);
+	}
+
+	private static bool AreAdjacent(FrameDescriptor previous, FrameDescriptor next) =>
+		previous.Timing.SequenceNumber < ulong.MaxValue &&
+		next.Timing.SequenceNumber == previous.Timing.SequenceNumber + 1 &&
+		next.Surface.Format == previous.Surface.Format &&
+		WindowsMediaFoundationMp4RecordingWriter.ToHundredNanoseconds(next.Timing.PresentationTimestamp, next.Timing.Timebase) == FrameEndTicks(previous);
+
+	private static long FrameEndTicks(FrameDescriptor frame)
+	{
+		// Round the complete rational endpoint once. Adding a separately rounded
+		// frame duration creates artificial one-tick gaps/overlaps at 59.94 fps.
+		var timebase = frame.Timing.Timebase;
+		var rate = frame.Surface.Format.FrameRate;
+		var numerator = checked(((Int128)frame.Timing.PresentationTimestamp * timebase.Numerator * rate.Numerator +
+			(Int128)rate.Denominator * timebase.Denominator) * TimeSpan.TicksPerSecond);
+		var denominator = checked((Int128)timebase.Denominator * rate.Numerator);
+		return checked((long)((numerator + denominator / 2) / denominator));
 	}
 
 	private async ValueTask FinalizeSegmentAsync(SegmentSession segment)
@@ -471,7 +505,8 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		FrameDescriptor Video,
 		AudioBufferDescriptor Audio,
 		IProgramRecordingPayloadLease VideoPayload,
-		ReadOnlyMemory<byte> AudioPayload);
+		ReadOnlyMemory<byte> AudioPayload,
+		bool DiscontinuityBefore);
 
 	private sealed class SegmentSession
 	{
@@ -499,7 +534,6 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 			var start = TimeSpan.FromTicks(WindowsMediaFoundationMp4RecordingWriter.ToHundredNanoseconds(
 				frame.Timing.PresentationTimestamp,
 				frame.Timing.Timebase));
-			var duration = TimeSpan.FromTicks(FrameDurationTicks(frame.Surface.Format));
 			if (!HasSamples)
 			{
 				HasSamples = true;
@@ -507,14 +541,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 				Start = start;
 			}
 			LastSequence = frame.Timing.SequenceNumber;
-			End = start + duration;
-		}
-
-		private static long FrameDurationTicks(VideoFormat format)
-		{
-			var numerator = checked((Int128)10_000_000 * format.FrameRate.Denominator);
-			var denominator = format.FrameRate.Numerator;
-			return checked((long)((numerator + (denominator / 2)) / denominator));
+			End = TimeSpan.FromTicks(FrameEndTicks(frame));
 		}
 	}
 
@@ -525,4 +552,3 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		public void Dispose() { }
 	}
 }
-

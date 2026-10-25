@@ -16,6 +16,7 @@ public sealed class ReplayControlService
 	private readonly MediaAssetCatalogService _catalog;
 	private readonly SemaphoreSlim _gate = new(1, 1);
 	private ReplayClipAssetResult? _lastAdoptedClip;
+	private int _createRequestActive;
 
 	public ReplayControlService(
 		IControlRuntimeTransportSeam runtime,
@@ -40,8 +41,8 @@ public sealed class ReplayControlService
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			_lastAdoptedClip = null;
 			var runtime = await _runtime.MarkReplayInAsync(lookback, cancellationToken).ConfigureAwait(false);
+			_lastAdoptedClip = null;
 			return ToControl(runtime);
 		}
 		finally
@@ -55,8 +56,8 @@ public sealed class ReplayControlService
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			_lastAdoptedClip = null;
 			var runtime = await _runtime.MarkReplayOutAsync(cancellationToken).ConfigureAwait(false);
+			_lastAdoptedClip = null;
 			return ToControl(runtime);
 		}
 		finally
@@ -73,8 +74,8 @@ public sealed class ReplayControlService
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			_lastAdoptedClip = null;
 			var runtime = await _runtime.SetReplayRangeAsync(@in, @out, cancellationToken).ConfigureAwait(false);
+			_lastAdoptedClip = null;
 			return ToControl(runtime);
 		}
 		finally
@@ -93,6 +94,7 @@ public sealed class ReplayControlService
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			Volatile.Write(ref _createRequestActive, 1);
 			_lastAdoptedClip = null;
 			var materialized = await _runtime.CreateReplayClipAsync(name.Trim(), cancellationToken).ConfigureAwait(false);
 			if (!materialized.Succeeded || string.IsNullOrWhiteSpace(materialized.FinalPath))
@@ -163,6 +165,7 @@ public sealed class ReplayControlService
 		}
 		finally
 		{
+			Volatile.Write(ref _createRequestActive, 0);
 			_gate.Release();
 		}
 	}
@@ -175,9 +178,22 @@ public sealed class ReplayControlService
 		var runtimeClipState = Enum.IsDefined(typeof(ReplayControlClipState), runtime.ClipState)
 			? (ReplayControlClipState)runtime.ClipState
 			: throw new InvalidDataException("Runtime replay clip state is invalid.");
-		var clipState = runtimeClipState == ReplayControlClipState.Ready && _lastAdoptedClip?.Succeeded != true
-			? ReplayControlClipState.Finalizing
-			: runtimeClipState;
+		var clipState = runtimeClipState;
+		var failure = runtime.Failure;
+		var adopted = _lastAdoptedClip;
+		if (runtimeClipState == ReplayControlClipState.Ready &&
+			(adopted?.Succeeded != true || runtime.LastClip is { } last && adopted.ClipId != last.ClipId))
+		{
+			if (Volatile.Read(ref _createRequestActive) != 0)
+				clipState = ReplayControlClipState.Finalizing;
+			else
+			{
+				clipState = ReplayControlClipState.Failed;
+				failure = runtime.LastClip is { Succeeded: true, FinalPath: { Length: > 0 } path } completed
+					? new Failure("replay.clip.catalog_adoption_required", $"Replay clip '{completed.ClipId}' finished at '{path}', but Media Library adoption was not confirmed. Import the existing file; do not repeat CREATE CLIP to recover this result.")
+					: new Failure("replay.clip.outcome_unavailable", "Runtime reports a finalized replay clip without confirmed Media Library adoption or readable result details. Inspect retained clip files before another CREATE CLIP.");
+			}
+		}
 
 		return new ReplayControlSnapshot(
 			ReplayControlContractVersion.Current,
@@ -196,6 +212,6 @@ public sealed class ReplayControlService
 			runtime.FinalizedSegments,
 			runtime.EvictedSegments,
 			runtime.Discontinuities,
-			runtime.Failure);
+			failure);
 	}
 }

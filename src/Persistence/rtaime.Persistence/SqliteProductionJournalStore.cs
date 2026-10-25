@@ -254,16 +254,9 @@ public sealed class SqliteProductionJournalStore : IProductionJournalBatchStore
 			Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_path)!);
 			await using var connection = CreateConnection();
 			await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			await SqliteStoreSchema.EnsureAsync(connection, "production-journal", SchemaVersion, SchemaSql,
+				["production_journal", "production_journal_head"], cancellationToken).ConfigureAwait(false);
 			await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
-			await using var command = connection.CreateCommand();
-			command.CommandText = SchemaSql;
-			await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-			await using var version = connection.CreateCommand();
-			version.CommandText = "SELECT schema_version FROM schema_metadata WHERE component = 'production-journal';";
-			var value = await version.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-			if (Convert.ToInt32(value, CultureInfo.InvariantCulture) != SchemaVersion)
-				throw new NotSupportedException("Unsupported production journal schema version.");
 			_initialized = true;
 		}
 		finally

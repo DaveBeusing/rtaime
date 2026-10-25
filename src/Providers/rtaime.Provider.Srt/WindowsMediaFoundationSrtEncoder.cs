@@ -33,6 +33,8 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 	private byte[]? _nv12Buffer;
 	private byte[]? _pcm16Buffer;
 	private bool _disposed;
+	private bool _completionAttempted;
+	private Exception? _completionFailure;
 
 	public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken cancellationToken)
 	{
@@ -53,6 +55,8 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 		ArgumentNullException.ThrowIfNull(sample);
 		cancellationToken.ThrowIfCancellationRequested();
 		ThrowIfDisposed();
+		if (_completionAttempted)
+			throw new InvalidOperationException("The SRT encoder no longer accepts input after completion has started.");
 		var configuration = _configuration ?? throw new InvalidOperationException("Network encoder has not been initialized.");
 
 		ValidatePayload(configuration, sample);
@@ -66,12 +70,22 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 
 	public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken cancellationToken)
 	{
+		ThrowIfDisposed();
 		cancellationToken.ThrowIfCancellationRequested();
+		if (_completionFailure is not null)
+			ExceptionDispatchInfo.Capture(_completionFailure).Throw();
+		var finalize = !_completionAttempted;
+		_completionAttempted = true;
 		if (!_started || _sinkWriter is null || _stream is null)
 			return ValueTask.FromResult<ReadOnlyMemory<byte>>(ReadOnlyMemory<byte>.Empty);
 
-		MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.Flush(_videoStream));
-		MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.Flush(_audioStream));
+		if (finalize)
+		{
+			try { MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.FinalizeWriter(), "IMFSinkWriter.Finalize"); }
+			catch (Exception exception) { _completionFailure = exception; throw; }
+		}
+		// Flush discards pending samples. Finalize completes the encoder and mux before their bytes are drained.
+		cancellationToken.ThrowIfCancellationRequested();
 		return ValueTask.FromResult<ReadOnlyMemory<byte>>(_stream.Drain());
 	}
 
@@ -421,13 +435,8 @@ public sealed class WindowsMediaFoundationSrtEncoder : ISrtPayloadEncoder
 	{
 		if (_disposed) return ValueTask.CompletedTask;
 		_disposed = true;
-		Exception? failure = null;
-		if (_sinkWriter is not null)
-		{
-			try { MediaFoundationNetwork.ThrowIfFailed(_sinkWriter.FinalizeWriter(), "IMFSinkWriter.Finalize"); }
-			catch (Exception exception) { failure = exception; }
-		}
-		failure = Release(failure);
+		// Disposal is also the abort path; only explicit DrainAsync finalizes or produces terminal output.
+		var failure = Release();
 		return failure is null ? ValueTask.CompletedTask : ValueTask.FromException(failure);
 	}
 
@@ -704,4 +713,3 @@ internal interface IMFSinkWriter
 	[PreserveSig] int GetServiceForStream(uint streamIndex, ref Guid service, ref Guid riid, out IntPtr value);
 	[PreserveSig] int GetStatistics(uint streamIndex, IntPtr statistics);
 }
-

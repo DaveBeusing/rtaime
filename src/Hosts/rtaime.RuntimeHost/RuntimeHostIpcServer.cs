@@ -666,21 +666,20 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		RuntimeProgramExecutionService runtime,
 		CancellationToken cancellationToken)
 	{
-		var wire = request.Payload.Deserialize<WireReplayClipCreate>(Wire.JsonOptions)
-			?? throw new InvalidDataException("Replay clip-create payload is required.");
-		var result = await runtime.CreateReplayClipAsync(wire.Name, cancellationToken).ConfigureAwait(false);
-		AdvanceStateVersion();
-		return Success(
-			request,
-			"runtime.replay.clip.response",
-			new WireReplayClipResult(
-				result.Succeeded,
-				result.ClipId.ToString(),
-				string.IsNullOrWhiteSpace(result.FinalPath) ? null : result.FinalPath,
-				result.SourceRange.In.Ticks,
-				result.SourceRange.Out.Ticks,
-				string.IsNullOrWhiteSpace(result.Sha256) ? null : result.Sha256,
-				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+		try
+		{
+			var wire = request.Payload.Deserialize<WireReplayClipCreate>(Wire.JsonOptions)
+				?? throw new InvalidDataException("Replay clip-create payload is required.");
+			var result = await runtime.CreateReplayClipAsync(wire.Name, cancellationToken).ConfigureAwait(false);
+			AdvanceStateVersion();
+			return Success(request, "runtime.replay.clip.response", ToWire(result));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or JsonException)
+		{
+			// Async admission failures must remain correlated business denials.
+			// Returning a faulted ValueTask bypasses DispatchAsync's sync catch.
+			return Error(request, "runtime.request.rejected", exception.Message);
+		}
 	}
 
     private WireEnvelope PreflightMediaAsset(WireEnvelope request)
@@ -1060,7 +1059,18 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.EvictedSegments,
 		snapshot.Statistics.Discontinuities,
 		snapshot.Statistics.RetainedBytes,
-		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.ActiveClipId?.ToString(),
+		snapshot.LastClip is { } lastClip ? ToWire(lastClip) : null);
+
+	private static WireReplayClipResult ToWire(ReplayClipResult result) => new(
+		result.Succeeded,
+		result.ClipId.ToString(),
+		string.IsNullOrWhiteSpace(result.FinalPath) ? null : result.FinalPath,
+		result.SourceRange.In.Ticks,
+		result.SourceRange.Out.Ticks,
+		string.IsNullOrWhiteSpace(result.Sha256) ? null : result.Sha256,
+		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireAvSyncDiagnostics ToWire(RuntimeHostAvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -1630,7 +1640,7 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireReplayRange(long InTicks, long OutTicks);
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySegment(string SegmentId, ulong FirstProgramSequence, ulong LastProgramSequence, long StartTicks, long EndTicks, long Bytes, bool HasAudio, bool DiscontinuityBefore);
-	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[] Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure);
+	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[] Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure, string? ActiveClipId = null, WireReplayClipResult? LastClip = null);
 	private sealed record WireReplayClipResult(bool Succeeded, string ClipId, string? FinalPath, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingProfile(
 		string ProfileId,

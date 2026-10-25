@@ -63,6 +63,10 @@ Replay uses Program frame timing as its media timeline. It does not use a wall-c
 
 A range crossing a discontinuity is rejected. A range that has already expired from the rolling store is rejected deterministically.
 
+Producer-side drop/rejection evidence travels with the next admitted sample, so older queued samples retain their original continuity. The encoder worker also checks successive Program sequences, formats and rational presentation endpoints. It finalizes the healthy prefix before the first non-adjacent sample and marks the new segment at that actual boundary. A failure while writing or finalizing similarly marks the next surviving segment; it cannot turn a missing frame into a continuous encoded interval.
+
+Segment endpoints are rounded once from the full rational frame end, including 60000/1001 cadence. Range admission and pinning use the same checks: both requested endpoints must be covered, and every crossed segment boundary must have adjacent sequence numbers, matching end/start time and no discontinuity flag. A gap before the first selected segment does not invalidate a range wholly inside its healthy contents.
+
 ## MARK IN / MARK OUT
 
 MARK IN selects a retained Program time and supports a bounded lookback. MARK OUT resolves to the latest retained Program history. The resulting range must still be continuously retained before materialization begins.
@@ -82,6 +86,16 @@ The materialized clip:
 - is cleaned up on failed materialization.
 
 A clip is not considered ready for production until ControlHost successfully imports it and confirms an online Media Library asset with a stable `MediaAssetId`.
+
+### Materialization ownership and uncertain responses
+
+RuntimeHost reserves one clip job identity independently of the displayed clip state and selected range. While that job owns materialization, MARK IN, MARK OUT, range replacement, selection clearing and another CREATE CLIP are rejected without modifying its selection. A Control-to-Runtime request timeout closes only the caller's response wait; it does not release the Runtime job or establish cancellation. Host shutdown cancellation still reaches the actual materializer.
+
+Ownership ends only after success, cancellation or an exception has terminated the operation. Every terminal outcome retains the original clip identity and range, including a cancellation before the materializer's scheduled task begins. Runtime replay disposal joins any active job before disposing the capture store and its directory ownership.
+
+The existing Runtime replay snapshot includes optional read-only `ActiveClipId` and `LastClip` observations. Earlier 1.0 snapshots without those fields remain readable; the new fields do not authorize an action or change the protocol version. A completed result remains available after the requesting connection disconnects and after selection edits.
+
+If materialization finishes after an unconfirmed response, ControlHost reports `replay.clip.catalog_adoption_required` with the completed clip identity and file path. Import that existing file through the ordinary Media Library flow. Do not repeat CREATE CLIP to recover an uncertain request. A legacy Runtime that provides no result details is reported as `replay.clip.outcome_unavailable`; ControlHost never infers successful catalog adoption from the Runtime's `Ready` state. While a live Control request is still performing catalog adoption, the state remains `Finalizing`.
 
 ## Playback reuse
 
@@ -115,7 +129,7 @@ All interactive controls use the custom Operator control set.
 
 The first replay implementation is normal-speed only. Variable speed, slow motion, reverse playback, interpolation, multi-angle replay, synchronized replay channels and highlight-reel editing are outside this capability.
 
-Automated qualification covers bounded retention/storage behavior, pinned-history protection, expired/discontinuous range rejection, Operator authority boundaries, build policy and the existing full Required Gates. Windows reference-media regression continues to qualify the shared H.264/AAC decode/encode path.
+Automated qualification covers bounded retention/storage behavior, pinned-history protection, expired/discontinuous range rejection, queued-backlog drops and rational segment boundaries, Operator authority boundaries, build policy and the existing full Required Gates. Replay ownership regressions exercise the ordinary Control replay service, named-pipe Runtime transport and Runtime server: a blocked materialization outlives its response timeout, selection/duplicate creation remain denied, and subsequent snapshots retain its coherent terminal result. Separate cases cover cancellation before scheduling, cancellation during work, synchronous/asynchronous failure, repeated disposal and legacy snapshot compatibility. Windows reference-media regression continues to qualify the shared H.264/AAC decode/encode path.
 
 Long-duration physical-storage qualification and hardware encoder behavior remain separate reference-platform evidence.
 

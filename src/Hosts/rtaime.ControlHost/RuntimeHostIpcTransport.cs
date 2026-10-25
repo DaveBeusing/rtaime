@@ -320,7 +320,9 @@ public sealed record RuntimeReplaySnapshot(
 	ulong EvictedSegments,
 	ulong Discontinuities,
 	long RetainedBytes,
-	Failure? Failure)
+	Failure? Failure,
+	string? ActiveClipId = null,
+	RuntimeReplayClipResult? LastClip = null)
 {
 	public TimeSpan RetainedDuration =>
 		Segments.Count == 0 ? TimeSpan.Zero : Segments[^1].End - Segments[0].Start;
@@ -872,14 +874,7 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireReplayClipResult>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime replay clip response is required.");
-		return new RuntimeReplayClipResult(
-			wire.Succeeded,
-			wire.ClipId,
-			wire.FinalPath,
-			TimeSpan.FromTicks(wire.SourceInTicks),
-			TimeSpan.FromTicks(wire.SourceOutTicks),
-			wire.Sha256,
-			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+		return FromWire(wire);
 	}
 
 	public async ValueTask<string> GetAIEffectCatalogJsonAsync(CancellationToken cancellationToken = default)
@@ -1666,8 +1661,19 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 			wire.EvictedSegments,
 			wire.Discontinuities,
 			wire.RetainedBytes,
-			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message),
+			wire.ActiveClipId,
+			wire.LastClip is null ? null : FromWire(wire.LastClip));
 	}
+
+	private static RuntimeReplayClipResult FromWire(WireReplayClipResult result) => new(
+		result.Succeeded,
+		result.ClipId,
+		result.FinalPath,
+		TimeSpan.FromTicks(result.SourceInTicks),
+		TimeSpan.FromTicks(result.SourceOutTicks),
+		result.Sha256,
+		result.Failure is null ? null : new Failure(result.Failure.Code, result.Failure.Message));
 
 	private static RuntimeRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
 	{
@@ -2117,7 +2123,7 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 	private sealed record WireReplayRange(long InTicks, long OutTicks);
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySegment(string SegmentId, ulong FirstProgramSequence, ulong LastProgramSequence, long StartTicks, long EndTicks, long Bytes, bool HasAudio, bool DiscontinuityBefore);
-	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[]? Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure);
+	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[]? Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure, string? ActiveClipId = null, WireReplayClipResult? LastClip = null);
 	private sealed record WireReplayClipResult(bool Succeeded, string ClipId, string? FinalPath, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingProfile(
 		string ProfileId,

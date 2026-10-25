@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
+
 namespace rtaime.ControlHost;
 
 /// <summary>
@@ -33,27 +35,32 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 		var probeInterval = TimeSpan.FromMilliseconds(ParsePositiveInt(environment("RTAIME_SUPERVISION_PROBE_INTERVAL_MS"), 500, "RTAIME_SUPERVISION_PROBE_INTERVAL_MS"));
 		var restartBackoff = TimeSpan.FromMilliseconds(ParseNonNegativeInt(environment("RTAIME_SUPERVISION_RESTART_BACKOFF_MS"), 500, "RTAIME_SUPERVISION_RESTART_BACKOFF_MS"));
 		var maxStarts = ParsePositiveInt(environment("RTAIME_SUPERVISION_MAX_START_ATTEMPTS"), 5, "RTAIME_SUPERVISION_MAX_START_ATTEMPTS");
+		var runtimeExecutable = environment("RTAIME_RUNTIME_EXECUTABLE");
+		var aiExecutable = environment("RTAIME_AI_EXECUTABLE");
+		var aiEndpoint = environment("RTAIME_AI_ENDPOINT");
+		if (string.IsNullOrWhiteSpace(aiEndpoint)) aiEndpoint = "rtaime.v1.ai.default";
+		var ownership = CreateOwnershipJournal(environment, controlOptions.RuntimeEndpoint, aiEndpoint, runtimeExecutable, aiExecutable, maxStarts);
 
 		var runtime = Create(
 			"RuntimeHost",
 			controlOptions.RuntimeEndpoint,
-			environment("RTAIME_RUNTIME_EXECUTABLE"),
+			runtimeExecutable,
 			probeTimeout,
 			probeInterval,
 			restartBackoff,
 			maxStarts,
-			$"--source-a-id={controlOptions.SourceAId} --source-b-id={controlOptions.SourceBId}");
-		var aiEndpoint = environment("RTAIME_AI_ENDPOINT");
-		if (string.IsNullOrWhiteSpace(aiEndpoint)) aiEndpoint = "rtaime.v1.ai.default";
+			$"--source-a-id={controlOptions.SourceAId} --source-b-id={controlOptions.SourceBId}",
+			ownership);
 		var ai = Create(
 			"AIHost",
 			aiEndpoint,
-			environment("RTAIME_AI_EXECUTABLE"),
+			aiExecutable,
 			probeTimeout,
 			probeInterval,
 			restartBackoff,
 			maxStarts,
-			string.Empty);
+			string.Empty,
+			ownership);
 
 		return new ControlHostChildSupervision(runtime, ai);
 	}
@@ -82,7 +89,8 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 		TimeSpan probeInterval,
 		TimeSpan restartBackoff,
 		int maxStarts,
-		string additionalArguments)
+		string additionalArguments,
+		LocalProcessOwnershipJournal? ownership)
 	{
 		if (string.IsNullOrWhiteSpace(executable)) return null;
 		return new LocalProcessSupervisor(new LocalProcessSupervisionOptions(
@@ -94,8 +102,36 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 			restartBackoff,
 			maxStarts)
 		{
-			AdditionalArguments = additionalArguments
+			AdditionalArguments = additionalArguments,
+			OwnershipJournal = ownership
 		});
+	}
+
+	private static LocalProcessOwnershipJournal? CreateOwnershipJournal(
+		Func<string, string?> environment,
+		string runtimeEndpoint,
+		string aiEndpoint,
+		string? runtimeExecutable,
+		string? aiExecutable,
+		int maxStarts)
+	{
+		var ownershipFile = environment("RTAIME_CHILD_OWNERSHIP_FILE");
+		if (string.IsNullOrWhiteSpace(ownershipFile)) return null;
+		var runId = environment("RTAIME_LIFECYCLE_RUN_ID");
+		var readinessFile = environment("RTAIME_HOST_READINESS_FILE");
+		if (!Guid.TryParseExact(runId, "N", out _) || string.IsNullOrWhiteSpace(readinessFile) ||
+			string.IsNullOrWhiteSpace(runtimeExecutable) || string.IsNullOrWhiteSpace(aiExecutable))
+			throw new ArgumentException("Durable child ownership requires a lifecycle run, readiness path and both managed host executables.");
+		var expected = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(readinessFile))!, "child-ownership", "ownership.json");
+		if (!string.Equals(Path.GetFullPath(ownershipFile), expected, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+			throw new ArgumentException("Durable child ownership must remain inside the managed lifecycle run directory.");
+		using var control = Process.GetCurrentProcess();
+		var identity = LocalProcessIdentity.Capture(control, typeof(ControlHostChildSupervision).Assembly.Location, runId!, runId);
+		return new LocalProcessOwnershipJournal(expected, runId!, identity,
+		[
+			new("runtime", "RuntimeHost", runtimeEndpoint, Path.GetFullPath(runtimeExecutable.Trim()), maxStarts),
+			new("ai", "AIHost", aiEndpoint, Path.GetFullPath(aiExecutable.Trim()), maxStarts)
+		]);
 	}
 
 	private static int ParsePositiveInt(string? value, int defaultValue, string name)

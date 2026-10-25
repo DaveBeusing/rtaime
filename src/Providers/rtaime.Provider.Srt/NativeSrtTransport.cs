@@ -13,12 +13,15 @@ public sealed class NativeSrtTransport : ISrtTransport
 	private const int InvalidSocket = -1;
 	private const int SrtError = -1;
 	private const int SrtLive = 0;
+	private const int SrtConnected = 5;
 	private const int SrtoSndSyn = 1;
+	private const int SrtoSndTimeo = 13;
 	private const int SrtoSender = 21;
 	private const int SrtoTsbpdMode = 22;
 	private const int SrtoLatency = 23;
 	private const int SrtoPassphrase = 26;
 	private const int SrtoConnTimeout = 36;
+	private const int SrtoPeerLatency = 44;
 	private const int SrtoMinVersion = 45;
 	private const int SrtoMessageApi = 48;
 	private const int SrtoPayloadSize = 49;
@@ -77,6 +80,7 @@ public sealed class NativeSrtTransport : ISrtTransport
 			SetIntOption(api, socket, SrtoMessageApi, 1);
 			SetIntOption(api, socket, SrtoPayloadSize, SrtTransportPacketizer.MaximumMessageSize);
 			SetIntOption(api, socket, SrtoSndSyn, 1);
+			SetIntOption(api, socket, SrtoSndTimeo, 1000);
 			if (!string.IsNullOrEmpty(passphrase))
 				SetStringOption(api, socket, SrtoPassphrase, passphrase);
 
@@ -126,6 +130,50 @@ public sealed class NativeSrtTransport : ISrtTransport
 		{
 			handle.Free();
 			GC.KeepAlive(copy);
+		}
+	}
+
+	public async ValueTask CompleteAsync(CancellationToken cancellationToken)
+	{
+		ThrowIfDisposed();
+		var api = _api ?? throw new InvalidOperationException("SRT transport is not connected.");
+		var length = sizeof(int);
+		api.ThrowIfError(api.GetIntSockFlag(_socket, SrtoPeerLatency, out var latencyMilliseconds, ref length), "srt_getsockflag(SRTO_PEERLATENCY)");
+		if (length != sizeof(int) || latencyMilliseconds < 0)
+			throw new InvalidDataException("SRT did not report a valid negotiated peer delivery latency.");
+		await WaitForSendCompletionAsync(() =>
+		{
+			api.ThrowIfError(api.GetSendBuffer(_socket, out var blocks, out var bytes), "srt_getsndbuffer");
+			if (api.GetSocketState(_socket) != SrtConnected)
+				throw new IOException("SRT disconnected before send-buffer completion and its peer-latency grace interval elapsed.");
+			return blocks == 0 && bytes == 0;
+		}, TimeSpan.FromMilliseconds(latencyMilliseconds), TimeProvider.System, cancellationToken).ConfigureAwait(false);
+	}
+
+	internal static async ValueTask WaitForSendCompletionAsync(
+		Func<bool> sendBufferIsEmpty,
+		TimeSpan peerLatency,
+		TimeProvider clock,
+		CancellationToken cancellationToken)
+	{
+		// ACKs can empty the sender buffer before the peer's TSBPD playout deadline.
+		// SRT 1.5.7 receiveMessage fails on SHUTDOWN while that final data is not yet
+		// readable. Keep the connected epoch alive for its negotiated peer latency
+		// after the last empty-buffer observation begins. That point is later than
+		// every successful send and its ACK; it does not claim application-level ACK.
+		long? emptySince = null;
+		while (true)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			if (sendBufferIsEmpty())
+			{
+				emptySince ??= clock.GetTimestamp();
+				if (clock.GetElapsedTime(emptySince.Value) >= peerLatency)
+					return;
+			}
+			else
+				emptySince = null;
+			await Task.Delay(TimeSpan.FromMilliseconds(10), clock, cancellationToken).ConfigureAwait(false);
 		}
 	}
 
@@ -182,7 +230,7 @@ public sealed class NativeSrtTransport : ISrtTransport
 		var socket = Interlocked.Exchange(ref _socket, InvalidSocket);
 		var api = _api;
 		if (socket != InvalidSocket && api is not null)
-			api.Close(socket);
+			api.ThrowIfError(api.Close(socket), "srt_close");
 		await ValueTask.CompletedTask;
 	}
 
@@ -190,14 +238,21 @@ public sealed class NativeSrtTransport : ISrtTransport
 	{
 		if (_disposed) return;
 		_disposed = true;
-		await DisposeSocketAsync().ConfigureAwait(false);
+		List<Exception>? failures = null;
+		try { await DisposeSocketAsync().ConfigureAwait(false); }
+		catch (Exception exception) { (failures ??= []).Add(exception); }
 		if (_started && _api is not null)
 		{
-			_api.Cleanup();
+			try { _api.ThrowIfError(_api.Cleanup(), "srt_cleanup"); }
+			catch (Exception exception) { (failures ??= []).Add(exception); }
 			_started = false;
 		}
-		_api?.Dispose();
+		try { _api?.Dispose(); }
+		catch (Exception exception) { (failures ??= []).Add(exception); }
 		_api = null;
+		if (failures is { Count: > 0 })
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures.Count == 1
+				? failures[0] : new AggregateException("SRT native cleanup failed.", failures)).Throw();
 	}
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
@@ -236,8 +291,11 @@ internal sealed class SrtNativeApi : IDisposable
 	private readonly SrtCreateSocket _createSocket;
 	private readonly SrtClose _close;
 	private readonly SrtSetSockFlag _setSockFlag;
+	private readonly SrtGetIntSockFlag _getIntSockFlag;
 	private readonly SrtConnect _connect;
 	private readonly SrtSend _send;
+	private readonly SrtGetSendBuffer _getSendBuffer;
+	private readonly SrtGetSocketState _getSocketState;
 	private readonly SrtGetLastErrorString _getLastErrorString;
 	private bool _disposed;
 
@@ -250,8 +308,11 @@ internal sealed class SrtNativeApi : IDisposable
 		_createSocket = Load<SrtCreateSocket>("srt_create_socket");
 		_close = Load<SrtClose>("srt_close");
 		_setSockFlag = Load<SrtSetSockFlag>("srt_setsockflag");
+		_getIntSockFlag = Load<SrtGetIntSockFlag>("srt_getsockflag");
 		_connect = Load<SrtConnect>("srt_connect");
 		_send = Load<SrtSend>("srt_send");
+		_getSendBuffer = Load<SrtGetSendBuffer>("srt_getsndbuffer");
+		_getSocketState = Load<SrtGetSocketState>("srt_getsockstate");
 		_getLastErrorString = Load<SrtGetLastErrorString>("srt_getlasterror_str");
 	}
 
@@ -268,8 +329,11 @@ internal sealed class SrtNativeApi : IDisposable
 	public int CreateSocket() => _createSocket();
 	public int Close(int socket) => _close(socket);
 	public int SetSockFlag(int socket, int option, IntPtr value, int length) => _setSockFlag(socket, option, value, length);
+	public int GetIntSockFlag(int socket, int option, out int value, ref int length) => _getIntSockFlag(socket, option, out value, ref length);
 	public int Connect(int socket, IntPtr address, int length) => _connect(socket, address, length);
 	public int Send(int socket, IntPtr buffer, int length) => _send(socket, buffer, length);
+	public int GetSendBuffer(int socket, out nuint blocks, out nuint bytes) => _getSendBuffer(socket, out blocks, out bytes);
+	public int GetSocketState(int socket) => _getSocketState(socket);
 
 	public void ThrowIfError(int result, string operation)
 	{
@@ -300,8 +364,10 @@ internal sealed class SrtNativeApi : IDisposable
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtCreateSocket();
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtClose(int socket);
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtSetSockFlag(int socket, int option, IntPtr value, int length);
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtGetIntSockFlag(int socket, int option, out int value, ref int length);
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtConnect(int socket, IntPtr address, int length);
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtSend(int socket, IntPtr buffer, int length);
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtGetSendBuffer(int socket, out nuint blocks, out nuint bytes);
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtGetSocketState(int socket);
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr SrtGetLastErrorString();
 }
-
