@@ -59,10 +59,11 @@ public sealed class NativeSrtTransport : ISrtTransport
 		{
 			api.ThrowIfError(api.Startup(), "srt_startup");
 			_started = true;
-			var version = api.GetVersion();
-			if (version < MinimumSrtVersion)
-				throw new NotSupportedException($"SRT runtime 0x{version:X6} is older than the required 1.5.7 baseline.");
 		}
+		// Recheck every connection attempt, including reuse after a failed version check.
+		var version = api.GetVersion();
+		if (version < MinimumSrtVersion)
+			throw new NotSupportedException($"SRT runtime 0x{version:X6} is older than the required 1.5.7 baseline.");
 
 		cancellationToken.ThrowIfCancellationRequested();
 		var socket = api.CreateSocket();
