@@ -92,10 +92,17 @@ connection or its replacement.
 
 Native `srt_send` has a one-second blocking-send limit. Orderly completion waits
 for [`srt_getsndbuffer`](https://github.com/Haivision/srt/blob/v1.5.7/docs/API/API-functions.md#srt_getsndbuffer)
-to report no pending blocks or bytes while the socket remains connected before
-socket close; live-mode linger is
-otherwise disabled by default. This is sender-buffer evidence, not proof of
-remote decoder acceptance. The local native qualification separately checks
+to report no pending blocks or bytes while the socket remains connected. It then
+keeps that buffer continuously empty and the connection alive for a grace interval
+equal to the negotiated
+[`SRTO_PEERLATENCY`](https://github.com/Haivision/srt/blob/v1.5.7/docs/API/API-socket-options.md#SRTO_PEERLATENCY),
+measured with a monotonic clock. ACKs can arrive before the peer's timestamp-based
+delivery deadline; closing immediately after an ACK can make a blocked receive fail
+before its buffered tail becomes readable. The interval starts after send-buffer
+completion, later than the successful sends and their ACKs, and remains cancellable
+within the same stop deadline. Live-mode linger is otherwise disabled by default.
+This is sender completion plus a peer playout grace interval, not proof of
+remote application receipt or decoder acceptance. The local native qualification separately checks
 receiver bytes and hashes through completion.
 
 The complete stop, including cleanup, has a ten-second deadline. Finalization,

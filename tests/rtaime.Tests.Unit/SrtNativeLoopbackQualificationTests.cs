@@ -44,105 +44,146 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
 		var formatName = use5994 ? "1080p59.94" : "1080p50";
 		using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-		await using var receiver = new LoopbackReceiver(library);
+		// The second rate negotiates a peer delay greater than the sender's configured 120 ms.
+		var receiver = new LoopbackReceiver(library, use5994 ? 240 : 120);
 		var encoder = new MeasuredEncoder(receiver.ExpectCompletion);
 		var configuration = new NetworkOutputConfiguration("native-loopback", new Uri($"srt://127.0.0.1:{receiver.Port}"),
 			NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller, format, AudioFormat.Stereo48kFloat32,
 			NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc, 12_000_000, 192_000, 120,
 			queueCapacity: 2, reconnectInitialDelayMilliseconds: 50, reconnectMaximumDelayMilliseconds: 1000,
 			reconnectMaximumAttempts: 1);
-		await using var session = new SrtNetworkOutputSession(configuration, () => new NativeSrtTransport(library), () => encoder);
-		var pixels = new byte[1920 * 1080 * 4];
-		new Random(579).NextBytes(pixels);
-		for (var pixel = 3; pixel < pixels.Length; pixel += 4) pixels[pixel] = 255;
-		const int frames = 90;
-		for (ulong sequence = 0; sequence < frames; sequence++)
+		var session = new SrtNetworkOutputSession(configuration, () => new NativeSrtTransport(library), () => encoder);
+		var failures = new List<Exception>();
+		object? evidence = null;
+		try
 		{
-			var units = (Int128)48000 * format.FrameRate.Denominator;
-			var start = checked((ulong)((Int128)sequence * units / format.FrameRate.Numerator));
-			var end = checked((ulong)(((Int128)sequence + 1) * units / format.FrameRate.Numerator));
-			var count = checked((uint)(end - start));
-			var pcm = new float[checked((int)count * 2)];
-			for (var frame = 0; frame < count; frame++)
+			var pixels = new byte[1920 * 1080 * 4];
+			new Random(579).NextBytes(pixels);
+			for (var pixel = 3; pixel < pixels.Length; pixel += 4) pixels[pixel] = 255;
+			const int frames = 90;
+			for (ulong sequence = 0; sequence < frames; sequence++)
 			{
-				var value = (float)(0.1 * Math.Sin(2 * Math.PI * 1000 * (start + (ulong)frame) / 48000));
-				pcm[frame * 2] = pcm[frame * 2 + 1] = value;
+				var units = (Int128)48000 * format.FrameRate.Denominator;
+				var start = checked((ulong)((Int128)sequence * units / format.FrameRate.Numerator));
+				var end = checked((ulong)(((Int128)sequence + 1) * units / format.FrameRate.Numerator));
+				var count = checked((uint)(end - start));
+				var pcm = new float[checked((int)count * 2)];
+				for (var frame = 0; frame < count; frame++)
+				{
+					var value = (float)(0.1 * Math.Sin(2 * Math.PI * 1000 * (start + (ulong)frame) / 48000));
+					pcm[frame * 2] = pcm[frame * 2 + 1] = value;
+				}
+				var lease = new SampleLease(pixels);
+				var sample = new NetworkOutputProgramSample(sequence,
+					new FrameTiming(sequence, checked((long)sequence), new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator)),
+					new AudioBufferTiming(start, count, checked((long)start), new Timebase(1, 48000)),
+					lease, MemoryMarshal.AsBytes(pcm.AsSpan()).ToArray());
+				Assert.True(session.TrySubmit(sample).Accepted);
+				await lease.Returned.Task.WaitAsync(timeout.Token);
+				var current = session.Snapshot;
+				if (current.Statistics.DroppedSamples != 0)
+				{
+					// These bytes come exclusively from the synthetic qualification fixture, never live Program input.
+					var diagnostic = JsonSerializer.Serialize(new
+					{
+						schemaVersion = "1.0", status = "FAIL", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
+						format = formatName, sequence, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
+						failure = current.Failure?.ToString(), encoderFailure = encoder.LastFailure?.ToString(),
+						encoder.EncodedBytes, encoder.MaximumDrain, encoder.EncodeCalls,
+						firstNonEmptyDrain = encoder.FirstNonEmptyDrain, latestNonEmptyDrain = encoder.LatestNonEmptyDrain,
+						current.Statistics
+					}, new JsonSerializerOptions { WriteIndented = true });
+					File.WriteAllText(Path.Combine(evidenceRoot, $"srt-native-{formatName}-failure.json"), diagnostic);
+					output.WriteLine(diagnostic);
+				}
+				Assert.True(current.Statistics.DroppedSamples == 0,
+					$"Native output failed: {current.Failure}; encoder: {encoder.LastFailure}");
 			}
-			var lease = new SampleLease(pixels);
-			var sample = new NetworkOutputProgramSample(sequence,
-				new FrameTiming(sequence, checked((long)sequence), new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator)),
-				new AudioBufferTiming(start, count, checked((long)start), new Timebase(1, 48000)),
-				lease, MemoryMarshal.AsBytes(pcm.AsSpan()).ToArray());
-			Assert.True(session.TrySubmit(sample).Accepted);
-			await lease.Returned.Task.WaitAsync(timeout.Token);
-			var current = session.Snapshot;
-			if (current.Statistics.DroppedSamples != 0)
+			Assert.True(encoder.MaximumDrain > 1316, "Native encoder never produced a drain larger than one SRT payload.");
+			Assert.True(encoder.EncodedBytes > 1316);
+			Assert.Equal(0L, encoder.EncodedBytes % 188);
+			var statistics = session.Snapshot.Statistics;
+			Assert.Equal((ulong)encoder.EncodedBytes, statistics.BytesSent);
+			await receiver.WaitForBytesAsync(encoder.EncodedBytes, timeout.Token);
+			Assert.Equal(encoder.EncodedBytes, receiver.BytesReceived);
+			Assert.Equal(statistics.PacketsSent, receiver.MessagesReceived);
+			var encodedHash = encoder.PayloadHash;
+			Assert.Equal(encodedHash, receiver.PayloadHash);
+			Assert.Equal(0UL, statistics.DroppedSamples);
+			Assert.Equal(0UL, statistics.ReconnectCount);
+			var liveBytes = encoder.EncodedBytes;
+			var liveHash = encodedHash;
+			// Keep the receiver alive while Finalize produces delayed media and the session sends every tail byte.
+			await session.DisposeAsync().AsTask().WaitAsync(timeout.Token);
+			Assert.Equal(1, encoder.CompletionCalls);
+			Assert.True(encoder.CompletionBytes > 0, "The native fixture did not exercise encoder/mux tail output.");
+			Assert.Equal(liveBytes + encoder.CompletionBytes, encoder.EncodedBytes);
+			Assert.Equal(0L, encoder.EncodedBytes % 188);
+			statistics = session.Snapshot.Statistics;
+			Assert.Equal((ulong)encoder.EncodedBytes, statistics.BytesSent);
+			await receiver.WaitForBytesAsync(encoder.EncodedBytes, timeout.Token);
+			Assert.Equal(encoder.EncodedBytes, receiver.BytesReceived);
+			Assert.Equal(statistics.PacketsSent, receiver.MessagesReceived);
+			encodedHash = encoder.PayloadHash;
+			Assert.Equal(encodedHash, receiver.PayloadHash);
+			Assert.Null(session.Snapshot.Failure);
+			Assert.Equal(NetworkOutputLifecycleState.Disabled, session.Snapshot.Lifecycle);
+			Assert.Equal(0UL, statistics.DroppedSamples);
+			Assert.Equal(0UL, statistics.RejectedSamples);
+			Assert.Equal(0UL, statistics.ReconnectCount);
+			evidence = new
 			{
-				// These bytes come exclusively from the synthetic qualification fixture, never live Program input.
+				schemaVersion = "1.0", status = "PASS", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
+				scope = "Live and orderly-completion output: Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
+				format = formatName, frames, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
+				senderLatencyMilliseconds = configuration.LatencyMilliseconds, receiverLatencyMilliseconds = receiver.LatencyMilliseconds,
+				maximumEncoderDrain = encoder.MaximumDrain, encodedBytes = encoder.EncodedBytes,
+				liveBytes, livePayloadSha256 = liveHash, completionBytes = encoder.CompletionBytes,
+				completionCalls = encoder.CompletionCalls, completionStatus = "PASS",
+				receivedBytes = receiver.BytesReceived,
+				messagesReceived = receiver.MessagesReceived, maximumMessage = receiver.MaximumMessage,
+				payloadSha256 = encodedHash, statistics,
+				limits = "Frame count is submitted input, not decoded frame coverage; bytes/hash cover live output plus complete Finalize output. External decode, WAN, encryption and physical latency remain UNVERIFIED."
+			};
+		}
+		catch (Exception exception) { failures.Add(exception); }
+		// Retain the initiating assertion/native error even if sender or receiver cleanup also fails.
+		try { await session.DisposeAsync(); }
+		catch (Exception exception)
+		{
+			if (!failures.Any(failure => ReferenceEquals(failure, exception))) failures.Add(exception);
+		}
+		try { await receiver.DisposeAsync(); }
+		catch (Exception exception)
+		{
+			if (!failures.Any(failure => ReferenceEquals(failure, exception))) failures.Add(exception);
+		}
+		if (failures.Count > 0)
+		{
+			try
+			{
 				var diagnostic = JsonSerializer.Serialize(new
 				{
 					schemaVersion = "1.0", status = "FAIL", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
-					format = formatName, sequence, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
-					failure = current.Failure?.ToString(), encoderFailure = encoder.LastFailure?.ToString(),
-					encoder.EncodedBytes, encoder.MaximumDrain, encoder.EncodeCalls,
-					firstNonEmptyDrain = encoder.FirstNonEmptyDrain, latestNonEmptyDrain = encoder.LatestNonEmptyDrain,
-					current.Statistics
+					format = formatName, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
+					failures = failures.Select(failure => failure.ToString()).ToArray(),
+					encoderFailure = encoder.LastFailure?.ToString(), encoder.EncodedBytes, encoder.CompletionBytes,
+					encoder.CompletionCalls, encoder.MaximumDrain, encoder.EncodeCalls,
+					encodedPayloadSha256 = encoder.PayloadHash, receivedBytes = receiver.BytesReceived,
+					receivedPayloadSha256 = receiver.PayloadHash, statistics = session.Snapshot.Statistics,
+					failure = session.Snapshot.Failure
 				}, new JsonSerializerOptions { WriteIndented = true });
 				File.WriteAllText(Path.Combine(evidenceRoot, $"srt-native-{formatName}-failure.json"), diagnostic);
 				output.WriteLine(diagnostic);
 			}
-			Assert.True(current.Statistics.DroppedSamples == 0,
-				$"Native output failed: {current.Failure}; encoder: {encoder.LastFailure}");
+			catch (Exception diagnosticFailure) { failures.Add(diagnosticFailure); }
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures.Count == 1 ? failures[0]
+				: new AggregateException("Native SRT qualification failed; initiating and cleanup failures are retained.", failures)).Throw();
 		}
-		Assert.True(encoder.MaximumDrain > 1316, "Native encoder never produced a drain larger than one SRT payload.");
-		Assert.True(encoder.EncodedBytes > 1316);
-		Assert.Equal(0L, encoder.EncodedBytes % 188);
-		var statistics = session.Snapshot.Statistics;
-		Assert.Equal((ulong)encoder.EncodedBytes, statistics.BytesSent);
-		await receiver.WaitForBytesAsync(encoder.EncodedBytes, timeout.Token);
-		Assert.Equal(encoder.EncodedBytes, receiver.BytesReceived);
-		Assert.Equal(statistics.PacketsSent, receiver.MessagesReceived);
-		var encodedHash = encoder.PayloadHash;
-		Assert.Equal(encodedHash, receiver.PayloadHash);
-		Assert.Equal(0UL, statistics.DroppedSamples);
-		Assert.Equal(0UL, statistics.ReconnectCount);
-		var liveBytes = encoder.EncodedBytes;
-		var liveHash = encodedHash;
-		// Keep the receiver alive while Finalize produces delayed media and the session sends every tail byte.
-		await session.DisposeAsync().AsTask().WaitAsync(timeout.Token);
-		Assert.Equal(1, encoder.CompletionCalls);
-		Assert.True(encoder.CompletionBytes > 0, "The native fixture did not exercise encoder/mux tail output.");
-		Assert.Equal(liveBytes + encoder.CompletionBytes, encoder.EncodedBytes);
-		Assert.Equal(0L, encoder.EncodedBytes % 188);
-		statistics = session.Snapshot.Statistics;
-		Assert.Equal((ulong)encoder.EncodedBytes, statistics.BytesSent);
-		await receiver.WaitForBytesAsync(encoder.EncodedBytes, timeout.Token);
-		Assert.Equal(encoder.EncodedBytes, receiver.BytesReceived);
-		Assert.Equal(statistics.PacketsSent, receiver.MessagesReceived);
-		encodedHash = encoder.PayloadHash;
-		Assert.Equal(encodedHash, receiver.PayloadHash);
-		Assert.Null(session.Snapshot.Failure);
-		Assert.Equal(NetworkOutputLifecycleState.Disabled, session.Snapshot.Lifecycle);
-		Assert.Equal(0UL, statistics.DroppedSamples);
-		Assert.Equal(0UL, statistics.RejectedSamples);
-		Assert.Equal(0UL, statistics.ReconnectCount);
-		var evidence = new
-		{
-			schemaVersion = "1.0", status = "PASS", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
-			scope = "Live and orderly-completion output: Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
-			format = formatName, frames, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
-			maximumEncoderDrain = encoder.MaximumDrain, encodedBytes = encoder.EncodedBytes,
-			liveBytes, livePayloadSha256 = liveHash, completionBytes = encoder.CompletionBytes,
-			completionCalls = encoder.CompletionCalls, completionStatus = "PASS",
-			receivedBytes = receiver.BytesReceived,
-			messagesReceived = receiver.MessagesReceived, maximumMessage = receiver.MaximumMessage,
-			payloadSha256 = encodedHash, statistics,
-			limits = "Frame count is submitted input, not decoded frame coverage; bytes/hash cover live output plus complete Finalize output. External decode, WAN, encryption and physical latency remain UNVERIFIED."
-		};
-		await receiver.DisposeAsync();
+		Assert.NotNull(evidence);
 		File.WriteAllText(Path.Combine(evidenceRoot, $"srt-native-{formatName}.json"),
 			JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
-		output.WriteLine($"Native SRT/MF {formatName}: {statistics.PacketsSent} messages, {statistics.BytesSent} bytes, SHA-256 {encodedHash}.");
+		output.WriteLine($"Native SRT/MF {formatName}: {session.Snapshot.Statistics.PacketsSent} messages, {session.Snapshot.Statistics.BytesSent} bytes, SHA-256 {encoder.PayloadHash}.");
 	}
 
 	private static string RequireEnvironment(string name) =>
@@ -256,21 +297,24 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		private ulong _messages;
 		private int _maximumMessage;
 		private long _expectedTotal = -1;
+		private string? _completedHash;
 		private bool _disposed;
 		public int Port { get; }
+		public int LatencyMilliseconds { get; }
 		public uint RuntimeVersion { get; }
 		public long BytesReceived { get { lock (_gate) return _bytes; } }
 		public ulong MessagesReceived { get { lock (_gate) return _messages; } }
 		public int MaximumMessage { get { lock (_gate) return _maximumMessage; } }
-		public string PayloadHash { get { lock (_gate) return Convert.ToHexString(_hash.GetCurrentHash()); } }
+		public string PayloadHash { get { lock (_gate) return _completedHash ?? Convert.ToHexString(_hash.GetCurrentHash()); } }
 
 		public void ExpectCompletion(long expectedTotal)
 		{
 			lock (_gate) _expectedTotal = expectedTotal;
 		}
 
-		public LoopbackReceiver(string library)
+		public LoopbackReceiver(string library, int latencyMilliseconds)
 		{
+			LatencyMilliseconds = latencyMilliseconds;
 			_library = NativeLibrary.Load(library);
 			var started = false;
 			try
@@ -291,7 +335,7 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 				Set(set, 50, 0); // Live transmission.
 				Set(set, 48, 1); // Message API.
 				Set(set, 49, 1316);
-				Set(set, 23, 120);
+				Set(set, 23, latencyMilliseconds);
 				Set(set, 45, 0x010507);
 				Set(set, 14, 10_000); // Bound each blocking receive.
 				var address = Marshal.AllocHGlobal(16);
@@ -309,14 +353,16 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 				finally { Marshal.FreeHGlobal(address); }
 				_worker = Task.Run(ReceiveLoop);
 			}
-			catch
+			catch (Exception initializationFailure)
 			{
-				if (_listener != -1) _close!(_listener);
-				if (started) _cleanup!();
-				NativeLibrary.Free(_library);
-				_hash.Dispose();
-				_shutdown.Dispose();
-				throw;
+				var failures = new List<Exception> { initializationFailure };
+				TryCleanup(() => Close(ref _listener), failures);
+				if (started) TryCleanup(() => Check(_cleanup!(), "cleanup"), failures);
+				TryCleanup(() => NativeLibrary.Free(_library), failures);
+				TryCleanup(_hash.Dispose, failures);
+				TryCleanup(_shutdown.Dispose, failures);
+				ThrowFailures(failures);
+				throw; // ThrowFailures always throws for the retained initialization failure.
 			}
 		}
 
@@ -324,10 +370,11 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		{
 			var bytes = new byte[1316];
 			var handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+			Exception? receiveFailure = null;
 			try
 			{
 				var socket = _accept(_listener, IntPtr.Zero, IntPtr.Zero);
-				if (_shutdown.IsCancellationRequested) { if (socket != -1) _close(socket); return; }
+				if (_shutdown.IsCancellationRequested) { if (socket != -1) Check(_close(socket), "close accepted socket"); return; }
 				Check(socket, "accept");
 				_connection = socket;
 				while (!_shutdown.IsCancellationRequested)
@@ -354,10 +401,17 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 					}
 				}
 			}
+			catch (Exception exception) { receiveFailure = exception; throw; }
 			finally
 			{
 				handle.Free();
-				Close(ref _connection);
+				try { Close(ref _connection); }
+				catch (Exception closeFailure)
+				{
+					if (receiveFailure is not null)
+						throw new AggregateException("SRT receiver and socket cleanup failed.", receiveFailure, closeFailure);
+					throw;
+				}
 			}
 		}
 
@@ -389,23 +443,40 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		private void Close(ref int socket)
 		{
 			var owned = Interlocked.Exchange(ref socket, -1);
-			if (owned != -1) _close(owned);
+			if (owned != -1) Check(_close(owned), "close");
 		}
 		public async ValueTask DisposeAsync()
 		{
 			if (_disposed) return;
 			_disposed = true;
-			_shutdown.Cancel();
-			Close(ref _listener);
-			Close(ref _connection);
+			var failures = new List<Exception>();
+			TryCleanup(_shutdown.Cancel, failures);
+			TryCleanup(() => Close(ref _listener), failures);
+			TryCleanup(() => Close(ref _connection), failures);
 			try { await _worker; }
-			finally
+			catch (Exception exception) { failures.Add(exception); }
+			TryCleanup(() =>
 			{
-				_cleanup();
-				NativeLibrary.Free(_library);
-				_hash.Dispose();
-				_shutdown.Dispose();
-			}
+				lock (_gate) _completedHash = Convert.ToHexString(_hash.GetCurrentHash());
+			}, failures);
+			TryCleanup(() => Check(_cleanup(), "cleanup"), failures);
+			TryCleanup(() => NativeLibrary.Free(_library), failures);
+			TryCleanup(_hash.Dispose, failures);
+			TryCleanup(_shutdown.Dispose, failures);
+			ThrowFailures(failures);
+		}
+
+		private static void TryCleanup(Action cleanup, List<Exception> failures)
+		{
+			try { cleanup(); }
+			catch (Exception exception) { failures.Add(exception); }
+		}
+
+		private static void ThrowFailures(List<Exception> failures)
+		{
+			if (failures.Count == 0) return;
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures.Count == 1 ? failures[0]
+				: new AggregateException("SRT receiver cleanup failed after every resource was attempted.", failures)).Throw();
 		}
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int Startup();
