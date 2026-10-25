@@ -321,7 +321,15 @@ internal sealed class SrtNativeApi : IDisposable
 	{
 		if (!NativeLibrary.TryLoad(libraryPath, out var handle))
 			throw new DllNotFoundException($"SRT native library could not be loaded from '{libraryPath}'.");
-		return new SrtNativeApi(handle);
+		try
+		{
+			return new SrtNativeApi(handle);
+		}
+		catch
+		{
+			NativeLibrary.Free(handle);
+			throw;
+		}
 	}
 
 	public int Startup() => _startup();
