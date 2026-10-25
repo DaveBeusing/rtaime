@@ -1,11 +1,13 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 # Product versioning
 
-rtaime adopts the Unified Versioning Standard. All managed components share one product release stream and `vX.Y.Z` tags. The current release target is `0.5.41`; adoption does not declare a stable release or change persisted-state schemas.
+rtaime adopts the Unified Versioning Standard. All managed components share one product release stream and `vX.Y.Z` tags. The current release target is defined by `VersionPrefix` in `Directory.Build.props`; adoption does not declare a stable release or change persisted-state schemas.
 
 `VersionPrefix` in `Directory.Build.props` is the planned SemVer target. Change it once when the release scope requires a new version. Never increment tracked PATCH per commit or commit generated build versions. Before 1.0, MINOR conventionally denotes notable features/contract changes and PATCH compatible fixes; SemVer does not guarantee a stable public API at 0.x.
 
 The public contract includes externally consumed Control/Runtime/Media/Provider/AI contracts and IPC, CLI/configuration behavior, persisted production state, supported provider interactions, and offline installation/update behavior. Internal refactoring, tests and documentation do not automatically change product SemVer. Contract/protocol/schema versions and durable migration history remain governed separately by their existing policies and catalogs. Release notes must describe compatibility and migration consequences.
+
+The identities below use `0.1.0` as an illustrative version; they are not the current release target. Retained assembly and file version compatibility values are governed independently from these product-version examples.
 
 ## Build identities
 
