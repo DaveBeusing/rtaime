@@ -194,7 +194,9 @@ public sealed record ReplayBufferSnapshot(
 	IReadOnlyList<ReplaySegmentDescriptor> Segments,
 	ReplayRange? Selection,
 	ReplayStatistics Statistics,
-	Failure? Failure)
+	Failure? Failure,
+	ReplayClipId? ActiveClipId = null,
+	ReplayClipResult? LastClip = null)
 {
 	public TimeSpan RetainedDuration =>
 		Segments.Count == 0 ? TimeSpan.Zero : Segments[^1].End - Segments[0].Start;
