@@ -148,14 +148,8 @@ public sealed class RollingReplaySegmentStore : IDisposable
 			var selected = _segments
 				.Where(segment => segment.End > range.In && segment.Start < range.Out)
 				.ToArray();
-			if (selected.Length == 0)
-				throw new InvalidOperationException("Requested replay range has no retained encoded segments.");
-
-			for (var index = 1; index < selected.Length; index++)
-			{
-				if (selected[index].DiscontinuityBefore)
-					throw new InvalidOperationException("Requested replay range crosses a capture discontinuity.");
-			}
+			if (!HasContinuousCoverage(selected, range))
+				throw new InvalidOperationException("Requested replay range crosses missing or discontinuous captured history.");
 
 			foreach (var segment in selected)
 				_pins[segment.SegmentId] = _pins.GetValueOrDefault(segment.SegmentId) + 1;
@@ -175,7 +169,24 @@ public sealed class RollingReplaySegmentStore : IDisposable
 		if (segments.Count == 0 || range.In < segments[0].Start || range.Out > segments[^1].End)
 			return false;
 		var selected = segments.Where(segment => segment.End > range.In && segment.Start < range.Out).ToArray();
-		return selected.Length > 0 && selected.Skip(1).All(segment => !segment.DiscontinuityBefore);
+		return HasContinuousCoverage(selected, range);
+	}
+
+	private static bool HasContinuousCoverage(IReadOnlyList<ReplaySegmentDescriptor> segments, ReplayRange range)
+	{
+		if (segments.Count == 0 || segments[0].Start > range.In || segments[^1].End < range.Out)
+			return false;
+		for (var index = 1; index < segments.Count; index++)
+		{
+			var previous = segments[index - 1];
+			var next = segments[index];
+			if (next.DiscontinuityBefore || next.Start != previous.End ||
+				previous.LastProgramSequence == ulong.MaxValue || next.FirstProgramSequence != previous.LastProgramSequence + 1)
+				return false;
+		}
+		// A discontinuity before the first selected segment is outside the
+		// requested interval and must not invalidate its healthy contents.
+		return true;
 	}
 
 	public void Trim()
@@ -349,4 +360,3 @@ public sealed class RollingReplaySegmentStore : IDisposable
 		public void Dispose() => Interlocked.Exchange(ref _owner, null)?.Release(Segments);
 	}
 }
-

@@ -67,6 +67,50 @@ public sealed class ReplaySegmentStoreTests
 		Assert.Throws<InvalidOperationException>(() => fixture.Store.PinRange(expired));
 	}
 
+	[Theory]
+	[InlineData(2.5, 3.5)]
+	[InlineData(1.5, 2.5)]
+	[InlineData(1.5, 3.5)]
+	[InlineData(2.25, 2.75)]
+	public void Range_endpoints_and_internal_intervals_must_be_physically_retained(double start, double end)
+	{
+		using var fixture = new Fixture(new ReplayBufferPolicy(TimeSpan.FromMinutes(1), 1024, TimeSpan.FromSeconds(2)));
+		fixture.Add(1, 10, TimeSpan.Zero, TimeSpan.FromSeconds(2), 64);
+		fixture.Add(11, 20, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5), 64);
+		var range = new ReplayRange(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end));
+
+		Assert.False(fixture.Store.ContainsRange(range));
+		Assert.Throws<InvalidOperationException>(() => fixture.Store.PinRange(range));
+	}
+
+	[Fact]
+	public void Adjacent_timestamps_do_not_hide_missing_Program_sequences()
+	{
+		using var fixture = new Fixture(new ReplayBufferPolicy(TimeSpan.FromMinutes(1), 1024, TimeSpan.FromSeconds(2)));
+		fixture.Add(1, 10, TimeSpan.Zero, TimeSpan.FromSeconds(2), 64);
+		fixture.Add(12, 20, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), 64);
+		var range = new ReplayRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
+
+		Assert.False(fixture.Store.ContainsRange(range));
+		Assert.Throws<InvalidOperationException>(() => fixture.Store.PinRange(range));
+	}
+
+	[Theory]
+	[InlineData(3.0)]
+	[InlineData(3.25)]
+	public void Discontinuity_before_selected_history_does_not_reject_its_healthy_contents(double start)
+	{
+		using var fixture = new Fixture(new ReplayBufferPolicy(TimeSpan.FromMinutes(1), 1024, TimeSpan.FromSeconds(2)));
+		fixture.Add(1, 10, TimeSpan.Zero, TimeSpan.FromSeconds(2), 64);
+		var second = fixture.Add(12, 20, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5), 64, discontinuityBefore: true);
+		var third = fixture.Add(21, 30, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(7), 64);
+		var range = new ReplayRange(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(6.5));
+
+		Assert.True(fixture.Store.ContainsRange(range));
+		using var pin = fixture.Store.PinRange(range);
+		Assert.Equal(new[] { second.SegmentId, third.SegmentId }, pin.Segments.Select(segment => segment.SegmentId));
+	}
+
 	private sealed class Fixture : IDisposable
 	{
 		private readonly string _root = Path.Combine(Path.GetTempPath(), "rtaime-replay-store-tests", Guid.NewGuid().ToString("N"));
@@ -122,4 +166,3 @@ public sealed class ReplaySegmentStoreTests
 		}
 	}
 }
-
