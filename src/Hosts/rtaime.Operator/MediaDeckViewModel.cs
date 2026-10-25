@@ -48,27 +48,28 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		_sourceIdSelector = sourceIdSelector ?? throw new ArgumentNullException(nameof(sourceIdSelector));
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
 		Timeline = new MediaTimelineViewModel(_controller.Timeline, _controller.Markers);
+		Timeline.PropertyChanged += OnTimelineStateChanged;
 		Cues = new ObservableCollection<MediaDeckCueItem>();
 		_controller.StateChanged += OnControllerStateChanged;
 
-		OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy);
+		OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && !RequiresSynchronization);
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
 		PlayCommand = new AsyncRelayCommand(() => TransportAsync(_controller.PlayAsync), () => CanPlay);
 		PauseCommand = new AsyncRelayCommand(() => TransportAsync(_controller.PauseAsync), () => CanPause);
 		TogglePlayPauseCommand = new AsyncRelayCommand(TogglePlayPauseAsync, () => CanPlay || CanPause);
 		StopCommand = new AsyncRelayCommand(() => TransportAsync(_controller.StopAsync), () => CanStop);
-		CloseCommand = new AsyncRelayCommand(CloseAsync, () => IsLoaded && !IsBusy);
-		SetInCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.SetInAtCurrentFrameAsync()), () => CanMark);
-		ClearInCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.ClearInAsync()), () => HasIn && !IsBusy);
-		SetOutCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.SetOutAtCurrentFrameAsync()), () => CanMark);
-		ClearOutCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.ClearOutAsync()), () => HasOut && !IsBusy);
-		JumpInCommand = new AsyncRelayCommand(() => _controller.Markers.JumpToInAsync().AsTask(), () => HasIn && CanSeek);
-		JumpOutCommand = new AsyncRelayCommand(() => _controller.Markers.JumpToOutAsync().AsTask(), () => HasOut && CanSeek);
+		CloseCommand = new AsyncRelayCommand(CloseAsync, () => IsLoaded && !IsBusy && !RequiresSynchronization);
+		SetInCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.SetInAtCurrentFrameAsync(_dispose.Token)), () => CanMark);
+		ClearInCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.ClearInAsync(_dispose.Token)), () => HasIn && !IsBusy && !RequiresSynchronization);
+		SetOutCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.SetOutAtCurrentFrameAsync(_dispose.Token)), () => CanMark);
+		ClearOutCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.ClearOutAsync(_dispose.Token)), () => HasOut && !IsBusy && !RequiresSynchronization);
+		JumpInCommand = new AsyncRelayCommand(() => SeekAsync(() => _controller.Markers.JumpToInAsync(_dispose.Token)), () => HasIn && CanSeek);
+		JumpOutCommand = new AsyncRelayCommand(() => SeekAsync(() => _controller.Markers.JumpToOutAsync(_dispose.Token)), () => HasOut && CanSeek);
 		AddCueCommand = new AsyncRelayCommand(AddCueAsync, () => CanMark && !string.IsNullOrWhiteSpace(CueName));
-		RenameCueCommand = new AsyncRelayCommand(RenameCueAsync, () => SelectedCue is not null && !IsBusy && !string.IsNullOrWhiteSpace(CueName));
-		DeleteCueCommand = new AsyncRelayCommand(DeleteCueAsync, () => SelectedCue is not null && !IsBusy);
+		RenameCueCommand = new AsyncRelayCommand(RenameCueAsync, () => SelectedCue is not null && !IsBusy && !RequiresSynchronization && !string.IsNullOrWhiteSpace(CueName));
+		DeleteCueCommand = new AsyncRelayCommand(DeleteCueAsync, () => SelectedCue is not null && !IsBusy && !RequiresSynchronization);
 		JumpCueCommand = new AsyncRelayCommand(JumpCueAsync, () => SelectedCue is not null && CanSeek);
-		ApplyPlaybackPolicyCommand = new AsyncRelayCommand(ApplyPlaybackPolicyAsync, () => IsLoaded && !IsBusy);
+		ApplyPlaybackPolicyCommand = new AsyncRelayCommand(ApplyPlaybackPolicyAsync, () => IsLoaded && !IsBusy && !RequiresSynchronization);
         TogglePlaybackOptionsCommand = new AsyncRelayCommand(() =>
         {
             _playbackOptionsExpanded = !_playbackOptionsExpanded;
@@ -120,11 +121,12 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		}
 	}
 	public bool HasError => _snapshot.State == MediaDeckState.Error || !string.IsNullOrWhiteSpace(LastError);
-	public bool CanSeek => Timeline.CanSeek;
+	public bool RequiresSynchronization => Timeline.RequiresSynchronization;
+	public bool CanSeek => !IsBusy && Timeline.CanSeek;
 	public bool CanMark => IsLoaded && CanSeek && !IsBusy;
-	public bool CanPlay => IsLoaded && !IsBusy && _snapshot.Transport?.State is MediaTransportState.Ready or MediaTransportState.Paused or MediaTransportState.Ended;
-	public bool CanPause => IsLoaded && !IsBusy && _snapshot.Transport?.State == MediaTransportState.Playing;
-	public bool CanStop => IsLoaded && !IsBusy && _snapshot.Transport?.State is MediaTransportState.Playing or MediaTransportState.Paused or MediaTransportState.Ended;
+	public bool CanPlay => IsLoaded && !IsBusy && !RequiresSynchronization && _snapshot.Transport?.State is MediaTransportState.Ready or MediaTransportState.Paused or MediaTransportState.Ended;
+	public bool CanPause => IsLoaded && !IsBusy && !RequiresSynchronization && _snapshot.Transport?.State == MediaTransportState.Playing;
+	public bool CanStop => IsLoaded && !IsBusy && !RequiresSynchronization && _snapshot.Transport?.State is MediaTransportState.Playing or MediaTransportState.Paused or MediaTransportState.Ended;
 	public bool HasIn => _snapshot.Markers?.InPointFrame is not null;
 	public bool HasOut => _snapshot.Markers?.OutPointFrame is not null;
 
@@ -189,7 +191,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			: $"{State} · {Current} / {Duration}");
 	public string? LastError
 	{
-		get => _lastError;
+		get => RequiresSynchronization ? _controller.Timeline.State.Failure : _lastError;
 		private set
 		{
 			if (Set(ref _lastError, value))
@@ -306,6 +308,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public async ValueTask DisposeAsync()
 	{
 		_controller.StateChanged -= OnControllerStateChanged;
+		Timeline.PropertyChanged -= OnTimelineStateChanged;
 		_dispose.Cancel();
 		await Timeline.DisposeAsync().ConfigureAwait(false);
 		await _controller.DisposeAsync().ConfigureAwait(false);
@@ -319,6 +322,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		if (string.IsNullOrWhiteSpace(path))
 			throw new ArgumentException("Media asset path is required.", nameof(path));
+		if (IsBusy || RequiresSynchronization) return false;
 		var sourceIdText = _sourceIdSelector();
 		if (string.IsNullOrWhiteSpace(sourceIdText))
 		{
@@ -344,9 +348,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			});
 			return opened.IsLoaded && opened.Probe?.AssetId == assetId;
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException or ArgumentException or FormatException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 			return false;
 		}
 		finally
@@ -383,9 +387,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				LastError = opened.Failure?.Message;
 			});
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException or ArgumentException or FormatException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -405,9 +409,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
                 await _controller.RefreshAsync(_dispose.Token).ConfigureAwait(false);
 			Post(() => LastError = null);
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -424,9 +428,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			_localPath = null;
 			Post(() => LastError = null);
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -449,9 +453,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				RefreshState();
 			});
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException or ArgumentException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -473,9 +477,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			var result = await action(_dispose.Token).ConfigureAwait(false);
 			Post(() => LastError = result.Failure?.Message);
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -494,9 +498,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			else
 				Post(() => LastError = null);
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException or ArgumentException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -514,9 +518,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				.ConfigureAwait(false);
 			Post(() => LastError = id.HasValue ? null : "Cue point could not be added.");
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception) || exception is InvalidOperationException or ArgumentException)
 		{
-			Post(() => LastError = exception.Message);
+			ReportCommandFailure(exception);
 		}
 		finally
 		{
@@ -537,7 +541,40 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private async Task JumpCueAsync()
 	{
 		if (SelectedCue is not null)
-			await _controller.Markers.JumpToCueAsync(SelectedCue.Id, _dispose.Token).ConfigureAwait(false);
+			await SeekAsync(() => _controller.Markers.JumpToCueAsync(SelectedCue.Id, _dispose.Token)).ConfigureAwait(false);
+	}
+
+	private static bool IsRecoverableMediaFailure(Exception exception) =>
+		exception is IOException or TimeoutException or RemoteHostSessionChangedException or
+			ControlSnapshotRequiredException or Grpc.Core.RpcException;
+
+	private void ReportCommandFailure(Exception exception)
+	{
+		Post(() =>
+		{
+			// The controller owns uncertainty. Do not reapply an old failure after a newer full synchronization.
+			if (!IsRecoverableMediaFailure(exception) || _controller.Timeline.RequiresSynchronization)
+				LastError = exception.Message;
+		});
+	}
+
+	private async Task SeekAsync(Func<ValueTask> action)
+	{
+		try { await action().ConfigureAwait(false); }
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception))
+		{
+			ReportCommandFailure(exception);
+		}
+	}
+
+	private void OnTimelineStateChanged(object? sender, PropertyChangedEventArgs args)
+	{
+		if (args.PropertyName is not (nameof(MediaTimelineViewModel.Failure) or
+			nameof(MediaTimelineViewModel.CanSeek) or nameof(MediaTimelineViewModel.RequiresSynchronization))) return;
+		foreach (var property in new[] { nameof(RequiresSynchronization), nameof(LastError), nameof(HasError),
+			nameof(StatusDetail), nameof(CanSeek), nameof(CanMark), nameof(CanPlay), nameof(CanPause), nameof(CanStop) })
+			OnPropertyChanged(property);
+		RaiseCommands();
 	}
 
 	internal void ApplyConfirmedSnapshot(MediaDeckSnapshot snapshot)
@@ -651,3 +688,4 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private void OnPropertyChanged([CallerMemberName] string? name = null) =>
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+

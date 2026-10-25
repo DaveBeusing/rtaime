@@ -679,7 +679,7 @@ public sealed class ControlHostProcess
 			if (!journalIntegrity.Healthy) throw new InvalidDataException($"Production Journal integrity failed: {journalIntegrity.Detail}");
 
 			_journal = new BoundedProductionJournal(_options.JournalCapacity, journalStore, _options.JournalRetainedCapacity);
-			_checkpointWriter = new BoundedProductionCheckpointWriter(_managementStore, _options.CheckpointQueueCapacity);
+			_checkpointWriter = new BoundedProductionCheckpointWriter(_managementStore, _options.CheckpointQueueCapacity, ownsStore: true);
 			_control = new ControlHostService(
 				specification,
 				_runtimeTransport.ProviderDescriptors,
@@ -1284,7 +1284,11 @@ public sealed class ControlHostProcess
                 await Drain("checkpoint-dispose", () => _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
             }
             if (_managementStore is not null)
-                await Drain("management-dispose", () => _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token)).ConfigureAwait(false);
+                // A timed-out join does not end the worker's ownership of its SQLite store.
+                // Rejoin the same drain/cleanup task; the overall shutdown deadline is unchanged.
+                await Drain("management-dispose", () => (_checkpointWriter is not null
+                    ? _checkpointWriter.DisposeAsync().AsTask()
+                    : _managementStore.DisposeAsync().AsTask()).WaitAsync(timeout.Token)).ConfigureAwait(false);
             if (_journal is not null)
             {
                 await Drain("journal-flush", () => _journal.FlushAsync(timeout.Token).AsTask()).ConfigureAwait(false);
@@ -1316,7 +1320,7 @@ public sealed class ControlHostProcess
 		try { if (_ipcServer is not null) await _ipcServer.DisposeAsync().ConfigureAwait(false); } catch { }
 		try { if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); } catch { }
 		try { if (_checkpointWriter is not null) await _checkpointWriter.DisposeAsync().ConfigureAwait(false); } catch { }
-		try { if (_managementStore is not null) await _managementStore.DisposeAsync().ConfigureAwait(false); } catch { }
+		try { if (_checkpointWriter is null && _managementStore is not null) await _managementStore.DisposeAsync().ConfigureAwait(false); } catch { }
 		try { if (_journal is not null) await _journal.DisposeAsync().ConfigureAwait(false); } catch { }
 	}
 
@@ -1353,3 +1357,4 @@ public sealed class ControlHostProcess
 		public Revision? RuntimeAuthorityRevision { get; }
 	}
 }
+

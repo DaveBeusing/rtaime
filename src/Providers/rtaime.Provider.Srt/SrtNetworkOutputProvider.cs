@@ -69,6 +69,8 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	private readonly NetworkOutputConfiguration _configuration;
 	private readonly Func<ISrtTransport> _transportFactory;
 	private readonly Func<ISrtPayloadEncoder> _encoderFactory;
+	private readonly SrtTransportPacketizer _packetizer = new();
+	private readonly Action<int> _messageSent;
 	private readonly Queue<NetworkOutputProgramSample> _queue = new();
 	private readonly SemaphoreSlim _queueSignal = new(0);
 	private readonly CancellationTokenSource _shutdown = new();
@@ -101,6 +103,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			throw new ArgumentException("SRT session requires typed SRT network-output settings.", nameof(configuration));
 		_transportFactory = transportFactory ?? throw new ArgumentNullException(nameof(transportFactory));
 		_encoderFactory = encoderFactory ?? throw new ArgumentNullException(nameof(encoderFactory));
+		_messageSent = ObserveSentMessage;
 		_worker = Task.Run(WorkerAsync);
 	}
 
@@ -220,18 +223,13 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						}
 					}
 					var encoded = await _encoder!.EncodeAsync(sample, cancellationToken).ConfigureAwait(false);
-					if (encoded.IsEmpty)
-						throw new InvalidDataException("Network encoder returned an empty transport payload.");
-					var sent = await _transport!.SendAsync(encoded, cancellationToken).ConfigureAwait(false);
-					if (sent != encoded.Length)
-						throw new IOException($"SRT transport accepted {sent} of {encoded.Length} encoded bytes.");
+					var messages = await _packetizer.SendAsync(_transport!, encoded, _messageSent, cancellationToken).ConfigureAwait(false);
+					if (messages == 0)
+						continue;
 
 					lock (_gate)
 					{
 						_sent++;
-						_packetsSent++;
-						_bytesSent += checked((ulong)sent);
-						_lastSuccessfulSendUtc = DateTimeOffset.UtcNow;
 						_lifecycle = NetworkOutputLifecycleState.Connected;
 						_connected = true;
 						_failure = null;
@@ -243,12 +241,13 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				catch (Exception exception)
 				{
+					var alignmentContext = _packetizer.AlignmentFailure is { } alignmentFailure ? $" {alignmentFailure}" : string.Empty;
 					DropSample(
 						sample,
 						"network.output.send_failed",
 						$"Network output sample failed without interrupting Program: {exception.GetType().Name}.");
 					await ResetConnectionAsync(
-						new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}."))
+						new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}.{alignmentContext}"))
 						.ConfigureAwait(false);
 				}
 				finally
@@ -277,6 +276,16 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						_lifecycle = NetworkOutputLifecycleState.Disabled;
 				}
 			}
+		}
+	}
+
+	private void ObserveSentMessage(int bytes)
+	{
+		lock (_gate)
+		{
+			_packetsSent++;
+			_bytesSent += checked((ulong)bytes);
+			_lastSuccessfulSendUtc = DateTimeOffset.UtcNow;
 		}
 	}
 
@@ -383,6 +392,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 
 	private async ValueTask ReleaseConnectionAsync()
 	{
+		_packetizer.Reset();
 		var encoder = Interlocked.Exchange(ref _encoder, null);
 		var transport = Interlocked.Exchange(ref _transport, null);
 		Exception? failure = null;
@@ -429,3 +439,4 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		}
 	}
 }
+

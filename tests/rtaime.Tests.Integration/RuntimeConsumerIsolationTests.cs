@@ -498,8 +498,15 @@ public sealed class RuntimeConsumerIsolationTests
     private sealed class Encoder : ISrtPayloadEncoder
     {
         public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => ValueTask.CompletedTask;
-        public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token) =>
-            ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 0x47 });
+        public ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token)
+        {
+            var packet = new byte[188];
+            packet[0] = 0x47;
+            packet[1] = 0x1f;
+            packet[2] = 0xff;
+            packet[3] = 0x10;
+            return ValueTask.FromResult<ReadOnlyMemory<byte>>(packet);
+        }
         public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token) => ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
@@ -561,3 +568,4 @@ public sealed class RuntimeConsumerIsolationTests
         }
     }
 }
+

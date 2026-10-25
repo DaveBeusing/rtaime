@@ -60,7 +60,7 @@ public sealed partial class MediaTimelineViewModel
 		{
 			if (!CanSeekEditCursor()) return;
 			InvalidateDraftHistory();
-			await _controller.SeekToFrameAsync(EditCursorFrame);
+			await ExecuteMediaCommandAsync(() => _controller.SeekToFrameAsync(EditCursorFrame));
 		}, CanSeekEditCursor);
 	}
 	private bool CanSeekEditCursor() => HasEditCursor && CanSeek && _routingCurrent &&
@@ -134,3 +134,4 @@ public sealed partial class MediaTimelineViewModel
 		(SeekEditCursorCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 }
+

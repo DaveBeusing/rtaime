@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Threading.Channels;
 using rtaime.Core;
@@ -45,13 +46,29 @@ public interface IProductionCheckpointStore
 	ValueTask<ProductionCheckpoint?> ReadLatestAsync(Identity productionId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>An atomic, ordered checkpoint transaction. A failure must leave every batch item uncommitted.</summary>
+public interface IProductionCheckpointBatchStore : IProductionCheckpointStore
+{
+	const int MaximumBatchSize = 64;
+	ValueTask WriteBatchAsync(IReadOnlyList<ProductionCheckpoint> checkpoints, CancellationToken cancellationToken = default);
+}
+
 public readonly record struct ProductionCheckpointWriterStatistics(
 	ulong Accepted,
 	ulong Persisted,
 	ulong Dropped,
 	ulong Failed,
 	int Pending,
-	int Capacity);
+	int Capacity)
+{
+	public ulong WriteOperations { get; init; }
+	public int ActiveBatchSize { get; init; }
+	public int LastBatchSize { get; init; }
+	public double ActiveWriteMilliseconds { get; init; }
+	public double TotalWriteMilliseconds { get; init; }
+	public double MaximumWriteMilliseconds { get; init; }
+	public double MaximumQueueWaitMilliseconds { get; init; }
+}
 
 /// <summary>
 /// Bounded asynchronous checkpoint writer. Checkpoint durability is deliberately decoupled from authoritative
@@ -61,6 +78,7 @@ public sealed class BoundedProductionCheckpointWriter : IAsyncDisposable
 {
 	private readonly object _gate = new();
 	private readonly IProductionCheckpointStore _store;
+	private readonly IAsyncDisposable? _ownedStore;
 	private readonly Channel<CheckpointWorkItem> _channel;
 	private readonly int _capacity;
 	private readonly Task _worker;
@@ -71,11 +89,22 @@ public sealed class BoundedProductionCheckpointWriter : IAsyncDisposable
 	private int _pending;
 	private bool _disposed;
 	private Failure? _lastFailure;
+	private Task? _disposal;
+	private ulong _writeOperations;
+	private int _activeBatchSize;
+	private int _lastBatchSize;
+	private long _activeWriteStarted;
+	private double _totalWriteMilliseconds;
+	private double _maximumWriteMilliseconds;
+	private double _maximumQueueWaitMilliseconds;
 
-	public BoundedProductionCheckpointWriter(IProductionCheckpointStore store, int capacity = 64)
+	public BoundedProductionCheckpointWriter(IProductionCheckpointStore store, int capacity = 64, bool ownsStore = false)
 	{
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+		_ownedStore = ownsStore
+			? store as IAsyncDisposable ?? throw new ArgumentException("An owned checkpoint store must support asynchronous disposal.", nameof(store))
+			: null;
 		_capacity = capacity;
 		_channel = Channel.CreateBounded<CheckpointWorkItem>(new BoundedChannelOptions(capacity)
 		{
@@ -92,7 +121,16 @@ public sealed class BoundedProductionCheckpointWriter : IAsyncDisposable
 		get
 		{
 			lock (_gate)
-				return new ProductionCheckpointWriterStatistics(_accepted, _persisted, _dropped, _failed, _pending, _capacity);
+				return new ProductionCheckpointWriterStatistics(_accepted, _persisted, _dropped, _failed, _pending, _capacity)
+				{
+					WriteOperations = _writeOperations,
+					ActiveBatchSize = _activeBatchSize,
+					LastBatchSize = _lastBatchSize,
+					ActiveWriteMilliseconds = _activeBatchSize == 0 ? 0 : Stopwatch.GetElapsedTime(_activeWriteStarted).TotalMilliseconds,
+					TotalWriteMilliseconds = _totalWriteMilliseconds,
+					MaximumWriteMilliseconds = _maximumWriteMilliseconds,
+					MaximumQueueWaitMilliseconds = _maximumQueueWaitMilliseconds
+				};
 		}
 	}
 
@@ -112,20 +150,15 @@ public sealed class BoundedProductionCheckpointWriter : IAsyncDisposable
 				_dropped++;
 				return false;
 			}
-			_pending++;
-			_accepted++;
-		}
-
-		if (_channel.Writer.TryWrite(new CheckpointWorkItem(checkpoint, null)))
-			return true;
-
-		lock (_gate)
-		{
-			_pending--;
-			_accepted--;
+			if (_channel.Writer.TryWrite(new CheckpointWorkItem(checkpoint, null, Stopwatch.GetTimestamp())))
+			{
+				_pending++;
+				_accepted++;
+				return true;
+			}
 			_dropped++;
+			return false;
 		}
-		return false;
 	}
 
 	public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
@@ -133,60 +166,128 @@ public sealed class BoundedProductionCheckpointWriter : IAsyncDisposable
 		TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		lock (_gate)
 			ObjectDisposedException.ThrowIf(_disposed, this);
-		await _channel.Writer.WriteAsync(new CheckpointWorkItem(null, completion), cancellationToken).ConfigureAwait(false);
+		await _channel.Writer.WriteAsync(new CheckpointWorkItem(null, completion, 0), cancellationToken).ConfigureAwait(false);
 		await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
 		lock (_gate)
 		{
-			if (_disposed) return;
-			_disposed = true;
+			if (_disposal is null)
+			{
+				_disposed = true;
+				_channel.Writer.TryComplete();
+				_disposal = DrainAndDisposeAsync();
+				_ = ObserveDisposalFailureAsync(_disposal);
+			}
+			return new ValueTask(_disposal);
 		}
-		_channel.Writer.TryComplete();
+	}
+
+	private async Task DrainAndDisposeAsync()
+	{
 		await _worker.ConfigureAwait(false);
+		if (_ownedStore is not null)
+			await _ownedStore.DisposeAsync().ConfigureAwait(false);
+	}
+
+	private async Task ObserveDisposalFailureAsync(Task disposal)
+	{
+		try { await disposal.ConfigureAwait(false); }
+		catch (Exception exception)
+		{
+			// The host may stop waiting at its deadline. Retain and observe the eventual
+			// cleanup failure while the same disposal task remains faulted for later joins.
+			lock (_gate)
+				_lastFailure ??= new Failure("checkpoint.disposal.failed", exception.Message);
+		}
+	}
+
+	private void CompleteBarrier(TaskCompletionSource barrier)
+	{
+		Failure? failure;
+		lock (_gate) failure = _lastFailure;
+		if (failure is { } value)
+			barrier.TrySetException(new IOException($"Checkpoint durability is degraded: {value.Code}: {value.Message}"));
+		else
+			barrier.TrySetResult();
+	}
+
+	private void ObserveQueueWait(long enqueuedAt)
+	{
+		var milliseconds = Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds;
+		lock (_gate) _maximumQueueWaitMilliseconds = Math.Max(_maximumQueueWaitMilliseconds, milliseconds);
 	}
 
 	private async Task WorkerAsync()
 	{
-		await foreach (var item in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
+		var batch = new List<ProductionCheckpoint>(Math.Min(_capacity, IProductionCheckpointBatchStore.MaximumBatchSize));
+		while (await _channel.Reader.WaitToReadAsync().ConfigureAwait(false))
 		{
-			if (item.Barrier is not null)
+			if (!_channel.Reader.TryRead(out var item)) continue;
+			if (item.Barrier is not null) { CompleteBarrier(item.Barrier); continue; }
+			if (item.Checkpoint is null) continue;
+
+			batch.Clear();
+			batch.Add(item.Checkpoint);
+			ObserveQueueWait(item.EnqueuedAt);
+			TaskCompletionSource? barrier = null;
+			if (_store is IProductionCheckpointBatchStore)
 			{
-				Failure? failure;
-				lock (_gate)
-					failure = _lastFailure;
-				if (failure is { } value)
-					item.Barrier.TrySetException(new IOException($"Checkpoint durability is degraded: {value.Code}: {value.Message}"));
-				else
-					item.Barrier.TrySetResult();
-				continue;
+				while (batch.Count < IProductionCheckpointBatchStore.MaximumBatchSize && _channel.Reader.TryRead(out var next))
+				{
+					// Never absorb a later checkpoint across an admitted flush fence.
+					if (next.Barrier is not null) { barrier = next.Barrier; break; }
+					if (next.Checkpoint is null) continue;
+					batch.Add(next.Checkpoint);
+					ObserveQueueWait(next.EnqueuedAt);
+				}
 			}
 
-			if (item.Checkpoint is null)
-				continue;
-
+			var started = Stopwatch.GetTimestamp();
+			lock (_gate)
+			{
+				_writeOperations++;
+				_activeBatchSize = batch.Count;
+				_activeWriteStarted = started;
+			}
 			try
 			{
-				await _store.WriteAsync(item.Checkpoint).ConfigureAwait(false);
+				if (_store is IProductionCheckpointBatchStore batchStore)
+					await batchStore.WriteBatchAsync(batch).ConfigureAwait(false);
+				else
+					await _store.WriteAsync(item.Checkpoint).ConfigureAwait(false);
 				lock (_gate)
 				{
-					_persisted++;
-					_pending--;
+					_persisted += (ulong)batch.Count;
+					_pending -= batch.Count;
 				}
 			}
 			catch (Exception exception)
 			{
 				lock (_gate)
 				{
-					_failed++;
-					_pending--;
+					_failed += (ulong)batch.Count;
+					_pending -= batch.Count;
 					_lastFailure = new Failure("checkpoint.persistence.failed", exception.Message);
 				}
 			}
+			finally
+			{
+				var milliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+				lock (_gate)
+				{
+					_totalWriteMilliseconds += milliseconds;
+					_maximumWriteMilliseconds = Math.Max(_maximumWriteMilliseconds, milliseconds);
+					_lastBatchSize = batch.Count;
+					_activeBatchSize = 0;
+				}
+			}
+			if (barrier is not null) CompleteBarrier(barrier);
 		}
 	}
 
-	private sealed record CheckpointWorkItem(ProductionCheckpoint? Checkpoint, TaskCompletionSource? Barrier);
+	private sealed record CheckpointWorkItem(ProductionCheckpoint? Checkpoint, TaskCompletionSource? Barrier, long EnqueuedAt);
 }
+

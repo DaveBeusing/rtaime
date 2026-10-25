@@ -248,3 +248,20 @@ GO reuses the resident decoder through existing authoritative CUT/DISSOLVE; HOLD
 invalidates next evidence. See [prepared-next playout](PreparedNextPlayout.md)
 for the initial 32-MiB/audio-required bound, IN/OUT/end behavior, recovery and exact
 qualification limits. Physical/no-gap acceptance remains UNVERIFIED.
+
+
+## Media command transport recovery
+
+An interrupted or timed-out Open, Close, playback, marker or seek request remains unconfirmed.
+The deck retains its last authoritative snapshot and local cue/playback-policy drafts, displays
+`MEDIA ACTION UNCONFIRMED`, and blocks further mutations until state has been reconciled.
+Refresh remains available and, after transport uncertainty, reads a full ControlHost snapshot
+before reading the selected deck. The read sequence must start after the failed operation; late background reads and command replies
+cannot restore availability or overwrite the retained snapshot. Recovery performs no automatic mutation replay; compare the refreshed deck state
+before deliberately issuing another action.
+
+Windows Dispatcher regression coverage exercises keyboard/cue/IN/OUT seeks, delayed command
+failures, pointer release, playback/Open/Close and marker changes. Lifecycle cancellation must
+not escape async-void command execution or report an unacknowledged action as successful.
+Closing-window coverage includes both cancellation exceptions and successful replies arriving
+concurrently with cancellation; disposed controllers ignore late snapshot publication.

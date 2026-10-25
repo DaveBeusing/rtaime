@@ -1329,38 +1329,27 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						measuredAudio);
 					var requiredProgramAudioValues = checked((int)(
 						programRecordingAudioBuffer.Timing.SampleCount * programRecordingAudioBuffer.Format.ChannelCount));
-					var recordingBusResult = _lastAudioProductionResults[AudioBusId.Program];
 					// An asynchronous payload snapshot is necessary only for the real
 					// recording payload writer or configured replay consumer. The
 					// authoritative Program output has its own independently owned payload.
 					var captureRecordingAudio = _replay is not null ||
 						(recordingActive && _recordingPayloadWriter is not null);
 					programRecordingAudioPayload =
-						!captureRecordingAudio ||
-						(audio.Status == AudioFollowVideoStatus.Underrun &&
-						 recordingBusResult.ActiveSourceCount == 0)
+						!captureRecordingAudio
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
 								AudioBusSamplesUnsafe(AudioBusId.Program, requiredProgramAudioValues)).ToArray();
-					var programOutputResult = _lastAudioProductionResults[programOutputBusId];
-					programAudioPayload =
-						audio.Status == AudioFollowVideoStatus.Underrun &&
-						programOutputResult.ActiveSourceCount == 0
-							? Array.Empty<byte>()
-							: MemoryMarshal.AsBytes(
-								AudioBusSamplesUnsafe(programOutputBusId, requiredProgramAudioValues)).ToArray();
+					// Missing input is already represented by silence in the final bus.
+					// Preserve its exact window for physical, recording and network sinks.
+					programAudioPayload = MemoryMarshal.AsBytes(
+						AudioBusSamplesUnsafe(programOutputBusId, requiredProgramAudioValues)).ToArray();
 					// The regular Aux provider consumes the frame descriptor, not an
 					// owned PCM byte array. Only an admitted Aux network route retains audio.
 					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null &&
 						auxNetworkSource is not null)
 					{
-						var auxResult = _lastAudioProductionResults[selectedAuxBus];
-						auxAudioPayload =
-							audio.Status == AudioFollowVideoStatus.Underrun &&
-							auxResult.ActiveSourceCount == 0
-								? Array.Empty<byte>()
-								: MemoryMarshal.AsBytes(
-									AudioBusSamplesUnsafe(selectedAuxBus, requiredProgramAudioValues)).ToArray();
+						auxAudioPayload = MemoryMarshal.AsBytes(
+							AudioBusSamplesUnsafe(selectedAuxBus, requiredProgramAudioValues)).ToArray();
 					}
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(presentedOutput.Descriptor.Timing)
@@ -2447,14 +2436,17 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			ThrowIfDisposed();
 			EnsureAudioSourceUnsafe(sourceId);
 			var queue = _externalAudioQueues[sourceId];
+			if (!available)
+				queue.Clear();
 			var maximumBufferedValues = checked((int)(_audioStreams[sourceId].Format.SampleRate * _audioStreams[sourceId].Format.ChannelCount / 2));
-			foreach (var sample in interleavedStereoSamples)
+			foreach (var sample in available ? interleavedStereoSamples : ReadOnlySpan<float>.Empty)
 			{
 				queue.Enqueue(float.IsFinite(sample) ? Math.Clamp(sample, -1f, 1f) : 0f);
 				while (queue.Count > maximumBufferedValues)
 					queue.Dequeue();
 			}
-			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, External: true);
+			_audioMeters[sourceId] = new AudioMeterObservation(
+				available ? meter : new AudioStereoMeter(0, 0), available, External: true, Pcm: true);
 		}
 	}
 
@@ -3283,13 +3275,15 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			(_inputSignals.TryGetValue(sourceId, out var signal) && signal != RuntimeInputSignalState.Lost);
 		var health = !sourceAvailable || !available
 			? RuntimeAudioHealthState.Error
-			: state.Muted
-				? RuntimeAudioHealthState.Muted
-				: clipping
-					? RuntimeAudioHealthState.Clipping
-					: Math.Max(left, right) <= 0.000001
-						? RuntimeAudioHealthState.Silence
-						: RuntimeAudioHealthState.Healthy;
+			: !hasTestSignal && observation.Underrun
+				? RuntimeAudioHealthState.Underrun
+				: state.Muted
+					? RuntimeAudioHealthState.Muted
+					: clipping
+						? RuntimeAudioHealthState.Clipping
+						: Math.Max(left, right) <= 0.000001
+							? RuntimeAudioHealthState.Silence
+							: RuntimeAudioHealthState.Healthy;
 
 		return new RuntimeHostAudioInputSnapshot(
 			sourceId,
@@ -4046,6 +4040,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			var requiredValues = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
 			var destination = _audioProductionSourceSamples[sourceIndex].AsSpan(0, requiredValues);
 			var available = true;
+			var underrun = false;
 			AudioStereoMeter meter;
 
 			if (_audioTestSignals.TryGetValue(sourceId, out var testSignal))
@@ -4065,9 +4060,13 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						available = false;
 						meter = new AudioStereoMeter(0, 0);
 					}
-					else if (TryConsumeExternalAudioSamplesUnsafe(sourceId, destination))
+					else if (observation.Pcm)
 					{
+						var consumedValues = ConsumeExternalAudioSamplesUnsafe(sourceId, destination);
+						available = consumedValues > 0;
+						underrun = consumedValues < destination.Length;
 						meter = AudioMetering.MeasureInterleavedStereoFloat32(destination);
+						_audioMeters[sourceId] = observation with { Meter = meter, Underrun = underrun };
 					}
 					else
 					{
@@ -4097,12 +4096,13 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			_audioProductionSourceBuffers[sourceIndex] = new AudioProductionSourceBuffer(
 				sourceId,
 				_audioProductionSourceSamples[sourceIndex].AsMemory(0, requiredValues),
-				available);
+				available,
+				underrun);
 
 			if (sourceId == routedAudioSource)
 			{
 				routedMeter = meter;
-				routedAvailable = available;
+				routedAvailable = available && !underrun;
 			}
 		}
 
@@ -4135,15 +4135,16 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			new OpaqueAudioHandle("runtime.audio.bus", $"{busId.Value}:{streamId}:{sequence}"));
 	}
 
-	private bool TryConsumeExternalAudioSamplesUnsafe(MediaSourceId sourceId, Span<float> destination)
+	private int ConsumeExternalAudioSamplesUnsafe(MediaSourceId sourceId, Span<float> destination)
 	{
 		var queue = _externalAudioQueues[sourceId];
-		if (queue.Count < destination.Length)
-			return false;
-
-		for (var index = 0; index < destination.Length; index++)
+		var consumedValues = Math.Min(queue.Count, destination.Length);
+		for (var index = 0; index < consumedValues; index++)
 			destination[index] = queue.Dequeue();
-		return true;
+		// A partial packet belongs to this window; retaining it for a later
+		// complete block would shift captured audio onto a different Program slot.
+		destination[consumedValues..].Clear();
+		return consumedValues;
 	}
 
 	private static void FillReferenceAudioSamples(
@@ -4299,7 +4300,12 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	private sealed record AudioMeterObservation(AudioStereoMeter Meter, bool Available, bool External);
+	private readonly record struct AudioMeterObservation(
+		AudioStereoMeter Meter,
+		bool Available,
+		bool External,
+		bool Pcm = false,
+		bool Underrun = false);
 	private sealed record AnchoredTransition(RuntimeProgramTransitionIntent Intent, ulong StartSequence);
 }
 
@@ -4312,3 +4318,4 @@ internal static class HostIdentity
 		return new Identity(new Guid(hash.AsSpan(0, 16)));
 	}
 }
+

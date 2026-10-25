@@ -38,6 +38,23 @@ Finalized encoded segments are retained by `RollingReplaySegmentStore`. Retentio
 
 Segments currently pinned by clip materialization are not evicted. If retention pressure cannot be resolved because eligible history is pinned, admission fails explicitly rather than deleting data that an active materialization owns.
 
+### Directory ownership and restart reclamation
+
+Before opening a segment writer, the replay worker acquires an exclusive `.replay-owner.lock` in its rolling `segments` directory. A second capture owner cannot reclaim or write that directory. The lease remains held after store disposal while an existing clip pin still owns a segment; the last pin releases it. Storage preparation runs on the replay worker and cannot block the Program producer.
+
+Storage observations are published as one immutable snapshot after each mutation,
+including failed cleanup. Reading segments, byte accounting and failure evidence
+does not take the filesystem mutation lock. Replay captures that coherent state
+before taking its producer queue lock, so a management snapshot cannot hold the
+Program path while waiting for disk cleanup. Starting capture remains explicitly
+`Starting` until its initial storage reconciliation completes.
+
+Rolling history is session-local because its sequence/time ranges belong to the previous Program session. Startup reclaims only recognized `replay-<GUID>.mp4`, `replay-<GUID>.partial.mp4` and `replay-<GUID>.mp4.lock` files in the owned directory. It does not recurse into `clips`, remove saved assets, or delete unrelated filenames. Abandoned writer artifacts are reconciled after abort and before another writer opens.
+
+Retained-byte evidence includes files awaiting deletion. Expiration removes their playable index entries, but neither their physical byte charge nor successful-eviction accounting is released until deletion succeeds. A failed cleanup records storage failure evidence and blocks a new segment writer until a later retry succeeds. Restart, trimming and pin release retry eligible cleanup. Segment descriptors must match actual finalized file sizes. Quota admission includes the newly finalized segment before older history is reclaimed; a rejected candidate that cannot be deleted remains charged as well.
+
+The finalized-history quota excludes the one currently open encoder segment, whose duration is bounded by the configured segment duration. A finalization or abort cannot permit repeated abandoned segments to accumulate: unresolved cleanup prevents the next writer from opening. Legacy files that already exceed quota stay visibly charged while storage is unavailable. The lock file contains no payload and is retained as the stable ownership rendezvous.
+
 ## Timing and continuity
 
 Each segment carries first/last Program sequence, Program-derived start/end time, encoded byte count, audio presence and discontinuity-before evidence.
@@ -109,3 +126,4 @@ ReplayCaptureEngine exposes a fixed-size QueueStatistics snapshot: current depth
 Every Stop call waits for the existing capture worker. Cancelling one wait does not cancel or abandon the shared drain. Repeated capture or Runtime replay disposal joins one finalization and resource release; no caller reports success while the first caller still owns a writer. Partial writer configuration/open failure invokes best-effort Abort before reporting the encoder failure and returning the sample lease.
 
 Mixed Runtime qualification retains Program readbacks while replay and recording writers are stalled, replaces source content, exercises monitoring churn and verifies retained pixels stay intact. Simulated replay artifacts only exercise ownership/finalization; they are not MP4 codec qualification.
+

@@ -2,6 +2,7 @@
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using rtaime.Client;
@@ -195,10 +196,10 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		if (_markers is not null)
 			_markers.StateChanged += OnMarkerStateChanged;
 
-		StepBackwardCommand = new AsyncRelayCommand(() => _controller.SeekRelativeAsync(-1).AsTask(), () => CanSeek);
-		StepForwardCommand = new AsyncRelayCommand(() => _controller.SeekRelativeAsync(1).AsTask(), () => CanSeek);
-		JumpToStartCommand = new AsyncRelayCommand(() => _controller.SeekToStartAsync().AsTask(), () => CanSeek);
-		JumpToEndCommand = new AsyncRelayCommand(() => _controller.SeekToEndAsync().AsTask(), () => CanSeek);
+		StepBackwardCommand = new AsyncRelayCommand(() => ExecuteMediaCommandAsync(() => _controller.SeekRelativeAsync(-1)).AsTask(), () => CanSeek);
+		StepForwardCommand = new AsyncRelayCommand(() => ExecuteMediaCommandAsync(() => _controller.SeekRelativeAsync(1)).AsTask(), () => CanSeek);
+		JumpToStartCommand = new AsyncRelayCommand(() => ExecuteMediaCommandAsync(() => _controller.SeekToStartAsync()).AsTask(), () => CanSeek);
+		JumpToEndCommand = new AsyncRelayCommand(() => ExecuteMediaCommandAsync(() => _controller.SeekToEndAsync()).AsTask(), () => CanSeek);
 		PreviousCueCommand = new AsyncRelayCommand(JumpToPreviousCueAsync, () => CanSeek && _markers is not null && Cues.Count > 0);
 		NextCueCommand = new AsyncRelayCommand(JumpToNextCueAsync, () => CanSeek && _markers is not null && Cues.Count > 0);
 		JumpSelectedCueCommand = new AsyncRelayCommand(JumpSelectedCueAsync, () => CanSeek && _markers is not null && SelectedCue is not null);
@@ -242,6 +243,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 
 	public bool IsLoaded => _state.IsLoaded;
 	public bool CanSeek => _state.CanSeek;
+	public bool RequiresSynchronization => _controller.RequiresSynchronization;
 	public bool HasPendingSeek => _state.HasPendingSeek;
 	public string TransportState => _state.TransportState;
 	public long ConfirmedFrame => _state.ConfirmedFrame;
@@ -609,7 +611,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 			return ValueTask.CompletedTask;
 		}
 		InvalidateDraftHistory();
-		return _controller.CompletePointerSeekAsync(frame, cancellationToken);
+		return ExecuteMediaCommandAsync(() => _controller.CompletePointerSeekAsync(frame, cancellationToken));
 	}
 
 	public ValueTask<bool> TrimInAsync(
@@ -621,7 +623,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		InvalidateDraftHistory();
-		return _markers.SetInAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken);
+		return ExecuteMarkerCommandAsync(() => _markers.SetInAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken));
 	}
 
 	public ValueTask<bool> TrimOutAsync(
@@ -633,7 +635,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 			return ValueTask.FromResult(false);
 		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
 		InvalidateDraftHistory();
-		return _markers.SetOutAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken);
+		return ExecuteMarkerCommandAsync(() => _markers.SetOutAtFrameAsync(ApplySnap(frame, logicalWidth), cancellationToken));
 	}
 
 	public async ValueTask DisposeAsync()
@@ -644,26 +646,47 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		await _controller.DisposeAsync().ConfigureAwait(false);
 	}
 
-	private async Task JumpToPreviousCueAsync()
+	private Task JumpToPreviousCueAsync() => ExecuteMediaCommandAsync(async () =>
 	{
-		if (_markers is null || !await _markers.JumpToPreviousCueAsync().ConfigureAwait(false))
-			return;
-		Post(SelectCueAtConfirmedFrame);
-	}
+		if (_markers is not null && await _markers.JumpToPreviousCueAsync().ConfigureAwait(false))
+			Post(SelectCueAtConfirmedFrame);
+	}).AsTask();
 
-	private async Task JumpToNextCueAsync()
+	private Task JumpToNextCueAsync() => ExecuteMediaCommandAsync(async () =>
 	{
-		if (_markers is null || !await _markers.JumpToNextCueAsync().ConfigureAwait(false))
-			return;
-		Post(SelectCueAtConfirmedFrame);
-	}
+		if (_markers is not null && await _markers.JumpToNextCueAsync().ConfigureAwait(false))
+			Post(SelectCueAtConfirmedFrame);
+	}).AsTask();
 
 	private async Task JumpSelectedCueAsync()
 	{
 		var cue = SelectedCue;
 		if (_markers is null || cue is null)
 			return;
-		await _markers.JumpToCueAsync(cue.Id).ConfigureAwait(false);
+		await ExecuteMediaCommandAsync(() => _markers.JumpToCueAsync(cue.Id)).ConfigureAwait(false);
+	}
+
+	private static bool IsRecoverableMediaFailure(Exception exception) =>
+		exception is IOException or TimeoutException or RemoteHostSessionChangedException or
+			ControlSnapshotRequiredException or Grpc.Core.RpcException;
+
+	private async ValueTask ExecuteMediaCommandAsync(Func<ValueTask> action)
+	{
+		try { await action().ConfigureAwait(false); }
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception))
+		{
+			// The controller recorded uncertainty before releasing its command gate.
+		}
+	}
+
+	private async ValueTask<bool> ExecuteMarkerCommandAsync(Func<ValueTask<bool>> action)
+	{
+		try { return await action().ConfigureAwait(false); }
+		catch (Exception exception) when (IsRecoverableMediaFailure(exception))
+		{
+			// Marker ownership recorded uncertainty before another queued command can run.
+			return false;
+		}
 	}
 
 	private void SelectCueAtConfirmedFrame()
@@ -835,6 +858,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 	{
 		OnPropertyChanged(nameof(IsLoaded));
 		OnPropertyChanged(nameof(CanSeek));
+		OnPropertyChanged(nameof(RequiresSynchronization));
 		OnPropertyChanged(nameof(HasPendingSeek));
 		OnPropertyChanged(nameof(TransportState));
 		OnPropertyChanged(nameof(ConfirmedFrame));
@@ -980,3 +1004,4 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 	private void OnPropertyChanged([CallerMemberName] string? name = null) =>
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+

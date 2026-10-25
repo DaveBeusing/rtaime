@@ -216,3 +216,52 @@ rapid TAKE lifecycle cases before broad suites; any failed case fails qualificat
 Normal test runs retain three cases. The test always releases its independent
 RuntimeHost after observing the ControlHost result, including failure, so later
 cases do not inherit an abandoned render loop.
+
+## Bounded checkpoint transactions and store ownership
+
+`SqliteManagementStore` implements the optional `IProductionCheckpointBatchStore`
+capability. The checkpoint worker collects only checkpoints already waiting in its
+bounded queue, up to 64 per transaction, without delaying the first item to fill a
+batch. Every revision remains a separate immutable checkpoint row. An identical
+production/revision checksum is idempotent even between new rows in the same
+transaction; a conflicting checksum rolls back that entire transaction. Stores
+without the atomic batch capability retain individual writes and individual
+success/failure accounting.
+
+A flush fence ends the current batch. It completes only after all preceding
+accepted checkpoints have committed or have been counted as failed; it does not
+include later checkpoints. Cancelling a flush wait cancels the caller's wait,
+not previously accepted storage work. Storage failures remain latched and later
+flushes report degraded durability. Queue capacity includes work being persisted,
+so collecting a batch does not create additional admission capacity.
+
+This removes per-revision durable transaction amplification from a rapid command
+backlog. The source at `3a58a7290d6a003ec380997cf3fcc2ce5cc1be2f` failed repetition
+15 of the fixed 50-case rapid TAKE qualification: checkpoint flush exceeded
+10,003 ms with 17 accepted, 10 persisted and 7 pending checkpoints, no checkpoint
+drops or write failures, and all 85 journal events persisted. The old worker
+reopened and configured a nonpooled connection, committed and closed it for every
+checkpoint. SQLite performs synchronous I/O through the ADO.NET async APIs, and
+closing the last WAL connection can also checkpoint and clean up the WAL files.
+See the [Microsoft.Data.Sqlite async limitations](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/async)
+and [SQLite WAL lifecycle](https://www.sqlite.org/wal.html). These are confirmed
+sources of repeated work; the physical cause of that Windows latency outlier was
+not isolated. Batching preserves WAL, `synchronous=FULL`, all revisions and the
+existing ten-second shutdown deadline.
+
+Checkpoint shutdown statistics now include storage operation count, active/last
+batch size, active storage duration, cumulative/maximum storage duration and
+maximum observed queue wait, measured with a monotonic clock. The existing bounded
+ControlHost phase evidence includes these values, distinguishing an active slow
+write from queued backlog in subsequent qualifications.
+
+ControlHost transfers management-store disposal ownership to its checkpoint
+writer. All disposal calls join one retained task that completes ingress,
+drains the worker and only then disposes that store. If the shutdown deadline
+expires, ControlHost still reports `ShutdownFailure` within the existing budget;
+the store remains alive for the already-owned writes until that task finishes.
+Its eventual cleanup failure is observed and retained, and another disposal call
+joins the same completion or failure. Startup cleanup directly disposes the store
+only when ownership has not transferred. This prevents an expired caller wait
+from disposing SQLite state beneath the checkpoint worker.
+

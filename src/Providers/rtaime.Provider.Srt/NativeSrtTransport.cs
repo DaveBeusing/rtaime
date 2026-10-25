@@ -74,8 +74,8 @@ public sealed class NativeSrtTransport : ISrtTransport
 			SetIntOption(api, socket, SrtoLatency, configuration.LatencyMilliseconds);
 			SetIntOption(api, socket, SrtoConnTimeout, Math.Min(configuration.ReconnectMaximumDelayMilliseconds, 10_000));
 			SetIntOption(api, socket, SrtoMinVersion, checked((int)MinimumSrtVersion));
-			SetIntOption(api, socket, SrtoMessageApi, 0);
-			SetIntOption(api, socket, SrtoPayloadSize, 1316);
+			SetIntOption(api, socket, SrtoMessageApi, 1);
+			SetIntOption(api, socket, SrtoPayloadSize, SrtTransportPacketizer.MaximumMessageSize);
 			SetIntOption(api, socket, SrtoSndSyn, 1);
 			if (!string.IsNullOrEmpty(passphrase))
 				SetStringOption(api, socket, SrtoPassphrase, passphrase);
@@ -101,6 +101,9 @@ public sealed class NativeSrtTransport : ISrtTransport
 			throw new InvalidOperationException("SRT transport is not connected.");
 		if (payload.IsEmpty)
 			return ValueTask.FromResult(0);
+		if (payload.Length > SrtTransportPacketizer.MaximumMessageSize ||
+			payload.Length % SrtTransportPacketizer.TransportPacketSize != 0)
+			throw new ArgumentException("SRT live messages require complete 188-byte MPEG-TS packets and at most 1316 bytes.", nameof(payload));
 
 		byte[]? copy = null;
 		ArraySegment<byte> segment;
@@ -301,3 +304,4 @@ internal sealed class SrtNativeApi : IDisposable
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SrtSend(int socket, IntPtr buffer, int length);
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr SrtGetLastErrorString();
 }
+

@@ -31,7 +31,7 @@ public sealed record PersistenceIntegrityReport(
 /// Transactional SQLite management/configuration persistence. This store is intentionally separate from the
 /// production journal and must never be placed on the synchronous media execution path.
 /// </summary>
-public sealed class SqliteManagementStore : IProductionCheckpointStore, IAsyncDisposable
+public sealed class SqliteManagementStore : IProductionCheckpointBatchStore, IAsyncDisposable
 {
 	private const int SchemaVersion = 1;
 	private readonly string _path;
@@ -148,12 +148,33 @@ public sealed class SqliteManagementStore : IProductionCheckpointStore, IAsyncDi
 	public async ValueTask WriteAsync(ProductionCheckpoint checkpoint, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(checkpoint);
+		await WriteBatchAsync([checkpoint], cancellationToken).ConfigureAwait(false);
+	}
+
+	public async ValueTask WriteBatchAsync(
+		IReadOnlyList<ProductionCheckpoint> checkpoints, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(checkpoints);
+		if (checkpoints.Count is < 1 or > IProductionCheckpointBatchStore.MaximumBatchSize)
+			throw new ArgumentOutOfRangeException(nameof(checkpoints));
+		var batch = checkpoints.ToArray();
+		if (batch.Any(checkpoint => checkpoint is null))
+			throw new ArgumentException("Checkpoints must not be null.", nameof(checkpoints));
 		await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 		await using var connection = CreateConnection();
 		await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 		await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
 		using var transaction = connection.BeginTransaction();
+		foreach (var checkpoint in batch)
+			await WriteInTransactionAsync(connection, transaction, checkpoint, cancellationToken).ConfigureAwait(false);
+		// One FULL/WAL commit retains every accepted revision in the bounded transaction.
+		transaction.Commit();
+	}
 
+	private static async ValueTask WriteInTransactionAsync(
+		SqliteConnection connection, SqliteTransaction transaction, ProductionCheckpoint checkpoint,
+		CancellationToken cancellationToken)
+	{
 		await using (var existing = connection.CreateCommand())
 		{
 			existing.Transaction = transaction;
@@ -165,7 +186,6 @@ public sealed class SqliteManagementStore : IProductionCheckpointStore, IAsyncDi
 			{
 				if (!string.Equals(checksum, checkpoint.ChecksumSha256, StringComparison.Ordinal))
 					throw new InvalidDataException("Checkpoint revision already exists with a different payload checksum.");
-				transaction.Rollback();
 				return;
 			}
 		}
@@ -188,7 +208,6 @@ public sealed class SqliteManagementStore : IProductionCheckpointStore, IAsyncDi
 			await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 		}
 
-		transaction.Commit();
 	}
 
 	public async ValueTask<ProductionCheckpoint?> ReadLatestAsync(
@@ -372,3 +391,4 @@ public sealed class SqliteManagementStore : IProductionCheckpointStore, IAsyncDi
 			ON production_checkpoints(production_id, authoritative_revision DESC);
 		""";
 }
+
