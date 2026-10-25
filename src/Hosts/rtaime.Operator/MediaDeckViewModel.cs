@@ -605,17 +605,19 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			OnPropertyChanged(nameof(EndBehavior));
 		}
 
-		Cues.Clear();
-		if (_snapshot.Markers is not null && _snapshot.Probe is not null)
+		var refreshedCues = _snapshot.Markers is not null && _snapshot.Probe is not null
+			? _snapshot.Markers.CuePoints.Select(cue => new MediaDeckCueItem(
+				cue.Id,
+				cue.Name,
+				cue.PositionFrame,
+				MediaTimelineTimecode.FormatFrame(cue.PositionFrame, _snapshot.Probe.VideoFormat.FrameRate))).ToArray()
+			: [];
+		if (!Cues.Select(cue => (cue.Id, cue.Name, cue.PositionFrame))
+			.SequenceEqual(refreshedCues.Select(cue => (cue.Id, cue.Name, cue.PositionFrame))))
 		{
-			foreach (var cue in _snapshot.Markers.CuePoints)
-			{
-				Cues.Add(new MediaDeckCueItem(
-					cue.Id,
-					cue.Name,
-					cue.PositionFrame,
-					MediaTimelineTimecode.FormatFrame(cue.PositionFrame, _snapshot.Probe.VideoFormat.FrameRate)));
-			}
+			Cues.Clear();
+			foreach (var cue in refreshedCues)
+				Cues.Add(cue);
 		}
 
 		OnPropertyChanged(nameof(State));
