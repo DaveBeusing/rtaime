@@ -588,7 +588,12 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 
 	private void RefreshState()
 	{
+		var previousSnapshot = _snapshot;
 		_snapshot = _controller.Snapshot;
+		// A pending policy edit must never be applied to another selected source or asset.
+		if (!Equals(previousSnapshot.SourceId, _snapshot.SourceId) ||
+			!string.Equals(previousSnapshot.Probe?.FileName, _snapshot.Probe?.FileName, StringComparison.Ordinal))
+			_playbackPolicyDirty = false;
         if (_snapshot.SourceId is { } source && _deckPaths.TryGetValue(source, out var path)) _localPath = path;
 		Timeline.ApplyMediaDeckSnapshot(_snapshot);
 		if (!_snapshot.IsLoaded)
