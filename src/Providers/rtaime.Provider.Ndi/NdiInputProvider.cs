@@ -239,8 +239,7 @@ public sealed class NdiInputSession : IAsyncDisposable
                     continue;
                 }
 
-                if (_backend.ConnectionCount <= 0 &&
-                    _clock() - (_lastMediaAt ?? _startedAt) >= _configuration.SourceLossTimeout)
+                if (_clock() - (_lastMediaAt ?? _startedAt) >= _configuration.SourceLossTimeout)
                 {
                     MarkLost(
                         "network.input.ndi_source_lost",
@@ -251,10 +250,23 @@ public sealed class NdiInputSession : IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (Exception exception)
+        {
+            Fault("network.input.ndi_worker_failed", $"NDI worker failed: {exception.GetType().Name}.");
+        }
         finally
         {
             if (_backend is not null)
-                await _backend.DisposeAsync().ConfigureAwait(false);
+            {
+                try
+                {
+                    await _backend.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    Fault("network.input.ndi_cleanup_failed", $"NDI cleanup failed: {exception.GetType().Name}.");
+                }
+            }
             lock (_gate)
             {
                 _connected = false;
