@@ -45,7 +45,7 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		var formatName = use5994 ? "1080p59.94" : "1080p50";
 		using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 		await using var receiver = new LoopbackReceiver(library);
-		var encoder = new MeasuredEncoder();
+		var encoder = new MeasuredEncoder(receiver.ExpectCompletion);
 		var configuration = new NetworkOutputConfiguration("native-loopback", new Uri($"srt://127.0.0.1:{receiver.Port}"),
 			NetworkOutputProtocolFamily.Srt, NetworkOutputConnectionMode.Caller, format, AudioFormat.Stereo48kFloat32,
 			NetworkOutputVideoCodec.H264, NetworkOutputAudioCodec.AacLc, 12_000_000, 192_000, 120,
@@ -106,18 +106,40 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		Assert.Equal(encodedHash, receiver.PayloadHash);
 		Assert.Equal(0UL, statistics.DroppedSamples);
 		Assert.Equal(0UL, statistics.ReconnectCount);
+		var liveBytes = encoder.EncodedBytes;
+		var liveHash = encodedHash;
+		// Keep the receiver alive while Finalize produces delayed media and the session sends every tail byte.
+		await session.DisposeAsync().AsTask().WaitAsync(timeout.Token);
+		Assert.Equal(1, encoder.CompletionCalls);
+		Assert.True(encoder.CompletionBytes > 0, "The native fixture did not exercise encoder/mux tail output.");
+		Assert.Equal(liveBytes + encoder.CompletionBytes, encoder.EncodedBytes);
+		Assert.Equal(0L, encoder.EncodedBytes % 188);
+		statistics = session.Snapshot.Statistics;
+		Assert.Equal((ulong)encoder.EncodedBytes, statistics.BytesSent);
+		await receiver.WaitForBytesAsync(encoder.EncodedBytes, timeout.Token);
+		Assert.Equal(encoder.EncodedBytes, receiver.BytesReceived);
+		Assert.Equal(statistics.PacketsSent, receiver.MessagesReceived);
+		encodedHash = encoder.PayloadHash;
+		Assert.Equal(encodedHash, receiver.PayloadHash);
+		Assert.Null(session.Snapshot.Failure);
+		Assert.Equal(NetworkOutputLifecycleState.Disabled, session.Snapshot.Lifecycle);
+		Assert.Equal(0UL, statistics.DroppedSamples);
+		Assert.Equal(0UL, statistics.RejectedSamples);
+		Assert.Equal(0UL, statistics.ReconnectCount);
 		var evidence = new
 		{
 			schemaVersion = "1.0", status = "PASS", sourceCommit = source, capturedAtUtc = DateTimeOffset.UtcNow,
-			scope = "Live EncodeAsync output: Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
+			scope = "Live and orderly-completion output: Windows Media Foundation H.264/AAC to native SRT caller and local native receiver",
 			format = formatName, frames, runtimeVersion = $"0x{receiver.RuntimeVersion:X6}", nativeLibrarySha256 = nativeHash,
 			maximumEncoderDrain = encoder.MaximumDrain, encodedBytes = encoder.EncodedBytes,
+			liveBytes, livePayloadSha256 = liveHash, completionBytes = encoder.CompletionBytes,
+			completionCalls = encoder.CompletionCalls, completionStatus = "PASS",
+			receivedBytes = receiver.BytesReceived,
 			messagesReceived = receiver.MessagesReceived, maximumMessage = receiver.MaximumMessage,
 			payloadSha256 = encodedHash, statistics,
-			limits = "Frame count is submitted input, not decoded or end-of-stream completeness; bytes/hash cover only live EncodeAsync output. Complete final drain, external decode, WAN, encryption and physical latency remain UNVERIFIED."
+			limits = "Frame count is submitted input, not decoded frame coverage; bytes/hash cover live output plus complete Finalize output. External decode, WAN, encryption and physical latency remain UNVERIFIED."
 		};
 		await receiver.DisposeAsync();
-		await session.DisposeAsync();
 		File.WriteAllText(Path.Combine(evidenceRoot, $"srt-native-{formatName}.json"),
 			JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
 		output.WriteLine($"Native SRT/MF {formatName}: {statistics.PacketsSent} messages, {statistics.BytesSent} bytes, SHA-256 {encodedHash}.");
@@ -134,18 +156,21 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		public void Dispose() => Returned.TrySetResult();
 	}
 
-	private sealed class MeasuredEncoder : ISrtPayloadEncoder
+	private sealed class MeasuredEncoder(Action<long> expectCompletion) : ISrtPayloadEncoder
 	{
 		private readonly WindowsMediaFoundationSrtEncoder _inner = new();
 		private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 		private bool _disposed;
+		private string? _completedHash;
 		public long EncodedBytes { get; private set; }
+		public long CompletionBytes { get; private set; }
+		public int CompletionCalls { get; private set; }
 		public int MaximumDrain { get; private set; }
 		public int EncodeCalls { get; private set; }
 		public DrainDiagnostic? FirstNonEmptyDrain { get; private set; }
 		public DrainDiagnostic? LatestNonEmptyDrain { get; private set; }
 		public Exception? LastFailure { get; private set; }
-		public string PayloadHash => Convert.ToHexString(_hash.GetCurrentHash());
+		public string PayloadHash => _completedHash ?? Convert.ToHexString(_hash.GetCurrentHash());
 		public ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken token) => _inner.InitializeAsync(configuration, token);
 		public async ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken token)
 		{
@@ -165,13 +190,27 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 			}
 			catch (Exception exception) { LastFailure = exception; throw; }
 		}
-		public ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token) => _inner.DrainAsync(token);
+		public async ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken token)
+		{
+			try
+			{
+				CompletionCalls++;
+				var tail = await _inner.DrainAsync(token);
+				CompletionBytes += tail.Length;
+				EncodedBytes += tail.Length;
+				MaximumDrain = Math.Max(MaximumDrain, tail.Length);
+				_hash.AppendData(tail.Span);
+				expectCompletion(EncodedBytes);
+				return tail;
+			}
+			catch (Exception exception) { LastFailure = exception; throw; }
+		}
 		public async ValueTask DisposeAsync()
 		{
 			if (_disposed) return;
 			_disposed = true;
 			try { await _inner.DisposeAsync(); }
-			finally { _hash.Dispose(); }
+			finally { _completedHash = Convert.ToHexString(_hash.GetCurrentHash()); _hash.Dispose(); }
 		}
 	}
 
@@ -216,6 +255,7 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		private long _bytes;
 		private ulong _messages;
 		private int _maximumMessage;
+		private long _expectedTotal = -1;
 		private bool _disposed;
 		public int Port { get; }
 		public uint RuntimeVersion { get; }
@@ -223,6 +263,11 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 		public ulong MessagesReceived { get { lock (_gate) return _messages; } }
 		public int MaximumMessage { get { lock (_gate) return _maximumMessage; } }
 		public string PayloadHash { get { lock (_gate) return Convert.ToHexString(_hash.GetCurrentHash()); } }
+
+		public void ExpectCompletion(long expectedTotal)
+		{
+			lock (_gate) _expectedTotal = expectedTotal;
+		}
 
 		public LoopbackReceiver(string library)
 		{
@@ -289,6 +334,7 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 				{
 					var count = _receive(socket, handle.AddrOfPinnedObject(), bytes.Length);
 					if (_shutdown.IsCancellationRequested) return;
+					if (count == -1 && HasReceivedCompleteOutput()) return;
 					Check(count, "receive");
 					Assert.InRange(count, 188, 1316);
 					Assert.Equal(0, count % 188);
@@ -299,6 +345,12 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 						_bytes += count;
 						_messages++;
 						_maximumMessage = Math.Max(_maximumMessage, count);
+					}
+					if (HasReceivedCompleteOutput())
+					{
+						// Do not close the receiver before the sender has observed native buffer completion.
+						_shutdown.Token.WaitHandle.WaitOne();
+						return;
 					}
 				}
 			}
@@ -316,6 +368,11 @@ public sealed class SrtNativeLoopbackQualificationTests(ITestOutputHelper output
 				if (_worker.IsCompleted) await _worker;
 				await Task.Delay(10, token);
 			}
+		}
+
+		private bool HasReceivedCompleteOutput()
+		{
+			lock (_gate) return _expectedTotal >= 0 && _bytes == _expectedTotal;
 		}
 
 		private void Set(SetSocketOption set, int option, int value)

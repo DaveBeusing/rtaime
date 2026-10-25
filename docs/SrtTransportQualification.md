@@ -21,8 +21,9 @@ SRT. The Message API's all-or-error result is checked for every message. A
 positive short result is treated as a transport failure; the uncertain message
 is never retransmitted by the provider. Successful earlier messages retain
 their byte and packet accounting even when a later message in the same encoder
-drain fails. Connection teardown clears residual packet bytes before a new
-encoder/connection epoch starts.
+drain fails. Aborted connection teardown clears residual packet bytes before a
+new encoder/connection epoch starts. Orderly completion retains them until the
+encoder's final output completes the packet.
 
 The mux `IStream.Stat` advertises `STGM_READWRITE`; leaving the access mode at its
 zero default incorrectly describes a read-only stream. After the native MF
@@ -55,7 +56,7 @@ and [Content Packet](https://learn.microsoft.com/en-us/windows/win32/medfound/mf
 zero values. The encoder owns the resulting media sink, releases the sink writer
 before calling the sink's `Shutdown`, and attempts all remaining cleanup even if
 a stage fails. Initialization errors retain secondary cleanup errors, and normal
-disposal reports finalization or shutdown failure. This follows the ownership
+completion reports finalization failure and disposal reports shutdown failure. This follows the ownership
 contract of
 [`MFCreateSinkWriterFromMediaSink`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-mfcreatesinkwriterfrommediasink).
 
@@ -70,6 +71,44 @@ The upstream API contract is documented in Haivision's
 [socket options](https://github.com/Haivision/srt/blob/master/docs/API/API-socket-options.md#srto_messageapi)
 and [send functions](https://github.com/Haivision/srt/blob/master/docs/API/API-functions.md#srt_send).
 
+## Orderly completion and abort
+
+Disposal stops new admission and lets an established worker finish its accepted
+queue. Connection attempts are cancelled immediately because they have no
+completed stream to preserve. The worker then calls the encoder's terminal
+`DrainAsync`, sends every returned byte through the same packetizer, validates
+that no incomplete TS packet remains, and completes buffered native sends before
+releasing the encoder and transport. Terminal messages use the same byte/packet
+accounting as live messages; they do not invent another submitted sample.
+
+`DrainAsync` calls
+[`IMFSinkWriter::Finalize`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-imfsinkwriter-finalize)
+once and collects all resulting mux bytes. Further encoding is rejected.
+[`Flush`](https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nf-mfreadwrite-imfsinkwriter-flush)
+discards pending samples and is not an orderly-completion operation. Encoder
+disposal releases resources without trying to finalize an aborted stream.
+Reconnect and error teardown never send old-stream tail bytes to either a failed
+connection or its replacement.
+
+Native `srt_send` has a one-second blocking-send limit. Orderly completion waits
+for [`srt_getsndbuffer`](https://github.com/Haivision/srt/blob/v1.5.7/docs/API/API-functions.md#srt_getsndbuffer)
+to report no pending blocks or bytes while the socket remains connected before
+socket close; live-mode linger is
+otherwise disabled by default. This is sender-buffer evidence, not proof of
+remote decoder acceptance. The local native qualification separately checks
+receiver bytes and hashes through completion.
+
+The complete stop, including cleanup, has a ten-second deadline. Finalization,
+final-send, truncated-packet and cleanup failures remain observable as a faulted
+session, and disposal returns the failure. Every independently owned resource
+is attempted even when another cleanup fails; multiple failures are retained.
+The deadline returns `network.output.completion_timeout` and cancels pending
+operations. A noncancelable native call retains its worker and resource ownership
+until it returns, after which cleanup continues. The timeout does not claim that
+native resources were released and never releases a COM object or native module
+concurrently with an operation still using it. Repeated disposal observes the same
+completion result, including a timeout.
+
 ## Deterministic regressions
 
 After the canonical pinned-SDK Release build:
@@ -77,7 +116,7 @@ After the canonical pinned-SDK Release build:
 ```powershell
 dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj `
     --configuration Release --no-build `
-    --filter "FullyQualifiedName~SrtTransportPacketizationTests|FullyQualifiedName~SrtMuxStreamTests|FullyQualifiedName~SrtMediaFoundationCleanupTests"
+    --filter "FullyQualifiedName~SrtTransportPacketizationTests|FullyQualifiedName~SrtCompletionTests|FullyQualifiedName~SrtMuxStreamTests|FullyQualifiedName~SrtMediaFoundationCleanupTests"
 ```
 
 The packetization suite covers large drains at 50 and 60000/1001 fps, splits
@@ -85,6 +124,10 @@ before/at/after TS and live-message boundaries, empty encoder drains, exact byte
 order, nonfabricated send counters, partial failure accounting, invalid sync and
 reconnect isolation. Existing network backpressure/cleanup fixtures emit complete
 TS null packets so that they continue to exercise the actual send boundary.
+Completion regressions cover nonempty encoder tail output, a packet split across
+live and terminal output, accepted-queue draining, late admission rejection,
+truncated output, final-send and finalization failures, combined cleanup failures,
+abort/reconnect isolation and ownership after a noncancelable completion timeout.
 
 These tests use deterministic transports. Their success alone does not establish
 native SRT or Media Foundation interoperability.
@@ -115,15 +158,18 @@ the real SRT listening/receive API. For both rates it requires:
 - at least one encoder drain larger than 1316 bytes;
 - complete TS alignment and bounded messages at the receiver;
 - exact byte totals and matching SHA-256 hashes between encoder output and receiver input;
+- nonempty terminal encoder/mux output and exact live-plus-terminal byte accounting;
+- a receiver that remains open through encoder finalization and native-buffer completion;
 - no dropped samples or reconnects during the qualification;
 - successful native/encoder teardown before writing PASS evidence.
 
-The 90 samples are submitted inputs, not a receiver-decoded or end-of-stream
-complete frame count. Byte totals and hashes cover only bytes actually returned
-by `EncodeAsync` during live submission. The current stop path calls the sink
-writer's `Flush` and discards encoder tail output; complete graceful final drain
-is a separate unresolved issue. This profile does not establish delivery of
-encoder-delayed terminal samples, even when finalization and shutdown succeed.
+The 90 samples are submitted inputs, not a receiver-decoded frame count. The
+profile checks live bytes first, then performs orderly session completion while
+the receiver remains alive and checks total bytes and hashes again. Separate live
+and completion counters prove that terminal output was exercised and delivered.
+This establishes delivery of all bytes returned by live encoding and terminal
+finalization; full decoded video/audio sample coverage remains a separate
+qualification obligation.
 
 The retained JSON files bind source commit, actual native runtime version and DLL
 SHA-256 to each format's encoder/message statistics and payload hash. The TRX

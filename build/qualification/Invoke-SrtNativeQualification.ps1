@@ -54,6 +54,15 @@ try {
 		if ([Convert]::ToUInt32($evidence.runtimeVersion.Substring(2), 16) -lt 0x010507 -or
 			$evidence.maximumEncoderDrain -le 1316 -or $evidence.maximumMessage -gt 1316 -or
 			$evidence.messagesReceived -le 0 -or $evidence.encodedBytes -le 1316 -or
+			$evidence.completionStatus -ne "PASS" -or $evidence.completionCalls -ne 1 -or
+			$evidence.completionBytes -le 0 -or $evidence.liveBytes -le 1316 -or
+			$evidence.encodedBytes -ne ($evidence.liveBytes + $evidence.completionBytes) -or
+			$evidence.receivedBytes -ne $evidence.encodedBytes -or
+			$evidence.statistics.BytesSent -ne $evidence.encodedBytes -or
+			$evidence.statistics.PacketsSent -ne $evidence.messagesReceived -or
+			$evidence.statistics.DroppedSamples -ne 0 -or $evidence.statistics.RejectedSamples -ne 0 -or
+			$evidence.statistics.ReconnectCount -ne 0 -or
+			$evidence.livePayloadSha256 -notmatch '^[0-9A-F]{64}$' -or
 			$evidence.payloadSha256 -notmatch '^[0-9A-F]{64}$') {
 			throw "Native qualification is incomplete: $name"
 		}

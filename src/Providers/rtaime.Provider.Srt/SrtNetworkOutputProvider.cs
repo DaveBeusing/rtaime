@@ -11,12 +11,15 @@ public interface ISrtTransport : IAsyncDisposable
 	bool IsConnected { get; }
 	ValueTask ConnectAsync(NetworkOutputConfiguration configuration, string? passphrase, CancellationToken cancellationToken);
 	ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken);
+	/// <summary>Waits for buffered sends before orderly close; unbuffered transports need no extra work.</summary>
+	ValueTask CompleteAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 }
 
 public interface ISrtPayloadEncoder : IAsyncDisposable
 {
 	ValueTask InitializeAsync(NetworkOutputConfiguration configuration, CancellationToken cancellationToken);
 	ValueTask<ReadOnlyMemory<byte>> EncodeAsync(NetworkOutputProgramSample sample, CancellationToken cancellationToken);
+	/// <summary>Completes encoding and returns all remaining mux bytes. No further input is accepted.</summary>
 	ValueTask<ReadOnlyMemory<byte>> DrainAsync(CancellationToken cancellationToken);
 }
 
@@ -65,19 +68,23 @@ public sealed class SrtNetworkOutputProvider
 
 public sealed class SrtNetworkOutputSession : INetworkOutputSession
 {
+	private static readonly TimeSpan DefaultCompletionTimeout = TimeSpan.FromSeconds(10);
 	private readonly object _gate = new();
 	private readonly NetworkOutputConfiguration _configuration;
 	private readonly Func<ISrtTransport> _transportFactory;
 	private readonly Func<ISrtPayloadEncoder> _encoderFactory;
+	private readonly TimeSpan _completionTimeout;
 	private readonly SrtTransportPacketizer _packetizer = new();
 	private readonly Action<int> _messageSent;
 	private readonly Queue<NetworkOutputProgramSample> _queue = new();
 	private readonly SemaphoreSlim _queueSignal = new(0);
 	private readonly CancellationTokenSource _shutdown = new();
+	private readonly CancellationTokenSource _connectionStop = new();
 	private readonly Task _worker;
 
 	private ISrtTransport? _transport;
 	private ISrtPayloadEncoder? _encoder;
+	private bool _encoderInitialized;
 	private NetworkOutputLifecycleState _lifecycle = NetworkOutputLifecycleState.Disabled;
 	private bool _connected;
 	private ulong _accepted;
@@ -90,19 +97,34 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	private int _maximumQueueDepth;
 	private DateTimeOffset? _lastSuccessfulSendUtc;
 	private Failure? _failure;
-	private bool _disposed;
+	private Failure? _completionFailure;
+	private volatile bool _disposed;
+	private bool _workerStopped;
 	private Task? _disposeTask;
+	private int _synchronizationDisposed;
 
 	public SrtNetworkOutputSession(
 		NetworkOutputConfiguration configuration,
 		Func<ISrtTransport> transportFactory,
 		Func<ISrtPayloadEncoder> encoderFactory)
+		: this(configuration, transportFactory, encoderFactory, DefaultCompletionTimeout)
+	{
+	}
+
+	internal SrtNetworkOutputSession(
+		NetworkOutputConfiguration configuration,
+		Func<ISrtTransport> transportFactory,
+		Func<ISrtPayloadEncoder> encoderFactory,
+		TimeSpan completionTimeout)
 	{
 		_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 		if (_configuration.Protocol != NetworkOutputProtocolFamily.Srt || _configuration.SrtSettings is null)
 			throw new ArgumentException("SRT session requires typed SRT network-output settings.", nameof(configuration));
 		_transportFactory = transportFactory ?? throw new ArgumentNullException(nameof(transportFactory));
 		_encoderFactory = encoderFactory ?? throw new ArgumentNullException(nameof(encoderFactory));
+		if (completionTimeout <= TimeSpan.Zero || completionTimeout > DefaultCompletionTimeout)
+			throw new ArgumentOutOfRangeException(nameof(completionTimeout));
+		_completionTimeout = completionTimeout;
 		_messageSent = ObserveSentMessage;
 		_worker = Task.Run(WorkerAsync);
 	}
@@ -120,8 +142,8 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 					"srt",
 					NetworkOutputProtocolFamily.Srt,
 					_configuration.SafeTargetIdentity,
-					_lifecycle,
-					_connected,
+					_completionFailure is null ? _lifecycle : NetworkOutputLifecycleState.Faulted,
+					_completionFailure is null && _connected,
 					_configuration.VideoFormat,
 					_configuration.AudioFormat,
 					_configuration.VideoCodec,
@@ -141,7 +163,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						_maximumQueueDepth,
 						_configuration.QueueCapacity),
 					_lastSuccessfulSendUtc,
-					_failure);
+					_completionFailure ?? _failure);
 			}
 		}
 	}
@@ -151,7 +173,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		ArgumentNullException.ThrowIfNull(sample);
 		lock (_gate)
 		{
-			if (_disposed || _shutdown.IsCancellationRequested)
+			if (_disposed || _workerStopped || _shutdown.IsCancellationRequested)
 			{
 				_rejected++;
 				sample.Video.Dispose();
@@ -193,6 +215,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	private async Task WorkerAsync()
 	{
 		var cancellationToken = _shutdown.Token;
+		Exception? workerFailure = null;
 		try
 		{
 			while (!cancellationToken.IsCancellationRequested)
@@ -200,7 +223,11 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				await _queueSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
 				NetworkOutputProgramSample? queuedSample;
 				lock (_gate)
+				{
+					if (_disposed && _queue.Count == 0)
+						break;
 					queuedSample = _queue.Count == 0 ? null : _queue.Dequeue();
+				}
 				if (queuedSample is null)
 					continue;
 				var sample = queuedSample;
@@ -224,6 +251,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 					}
 					var encoded = await _encoder!.EncodeAsync(sample, cancellationToken).ConfigureAwait(false);
 					var messages = await _packetizer.SendAsync(_transport!, encoded, _messageSent, cancellationToken).ConfigureAwait(false);
+					cancellationToken.ThrowIfCancellationRequested();
 					if (messages == 0)
 						continue;
 
@@ -237,6 +265,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
+					lock (_gate) _dropped++;
 					break;
 				}
 				catch (Exception exception)
@@ -246,9 +275,18 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						sample,
 						"network.output.send_failed",
 						$"Network output sample failed without interrupting Program: {exception.GetType().Name}.");
-					await ResetConnectionAsync(
-						new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}.{alignmentContext}"))
-						.ConfigureAwait(false);
+					try
+					{
+						await ResetConnectionAsync(
+							new Failure("network.output.transport_failed", $"SRT transport failed: {exception.GetType().Name}.{alignmentContext}"))
+							.ConfigureAwait(false);
+					}
+					catch (Exception cleanupFailure)
+					{
+						throw new AggregateException("SRT sample execution and aborted-connection cleanup failed.", exception, cleanupFailure);
+					}
+					if (_disposed)
+						throw new IOException("SRT output failed while completing the accepted Program samples.", exception);
 				}
 				finally
 				{
@@ -259,23 +297,43 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
 		}
+		catch (Exception exception)
+		{
+			workerFailure = exception;
+		}
 		finally
 		{
 			try
 			{
-				await ReleaseConnectionAsync().ConfigureAwait(false);
+				await ReleaseConnectionAsync(
+					orderly: _disposed && workerFailure is null && !cancellationToken.IsCancellationRequested,
+					cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception exception)
+			{
+				workerFailure = workerFailure is null ? exception
+					: new AggregateException("SRT worker and resource cleanup failed.", workerFailure, exception);
 			}
 			finally
 			{
 				lock (_gate)
 				{
+					_workerStopped = true;
 					while (_queue.Count > 0)
+					{
 						_queue.Dequeue().Video.Dispose();
+						_dropped++;
+					}
 					_connected = false;
 					if (_lifecycle != NetworkOutputLifecycleState.Faulted)
 						_lifecycle = NetworkOutputLifecycleState.Disabled;
 				}
 			}
+		}
+		if (workerFailure is not null)
+		{
+			ObserveCompletionFailure(workerFailure);
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(workerFailure).Throw();
 		}
 	}
 
@@ -291,8 +349,10 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 
 	private async ValueTask<bool> EnsureConnectedAsync(CancellationToken cancellationToken)
 	{
-		if (_transport is { IsConnected: true } && _encoder is not null)
+		if (_transport is { IsConnected: true } && _encoder is not null && _encoderInitialized)
 			return true;
+		using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _connectionStop.Token);
+		cancellationToken = attemptCancellation.Token;
 
 		var attempt = 0;
 		var delay = _configuration.ReconnectInitialDelayMilliseconds;
@@ -312,7 +372,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 
 			try
 			{
-				await ReleaseConnectionAsync().ConfigureAwait(false);
+				await ReleaseConnectionAsync(orderly: false, cancellationToken).ConfigureAwait(false);
 				var transport = _transportFactory();
 				_transport = transport;
 				var encoder = _encoderFactory();
@@ -327,6 +387,8 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				await transport.ConnectAsync(_configuration, passphrase, cancellationToken).ConfigureAwait(false);
 				await encoder.InitializeAsync(_configuration, cancellationToken).ConfigureAwait(false);
+				_encoderInitialized = true;
+				cancellationToken.ThrowIfCancellationRequested();
 				lock (_gate)
 				{
 					if (attempt > 1 || _reconnects > 0)
@@ -349,8 +411,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 					_lifecycle = NetworkOutputLifecycleState.Reconnecting;
 					_failure = new Failure("network.output.connect_failed", $"SRT connection failed: {exception.GetType().Name}.");
 				}
-				await ReleaseConnectionAsync().ConfigureAwait(false);
-				await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+				await ReleaseConnectionAsync(orderly: false, cancellationToken).ConfigureAwait(false);
+				try { await Task.Delay(delay, cancellationToken).ConfigureAwait(false); }
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return false; }
 				delay = Math.Min(checked(delay * 2), _configuration.ReconnectMaximumDelayMilliseconds);
 			}
 		}
@@ -387,29 +450,59 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			_failure = failure;
 			_reconnects++;
 		}
-		await ReleaseConnectionAsync().ConfigureAwait(false);
+		await ReleaseConnectionAsync(orderly: false, CancellationToken.None).ConfigureAwait(false);
 	}
 
-	private async ValueTask ReleaseConnectionAsync()
+	private async ValueTask ReleaseConnectionAsync(bool orderly, CancellationToken cancellationToken)
 	{
-		_packetizer.Reset();
 		var encoder = Interlocked.Exchange(ref _encoder, null);
 		var transport = Interlocked.Exchange(ref _transport, null);
-		Exception? failure = null;
+		var encoderInitialized = _encoderInitialized;
+		_encoderInitialized = false;
+		List<Exception>? failures = null;
+		if (orderly && encoderInitialized && encoder is not null && transport is not null)
+		{
+			try
+			{
+				var tail = await encoder.DrainAsync(cancellationToken).ConfigureAwait(false);
+				await _packetizer.SendAsync(transport, tail, _messageSent, cancellationToken).ConfigureAwait(false);
+				_packetizer.Complete();
+				await transport.CompleteAsync(cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception exception)
+			{
+				(failures ??= []).Add(exception);
+				ObserveCompletionFailure(exception, detail: _packetizer.AlignmentFailure);
+			}
+		}
+		// An aborted connection never drains or carries old-stream bytes into its replacement.
+		_packetizer.Reset();
 		if (encoder is not null)
 		{
-			try { _ = await encoder.DrainAsync(CancellationToken.None).ConfigureAwait(false); }
-			catch { }
 			try { await encoder.DisposeAsync().ConfigureAwait(false); }
-			catch (Exception exception) { failure = exception; }
+			catch (Exception exception) { (failures ??= []).Add(exception); }
 		}
 		if (transport is not null)
 		{
 			try { await transport.DisposeAsync().ConfigureAwait(false); }
-			catch (Exception exception) { failure ??= exception; }
+			catch (Exception exception) { (failures ??= []).Add(exception); }
 		}
-		if (failure is not null)
-			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+		if (failures is { Count: > 0 })
+			System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures.Count == 1
+				? failures[0] : new AggregateException("SRT completion or resource cleanup failed.", failures)).Throw();
+	}
+
+	private void ObserveCompletionFailure(Exception exception, bool timedOut = false, string? detail = null)
+	{
+		lock (_gate)
+		{
+			_connected = false;
+			_lifecycle = NetworkOutputLifecycleState.Faulted;
+			if (_completionFailure is null || timedOut)
+				_completionFailure = new Failure(timedOut ? "network.output.completion_timeout" : "network.output.completion_failed",
+					timedOut ? "SRT completion exceeded its deadline; pending native work retains resource ownership until it returns."
+						: $"SRT completion or cleanup failed: {exception.GetType().Name}.{(detail is null ? string.Empty : $" {detail}")}");
+		}
 	}
 
 	public ValueTask DisposeAsync()
@@ -419,24 +512,55 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			if (_disposeTask is not null)
 				return new ValueTask(_disposeTask);
 			_disposed = true;
-			_lifecycle = NetworkOutputLifecycleState.Stopping;
-			return new ValueTask(_disposeTask = DisposeCoreAsync());
+			if (_lifecycle != NetworkOutputLifecycleState.Faulted)
+				_lifecycle = NetworkOutputLifecycleState.Stopping;
+			// The worker owns native calls and cleanup. Starting disposal must never run a blocking native call inline.
+			return new ValueTask(_disposeTask = Task.Run(DisposeCoreAsync));
 		}
 	}
 
 	private async Task DisposeCoreAsync()
 	{
+		using var deadlineCancellation = new CancellationTokenSource();
 		try
 		{
-			_shutdown.Cancel();
+			// There is no completed stream to preserve while a connection is still being established.
+			_connectionStop.Cancel();
 			_queueSignal.Release();
-			try { await _worker.ConfigureAwait(false); } catch (OperationCanceledException) { }
+			var deadline = Task.Delay(_completionTimeout, deadlineCancellation.Token);
+			if (await Task.WhenAny(_worker, deadline).ConfigureAwait(false) != _worker)
+			{
+				var exception = new TimeoutException("SRT orderly completion did not finish within its deadline.");
+				ObserveCompletionFailure(exception, timedOut: true);
+				_shutdown.Cancel();
+				// A native call may ignore cancellation. Its worker remains the sole cleanup owner;
+				// releasing its COM objects or library while it is in flight would be unsafe.
+				_ = ReleaseSynchronizationAfterWorkerAsync();
+				throw exception;
+			}
+			await _worker.ConfigureAwait(false);
 		}
 		finally
 		{
-			_queueSignal.Dispose();
-			_shutdown.Dispose();
+			await deadlineCancellation.CancelAsync().ConfigureAwait(false);
+			if (_worker.IsCompleted)
+				ReleaseSynchronization();
 		}
 	}
-}
 
+	private async Task ReleaseSynchronizationAfterWorkerAsync()
+	{
+		try { await _worker.ConfigureAwait(false); }
+		catch (Exception exception) { ObserveCompletionFailure(exception); }
+		finally { ReleaseSynchronization(); }
+	}
+
+	private void ReleaseSynchronization()
+	{
+		if (Interlocked.Exchange(ref _synchronizationDisposed, 1) != 0)
+			return;
+		_queueSignal.Dispose();
+		_shutdown.Dispose();
+		_connectionStop.Dispose();
+	}
+}

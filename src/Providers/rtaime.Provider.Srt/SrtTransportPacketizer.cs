@@ -75,6 +75,17 @@ internal sealed class SrtTransportPacketizer
 		messageSent(sent);
 	}
 
+	public void Complete()
+	{
+		if (_failed)
+			throw new InvalidOperationException("Failed transport packetization cannot complete its connection epoch.");
+		if (_residualLength == 0)
+			return;
+		_failed = true;
+		AlignmentFailure = $"MPEG-TS completion is truncated: residualBytes={_residualLength}; packetBytes={TransportPacketSize}.";
+		throw new InvalidDataException(AlignmentFailure);
+	}
+
 	public void Reset()
 	{
 		_residualLength = 0;
