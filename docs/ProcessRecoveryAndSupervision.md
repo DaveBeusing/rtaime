@@ -213,6 +213,7 @@ Recovery does not resend the unconfirmed command or infer its outcome from the o
 | Monitoring disconnect/replacement | `OperatorMonitoringPlaneTests`, `RuntimeConsumerIsolationTests` | bounded shared owners and queues; Program authority unaffected |
 | Rapid all-host startup/stop | `HostIpcSessionLifecycleIntegrationTests.Rapid_all_host_cycles_*` | five cycles per 1080p50/1080p59.94; reused listeners; zero active IPC sessions, GPU surfaces and AI reservations after completed drain |
 | Owned child startup/stop | `ProcessSupervisionRecoveryTests.Repeated_owned_process_cycles_*` | three cycles each RuntimeHost/AIHost; recorded PID dead; endpoint and readiness leases released |
+| Installed child replacement and ControlHost crash | `Test-ManagedHostLifecycle.ps1` and `Test-ManagedHostProcessIdentity.ps1` | durable generation ownership before readiness; R0/A0 replaced by R1/A1; AI loss withdraws readiness; ControlHost-only termination leaves R1 for verified graceful recovery; incomplete launch outcomes and unrelated live PIDs fail closed |
 | GPU start, operation, recovery and disposal faults | `GpuLifecycleRecoveryTests`, `GpuBackendResourceSemanticsTests` | original exceptions retained; Failed/Degraded explicit; tracked ownership retryable; no false Ready/Stopped |
 | Recording/replay/network shutdown | `RuntimeConsumerIsolationTests`, `ReplayCaptureIsolationTests`, recording/network foundation tests | all shutdown callers join drain; zero active readback leases; independent cleanup attempted |
 

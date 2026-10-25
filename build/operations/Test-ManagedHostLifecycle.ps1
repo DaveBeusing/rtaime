@@ -31,7 +31,112 @@ function Assert-DurableManagedIdentity {
 		Assert-Condition ([string]$identity.launchId -match '^[a-fA-F0-9]{32}$') "Recorded $role identity has no launch ID."
 	}
 	Assert-Condition ([string]$state.controlIdentity.launchId -ceq [string]$state.runId) 'ControlHost launch identity does not match the lifecycle run.'
+	Assert-Condition (Test-Path -LiteralPath ([string]$state.childOwnershipPath) -PathType Leaf) 'Managed lifecycle did not retain independent child ownership.'
+	$journal = Get-Content -LiteralPath ([string]$state.childOwnershipPath) -Raw | ConvertFrom-Json -Depth 32
+	Assert-Condition ([string]$journal.lifecycleRunId -ceq [string]$state.runId) 'Child ownership journal belongs to another lifecycle run.'
+	Assert-Condition ([int]$journal.controlIdentity.processId -eq [int]$state.controlProcessId) 'Child ownership journal belongs to another ControlHost.'
+	foreach ($role in @('runtime', 'ai')) {
+		$launchId = [string]$state.($role + 'Identity').launchId
+		$generation = @($journal.generations | Where-Object { $_.role -ceq $role -and $_.launchId -ceq $launchId })
+		Assert-Condition ($generation.Count -eq 1 -and $generation[0].state -ceq 'RUNNING') "Initial $role readiness was not preceded by durable launch ownership."
+		Assert-Condition ([string]$generation[0].processIdentity.creationTimeUtcTicks -ceq [string]$state.($role + 'Identity').creationTimeUtcTicks) "Durable $role identity differs from startup evidence."
+	}
 	return $state
+}
+
+function Open-OwnedFixtureProcess {
+	param([Parameter(Mandatory)]$Identity, [Parameter(Mandatory)][string]$RunId)
+	Assert-Condition ([string]$Identity.lifecycleRunId -ceq $RunId) 'Crash fixture process belongs to another run.'
+	$process = [Diagnostics.Process]::GetProcessById([int]$Identity.processId)
+	try {
+		$null = $process.SafeHandle
+		Assert-Condition (-not $process.HasExited) 'Crash fixture process exited before its identity was retained.'
+		Assert-Condition ($process.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture) -ceq [string]$Identity.creationTimeUtcTicks) 'Crash fixture encountered a reused process ID.'
+		Assert-Condition ([string]::Equals([IO.Path]::GetFullPath($process.MainModule.FileName), [IO.Path]::GetFullPath([string]$Identity.executablePath), [StringComparison]::OrdinalIgnoreCase)) 'Crash fixture process has another executable image.'
+		return $process
+	} catch { $process.Dispose(); throw }
+}
+
+function Invoke-ChildOwnershipCrashQualification {
+	param([Parameter(Mandatory)][string]$Controller, [Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$FixtureRoot, [Parameter(Mandatory)][string]$PersistentStateRoot)
+	$work = Join-Path $FixtureRoot 'lifecycle'
+	$instance = 'ownership-' + [Guid]::NewGuid().ToString('N')
+	$tools = Join-Path $FixtureRoot 'controller'
+	New-Item -ItemType Directory -Path $tools -Force | Out-Null
+	$fixtureController = Join-Path $tools 'Invoke-ManagedHostLifecycle.ps1'
+	Copy-Item -LiteralPath $Controller -Destination $fixtureController
+	Assert-Condition ((Get-FileHash -LiteralPath $Controller).Hash -eq (Get-FileHash -LiteralPath $fixtureController).Hash) 'Crash fixture controller differs from the installed source.'
+	$fixturePolicy = Get-Content -LiteralPath (Join-Path $InstallRoot 'tools/host-lifecycle-policy.json') -Raw | ConvertFrom-Json
+	# Two attempts make the second AI exit terminal, so readiness withdrawal can be synchronized
+	# without racing a third launch. The signed installation and all existing time limits stay intact.
+	$fixturePolicy.startup.childMaxStartAttempts = 2
+	[IO.File]::WriteAllText((Join-Path $tools 'host-lifecycle-policy.json'), ($fixturePolicy | ConvertTo-Json -Depth 16), [Text.UTF8Encoding]::new($false))
+	$owned = [Collections.Generic.List[Diagnostics.Process]]::new()
+	try {
+		$start = & $fixtureController -Action Start -InstallPath $InstallRoot -StateRoot $PersistentStateRoot -WorkPath $work -InstanceId $instance -QualificationMode
+		Assert-Condition ([string]$start.status -eq 'PASS') 'Crash fixture did not start its installed hosts.'
+		$initial = Assert-DurableManagedIdentity -LifecycleWorkRoot $work
+		$control = Open-OwnedFixtureProcess $initial.controlIdentity $initial.runId
+		$owned.Add($control)
+		foreach ($role in @('runtime', 'ai')) {
+			$child = Open-OwnedFixtureProcess $initial.($role + 'Identity') $initial.runId
+			$owned.Add($child)
+			$child.Kill($false)
+			Assert-Condition ($child.WaitForExit(5000)) "Initial $role did not exit for replacement qualification."
+		}
+		$deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+		$replacement = $null
+		do {
+			Assert-Condition (-not $control.HasExited) 'ControlHost exited before replacement readiness.'
+			try {
+				$candidate = Get-Content -LiteralPath ([string]$initial.readinessPath) -Raw -ErrorAction Stop | ConvertFrom-Json
+				if ([string]$candidate.state -ceq 'READY' -and
+					[string]$candidate.runtimeSupervision.processIdentity.launchId -cne [string]$initial.runtimeIdentity.launchId -and
+					[string]$candidate.aiSupervision.processIdentity.launchId -cne [string]$initial.aiIdentity.launchId) { $replacement = $candidate; break }
+			} catch { }
+			Start-Sleep -Milliseconds 25
+		} while ([DateTimeOffset]::UtcNow -lt $deadline)
+		Assert-Condition ($null -ne $replacement) 'Installed children did not publish their replacement identities before the deadline.'
+		$runtime = Open-OwnedFixtureProcess $replacement.runtimeSupervision.processIdentity $initial.runId
+		$ai = Open-OwnedFixtureProcess $replacement.aiSupervision.processIdentity $initial.runId
+		$owned.Add($runtime)
+		$owned.Add($ai)
+		$journal = Get-Content -LiteralPath ([string]$initial.childOwnershipPath) -Raw | ConvertFrom-Json -Depth 32
+		foreach ($role in @('runtime', 'ai')) {
+			$generations = @($journal.generations | Where-Object { $_.role -ceq $role })
+			Assert-Condition ($generations.Count -eq 2) "Durable journal did not retain both $role generations."
+		}
+		$ai.Kill($false)
+		Assert-Condition ($ai.WaitForExit(5000)) 'Replacement AIHost did not exit.'
+		$deadline = [DateTimeOffset]::UtcNow.AddSeconds(5)
+		while (Test-Path -LiteralPath ([string]$initial.readinessPath)) {
+			Assert-Condition (-not $control.HasExited -and [DateTimeOffset]::UtcNow -lt $deadline) 'ControlHost did not withdraw transient readiness after AIHost loss.'
+			Start-Sleep -Milliseconds 10
+		}
+		Assert-Condition (-not $runtime.HasExited) 'Replacement RuntimeHost did not survive until the controlled owner crash.'
+		$control.Kill($false)
+		Assert-Condition ($control.WaitForExit(5000)) 'Only the owned ControlHost could not be terminated.'
+		Assert-Condition (-not $runtime.HasExited) 'The owner crash unexpectedly removed the replacement RuntimeHost.'
+		Assert-Condition (-not (Test-Path -LiteralPath ([string]$initial.readinessPath))) 'Crash fixture still has transient readiness evidence.'
+		$stop = & $Controller -Action Stop -InstallPath $InstallRoot -WorkPath $work -InstanceId $instance -QualificationMode
+		Assert-Condition ([string]$stop.status -eq 'PASS' -and [int]$stop.recoveredOwnedChildren -ge 1) 'Installed Stop did not recover the durable replacement ownership.'
+		Assert-Condition ($runtime.WaitForExit(5000)) 'Replacement RuntimeHost survived a successful Stop receipt.'
+		Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $work 'lifecycle-state.json'))) 'Successful orphan recovery retained active lifecycle state.'
+		Assert-Condition (Test-Path -LiteralPath ([string]$initial.childOwnershipPath)) 'Successful orphan recovery discarded its generation evidence.'
+		Write-Host 'Managed child ownership crash/replacement qualification PASS'
+	} finally {
+		$cleanupFailures = [Collections.Generic.List[Exception]]::new()
+		foreach ($process in $owned) {
+			try {
+				if (-not $process.HasExited) {
+					$process.Kill($true)
+					Assert-Condition ($process.WaitForExit(10000)) 'A retained fixture process remained after crash qualification cleanup.'
+				}
+			} catch { $cleanupFailures.Add($_.Exception) }
+			finally { $process.Dispose() }
+		}
+		if ($cleanupFailures.Count -gt 0) { throw [AggregateException]::new('Crash fixture ownership cleanup failed.', $cleanupFailures.ToArray()) }
+	}
 }
 
 function Wait-ForStableManagedReadiness {
@@ -206,6 +311,7 @@ try {
 	Assert-Condition ([string]$stoppedStatus.runtimeReadiness -eq 'NOT_APPLICABLE') "Stopped lifecycle must not report runtime readiness PASS."
 
 	if ($legacyQualification) { Invoke-LegacyCheckpointFixture -Mode verify }
+	else { Invoke-ChildOwnershipCrashQualification -Controller $lifecycle -InstallRoot $install -FixtureRoot (Join-Path $root 'ownership-crash') -PersistentStateRoot (Join-Path $root 'crash-state') }
 
 	Write-Host 'Managed host lifecycle qualification PASS'
 	Write-Host 'Sequence: Start -> Status -> Restart -> Status -> Stop'

@@ -44,6 +44,7 @@ public sealed record LocalProcessSupervisionOptions(
 	public string AdditionalArguments { get; init; } = string.Empty;
 	public TimeSpan GracefulStopTimeout { get; init; } = TimeSpan.FromSeconds(10);
 	public TimeSpan InitialAdoptionWindow { get; init; } = TimeSpan.FromSeconds(1);
+	internal LocalProcessOwnershipJournal? OwnershipJournal { get; init; }
 
 	public void Validate()
 	{
@@ -79,6 +80,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private Task? _loop;
 	private Process? _ownedProcess;
 	private LocalProcessIdentity? _ownedProcessIdentity;
+	private LocalProcessOwnershipJournal.Launch? _ownedLaunch;
 	private string? _ownedStopFilePath;
 	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
@@ -135,15 +137,18 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 
 		Process? owned;
+		LocalProcessOwnershipJournal.Launch? launch;
 		string? stopFile;
 		string? readinessFile;
 		lock (_gate)
 		{
 			owned = _ownedProcess;
+			launch = _ownedLaunch;
 			stopFile = _ownedStopFilePath;
 			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
 			_ownedProcessIdentity = null;
+			_ownedLaunch = null;
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
@@ -155,6 +160,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			{
 				if (_options.StopOwnedProcessOnDispose && !owned.HasExited)
 					_ = await StopOwnedProcessAsync(owned, stopFile).ConfigureAwait(false);
+				if (owned.HasExited) launch?.Exited(owned);
 			}
 			catch (InvalidOperationException) { }
 			finally
@@ -354,8 +360,9 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		var supervisionDirectory = Path.Combine(Path.GetTempPath(), "rtaime", "supervision");
 		Directory.CreateDirectory(supervisionDirectory);
 		var instanceId = Guid.NewGuid().ToString("N");
-		var stopFile = Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.stop");
-		var readinessFile = Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.ready.json");
+		var launch = _options.OwnershipJournal?.Reserve(_options.Name, _options.Endpoint, fullPath, instanceId, _startAttempts);
+		var stopFile = launch?.StopPath ?? Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.stop");
+		var readinessFile = launch?.ReadinessPath ?? Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.ready.json");
 		CleanupManagedFile(stopFile);
 		CleanupManagedFile(readinessFile);
 		var startInfo = new ProcessStartInfo
@@ -368,12 +375,25 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		};
 		startInfo.Environment["RTAIME_HOST_STOP_FILE"] = stopFile;
 		startInfo.Environment["RTAIME_HOST_READINESS_FILE"] = readinessFile;
-		var process = Process.Start(startInfo)
-			?? throw new InvalidOperationException($"Failed to start supervised process '{_options.Name}'.");
+		if (_options.OwnershipJournal is { } ownership)
+			startInfo.Environment["RTAIME_LIFECYCLE_RUN_ID"] = ownership.LifecycleRunId;
+		Process process;
+		try
+		{
+			process = Process.Start(startInfo)
+				?? throw new InvalidOperationException($"Failed to start supervised process '{_options.Name}'.");
+		}
+		catch (Exception startFailure)
+		{
+			try { launch?.NotStarted(); }
+			catch (Exception journalFailure) { throw new AggregateException("Child launch and ownership completion both failed.", startFailure, journalFailure); }
+			throw;
+		}
 		lock (_gate)
 		{
 			_ownedProcess = process;
 			_ownedProcessIdentity = null;
+			_ownedLaunch = launch;
 			_ownedStopFilePath = stopFile;
 			_ownedReadinessFilePath = readinessFile;
 			_ownedProcessReady = false;
@@ -383,6 +403,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			startInfo.Environment.TryGetValue("RTAIME_LIFECYCLE_RUN_ID", out var lifecycleRunId);
 			var identity = LocalProcessIdentity.Capture(process, fullPath, instanceId, lifecycleRunId);
+			launch?.Started(identity);
 			lock (_gate) _ownedProcessIdentity = identity;
 		}
 		catch (Exception identityFailure)
@@ -390,6 +411,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			try
 			{
 				await StopOwnedProcessAsync(process, stopFile).ConfigureAwait(false);
+				launch?.Exited(process);
 			}
 			catch (Exception stopFailure)
 			{
@@ -400,6 +422,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			{
 				_ownedProcess = null;
 				_ownedProcessIdentity = null;
+				_ownedLaunch = null;
 				_ownedStopFilePath = null;
 				_ownedReadinessFilePath = null;
 				_ownedProcessReady = false;
@@ -518,6 +541,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private async Task RecoverUnreadyOwnedProcessAsync()
 	{
 		Process process;
+		LocalProcessOwnershipJournal.Launch? launch;
 		string? stopFile;
 		string? readinessFile;
 		lock (_gate)
@@ -537,6 +561,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				return;
 
 			process = _ownedProcess;
+			launch = _ownedLaunch;
 			stopFile = _ownedStopFilePath;
 			readinessFile = _ownedReadinessFilePath;
 		}
@@ -549,6 +574,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		try
 		{
 			forcedTermination = await StopOwnedProcessAsync(process, stopFile).ConfigureAwait(false);
+			launch?.Exited(process);
 		}
 		finally
 		{
@@ -558,6 +584,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				{
 					_ownedProcess = null;
 					_ownedProcessIdentity = null;
+					_ownedLaunch = null;
 					_ownedStopFilePath = null;
 					_ownedReadinessFilePath = null;
 					_ownedProcessReady = false;
@@ -617,10 +644,12 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			}
 			catch (InvalidOperationException) { }
 			process = _ownedProcess;
+			_ownedLaunch?.Exited(process);
 			stopFile = _ownedStopFilePath;
 			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
 			_ownedProcessIdentity = null;
+			_ownedLaunch = null;
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
