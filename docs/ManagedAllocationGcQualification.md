@@ -21,8 +21,13 @@ process private bytes include committed managed heap, native allocations and
 other overhead; last-GC committed values need not coincide exactly with process
 samples. The original 59.94 failure on `a1c7fa4a` was 966.57 MiB versus the
 unchanged 512 MiB limit, while the isolated observation-source `1678848b`
-successfully completed 600 seconds with approximately 290 MiB growth and
-reclaimed significant private bytes on shutdown. The differing source/run
+successfully completed 600 seconds with **521,105,408 bytes (~497 MiB)** of
+assertion-baseline growth against the original 512 MiB ceiling. The sparse
+sidecar's first-to-last playback snapshots grew ~290 MiB over a shorter
+measurement interval, not the test baseline. The unchanged repeat on the
+**same** `a1c7fa4a` source also passed with 304,893,952 bytes (~291 MiB),
+showing source-matched variability. Significant private bytes were reclaimed
+after shutdown. The differing source/run
 means a current-master non-leak conclusion is **UNVERIFIED**. The newer NV12
 scratch-pool change must be qualified on its own exact commit; production Replay
 backpressure and continuity evidence must not be conflated with deck decode
