@@ -104,6 +104,29 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 	}
 
 	[Fact]
+	public void Selected_Preview_stales_while_Program_and_unselected_sources_keep_arriving()
+	{
+		var now = DateTimeOffset.UnixEpoch.AddDays(10);
+		var preview = new MonitoringViewerFreshness();
+		var program = new MonitoringViewerFreshness();
+		preview.SelectSource("source-b", 4, 1);
+		program.SelectSource("program", 1, 1);
+		Assert.True(preview.Observe("source-b", 4, 1, now, 8));
+		Assert.True(program.Observe("program", 1, 1, now, 16));
+
+		for (var index = 1; index <= 12; index++)
+		{
+			Assert.True(program.Observe("program", 1, 1,
+				now.AddMilliseconds(index * 500), (ulong)(16 + index)));
+		}
+		Assert.Equal("STALE", preview.Status(true, now.AddSeconds(6)));
+		Assert.Equal("LIVE", program.Status(true, now.AddSeconds(6)));
+		Assert.False(preview.Observe("source-a", 4, 1, now.AddSeconds(6), 1000));
+		Assert.True(preview.Observe("source-b", 4, 1, now.AddSeconds(6), 9));
+		Assert.Equal("LIVE", preview.Status(true, now.AddSeconds(6)));
+	}
+
+	[Fact]
 	public void Source_switch_and_reconnect_never_promote_retained_pixels_without_matching_evidence()
 	{
 		var now = DateTimeOffset.UnixEpoch.AddDays(10);
