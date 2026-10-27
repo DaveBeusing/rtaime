@@ -111,9 +111,11 @@ public partial class CompositingGraphControl : UserControl
 
 	private void EndPan()
 	{
-		_isPanning = false;
-		GraphViewport.ReleaseMouseCapture();
-		GraphViewport.Cursor = Cursors.Arrow;
+        _isPanning = false;
+        // Visibility changes can arrive while the XAML name scope is initializing.
+        if (GraphViewport is not { } viewport) return;
+        if (viewport.IsMouseCaptured) viewport.ReleaseMouseCapture();
+        viewport.Cursor = Cursors.Arrow;
 	}
     private void OnNodeSelectionModifiers(object sender, MouseButtonEventArgs e)
     {
