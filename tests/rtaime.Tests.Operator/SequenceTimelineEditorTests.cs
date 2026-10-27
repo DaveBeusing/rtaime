@@ -209,6 +209,16 @@ public sealed class SequenceTimelineEditorTests
         vm.Zoom = 2;
         Assert.InRange(Math.Abs(vm.CursorLeft - left), 0, 1);
         Assert.NotEmpty(vm.RulerMarks);
+        var marks = vm.RulerMarks;
+        vm.SelectClip(vm.Sequence!.Clips[0].ClipId);
+        Assert.Same(marks, vm.RulerMarks); // Selection does not rebuild WPF ruler items.
+        vm.EditCursorTick = 0;
+        vm.Scroll(0.9);
+        Assert.Equal(0, vm.CursorRulerOpacity);
+        Assert.Equal(0, vm.CursorTrackOpacity);
+        vm.PlaceCursor(100, 800);
+        Assert.Equal(1, vm.CursorRulerOpacity);
+        Assert.Equal(0.55, vm.CursorTrackOpacity);
         Assert.Equal(0, transport.CommittedEdits);
         Assert.Equal(0, transport.ProductionActions);
     }
