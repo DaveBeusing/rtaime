@@ -13,7 +13,7 @@ public partial class CompositingGraphControl : UserControl
 	private bool _isPanning;
 	private Point _lastPointer;
     private CompositingGraphNodeViewModel? _nodeDrag;
-    private UIElement? _nodeDragSource;
+    private FrameworkElement? _nodeDragSource;
     private Point _nodeDragPointer;
     private Point _dragStart;
     private CompositingGraphNodeViewModel? _dragLayer;
@@ -119,7 +119,7 @@ public partial class CompositingGraphControl : UserControl
     {
         if (ViewModel is not { } model) return;
         if ((Keyboard.Modifiers & ModifierKeys.Alt) == 0 ||
-            !model.IsSelectMode || sender is not UIElement source ||
+            !model.IsSelectMode || sender is not FrameworkElement source ||
             (sender as FrameworkElement)?.DataContext is not CompositingGraphNodeViewModel node)
         {
             model.ExtendSelection = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
