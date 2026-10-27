@@ -201,7 +201,7 @@ The verifier reports the exact source commit and releasePromotionPerformed = fal
 
 ## Current source boundary
 
-The planned version is `0.5.39` (`Directory.Build.props`); the source remains in release stage DEV.
+The planned version is `0.5.44` (`Directory.Build.props`, checked 27 October 2026); the source remains in release stage DEV. This is a documentation correction, not a new release or SemVer change.
 
 Production support governance does not change that identity.
 
