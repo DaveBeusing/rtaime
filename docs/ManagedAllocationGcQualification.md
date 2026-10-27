@@ -28,7 +28,7 @@ scratch-pool change must be qualified on its own exact commit; production Replay
 backpressure and continuity evidence must not be conflated with deck decode
 failure (see [Recording Foundation](RecordingFoundation.md)).
 
-The optional Windows qualification workflow `.github/workflows/replay-memory-qualification.yml`
+The existing Windows [Reference Media Regression](../.github/workflows/reference-media-regression.yml) SSD job
 runs both formats using the canonical `Invoke-SsdPlaybackQualification.ps1`
 runner, emits the sidecar alongside the original hashed media and TRX reports
 and fails on the **original** duration/memory/handle/continuity assertions.
