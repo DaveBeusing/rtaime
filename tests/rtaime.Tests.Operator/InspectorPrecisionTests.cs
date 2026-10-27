@@ -362,6 +362,95 @@ public sealed class InspectorPrecisionTests
     }
 
     [Fact]
+    public async Task Graph_fx_order_is_local_revision_bound_and_confirmed_only_after_explicit_apply()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.ShowAdvancedGraph = true;
+        var grade = graph.Nodes.Single(node => node.Id == "processing:bitmap-graphics:grade");
+        graph.SelectNodeCommand.Execute(grade);
+        var program = owner.ProgramSourceId;
+        var original = owner.CompositingLayers[0].ProcessingStack.Select(node => node.NodeId).ToArray();
+        Assert.True(graph.StageSelectedProcessingMove(1));
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.True(graph.HasFxOrderDraft);
+        Assert.Contains("NOT ON PROGRAM", graph.FxOrderEvidence);
+        Assert.Equal(original, owner.CompositingLayers[0].ProcessingStack.Select(node => node.NodeId));
+        Assert.True(graph.ApplyProcessingOrderDraftCommand.CanExecute(null));
+
+        transport.RevisionValue++;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.False(graph.ApplyProcessingOrderDraftCommand.CanExecute(null));
+        Assert.Contains("STALE FX ORDER", graph.FxOrderEvidence);
+        Assert.Equal(0, transport.MutationCalls);
+        graph.DiscardProcessingOrderDraft();
+        Assert.False(graph.HasFxOrderDraft);
+
+        Assert.True(graph.StageSelectedProcessingMove(1));
+        transport.Reject = true;
+        graph.ApplyProcessingOrderDraftCommand.Execute(null);
+        await UntilAsync(() => transport.MutationCalls == 1 && !owner.IsBusy &&
+            graph.FxOrderEvidence.Contains("REJECTED", StringComparison.Ordinal));
+        Assert.True(graph.HasFxOrderDraft);
+        Assert.Equal(original, owner.CompositingLayers[0].ProcessingStack.Select(node => node.NodeId));
+        Assert.Equal(program, owner.ProgramSourceId);
+
+        transport.Reject = false;
+        graph.ApplyProcessingOrderDraftCommand.Execute(null);
+        await UntilAsync(() => transport.MutationCalls == 2 && !owner.IsBusy && !graph.HasFxOrderDraft);
+        Assert.Equal(new[] { "key", "grade" },
+            owner.CompositingLayers[0].ProcessingStack.Select(node => node.NodeId));
+        Assert.Contains("RUNTIME OBSERVED", graph.FxOrderEvidence);
+        Assert.Same(grade, graph.SelectedNode);
+        Assert.Equal(program, owner.ProgramSourceId);
+    }
+
+    [Fact]
+    public async Task Graph_link_inspection_and_local_node_layout_never_mutate_program()
+    {
+        var transport = new InspectorTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
+        using var inspector = new MediaPoolInspectorViewModel(owner, deck);
+        owner.SynchronizeCommand.Execute(null);
+        using var graph = new CompositingGraphViewModel(owner, inspector);
+        graph.ShowAdvancedGraph = true;
+        graph.UpdateViewport(1600, 900);
+        var link = graph.Connections.Single(connection =>
+            connection.FromNodeId == "layer:bitmap-graphics" &&
+            connection.ToNodeId == "transform:bitmap-graphics");
+        graph.SelectConnection(link);
+        Assert.Same(link, graph.SelectedConnection);
+        Assert.True(link.IsSelected);
+        Assert.Contains("INSPECTION ONLY", graph.ConnectionEvidence);
+        Assert.Equal("transform:bitmap-graphics", graph.SelectedNode?.Id);
+
+        var node = graph.SelectedNode!;
+        var before = (node.X, node.Y);
+        var geometry = link.Geometry;
+        Assert.True(graph.TryMoveNode(node, 32, 16));
+        Assert.NotEqual(before, (node.X, node.Y));
+        Assert.NotSame(geometry, link.Geometry);
+        graph.Refresh();
+        Assert.Same(node, graph.SelectedNode);
+        Assert.Same(link, graph.SelectedConnection);
+        Assert.Equal(0, transport.MutationCalls);
+        graph.AutoLayout();
+        Assert.Contains("AUTO LAYOUT", graph.LayoutEvidence);
+        graph.ShowAdvancedGraph = false;
+        Assert.Empty(graph.VisibleConnections);
+        Assert.Empty(graph.VisibleNodes);
+        Assert.Null(graph.SelectedConnection);
+        Assert.Equal(0, transport.MutationCalls);
+    }
+
+    [Fact]
     public async Task Compositing_missing_bitmap_retains_selection_and_dirty_intent_until_identity_returns()
     {
         var transport = new InspectorTransport();
@@ -546,6 +635,22 @@ public sealed class InspectorPrecisionTests
 				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(RevisionValue), new ProductionRoutingState(_source, RemoteCut ? OtherSource : _source)),
 				[new(_source.ToString(), "Camera"), new(OtherSource.ToString(), "Camera 2")], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0,
 				compositingLayers: Layers, audioInputs: [Audio(SourceId), Audio(OtherSource.ToString())]));
+
+        public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingStackAsync(
+            string layerId, IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack,
+            CancellationToken cancellationToken = default)
+        {
+            MutationCalls++;
+            if (Reject) throw new InvalidOperationException("control.processing.rejected");
+            if (layerId != _layer.LayerId) throw new InvalidOperationException("Unexpected layer identity");
+            _layer = new(_layer.LayerId, _layer.Kind, _layer.Order, _layer.Visible, _layer.Opacity,
+                _layer.PositionX, _layer.PositionY, _layer.Scale, _layer.ContentIdentity,
+                _layer.RotationDegrees, _layer.AnchorX, _layer.AnchorY,
+                _layer.CropLeft, _layer.CropTop, _layer.CropRight, _layer.CropBottom,
+                processingStack: processingStack);
+            RevisionValue++;
+            return ValueTask.FromResult(Layers);
+        }
 
         public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
             string layerId, bool visible, byte opacity, CancellationToken cancellationToken = default)

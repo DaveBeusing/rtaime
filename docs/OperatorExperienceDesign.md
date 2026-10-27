@@ -188,6 +188,24 @@ Source changes alone are not visual acceptance: physical mixed-DPI, keyboard
 focus review, screen-reader behavior and high-contrast review remain subject to
 real Windows evidence in `docs/OperatorVisualQualification.md`.
 
+### Controlled Compositing graph authoring
+
+The layer-first COMPOSITING workflow retains its single Inspector and
+authoritative Runtime layer model. Optional ADVANCED GRAPH adds selected-link
+inspection, local node arrangement, per-node static-edit capability text
+and an explicit revision-bound FX-order draft/Apply/Discard sequence.
+Connection endpoints and projected graph cycles are validated before
+presenting links as observed execution. Free rewiring and unexecuted
+keyframe animation remain clearly unavailable.
+
+Pointer Alt+drag and focused Ctrl+Arrow movement affect only the local
+graph canvas. The original Preview owner, routing, source/generation
+identity, Layer/Scene/Cue commands, support status and persisted shell layout
+remain unchanged. Collapsed graphs clear offscreen visuals and release pointer
+capture. A draft is never represented as committed Program; only a matching
+Control/Runtime observation can confirm the actual reordered processing
+stack. Physical display/monitor acceptance remains evidence-bound.
+
 ## Interaction and production safety
 
 The shared state sequence is **local selection/draft → explicit request → pending response → synchronized authority → execution/provider evidence where supplied**. Those stages are not interchangeable. An accepted response alone is not proof of physical output delivery.
