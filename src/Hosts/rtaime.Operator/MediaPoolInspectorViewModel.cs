@@ -380,6 +380,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 				return;
 			if (_hoverKey is not null && value?.Key != _hoverKey)
 				CancelHover();
+            ReconcileMediaReviewContext();
 			_timelineItem = null;
 			_timelineItems.Clear();
 			_timelineCue = null;
@@ -681,6 +682,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
         if (recordVisit && SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
+        ReconcileMediaReviewContext();
 	}
 
 
@@ -693,6 +695,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		CatalogObservedAtUtc = DateTimeOffset.UtcNow;
 		OnPropertyChanged(nameof(CatalogEvidence));
 		OnPropertyChanged(nameof(CatalogObservedAtUtc));
+        ReconcileMediaReviewContext();
 	}
 
 	public async Task LoadCatalogAsync()
@@ -934,6 +937,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		Library.Refresh(_operator, _mediaDeck, _catalogSnapshot, AssetPreparationState);
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
+        ReconcileMediaReviewContext();
         RefreshInspectorDraftContext();
 		RaiseTestSignalState();
 	}
