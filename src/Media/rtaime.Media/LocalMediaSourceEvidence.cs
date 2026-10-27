@@ -21,7 +21,8 @@ internal static class LocalMediaSourceEvidence
             : $"entry {source.AudioSampleEntry}, " +
               $"{source.AudioChannels?.ToString() ?? "?"}ch, " +
               $"{source.AudioSampleRateHz?.ToString() ?? "?"}Hz, " +
-              $"{source.AudioSampleSizeBits?.ToString() ?? "?"}-bit declared";
+              $"{source.AudioSampleSizeBits?.ToString() ?? "?"}-bit declared, " +
+              $"audio timebase 1/{source.AudioTimeScale?.ToString() ?? "?"}";
         return $"SOURCE {source.Container}/{source.SampleEntry} {source.VideoCodec?.ToString() ?? "UNKNOWN"} " +
                $"profile {source.Profile?.ToString() ?? "?"} {source.BitDepth?.ToString() ?? "?"}-bit " +
                $"chroma {source.ChromaFormat?.ToString() ?? "?"}, " +
