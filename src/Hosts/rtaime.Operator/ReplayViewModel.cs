@@ -174,10 +174,11 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 			OnPropertyChanged(nameof(ClipResult));
 		});
 
-	private async Task CreateClipAsync() =>
-		await RunAsync(async () =>
-		{
-            if (!CanCreateClip) return;
+	private async Task CreateClipAsync()
+    {
+        if (!CanCreateClip) return;
+        await RunAsync(async () =>
+        {
             var requestedName = ClipName.Trim();
             ReplayClipAssetResult result;
             try
@@ -202,6 +203,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 			OnPropertyChanged(nameof(ClipResult));
 			OnPropertyChanged(nameof(CanOpenClip));
 		});
+    }
 
 	private async Task OpenInMediaDeckAsync() =>
 		await RunAsync(async () =>
