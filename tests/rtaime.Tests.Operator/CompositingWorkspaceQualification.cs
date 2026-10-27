@@ -89,6 +89,13 @@ internal static class CompositingWorkspaceQualification
             Assert.True(viewport.IsVisible);
             Assert.InRange(graph.LayerPanelWidth, 0, 220);
             Assert.Same(savedSelection, graph.SelectedNode);
+            Assert.Same(graph.ApplyProcessingOrderDraftCommand,
+                Assert.IsType<RtaimeButton>(control.FindName("ApplyFxOrderButton")).Command);
+            Assert.Same(graph.DiscardProcessingOrderDraftCommand,
+                Assert.IsType<RtaimeButton>(control.FindName("DiscardFxOrderButton")).Command);
+            Assert.Contains(graph.Nodes, node => node.Projection.Kind == CompositingGraphNodeKind.Processing &&
+                node.CapabilityLabel.Contains("STATIC FX", StringComparison.Ordinal));
+            Assert.Contains("READ ONLY", graph.TopologyEvidence);
             graph.CollapseLayerCommand.Execute(graph.Layers[0]);
             Assert.True(graph.Layers[0].IsCollapsed);
             graph.Fit();
@@ -103,6 +110,14 @@ internal static class CompositingWorkspaceQualification
             Assert.False(viewport.IsVisible);
             Assert.True(graph.LayerPanelWidth > 220);
             Assert.Same(savedSelection, graph.SelectedNode);
+            // Repeated opening must not retain realized offscreen graph elements.
+            for (var iteration = 0; iteration < 12; iteration++)
+            {
+                graph.ShowAdvancedGraph = true;
+                graph.ShowAdvancedGraph = false;
+                Assert.Empty(graph.VisibleNodes);
+                Assert.Empty(graph.VisibleConnections);
+            }
             Assert.Same(monitoring, window.Monitoring);
             Assert.Equal(0, transport.MutationCalls);
             Console.WriteLine("COMPOSITING WORKSPACE PASS: productive controls, precision drafts/undo, stable refresh, filter, finite layer virtualization, compact bounds and shared High Contrast/Reduced Motion; production authority unchanged.");
