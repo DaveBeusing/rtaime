@@ -95,7 +95,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 	public bool CanMark => !IsBusy && !_clipOutcomeUnknown &&
         _snapshot.ClipState != ReplayControlClipState.Finalizing &&
         _snapshot.CaptureState is ReplayControlCaptureState.Capturing or ReplayControlCaptureState.Degraded;
-	public bool CanCreateClip => !IsBusy && !_clipOutcomeUnknown && !_mustMarkNewRange &&
+	public bool CanCreateClip => !IsBusy && _lastClip is null && !_clipOutcomeUnknown && !_mustMarkNewRange &&
         _snapshot.ClipState == ReplayControlClipState.Marked &&
         _snapshot.HasSelection && _snapshot.MarkIn >= TimeSpan.Zero &&
         _snapshot.SelectedDuration <= _snapshot.RetainedDuration &&
