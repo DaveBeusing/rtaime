@@ -45,15 +45,26 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     public Visibility GraphVisibility => _reviewSelected ? Visibility.Collapsed : Visibility.Visible;
     public Visibility ReviewVisibility => _reviewSelected ? Visibility.Visible : Visibility.Collapsed;
     public string ModeLabel => _reviewSelected ? "COLOR REVIEW" : "LAYER / GRAPH";
-    public Visibility CompareVisibility => _monitoring.CompareMode == MediaCompareMode.Off
-        ? Visibility.Collapsed : Visibility.Visible;
+    public bool BothComparisonSourcesLive => _monitoring.ProgramState == "LIVE" &&
+        _monitoring.PreviewState == "LIVE";
+    public Visibility CompareVisibility => _monitoring.CompareMode != MediaCompareMode.Off &&
+        BothComparisonSourcesLive ? Visibility.Visible : Visibility.Collapsed;
     public Visibility CpuCompareVisibility => _monitoring.CompareMode != MediaCompareMode.Off &&
-        !_monitoring.IsGpuComparisonActive ? Visibility.Visible : Visibility.Collapsed;
+        BothComparisonSourcesLive && !_monitoring.IsGpuComparisonActive
+            ? Visibility.Visible : Visibility.Collapsed;
+    public System.Windows.Media.ImageSource? ConfirmedProgramImage => BothComparisonSourcesLive
+        ? _monitoring.ProgramImage : null;
+    public System.Windows.Media.ImageSource? ConfirmedPreviewImage => BothComparisonSourcesLive
+        ? _monitoring.PreviewImage : null;
+    public OperatorGpuMonitoringFrame? ConfirmedProgramGpuFrame => BothComparisonSourcesLive
+        ? _monitoring.ProgramGpuFrame : null;
+    public OperatorGpuMonitoringFrame? ConfirmedPreviewGpuFrame => BothComparisonSourcesLive
+        ? _monitoring.PreviewGpuFrame : null;
     public MonitoringStreamKind ScopeSource => _selectedSource;
     public bool IsPreviewScope => _selectedSource == MonitoringStreamKind.Preview;
-    public bool AnalysisEnabled => _scopeLease && _monitoring.ScopesEnabled;
-    public OperatorGpuMonitoringFrame? SelectedScopeGpuFrame => IsPreviewScope
-        ? _monitoring.PreviewGpuFrame : _monitoring.ProgramGpuFrame;
+    public bool AnalysisEnabled => _scopeLease && _monitoring.ScopesEnabled && IsSelectedObservationLive;
+    public OperatorGpuMonitoringFrame? SelectedScopeGpuFrame => !AnalysisEnabled ? null :
+        IsPreviewScope ? _monitoring.PreviewGpuFrame : _monitoring.ProgramGpuFrame;
     public MediaScopeSnapshot? SelectedScopes
     {
         get
@@ -157,7 +168,10 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     private void NotifyReview() => Notify(nameof(ScopeSource), nameof(IsPreviewScope),
         nameof(AnalysisEnabled), nameof(SelectedScopeGpuFrame), nameof(SelectedScopes),
         nameof(ScopeSourceLabel), nameof(ScopeFrameLabel), nameof(ColorBasisLabel),
-        nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility));
+        nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility),
+        nameof(BothComparisonSourcesLive), nameof(ConfirmedProgramImage),
+        nameof(ConfirmedPreviewImage), nameof(ConfirmedProgramGpuFrame),
+        nameof(ConfirmedPreviewGpuFrame));
 
     private void Notify(params string[] properties)
     {
