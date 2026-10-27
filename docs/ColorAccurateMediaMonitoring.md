@@ -25,3 +25,11 @@ The GPU path performs the color transform during presentation sampling. It does 
 Contract tests cover color metadata and shared-resource interop round trips. Operator tests cover unknown passthrough, full-range sRGB identity and Rec.709 limited-range black/white endpoints. Geometry and presentation tests qualify physical-pixel placement independently from the graphics device.
 
 Physical GPU/WPF color equivalence, calibrated monitor output, creative grading, LUT authoring and HDR behavior remain outside software-only CI and require dedicated reference-hardware/display qualification.
+
+## Operator Color Review workflow
+
+The existing COMPOSITING destination now contains a reversible **LAYERS / GRAPH** versus **COLOR REVIEW** presentation mode. The review view borrows the confirmed Program and Preview frame identities, the existing GPU/CPU monitoring fallbacks, the shared ROI/zoom pixel-inspection control, and the single validated Inspector Color Grade editing flow. **Program A / confirmed Preview B** split, wipe and Difference are read-only monitoring comparisons; unavailable metadata or incompatible resources retain the existing explicit compare rejection and CPU fallback behavior.
+
+Each of the four color scopes displays the selected source's evidence-bound snapshot: histogram, luma waveform, RGB parade and vectorscope. The selected source format and sampled frame sequence are visible, and incomplete color semantics explicitly disable vectorscope rather than inferring primaries, transfer, matrix or range. ROI remains a source-pixel inspection, not a production crop. Brightness (-1..1), Contrast (0..2) and Saturation (0..2) are edited only through the existing bounded Color Grade processing-node draft in the shared Inspector; **Apply** still uses its original authorized ControlHost path. A missing or unsupported grade node shows guidance instead of a false local preview or uncommitted grading effect.
+
+Software tests and real UI qualification for the new mode are **PENDING** on its exact final PR head. Monitor calibration, physical output color accuracy, creative LUT authoring, and HDR-grade/output support remain **UNVERIFIED**; the UI makes no such claim.
