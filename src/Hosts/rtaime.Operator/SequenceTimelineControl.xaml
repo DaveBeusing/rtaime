@@ -124,6 +124,16 @@
                             </Style>
                         </controls:RtaimeScrollViewer.Style>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="7,2">
+                    <controls:RtaimeButton Content="SELECT" Command="{Binding SelectToolCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="V · Select without changing clips." />
+                    <controls:RtaimeButton Content="MOVE" Command="{Binding MoveToolCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="M · Drag clip body to move linked clips." />
+                    <controls:RtaimeButton Content="TRIM" Command="{Binding TrimToolCommand}"
+                        IsCompact="True" Margin="0,0,4,0" ToolTip="T · Drag start or end handles (9 px)." />
+                    <TextBlock Text="{Binding ToolLabel}" Style="{StaticResource OperatorLabel}"
+                        VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <controls:RtaimeButton Content="CLEAR DRAFT" Command="{Binding DiscardDraftCommand}"
+                        IsCompact="True" Margin="0,0,8,0" ToolTip="Discard a rejected draft without resubmitting." />
                     <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
                         IsCompact="True" Margin="0,0,4,0" ToolTip="Undo persisted sequence transaction (ControlHost)." />
                     <controls:RtaimeButton Content="REDO" Command="{Binding RedoCommand}"
@@ -149,7 +159,17 @@
                     <controls:RtaimeButton Content="MUTE" Command="{Binding ToggleTrackMuteCommand}"
                         IsCompact="True" Margin="0,0,8,0" ToolTip="Persist mute state of selected track." />
                     <controls:RtaimeButton Content="PCM" Command="{Binding WaveformCommand}"
-                        IsCompact="True" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
+                        IsCompact="True" Margin="0,0,9,0" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
+                    <controls:RtaimeButton Content="◀ TIME" Command="{Binding ScrollBackwardCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Scroll visible sequence left." />
+                    <controls:RtaimeButton Content="−" Command="{Binding ZoomOutCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom out around edit cursor." />
+                    <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Fit all authored clips." />
+                    <controls:RtaimeButton Content="+" Command="{Binding ZoomInCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom in around edit cursor." />
+                    <controls:RtaimeButton Content="TIME ▶" Command="{Binding ScrollForwardCommand}"
+                        IsCompact="True" ToolTip="Scroll visible sequence right." />
                 </StackPanel>
                     </controls:RtaimeScrollViewer>
                     <DockPanel LastChildFill="True">
