@@ -376,6 +376,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		get => _selectedItem;
 		set
 		{
+                if (ReferenceEquals(_selectedItem, value)) return;
             if (ShouldSuppressInspectorSelection(value?.Key)) return;
 			if (!Set(ref _selectedItem, value))
 				return;
@@ -927,9 +928,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 	public void ClearTimelineSelection()
 	{
-        if (ShouldSuppressInspectorSelection("none")) return;
 		if (_timelineItem is null && _timelineItems.Count == 0 && _timelineCue is null)
 			return;
+        if (ShouldSuppressInspectorSelection("none")) return;
 		_timelineItem = null;
 		_timelineItems.Clear();
 		_timelineCue = null;
