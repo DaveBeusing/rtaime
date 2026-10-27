@@ -882,7 +882,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         var end = nextTick / authoredTicksPerPcmSample;
         var count = end - first;
         if (first < 0 || first > ulong.MaxValue ||
-            count is < 1 or > SequenceFrameComposition.MaximumAudioSamples)
+            count < 1 || count > SequenceFrameComposition.MaximumAudioSamples)
             throw new InvalidOperationException(
                 "Sequence frame rate requires a larger native PCM window than admitted.");
         return ((ulong)first, (uint)count);
@@ -900,8 +900,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             stereo.Length != checked((int)frameSamples * 2))
             throw new ArgumentException("Invalid bounded stereo source PCM slice.");
         var exclusiveEndSample = ((Int128)sliceEndTick + 4) / 5;
-        var available = Math.Clamp(exclusiveEndSample - sourceStartSample,
-            0, (Int128)frameSamples);
+        var available = exclusiveEndSample - (Int128)sourceStartSample;
+        if (available < 0) available = 0;
+        if (available > frameSamples) available = frameSamples;
         var count = (int)frameSamples - (int)available;
         if (count > 0)
             stereo[((int)available * 2)..].Clear();
