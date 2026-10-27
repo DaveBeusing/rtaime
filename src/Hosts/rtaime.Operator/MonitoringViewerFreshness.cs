@@ -15,6 +15,7 @@ internal sealed class MonitoringViewerFreshness
 	private DateTimeOffset _lastReceipt;
 	private ulong _lastSequence;
 	private bool _hasSequence;
+	private string? _providerInstanceId;
 
 	internal void SelectSource(string sourceId, long routeVersion, long connectionEpoch)
 	{
@@ -24,9 +25,11 @@ internal sealed class MonitoringViewerFreshness
 		_lastReceipt = default;
 		_lastSequence = 0;
 		_hasSequence = false;
+		_providerInstanceId = null;
 	}
 
-	internal bool Observe(string sourceId, long routeVersion, long connectionEpoch, DateTimeOffset receivedAt, ulong sequenceNumber)
+	internal bool Observe(string sourceId, long routeVersion, long connectionEpoch, DateTimeOffset receivedAt, ulong sequenceNumber,
+		string? providerInstanceId = null)
 	{
 		if (!string.Equals(sourceId, _sourceId, StringComparison.Ordinal) ||
 			routeVersion != _routeVersion ||
@@ -34,11 +37,18 @@ internal sealed class MonitoringViewerFreshness
 			receivedAt == default)
 			return false;
 
-		// Delayed/reordered observations must not revive or age a newer viewer.
-		if (receivedAt < _lastReceipt || (_hasSequence && sequenceNumber <= _lastSequence))
+		// A provider restart establishes a new sequence epoch even if the
+		// monitoring pipe remains connected. Reordered receipts stay rejected.
+		if (receivedAt < _lastReceipt)
+			return false;
+		var providerChanged = providerInstanceId is not null &&
+			!string.Equals(providerInstanceId, _providerInstanceId, StringComparison.Ordinal);
+		if (_hasSequence && !providerChanged && sequenceNumber <= _lastSequence)
 			return false;
 
 		_lastReceipt = receivedAt;
+		if (providerInstanceId is not null)
+			_providerInstanceId = providerInstanceId;
 		_lastSequence = sequenceNumber;
 		_hasSequence = true;
 		return true;
