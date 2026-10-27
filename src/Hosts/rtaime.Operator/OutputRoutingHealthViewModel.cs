@@ -57,6 +57,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly OutputStatusViewModel _cleanProgram;
 	private readonly Dictionary<string, PerformanceMetricViewModel> _metrics;
 	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
+	private readonly Dictionary<string, SenderRateObservation> _senderRates = new(StringComparer.Ordinal);
+	private sealed record SenderRateObservation(
+		string SafeTarget, ulong? ControlRevision, ulong? RuntimeRevision,
+		ulong BytesSent, DateTimeOffset ObservedAt, double? BytesPerSecond);
 	private OutputStatusViewModel? _selectedOutput;
 	private bool _disposed;
 	private bool _isCanvasMode;
@@ -158,10 +162,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public PerformanceMetricViewModel TemperatureMetric => _metrics["temperature"];
 	public ICommand RoutePreviewToProgramCommand => _control.CutCommand;
 	// Network transmission is a Runtime observation, never an Operator command state.
-	public string ProgramTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
-	public string AuxTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
-	public string ProgramTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
-	public string AuxTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
+	public string ProgramTransmissionState => TransmissionStateForRole(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program"),
+		_control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
+	public string AuxTransmissionState => TransmissionStateForRole(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux"),
+		_control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
+	public string ProgramTransmissionDetail => TransmissionDetail(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program"));
+	public string AuxTransmissionDetail => TransmissionDetail(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux"));
 
 
 	public OutputStatusViewModel? SelectedOutput
@@ -207,6 +217,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private void Refresh(bool sampleHistory)
 	{
+		if (sampleHistory) RefreshSenderRates(DateTimeOffset.UtcNow);
 		var format = ParseFormat(_control.CurrentFormat);
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
 		var performanceEvidence = ResolvePerformanceEvidence(runtimeEvidence);
@@ -221,6 +232,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var programRole = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "program", StringComparison.Ordinal));
 		var programNetwork = programRole?.NetworkOutput;
+		var programNetworks = programRole?.NetworkOutputs ?? [];
 		var programEvidence = RoleEvidence(programRole, _control.IsConnected, _control.IsStale, runtimeEvidence);
 		var programTarget = programRole is null
 			? Unavailable
@@ -238,15 +250,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			colorSpace: Unavailable,
 			status: ToOperatorStatus(programEvidence),
 			evidenceState: programEvidence,
-			detail: AppendNetworkDetail(programDetail, programNetwork),
+			detail: AppendNetworkDetail(programDetail, programRole),
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
-			streamingStatus: ResolveStreamingStatus(programNetwork),
-			streamingTarget: programNetwork?.SafeTargetIdentity ?? Unavailable,
-			streamingProvider: programNetwork is null ? Unavailable : $"{programNetwork.Provider} · {programNetwork.Protocol}",
-			streamingBitrate: FormatNetworkBitrate(programNetwork),
-			streamingQueue: FormatNetworkQueue(programNetwork),
-			streamingDrops: FormatNetworkDrops(programNetwork),
-			streamingReconnects: programNetwork?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
+			streamingStatus: TransmissionStateForRole(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow),
+			streamingTarget: FormatTargetIdentities(programNetworks),
+			streamingProvider: FormatTargetProviders(programNetworks),
+			streamingBitrate: programNetworks.Count == 1 ? FormatNetworkBitrate(programNetwork) : "SEE PER-TARGET CAPABILITIES",
+			streamingQueue: FormatNetworkQueue(programNetworks),
+			streamingDrops: FormatNetworkDrops(programNetworks),
+			streamingReconnects: FormatNetworkReconnects(programNetworks));
+		_program.UpdateNetworkTargets(ProjectNetworkTargets(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow, SnapshotSenderRates()));
 
 		var previewEvidence = !_control.IsConnected || _control.IsStale
 			? "UNVERIFIED" : NormalizeEvidence(_control.ControlHealth);
@@ -270,6 +283,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingDrops: Unavailable,
 			streamingReconnects: Unavailable);
 
+		_preview.UpdateNetworkTargets([]);
 		var aux = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "aux", StringComparison.Ordinal));
 		if (aux is null)
@@ -292,6 +306,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				streamingQueue: Unavailable,
 				streamingDrops: Unavailable,
 				streamingReconnects: Unavailable);
+			_aux.UpdateNetworkTargets([]);
 		}
 		else
 		{
@@ -312,15 +327,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				colorSpace: Unavailable,
 				status: ToOperatorStatus(evidence),
 				evidenceState: evidence,
-				detail: AppendNetworkDetail(detail, aux.NetworkOutput),
+				detail: AppendNetworkDetail(detail, aux),
 				recordingStatus: Unavailable,
-				streamingStatus: ResolveStreamingStatus(aux.NetworkOutput),
-				streamingTarget: aux.NetworkOutput?.SafeTargetIdentity ?? Unavailable,
-				streamingProvider: aux.NetworkOutput is null ? Unavailable : $"{aux.NetworkOutput.Provider} · {aux.NetworkOutput.Protocol}",
-				streamingBitrate: FormatNetworkBitrate(aux.NetworkOutput),
-				streamingQueue: FormatNetworkQueue(aux.NetworkOutput),
-				streamingDrops: FormatNetworkDrops(aux.NetworkOutput),
-				streamingReconnects: aux.NetworkOutput?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
+				streamingStatus: TransmissionStateForRole(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow),
+				streamingTarget: FormatTargetIdentities(aux.NetworkOutputs),
+				streamingProvider: FormatTargetProviders(aux.NetworkOutputs),
+				streamingBitrate: aux.NetworkOutputs.Count == 1 ? FormatNetworkBitrate(aux.NetworkOutput) : "SEE PER-TARGET CAPABILITIES",
+				streamingQueue: FormatNetworkQueue(aux.NetworkOutputs),
+				streamingDrops: FormatNetworkDrops(aux.NetworkOutputs),
+				streamingReconnects: FormatNetworkReconnects(aux.NetworkOutputs));
+			_aux.UpdateNetworkTargets(ProjectNetworkTargets(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow, SnapshotSenderRates()));
 		}
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
@@ -344,6 +360,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingDrops: Unavailable,
 			streamingReconnects: Unavailable);
 
+		_cleanProgram.UpdateNetworkTargets([]);
 		var hasRuntimePerformance = NormalizeAvailability(_control.CurrentFormat) != Unavailable &&
 			NormalizeAvailability(_control.FrameTime) != Unavailable;
 		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
@@ -420,28 +437,25 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			null,
 			sampleHistory);
 		var networkOutputs = _control.OutputRoles
-			.Select(role => role.NetworkOutput)
-			.Where(output => output is not null)
-			.Cast<OperatorNetworkOutputDescriptor>()
-			.ToArray();
-		var connectedNetworkOutputs = networkOutputs.Count(output => output.Connected);
+			.SelectMany(role => role.NetworkOutputs.Select(output => (Role: role, Output: output))).ToArray();
+		var now = DateTimeOffset.UtcNow;
+		var networkStates = networkOutputs
+			.Select(entry => TransmissionStateForRoleTarget(entry.Role, entry.Output,
+				_control.IsConnected, _control.IsStale, now)).ToArray();
+		var locallySending = networkStates.Count(state => state == "LIVE");
 		var networkEvidence = networkOutputs.Length == 0
-			? "UNVERIFIED"
-			: networkOutputs.Any(output => output.Failure is not null)
-				? "FAIL"
-				: connectedNetworkOutputs == networkOutputs.Length
-					? "PASS"
-					: "UNVERIFIED";
+			? "UNVERIFIED" : networkStates.Any(state => state == "FAILED")
+				? "FAIL" : locallySending == networkOutputs.Length ? "PASS" : "UNVERIFIED";
 		var networkValue = networkOutputs.Length == 0
 			? Unavailable
-			: $"{connectedNetworkOutputs}/{networkOutputs.Length} LIVE";
+			: $"{locallySending}/{networkOutputs.Length} SENDER ACTIVE";
 		UpdateMetric(
 			"network",
 			networkValue,
 			networkEvidence,
 			networkOutputs.Length == 0
 				? "No governed network output is configured."
-				: $"Runtime/provider evidence: {networkOutputs.Sum(output => (decimal)output.BytesSent):N0} bytes sent, {networkOutputs.Sum(output => (decimal)output.DroppedSamples):N0} dropped and {networkOutputs.Sum(output => (decimal)output.RejectedSamples):N0} rejected samples.",
+				: $"Runtime/provider evidence: {networkOutputs.Sum(entry => (decimal)entry.Output.BytesSent):N0} local bytes sent, {networkOutputs.Sum(entry => (decimal)entry.Output.DroppedSamples):N0} dropped and {networkOutputs.Sum(entry => (decimal)entry.Output.RejectedSamples):N0} rejected samples. Physical receiver delivery unverified.",
 			null,
 			sampleHistory);
 		UpdateMetric(
@@ -493,75 +507,187 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private static readonly TimeSpan SendFreshnessLimit = TimeSpan.FromSeconds(5);
 
-	private string TransmissionState(OperatorNetworkOutputDescriptor? output) =>
-		TransmissionState(output, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
-
 	internal static string TransmissionState(
 		OperatorNetworkOutputDescriptor? output, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (!connected || stale)
-			return "OFFLINE";
-		if (output is null)
-			return "OFFLINE";
-		if (output.Failure is not null)
-			return "FAILED";
+		if (!connected || stale) return "OFFLINE";
+		if (output is null) return "OFFLINE";
+		if (output.Failure is not null || output.Lifecycle == "FAULTED") return "FAILED";
 		var lifecycle = output.Lifecycle.ToUpperInvariant();
 		if (lifecycle is "STOPPING" or "STOPPED" or "DISPOSING")
 			return lifecycle == "STOPPED" ? "OFFLINE" : "STOPPING";
-		if (lifecycle is "RECONNECTING" or "RETRYING")
-			return "RECONNECTING";
-		if (lifecycle is "CONNECTING" or "STARTING" or "INITIALIZING")
-			return "CONNECTING";
-		if (!output.Connected || lifecycle != "CONNECTED")
-			return "OFFLINE";
-		var send = output.LastSuccessfulSendUtc;
-		var age = send is null ? TimeSpan.MaxValue : now - send.Value;
-		if (age < TimeSpan.Zero || age > SendFreshnessLimit)
-			return "DEGRADED";
-		return output.DroppedSamples > 0 || output.RejectedSamples > 0
-			? "DEGRADED"
-			: "LIVE";
+		if (lifecycle is "RECONNECTING" or "RETRYING") return "RECONNECTING";
+		if (lifecycle is "CONNECTING" or "STARTING" or "INITIALIZING") return "CONNECTING";
+		if (!output.Connected || lifecycle != "CONNECTED") return "UNKNOWN";
+		if (output.LastSuccessfulSendUtc is not { } sent || now < sent) return "UNKNOWN";
+		if (now - sent > SendFreshnessLimit) return "STALE";
+		return output.DroppedSamples > 0 || output.RejectedSamples > 0 ? "DEGRADED" : "LIVE";
 	}
 
-	private string TransmissionDetail(OperatorNetworkOutputDescriptor? output)
+	internal static string TransmissionStateForRole(
+		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (output is null)
-			return "No network output configured.";
-		var lastSend = output.LastSuccessfulSendUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never";
-		var failure = output.Failure is { } error ? $" {error.Code}: {error.Message}" : string.Empty;
-		return $"{output.Protocol} · {output.SafeTargetIdentity} · {TransmissionState(output)} · " +
-			$"{output.QueueDepth} queued · {output.DroppedSamples} dropped · {output.RejectedSamples} rejected · " +
-			$"{output.ReconnectCount} reconnects · {output.BytesSent} bytes sent · last send {lastSend}.{failure}";
+		if (!connected || stale || role is null || role.NetworkOutputs.Count == 0)
+			return "OFFLINE";
+		var states = role.NetworkOutputs.Select(target =>
+			TransmissionStateForRoleTarget(role, target, connected, stale, now)).ToArray();
+		if (states.All(state => state == "LIVE")) return "LIVE";
+		foreach (var state in new[] { "FAILED", "STALE", "RECONNECTING", "CONNECTING",
+			"DEGRADED", "UNKNOWN", "STOPPING" })
+			if (states.Contains(state, StringComparer.Ordinal)) return state;
+		return "OFFLINE";
 	}
 
-	private string ResolveStreamingStatus(OperatorNetworkOutputDescriptor? output) => TransmissionState(output);
+	// A local sender can still be sending an older Program source while Control
+	// rejects the current role. Do not promote that observation to current LIVE.
+	private static string TransmissionStateForRoleTarget(
+		OperatorOutputRoleDescriptor role, OperatorNetworkOutputDescriptor target,
+		bool connected, bool stale, DateTimeOffset now)
+	{
+		var senderState = TransmissionState(target, connected, stale, now);
+		if (!connected || stale) return "OFFLINE";
+		if (!role.AuthoritativeActive || role.HealthState != "PASS" ||
+			role.RuntimeExecutionRevision is null)
+			return senderState == "FAILED" ? "FAILED" : "UNKNOWN";
+		return senderState;
+	}
+
+	private string TransmissionDetail(OperatorOutputRoleDescriptor? role)
+	{
+		if (role is null || role.NetworkOutputs.Count == 0)
+			return "No network output configured.";
+		return $"{role.NetworkOutputs.Count} independently admitted sender(s) · " +
+			$"{TransmissionStateForRole(role, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow)} · " +
+			string.Join("; ", role.NetworkOutputs.Select(target =>
+			{
+				var last = target.LastSuccessfulSendUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never";
+				return $"{target.TargetId} {target.Protocol}/{target.Lifecycle}: {target.BytesSent:N0} local bytes, " +
+					$"queue {target.QueueDepth}, last provider send {last}" +
+					(target.Failure is { } failure ? $" · {failure.Code}" : "");
+			}));
+	}
+
+	private static string FormatTargetIdentities(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		targets.Count == 1 ? targets[0].SafeTargetIdentity : $"{targets.Count} separate targets";
+
+	private static string FormatTargetProviders(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		string.Join(" / ", targets.Select(target => target.Protocol).Distinct(StringComparer.OrdinalIgnoreCase));
 
 	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output)
 	{
-		if (output is null)
-			return Unavailable;
+		if (output is null) return Unavailable;
 		if (string.Equals(output.Protocol, "NDI", StringComparison.OrdinalIgnoreCase))
-			return "NDI High Bandwidth · 48 kHz Float32";
-		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + {output.AudioBitRate / 1_000d:0} kb/s AAC";
+			return "NDI High Bandwidth · 48 kHz Float32; encoded bitrate UNAVAILABLE";
+		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + " +
+			$"{output.AudioBitRate / 1_000d:0} kb/s AAC (configured)";
 	}
 
-	private static string FormatNetworkQueue(OperatorNetworkOutputDescriptor? output) =>
-		output is null ? Unavailable : $"{output.QueueDepth} queued";
+	private static string FormatNetworkQueue(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (long)target.QueueDepth)} queued across {targets.Count} targets";
 
-	private static string FormatNetworkDrops(OperatorNetworkOutputDescriptor? output) =>
-		output is null
-			? Unavailable
-			: $"{output.DroppedSamples} dropped · {output.RejectedSamples} rejected";
+	private static string FormatNetworkDrops(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (decimal)target.DroppedSamples):N0} dropped · " +
+		$"{targets.Sum(target => (decimal)target.RejectedSamples):N0} rejected";
 
-	private static string AppendNetworkDetail(string detail, OperatorNetworkOutputDescriptor? output)
+	private static string FormatNetworkReconnects(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (decimal)target.ReconnectCount):N0} total";
+
+	private string AppendNetworkDetail(string detail, OperatorOutputRoleDescriptor? role) =>
+		role is null || role.NetworkOutputs.Count == 0 ? detail :
+		$"{detail} Network send evidence: {TransmissionDetail(role)}. Receiver and physical output UNVERIFIED.";
+
+	internal static IReadOnlyList<OutputNetworkTargetPresentation> ProjectNetworkTargets(
+		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now,
+		IReadOnlyDictionary<string, double?>? measuredSenderRates = null)
 	{
-		if (output is null)
-			return detail;
-		var transport = $"{output.Protocol} {output.Lifecycle}; {output.SafeTargetIdentity}; queue {output.QueueDepth}; {output.DroppedSamples} dropped; {output.RejectedSamples} rejected; {output.ReconnectCount} reconnects.";
-		if (output.Failure is { } failure)
-			transport += $" {failure.Code}: {failure.Message}";
-		return $"{detail} Network output: {transport}";
+		if (role is null) return [];
+		var routeConfirmed = connected && !stale && role.AuthoritativeActive && role.HealthState == "PASS";
+		var output = new List<OutputNetworkTargetPresentation>(role.NetworkOutputs.Count);
+		foreach (var target in role.NetworkOutputs)
+		{
+			var senderState = TransmissionState(target, connected, stale, now);
+			var state = TransmissionStateForRoleTarget(role, target, connected, stale, now);
+			var age = target.LastSuccessfulSendUtc is { } sent && now >= sent
+				? $"{(now - sent).TotalSeconds:0.#} s" : "UNKNOWN";
+			var codec = target.Protocol == "NDI"
+				? "NDI High Bandwidth / Float32 · bitrate, peer latency UNAVAILABLE"
+				: $"{target.VideoCodec}/{target.AudioCodec} · configured " +
+					$"{target.VideoBitRate / 1_000_000d:0.##} Mb/s video · {target.LatencyMilliseconds} ms SRT latency";
+			var failure = target.Failure is { } reason ? $" · {reason.Code}: {reason.Message}" : string.Empty;
+			var rateKey = role.RoleId + ":" + target.TargetId;
+			var rate = state == "LIVE" && measuredSenderRates is not null &&
+				measuredSenderRates.TryGetValue(rateKey, out var observedRate) && observedRate is >= 0
+				? $" · measured local sender rate {observedRate.Value / 1024d:0.#} KiB/s"
+				: " · measured local sender rate UNVERIFIED";
+			output.Add(new OutputNetworkTargetPresentation(
+				target.TargetId, target.Protocol, target.SafeTargetIdentity,
+				$"CONTROL REV {(role.ControlRevision?.ToString(CultureInfo.InvariantCulture) ?? "UNAVAILABLE")} · " +
+					$"RUNTIME EXEC REV {(routeConfirmed ? role.RuntimeExecutionRevision?.ToString(CultureInfo.InvariantCulture) : null) ?? "UNVERIFIED"} · " +
+					$"SOURCE {role.SourceId}",
+				routeConfirmed ? "ROUTE CONFIRMED" : "ROUTE UNVERIFIED",
+				codec, state,
+				$"{target.BytesSent:N0} local sender bytes · {target.SentSamples:N0} submitted sends · " +
+				$"provider state {senderState}{rate} · " +
+					$"age {age} · queued {target.QueueDepth} · {target.DroppedSamples:N0} dropped / " +
+					$"{target.RejectedSamples:N0} rejected · {target.ReconnectCount} reconnects{failure}",
+				"PEER RECEPTION / PHYSICAL OUTPUT UNVERIFIED"));
+		}
+		return output.AsReadOnly();
 	}
+
+
+	internal static double? CalculateSenderRate(ulong priorBytes, ulong currentBytes, TimeSpan interval)
+	{
+		if (currentBytes < priorBytes || interval < TimeSpan.FromMilliseconds(250) ||
+			interval > TimeSpan.FromSeconds(15))
+			return null;
+		var rate = (double)(currentBytes - priorBytes) / interval.TotalSeconds;
+		return double.IsFinite(rate) ? rate : null;
+	}
+
+	private void RefreshSenderRates(DateTimeOffset now)
+	{
+		if (!_control.IsConnected || _control.IsStale)
+		{
+			_senderRates.Clear();
+			return;
+		}
+		var keys = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var role in _control.OutputRoles)
+		{
+			foreach (var target in role.NetworkOutputs)
+			{
+				var key = role.RoleId + ":" + target.TargetId;
+				keys.Add(key);
+				if (!role.AuthoritativeActive || role.HealthState != "PASS" ||
+					role.RuntimeExecutionRevision is null)
+				{
+					_senderRates.Remove(key);
+					continue;
+				}
+				double? rate = null;
+				if (_senderRates.TryGetValue(key, out var prior) &&
+					prior.SafeTarget == target.SafeTargetIdentity &&
+					prior.ControlRevision == role.ControlRevision &&
+					prior.RuntimeRevision == role.RuntimeExecutionRevision)
+				{
+					rate = CalculateSenderRate(prior.BytesSent, target.BytesSent, now - prior.ObservedAt);
+				}
+				_senderRates[key] = new SenderRateObservation(target.SafeTargetIdentity,
+					role.ControlRevision, role.RuntimeExecutionRevision, target.BytesSent, now, rate);
+			}
+		}
+		foreach (var key in _senderRates.Keys.Where(key => !keys.Contains(key)).ToArray())
+			_senderRates.Remove(key);
+	}
+
+	private IReadOnlyDictionary<string, double?> SnapshotSenderRates() =>
+		_senderRates.ToDictionary(pair => pair.Key, pair => pair.Value.BytesPerSecond, StringComparer.Ordinal);
 
 	private void UpdateSystemHealth(string key, string evidenceState)
 	{
@@ -845,6 +971,11 @@ public sealed class SystemHealthStatusViewModel : INotifyPropertyChanged
 	}
 }
 
+public sealed record OutputNetworkTargetPresentation(
+	string TargetId, string Protocol, string SafeTargetIdentity, string RouteRevision,
+	string RouteEvidence, string ConfiguredCapability, string TransmissionState,
+	string ProviderSendEvidence, string PhysicalEvidence);
+
 public sealed class OutputStatusViewModel : INotifyPropertyChanged
 {
 	private string _target = "UNAVAILABLE";
@@ -864,6 +995,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	private string _streamingQueue = "UNAVAILABLE";
 	private string _streamingDrops = "UNAVAILABLE";
 	private string _streamingReconnects = "UNAVAILABLE";
+	private IReadOnlyList<OutputNetworkTargetPresentation> _networkTargets = [];
 
 	public OutputStatusViewModel(string id, string name)
 	{
@@ -892,6 +1024,13 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	public string StreamingQueue { get => _streamingQueue; private set => Set(ref _streamingQueue, value); }
 	public string StreamingDrops { get => _streamingDrops; private set => Set(ref _streamingDrops, value); }
 	public string StreamingReconnects { get => _streamingReconnects; private set => Set(ref _streamingReconnects, value); }
+	public IReadOnlyList<OutputNetworkTargetPresentation> NetworkTargets
+	{
+		get => _networkTargets;
+		private set => Set(ref _networkTargets, value);
+	}
+	internal void UpdateNetworkTargets(IReadOnlyList<OutputNetworkTargetPresentation> targets) =>
+		NetworkTargets = targets ?? [];
 	public string OutputKind => Id switch
 	{
 		"program" => "GOVERNED PROGRAM ROLE · PHYSICAL SCAN-OUT UNVERIFIED",

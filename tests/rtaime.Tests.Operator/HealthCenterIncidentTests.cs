@@ -223,7 +223,7 @@ public sealed class HealthCenterIncidentTests
 
 	[Theory]
 	[InlineData("CONNECTED", true, 0, "LIVE")]
-	[InlineData("CONNECTED", true, 10, "DEGRADED")]
+	[InlineData("CONNECTED", true, 10, "STALE")]
 	[InlineData("RECONNECTING", false, 0, "RECONNECTING")]
 	[InlineData("STOPPED", false, 0, "OFFLINE")]
 	public void Transport_guidance_reuses_existing_send_freshness_and_lifecycle_semantics(
@@ -235,6 +235,81 @@ public sealed class HealthCenterIncidentTests
 			Start.AddSeconds(-ageSeconds), null);
 		Assert.Equal(expected, OutputRoutingHealthViewModel.TransmissionState(transport, true, false, Start));
 		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionState(transport, false, true, Start));
+	}
+
+
+	[Fact]
+	public void Multi_target_sender_health_does_not_hide_a_failed_or_stale_peer()
+	{
+		var healthy = new OperatorNetworkOutputDescriptor(
+			"program-srt", "srt", "SRT", "srt://example.test:9000/program",
+			"CONNECTED", true, "H264", "AACLC", 48000, 2, "FLOAT32",
+			12_000_000, 192_000, 120, 50, 50, 0, 0, 0, 100, 30000, 0,
+			Start, null);
+		var failed = new OperatorNetworkOutputDescriptor(
+			"program-ndi", "ndi", "NDI", "ndi://Program",
+			"FAULTED", false, "NDIHIGHBANDWIDTH", "FLOAT32", 48000, 2, "FLOAT32",
+			0, 0, 0, 50, 25, 1, 5, 2, 25, 18000, 0,
+			Start.AddSeconds(-10), new Failure("network.output.reconnect_exhausted", "Retry budget used."));
+		var role = new OperatorOutputRoleDescriptor(
+			"program", "PROGRAM", "source-id", "sink-id", "provider-id", 1920, 1080,
+			"50/1", "RGBA8", "1/50", "ACTIVE", true, "PASS", "Runtime has matching source evidence.",
+			null, healthy, "program", [healthy, failed], 25, 9);
+
+		Assert.Equal("FAILED", OutputRoutingHealthViewModel.TransmissionStateForRole(role, true, false, Start));
+		var targets = OutputRoutingHealthViewModel.ProjectNetworkTargets(role, true, false, Start);
+		Assert.Equal(2, targets.Count);
+		Assert.Equal("LIVE", targets[0].TransmissionState);
+		Assert.Equal("FAILED", targets[1].TransmissionState);
+		var measured = OutputRoutingHealthViewModel.ProjectNetworkTargets(role, true, false, Start,
+			new Dictionary<string, double?> { ["program:program-srt"] = 1024 });
+		Assert.Contains("1 KiB/s", measured[0].ProviderSendEvidence, StringComparison.Ordinal);
+		Assert.Contains("rate UNVERIFIED", measured[1].ProviderSendEvidence, StringComparison.Ordinal);
+		Assert.Contains("CONTROL REV 25", targets[0].RouteRevision, StringComparison.Ordinal);
+		Assert.Contains("RUNTIME EXEC REV 9", targets[0].RouteRevision, StringComparison.Ordinal);
+		Assert.Contains("SOURCE source-id", targets[0].RouteRevision, StringComparison.Ordinal);
+		Assert.Equal("ROUTE CONFIRMED", targets[0].RouteEvidence);
+		Assert.Contains("UNVERIFIED", targets[0].PhysicalEvidence, StringComparison.Ordinal);
+		Assert.Contains("UNAVAILABLE", targets[1].ConfiguredCapability, StringComparison.Ordinal);
+
+		// Simulate a current/connected NDI sender whose last successful
+		// publication has expired: it must not be counted as LIVE.
+		var stale = new OperatorNetworkOutputDescriptor(
+			"program-ndi", "ndi", "NDI", "ndi://Program", "CONNECTED", true,
+			"NDIHIGHBANDWIDTH", "FLOAT32", 48000, 2, "FLOAT32", 0, 0, 0,
+			50, 25, 0, 0, 0, 25, 18000, 0, Start.AddSeconds(-10), null);
+		var mixed = new OperatorOutputRoleDescriptor("program", "PROGRAM", "source-id",
+			"sink-id", "provider-id", 1920, 1080, "50/1", "RGBA8", "1/50",
+			"ACTIVE", true, "PASS", "Confirmed.", null, healthy, "program",
+			[healthy, stale], 25, 9);
+		Assert.Equal("STALE", OutputRoutingHealthViewModel.TransmissionStateForRole(mixed, true, false, Start));
+		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionStateForRole(role, false, true, Start));
+		Assert.Equal("ROUTE UNVERIFIED",
+			OutputRoutingHealthViewModel.ProjectNetworkTargets(role, false, true, Start)[0].RouteEvidence);
+		var unconfirmed = new OperatorOutputRoleDescriptor(
+			"program", "PROGRAM", "new-source", "new-sink", "provider-id", 1920, 1080,
+			"50/1", "RGBA8", "1/50", "ACTIVE", false, "UNVERIFIED",
+			"Runtime confirmation for this new route is pending.", null,
+			healthy, "program", [healthy], 26, null);
+		Assert.Equal("UNKNOWN", OutputRoutingHealthViewModel.TransmissionStateForRole(
+			unconfirmed, true, false, Start));
+		Assert.Equal("UNKNOWN", Assert.Single(OutputRoutingHealthViewModel.ProjectNetworkTargets(
+			unconfirmed, true, false, Start)).TransmissionState);
+	}
+
+	[Fact]
+	public void Measured_local_sender_rates_require_monotonic_bytes_and_a_bounded_observation_interval()
+	{
+		Assert.Equal(2048d, OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 3072, TimeSpan.FromSeconds(1)));
+		Assert.Equal(0d, OutputRoutingHealthViewModel.CalculateSenderRate(
+			4096, 4096, TimeSpan.FromSeconds(1)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			4096, 2048, TimeSpan.FromSeconds(1)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 2048, TimeSpan.FromMilliseconds(100)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 2048, TimeSpan.FromSeconds(20)));
 	}
 
 	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>

@@ -1710,7 +1710,9 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 		snapshot.Evidence,
 		snapshot.Error is null ? null : new Failure(snapshot.Error.Code, snapshot.Error.Message),
 		snapshot.NetworkOutput is null ? null : FromWire(snapshot.NetworkOutput, snapshot.Format),
-		snapshot.AudioBusId ?? AudioBusId.Program.Value);
+		snapshot.AudioBusId ?? AudioBusId.Program.Value,
+		snapshot.NetworkOutputs?.Select(target => FromWire(target, snapshot.Format)).ToArray(),
+		snapshot.RuntimeExecutionRevision);
 
 	private static NetworkOutputHealthSnapshot FromWire(WireNetworkOutput snapshot, WireVideoFormat videoFormat)
 	{
@@ -2193,7 +2195,7 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null, WireNetworkOutput[]? NetworkOutputs = null, ulong? RuntimeExecutionRevision = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);

@@ -170,13 +170,32 @@ Backpressure is represented through:
 
 Connection/runtime/send failures move the provider through connecting, reconnecting or faulted observational lifecycle states.
 
-Reconnect uses configured initial and maximum delays. A maximum-attempt value of zero means retry until shutdown where retry is meaningful; a positive value bounds attempts.
+Reconnect uses configured initial and maximum delays subject to a maximum effective automatic backoff of five seconds. A positive `reconnectMaximumAttempts` caps attempts within one failure episode; a configured zero is retained as a wire-compatible input but now uses a **finite safety default of eight attempts**, not unlimited retries. Independently, each episode has a 45-second elapsed budget, and SRT connect/encoder initialization has an eight-second per-attempt cancellation budget. These bounds do not certify cancellation of a noncooperative native SDK call; ownership is retained until cleanup is confirmed.
 
 Runtime-unavailable failures such as a missing/incompatible NDI native library fail closed rather than spinning indefinitely.
 
 A provider/runtime/encoder/secret/endpoint failure affects only its network-output session. It does not roll back Runtime committed execution and does not mutate Control authority.
 
 Shutdown cancels reconnect work, disposes queued payload leases and releases provider/native resources.
+
+## Connection retry episodes and fail-closed admission
+
+A configured `reconnectMaximumAttempts` is a limit for the **entire
+failed connection episode**, not a fresh allowance per queued Program sample;
+zero means the finite eight-attempt safety default rather than unlimited reconnects.
+SRT transport connection and NDI sender creation retain a session-owned
+attempt counter across subsequent samples. After the final permitted attempt or 45-second budget,
+the target remains `FAULTED` with `network.output.reconnect_exhausted`.
+Later Program samples are rejected synchronously by that **target only** and
+their readback leases are returned without a new native retry. A successfully
+established connection resets the budget for a genuinely later loss;
+recreating a target session through the already governed lifecycle resets it
+explicitly. Missing/incompatible NDI runtime remains a separate terminal
+`network.output.ndi_runtime_unavailable` condition until target restart.
+
+A failed reconnect must not overwrite its terminal cause with a misleading
+cancellation error. Actual shutdown cancellation is separate and retains
+the existing resource/cleanup ownership and SRT completion limits.
 
 ## Configuration
 
@@ -270,6 +289,39 @@ Common evidence includes:
 For SRT the Operator may show H.264/AAC bitrate. For NDI it shows NDI High Bandwidth / Float32 semantics rather than fabricating an encoded bitrate.
 
 No SDK path, native library path or secret is projected into output snapshots.
+
+## Per-target capability and observed sender evidence
+
+The Runtime output graph still reserves every configured session before
+activation, subject to its advertised exact provider format and finite
+per-provider slots. The **requested role/source** belongs to ControlHost.
+A committed Runtime role now includes an additive, bounded array of up to
+eight **independent target** snapshots, plus the Runtime execution revision;
+ControlHost attaches its distinct authoritative production revision and
+continues to project the legacy first target unchanged for compatibility.
+Older peers lacking the array remain readable but cannot be interpreted
+as proving additional targets.
+
+`RuntimeNetworkOutputTargetEvidence` also distinguishes each target's
+configured protocol/profile, declared capability/admission, local enqueue
+count and last sequence/time from observed provider send count/bytes,
+queue depth, failures, last send age and measured byte-rate deltas. The Runtime in-process observer measures provider byte deltas only when at least 250 ms separates polls; the Operator independently derives displayed local sender KiB/s from consecutive fresh health observations at the same source/target and Control/Runtime revisions. A missing, stale, changed or sub-250-ms observation reports rate UNVERIFIED; it never claims network or peer throughput.
+A locally connected sender is not automatically active: no recent
+successful provider send means `UNKNOWN`, expired local send evidence
+means `STALE`, a terminal provider fault means `FAILED`.
+Only a fresh successful local send can become `SENDER_ACTIVE`;
+SRT/NDI receiver delivery, end-to-end network latency, physical SDI
+scan-out and real peer compatibility remain **UNVERIFIED**. Configured
+SRT latency is not a measured peer RTT; NDI encoded bitrate and SRT peer
+latency are not fabricated for NDI. Every target can fail independently
+without changing Program authority, recording or the other targets.
+
+The Operator's OUTPUTS technical section displays a bounded per-target
+row for the confirmed role/source and Control/Runtime revision evidence,
+configured provider/profile, recent local send, age, bytes and queue/errors.
+The aggregate Program/Aux sender status is never `LIVE` when a sibling
+target is failed, stale, unknown or disconnected. Missing or stale Control
+observations never borrow Runtime delivery truth.
 
 ## Qualification boundary
 

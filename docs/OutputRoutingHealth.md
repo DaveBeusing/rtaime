@@ -112,6 +112,38 @@ Color space is likewise `UNAVAILABLE` until it is published by an authoritative 
 
 The Operator does not probe Performance Counters, driver utilities or hardware APIs to fill missing values. The compact System Status surface may render Disk, Network and Temperature as thin metric bars, but unavailable evidence remains visually empty rather than being converted into synthetic telemetry.
 
+## Per-target network delivery status
+
+A governed Program/Aux route can feed multiple admitted SRT/NDI targets.
+The existing legacy single-target observation remains for older peers.
+Newer Runtime → Control → Operator read-only observations preserve each
+distinct target and expose it beneath **TECHNICAL DETAILS**, including
+configured source and target identity, Control production revision,
+separate Runtime execution revision, protocol/format capability,
+local provider lifecycle, queued samples, dropped/rejected counts,
+reconnects, sent bytes, measured local sender KiB/s from two consecutive identity-matched health observations and last successful local send age. Fewer than two samples, a restarted counter, stale control or a changed route reports sender rate UNVERIFIED.
+
+Network display states are deliberately more precise than a configured
+route: `UNKNOWN` means there is no matching recent send evidence,
+`STALE` means that a previously reported local send exceeded the
+existing five-second sender freshness budget, `FAILED` retains a
+provider failure code, and `LIVE` requires a connected sender with
+fresh successful send evidence. Any sibling target not `LIVE` prevents
+the aggregate role transmission status from being `LIVE`.
+`ROUTE CONFIRMED` refers to matching source, Control/Runtime health and
+revision evidence, not media reception. Software provider-send bytes
+are **not** physical receiver delivery, measured network throughput
+outside the sending process, or SDI scan-out; those remain `UNVERIFIED`.
+SRT codec bitrates and latency are configured values; NDI encoded bitrate
+and peer latency are unavailable, not zero-valued performance measures.
+
+The current per-target receiver-health array is additive to the
+historical first-target JSON projection; no new production-control
+command, independent poller or physical output device was introduced.
+The generated [Support Compatibility Matrix](SupportCompatibilityMatrix.md)
+remains unchanged and `UNVERIFIED` pending separate reference-device
+and vendor-runtime qualification.
+
 ## Historical metrics
 
 Mini histories are presentation-only ring buffers with a maximum of 48 samples. Samples are accepted only when the existing health observation changes. No additional polling timer is introduced, and unavailable values are not converted into zero-value samples.

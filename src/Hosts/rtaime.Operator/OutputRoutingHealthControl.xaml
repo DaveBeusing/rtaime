@@ -292,6 +292,7 @@
 								<Setter Property="Visibility" Value="Visible" />
 							</DataTrigger></Style.Triggers>
 						</Style></Border.Style>
+						<StackPanel>
 						<Grid>
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="*" />
@@ -311,6 +312,38 @@
 								<DockPanel Height="22"><TextBlock Text="Reconnects" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingReconnects}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							</StackPanel>
 						</Grid>
+						<ItemsControl ItemsSource="{Binding SelectedOutput.NetworkTargets}"
+							AutomationProperties.Name="Per-target network output delivery evidence"
+							Margin="0,10,0,0">
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<Border Background="{DynamicResource OperatorPanelBrush}"
+										BorderBrush="{DynamicResource OperatorBorderBrush}"
+										BorderThickness="1" Padding="7" Margin="0,0,0,5">
+										<StackPanel>
+											<DockPanel>
+												<TextBlock Text="{Binding TargetId}" Style="{StaticResource OperatorValue}"
+													FontWeight="SemiBold" />
+												<TextBlock Text="{Binding TransmissionState}" DockPanel.Dock="Right"
+													Style="{StaticResource OperatorValue}" />
+											</DockPanel>
+											<TextBlock Text="{Binding SafeTargetIdentity}" Style="{StaticResource OperatorLabel}"
+												TextTrimming="CharacterEllipsis" ToolTip="{Binding SafeTargetIdentity}" />
+											<TextBlock Text="{Binding RouteRevision}" Style="{StaticResource OperatorLabel}"
+												TextWrapping="Wrap" />
+											<TextBlock Text="{Binding RouteEvidence}" Style="{StaticResource OperatorLabel}" />
+											<TextBlock Text="{Binding ConfiguredCapability}" Style="{StaticResource OperatorLabel}"
+												TextWrapping="Wrap" />
+											<TextBlock Text="{Binding ProviderSendEvidence}" Style="{StaticResource OperatorLabel}"
+												TextWrapping="Wrap" />
+											<TextBlock Text="{Binding PhysicalEvidence}" Style="{StaticResource OperatorLabel}"
+												TextWrapping="Wrap" />
+										</StackPanel>
+									</Border>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+						</StackPanel>
 					</Border>
 				</StackPanel>
 			</Border>

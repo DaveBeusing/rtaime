@@ -142,7 +142,9 @@ public sealed record RuntimeOutputRoleSnapshot
         string evidence,
         Failure? error = null,
         NetworkOutputHealthSnapshot? networkOutput = null,
-        string audioBusId = "program")
+        string audioBusId = "program",
+        IReadOnlyList<NetworkOutputHealthSnapshot>? networkOutputs = null,
+        ulong? runtimeExecutionRevision = null)
     {
         if (string.IsNullOrWhiteSpace(roleId))
             throw new ArgumentException("Output role identity is required.", nameof(roleId));
@@ -172,8 +174,18 @@ public sealed record RuntimeOutputRoleSnapshot
         HealthState = healthState;
         Evidence = evidence.Trim();
         Error = error;
-        NetworkOutput = networkOutput;
+        var targets = networkOutputs?.ToArray() ??
+            (networkOutput is null ? [] : [networkOutput]);
+        if (targets.Length > 8 || targets.Any(target => target is null) ||
+            targets.Select(target => target.TargetId)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length ||
+            networkOutput is not null && targets.Length > 0 &&
+                !string.Equals(networkOutput.TargetId, targets[0].TargetId, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Runtime role network targets must be bounded, unique and legacy-first.", nameof(networkOutputs));
+        NetworkOutputs = Array.AsReadOnly(targets);
+        NetworkOutput = networkOutput ?? targets.FirstOrDefault();
         AudioBusId = normalizedAudioBusId;
+        RuntimeExecutionRevision = runtimeExecutionRevision;
     }
 
     public string RoleId { get; }
@@ -189,6 +201,10 @@ public sealed record RuntimeOutputRoleSnapshot
     public string Evidence { get; }
     public Failure? Error { get; }
     public NetworkOutputHealthSnapshot? NetworkOutput { get; }
+    /// <summary>Read-only transport health per independently admitted network target.</summary>
+    public IReadOnlyList<NetworkOutputHealthSnapshot> NetworkOutputs { get; }
+    /// <summary>Runtime execution revision, distinct from the Control production revision.</summary>
+    public ulong? RuntimeExecutionRevision { get; }
     public string AudioBusId { get; }
 }
 

@@ -164,8 +164,11 @@ public sealed record OperatorNetworkOutputDescriptor
         if (string.IsNullOrWhiteSpace(audioCodec)) throw new ArgumentException("Network output audio codec is required.", nameof(audioCodec));
         if (audioSampleRate == 0 || audioChannelCount == 0) throw new ArgumentOutOfRangeException(nameof(audioSampleRate));
         if (string.IsNullOrWhiteSpace(audioSampleFormat)) throw new ArgumentException("Network output audio sample format is required.", nameof(audioSampleFormat));
-        if (videoBitRate == 0 || audioBitRate == 0) throw new ArgumentOutOfRangeException(nameof(videoBitRate));
-        if (latencyMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(latencyMilliseconds));
+        // NDI High Bandwidth has no encoded SRT bitrate/peer-latency setting.
+        // Do not reject a real NDI provider snapshot or fabricate those values.
+        if (string.Equals(protocol, "srt", StringComparison.OrdinalIgnoreCase) &&
+            (videoBitRate == 0 || audioBitRate == 0 || latencyMilliseconds <= 0))
+            throw new ArgumentOutOfRangeException(nameof(videoBitRate));
         if (queueDepth < 0) throw new ArgumentOutOfRangeException(nameof(queueDepth));
 
         TargetId = targetId.Trim();
@@ -239,7 +242,10 @@ public sealed record OperatorOutputRoleDescriptor
         string evidence,
         Failure? error,
         OperatorNetworkOutputDescriptor? networkOutput = null,
-        string audioBusId = "program")
+        string audioBusId = "program",
+        IReadOnlyList<OperatorNetworkOutputDescriptor>? networkOutputs = null,
+        ulong? controlRevision = null,
+        ulong? runtimeExecutionRevision = null)
     {
         if (string.IsNullOrWhiteSpace(roleId)) throw new ArgumentException("Output role id is required.", nameof(roleId));
         if (string.IsNullOrWhiteSpace(roleKind)) throw new ArgumentException("Output role kind is required.", nameof(roleKind));
@@ -266,7 +272,17 @@ public sealed record OperatorOutputRoleDescriptor
         HealthState = healthState;
         Evidence = evidence.Trim();
         Error = error;
-        NetworkOutput = networkOutput;
+        var targets = networkOutputs?.ToArray() ??
+            (networkOutput is null ? [] : [networkOutput]);
+        if (targets.Length > 8 || targets.Any(target => target is null) ||
+            targets.Select(target => target.TargetId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length ||
+            networkOutput is not null && targets.Length > 0 &&
+                !string.Equals(networkOutput.TargetId, targets[0].TargetId, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Operator output targets must be bounded, unique and legacy-first.", nameof(networkOutputs));
+        NetworkOutputs = Array.AsReadOnly(targets);
+        NetworkOutput = networkOutput ?? targets.FirstOrDefault();
+        ControlRevision = controlRevision;
+        RuntimeExecutionRevision = runtimeExecutionRevision;
         AudioBusId = audioBusId.Trim().ToLowerInvariant();
     }
     public string RoleId { get; }
@@ -285,6 +301,12 @@ public sealed record OperatorOutputRoleDescriptor
     public string Evidence { get; }
     public Failure? Error { get; }
     public OperatorNetworkOutputDescriptor? NetworkOutput { get; }
+    /// <summary>Independent provider observations; legacy peers expose at most the first target.</summary>
+    public IReadOnlyList<OperatorNetworkOutputDescriptor> NetworkOutputs { get; }
+    /// <summary>Requested Control revision, not a claim about physical transmission.</summary>
+    public ulong? ControlRevision { get; }
+    /// <summary>Confirmed Runtime execution revision, separate from the Control revision.</summary>
+    public ulong? RuntimeExecutionRevision { get; }
     public string AudioBusId { get; }
 }
 
