@@ -10,6 +10,35 @@ namespace rtaime.Tests.Operator;
 public sealed class LiveConsoleTests
 {
     [Fact]
+    public void Production_take_evidence_keeps_requests_rejections_and_unknown_outcomes_distinct()
+    {
+        static string Evidence(bool connected = true, bool stale = false, bool pending = false,
+            bool hasSnapshot = true, bool blocked = false, string runtime = "READY",
+            string transition = "READY", bool previewKnown = true, uint frames = 12) =>
+            LiveProductionPresentation.TakeEvidence(connected, stale, pending, hasSnapshot,
+                blocked, runtime, transition, previewKnown, frames);
+
+        Assert.Contains("REQUEST ELIGIBLE", Evidence());
+        Assert.Contains("PENDING", Evidence(pending: true));
+        Assert.Contains("REJECTED BY CONTROL", Evidence(transition: "CUT REJECTED"));
+        Assert.Contains("REJECTED BY CONTROL", Evidence(transition: "DISSOLVE REJECTED"));
+        Assert.Contains("UNCONFIRMED TAKE", Evidence(transition: "CUT FAILED"));
+        Assert.Contains("UNCONFIRMED TAKE", Evidence(transition: "DISSOLVE 12F FAILED"));
+        Assert.Contains("UNVERIFIED", Evidence(stale: true));
+        Assert.Contains("UNVERIFIED", Evidence(connected: false));
+        Assert.Contains("UNVERIFIED", Evidence(hasSnapshot: false));
+        Assert.Contains("UNVERIFIED", Evidence(previewKnown: false));
+        Assert.Contains("BLOCKED", Evidence(blocked: true));
+        Assert.Contains("BLOCKED", Evidence(runtime: "RECOVERING"));
+        Assert.Contains("AUTO needs at least two frames", Evidence(frames: 1));
+        Assert.Contains("CONTROL COMMIT CONFIRMED", Evidence(transition: "CUT CONFIRMED"));
+        Assert.Contains("output delivery", Evidence());
+        // Disconnected authority wins over retained success/failure presentation.
+        Assert.Contains("UNVERIFIED", Evidence(stale: true, transition: "CUT CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Evidence(connected: false, transition: "CUT FAILED"));
+    }
+
+    [Fact]
     public async Task Observations_preserve_local_reorder_undo_and_selection_but_surface_storage_conflict()
     {
         var transport = new ReadOnlyTransport();
