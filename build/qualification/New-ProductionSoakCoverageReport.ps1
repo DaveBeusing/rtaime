@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedSourceCommit,
     [string[]]$SsdEvidencePaths = @(),
     [string[]]$MixedEvidencePaths = @(),
+    [string[]]$ReplayMemoryDiagnosticPaths = @(),
     [string]$RealtimeEvidencePath = "",
     [string]$RequiredGatesPath = "",
     [Parameter(Mandatory)][string]$OutputPath
@@ -20,6 +21,7 @@ $policyFile = Join-Path $root "qualification/soak/production-playout-coverage.js
 $policy = Get-Content -LiteralPath $policyFile -Raw | ConvertFrom-Json -Depth 32
 $statuses = [Collections.Generic.List[object]]::new()
 $artifacts = [Collections.Generic.List[object]]::new()
+$measurements = [Collections.Generic.List[object]]::new()
 $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 function Add-Status([string]$id, [string]$status, [string]$scope, [string]$reason) {
     if ($status -cnotin @("PASS","FAIL","UNVERIFIED") -or -not $seen.Add($id)) {
@@ -73,11 +75,41 @@ foreach ($path in @($SsdEvidencePaths)) {
             reason= "Existing verifier accepted exact source, elapsed duration, two media hashes, resource limit, host teardown; timing=$($artifact.data.result.timingStatus); not physical scan-out."
         }
         Add-Artifact "ssd/$key" $artifact
+        $observed = $artifact.data.result
+        $measurements.Add([ordered]@{
+            id="ssd/$key"; scope="TWO_DECK_REAL_SOFTWARE_NOT_PHYSICAL_IO"
+            elapsedSeconds=[double]$observed.elapsedSeconds
+            privateGrowthBytes=[long]$observed.privateGrowth
+            handleGrowth=[long]$observed.handleGrowth
+            programMissedSlots=[ulong]$observed.missedDelta
+            softwareTiming=[string]$observed.timingStatus
+            authoritativelyRequestedTakes=[int]$observed.takes
+            firstReadFailures=[ulong]$observed.firstPlayback.ReadFailures
+            secondReadFailures=[ulong]$observed.secondPlayback.ReadFailures
+            firstAudioTimestampDiscontinuities=[ulong]$observed.firstPlayback.AudioTimestampDiscontinuities
+            secondAudioTimestampDiscontinuities=[ulong]$observed.secondPlayback.AudioTimestampDiscontinuities
+            cpuSampledScope="OBSERVER_INTERVAL_NOT_PER_FRAME"
+            sampledCpu=$observed.cpu
+            physicalAvDrift="UNVERIFIED"; srtReceiverLoss="UNVERIFIED"
+            ndiReceiverLoss="UNVERIFIED"; gpuAndVram="UNVERIFIED"
+        })
         $diagnostic = Join-Path (Split-Path -Parent $artifact.file) "ssd-playback-memory-diagnostic.json"
         if (Test-Path -LiteralPath $diagnostic -PathType Leaf) {
             $memory = Read-Input $diagnostic 65536
             & (Join-Path $PSScriptRoot "Test-SsdPlaybackMemoryDiagnostic.ps1") -EvidencePath $memory.file -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $p -ExpectedFormat $format | Out-Null
             Add-Artifact "ssdMemory/$key" $memory
+            $playbackPoints = @($memory.data.points | Where-Object phase -EQ "playback")
+            $measurements.Add([ordered]@{
+                id="ssdMemory/$key"; scope="SPARSE_DIAGNOSTIC_NO_CAUSAL_LEAK_OR_FULL_RUN_PLATEAU"
+                samples=@($memory.data.points).Count
+                sparsePrivateGrowthBytes=([long]$playbackPoints[-1].privateBytes - [long]$playbackPoints[0].privateBytes)
+                baselineManagedCommittedBytes=[long]$playbackPoints[0].lastGc.committedManagedBytes
+                lastManagedCommittedBytes=[long]$playbackPoints[-1].lastGc.committedManagedBytes
+                baselineReplayWriterOpens=$playbackPoints[0].writerLifetime.Opened
+                lastReplayWriterOpens=$playbackPoints[-1].writerLifetime.Opened
+                workloadFailed=[bool]$memory.data.playbackFailed
+                physicalOutput="UNVERIFIED"
+            })
             $ssdRows[$key].reason += " Sparse writer/GC/private-byte observations checked; attribution and physical retention not proven."
         }
     } catch {
@@ -103,6 +135,32 @@ foreach ($key in @($ssdRows.Keys)) {
         Add-Status "ssd/invalid/$key" "FAIL" "INVALID_INPUT" $ssdRows[$key].reason
     }
 }
+# Separately inspect optional failed-run memory sidecars. A failed 600-second
+# test remains FAIL/UNVERIFIED even when its diagnostic observations are complete.
+$sidecarSeen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($path in @($ReplayMemoryDiagnosticPaths)) {
+    $key = "unknown"
+    try {
+        $memory = Read-Input $path 65536
+        $key = "$($memory.data.programFormat)/$($memory.data.profile)"
+        if (-not $sidecarSeen.Add($key)) { throw "Duplicate source/profile sidecar." }
+        & (Join-Path $PSScriptRoot "Test-SsdPlaybackMemoryDiagnostic.ps1") -EvidencePath $memory.file -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $memory.data.profile -ExpectedFormat $memory.data.programFormat | Out-Null
+        Add-Artifact "diagnosticOnly/$key" $memory
+        $playbackPoints = @($memory.data.points | Where-Object phase -EQ "playback")
+        $measurements.Add([ordered]@{
+            id="diagnosticOnly/$key"; scope="OBSERVATION_ONLY_NO_PLAYBACK_PASS"
+            samples=@($memory.data.points).Count
+            sparsePrivateGrowthBytes=([long]$playbackPoints[-1].privateBytes - [long]$playbackPoints[0].privateBytes)
+            workloadFailed=[bool]$memory.data.playbackFailed
+            replayOpenedStart=$playbackPoints[0].writerLifetime.Opened
+            replayOpenedLast=$playbackPoints[-1].writerLifetime.Opened
+            lastObservedManagedCommittedBytes=[long]$playbackPoints[-1].lastGc.committedManagedBytes
+        })
+        Add-Status "diagnosticOnly/$key" "UNVERIFIED" "SPARSE_FAILED_OR_SUCCESSFUL_SSD_SIDECAR" "Observations verified; cannot replace original full-duration pass, resource assertion or physical output evidence."
+    } catch {
+        Add-Status "diagnosticOnly/invalid/$key" "FAIL" "INVALID_DIAGNOSTIC" ("Rejected optional sparse diagnostic: " + $_.Exception.Message)
+    }
+}
 $mixedRows = @{}
 foreach ($path in @($MixedEvidencePaths)) {
     $key = "unknown"
@@ -115,6 +173,14 @@ foreach ($path in @($MixedEvidencePaths)) {
         & (Join-Path $PSScriptRoot "Test-SustainedMixedLoadEvidence.ps1") -EvidencePath $artifact.file -DescriptorPath (Join-Path $root $policy.mixed.descriptor) -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $key | Out-Null
         $mixedRows[$key] = @{ status="PASS"; reason="Bounded staged sessions verified; NOT uninterrupted Program, native network or physical A/V." }
         Add-Artifact "stagedMixed/$key" $artifact
+        $measurements.Add([ordered]@{
+            id="stagedMixed/$key"; scope="STAGED_MANAGED_CONSUMERS"
+            elapsedSeconds=$artifact.data.elapsedSeconds
+            frames=$artifact.data.frames
+            recoveries=$artifact.data.recoveries
+            sampledLatencyUpperBinP99=$artifact.data.latency.p99
+            physicalAv="UNVERIFIED"; nativeContinuousProgram="UNVERIFIED"
+        })
     } catch {
         $mixedRows[$key] = @{ status="FAIL"; reason="Rejected staged mixed-soak evidence: $($_.Exception.Message)" }
     }
@@ -139,6 +205,12 @@ if ($RealtimeEvidencePath) {
         $software = "PASS"
         $softwareReason = "Software producer matrix checked; native 25 fps, uninterrupted Program and physical A/V remain UNVERIFIED."
         Add-Artifact "realtimeSoftware" $artifact
+        $measurements.Add([ordered]@{
+            id="realtimeSoftware"; scope="SOURCE_BOUND_EXISTING_PRODUCER_COMPOSITION"
+            profile=$artifact.data.profile
+            program=$artifact.data.program
+            physicalGpuAndNetwork="UNVERIFIED"
+        })
     } catch {
         $software = "FAIL"
         $softwareReason = "Rejected realtime software evidence: $($_.Exception.Message)"
@@ -161,6 +233,7 @@ $report = [ordered]@{
     sourceScope="EXACT_CHECKED_OUT_HEAD_NOT_PRODUCTION_SIGNING_OR_GITHUB_ATTESTATION"
     statusVocabulary=@("PASS","FAIL","UNVERIFIED")
     qualifications=@($statuses)
+    measuredObservations=@($measurements)
     referencedArtifacts=@($artifacts)
     hardwarePerformance="UNVERIFIED"; supportedPlatform="UNVERIFIED"
     productionSigning="UNVERIFIED"; unbrokenProductionSoak="UNVERIFIED"
