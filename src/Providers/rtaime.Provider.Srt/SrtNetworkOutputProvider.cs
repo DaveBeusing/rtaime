@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
@@ -88,6 +89,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	// A failed connection episode persists across Program samples. Only a
 	// confirmed connection or a newly constructed session resets this budget.
 	private int _retryEpisodeAttempts;
+	private long _retryEpisodeStartTimestamp;
 	private bool _retryEpisodeExhausted;
 	private NetworkOutputLifecycleState _lifecycle = NetworkOutputLifecycleState.Disabled;
 	private bool _connected;
@@ -366,19 +368,25 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _connectionStop.Token);
 		cancellationToken = attemptCancellation.Token;
 
-		var delay = _configuration.ReconnectInitialDelayMilliseconds;
+		var delay = Math.Min(_configuration.ReconnectInitialDelayMilliseconds,
+			NetworkOutputReconnectPolicy.MaximumAutomaticBackoffMilliseconds);
+		var maximumAttempts = NetworkOutputReconnectPolicy.EffectiveMaximumAttempts(
+			_configuration.ReconnectMaximumAttempts);
 		while (!cancellationToken.IsCancellationRequested)
 		{
 			int attempt;
 			lock (_gate)
 			{
 				if (_retryEpisodeExhausted) return false;
-				if (_configuration.ReconnectMaximumAttempts > 0 &&
-					_retryEpisodeAttempts >= _configuration.ReconnectMaximumAttempts)
+				if (_retryEpisodeStartTimestamp != 0 &&
+					Stopwatch.GetElapsedTime(_retryEpisodeStartTimestamp) >= NetworkOutputReconnectPolicy.MaximumEpisodeDuration ||
+					_retryEpisodeAttempts >= maximumAttempts)
 				{
 					ExhaustRetryEpisodeLocked();
 					return false;
 				}
+				if (_retryEpisodeStartTimestamp == 0)
+					_retryEpisodeStartTimestamp = Stopwatch.GetTimestamp();
 				attempt = _retryEpisodeAttempts < int.MaxValue
 					? ++_retryEpisodeAttempts : int.MaxValue;
 			}
@@ -398,8 +406,10 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						: NetworkOutputLifecycleState.Reconnecting;
 					_connected = false;
 				}
-				await transport.ConnectAsync(_configuration, passphrase, cancellationToken).ConfigureAwait(false);
-				await encoder.InitializeAsync(_configuration, cancellationToken).ConfigureAwait(false);
+				using var attemptDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+				attemptDeadline.CancelAfter(NetworkOutputReconnectPolicy.MaximumConnectAttemptDuration);
+				await transport.ConnectAsync(_configuration, passphrase, attemptDeadline.Token).ConfigureAwait(false);
+				await encoder.InitializeAsync(_configuration, attemptDeadline.Token).ConfigureAwait(false);
 				_encoderInitialized = true;
 				cancellationToken.ThrowIfCancellationRequested();
 				lock (_gate)
@@ -409,6 +419,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 					_lifecycle = NetworkOutputLifecycleState.Connected;
 					_connected = true;
 					_retryEpisodeAttempts = 0;
+					_retryEpisodeStartTimestamp = 0;
 					_retryEpisodeExhausted = false;
 					_failure = null;
 				}
@@ -429,8 +440,8 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				await ReleaseConnectionAsync(orderly: false, cancellationToken).ConfigureAwait(false);
 				lock (_gate)
 				{
-					if (_configuration.ReconnectMaximumAttempts > 0 &&
-						_retryEpisodeAttempts >= _configuration.ReconnectMaximumAttempts)
+					if (_retryEpisodeAttempts >= maximumAttempts ||
+						Stopwatch.GetElapsedTime(_retryEpisodeStartTimestamp) >= NetworkOutputReconnectPolicy.MaximumEpisodeDuration)
 					{
 						ExhaustRetryEpisodeLocked();
 						return false;
@@ -438,7 +449,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 				}
 				try { await Task.Delay(delay, cancellationToken).ConfigureAwait(false); }
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return false; }
-				delay = Math.Min(checked(delay * 2), _configuration.ReconnectMaximumDelayMilliseconds);
+				delay = Math.Min(checked(delay * 2),
+				Math.Min(_configuration.ReconnectMaximumDelayMilliseconds,
+					NetworkOutputReconnectPolicy.MaximumAutomaticBackoffMilliseconds));
 			}
 		}
 		return false;
@@ -452,7 +465,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		_connected = false;
 		_lifecycle = NetworkOutputLifecycleState.Faulted;
 		_failure = new Failure("network.output.reconnect_exhausted",
-			$"Configured SRT reconnect attempts ({_configuration.ReconnectMaximumAttempts}) were exhausted; explicitly restart the target.");
+			$"SRT reconnect episode exceeded its finite limit " +
+			$"({NetworkOutputReconnectPolicy.EffectiveMaximumAttempts(_configuration.ReconnectMaximumAttempts)} attempts / " +
+			$"{NetworkOutputReconnectPolicy.MaximumEpisodeDuration.TotalSeconds:0} s); explicitly restart the target.");
 	}
 
 	private string? ResolvePassphrase()
