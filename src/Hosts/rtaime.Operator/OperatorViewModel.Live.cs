@@ -14,7 +14,15 @@ public sealed partial class OperatorViewModel
         ProgramSafety == OperatorProgramSafetyStates.Blocked ? $"Production blocked: {GlobalReadinessSummary}. Open Health." :
         !string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase) ? $"Runtime {RuntimeStatus}. Restore Runtime readiness." :
         "Confirmed Control state; Runtime revalidates every action.";
-    public string PreviewTakeDetail => $"CUT / AUTO → {PreviewSourceName} · {LiveAvailability}";
+    public string SetPreviewDetail => $"SELECTED {SelectedSource?.Name ?? "NONE"} → PREVIEW · local selection is not a route; SET PVW needs explicit Control confirmation.";
+    public string LiveTakeEvidence => LiveProductionPresentation.TakeEvidence(
+        IsConnected, IsStale, IsBusy || LiveCommandsBusy?.Invoke() == true,
+        _client?.Snapshot is not null,
+        ProgramSafety == OperatorProgramSafetyStates.Blocked,
+        RuntimeStatus, TransitionStatus,
+        !string.IsNullOrWhiteSpace(PreviewSourceId) && PreviewSourceId != "—",
+        TransitionFrames);
+    public string PreviewTakeDetail => $"CUT / AUTO → {PreviewSourceName} · {LiveTakeEvidence}";
     public string SceneTakeDetail => $"SCENE TAKE → {SelectedScene?.Name ?? "select a scene"} · {LiveAvailability}";
     internal void NotifyLiveCommandsChanged()
     {
@@ -25,6 +33,8 @@ public sealed partial class OperatorViewModel
     private void NotifyLivePresentation()
     {
         NotifyLiveProperty(nameof(LiveAvailability));
+        NotifyLiveProperty(nameof(SetPreviewDetail));
+        NotifyLiveProperty(nameof(LiveTakeEvidence));
         NotifyLiveProperty(nameof(PreviewTakeDetail));
         NotifyLiveProperty(nameof(SceneTakeDetail));
     }
