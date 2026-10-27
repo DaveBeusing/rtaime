@@ -9,6 +9,7 @@ namespace rtaime.Operator;
 
 public sealed record MediaDurationChoice(MediaDurationFilter Value, string Label);
 public sealed record MediaReadinessChoice(MediaReadinessFilter Value, string Label);
+public sealed record MediaLibrarySortChoice(MediaLibrarySortOrder Value, string Label);
 
 public sealed partial class MediaPoolInspectorViewModel
 {
@@ -29,7 +30,26 @@ public sealed partial class MediaPoolInspectorViewModel
 	private bool _hoverPreviewsEnabled = true;
 	private MediaDurationFilter _durationFilter;
 	private MediaReadinessFilter _readinessFilter;
-	private string _searchStatus = "AND terms · quotes for phrases · -term to exclude";
+	private MediaLibrarySortOrder _sortOrder = MediaLibrarySortOrder.CategoryName;
+    public IReadOnlyList<MediaLibrarySortChoice> SortChoices { get; } =
+    [
+        new(MediaLibrarySortOrder.CategoryName, "CATEGORY / NAME"),
+        new(MediaLibrarySortOrder.Name, "NAME A–Z"),
+        new(MediaLibrarySortOrder.DurationShortFirst, "DURATION · SHORTEST"),
+        new(MediaLibrarySortOrder.DurationLongFirst, "DURATION · LONGEST"),
+        new(MediaLibrarySortOrder.ReadyFirst, "READINESS · READY FIRST")
+    ];
+    public MediaLibrarySortOrder SortOrder
+    {
+        get => _sortOrder;
+        set
+        {
+            if (!Enum.IsDefined(value) || !Set(ref _sortOrder, value)) return;
+            ApplyFilter();
+        }
+    }
+
+    private string _searchStatus = "AND terms · quotes for phrases · -term to exclude";
 	public string SearchStatus { get => _searchStatus; private set => Set(ref _searchStatus, value); }
 	private string _binStatus = "Smart Bins save filters only.";
 	private string _hoverStatus = "Hover a clip to scrub · Ctrl+Left/Right for keyboard scrubbing";
@@ -96,6 +116,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			return Task.CompletedTask;
 		});
 		ClearLibrarySelectionCommand = new AsyncRelayCommand(() => { UpdateSelection([]); return Task.CompletedTask; });
+
 	}
 
 	public MediaDurationFilter DurationFilter
@@ -359,5 +380,6 @@ public sealed partial class MediaPoolInspectorViewModel
 	private void DisposeBrowsing()
 	{
 		_browsingDisposed = true; CancelHover(); _hoverPreview.Dispose();
+        DisposeMediaReview();
 	}
 }

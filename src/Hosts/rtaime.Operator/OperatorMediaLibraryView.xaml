@@ -172,6 +172,7 @@
             <Border Grid.Row="1" x:Name="MediaSelectedDetails" Visibility="Collapsed"
                 Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
                 BorderThickness="1" Margin="0,3,0,0" Padding="8,5">
+                <controls:RtaimeScrollViewer MaxHeight="184" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Text="INSPECT · CATALOGUE METADATA (NOT OUTPUT EVIDENCE)"
                         Style="{StaticResource OperatorSectionTitle}" />
@@ -186,12 +187,77 @@
                         ToolTip="{Binding Context.MediaPool.SelectedItem.LocalPath, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
                     <TextBlock Text="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                         Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                        <TextBlock Text="IN %" Style="{StaticResource OperatorLabel}" Width="34" VerticalAlignment="Center" />
+                        <controls:RtaimeSlider Minimum="0" Maximum="99" SmallChange="1" LargeChange="5"
+                            Width="98" TickFrequency="1" IsSnapToTickEnabled="True"
+                            Value="{Binding Context.MediaPool.ReviewInPercent, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                            ToolTip="Non-destructive source-relative review IN marker, not Deck IN."
+                            AutomationProperties.Name="Media Library source review IN percent" />
+                        <TextBlock Text="OUT %" Style="{StaticResource OperatorLabel}" Margin="5,0,0,0" Width="40" VerticalAlignment="Center" />
+                        <controls:RtaimeSlider Minimum="1" Maximum="100" SmallChange="1" LargeChange="5"
+                            Width="98" TickFrequency="1" IsSnapToTickEnabled="True"
+                            Value="{Binding Context.MediaPool.ReviewOutPercent, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                            ToolTip="Non-destructive source-relative review OUT marker, not Deck OUT."
+                            AutomationProperties.Name="Media Library source review OUT percent" />
+                    </StackPanel>
+                    <WrapPanel Margin="0,5,0,0">
+                        <controls:RtaimeButton Content="REVIEW FRAMES" IsCompact="True"
+                            Command="{Binding Context.MediaPool.ReviewFramesCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Review source-bound media filmstrip"
+                            ToolTip="Up to five independent decoded source frames. No deck seek or Preview/Program route change." />
+                        <controls:RtaimeButton Content="CLEAR REVIEW" IsCompact="True" Margin="4,0,0,0"
+                            Command="{Binding Context.MediaPool.CancelFrameReviewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Cancel and clear Library frame review" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.FrameReviewStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media frame review status" />
+                    <controls:RtaimeScrollViewer MaxHeight="100" HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0">
+                        <ItemsControl ItemsSource="{Binding Context.MediaPool.FrameReviewSamples, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Selected media source frame strip">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="120" Margin="0,0,4,0">
+                                        <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+                                            <Image Source="{Binding Image}" Width="112" Height="63" Stretch="Uniform" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource OperatorFontSizeCompact}" />
+                                        <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource OperatorFontSizeCompact}" ToolTip="{Binding Status}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </controls:RtaimeScrollViewer>
+                    <WrapPanel Margin="0,5,0,0">
+                        <controls:RtaimeButton Content="REVIEW AUDIO" IsCompact="True"
+                            Command="{Binding Context.MediaPool.ReviewAudioCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Review selected source PCM waveform"
+                            ToolTip="Up to 120 seconds of decoded PCM evidence; not live audio output or program audio." />
+                        <controls:RtaimeButton Content="CLEAR AUDIO" IsCompact="True" Margin="4,0,0,0"
+                            Command="{Binding Context.MediaPool.CancelAudioReviewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Cancel and clear Library audio review" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.AudioReviewStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media source PCM review status" />
+                    <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+                        BorderThickness="1" Margin="0,4,0,0">
+                        <local:SequenceWaveformGlyph Height="44" MinWidth="220"
+                            Presentation="{Binding Context.MediaPool.AudioReviewPresentation, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Media Library decoded source audio waveform" />
+                    </Border>
                 </StackPanel>
+                </controls:RtaimeScrollViewer>
             </Border>
         </Grid>
 
 		<Grid x:Name="MediaAdvancedTools" Grid.Row="4" Visibility="Collapsed" Margin="0,2,0,0">
-			<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+			<Grid.RowDefinitions><RowDefinition Height="30" /><RowDefinition Height="30" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
 			<Grid>
 				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /><ColumnDefinition Width="36" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
 				<controls:RtaimeComboBox x:Name="MediaSmartBins" ItemsSource="{Binding Context.MediaPool.SmartBins, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedItem="{Binding Context.MediaPool.SelectedSmartBin, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
@@ -200,7 +266,17 @@
 				<controls:RtaimeButton Grid.Column="2" Content="Del" Command="{Binding Context.MediaPool.DeleteSmartBinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" ToolTip="Delete selected Smart Bin; media stays in the library." AutomationProperties.Name="Delete Smart Bin" />
 				<controls:RtaimeButton Grid.Column="3" Content="Filters" Command="{Binding Context.MediaPool.ToggleMetadataFiltersCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" IsCompact="True" ToolTip="Show or hide duration and readiness filters." AutomationProperties.Name="Show media metadata filters" />
 			</Grid>
-			<Grid Grid.Row="3" Margin="0,2,0,0" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+			<Grid Grid.Row="1" Margin="0,2,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="56" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="SORT" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+                <controls:RtaimeComboBox x:Name="MediaLibrarySort" Grid.Column="1"
+                    ItemsSource="{Binding Context.MediaPool.SortChoices, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                    SelectedValue="{Binding Context.MediaPool.SortOrder, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                    SelectedValuePath="Value" DisplayMemberPath="Label"
+                    ToolTip="Sort only the visible catalogue projection; selected asset IDs and Smart Bins are unchanged."
+                    AutomationProperties.Name="Media Library sort order" />
+            </Grid>
+            <Grid Grid.Row="4" Margin="0,2,0,0" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
                                 <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="30"/></Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
                                 <controls:RtaimeTextBox x:Name="MediaSmartBinName" MaxLength="128" Text="{Binding Context.MediaPool.SmartBinName, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, UpdateSourceTrigger=PropertyChanged}"
@@ -209,7 +285,7 @@
                                 <controls:RtaimeCheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Hover / scrub previews" IsChecked="{Binding Context.MediaPool.HoverPreviewsEnabled, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
                                     ToolTip="For online catalogue clips, request an isolated time-indexed frame. Ctrl+Left/Right scrubs the focused asset in 5% steps. No Preview/Program seek or Take. Other assets may show an existing monitoring thumbnail. Runtime pressure may pause admission." AutomationProperties.Name="Enable hover and keyboard focus scrub previews"/>
                             </Grid>
-                            <Grid Grid.Row="1" Height="30" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
+                            <Grid Grid.Row="2" Height="30" Visibility="{Binding Context.MediaPool.MetadataFiltersVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}">
 				<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 				<controls:RtaimeComboBox ItemsSource="{Binding Context.MediaPool.DurationChoices, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValue="{Binding Context.MediaPool.DurationFilter, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" SelectedValuePath="Value" DisplayMemberPath="Label"
 					ToolTip="Known catalogue duration; unknown durations stay explicit." AutomationProperties.Name="Media duration filter" />
@@ -217,7 +293,7 @@
 					ToolTip="Current presentation readiness; not a production qualification." AutomationProperties.Name="Media readiness filter" />
 			</Grid>
 
-                            <StackPanel Grid.Row="2">
+                            <StackPanel Grid.Row="3">
                                 <TextBlock Text="{Binding Context.MediaPool.SearchStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeCompact}" AutomationProperties.LiveSetting="Polite" />
                                 <Border Visibility="{Binding Context.MediaPool.PreparationVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource RtaimeBorderBrush}">
     <StackPanel>

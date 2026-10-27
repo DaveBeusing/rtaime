@@ -4,6 +4,9 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
+// Sorting changes only the bounded Operator projection, never catalogue storage or asset identity.
+public enum MediaLibrarySortOrder { CategoryName, Name, DurationShortFirst, DurationLongFirst, ReadyFirst }
+
 // Observation projection only; no transport, subscriptions, authority or decoder.
 public sealed class MediaLibraryProjection
 {
@@ -143,10 +146,30 @@ public sealed class MediaLibraryProjection
 		});
     }
 
-    internal MediaPoolItemViewModel[] Filter(MediaSmartBin bin, MediaLibrarySearch search)
+    internal MediaPoolItemViewModel[] Filter(MediaSmartBin bin, MediaLibrarySearch search,
+        MediaLibrarySortOrder sort = MediaLibrarySortOrder.CategoryName)
     {
-        var filtered = Items.Where(item => MediaSmartBinPolicy.Matches(item, bin, search))
+        // Items is already stable category/name/key order. Sort only the bounded in-memory
+        // result set when requested; no catalogue read, decoder, or file I/O is involved.
+        var matching = Items.Where(item => MediaSmartBinPolicy.Matches(item, bin, search))
             .Take(MaxProjectedItems).ToArray();
+        IOrderedEnumerable<MediaPoolItemViewModel>? ordered = sort switch
+        {
+            MediaLibrarySortOrder.Name => matching.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase),
+            MediaLibrarySortOrder.DurationShortFirst => matching
+                .OrderBy(item => item.KnownDuration is null)
+                .ThenBy(item => item.KnownDuration),
+            MediaLibrarySortOrder.DurationLongFirst => matching
+                .OrderBy(item => item.KnownDuration is null)
+                .ThenByDescending(item => item.KnownDuration),
+            MediaLibrarySortOrder.ReadyFirst => matching
+                .OrderBy(item => !item.IsReady)
+                .ThenBy(item => !item.IsOnline)
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase),
+            _ => null
+        };
+        var filtered = ordered is null ? matching :
+            ordered.ThenBy(item => item.Key, StringComparer.Ordinal).ToArray();
         FilteredItems.ReplaceWith(filtered);
         return filtered;
     }
