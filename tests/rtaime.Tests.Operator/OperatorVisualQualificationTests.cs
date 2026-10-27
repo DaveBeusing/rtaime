@@ -329,6 +329,29 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 		Assert.DoesNotContain("Height=\"1080\"", window, StringComparison.Ordinal);
 	}
 
+	[Fact]
+	public void Critical_top_bar_statuses_use_transient_compact_columns()
+	{
+		var repositoryRoot = FindRepositoryRoot();
+		var windowPath = Path.Combine(repositoryRoot, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml");
+		var document = XDocument.Load(windowPath);
+		XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+		XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+		var topBar = document.Descendants(presentation + "Border")
+			.Single(element => element.Attribute(x + "Name")?.Value == "TopBar");
+		foreach (var property in new[]
+		{
+			"TopBarBrandWidth", "TopBarProjectWidth", "TopBarEngineWidth",
+			"TopBarTimecodeWidth", "TopBarTransmissionWidth",
+			"TopBarProgramWidth", "TopBarSettingsWidth"
+		})
+			Assert.Contains(topBar.Descendants(presentation + "ColumnDefinition"),
+				column => column.Attribute("Width")?.Value.Contains("Shell." + property, StringComparison.Ordinal) == true);
+		Assert.Contains(topBar.Descendants(), element => element.Attribute(x + "Name")?.Value == "TopBarRecordingState");
+		Assert.Contains(topBar.Descendants(), element =>
+			element.Name.LocalName == "RtaimeGlobalStatusButton");
+	}
+
 	public void Dispose()
 	{
 		try
