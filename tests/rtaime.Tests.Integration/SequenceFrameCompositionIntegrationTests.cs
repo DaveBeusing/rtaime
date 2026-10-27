@@ -78,6 +78,22 @@ public sealed class SequenceFrameCompositionIntegrationTests
             LocalMediaDeckRuntimeService.SourcePcmWindow(0, new FrameRate(10, 1)));
     }
 
+    [Theory]
+    [InlineData("runtime.sequence.ended", true)]
+    [InlineData("runtime.sequence.stale_sample", true)]
+    [InlineData("runtime.sequence.source_mismatch", true)]
+    [InlineData("runtime.sequence.boundary_missing", true)]
+    [InlineData("runtime.sequence.boundary_capacity", true)]
+    [InlineData("runtime.sequence.boundary_fence", true)]
+    [InlineData("runtime.sequence.buffering", false)]
+    [InlineData("runtime.sequence.boundary_stale", false)]
+    [InlineData(null, false)]
+    public void Terminal_native_faults_cannot_be_revived_by_next_slot(
+        string? failure, bool terminal)
+    {
+        Assert.Equal(terminal, LocalMediaDeckRuntimeService.IsTerminalSequenceFailure(failure));
+    }
+
     [Fact]
     public void Authored_slice_end_masks_only_trailing_pcm_and_preserves_frame_sample_count()
     {
