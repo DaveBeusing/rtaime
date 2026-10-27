@@ -23,7 +23,7 @@ internal static class LiveProductionPresentation
         if (string.IsNullOrWhiteSpace(selectedSourceName))
             return "SELECT SOURCE · selection never changes Preview or Program by itself.";
         if (string.Equals(transitionStatus, "PREVIEW CONFIRMED", StringComparison.OrdinalIgnoreCase))
-            return $"PREVIEW CONTROL CONFIRMED · selected {selectedSourceName}; matching monitor frames remain separate evidence.";
+            return "PREVIEW CONTROL CONFIRMED · current Preview identity is the synchronized NEXT/PVW route, not local selection; matching monitor frames remain separate evidence.";
         return $"SELECTED {selectedSourceName} → SET PVW REQUEST · Program is never changed by local selection.";
     }
 
