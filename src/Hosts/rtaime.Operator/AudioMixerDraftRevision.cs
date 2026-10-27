@@ -12,7 +12,9 @@ public sealed partial class OperatorAudioSourceStripViewModel
 {
     private string? _draftOrigin;
     public bool NeedsReview => HasDraftChanges && _draftOrigin is not null &&
-        !string.Equals(_draftOrigin, _owner.CurrentAudioDraftToken, StringComparison.Ordinal);
+        (_owner.CurrentAudioDraftToken is { } current
+            ? !string.Equals(_draftOrigin, current, StringComparison.Ordinal)
+            : _draftOrigin != "UNVERIFIED");
     public Visibility DraftReviewVisibility => NeedsReview ? Visibility.Visible : Visibility.Collapsed;
     public string DraftReviewDetail => NeedsReview
         ? "SOURCE DRAFT HELD · production revision or connection changed. Compare confirmed gain, mute, EQ and bus routing; REBASE retains this draft locally, DISCARD restores confirmed values."
@@ -23,12 +25,13 @@ public sealed partial class OperatorAudioSourceStripViewModel
     {
         RebaseDraftCommand = new AsyncRelayCommand(() =>
         {
-            _draftOrigin = _owner.CurrentAudioDraftToken;
+            _draftOrigin = _owner.PresentedAudioDraftToken;
             MutationState = "CONFIRMED";
             DraftChanged();
             return Task.CompletedTask;
         }, () => NeedsReview && CanEditDraft && InputsValid && _owner.CanMutate() &&
-            _owner.CurrentAudioDraftToken is not null);
+            _owner.CurrentAudioDraftToken is { } current &&
+            string.Equals(_owner.PresentedAudioDraftToken, current, StringComparison.Ordinal));
     }
 
     private void TrackDraftRevision()
@@ -36,7 +39,7 @@ public sealed partial class OperatorAudioSourceStripViewModel
         if (!HasDraftChanges)
             _draftOrigin = null;
         else
-            _draftOrigin ??= _owner.CurrentAudioDraftToken ?? "UNVERIFIED";
+            _draftOrigin ??= _owner.PresentedAudioDraftToken ?? "UNVERIFIED";
         NotifyDraftReview();
     }
 
@@ -54,7 +57,9 @@ public sealed partial class OperatorAudioBusStripViewModel
 {
     private string? _draftOrigin;
     public bool NeedsReview => HasDraftChanges && _draftOrigin is not null &&
-        !string.Equals(_draftOrigin, _owner.CurrentAudioDraftToken, StringComparison.Ordinal);
+        (_owner.CurrentAudioDraftToken is { } current
+            ? !string.Equals(_draftOrigin, current, StringComparison.Ordinal)
+            : _draftOrigin != "UNVERIFIED");
     public Visibility DraftReviewVisibility => NeedsReview ? Visibility.Visible : Visibility.Collapsed;
     public string DraftReviewDetail => NeedsReview
         ? "BUS DRAFT HELD · production revision or connection changed. Compare confirmed bus gain, mute and dynamics; REBASE retains this draft locally, DISCARD restores confirmed values."
@@ -65,12 +70,13 @@ public sealed partial class OperatorAudioBusStripViewModel
     {
         RebaseDraftCommand = new AsyncRelayCommand(() =>
         {
-            _draftOrigin = _owner.CurrentAudioDraftToken;
+            _draftOrigin = _owner.PresentedAudioDraftToken;
             MutationState = "CONFIRMED";
             DraftChanged();
             return Task.CompletedTask;
         }, () => NeedsReview && CanEditDraft && InputsValid && _owner.CanMutate() &&
-            _owner.CurrentAudioDraftToken is not null);
+            _owner.CurrentAudioDraftToken is { } current &&
+            string.Equals(_owner.PresentedAudioDraftToken, current, StringComparison.Ordinal));
     }
 
     private void TrackDraftRevision()
@@ -78,7 +84,7 @@ public sealed partial class OperatorAudioBusStripViewModel
         if (!HasDraftChanges)
             _draftOrigin = null;
         else
-            _draftOrigin ??= _owner.CurrentAudioDraftToken ?? "UNVERIFIED";
+            _draftOrigin ??= _owner.PresentedAudioDraftToken ?? "UNVERIFIED";
         NotifyDraftReview();
     }
 
