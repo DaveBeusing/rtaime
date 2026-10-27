@@ -282,6 +282,15 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionStateForRole(role, false, true, Start));
 		Assert.Equal("ROUTE UNVERIFIED",
 			OutputRoutingHealthViewModel.ProjectNetworkTargets(role, false, true, Start)[0].RouteEvidence);
+		var unconfirmed = new OperatorOutputRoleDescriptor(
+			"program", "PROGRAM", "new-source", "new-sink", "provider-id", 1920, 1080,
+			"50/1", "RGBA8", "1/50", "ACTIVE", false, "UNVERIFIED",
+			"Runtime confirmation for this new route is pending.", null,
+			healthy, "program", [healthy], 26, null);
+		Assert.Equal("UNKNOWN", OutputRoutingHealthViewModel.TransmissionStateForRole(
+			unconfirmed, true, false, Start));
+		Assert.Equal("UNKNOWN", Assert.Single(OutputRoutingHealthViewModel.ProjectNetworkTargets(
+			unconfirmed, true, false, Start)).TransmissionState);
 	}
 
 	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>
