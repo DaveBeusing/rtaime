@@ -97,6 +97,52 @@ The existing Runtime replay snapshot includes optional read-only `ActiveClipId` 
 
 If materialization finishes after an unconfirmed response, ControlHost reports `replay.clip.catalog_adoption_required` with the completed clip identity and file path. Import that existing file through the ordinary Media Library flow. Do not repeat CREATE CLIP to recover an uncertain request. A legacy Runtime that provides no result details is reported as `replay.clip.outcome_unavailable`; ControlHost never infers successful catalog adoption from the Runtime's `Ready` state. While a live Control request is still performing catalog adoption, the state remains `Finalizing`.
 
+## Replay to Rundown operator handoff
+
+The Replay panel exposes **RANGE CANDIDATE** rather than declaring a
+selectable interval healthy from elapsed retention alone. It displays
+confirmed retained bytes/segments, dropped samples, discontinuities and
+source capture IN/OUT. The bounded 1,800-second lookback remains a UI
+input limit, not a guarantee that those frames are retained. The Runtime
+store still validates complete pinned encoded history and refuses a range
+that crosses a gap or expired segment.
+
+CREATE CLIP remains a **separate materialization + ControlHost Media
+Library adoption request**. A confirmed success carries the resulting
+file path, immutable asset ID, original captured Program IN/OUT and
+SHA-256. Materialization fails instead of publishing a shortened file
+when an admitted segment ends before its requested decoded frame. The
+ControlHost catalog adoption also requires the online imported file's
+SHA-256 and H.264/AAC codec identity to match the finalized result.
+Replay source IN/OUT represent capture-time Program positions; the MP4
+is a new ordinary asset starting at local time zero.
+
+To stage the replay in the show, the operator explicitly opens the
+confirmed adopted asset in the existing selected Media Deck production
+source slot and then chooses **QUEUE IN RUNDOWN**. That operation
+reads the latest catalogue and checks the saved ID, source path, SHA-256,
+H.264/AAC metadata and duration against the prior finalized result,
+as well as the currently loaded deck's exact asset/source identity.
+This stages only an undoable local **manual CUT** Rundown media item.
+No automatic Follow/Repeat, Save, PREPARE, Preview or GO occurs.
+The operator independently **SAVE**s the Rundown at its optimistic
+storage revision, **PREPARE**s the entry through resident A/B admission,
+and then explicitly **GO**s only after authoritative readiness is
+confirmed. The entry carries normal Media Library asset and source
+identities, not a new replay-specific protocol or source-time trim.
+
+After a lost CREATE response, the Operator retains **OUTCOME UNKNOWN**,
+suppresses another CREATE and blocks mark mutation on the same uncertain
+selection. **REVIEW / NEW RANGE** performs a read-only replay-state check;
+the operator must inspect any completed clip files and Media Library
+adoption before choosing a *different* MARK IN and MARK OUT. This is
+an explicit new operation, not replay/retry of the ambiguous clip
+request. A Finalizing observation cannot be dismissed. Missing
+catalogue assets, insufficient quota, denied pinning, failed cleanup
+and expired segments remain actionable failures; the UI has no
+unqualified delete or storage-reclamation command. The existing
+physical quota and pin accounting remain the only owners.
+
 ## Playback reuse
 
 Replay playback is ordinary Media Deck playback. The Operator opens the adopted Media Library asset through `MediaDeckViewModel` and uses the existing Preview selection. CUT/DISSOLVE remain the established governed production commands.
