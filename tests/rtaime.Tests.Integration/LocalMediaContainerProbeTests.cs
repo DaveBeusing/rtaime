@@ -283,6 +283,7 @@ public sealed class LocalMediaContainerProbeTests
             Assert.Contains("delta 20 ticks (CFR)", evidence);
             Assert.Contains("1920x1080 @ 50/1 avg", evidence);
             Assert.Contains("2ch, 48000Hz, 16-bit declared", evidence);
+            Assert.Contains("audio timebase 1/1000", evidence);
             Assert.Contains(mov ? "AUDIO entry sowt" : "AUDIO entry mp4a", evidence);
             Assert.Contains(mov ? "negotiated Pcm" : "negotiated Aac", evidence);
             Assert.Contains("selected MFT UNVERIFIED", evidence);
