@@ -364,7 +364,24 @@ public sealed class RuntimeConsumerIsolationTests
                 Assert.Equal(1L, target.EnqueuedVideoFrames);
                 Assert.True(target.EnqueuedAudioSampleFrames > 0);
                 Assert.Equal(1UL, target.ProviderHealth.Statistics.AcceptedSamples);
+                Assert.NotNull(target.RequestedConfiguration);
+                Assert.Equal(target.TargetId, target.RequestedConfiguration.TargetId);
+                Assert.Equal("UNVERIFIED_TEST_PROVIDER", target.CapabilityEvidence);
+                Assert.NotNull(target.LastAcceptedAtUtc);
+                Assert.NotNull(target.LastAcceptedSequence);
+                Assert.Equal("UNVERIFIED", target.PhysicalDeliveryEvidence);
+                Assert.Contains(target.DeliveryState,
+                    new[] { "UNKNOWN", "SENDER_ACTIVE", "STALE", "FAILED" });
             });
+            var runtimeRoles = runtime.Snapshot.OutputRoles;
+            var programRole = Assert.Single(runtimeRoles!, role => role.RoleId == "program");
+            Assert.Equal(2, programRole.NetworkOutputs.Count);
+            Assert.Equal(new[] { "program-ndi", "program-srt" },
+                programRole.NetworkOutputs.Select(target => target.TargetId).ToArray());
+            Assert.Equal(programRole.NetworkOutput?.TargetId, programRole.NetworkOutputs[0].TargetId);
+            Assert.NotNull(programRole.RuntimeExecutionRevision);
+            Assert.All(programRole.NetworkOutputs, target =>
+                Assert.Equal(format, target.VideoFormat));
         }
         finally
         {
