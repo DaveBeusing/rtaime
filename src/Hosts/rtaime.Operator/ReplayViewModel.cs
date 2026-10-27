@@ -145,7 +145,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 	}
 
 	private async Task RefreshAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync().ConfigureAwait(false)));
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync()));
 
 	private async Task MarkInAsync() =>
 		await RunAsync(async () =>
@@ -153,7 +153,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 			_lastClip = null;
             _materializedClipName = null;
             RundownFeedback = "IN selection updated; any previous clip must be reviewed independently.";
-			var snapshot = await _client.MarkReplayInAsync(TimeSpan.FromSeconds(LookbackSeconds)).ConfigureAwait(false);
+			var snapshot = await _client.MarkReplayInAsync(TimeSpan.FromSeconds(LookbackSeconds));
             if (_mustMarkNewRange) _newRangeStarted = true;
 			ApplyConfirmedSnapshot(snapshot);
 			OnPropertyChanged(nameof(ClipResult));
@@ -164,7 +164,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		{
 			_lastClip = null;
             _materializedClipName = null;
-			var snapshot = await _client.MarkReplayOutAsync().ConfigureAwait(false);
+			var snapshot = await _client.MarkReplayOutAsync();
             if (_mustMarkNewRange && _newRangeStarted && snapshot.HasSelection)
             {
                 _mustMarkNewRange = false;
@@ -183,7 +183,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
             ReplayClipAssetResult result;
             try
             {
-                result = await _client.CreateReplayClipAsync(requestedName).ConfigureAwait(false);
+                result = await _client.CreateReplayClipAsync(requestedName);
             }
             catch (Exception exception) when (exception is IOException or TimeoutException or
                 InvalidOperationException or OperationCanceledException)
@@ -199,7 +199,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 			_lastClip = result;
             _materializedClipName = result.Succeeded ? requestedName : null;
 			LastError = result.Failure?.Message;
-			ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync().ConfigureAwait(false));
+			ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync());
 			OnPropertyChanged(nameof(ClipResult));
 			OnPropertyChanged(nameof(CanOpenClip));
 		});
@@ -209,7 +209,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		await RunAsync(async () =>
 		{
 			var clip = RequireReadyClip();
-			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!))).ConfigureAwait(false);
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!)));
 			if (!opened)
 				throw new InvalidOperationException("Replay clip could not be opened through the existing Media Deck.");
 		});
@@ -218,12 +218,12 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		await RunAsync(async () =>
 		{
 			var clip = RequireReadyClip();
-			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!))).ConfigureAwait(false);
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!)));
 			if (!opened)
 				throw new InvalidOperationException("Replay clip could not be opened through the existing Media Deck.");
 			if (string.IsNullOrWhiteSpace(_mediaDeck.SourceId) || _mediaDeck.SourceId == "—")
 				throw new InvalidOperationException("Media Deck did not confirm a production source slot for the replay clip.");
-			var response = await _client.SelectPreviewAsync(_mediaDeck.SourceId).ConfigureAwait(false);
+			var response = await _client.SelectPreviewAsync(_mediaDeck.SourceId);
 			if (!response.Accepted)
 				throw new InvalidOperationException(response.Failure?.Message ?? "Replay clip Preview selection was rejected.");
 		});
@@ -241,7 +241,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		LastError = null;
 		try
 		{
-			await operation().ConfigureAwait(false);
+			await operation();
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException or TimeoutException or OperationCanceledException)
 		{
