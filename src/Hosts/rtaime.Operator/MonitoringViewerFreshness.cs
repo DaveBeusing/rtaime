@@ -13,6 +13,8 @@ internal sealed class MonitoringViewerFreshness
 	private long _routeVersion;
 	private long _connectionEpoch;
 	private DateTimeOffset _lastReceipt;
+	private ulong _lastSequence;
+	private bool _hasSequence;
 
 	internal void SelectSource(string sourceId, long routeVersion, long connectionEpoch)
 	{
@@ -20,9 +22,11 @@ internal sealed class MonitoringViewerFreshness
 		_routeVersion = routeVersion;
 		_connectionEpoch = connectionEpoch;
 		_lastReceipt = default;
+		_lastSequence = 0;
+		_hasSequence = false;
 	}
 
-	internal bool Observe(string sourceId, long routeVersion, long connectionEpoch, DateTimeOffset receivedAt)
+	internal bool Observe(string sourceId, long routeVersion, long connectionEpoch, DateTimeOffset receivedAt, ulong sequenceNumber)
 	{
 		if (!string.Equals(sourceId, _sourceId, StringComparison.Ordinal) ||
 			routeVersion != _routeVersion ||
@@ -31,10 +35,12 @@ internal sealed class MonitoringViewerFreshness
 			return false;
 
 		// Delayed/reordered observations must not revive or age a newer viewer.
-		if (receivedAt < _lastReceipt)
+		if (receivedAt < _lastReceipt || (_hasSequence && sequenceNumber <= _lastSequence))
 			return false;
 
 		_lastReceipt = receivedAt;
+		_lastSequence = sequenceNumber;
+		_hasSequence = true;
 		return true;
 	}
 
