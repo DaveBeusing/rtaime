@@ -108,6 +108,58 @@ The authoritative model supports an ordered stack of 0..4 typed processing nodes
 
 Legacy visual/test-layer state remains governed by its existing command and does not acquire unsupported transform or processing semantics.
 
+## Graph authoring, link inspection and capability constraints
+
+The advanced graph exposes local, keyboard-addressable connection inspection. A
+selected edge reports its exact `FromNodeId/FromPortId → ToNodeId/ToPortId`
+and observed ACTIVE/INACTIVE state. It uses the existing node selection to
+open the shared Inspector for the downstream node. No edge click produces a
+Control request or changes Program. The graph validates projected identities,
+port direction, existing endpoints and acyclicity before drawing any live
+connection. An invalid projection is shown as INVALID with edges withheld
+rather than silently converting a broken route into apparent execution.
+**Free connection editing remains UNAVAILABLE** until an accepted versioned
+Control/Runtime contract exists.
+
+SELECT supports explicit **Alt+drag** to move an existing node in the local
+graph arrangement; **Ctrl+Arrow** nudges the selected node while graph focus
+is active. The move honors the real viewport zoom and clamps positions to
+the finite current canvas. Middle mouse/PAN, FIT and AUTO LAYOUT preserve their
+existing behavior. Positions are not authoritative transforms, are not
+persisted to production, and are never sent to ControlHost. A drag only
+recalculates affected visible connection geometry. Closing ADVANCED GRAPH
+releases pointer capture and removes offscreen node/edge realizations;
+reopening preserves Inspector selection but not any uncommitted connection
+highlight.
+
+The selected node's capability label distinguishes a supported **STATIC
+TRANSFORM / STATIC FX** (editable through the existing Inspector's validated
+local parameter draft and explicit APPLY) from **OBSERVE ONLY** source/route/
+sink nodes. No compositor keyframe execution contract exists here:
+nonexecuting keyframes are not authored or advertised as live.
+
+The closed production processing stack already supports at most four
+Color Grade/Chroma Key nodes per authoritative layer. The advanced graph can
+locally stage a selected processing node one position earlier/later using
+**FX DRAFT ←/→**. The draft retains production revision, owning layer content
+identity, layer kind and the complete confirmed typed baseline. **APPLY FX
+ORDER** checks all those identities again, validates the same bounded node
+set, then submits the reordered stack through the **existing** Operator →
+Client → ControlHost → RuntimeHost processing-stack command. Only an identical
+Runtime-observed final order can become CONFIRMED; rejection or ambiguous
+outcome retains the local draft. A concurrent revision/content/stack change
+marks it STALE and disables APPLY until explicit **DISCARD FX ORDER**.
+Node selection, drag, connection inspection, FX draft and discard leave
+Program and active Scene unchanged. Other processing operations (add,
+enable/disable, remove, static parameter edits) remain owned by the shared
+Inspector; this graph does not create a competing edit context.
+
+The header exposes the observed production revision, topology verification
+and FX draft status separately from saved Scene intent and Program pixels.
+Neither a valid projection nor a confirmed Control revision proves physical
+monitor/output presentation; existing dedicated qualification is still
+required.
+
 ## Preview
 
 The right-side Preview reuses the same `PreviewViewer` and monitor chrome used elsewhere in the Operator. It consumes the existing monitoring image, source identity, format, timecode, Media Deck transport, cue navigation, fit/maximize and fullscreen paths.

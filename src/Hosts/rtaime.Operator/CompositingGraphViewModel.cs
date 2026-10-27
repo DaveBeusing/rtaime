@@ -88,6 +88,7 @@ public sealed partial class CompositingGraphNodeViewModel : INotifyPropertyChang
 		OnPropertyChanged(nameof(CanRewire));
 		OnPropertyChanged(nameof(InputPorts));
 		OnPropertyChanged(nameof(OutputPorts));
+        OnPropertyChanged(nameof(CapabilityLabel));
 	}
 
 	private static string ResolveRoleLabel(CompositingGraphNodeProjection projection) =>
@@ -127,13 +128,14 @@ public sealed partial class CompositingGraphNodeViewModel : INotifyPropertyChang
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
-public sealed class CompositingGraphConnectionViewModel : INotifyPropertyChanged
+public sealed partial class CompositingGraphConnectionViewModel : INotifyPropertyChanged
 {
 	private CompositingGraphConnectionProjection _projection;
 	private readonly CompositingGraphNodeViewModel _from;
 	private readonly CompositingGraphNodeViewModel _to;
 	private Geometry _geometry = Geometry.Empty;
 	private PointCollection _arrowPoints = [];
+    private bool _isSelected;
 
 	public CompositingGraphConnectionViewModel(
 		CompositingGraphConnectionProjection projection,
@@ -149,8 +151,24 @@ public sealed class CompositingGraphConnectionViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public string Id => _projection.Id;
+    public string FromNodeId => _projection.FromNodeId;
+    public string FromPortId => _projection.FromPortId;
+    public string ToNodeId => _projection.ToNodeId;
+    public string ToPortId => _projection.ToPortId;
+    public string Description => _from.Title + " / " + FromPortId + " → " + _to.Title + " / " + ToPortId +
+        (IsActive ? " · OBSERVED ACTIVE" : " · OBSERVED INACTIVE");
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value) return;
+            _isSelected = value;
+            OnPropertyChanged(nameof(IsSelected));
+        }
+    }
 	public bool IsActive => _projection.IsActive;
-	public double Opacity => IsActive ? 0.9 : 0.35;
+	public double Opacity => IsSelected ? 1 : IsActive ? 0.9 : 0.35;
 	public Geometry Geometry => _geometry;
 	public PointCollection ArrowPoints => _arrowPoints;
 
@@ -163,6 +181,7 @@ public sealed class CompositingGraphConnectionViewModel : INotifyPropertyChanged
 		_projection = projection;
 		OnPropertyChanged(nameof(IsActive));
 		OnPropertyChanged(nameof(Opacity));
+        OnPropertyChanged(nameof(Description));
 	}
 
 	internal bool HasVisibleEndpoints(HashSet<string> ids) => ids.Contains(_from.Id) && ids.Contains(_to.Id);
@@ -247,6 +266,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		IncreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => StageSelectedLayerOpacityAsync(16), CanEditSelectedLayer);
 
 		InitializeLayerWorkspace();
+        InitializeGraphAuthoring();
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_operator.Sources.CollectionChanged += OnSourcesChanged;
 		RewireSourceSubscriptions();
@@ -445,6 +465,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		CanvasWidth = Math.Max(1490, compositeX + 840);
 		CanvasHeight = Math.Max(650, graphicsY + 190 + Math.Max(0, layerNodes.Length - 1) * 132);
 		UpdateConnections();
+        LayoutEvidence = "AUTO LAYOUT · PRESENTATION ONLY";
 	}
 
 	public void Refresh()
@@ -453,6 +474,8 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
         var selectedNodeId = SelectedNode?.Id ?? _missingSelectedNodeId;
         var selectedLayerId = selectedNodeId is null ? null : ResolveLayerId(selectedNodeId);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
+        var topology = CompositingGraphTopologyValidator.Validate(graph);
+        TopologyEvidence = topology.Detail;
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
 		for (var index = Nodes.Count - 1; index >= 0; index--)
@@ -482,14 +505,17 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 			}
 		}
 
-		var incomingConnections = graph.Connections.Select(connection => connection.Id).ToHashSet(StringComparer.Ordinal);
+        // A broken projection is never presented as an executable signal path.
+        var verifiedConnections = topology.IsValid
+            ? graph.Connections : Array.Empty<CompositingGraphConnectionProjection>();
+		var incomingConnections = verifiedConnections.Select(connection => connection.Id).ToHashSet(StringComparer.Ordinal);
 		for (var index = Connections.Count - 1; index >= 0; index--)
 		{
 			if (!incomingConnections.Contains(Connections[index].Id))
 				Connections.RemoveAt(index);
 		}
 
-		foreach (var projection in graph.Connections)
+		foreach (var projection in verifiedConnections)
 		{
 			var from = Nodes.First(node => string.Equals(node.Id, projection.FromNodeId, StringComparison.Ordinal));
 			var to = Nodes.First(node => string.Equals(node.Id, projection.ToNodeId, StringComparison.Ordinal));
@@ -507,6 +533,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
             SelectNode(restored);
         }
 
+        RestoreConnectionSelection();
 		if (SelectedNode is { } selected)
 		{
 			var current = Nodes.FirstOrDefault(node => string.Equals(node.Id, selected.Id, StringComparison.Ordinal));
@@ -538,6 +565,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
         if (topologyBefore != string.Join("|", Nodes.Select(node => node.Id))) AutoLayout();
         RefreshViewportProjection();
 		PublishHealthRevision(graph.Nodes);
+        NotifyGraphAuthoringSelectionChanged();
 		RefreshLayerCommandState();
 	}
 
@@ -681,6 +709,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 
 	private void SelectNode(CompositingGraphNodeViewModel node, bool extend = false)
 	{
+        ClearConnectionSelection();
         if (extend && ResolveLayerId(node.Id) is { } layerId)
         {
             var selection = Layers.Where(layer => layer.IsSelected).ToList();
@@ -698,6 +727,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 		SelectedNode = node;
 		_inspector.SelectCompositingNode(node.Projection);
         SynchronizeSelectedLayerDraft();
+        NotifyGraphAuthoringSelectionChanged();
 		RefreshLayerCommandState();
 	}
 
@@ -768,8 +798,14 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
         if (e.PropertyName is nameof(CompositingGraphNodeViewModel.HasStateDraft) or nameof(CompositingGraphNodeViewModel.StateConflict)) SynchronizeSelectedLayerDraft();
-		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y))
-			{ UpdateConnections(); RefreshViewportProjection(); }
+		if ((e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y)) &&
+            sender is CompositingGraphNodeViewModel moved && !_nodeLayoutMoving)
+        {
+            foreach (var connection in Connections.Where(connection =>
+                connection.FromNodeId == moved.Id || connection.ToNodeId == moved.Id))
+                connection.UpdateGeometry();
+            RefreshViewportProjection();
+        }
 	}
 
 	private void PublishHealthRevision(IReadOnlyList<CompositingGraphNodeProjection> nodes)

@@ -160,7 +160,8 @@ public sealed partial class CompositingGraphViewModel
         set
         {
             if (!Set(ref _showAdvancedGraph, value)) return;
-            if (!value) ShowLayers = true;
+            if (!value) { ShowLayers = true; ClearConnectionSelection(); }
+            NotifyGraphAuthoringSelectionChanged();
             OnPropertyChanged(nameof(AdvancedGraphColumnWidth));
             OnPropertyChanged(nameof(LayerPanelWidth));
             RefreshViewportProjection();
@@ -313,6 +314,7 @@ public sealed partial class CompositingGraphViewModel
         _selectingLayers = true;
         try
         {
+            ClearConnectionSelection();
             var selected = selection.Where(Layers.Contains).Distinct().ToArray();
             _missingSelectedNodeId = null;
             _reviewingLayers = selected.Length > 1;
@@ -322,6 +324,7 @@ public sealed partial class CompositingGraphViewModel
             else if (selected.Length > 1) _inspector.ReviewCompositingLayers(
                 _operator.CompositingLayers.Where(layer => selected.Any(node => ResolveLayerId(node.Id) == layer.LayerId)).ToArray());
             SynchronizeSelectedLayerDraft();
+            NotifyGraphAuthoringSelectionChanged();
             RefreshLayerCommandState();
         }
         finally { _selectingLayers = false; }

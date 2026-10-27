@@ -121,6 +121,23 @@ A missing or checksum-invalid graphics sidecar is a recovery failure rather than
 
 Operator clients continue to receive graphics truth from Runtime snapshots. Durable authored state is therefore recovery input, not a substitute for Runtime confirmation.
 
+## Controlled static processing in the Compositing workspace
+
+The COMPOSITING advanced graph inspects the same Runtime-confirmed Production
+CG and bitmap layer identities as the layer list and shared Inspector.
+Selecting a CG Transform or a supported Color Grade/Chroma Key node reuses the
+established Inspector's bounded typed parameter drafts and explicit Apply;
+no separate graph compositor or WPF Program rasterizer is added. The graph
+labels these operations **STATIC** because animated/keyframed processing is
+not part of this executed path.
+
+Local node repositioning and connection inspection are presentation only.
+A staged FX order is bound to the confirmed production revision and layer
+content/processing signature, then submitted solely through the existing
+Client → ControlHost → RuntimeHost processing-stack mutation. No arbitrary
+wiring, extra source or effect kind is implicitly supported, and rejection
+must leave the original confirmed Program chain untouched.
+
 ## Validation
 
 The qualified path is covered by:
