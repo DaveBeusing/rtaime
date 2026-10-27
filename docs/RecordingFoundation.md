@@ -347,8 +347,12 @@ diagnostic is never a substitute for the original 512 MiB assertion or
 the replay timestamp/clip-window invariants.
 
 Issue #401 retains the historical 966.57 MiB failure on `a1c7fa4a`.
-A separate observation source `1678848b` later passed 600 seconds with
-~290 MiB growth and reduced private bytes after cleanup. Because source
+An unchanged same-source `a1c7fa4a` repeat passed 600 seconds with
+304,893,952 bytes (~291 MiB) growth. The separate observation source
+`1678848b` also passed with **521,105,408 bytes (~497 MiB)** of assertion-
+baseline growth, very near the preserved 512 MiB bound, and reclaimed private
+bytes after cleanup. Its ~290 MiB difference between sparse playback samples
+uses a later starting point and must not be reported as its test growth. Because source
 revisions differ, neither observation proves a current-master leak nor a
 current-master fix. The pooled NV12 conversion scratch described below
 is already present on the current master; it is not a license to weaken
