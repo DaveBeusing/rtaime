@@ -51,10 +51,10 @@ public sealed record MediaFilmstripRequest(
             throw new ArgumentException("Filmstrip request exceeds source identity, range or preview capacity.");
     }
 
-    internal string CacheKey => string.Join("|", AssetId, FingerprintSha256.ToUpperInvariant(),
-        LengthBytes, UpdatedUtcTicks, DurationTicks, StartTicks, EndTicks,
-        FrameRateNumerator, FrameRateDenominator, Width, Height, SampleCount, (int)Quality,
-        MediaAnalysisContract.Version);
+    internal string CacheKey => FormattableString.Invariant(
+        $"{AssetId}|{FingerprintSha256.ToUpperInvariant()}|{LengthBytes}|{UpdatedUtcTicks}|" +
+        $"{DurationTicks}|{StartTicks}|{EndTicks}|{FrameRateNumerator}|{FrameRateDenominator}|" +
+        $"{Width}|{Height}|{SampleCount}|{(int)Quality}|{MediaAnalysisContract.Version}");
 
     /// <summary>
     /// Use rational nominal frame boundaries only for selecting seek positions.
@@ -141,15 +141,7 @@ public sealed class MediaAssetFilmstripService : IDisposable
         // The catalogue remains the owner; this service never opens a media path.
         try
         {
-            var catalog = await _client.GetMediaAssetCatalogAsync(cancellationToken);
-            var current = catalog.Assets.FirstOrDefault(item => item.AssetId.ToString() == request.AssetId);
-            if (current is null || current.Availability != MediaAssetAvailability.Online ||
-                current.FingerprintSha256 != request.FingerprintSha256 ||
-                current.LengthBytes != request.LengthBytes ||
-                current.UpdatedAt.Value.UtcTicks != request.UpdatedUtcTicks ||
-                current.Duration.Ticks != request.DurationTicks ||
-                current.VideoFormat.FrameRate.Numerator != request.FrameRateNumerator ||
-                current.VideoFormat.FrameRate.Denominator != request.FrameRateDenominator)
+            if (!await IsCurrentAssetAsync(request, cancellationToken))
             {
                 lock (_gate) EvictAsset(request.AssetId);
                 return new(request, MediaAnalysisState.Stale, [],
@@ -215,6 +207,20 @@ public sealed class MediaAssetFilmstripService : IDisposable
         }
     }
 
+    private async Task<bool> IsCurrentAssetAsync(MediaFilmstripRequest request, CancellationToken token)
+    {
+        var catalog = await _client.GetMediaAssetCatalogAsync(token);
+        var current = catalog.Assets.FirstOrDefault(item => item.AssetId.ToString() == request.AssetId);
+        return current is not null && current.Availability == MediaAssetAvailability.Online &&
+            string.Equals(current.FingerprintSha256, request.FingerprintSha256,
+                StringComparison.OrdinalIgnoreCase) &&
+            current.LengthBytes == request.LengthBytes &&
+            current.UpdatedAt.Value.UtcTicks == request.UpdatedUtcTicks &&
+            current.Duration.Ticks == request.DurationTicks &&
+            current.VideoFormat.FrameRate.Numerator == request.FrameRateNumerator &&
+            current.VideoFormat.FrameRate.Denominator == request.FrameRateDenominator;
+    }
+
     private async Task<MediaFilmstripResult?> RunAsync(MediaFilmstripRequest request,
         CancellationToken canceled, IProgress<MediaFilmstripProgress>? progress)
     {
@@ -234,6 +240,12 @@ public sealed class MediaAssetFilmstripService : IDisposable
                 output.Add(sample);
                 progress?.Report(new(output.Count, points.Length, MediaAnalysisState.Running));
             }
+            // A relink while a filmstrip was decoding revokes the old pictures
+            // before they can reach a visible Library or timeline presentation.
+            if (!await IsCurrentAssetAsync(request, totalBudget.Token))
+                return new(request, MediaAnalysisState.Stale, [],
+                    "Catalogue identity changed during thumbnail preparation.");
+            totalBudget.Token.ThrowIfCancellationRequested();
             var completed = output.Count(sample => sample.State == MediaAnalysisState.Complete);
             var state = completed == points.Length ? MediaAnalysisState.Complete :
                 completed > 0 ? MediaAnalysisState.Partial : MediaAnalysisState.Unavailable;
