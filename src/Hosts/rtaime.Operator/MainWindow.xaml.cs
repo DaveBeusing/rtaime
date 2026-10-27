@@ -90,6 +90,7 @@ public partial class MainWindow : Window
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
@@ -199,6 +200,7 @@ public partial class MainWindow : Window
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
@@ -290,6 +292,7 @@ public partial class MainWindow : Window
 	private readonly LiveConsoleBinding _liveConsole;
 	public RundownViewModel Rundown { get; }
 	public CompositingGraphViewModel CompositingGraph { get; }
+	public ColorReviewViewModel ColorReview { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
 	public ShowControlViewModel ShowControl { get; }
 	public ProductionMacroViewModel ProductionMacros { get; }
@@ -435,6 +438,7 @@ public partial class MainWindow : Window
 		if (e.PropertyName != nameof(OperatorShellViewModel.SelectedWorkspace))
 			return;
 
+		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
 		Library?.Visit(new("workspace", "", Shell.SelectedWorkspace));
         _ = _sessionRecoveryStore.CheckpointAsync(
 			new OperatorSafeSessionState(Shell.SelectedWorkspace));
@@ -613,6 +617,7 @@ public partial class MainWindow : Window
 				viewModel.ConfirmedReplaySnapshot -= Replay.ApplyConfirmedSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
+				ColorReview.Dispose();
 				CompositingGraph.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
@@ -623,6 +628,7 @@ public partial class MainWindow : Window
 			{
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
+				ColorReview.Dispose();
 				CompositingGraph.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
