@@ -33,6 +33,8 @@ public sealed class ReplayCaptureIsolationTests
                 Assert.True(capture.TryEnqueue(MediaSinkId.New(), frame.Descriptor, audio, lease, new byte[7680]).Accepted);
                 await capture.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.Equal(1, lease.Disposals);
+                Assert.Equal(new ReplayCaptureWriterLifetimeStatistics(
+                    1, 1, 1, 1, 0, 0, 0), capture.WriterLifetimeStatistics);
                 Assert.Null(capture.Snapshot.Failure);
                 Assert.Single(capture.Snapshot.Segments);
                 Assert.Single(Directory.GetFiles(root, "replay-*.mp4"));
@@ -81,6 +83,8 @@ public sealed class ReplayCaptureIsolationTests
             Assert.Equal(ReplayCaptureState.Disabled, capture.Snapshot.CaptureState);
             Assert.Equal(1, lease.Disposals);
             Assert.Equal(1, writer.Finalizations);
+            Assert.Equal(new ReplayCaptureWriterLifetimeStatistics(
+                1, 1, 1, 1, 0, 0, 0), capture.WriterLifetimeStatistics);
         }
         finally
         {
@@ -112,6 +116,8 @@ public sealed class ReplayCaptureIsolationTests
             Assert.True(capture.TryEnqueue(MediaSinkId.New(), frame.Descriptor, audio, lease, new byte[7680]).Accepted);
             await capture.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(1, writer.Aborts);
+            Assert.Equal(new ReplayCaptureWriterLifetimeStatistics(
+                1, 0, 0, 0, 1, 1, 0), capture.WriterLifetimeStatistics);
             Assert.Equal(1, lease.Disposals);
             Assert.Equal(1UL, capture.Snapshot.Statistics.DroppedSamples);
             Assert.Empty(Directory.GetFiles(root, "replay-*"));

@@ -7,6 +7,12 @@ namespace rtaime.Recording;
 
 public readonly record struct ReplayCaptureQueueStatistics(int QueueDepth, int MaximumQueueDepth, int QueueCapacity);
 
+// Writer lifetime observations are independent of encoded-file retention and Program cadence.
+// Counts advance only at writer lifecycle transitions, never per captured frame.
+public readonly record struct ReplayCaptureWriterLifetimeStatistics(
+    ulong OpenAttempts, ulong Opened, ulong FinalizeAttempts, ulong Finalized,
+    ulong AbortAttempts, ulong Aborted, int Active);
+
 /// <summary>
 /// Failure-isolated bounded Program replay encoder. The queue owns only a small, bounded set of
 /// retained Program payload leases while encoded history is stored as finalized MP4 segments.
@@ -38,6 +44,9 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	private ulong _accepted;
 	private ulong _dropped;
 	private ulong _finalized;
+    private ulong _writerOpenAttempts, _writerOpened, _writerFinalizeAttempts, _writerFinalized;
+    private ulong _writerAbortAttempts, _writerAborted;
+    private int _activeWriters;
 	private ulong _discontinuities;
 	private bool _discontinuityPending;
 	private TimeSpan? _markIn;
@@ -69,6 +78,15 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	{
 		get { lock (_gate) return new(_queue.Count, _maximumQueueDepth, _queueCapacity); }
 	}
+    public ReplayCaptureWriterLifetimeStatistics WriterLifetimeStatistics
+    {
+        get
+        {
+            lock (_gate)
+                return new(_writerOpenAttempts, _writerOpened, _writerFinalizeAttempts,
+                    _writerFinalized, _writerAbortAttempts, _writerAborted, _activeWriters);
+        }
+    }
 	public IReadOnlyList<ReplayObservation> Observations => _observations.Snapshot();
 	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
@@ -384,6 +402,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		var id = ReplaySegmentId.New();
 		var outputId = new RecordingOutputId(id.Value);
 		var writer = _writerFactory();
+        lock (_gate) _writerOpenAttempts++;
 		var fileName = $"replay-{id}.mp4";
 		try
 		{
@@ -393,10 +412,20 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 				RecordingSessionId.New(),
 				new RecordingOutputDescriptor(outputId, first.ProgramSinkId, $"Replay {id}"));
 			await writer.OpenAsync(request, CancellationToken.None).ConfigureAwait(false);
+            lock (_gate)
+            {
+                _writerOpened++;
+                _activeWriters++;
+            }
 		}
 		catch
 		{
-			try { await writer.AbortAsync(CancellationToken.None).ConfigureAwait(false); }
+            lock (_gate) _writerAbortAttempts++;
+			try
+            {
+                await writer.AbortAsync(CancellationToken.None).ConfigureAwait(false);
+                lock (_gate) _writerAborted++;
+            }
 			catch { }
 			ReclaimAbandonedFiles();
 			throw;
@@ -427,10 +456,11 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	{
 		if (!segment.HasSamples)
 		{
-			await segment.Writer.AbortAsync(CancellationToken.None).ConfigureAwait(false);
+            await AbortSegmentAsync(segment).ConfigureAwait(false);
 			return;
 		}
 
+        lock (_gate) _writerFinalizeAttempts++;
 		await segment.Writer.FinalizeAsync(CancellationToken.None).ConfigureAwait(false);
 		var finalPath = segment.Writer.FinalPath
 			?? throw new InvalidDataException("Replay segment writer finalized without publishing a path.");
@@ -453,6 +483,8 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		lock (_gate)
 		{
 			_finalized++;
+            _writerFinalized++;
+            _activeWriters--;
 			_failure = null;
 			ObserveUnsafe("replay.segment.finalized", $"Replay segment {segment.Id} finalized ({info.Length} bytes).", segment.LastSequence, segment.Id);
 		}
@@ -460,7 +492,16 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 
 	private async ValueTask AbortSegmentAsync(SegmentSession segment)
 	{
-		try { await segment.Writer.AbortAsync(CancellationToken.None).ConfigureAwait(false); }
+        lock (_gate) _writerAbortAttempts++;
+        try
+        {
+            await segment.Writer.AbortAsync(CancellationToken.None).ConfigureAwait(false);
+            lock (_gate)
+            {
+                _writerAborted++;
+                _activeWriters--;
+            }
+        }
 		catch { }
 		ReclaimAbandonedFiles();
 	}

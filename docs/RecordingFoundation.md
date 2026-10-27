@@ -334,6 +334,33 @@ Repeated recorder disposal joins one drain. Closing disposal admission prevents 
 
 The mixed Runtime qualification fills the unchanged default 64-sample recording queue while replay, NDI and SRT are also stalled. Program continues, rejected recording samples do not retain payloads, and the first writer's retained Program hash remains unchanged across later source replacement and transitions. Shutdown waits for recording finalization, including repeated shutdown callers.
 
+## Replay memory soak evidence boundary
+
+The long dual-deck Replay workload has an opt-in, fixed-size memory diagnostic
+sidecar. Alongside the unchanged 600-second 50/59.94 software tests, it records
+live/committed managed heap, GC, process private/working-set bytes and handles,
+Replay encoded-store size, queue occupancy and per-writer open/finalize/abort
+ownership counts. Media Foundation native writer counters additionally record
+configured COM sink acquisitions/releases, MF startup/shutdown calls and
+rented/returned NV12 scratch buffers without retaining COM objects, encoded
+segments or Program payloads in diagnostic collections. Tests in `ReplayCaptureIsolationTests` and
+`ReplayCaptureContinuityTests` verify the lifecycle counters across success,
+failed open, cancellation, drop-induced rotations and complete drain. The
+diagnostic is never a substitute for the original 512 MiB assertion or
+the replay timestamp/clip-window invariants.
+
+Issue #401 retains the historical 966.57 MiB failure on `a1c7fa4a`.
+An unchanged same-source `a1c7fa4a` repeat passed 600 seconds with
+304,893,952 bytes (~291 MiB) growth. The separate observation source
+`1678848b` also passed with **521,105,408 bytes (~497 MiB)** of assertion-
+baseline growth, very near the preserved 512 MiB bound, and reclaimed private
+bytes after cleanup. Its ~290 MiB difference between sparse playback samples
+uses a later starting point and must not be reported as its test growth. Because source
+revisions differ, neither observation proves a current-master leak nor a
+current-master fix. The pooled NV12 conversion scratch described below
+is already present on the current master; it is not a license to weaken
+retention, timing, queue limits or the existing resource budget.
+
 ## Segmented MP4 conversion scratch ownership
 
 The default two-second Replay segments use distinct Media Foundation writers.
