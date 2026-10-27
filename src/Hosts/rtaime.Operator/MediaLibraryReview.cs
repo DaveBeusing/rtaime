@@ -99,7 +99,7 @@ public sealed partial class MediaPoolInspectorViewModel
     }
 
     private bool CanReviewSelectedFrames() =>
-        !_reviewDisposed && !_reviewRunning && _reviewService is not null &&
+        !_reviewDisposed && !_reviewRunning && !_audioReviewRunning && _reviewService is not null &&
         !_catalogBusy && !_batchRunning && !_operator.IsBusy &&
         _operator.IsConnected && !_operator.IsStale &&
         !MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow) &&
