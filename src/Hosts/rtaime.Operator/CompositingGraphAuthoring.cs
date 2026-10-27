@@ -85,6 +85,7 @@ public sealed partial class CompositingGraphViewModel
 
     private FxOrderDraft? _fxOrderDraft;
     private bool _fxOrderApplying;
+    private bool _nodeLayoutMoving;
     private string _fxOrderResult = "FX ORDER · CONFIRMED OBSERVATION";
     private string _topologyEvidence = "OBSERVED TOPOLOGY · CONNECTIONS READ ONLY";
     private string _layoutEvidence = "AUTO LAYOUT · PRESENTATION ONLY";
@@ -130,6 +131,7 @@ public sealed partial class CompositingGraphViewModel
         ? _fxOrderResult
         : (!IsFxOrderBaselineCurrent(draft) ? "STALE FX ORDER DRAFT · DISCARD REQUIRED" :
             _fxOrderApplying ? "FX ORDER APPLYING · AWAITING RUNTIME OBSERVATION" :
+            _fxOrderResult.StartsWith("FX ORDER REJECTED", StringComparison.Ordinal) ? _fxOrderResult :
             ("LOCAL FX ORDER DRAFT · NOT ON PROGRAM · " + draft.LayerId + " · REV " +
                 draft.Revision + " · " + string.Join(" → ", draft.OrderedIds)));
     public bool HasFxOrderDraft => _fxOrderDraft is not null;
@@ -284,8 +286,13 @@ public sealed partial class CompositingGraphViewModel
         var x = Math.Clamp(node.X + deltaViewportX / Zoom, 0, Math.Max(0, CanvasWidth - CompositingGraphNodeViewModel.NodeWidth));
         var y = Math.Clamp(node.Y + deltaViewportY / Zoom, 0, Math.Max(0, CanvasHeight - CompositingGraphNodeViewModel.NodeHeight));
         if (Math.Abs(x - node.X) < .01 && Math.Abs(y - node.Y) < .01) return false;
-        node.X = x;
-        node.Y = y;
+        _nodeLayoutMoving = true;
+        try { node.X = x; node.Y = y; }
+        finally { _nodeLayoutMoving = false; }
+        foreach (var connection in Connections.Where(connection =>
+            connection.FromNodeId == node.Id || connection.ToNodeId == node.Id))
+            connection.UpdateGeometry();
+        RefreshViewportProjection();
         LayoutEvidence = "LOCAL NODE ARRANGEMENT · NOT A RUNTIME TRANSFORM";
         return true;
     }
