@@ -187,15 +187,19 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
     public bool TryStageReplayClip(ReplayClipAssetResult clip,
         MediaAssetDescriptor asset, ProductionSourceId sourceId, string name)
     {
-        if (!CanStageReplayClip ||
-            !_operator.Sources.Any(source => source.Id == sourceId.ToString()) ||
-            !ReplayRundownEligibility.TryVerifyAsset(clip, asset, out var failure))
+        if (!CanStageReplayClip)
         {
-            Detail = !CanStageReplayClip
-                ? "Replay cannot enter the rundown while saved revisions, execution or Control authority are unverified."
-                : !_operator.Sources.Any(source => source.Id == sourceId.ToString())
-                    ? "Replay media deck source is not a current Control-authorized production source."
-                    : failure;
+            Detail = "Replay cannot enter the rundown while saved revisions, execution or Control authority are unverified.";
+            return false;
+        }
+        if (!_operator.Sources.Any(source => source.Id == sourceId.ToString()))
+        {
+            Detail = "Replay media deck source is not a current Control-authorized production source.";
+            return false;
+        }
+        if (!ReplayRundownEligibility.TryVerifyAsset(clip, asset, out var failure))
+        {
+            Detail = failure;
             return false;
         }
 
