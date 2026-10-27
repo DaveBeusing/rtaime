@@ -48,6 +48,57 @@ public sealed class SequenceFrameCompositionIntegrationTests
                 new AudioProductionSourceConfiguration(b, 0.5, false, false, [AudioBusId.Program])
             ]));
 
+    [Theory]
+    [InlineData(25, 1, 9600, 1920)]
+    [InlineData(50, 1, 4800, 960)]
+    [InlineData(60000, 1001, 4004, 800)]
+    public void Source_pcm_window_is_sample_exact_across_first_last_and_looped_frames(
+        long numerator, long denominator, long ticksPerFrame, int firstSamples)
+    {
+        var rate = new FrameRate(numerator, denominator);
+        var (firstPosition, firstCount) = LocalMediaDeckRuntimeService.SourcePcmWindow(0, rate);
+        Assert.Equal(0UL, firstPosition);
+        Assert.Equal((uint)firstSamples, firstCount);
+        ulong cumulative = 0;
+        for (var frame = 0; frame < 12; frame++)
+        {
+            var sourceTick = checked(ticksPerFrame * frame);
+            var (position, count) = LocalMediaDeckRuntimeService.SourcePcmWindow(sourceTick, rate);
+            Assert.Equal(cumulative, position);
+            cumulative = checked(cumulative + count);
+            Assert.InRange(count, 1U, (uint)SequenceFrameComposition.MaximumAudioSamples);
+        }
+        Assert.Equal((ulong)(12 * ticksPerFrame / 5), cumulative);
+        // Native loop preroll rewinds source sample time without rewinding
+        // the authoritative Program clock or changing the PCM length.
+        var (looped, loopCount) = LocalMediaDeckRuntimeService.SourcePcmWindow(0, rate);
+        Assert.Equal(firstPosition, looped);
+        Assert.Equal(firstCount, loopCount);
+        Assert.Throws<InvalidOperationException>(() =>
+            LocalMediaDeckRuntimeService.SourcePcmWindow(0, new FrameRate(10, 1)));
+    }
+
+    [Fact]
+    public void Authored_slice_end_masks_only_trailing_pcm_and_preserves_frame_sample_count()
+    {
+        const uint count = 960;
+        var window = new float[count * 2];
+        Array.Fill(window, 0.5f);
+        var masked = LocalMediaDeckRuntimeService.SilenceBeyondSourceSlice(
+            window, 0, count, 4002);
+        Assert.Equal(159, masked);
+        for (var sample = 0; sample < count; sample++)
+        {
+            Assert.Equal(sample < 801 ? 0.5f : 0f, window[sample * 2]);
+            Assert.Equal(sample < 801 ? 0.5f : 0f, window[sample * 2 + 1]);
+        }
+        Assert.Equal(0, LocalMediaDeckRuntimeService.SilenceBeyondSourceSlice(
+            window, 0, count, 4800));
+        Assert.Throws<ArgumentException>(() =>
+            LocalMediaDeckRuntimeService.SilenceBeyondSourceSlice(
+                new float[10], 0, count, 4800));
+    }
+
     [Fact]
     public void Real_two_native_mp4_frames_compose_through_gpu_and_pcm_uses_existing_audio_mixer()
     {
