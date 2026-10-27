@@ -256,7 +256,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 				sampleCount,
 				results,
 				Stopwatch.GetElapsedTime(started));
-			Monitoring?.ApplyGpuScopes(snapshot, AnalyzePreview);
+			Monitoring?.ApplyGpuScopes(snapshot, frame, AnalyzePreview);
 		}
 		finally
 		{
