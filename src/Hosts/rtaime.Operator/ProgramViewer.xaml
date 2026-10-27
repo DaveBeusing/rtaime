@@ -20,6 +20,7 @@
 		FrameUnavailableText="Program frame unavailable · production authority remains remote">
 
 		<controls:RtaimeMonitorPresentation.HeaderContent>
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 			<controls:RtaimeStatusBadge
 				Status="{x:Static controls:RtaimeStatusKind.Program}"
 				Content="ON AIR"
@@ -36,6 +37,12 @@
 					</Style>
 				</controls:RtaimeStatusBadge.Style>
 			</controls:RtaimeStatusBadge>
+			<TextBlock Text="{Binding Monitoring.ProgramFrameAge, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+				Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}"
+				Margin="6,0,0,0" MaxWidth="185" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+				ToolTip="Actual matching Program monitoring receipt age; not physical output delivery or sink latency."
+				AutomationProperties.Name="Program monitoring receipt age" />
+			</StackPanel>
 		</controls:RtaimeMonitorPresentation.HeaderContent>
 
 		<controls:RtaimeMonitorPresentation.StatusContent>
