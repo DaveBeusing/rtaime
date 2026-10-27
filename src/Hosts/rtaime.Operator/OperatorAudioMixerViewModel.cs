@@ -599,9 +599,9 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
 	public bool HasDraftChanges => !DraftMatches(_confirmed) || Assignments.Any(a => a.HasDraftChanges);
-	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState == "PENDING" ? "PENDING" :
-		NeedsReview ? "REVIEW REQUIRED" : MutationState == "REJECTED" ? "REJECTED" :
-		HasDraftChanges ? "DRAFT" : MutationState;
+	public string DraftState => !InputsValid ? "INVALID INPUT" :
+		MutationState is "PENDING" or "REJECTED" ? MutationState :
+		NeedsReview ? "REVIEW REQUIRED" : HasDraftChanges ? "DRAFT" : MutationState;
 
 	internal void Apply(
 		AudioProductionSourceConfiguration source,
@@ -927,9 +927,9 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
 	public bool HasDraftChanges => !DraftMatches(_confirmed);
-	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState == "PENDING" ? "PENDING" :
-		NeedsReview ? "REVIEW REQUIRED" : MutationState == "REJECTED" ? "REJECTED" :
-		HasDraftChanges ? "DRAFT" : MutationState;
+	public string DraftState => !InputsValid ? "INVALID INPUT" :
+		MutationState is "PENDING" or "REJECTED" ? MutationState :
+		NeedsReview ? "REVIEW REQUIRED" : HasDraftChanges ? "DRAFT" : MutationState;
 	public string MuteActionLabel => _confirmed.Muted ? "MUTE OFF" : "MUTE";
 
 	internal void Apply(
