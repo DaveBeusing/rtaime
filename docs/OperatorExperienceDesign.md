@@ -167,6 +167,27 @@ must never seek/reuse a live production deck or create a second admission owner.
 Until that real path exists, current hover remains thumbnail-only; unavailable
 original detail stays explicit.
 
+### Shared Operator shell chrome
+
+The existing custom-control shell owns the compact status hierarchy, LIVE /
+MEDIA / Timeline / OUTPUTS primary destinations, contextual **More** navigation
+and reusable dock headers. The dock panel title and action strip use the shared
+`RtaimePanelHeader` slots; selected dock tabs use the same custom button focus,
+contrast and hover foundations as the navigation rail. This is a presentation
+change, not a new dock/transport framework.
+
+The 960 × 540 surface gives explicit width to project, engine, timecode, LIVE
+transmission and Program identity; global readiness takes the remaining width.
+Only the secondary wordmark is suppressed. The viewer and timeline continue to
+measure the real center container instead of applying a window-wide scale.
+Floating TIMELINE/MONITORS must keep the same timeline owners and observable
+mode state as the main window. `docs/OperatorShellLayouts.md` records the
+before/after compact width allocation and owner contract.
+
+Source changes alone are not visual acceptance: physical mixed-DPI, keyboard
+focus review, screen-reader behavior and high-contrast review remain subject to
+real Windows evidence in `docs/OperatorVisualQualification.md`.
+
 ## Interaction and production safety
 
 The shared state sequence is **local selection/draft → explicit request → pending response → synchronized authority → execution/provider evidence where supplied**. Those stages are not interchangeable. An accepted response alone is not proof of physical output delivery.
