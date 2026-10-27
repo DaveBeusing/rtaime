@@ -448,6 +448,14 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ReplayClipPolicy.ps1
 
+      - name: Reject forged and incomplete replay memory diagnostic evidence
+        shell: pwsh
+        run: ./build/qualification/Test-SsdPlaybackMemoryVerifierRegression.ps1
+
+      - name: Verify sustained playout coverage and no false release readiness
+        shell: pwsh
+        run: ./build/qualification/Test-ProductionSoakCoverageRegression.ps1
+
       - name: Verify recording profile catalog policy
         shell: pwsh
         run: ./build/quality/Test-RecordingProfilePolicy.ps1
