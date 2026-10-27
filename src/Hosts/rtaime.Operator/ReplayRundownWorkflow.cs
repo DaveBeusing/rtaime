@@ -115,7 +115,7 @@ public sealed partial class ReplayViewModel
         {
         if (_rundown is null) return;
         var clip = RequireReadyClip();
-        var catalog = await _client.GetMediaAssetCatalogAsync().ConfigureAwait(false);
+        var catalog = await _client.GetMediaAssetCatalogAsync();
         var asset = catalog.Assets.SingleOrDefault(value =>
             string.Equals(value.AssetId.ToString(), clip.AssetId, StringComparison.OrdinalIgnoreCase));
         if (!ReplayRundownEligibility.TryVerifyAsset(clip, asset, out var reason))
@@ -142,7 +142,7 @@ public sealed partial class ReplayViewModel
     private async Task ReviewNewRangeAsync() => await RunAsync(async () =>
     {
         if (!_clipOutcomeUnknown) return;
-        var snapshot = await _client.GetReplaySnapshotAsync().ConfigureAwait(false);
+        var snapshot = await _client.GetReplaySnapshotAsync();
         ApplyConfirmedSnapshot(snapshot);
         if (snapshot.ClipState == ReplayControlClipState.Finalizing)
         {
