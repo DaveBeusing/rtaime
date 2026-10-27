@@ -154,7 +154,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		get => _activeScopeStream;
 		set
 		{
-			if (value is not (MonitoringStreamKind.Program or MonitoringStreamKind.Preview) ||
+			if (value is not (MonitoringStreamKind.Program or MonitoringStreamKind.Source) ||
 			    !Set(ref _activeScopeStream, value)) return;
 			_programScopes = null; _previewScopes = null;
 			OnPropertyChanged(nameof(ProgramScopes)); OnPropertyChanged(nameof(PreviewScopes));
@@ -609,7 +609,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot, bool preview = false)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
-		var stream = preview ? MonitoringStreamKind.Preview : MonitoringStreamKind.Program;
+		var stream = preview ? MonitoringStreamKind.Source : MonitoringStreamKind.Program;
 		var current = preview ? PreviewGpuFrame : ProgramGpuFrame;
 		if (!ScopesEnabled || ActiveScopeStream != stream || current is null ||
 			(preview ? PreviewState : ProgramState) != "LIVE" ||
@@ -629,7 +629,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	internal void SetGpuScopesUnavailable(string detail, bool preview = false)
 	{
 		if (!ScopesEnabled || ActiveScopeStream !=
-			(preview ? MonitoringStreamKind.Preview : MonitoringStreamKind.Program))
+			(preview ? MonitoringStreamKind.Source : MonitoringStreamKind.Program))
 			return;
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, true);
 		ScopeProcessingDetail = $"CPU fallback eligible · {detail}";
