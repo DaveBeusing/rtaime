@@ -334,8 +334,7 @@
 
 				<ItemsControl ItemsSource="{Binding VisibleConnections}"
 					Width="{Binding CanvasWidth}"
-					Height="{Binding CanvasHeight}"
-					IsHitTestVisible="False">
+					Height="{Binding CanvasHeight}">
 					<ItemsControl.ItemsPanel>
 						<ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
 					</ItemsControl.ItemsPanel>
@@ -352,11 +351,22 @@
 													<Setter Property="Stroke" Value="{DynamicResource OperatorAccentBrush}" />
 													<Setter Property="Opacity" Value="1" />
 												</DataTrigger>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Stroke" Value="{DynamicResource OperatorFocusBrush}" />
+                                            <Setter Property="StrokeThickness" Value="4" />
+                                            <Setter Property="Opacity" Value="1" />
+                                        </DataTrigger>
 											</Style.Triggers>
 										</Style>
 									</Path.Style>
 								</Path>
-								<Polygon Points="{Binding ArrowPoints}" Opacity="{Binding Opacity}">
+								<!-- The hit target has no effect on confirmed signal geometry. -->
+                                <Path Data="{Binding Geometry}" Stroke="Transparent" StrokeThickness="14"
+                                    Focusable="True" Cursor="Hand" ToolTip="{Binding Description}"
+                                    AutomationProperties.Name="{Binding Description}"
+                                    PreviewMouseLeftButtonDown="OnConnectionSelect"
+                                    PreviewKeyDown="OnConnectionKeyDown" />
+                                <Polygon Points="{Binding ArrowPoints}" Opacity="{Binding Opacity}">
 									<Polygon.Style>
 										<Style TargetType="{x:Type Polygon}">
 											<Setter Property="Fill" Value="{StaticResource GraphConnectionBrush}" />
@@ -397,7 +407,8 @@
 								Padding="0"
 								HorizontalContentAlignment="Stretch"
 								VerticalContentAlignment="Stretch"
-								ToolTip="{Binding Id}" AutomationProperties.Name="{Binding Id}" PreviewMouseLeftButtonDown="OnNodeSelectionModifiers">
+								ToolTip="{Binding CapabilityLabel}" AutomationProperties.Name="{Binding Id}" PreviewMouseLeftButtonDown="OnNodeSelectionModifiers"
+                                PreviewMouseMove="OnNodeDragMove" PreviewMouseLeftButtonUp="OnNodeDragEnd" LostMouseCapture="OnNodeDragLostCapture">
 								<Border Style="{StaticResource GraphNodeBorder}">
 									<Grid>
 										<Grid.ColumnDefinitions>
