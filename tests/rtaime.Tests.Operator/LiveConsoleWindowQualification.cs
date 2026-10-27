@@ -89,6 +89,12 @@ internal static class LiveConsoleWindowQualification
             Assert.Same(((OperatorViewModel)window.DataContext).SetPreviewCommand, liveButtons[0].Command);
             Assert.Same(((OperatorViewModel)window.DataContext).CutCommand, liveButtons[1].Command);
             Assert.Same(((OperatorViewModel)window.DataContext).DissolveCommand, liveButtons[2].Command);
+            Assert.True(liveButtons[1].Focus());
+            var compactEnter = new KeyEventArgs(Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(liveButtons[1])!, 0, Key.Enter);
+            Assert.False(registry.TryHandle(compactEnter));
+            Assert.Equal(0, autoCalls); // Focused CUT cannot accidentally trigger global AUTO.
+            Assert.Same(liveButtons[1], LiveConsoleInput.FindButton(liveButtons[1]));
             Assert.Equal(((OperatorViewModel)window.DataContext).LiveTakeEvidence,
                 Assert.IsType<TextBlock>(window.FindName("LiveAuthorityDetail")).Text);
             Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
