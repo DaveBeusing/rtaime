@@ -133,6 +133,36 @@ public sealed class NetworkOutputFoundationTests
 		Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
 	}
 
+
+	[Fact]
+	public async Task Successful_SRT_connection_resets_a_later_failed_send_reconnect_episode()
+	{
+		var attempts = 0;
+		var failingSend = new FailingSrtSendTransport();
+		var resumed = new BlockingTransport(Task.CompletedTask);
+		await using var session = new SrtNetworkOutputSession(
+			Configuration(new Uri("srt://127.0.0.1:9000/live"), reconnectMaximumAttempts: 2),
+			() => Interlocked.Increment(ref attempts) switch
+			{
+				1 => new FailingTransport(),
+				2 => failingSend,
+				_ => resumed
+			},
+			() => new PassThroughEncoder());
+		Assert.True(session.TrySubmit(Sample(1)).Accepted);
+		await failingSend.SendAttempted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		await WaitUntilAsync(() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Reconnecting,
+			TimeSpan.FromSeconds(5));
+		Assert.Equal(2, Volatile.Read(ref attempts));
+		Assert.True(session.TrySubmit(Sample(2)).Accepted);
+		await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples >= 1,
+			TimeSpan.FromSeconds(5));
+		Assert.Equal(3, Volatile.Read(ref attempts));
+		Assert.Null(session.Snapshot.Failure);
+		Assert.Equal(NetworkOutputLifecycleState.Connected, session.Snapshot.Lifecycle);
+	}
+
+
 	[Fact]
 	public async Task Successful_NDI_sender_recovery_resets_the_next_failure_episode_budget()
 	{
@@ -766,6 +796,32 @@ public sealed class NetworkOutputFoundationTests
 		public ValueTask DisposeAsync()
 		{
 			DisposeCount++;
+			IsConnected = false;
+			return ValueTask.CompletedTask;
+		}
+	}
+
+
+	private sealed class FailingSrtSendTransport : ISrtTransport
+	{
+		public TaskCompletionSource SendAttempted { get; } =
+			new(TaskCreationOptions.RunContinuationsAsynchronously);
+		public bool IsConnected { get; private set; }
+		public ValueTask ConnectAsync(NetworkOutputConfiguration configuration, string? passphrase,
+			CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			IsConnected = true;
+			return ValueTask.CompletedTask;
+		}
+		public ValueTask<int> SendAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			SendAttempted.TrySetResult();
+			throw new IOException("Synthetic SRT transport send failure.");
+		}
+		public ValueTask DisposeAsync()
+		{
 			IsConnected = false;
 			return ValueTask.CompletedTask;
 		}
