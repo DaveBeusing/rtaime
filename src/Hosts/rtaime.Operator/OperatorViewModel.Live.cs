@@ -14,7 +14,9 @@ public sealed partial class OperatorViewModel
         ProgramSafety == OperatorProgramSafetyStates.Blocked ? $"Production blocked: {GlobalReadinessSummary}. Open Health." :
         !string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase) ? $"Runtime {RuntimeStatus}. Restore Runtime readiness." :
         "Confirmed Control state; Runtime revalidates every action.";
-    public string SetPreviewDetail => $"SELECTED {SelectedSource?.Name ?? "NONE"} → PREVIEW · local selection is not a route; SET PVW needs explicit Control confirmation.";
+    public string SetPreviewDetail => LiveProductionPresentation.PreviewEvidence(
+        SelectedSource?.Name, IsConnected, IsStale,
+        IsBusy || LiveCommandsBusy?.Invoke() == true, TransitionStatus);
     public string LiveTakeEvidence => LiveProductionPresentation.TakeEvidence(
         IsConnected, IsStale, IsBusy || LiveCommandsBusy?.Invoke() == true,
         _client?.Snapshot is not null,
