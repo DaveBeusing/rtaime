@@ -2994,7 +2994,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
 				fault,
 				_networkOutputBridge.SnapshotForRole("program"),
-				programBinding.AudioBusId ?? AudioBusId.Program.Value));
+				programBinding.AudioBusId ?? AudioBusId.Program.Value,
+				_networkOutputBridge.SnapshotsForRole("program"),
+				execution.ExecutionRevision.Value));
 		}
 
 		var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
@@ -3048,7 +3050,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
 				fault,
 				_networkOutputBridge.SnapshotForRole("aux"),
-				auxBinding.AudioBusId ?? AudioBusId.Program.Value));
+				auxBinding.AudioBusId ?? AudioBusId.Program.Value,
+				_networkOutputBridge.SnapshotsForRole("aux"),
+				execution.ExecutionRevision.Value));
 		}
 		return snapshots.AsReadOnly();
 	}
