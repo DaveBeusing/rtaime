@@ -45,8 +45,8 @@
                     SourceName="PROGRAM A · COLOR REVIEW"
                     ZoomMode="FIT" />
                 <controls:RtaimeMediaCompareView
-                    FrameA="{Binding Monitoring.ProgramImage}"
-                    FrameB="{Binding Monitoring.PreviewImage}"
+                    FrameA="{Binding ConfirmedProgramImage}"
+                    FrameB="{Binding ConfirmedPreviewImage}"
                     DifferenceFrame="{Binding Monitoring.DifferenceImage}"
                     CompareMode="{Binding Monitoring.CompareMode}"
                     WipePosition="0.5" SnapsToDevicePixels="True" IsHitTestVisible="False"
@@ -54,8 +54,8 @@
                 </controls:RtaimeMediaCompareView>
                 <controls:GpuMediaCompareSurface
                     Monitoring="{Binding Monitoring}"
-                    FrameA="{Binding Monitoring.ProgramGpuFrame}"
-                    FrameB="{Binding Monitoring.PreviewGpuFrame}"
+                    FrameA="{Binding ConfirmedProgramGpuFrame}"
+                    FrameB="{Binding ConfirmedPreviewGpuFrame}"
                     CompareMode="{Binding Monitoring.CompareMode}"
                     WipePosition="0.5" Panel.ZIndex="2" IsHitTestVisible="False"
                     Visibility="{Binding CompareVisibility}" />
