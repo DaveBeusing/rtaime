@@ -2,6 +2,7 @@
 
 using System.Windows.Input;
 using rtaime.Client;
+using rtaime.Core;
 using rtaime.Operator;
 using Xunit;
 
