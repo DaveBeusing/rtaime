@@ -292,6 +292,7 @@
 								<Setter Property="Visibility" Value="Visible" />
 							</DataTrigger></Style.Triggers>
 						</Style></Border.Style>
+						<StackPanel>
 						<Grid>
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="*" />
@@ -342,7 +343,7 @@
 								</DataTemplate>
 							</ItemsControl.ItemTemplate>
 						</ItemsControl>
-
+						</StackPanel>
 					</Border>
 				</StackPanel>
 			</Border>
