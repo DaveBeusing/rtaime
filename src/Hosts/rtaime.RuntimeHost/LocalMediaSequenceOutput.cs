@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Diagnostics;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media;
@@ -97,6 +98,14 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal bool ProgramAuthorized { get; set; }
         internal SequenceOutputCommand? ArmedTake { get; set; }
         internal ulong AuthorityRevision { get; set; }
+        // At most one native loop repreroll is admitted per output session.
+        // This is management work and never runs on the Program frame callback.
+        internal Task? LoopPreroll { get; set; }
+        internal ulong LoopReprerollCount { get; set; }
+        internal TimeSpan LastLoopReprerollDuration { get; set; }
+        internal TimeSpan LastComposeDuration { get; set; }
+        internal TimeSpan MaximumComposeDuration { get; set; }
+        internal ulong LateComposeBoundaries { get; set; }
     }
 
     /// <summary>
@@ -169,6 +178,19 @@ public sealed partial class LocalMediaDeckRuntimeService
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
+            if (session.OutputState == "ENDED")
+            {
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            // A running native loop repreroll is never awaited by Program.
+            if (session.LoopPreroll is { IsCompleted: false })
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, "BUFFERING", "runtime.sequence.loop_preroll_pending",
+                    session.LastPublishedSlot);
+            }
             // An actual sink failure is terminal for this prepared owner.
             // A new native ingress cannot requalify a failed Program output
             // without an explicit cancellation and fresh preparation.
@@ -178,10 +200,17 @@ public sealed partial class LocalMediaDeckRuntimeService
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
 
+            if (TryStartSequenceLoopRepreroll(session, programSlot))
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
             var count = 0;
             var ownerCount = 0;
             try
             {
+                var composeStarted = Stopwatch.GetTimestamp();
                 if (!TrySelectBoundSequenceBoundary(session.Reference, programSlot,
                     session.Clips, session.ClipRequests, session.OwnerRequests,
                     session.Frames, session.Indices,
@@ -253,6 +282,15 @@ public sealed partial class LocalMediaDeckRuntimeService
                 using (frame)
                     runtime.PresentSequenceInput(session.SourceId, frame, slice);
 
+                session.LastComposeDuration = Stopwatch.GetElapsedTime(composeStarted);
+                if (session.LastComposeDuration > session.MaximumComposeDuration)
+                    session.MaximumComposeDuration = session.LastComposeDuration;
+                var budget = TimeSpan.FromSeconds(
+                    (double)runtime.Format.FrameRate.Denominator /
+                    runtime.Format.FrameRate.Numerator);
+                if (session.LastComposeDuration > budget)
+                    session.LateComposeBoundaries++;
+
                 session.LastPublishedSlot = programSlot;
                 session.PublishedBoundaries++;
                 // A previously observed physical ProgramBoundaryResult
@@ -285,6 +323,125 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.Frames[index] = null;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// The immutable Program position map advances into a new loop pass before
+    /// the existing native decoder can be safely repositioned. The first
+    /// boundary marks the old pass unavailable and schedules exactly one
+    /// management-lane repreroll. Neither the native worker nor its cleanup
+    /// ever executes under this Program boundary callback.
+    /// Must be called with _sequenceOutputGate held.
+    /// </summary>
+    private bool TryStartSequenceLoopRepreroll(
+        SequenceOutputSession session, ulong programSlot)
+    {
+        SequenceRuntimePositionMap? map;
+        SequenceRuntimePosition next;
+        lock (_sequenceGate)
+        {
+            var prepared = _sequenceOwners;
+            map = _sequenceShuttleMap;
+            if (prepared is null || map is null || !map.Loop ||
+                map.State != SequenceRuntimeTransportState.Playing ||
+                prepared.SequenceId != session.Reference.SequenceId ||
+                prepared.AuthoringRevision != session.Reference.AuthoringRevision ||
+                prepared.InitialGeneration != session.Reference.Generation ||
+                !map.TryMap(programSlot, out next) ||
+                next.Generation != prepared.Generation ||
+                next.LoopPass <= prepared.LoopPass)
+                return false;
+        }
+
+        session.ArmedTake = null;
+        session.LastPreviewSlot = null;
+        session.LastProgramSlot = null;
+        session.LastPublishedSlot = ulong.MaxValue;
+        session.OutputState = "BUFFERING";
+        session.FailureCode = "runtime.sequence.loop_preroll_pending";
+        // The asynchronous task captures only the original session and map.
+        // Cancellation, replacement and authority changes are checked again
+        // under the management owner before any native seek.
+        session.LoopPreroll = Task.Run(() =>
+            RunSequenceLoopRepreroll(session, map!, next));
+        return true;
+    }
+
+    private void RunSequenceLoopRepreroll(SequenceOutputSession session,
+        SequenceRuntimePositionMap map, SequenceRuntimePosition target)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            lock (_management)
+            {
+                lock (_sequenceOutputGate)
+                    if (!ReferenceEquals(_sequenceOutput, session) ||
+                        session.OutputState is "FAILED" or "STALE" ||
+                        !session.Runtime.IsCommittedSequenceOutputSource(
+                            session.SourceId, session.ProgramAuthorized, session.AuthorityRevision))
+                        return;
+
+                lock (_sequenceGate)
+                {
+                    if (!ReferenceEquals(_sequenceShuttleMap, map) ||
+                        _sequenceOwners is not { } owners ||
+                        owners.SequenceId != session.Reference.SequenceId ||
+                        owners.Generation != target.Generation ||
+                        owners.LoopPass >= target.LoopPass)
+                        throw new InvalidOperationException(
+                            "Native loop preroll was superseded by another source generation.");
+                }
+                // Reposition joins the old native worker generation; it retains
+                // the same admitted decoder owners and resource-ledger charges.
+                var receipt = RepositionSequenceMedia(
+                    session.Reference.SequenceId, session.Reference.AuthoringRevision, target);
+                if (!receipt.Prepared)
+                    throw new IOException(receipt.Failure?.Code ??
+                        "runtime.sequence.loop_preroll_failed");
+
+                var slot = session.Runtime.NextSequenceOutputSlot;
+                lock (_sequenceGate)
+                {
+                    if (!ReferenceEquals(_sequenceShuttleMap, map) ||
+                        _sequenceOwners is not { } prepared ||
+                        prepared.Generation != target.Generation ||
+                        prepared.LoopPass != target.LoopPass)
+                        throw new InvalidOperationException(
+                            "Native loop owner changed before position publication.");
+                    _sequenceShuttleMap = map.WithConfirmedLoopPrerollAnchor(slot, target);
+                    _sequenceShuttleRevision = checked(_sequenceShuttleRevision + 1);
+                }
+                lock (_sequenceOutputGate)
+                {
+                    if (!ReferenceEquals(_sequenceOutput, session)) return;
+                    session.LoopReprerollCount++;
+                    session.LastLoopReprerollDuration = Stopwatch.GetElapsedTime(started);
+                    session.FirstAuthorizedProgramSlot = slot;
+                    session.OutputState = session.ProgramAuthorized
+                        ? "TAKE_COMMITTED" : "UNAVAILABLE";
+                    session.FailureCode = null;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or
+            ArgumentException or OverflowException or ObjectDisposedException)
+        {
+            lock (_sequenceOutputGate)
+            {
+                if (!ReferenceEquals(_sequenceOutput, session)) return;
+                session.OutputState = "FAILED";
+                session.FailureCode = "runtime.sequence.loop_preroll_failed";
+                session.LastLoopReprerollDuration = Stopwatch.GetElapsedTime(started);
+                session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
+            }
+        }
+        finally
+        {
+            lock (_sequenceOutputGate)
+                if (ReferenceEquals(_sequenceOutput, session))
+                    session.LoopPreroll = null;
         }
     }
 
@@ -557,7 +714,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         {
             var session = _sequenceOutput;
             if (session is null || session.LastPublishedSlot != boundary.SequenceNumber ||
-                session.OutputState is "FAILED" or "STALE")
+                session.OutputState is "FAILED" or "STALE" or "BUFFERING" or "ENDED")
                 return; // Late feedback cannot revive terminal owner/authority loss.
             if (session.ProgramAuthorized)
             {
