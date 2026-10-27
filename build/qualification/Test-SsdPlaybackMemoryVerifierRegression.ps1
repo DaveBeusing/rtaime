@@ -73,7 +73,39 @@ try {
     $v = Copy-Fixture; $v.programFormat = "1080p50"; Reject $v "wrong cadence"
     $v = Copy-Fixture; $v.media[0].sha256 = ""; Reject $v "missing media hash"
     $v = Copy-Fixture; $v.points[-1].phase = "playback"; Reject $v "missing teardown"
-    Write-Host "Memory diagnostic verification: one complete synthetic observation and $rejected fail-closed cases PASS. No playback or physical device qualified."
+
+    # A fully observed *failed* workload must be a FAIL in the separate
+    # source-bound readiness inventory, even though its sparse memory sidecar
+    # is structurally valid. No synthetic PASS can qualify playback.
+    $source = (& git -C (Join-Path $PSScriptRoot "../..") rev-parse HEAD).Trim().ToLowerInvariant()
+    if ($LASTEXITCODE -ne 0 -or $source -cnotmatch '^[0-9a-f]{40}
+} finally {
+    if ([IO.Path]::GetFileName($root) -notlike "rtaime-memory-verifier-*") {
+        throw "Unsafe temporary verifier directory."
+    }
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
+) {
+        throw "Exact checked-out source is required for failed-sidecar regression."
+    }
+    $supplied = Copy-Fixture
+    foreach ($field in @("sourceCommit","buildCommit","compiledRuntimeSourceCommit",
+        "compiledDiagnosticSourceCommit")) { $supplied[$field] = $source }
+    Write-Fixture $supplied
+    $assessmentPath = Join-Path $root "failed-sidecar-assessment.json"
+    & (Join-Path $PSScriptRoot "New-ProductionSoakCoverageReport.ps1") `
+        -ExpectedSourceCommit $source -ReplayMemoryDiagnosticPaths @($path) `
+        -OutputPath $assessmentPath | Out-Null
+    $assessment = Get-Content -LiteralPath $assessmentPath -Raw | ConvertFrom-Json -Depth 48
+    $sidecar = @($assessment.qualifications | Where-Object id -EQ "diagnosticOnly/1080p59.94/10m")
+    $playback = @($assessment.qualifications | Where-Object id -EQ "ssd/1080p59.94/10m")
+    if ($assessment.releaseDecision -cne "NO-GO" -or $sidecar.Count -ne 1 -or
+        $sidecar[0].status -cne "FAIL" -or $playback.Count -ne 1 -or
+        $playback[0].status -cne "UNVERIFIED" -or
+        @($assessment.measuredObservations | Where-Object id -EQ "diagnosticOnly/1080p59.94/10m").Count -ne 1) {
+        throw "Failed replay workload was hidden behind successful sparse diagnostics."
+    }
+    Write-Host "Memory diagnostic verification: one complete synthetic observation and $rejected fail-closed cases; failed sidecar is FAIL/NO-GO, not playback PASS. No physical device qualified."
 } finally {
     if ([IO.Path]::GetFileName($root) -notlike "rtaime-memory-verifier-*") {
         throw "Unsafe temporary verifier directory."
