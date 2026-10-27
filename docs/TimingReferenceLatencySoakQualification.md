@@ -61,6 +61,36 @@ The CI-sized Runtime boundary soak exercises Program and Aux output, monitoring,
 
 These software lanes prove architecture and bounded-resource behavior only. They do not qualify physical cadence, CUDA deadlines, AJA timing/reference, physical A/V synchronization, physical end-to-end latency or long-duration reference-hardware stability.
 
+## Sequence output software timing and resource observations
+
+The source-bound native sequence adapter now measures native
+select+GPU/PCM composition+source ingress duration against its
+one-frame Runtime budget, counts late/failed/published boundaries
+and confirmed asynchronous native loop reprerolls, and exposes the
+current decoder queue/capacity/starvation observations and ledger
+managed/native/GPU bytes or explicit unknown pressure. This internal
+`SequenceOutputPerformanceEvidence` is collected without a
+second Program scheduler or a synchronous native repreroll in the
+hot frame callback. Only successive actual ProgramBoundaryResult
+sink evidence confirms a new Preview/Program frame after a loop;
+source staging and a reported native preroll by themselves do not.
+
+Deterministic 25/50/60000:1001 frame-map and 48-kHz PCM
+coverage is *software qualification*, not proof of the native
+source-format matrix. Real 1080p50 native Preview/Program loop
+tests are present and require successful exact-head Windows execution.
+No new GPU surface/decoder slot budget was authorized; the
+existing all-or-none `LocalMediaResourceLedger` reservations and
+quarantine remain the admission boundary. A tail buffer interval
+is zeroed only where authored source audio ends; missing native
+PCM is never upgraded into measured silence.
+
+Engineering one-frame headroom and reference A/V/physical latency
+remain UNVERIFIED until an exact-source timed run with provider,
+actual hardware/SSD/driver, multi-loop soak and independent output
+measurement passes. A successful unit/integration test alone
+cannot claim this evidence.
+
 ## Layer 2: external reference observation
 
 Timing/Reference/Latency/Soak Qualification does not add a new Media I/O contract or native ABI. The existing output `MediaIoPortStatus` is sufficient for live reference observation.

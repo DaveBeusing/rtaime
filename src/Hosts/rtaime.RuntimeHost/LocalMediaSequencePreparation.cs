@@ -269,12 +269,19 @@ public sealed partial class LocalMediaDeckRuntimeService
                     var fault = owner.Decode.Reposition(frame);
                     if (fault is { } rejected) throw new IOException(rejected.Message);
                 }
+                // A multi-owner seek/loop has ONE finite budget, not ten
+                // seconds for each source. Native work is management-only;
+                // timed-out owners are closed/quarantined by the existing
+                // joined cleanup path rather than being reused on Program.
+                var reprerollBudget = Stopwatch.StartNew();
                 foreach (var owner in original.Owners)
                 {
-                    if (!owner.Decode.WaitForPreroll(TimeSpan.FromSeconds(10)) ||
+                    var remaining = TimeSpan.FromSeconds(10) - reprerollBudget.Elapsed;
+                    if (remaining <= TimeSpan.Zero ||
+                        !owner.Decode.WaitForPreroll(remaining) ||
                         owner.Decode.Snapshot.Failure is not null)
                         throw new IOException(owner.Decode.Snapshot.Failure?.Message ??
-                            "Native sequence worker did not complete repreroll.");
+                            "Native sequence group did not complete its shared ten-second repreroll budget.");
                 }
                 lock (_sequenceGate)
                     _sequenceOwners = original with { Generation = next.Generation, LoopPass = next.LoopPass };

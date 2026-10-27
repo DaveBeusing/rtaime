@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Diagnostics;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media;
@@ -97,6 +98,55 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal bool ProgramAuthorized { get; set; }
         internal SequenceOutputCommand? ArmedTake { get; set; }
         internal ulong AuthorityRevision { get; set; }
+        // At most one native loop repreroll is admitted per output session.
+        // This is management work and never runs on the Program frame callback.
+        internal Task? LoopPreroll { get; set; }
+        internal bool EndReached { get; set; }
+        internal ulong LoopReprerollCount { get; set; }
+        internal TimeSpan LastLoopReprerollDuration { get; set; }
+        internal TimeSpan LastComposeDuration { get; set; }
+        internal TimeSpan MaximumComposeDuration { get; set; }
+        internal ulong LateComposeBoundaries { get; set; }
+    }
+
+
+    /// <summary>Source-bound in-process qualification only; not receiver or physical I/O evidence.</summary>
+    internal sealed record SequenceOutputPerformanceEvidence(
+        string State, ulong PublishedBoundaries, ulong FailedBoundaries,
+        ulong CompletedLoopPrerolls, TimeSpan LastLoopPreroll,
+        TimeSpan LastBoundaryDuration, TimeSpan MaximumBoundaryDuration,
+        ulong LateBoundaries, TimeSpan FrameBudget,
+        int NativeOwners, int QueuedDecoderFrames, int MaximumDecoderQueueFrames,
+        ulong DecoderStarvations, int ReservedOwners, long KnownManagedBytes,
+        int QuarantinedOwners, long? NativeBytes, long? GpuBytes, string StoragePressure);
+
+    internal SequenceOutputPerformanceEvidence? GetSequenceOutputPerformance(
+        SequencePreparationReference reference)
+    {
+        reference.Validate();
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != reference) return null;
+            LocalMediaDecodeSnapshot[] native;
+            lock (_sequenceGate)
+                native = _sequenceOwners is { } owners && owners.SequenceId == reference.SequenceId
+                    ? owners.Owners.Select(owner => owner.Decode.Snapshot).ToArray()
+                    : [];
+            var capacity = _ledger.Snapshot;
+            return new SequenceOutputPerformanceEvidence(session.OutputState,
+                session.PublishedBoundaries, session.FailedBoundaries,
+                session.LoopReprerollCount, session.LastLoopReprerollDuration,
+                session.LastComposeDuration, session.MaximumComposeDuration,
+                session.LateComposeBoundaries,
+                TimeSpan.FromSeconds((double)session.Runtime.Format.FrameRate.Denominator /
+                    session.Runtime.Format.FrameRate.Numerator),
+                native.Length, native.Sum(snapshot => snapshot.QueuedFrames),
+                native.Sum(snapshot => snapshot.Capacity),
+                native.Aggregate(0UL, (sum, snapshot) => checked(sum + snapshot.Starvations)),
+                capacity.ReservedOwners, capacity.KnownManagedBytes, capacity.QuarantinedOwners,
+                capacity.NativeBytes, capacity.GpuBytes, capacity.StoragePressure);
+        }
     }
 
     /// <summary>
@@ -169,27 +219,61 @@ public sealed partial class LocalMediaDeckRuntimeService
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
+            if (session.EndReached)
+            {
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            // A running native loop repreroll is never awaited by Program.
+            if (session.LoopPreroll is { IsCompleted: false })
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, "BUFFERING", "runtime.sequence.loop_preroll_pending",
+                    session.LastPublishedSlot);
+            }
             // An actual sink failure is terminal for this prepared owner.
             // A new native ingress cannot requalify a failed Program output
             // without an explicit cancellation and fresh preparation.
-            if (session.OutputState == "FAILED")
+            if (session.OutputState is "FAILED" or "STALE")
             {
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
 
+            if (TryStartSequenceLoopRepreroll(session, programSlot))
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            if (TryReachSequenceEnd(session, programSlot))
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
             var count = 0;
             var ownerCount = 0;
+            var composeStarted = Stopwatch.GetTimestamp();
             try
             {
                 if (!TrySelectBoundSequenceBoundary(session.Reference, programSlot,
                     session.Clips, session.ClipRequests, session.OwnerRequests,
                     session.Frames, session.Indices,
-                    out var position, out count, out ownerCount, out var readFailure))
+                    out var position, out var sliceEndTick,
+                    out count, out ownerCount, out var readFailure))
                 {
-                    session.OutputState = "BUFFERING";
+                    // Real decoder exhaustion or a mismatched generation is
+                    // terminal for this prepared source. Only an ordinary
+                    // producer starvation may be retried at the next slot.
+                    session.OutputState = IsTerminalSequenceFailure(readFailure?.Code)
+                        ? "FAILED" : "BUFFERING";
                     session.FailureCode = readFailure?.Code;
                     session.FailedBoundaries++;
+                    session.LastPreviewSlot = null;
+                    session.LastProgramSlot = null;
+                    session.ArmedTake = null;
                     runtime.MarkSequenceInputUnavailable(session.SourceId);
                     return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
                 }
@@ -218,19 +302,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                     }
                 }
 
-                var audioPosition = checked((ulong)(position.Tick / 5));
-                // Decoder samples are positioned in the authored sequence
-                // timeline, not the absolute Program frame number. A prepared
-                // seek or Preroll reanchors the sequence at a later Program
-                // slot without advancing the source PCM clock.
-                var nextSourceTick = checked((long)((Int128)position.Tick +
-                    (Int128)SequenceContract.TicksPerSecond *
-                    runtime.Format.FrameRate.Denominator /
-                    runtime.Format.FrameRate.Numerator));
-                var sampleCount = checked((uint)(
-                    nextSourceTick / 5 - position.Tick / 5));
-                if (sampleCount == 0 || sampleCount > SequenceFrameComposition.MaximumAudioSamples)
-                    throw new InvalidOperationException("Sequence Program PCM window exceeds bounded stereo sample capacity.");
+                // The sample window belongs to authored source time, not the
+                // absolute Program slot; 25/50/60000/1001 rates preserve their
+                // exact 48-kHz cadence across Seek, Loop and non-frame cuts.
+                var (audioPosition, sampleCount) =
+                    SourcePcmWindow(position.Tick, runtime.Format.FrameRate);
 
                 var slice = session.Pcm.AsSpan(0, checked((int)sampleCount * 2));
                 var composed = session.Composer.TryCompose(this, session.Reference.SequenceId,
@@ -250,6 +326,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                     runtime.MarkSequenceInputUnavailable(session.SourceId);
                     return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
                 }
+                // The final authored slice can end mid-Program-frame. Silence
+                // only its trailing source samples; never pad missing native
+                // decoder audio and never shorten the Program PCM clock.
+                if (audios > 0)
+                    SilenceBeyondSourceSlice(slice, audioPosition, sampleCount, sliceEndTick);
                 using (frame)
                     runtime.PresentSequenceInput(session.SourceId, frame, slice);
 
@@ -278,6 +359,16 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             finally
             {
+                // Measure the complete admitted native selection + GPU/PCM
+                // composition + Runtime ingress, including failed boundaries.
+                session.LastComposeDuration = Stopwatch.GetElapsedTime(composeStarted);
+                if (session.LastComposeDuration > session.MaximumComposeDuration)
+                    session.MaximumComposeDuration = session.LastComposeDuration;
+                var budget = TimeSpan.FromSeconds(
+                    (double)runtime.Format.FrameRate.Denominator /
+                    runtime.Format.FrameRate.Numerator);
+                if (session.LastComposeDuration > budget)
+                    session.LateComposeBoundaries++;
                 // Lease cleanup never depends on successful Program submission.
                 for (var index = 0; index < session.Frames.Length; index++)
                 {
@@ -285,6 +376,148 @@ public sealed partial class LocalMediaDeckRuntimeService
                     session.Frames[index] = null;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// The immutable Program position map advances into a new loop pass before
+    /// the existing native decoder can be safely repositioned. The first
+    /// boundary marks the old pass unavailable and schedules exactly one
+    /// management-lane repreroll. Neither the native worker nor its cleanup
+    /// ever executes under this Program boundary callback.
+    /// Must be called with _sequenceOutputGate held.
+    /// </summary>
+    private bool TryReachSequenceEnd(SequenceOutputSession session, ulong programSlot)
+    {
+        lock (_sequenceGate)
+        {
+            var map = _sequenceShuttleMap;
+            if (map is null || map.Loop ||
+                map.State != SequenceRuntimeTransportState.Playing ||
+                programSlot < map.AnchorProgramSlot ||
+                map.TryMap(programSlot, out _))
+                return false;
+        }
+        // End is a deliberately unavailable signal, not a fabricated held
+        // native frame or an endlessly retrying decoder. A later explicit
+        // Seek/Stop/Play must acquire a new generation before publication.
+        session.EndReached = true;
+        session.ArmedTake = null;
+        session.LastPreviewSlot = null;
+        session.LastProgramSlot = null;
+        session.LastPublishedSlot = ulong.MaxValue;
+        session.OutputState = "UNAVAILABLE";
+        session.FailureCode = "runtime.sequence.end_reached";
+        return true;
+    }
+
+    private bool TryStartSequenceLoopRepreroll(
+        SequenceOutputSession session, ulong programSlot)
+    {
+        SequenceRuntimePositionMap? map;
+        SequenceRuntimePosition next;
+        lock (_sequenceGate)
+        {
+            var prepared = _sequenceOwners;
+            map = _sequenceShuttleMap;
+            if (prepared is null || map is null || !map.Loop ||
+                map.State != SequenceRuntimeTransportState.Playing ||
+                prepared.SequenceId != session.Reference.SequenceId ||
+                prepared.AuthoringRevision != session.Reference.AuthoringRevision ||
+                prepared.InitialGeneration != session.Reference.Generation ||
+                !map.TryMap(programSlot, out next) ||
+                next.Generation != prepared.Generation ||
+                next.LoopPass <= prepared.LoopPass)
+                return false;
+        }
+
+        session.ArmedTake = null;
+        session.LastPreviewSlot = null;
+        session.LastProgramSlot = null;
+        session.LastPublishedSlot = ulong.MaxValue;
+        session.OutputState = "BUFFERING";
+        session.FailureCode = "runtime.sequence.loop_preroll_pending";
+        // The asynchronous task captures only the original session and map.
+        // Cancellation, replacement and authority changes are checked again
+        // under the management owner before any native seek.
+        session.LoopPreroll = Task.Run(() =>
+            RunSequenceLoopRepreroll(session, map!, next));
+        return true;
+    }
+
+    private void RunSequenceLoopRepreroll(SequenceOutputSession session,
+        SequenceRuntimePositionMap map, SequenceRuntimePosition target)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            lock (_management)
+            {
+                lock (_sequenceOutputGate)
+                    if (!ReferenceEquals(_sequenceOutput, session) ||
+                        session.OutputState is "FAILED" or "STALE" ||
+                        !session.Runtime.IsCommittedSequenceOutputSource(
+                            session.SourceId, session.ProgramAuthorized, session.AuthorityRevision))
+                        return;
+
+                lock (_sequenceGate)
+                {
+                    if (!ReferenceEquals(_sequenceShuttleMap, map) ||
+                        _sequenceOwners is not { } owners ||
+                        owners.SequenceId != session.Reference.SequenceId ||
+                        owners.Generation != target.Generation ||
+                        owners.LoopPass >= target.LoopPass)
+                        return; // Explicit Seek/Stop superseded this pending loop before native mutation.
+                }
+                // Reposition joins the old native worker generation; it retains
+                // the same admitted decoder owners and resource-ledger charges.
+                var receipt = RepositionSequenceMedia(
+                    session.Reference.SequenceId, session.Reference.AuthoringRevision, target);
+                if (!receipt.Prepared)
+                    throw new IOException(receipt.Failure?.Code ??
+                        "runtime.sequence.loop_preroll_failed");
+
+                var slot = session.Runtime.NextSequenceOutputSlot;
+                lock (_sequenceGate)
+                {
+                    if (!ReferenceEquals(_sequenceShuttleMap, map) ||
+                        _sequenceOwners is not { } prepared ||
+                        prepared.Generation != target.Generation ||
+                        prepared.LoopPass != target.LoopPass)
+                        throw new InvalidOperationException(
+                            "Native loop owner changed before position publication.");
+                    _sequenceShuttleMap = map.WithConfirmedLoopPrerollAnchor(slot, target);
+                    _sequenceShuttleRevision = checked(_sequenceShuttleRevision + 1);
+                }
+                lock (_sequenceOutputGate)
+                {
+                    if (!ReferenceEquals(_sequenceOutput, session)) return;
+                    session.LoopReprerollCount++;
+                    session.LastLoopReprerollDuration = Stopwatch.GetElapsedTime(started);
+                    session.FirstAuthorizedProgramSlot = slot;
+                    session.OutputState = session.ProgramAuthorized
+                        ? "TAKE_COMMITTED" : "UNAVAILABLE";
+                    session.FailureCode = null;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or
+            ArgumentException or OverflowException or ObjectDisposedException)
+        {
+            lock (_sequenceOutputGate)
+            {
+                if (!ReferenceEquals(_sequenceOutput, session)) return;
+                session.OutputState = "FAILED";
+                session.FailureCode = "runtime.sequence.loop_preroll_failed";
+                session.LastLoopReprerollDuration = Stopwatch.GetElapsedTime(started);
+                session.Runtime.MarkSequenceInputUnavailable(session.SourceId);
+            }
+        }
+        finally
+        {
+            lock (_sequenceOutputGate)
+                if (ReferenceEquals(_sequenceOutput, session))
+                    session.LoopPreroll = null;
         }
     }
 
@@ -309,6 +542,14 @@ public sealed partial class LocalMediaDeckRuntimeService
     // A previously confirmed Preview frame remains eligible while the next
     // source frame is still passing through the existing Program boundary.
     // A two-frame gap, source failure or stale generation is not Take-ready.
+    internal static bool IsTerminalSequenceFailure(string? code) => code is
+        "runtime.sequence.ended" or
+        "runtime.sequence.stale_sample" or
+        "runtime.sequence.source_mismatch" or
+        "runtime.sequence.boundary_missing" or
+        "runtime.sequence.boundary_capacity" or
+        "runtime.sequence.boundary_fence";
+
     private static bool HasRecentConfirmedPreview(SequenceOutputSession session) =>
         session.LastPreviewSlot is { } confirmed &&
         session.LastPublishedSlot >= confirmed &&
@@ -391,6 +632,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 return;
             }
             session.ArmedTake = null;
+            session.EndReached = false;
             session.LastPreviewSlot = null;
             session.LastProgramSlot = null;
             session.LastPublishedSlot = ulong.MaxValue;
@@ -557,7 +799,8 @@ public sealed partial class LocalMediaDeckRuntimeService
         {
             var session = _sequenceOutput;
             if (session is null || session.LastPublishedSlot != boundary.SequenceNumber ||
-                session.OutputState is "FAILED" or "STALE")
+                session.OutputState is "FAILED" or "STALE" or "BUFFERING" ||
+                session.EndReached)
                 return; // Late feedback cannot revive terminal owner/authority loss.
             if (session.ProgramAuthorized)
             {
@@ -619,6 +862,51 @@ public sealed partial class LocalMediaDeckRuntimeService
             result.Validate();
             return result;
         }
+    }
+
+    /// <summary>
+    /// One bounded native sequence PCM window at the original source's rational
+    /// frame clock. The existing Program clock determines the presentation
+    /// slot; this function never schedules one.
+    /// </summary>
+    internal static (ulong SamplePosition, uint SampleCount) SourcePcmWindow(
+        long sequenceTick, FrameRate rate)
+    {
+        if (sequenceTick < 0 || rate.Numerator <= 0 || rate.Denominator <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sequenceTick));
+        const int sourceRate = 240_000;
+        const int authoredTicksPerPcmSample = 5;
+        var nextTick = (Int128)sequenceTick +
+            (Int128)sourceRate * rate.Denominator / rate.Numerator;
+        var first = (Int128)sequenceTick / authoredTicksPerPcmSample;
+        var end = nextTick / authoredTicksPerPcmSample;
+        var count = end - first;
+        if (first < 0 || first > ulong.MaxValue ||
+            count < 1 || count > SequenceFrameComposition.MaximumAudioSamples)
+            throw new InvalidOperationException(
+                "Sequence frame rate requires a larger native PCM window than admitted.");
+        return ((ulong)first, (uint)count);
+    }
+
+    /// <summary>
+    /// Audio from a clip which ends inside this rational Program frame must not
+    /// continue beyond its compiled source slice. No sample is synthesized to
+    /// substitute an absent native PCM track.
+    /// </summary>
+    internal static int SilenceBeyondSourceSlice(Span<float> stereo,
+        ulong sourceStartSample, uint frameSamples, long sliceEndTick)
+    {
+        if (sliceEndTick < 0 || frameSamples == 0 ||
+            stereo.Length != checked((int)frameSamples * 2))
+            throw new ArgumentException("Invalid bounded stereo source PCM slice.");
+        var exclusiveEndSample = ((Int128)sliceEndTick + 4) / 5;
+        var available = exclusiveEndSample - (Int128)sourceStartSample;
+        if (available < 0) available = 0;
+        if (available > frameSamples) available = frameSamples;
+        var count = (int)frameSamples - (int)available;
+        if (count > 0)
+            stereo[((int)available * 2)..].Clear();
+        return count;
     }
 
     private static byte Weight(SequenceExecutionClip clip, long tick)
