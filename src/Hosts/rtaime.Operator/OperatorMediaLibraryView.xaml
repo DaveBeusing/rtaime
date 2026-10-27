@@ -187,7 +187,21 @@
                         ToolTip="{Binding Context.MediaPool.SelectedItem.LocalPath, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
                     <TextBlock Text="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                         Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                                    <WrapPanel Margin="0,5,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                        <TextBlock Text="IN %" Style="{StaticResource OperatorLabel}" Width="34" VerticalAlignment="Center" />
+                        <controls:RtaimeSlider Minimum="0" Maximum="99" SmallChange="1" LargeChange="5"
+                            Width="98" TickFrequency="1" IsSnapToTickEnabled="True"
+                            Value="{Binding Context.MediaPool.ReviewInPercent, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                            ToolTip="Non-destructive source-relative review IN marker, not Deck IN."
+                            AutomationProperties.Name="Media Library source review IN percent" />
+                        <TextBlock Text="OUT %" Style="{StaticResource OperatorLabel}" Margin="5,0,0,0" Width="40" VerticalAlignment="Center" />
+                        <controls:RtaimeSlider Minimum="1" Maximum="100" SmallChange="1" LargeChange="5"
+                            Width="98" TickFrequency="1" IsSnapToTickEnabled="True"
+                            Value="{Binding Context.MediaPool.ReviewOutPercent, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}, Mode=TwoWay}"
+                            ToolTip="Non-destructive source-relative review OUT marker, not Deck OUT."
+                            AutomationProperties.Name="Media Library source review OUT percent" />
+                    </StackPanel>
+                    <WrapPanel Margin="0,5,0,0">
                         <controls:RtaimeButton Content="REVIEW FRAMES" IsCompact="True"
                             Command="{Binding Context.MediaPool.ReviewFramesCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                             AutomationProperties.Name="Review source-bound media filmstrip"
@@ -219,7 +233,25 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </controls:RtaimeScrollViewer>
-</StackPanel>
+                    <WrapPanel Margin="0,5,0,0">
+                        <controls:RtaimeButton Content="REVIEW AUDIO" IsCompact="True"
+                            Command="{Binding Context.MediaPool.ReviewAudioCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Review selected source PCM waveform"
+                            ToolTip="Up to 120 seconds of decoded PCM evidence; not live audio output or program audio." />
+                        <controls:RtaimeButton Content="CLEAR AUDIO" IsCompact="True" Margin="4,0,0,0"
+                            Command="{Binding Context.MediaPool.CancelAudioReviewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Cancel and clear Library audio review" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.AudioReviewStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media source PCM review status" />
+                    <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+                        BorderThickness="1" Margin="0,4,0,0">
+                        <local:SequenceWaveformGlyph Height="44" MinWidth="220"
+                            Presentation="{Binding Context.MediaPool.AudioReviewPresentation, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Media Library decoded source audio waveform" />
+                    </Border>
+                </StackPanel>
                 </controls:RtaimeScrollViewer>
             </Border>
         </Grid>
