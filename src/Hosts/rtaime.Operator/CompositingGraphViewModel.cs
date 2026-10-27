@@ -798,7 +798,7 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
         if (e.PropertyName is nameof(CompositingGraphNodeViewModel.HasStateDraft) or nameof(CompositingGraphNodeViewModel.StateConflict)) SynchronizeSelectedLayerDraft();
-		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y) &&
+		if ((e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y)) &&
             sender is CompositingGraphNodeViewModel moved && !_nodeLayoutMoving)
         {
             foreach (var connection in Connections.Where(connection =>
