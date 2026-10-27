@@ -108,7 +108,7 @@
                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="290" Margin="0,0,8,8" Padding="9"
+                                <Border Width="290" MaxWidth="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeScrollViewer}}}" Margin="0,0,8,8" Padding="9"
                                     Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4">
                                     <StackPanel>
                                         <DockPanel LastChildFill="False" Margin="0,0,0,3">
@@ -135,6 +135,12 @@
                                                 Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live bus right sample peak" />
                                             <TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
                                         </Grid>
+                                        <TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
+                                        <WrapPanel Margin="0,1,0,3">
+                                            <TextBlock Text="{Binding CompressorActivity, StringFormat=COMP {0}}" Style="{StaticResource MixerLabel}" Margin="0,0,10,0" ToolTip="Runtime compressor gain reduction in dB; unavailable observations remain unavailable." />
+                                            <TextBlock Text="{Binding LimiterActivity, StringFormat=LIMIT {0}}" Style="{StaticResource MixerLabel}" ToolTip="Runtime limiter reduction or accumulated hit counter, not an instantaneous event." />
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding CountsEvidence}" Style="{StaticResource MixerLabel}" />
                                         <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat=CONFIRMED {0}}"
                                             Style="{StaticResource MixerLabel}" />
                                         <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
@@ -149,6 +155,18 @@
                                             Orientation="Horizontal" Height="26" AutomationProperties.Name="Bus gain draft fader"
                                             AutomationProperties.HelpText="Adjust local bus gain only; Apply requests authoritative confirmation. Arrow steps 0.01x, Page 0.1x." />
                                         </Border>
+                                        <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
+                                            <TextBlock Text="{Binding DraftReviewDetail}" TextWrapping="Wrap" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
+                                            <controls:RtaimeButton Content="REBASE DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True" HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Review and rebase retained bus draft"
+                                                ToolTip="Acknowledge the new revision for this local draft. No production change is sent until Apply." />
+                                        </StackPanel>
+                                        <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
+                                            <TextBlock Text="{Binding DraftReviewDetail}" TextWrapping="Wrap" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
+                                            <controls:RtaimeButton Content="REBASE DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True" HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Review and rebase retained source draft"
+                                                ToolTip="Acknowledge the new revision for this local draft. No production change is sent until Apply." />
+                                        </StackPanel>
                                         <WrapPanel Margin="0,5,0,0">
                                             <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
                                                 IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local bus mute draft" />
@@ -171,7 +189,7 @@
                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="290" Margin="0,0,8,8" Padding="9"
+                                <Border Width="290" MaxWidth="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeScrollViewer}}}" Margin="0,0,8,8" Padding="9"
                                     Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4">
                                     <StackPanel>
                                         <DockPanel LastChildFill="False" Margin="0,0,0,4">
@@ -390,6 +408,11 @@
 											</Grid>
 										</StackPanel>
 									</Border>
+                                    <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
+                                        <TextBlock Text="{Binding DraftReviewDetail}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <controls:RtaimeButton Content="REBASE SOURCE DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True"
+                                            AutomationProperties.Name="Review and rebase advanced source draft" />
+                                    </StackPanel>
 											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="APPLY SOURCE / EQ DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
 												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DISCARD SOURCE DRAFT" Command="{Binding DiscardDraftCommand}" Click="DiscardDraft_Click" IsCompact="True" Margin="0,5,0,0" />
@@ -495,6 +518,11 @@
 											</Grid>
 										</StackPanel>
 									</Border>
+                                    <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
+                                        <TextBlock Text="{Binding DraftReviewDetail}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <controls:RtaimeButton Content="REBASE BUS DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True"
+                                            AutomationProperties.Name="Review and rebase advanced bus draft" />
+                                    </StackPanel>
 											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="APPLY BUS / DYNAMICS DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
 												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DISCARD BUS DRAFT" Command="{Binding DiscardDraftCommand}" Click="DiscardDraft_Click" IsCompact="True" Margin="0,5,0,0" />
