@@ -52,6 +52,10 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     public Visibility CpuCompareVisibility => _monitoring.CompareMode != MediaCompareMode.Off &&
         BothComparisonSourcesLive && !_monitoring.IsGpuComparisonActive
             ? Visibility.Visible : Visibility.Collapsed;
+    // The standalone monitor owns exact pixel/ROI coordinates. Compare surfaces
+    // use independent FIT geometry, so they must never pass pointer gestures
+    // through to the hidden zoomed/ROI viewer underneath them.
+    public bool SingleFrameInspectionEnabled => CompareVisibility != Visibility.Visible;
     public System.Windows.Media.ImageSource? ConfirmedProgramImage => BothComparisonSourcesLive
         ? _monitoring.ProgramImage : null;
     public System.Windows.Media.ImageSource? ConfirmedPreviewImage => BothComparisonSourcesLive
@@ -169,6 +173,7 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
         nameof(AnalysisEnabled), nameof(SelectedScopeGpuFrame), nameof(SelectedScopes),
         nameof(ScopeSourceLabel), nameof(ScopeFrameLabel), nameof(ColorBasisLabel),
         nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility),
+        nameof(SingleFrameInspectionEnabled),
         nameof(BothComparisonSourcesLive), nameof(ConfirmedProgramImage),
         nameof(ConfirmedPreviewImage), nameof(ConfirmedProgramGpuFrame),
         nameof(ConfirmedPreviewGpuFrame));
