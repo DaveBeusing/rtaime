@@ -6,6 +6,27 @@
 
 # Program Frame Memory Ownership
 
+## Replay writer ownership observations
+
+The Runtime Program owner already transfers retained frame-payload leases to
+a bounded Replay capture queue. A separate `ReplayCaptureWriterLifetimeStatistics`
+record reports counters at **writer lifecycle transitions only**:
+`OpenAttempts`, `Opened`, `FinalizeAttempts`, `Finalized`,
+`AbortAttempts`, `Aborted` and `Active`. The host exposes these values
+only as read-only local software diagnostics; they are not a new IPC contract,
+Program authority, frame lease or media-payload store. A writer is counted
+as active after a successful open and ceases to be active only after a
+successful completion or abort; failed cleanup remains visible rather than
+being optimistically counted as released.
+
+The opt-in SSD memory sidecar reads these counters and the independent bounded
+queue depth at four sparse playback checkpoints and once after host drain.
+It records process private bytes, managed heap/GC evidence and replay file
+retention without retaining any Program pixels. The original 600-second
+memory ceiling (512 MiB process-private growth) and Replay continuity
+requirements are unchanged. High-watermark and post-drain memory evidence are
+different observations; neither alone establishes native allocation roots.
+
 ## Scope
 
 Program Frame Memory Ownership defines both the internal host-memory lifetime used after GPU composition and the bounded device-surface lifetime retained by shared monitoring observations.
