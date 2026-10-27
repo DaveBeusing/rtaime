@@ -4,6 +4,9 @@
 
 Inventory baseline: `7bd13506272dec071bccda23beb767da44562fac`, reviewed 2026-10-17.
 This is an inventory of existing policy and evidence, not a codec support expansion.
+The 2026-10-27 admission refinement retains the same Windows Media Foundation dependency,
+native owner limits and approved media tuples. It adds source-bound format facts,
+an earlier software envelope rejection and clearer required-audio preflight reasons.
 See [decoder dependency decision](ProfessionalDecoderDecision.md) before proposing a backend.
 
 ## Interpretation and source of truth
@@ -61,7 +64,7 @@ are checked; full HEVC sequence/VUI validation is not implemented.
 | Container | Source audio description | Existing behavior | Evidence limit |
 | --- | --- | --- | --- |
 | MP4 | No first supported audio stream | Video-only / NO AUDIO | Existing compatibility; not proof that requested audio was decoded |
-| MP4 | Any audio sample entry in container | No sample-entry allowlist or container/native audio cross-check | Native AAC, MP3 or PCM maps to supported audio; unknown subtype maps to None |
+| MP4 | Audio sample entry in container, except encrypted `enca` | Container-declared channels/size/sample rate now retained when present; these are not native PCM proof. Encrypted `enca` fails before native open as `media.file.audio_codec_unsupported` | Other unsupported native audio may retain historical video-only behavior; required-audio preflight fails explicitly |
 | MP4 | Native AAC, MP3 or PCM | Requests PCM16 stereo 48 kHz, converts to Float32 | AAC real reference; other codec/layout tuples not exhaustively exercised |
 | MOV | No audio track | Video-only allowed | Cannot satisfy a required-audio request |
 | MOV | mp4a version 0 | AAC must match native AAC | Generated AAC evidence; arbitrary AAC profiles/channel maps not separately certified |
@@ -81,8 +84,14 @@ actual decoded audio; a conditional observation does not change playback admissi
 - One video track, at most one audio track, exactly one sample description per
   inspected track and one self-contained data reference. At most 16 tracks,
   32 MiB moov, 4096 boxes per sibling/top-level scan, 65536 timing runs/table.
-- Positive stts runs produce a rational average; multiple runs mark VFR.
-  Native timestamps remain the playback timing source. ctts v0/v1 decode and
+- Positive stts runs produce an exact reduced rational average; **different
+  positive frame-duration deltas** mark VFR, not the number of stts runs.
+  Equal-duration adjacent runs remain CFR. Source video timescale, bounded
+  sample count, minimum/maximum stts delta and declared audio channel/sample
+  size/rate/timescale are retained internally, with missing metadata left
+  unknown rather than synthesized. Native 100-ns PTS remains the playback
+  timing source and the existing normalized output clock stays separate.
+  ctts v0/v1 decode and
   composition runs are merged without per-frame expansion; cslg is rejected.
 - An absent edit list or one nonempty, nonnegative, unit-rate edit within
   movie/media presentation extent is accepted. Other edit programs are rejected.
@@ -96,6 +105,20 @@ actual decoded audio; a conditional observation does not change playback admissi
   RGB32 output is explicitly progressive. Timecode tracks are not imported as
   a timecode contract; generic track parsing is not a validated timecode path.
   These are open professional qualification requirements.
+- The existing input envelope (dimensions, rational cadence, H.264 macroblock
+  rate) is now evaluated from the validated container **before** the Windows
+  Source Reader is created; invalid inputs return the existing resolution,
+  frame-rate or decode-rate failure code without allocating a native decoder.
+  Reported native average bitrate is still checked only after native probe.
+- Bounded preflight carries a description of **declared source** container,
+  video entry/profile/chroma/bit depth, original rational timing and audio
+  entry/layout; it separately reports **negotiated** audio codec and normalized
+  output. It does not expose or certify a selected native MFT binary.
+  Missing required audio is `media.file.required_audio_missing`; missing
+  required decoded PCM in a representative verified window is
+  `media.file.required_audio_samples_missing`. Both are UNAVAILABLE, not
+  a conditional PASS. A requested video-only playback remains possible through
+  the established MP4 fallback when audio was not required.
 - Malformed/truncated metadata uses probe_failed; dedicated policy failures retain
   their media.file.* codes. Wrong native video codec gives codec_mismatch;
   0xC00D5212 during video negotiation gives decoder_unavailable, other native
@@ -105,8 +128,13 @@ actual decoded audio; a conditional observation does not change playback admissi
 ## Evidence and acceptance procedure
 
 Existing software tests: LocalMediaContainerProbeTests, LocalMediaInputPolicyTests,
-LocalMediaDecoderSafetyTests, AsynchronousLocalMediaDecodeTests,
-ReferenceMediaRegressionTests and MultiDeckLocalMediaIntegrationTests.
+LocalMediaDecoderSafetyTests, MediaAssetPreflightIntegrationTests,
+AsynchronousLocalMediaDecodeTests, ReferenceMediaRegressionTests and
+MultiDeckLocalMediaIntegrationTests. Added deterministic metadata fixtures
+cover multiple equal-duration CFR timing runs versus true VFR, source
+audio-layout fields, encrypted MP4 audio rejection, early >240-fps rejection
+before native reader open, missing required codec and empty decoded PCM
+windows. These are source/probe/host checks, not physical format certification.
 The generated reference workflow retains asset SHA-256, encoder identity,
 probe metadata, source SHA and SOFTWARE_DECODED or UNAVAILABLE. Returned test
 success with an UNAVAILABLE HEVC row is negative evidence, not decoded support.
@@ -128,3 +156,21 @@ selected MFT/binary hashes, driver/GPU/SSD identity, A/B profiles, source/output
 latency and A/V evidence, resource deltas, sustained load and device/storage faults.
 SATA/NVMe throughput, 60-minute/8-hour endurance and physical acceptance remain
 UNVERIFIED until actual matching evidence exists.
+
+## Compatibility evidence boundary
+
+The [generated support and compatibility matrix](SupportCompatibilityMatrix.md)
+continues to report the physical Windows x64 reference configuration and
+Preview/Stable support as **UNVERIFIED**. Its source of truth is the
+machine-readable support policy; do not edit generated support states here
+or claim that internal media probing qualifies a complete deployment.
+
+The exact-profile acceptance ledger requires **PASS** from the current
+Windows Release build, real generated media/native open/seek/PCM tests and
+five exact-head Required Gates. Until those runs complete for the specific
+candidate SHA, their evidence state is **PENDING**. The earlier test media
+and reference manifests retain an independently computed SHA-256 for each
+generated file, rather than asserting a universal hash across encoder builds.
+Selected Windows MFT binary identity, additional professional format tuples,
+device throughput, sustained performance and physical Program output remain
+**UNVERIFIED**.
