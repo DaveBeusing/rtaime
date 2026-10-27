@@ -359,6 +359,7 @@
 
 						<controls:RtaimeTabControl
 							Grid.Row="1"
+                            IsEnabled="{Binding Inspector.InspectorPinAllowsActions, ElementName=Root}"
 							Background="{DynamicResource OperatorSurfaceBrush}"
 							BorderThickness="0">
 							<controls:RtaimeTabItem Header="Video" Style="{StaticResource InspectorCategoryTab}">
@@ -905,7 +906,8 @@
 					<Grid>
 						<Grid.RowDefinitions><RowDefinition Height="72" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 						<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
-						<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+						<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                            IsEnabled="{Binding Inspector.InspectorPinAllowsActions, ElementName=Root}">
 							<StackPanel>
 								<controls:RtaimeToggleButton Content="EFFECTS" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}" />
 								<Border Style="{StaticResource InspectorPropertySectionContent}">
