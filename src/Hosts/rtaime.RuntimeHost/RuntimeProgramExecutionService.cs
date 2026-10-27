@@ -2749,6 +2749,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
     public ReplayCaptureWriterLifetimeStatistics? GetReplayWriterLifetimeStatistics() =>
         _replay?.WriterLifetimeStatistics;
 
+    public ReplayCaptureQueueStatistics? GetReplayQueueStatistics() =>
+        _replay?.QueueStatistics;
+
 	public ReplayBufferSnapshot GetReplaySnapshot() =>
 		_replay?.Snapshot ?? new ReplayBufferSnapshot(
 			ReplayContractVersion.Current,
