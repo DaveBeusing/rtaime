@@ -45,6 +45,10 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     public Visibility GraphVisibility => _reviewSelected ? Visibility.Collapsed : Visibility.Visible;
     public Visibility ReviewVisibility => _reviewSelected ? Visibility.Visible : Visibility.Collapsed;
     public string ModeLabel => _reviewSelected ? "COLOR REVIEW" : "LAYER / GRAPH";
+    public Visibility CompareVisibility => _monitoring.CompareMode == MediaCompareMode.Off
+        ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility CpuCompareVisibility => _monitoring.CompareMode != MediaCompareMode.Off &&
+        !_monitoring.IsGpuComparisonActive ? Visibility.Visible : Visibility.Collapsed;
     public MonitoringStreamKind ScopeSource => _selectedSource;
     public bool IsPreviewScope => _selectedSource == MonitoringStreamKind.Preview;
     public bool AnalysisEnabled => _scopeLease && _monitoring.ScopesEnabled;
@@ -137,7 +141,9 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
             or nameof(OperatorMonitoringViewModel.PreviewState)
             or nameof(OperatorMonitoringViewModel.ProgramFormat)
             or nameof(OperatorMonitoringViewModel.PreviewFormat)
-            or nameof(OperatorMonitoringViewModel.ScopesEnabled))
+            or nameof(OperatorMonitoringViewModel.ScopesEnabled)
+            or nameof(OperatorMonitoringViewModel.CompareMode)
+            or nameof(OperatorMonitoringViewModel.IsGpuComparisonActive))
             NotifyReview();
     }
 
@@ -151,7 +157,7 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     private void NotifyReview() => Notify(nameof(ScopeSource), nameof(IsPreviewScope),
         nameof(AnalysisEnabled), nameof(SelectedScopeGpuFrame), nameof(SelectedScopes),
         nameof(ScopeSourceLabel), nameof(ScopeFrameLabel), nameof(ColorBasisLabel),
-        nameof(SourceFormatLabel));
+        nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility));
 
     private void Notify(params string[] properties)
     {
