@@ -149,6 +149,98 @@ public static class SequenceTimelineGeometry
         distance = diff;
     }
 
+    /// <summary>
+    /// Snap a dragged clip boundary, rather than the pointer position. The optional
+    /// trailing edge lets move gestures magnetize either edge without changing duration.
+    /// Magnetic tolerance is measured in viewport pixels and converted to authoring
+    /// ticks; snapped results always lie on the rational sequence frame grid.
+    /// </summary>
+    public static long SnapEditBoundary(long proposedStart, SequenceDefinition definition,
+        bool enabled, long visibleSpan, double viewportWidth, long cursorTick,
+        Guid editedClipId, long trailingEdgeOffset = 0)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var anchor = Quantize(Math.Max(0, proposedStart), definition.FrameRate);
+        if (!enabled || visibleSpan <= 0 || !double.IsFinite(viewportWidth) ||
+            viewportWidth <= 0 || trailingEdgeOffset < 0)
+            return anchor;
+
+        var tolerance = (long)Math.Ceiling(Math.Clamp(
+            (double)visibleSpan * 8.0 / viewportWidth, 0, 1_000_000_000));
+        var nearest = anchor;
+        var distance = tolerance + 1;
+        var moving = definition.Clips.FirstOrDefault(c => c.ClipId == editedClipId);
+        var movingGroup = moving?.LinkGroupId;
+
+        void Consider(long edge)
+        {
+            // The raw source edge may have been authored at subframe precision.
+            // Quantize candidates to the edit grid without changing saved sources.
+            void TryOffset(long offset)
+            {
+                if (edge < offset) return;
+                var candidate = Quantize(edge - offset, definition.FrameRate);
+                var delta = Math.Abs(candidate - anchor);
+                if (delta < distance || (delta == distance && candidate < nearest))
+                {
+                    if (delta > tolerance) return;
+                    nearest = candidate;
+                    distance = delta;
+                }
+            }
+
+            TryOffset(0);
+            if (trailingEdgeOffset > 0) TryOffset(trailingEdgeOffset);
+        }
+
+        Consider(0);
+        Consider(Math.Max(0, cursorTick));
+        foreach (var clip in definition.Clips)
+        {
+            if (clip.ClipId == editedClipId ||
+                (movingGroup.HasValue && clip.LinkGroupId == movingGroup))
+                continue;
+            Consider(clip.TimelineStart);
+            Consider(ClipEnd(clip));
+        }
+        foreach (var transition in definition.Transitions)
+        {
+            if (transition.FromClipId == editedClipId || transition.ToClipId == editedClipId)
+                continue;
+            Consider(transition.Start);
+            Consider(checked(transition.Start + transition.Duration));
+        }
+        return nearest;
+    }
+
+    /// <summary>Bounded source-frame ruler projection shared with clip/cursor geometry.</summary>
+    public static IReadOnlyList<SequenceRulerMark> Ruler(long from, long end,
+        double width, SequenceRate rate)
+    {
+        if (from < 0 || end <= from || !double.IsFinite(width) || width <= 0 ||
+            rate.Numerator <= 0 || rate.Denominator <= 0)
+            return [];
+
+        var frameDivisor = (BigInteger)TicksPerSecond * rate.Denominator;
+        var firstFrame = (long)(((BigInteger)from * rate.Numerator + frameDivisor - 1) / frameDivisor);
+        var visibleFrames = (double)(end - from) * rate.Numerator / (double)frameDivisor;
+        var desiredStep = Math.Max(1, visibleFrames * 115.0 / width);
+        long step = 1;
+        while (step < desiredStep && step < 1_000_000_000) step *= 10;
+        if (step / 5.0 >= desiredStep) step /= 5;
+        else if (step / 2.0 >= desiredStep) step /= 2;
+
+        var aligned = checked((firstFrame / step + (firstFrame % step == 0 ? 0 : 1)) * step);
+        var marks = new List<SequenceRulerMark>(Math.Min(64, (int)(width / 70) + 1));
+        for (var frame = aligned; marks.Count < 64; frame = checked(frame + step))
+        {
+            var tick = FrameTicks(frame, rate);
+            if (tick >= end) break;
+            marks.Add(new(tick, Pixel(tick, from, end, width), Timecode(tick, rate)));
+        }
+        return marks;
+    }
+
     public static long ToMediaTicks(long authoringTick, bool ceiling = false)
     {
         if (authoringTick < 0) throw new ArgumentOutOfRangeException(nameof(authoringTick));
@@ -169,7 +261,8 @@ public static class SequenceTimelineGeometry
     }
 }
 
-public sealed record SequenceEditorRow(Guid Id, string Name, SequenceMediaKind Kind,
+public sealed record SequenceRulerMark(long Tick, double Left, string Label);
+\npublic sealed record SequenceEditorRow(Guid Id, string Name, SequenceMediaKind Kind,
     bool Enabled, bool Muted, int Layer, IReadOnlyList<SequenceEditorClip> Clips);
 
 public sealed record SequenceEditorClip(Guid Id, Guid TrackId, Guid AssetId,
