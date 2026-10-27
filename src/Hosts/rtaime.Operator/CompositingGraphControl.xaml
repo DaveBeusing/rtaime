@@ -321,6 +321,7 @@
 			MouseMove="OnGraphMouseMove"
 			MouseUp="OnGraphMouseUp"
 			MouseLeave="OnGraphMouseLeave"
+            IsVisibleChanged="OnGraphVisibilityChanged"
 			SizeChanged="OnGraphSizeChanged">
             <Grid.Style><Style TargetType="Grid">
                 <Setter Property="Background" Value="{StaticResource GraphGridBrush}" />
