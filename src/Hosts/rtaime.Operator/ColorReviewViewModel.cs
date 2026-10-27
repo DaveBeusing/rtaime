@@ -32,7 +32,7 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
         ShowGraphCommand = new OperatorShellCommand(() => SelectReview(false));
         SelectScopeSourceCommand = new OperatorShellCommand(value =>
             SetScopeSource(string.Equals(value?.ToString(), "PREVIEW", StringComparison.OrdinalIgnoreCase)
-                ? MonitoringStreamKind.Preview : MonitoringStreamKind.Program));
+                ? MonitoringStreamKind.Source : MonitoringStreamKind.Program));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -61,7 +61,7 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     public OperatorGpuMonitoringFrame? ConfirmedPreviewGpuFrame => BothComparisonSourcesLive
         ? _monitoring.PreviewGpuFrame : null;
     public MonitoringStreamKind ScopeSource => _selectedSource;
-    public bool IsPreviewScope => _selectedSource == MonitoringStreamKind.Preview;
+    public bool IsPreviewScope => _selectedSource == MonitoringStreamKind.Source;
     public bool AnalysisEnabled => _scopeLease && _monitoring.ScopesEnabled && IsSelectedObservationLive;
     public OperatorGpuMonitoringFrame? SelectedScopeGpuFrame => !AnalysisEnabled ? null :
         IsPreviewScope ? _monitoring.PreviewGpuFrame : _monitoring.ProgramGpuFrame;
