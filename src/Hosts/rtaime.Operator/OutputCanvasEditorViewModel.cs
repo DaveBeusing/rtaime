@@ -134,6 +134,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public string ResultDetail { get => _resultDetail; private set => Set(ref _resultDetail, value); }
     public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) RaiseCommandState(); } }
     public bool IsDirty => _session?.IsDirty == true;
+    public string ValidationActionLabel => IsDirty ? "VALIDATE DRAFT" : "VALIDATE SAVED";
     public bool HasSavedConflict => _savedConflict;
     public bool SaveOutcomeUnconfirmed => _saveOutcomeUnknown;
     public bool ApplyOutcomeUnconfirmed => _applyOutcomeUnknown;
@@ -1013,7 +1014,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
 
     private void RaiseAll()
     {
-        foreach (var name in new[] { nameof(IsDirty), nameof(CanEdit), nameof(CanSubmit),
+        foreach (var name in new[] { nameof(IsDirty), nameof(ValidationActionLabel), nameof(CanEdit), nameof(CanSubmit),
             nameof(HasSavedConflict), nameof(SaveOutcomeUnconfirmed), nameof(ApplyOutcomeUnconfirmed),
             nameof(IsDraftValidated), nameof(IsActiveMappingConfirmed), nameof(WorkflowStage),
             nameof(SavedRevision), nameof(DraftRevision),
