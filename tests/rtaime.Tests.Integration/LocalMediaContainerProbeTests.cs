@@ -274,6 +274,26 @@ public sealed class LocalMediaContainerProbeTests
     }
 
     [Fact]
+    public void Unsupported_rational_source_rate_is_rejected_before_native_reader_negotiation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // The sample table spans exactly the declared 6-s media duration,
+        // but 2,000 samples / 6 s requires >240 fps. Metadata alone suffices
+        // for a deterministic rejection before SourceReader creation.
+        WithFile(Movie(mutation: "fast-rate"), path => {
+            var metadata = new Mp4LocalMediaProbe().Read(path);
+            Assert.Equal(1000, metadata.FrameRateNumerator);
+            Assert.Equal(3, metadata.FrameRateDenominator);
+            Assert.Equal(2000UL, metadata.VideoSampleCount);
+            var result = new LocalMediaFileProvider().TryOpen(path, MediaSourceId.New());
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Source);
+            Assert.Equal("media.file.frame_rate_unsupported", result.Failure?.Code);
+            Assert.Contains("MP4/avc1", result.Failure?.Message, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
     public void MXF_input_has_no_provider_path_even_when_the_file_contains_valid_MP4_metadata()
     {
         WithFile(Movie(), path => {
@@ -306,6 +326,7 @@ public sealed class LocalMediaContainerProbeTests
         var stts = Box("stts", mutation switch {
             "vfr" => Join(U32(0), U32(2), U32(100), U32(20), U32(100), U32(40)),
             "split-cfr" => Join(U32(0), U32(2), U32(150), U32(20), U32(150), U32(20)),
+            "fast-rate" => Join(U32(0), U32(1), U32(2000), U32(3)),
             _ => Join(U32(0), U32(mutation == "timing-count" ? uint.MaxValue : 1), U32(300), U32(20))
         });
         var edit = Box("edts", Box("elst", Join(U32(0), U32(1), U32(6000),
