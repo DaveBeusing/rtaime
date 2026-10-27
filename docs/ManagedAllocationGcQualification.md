@@ -2,6 +2,40 @@
 
 # Managed Allocation, GC and Program Latency Qualification
 
+## Sustained dual-deck Replay process-memory observation
+
+The SSD qualification path is separate from the Program-only managed-allocation
+matrix below. An opt-in `RTAIME_SSD_MEMORY_DIAGNOSTIC=1` sidecar at the existing
+dual-deck test checkpoints captures no more than five structured process/GC/Replay
+observations (64 KiB total) during the **unchanged** 600-second 1080p50 or
+1080p59.94 workload. It measures process private/working-set bytes, handles,
+thread counts, live managed-byte estimate, cumulative allocations, GC pause and
+collection counts, last-completed-GC heap committed/fragmented/LOH/POH evidence,
+Replay queue depth/high-water/capacity, encoded segment retention, and actual
+writer lifecycle opens/finalize/abort and active owners. A fifth observation
+is made after Runtime/Control shutdown. No per-frame statistics collection,
+forced GC, producer allocation or changed acceptance bound is introduced.
+
+The native/managed attribution is **comparative**, not a naive subtraction:
+process private bytes include committed managed heap, native allocations and
+other overhead; last-GC committed values need not coincide exactly with process
+samples. The original 59.94 failure on `a1c7fa4a` was 966.57 MiB versus the
+unchanged 512 MiB limit, while the isolated observation-source `1678848b`
+successfully completed 600 seconds with approximately 290 MiB growth and
+reclaimed significant private bytes on shutdown. The differing source/run
+means a current-master non-leak conclusion is **UNVERIFIED**. The newer NV12
+scratch-pool change must be qualified on its own exact commit; production Replay
+backpressure and continuity evidence must not be conflated with deck decode
+failure (see [Recording Foundation](RecordingFoundation.md)).
+
+The optional Windows qualification workflow `.github/workflows/replay-memory-qualification.yml`
+runs both formats using the canonical `Invoke-SsdPlaybackQualification.ps1`
+runner, emits the sidecar alongside the original hashed media and TRX reports
+and fails on the **original** duration/memory/handle/continuity assertions.
+An unrelated passing Required Gates run is not replay soak PASS.
+The physical SSD, native decoder, GPU and storage pressure tuples remain
+**UNVERIFIED** until separately measured.
+
 ## Scope and existing producer ownership
 
 This is an optional, isolated Windows x64 **software** measurement contract.
