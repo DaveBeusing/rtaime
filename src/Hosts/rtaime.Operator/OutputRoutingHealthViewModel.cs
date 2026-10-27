@@ -431,10 +431,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			"No disk telemetry is published by the current health contract.",
 			null,
 			sampleHistory);
-		var networkOutputs = _control.OutputRoles.SelectMany(role => role.NetworkOutputs).ToArray();
+		var networkOutputs = _control.OutputRoles
+			.SelectMany(role => role.NetworkOutputs.Select(output => (Role: role, Output: output))).ToArray();
 		var now = DateTimeOffset.UtcNow;
 		var networkStates = networkOutputs
-			.Select(output => TransmissionState(output, _control.IsConnected, _control.IsStale, now)).ToArray();
+			.Select(entry => TransmissionStateForRoleTarget(entry.Role, entry.Output,
+				_control.IsConnected, _control.IsStale, now)).ToArray();
 		var locallySending = networkStates.Count(state => state == "LIVE");
 		var networkEvidence = networkOutputs.Length == 0
 			? "UNVERIFIED" : networkStates.Any(state => state == "FAILED")
@@ -448,7 +450,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			networkEvidence,
 			networkOutputs.Length == 0
 				? "No governed network output is configured."
-				: $"Runtime/provider evidence: {networkOutputs.Sum(output => (decimal)output.BytesSent):N0} bytes sent, {networkOutputs.Sum(output => (decimal)output.DroppedSamples):N0} dropped and {networkOutputs.Sum(output => (decimal)output.RejectedSamples):N0} rejected samples.",
+				: $"Runtime/provider evidence: {networkOutputs.Sum(entry => (decimal)entry.Output.BytesSent):N0} local bytes sent, {networkOutputs.Sum(entry => (decimal)entry.Output.DroppedSamples):N0} dropped and {networkOutputs.Sum(entry => (decimal)entry.Output.RejectedSamples):N0} rejected samples. Physical receiver delivery unverified.",
 			null,
 			sampleHistory);
 		UpdateMetric(
@@ -523,12 +525,26 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		if (!connected || stale || role is null || role.NetworkOutputs.Count == 0)
 			return "OFFLINE";
 		var states = role.NetworkOutputs.Select(target =>
-			TransmissionState(target, connected, stale, now)).ToArray();
+			TransmissionStateForRoleTarget(role, target, connected, stale, now)).ToArray();
 		if (states.All(state => state == "LIVE")) return "LIVE";
 		foreach (var state in new[] { "FAILED", "STALE", "RECONNECTING", "CONNECTING",
 			"DEGRADED", "UNKNOWN", "STOPPING" })
 			if (states.Contains(state, StringComparer.Ordinal)) return state;
 		return "OFFLINE";
+	}
+
+	// A local sender can still be sending an older Program source while Control
+	// rejects the current role. Do not promote that observation to current LIVE.
+	private static string TransmissionStateForRoleTarget(
+		OperatorOutputRoleDescriptor role, OperatorNetworkOutputDescriptor target,
+		bool connected, bool stale, DateTimeOffset now)
+	{
+		var senderState = TransmissionState(target, connected, stale, now);
+		if (!connected || stale) return "OFFLINE";
+		if (!role.AuthoritativeActive || role.HealthState != "PASS" ||
+			role.RuntimeExecutionRevision is null)
+			return senderState == "FAILED" ? "FAILED" : "UNKNOWN";
+		return senderState;
 	}
 
 	private string TransmissionDetail(OperatorOutputRoleDescriptor? role)
@@ -588,7 +604,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var output = new List<OutputNetworkTargetPresentation>(role.NetworkOutputs.Count);
 		foreach (var target in role.NetworkOutputs)
 		{
-			var state = TransmissionState(target, connected, stale, now);
+			var senderState = TransmissionState(target, connected, stale, now);
+			var state = TransmissionStateForRoleTarget(role, target, connected, stale, now);
 			var age = target.LastSuccessfulSendUtc is { } sent && now >= sent
 				? $"{(now - sent).TotalSeconds:0.#} s" : "UNKNOWN";
 			var codec = target.Protocol == "NDI"
@@ -604,6 +621,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				routeConfirmed ? "ROUTE CONFIRMED" : "ROUTE UNVERIFIED",
 				codec, state,
 				$"{target.BytesSent:N0} local sender bytes · {target.SentSamples:N0} submitted sends · " +
+				$"provider state {senderState} · " +
 					$"age {age} · queued {target.QueueDepth} · {target.DroppedSamples:N0} dropped / " +
 					$"{target.RejectedSamples:N0} rejected · {target.ReconnectCount} reconnects{failure}",
 				"PEER RECEPTION / PHYSICAL OUTPUT UNVERIFIED"));
