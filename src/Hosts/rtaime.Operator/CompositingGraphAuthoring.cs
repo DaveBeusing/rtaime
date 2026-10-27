@@ -107,10 +107,10 @@ public sealed partial class CompositingGraphViewModel
     }
 
     public string ConnectionEvidence => SelectedConnection is { } connection
-        ? ${"CONNECTION " + connection.FromNodeId + "/" + connection.FromPortId + " → " +
+        ? ("CONNECTION " + connection.FromNodeId + "/" + connection.FromPortId + " → " +
             connection.ToNodeId + "/" + connection.ToPortId + " · " +
             (connection.IsActive ? "OBSERVED ACTIVE" : "OBSERVED INACTIVE") +
-            " · INSPECTION ONLY"}
+            " · INSPECTION ONLY")
         : "Select a connection to inspect its confirmed endpoints · REWIRE UNAVAILABLE";
     public string TopologyEvidence
     {
@@ -123,15 +123,15 @@ public sealed partial class CompositingGraphViewModel
         private set => Set(ref _layoutEvidence, value);
     }
     public string RuntimeRevisionEvidence => _operator.Client?.Snapshot is { } snapshot
-        ? ${"CONTROL REVISION " + snapshot.Production.Revision.Value + " · " +
-            (_operator.IsConnected && !_operator.IsStale ? "OBSERVED" : "STALE / DISCONNECTED")}
+        ? ("CONTROL REVISION " + snapshot.Production.Revision.Value + " · " +
+            (_operator.IsConnected && !_operator.IsStale ? "OBSERVED" : "STALE / DISCONNECTED"))
         : "NO AUTHORITATIVE REVISION · GRAPH UNVERIFIED";
     public string FxOrderEvidence => _fxOrderDraft is not { } draft
         ? _fxOrderResult
         : (!IsFxOrderBaselineCurrent(draft) ? "STALE FX ORDER DRAFT · DISCARD REQUIRED" :
             _fxOrderApplying ? "FX ORDER APPLYING · AWAITING RUNTIME OBSERVATION" :
-            ${"LOCAL FX ORDER DRAFT · NOT ON PROGRAM · " + draft.LayerId + " · REV " +
-                draft.Revision + " · " + string.Join(" → ", draft.OrderedIds)});
+            ("LOCAL FX ORDER DRAFT · NOT ON PROGRAM · " + draft.LayerId + " · REV " +
+                draft.Revision + " · " + string.Join(" → ", draft.OrderedIds)));
     public bool HasFxOrderDraft => _fxOrderDraft is not null;
 
     private void InitializeGraphAuthoring()
