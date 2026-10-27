@@ -8,8 +8,31 @@ public sealed partial class OperatorViewModel
     internal Func<CancellationToken, Task<Action?>>? CaptureLiveObservationAsync { get; set; }
     internal Func<bool>? LiveCommandsBusy { get; set; }
     internal void InvalidateLiveObservation() => _audioRefreshDelivery.Invalidate();
-    internal bool CanOperateLive => CanControl();
+    private bool _liveTakeNeedsReconciliation;
+    public bool LiveTakeNeedsReconciliation => _liveTakeNeedsReconciliation;
+    internal bool CanOperateLive => CanControl() && !LiveTakeNeedsReconciliation;
+
+    // The visible routing may still be the previous confirmed Program after a
+    // transport failure. Only an explicit successful Control synchronization
+    // can resolve whether an ambiguous Take actually committed.
+    private void RequireLiveTakeReconciliation(string operation)
+    {
+        if (operation is not ("CUT" or "DISSOLVE") || _liveTakeNeedsReconciliation)
+            return;
+        _liveTakeNeedsReconciliation = true;
+        NotifyLiveProperty(nameof(LiveTakeNeedsReconciliation));
+        NotifyLiveCommandsChanged();
+    }
+
+    private void ClearLiveTakeReconciliation()
+    {
+        if (!_liveTakeNeedsReconciliation) return;
+        _liveTakeNeedsReconciliation = false;
+        NotifyLiveProperty(nameof(LiveTakeNeedsReconciliation));
+        NotifyLiveCommandsChanged();
+    }
     public string LiveAvailability => !IsConnected || IsStale ? "Control evidence is stale. Synchronize before taking." :
+        LiveTakeNeedsReconciliation ? "Previous Take outcome is unresolved. Explicitly synchronize Control before further LIVE routing." :
         IsBusy || LiveCommandsBusy?.Invoke() == true ? "Production command pending. Wait for confirmation." :
         ProgramSafety == OperatorProgramSafetyStates.Blocked ? $"Production blocked: {GlobalReadinessSummary}. Open Health." :
         !string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase) ? $"Runtime {RuntimeStatus}. Restore Runtime readiness." :
@@ -17,7 +40,9 @@ public sealed partial class OperatorViewModel
     public string SetPreviewDetail => LiveProductionPresentation.PreviewEvidence(
         SelectedSource?.Name, IsConnected, IsStale,
         IsBusy || LiveCommandsBusy?.Invoke() == true, TransitionStatus);
-    public string LiveTakeEvidence => LiveProductionPresentation.TakeEvidence(
+    public string LiveTakeEvidence => LiveTakeNeedsReconciliation
+        ? "UNCONFIRMED TAKE · explicit Control synchronization required; do not repeat CUT, AUTO or another live route."
+        : LiveProductionPresentation.TakeEvidence(
         IsConnected, IsStale, IsBusy || LiveCommandsBusy?.Invoke() == true,
         _client?.Snapshot is not null,
         ProgramSafety == OperatorProgramSafetyStates.Blocked,
