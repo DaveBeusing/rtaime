@@ -240,10 +240,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (isProgram)
 		{
 			if (!string.Equals(sourceId, _controlState.ProgramSourceId, StringComparison.Ordinal) ||
-				!_programFreshness.Observe(sourceId, observation.ProgramRouteVersion,
-					observation.ConnectionEpoch, observation.ReceivedAt, descriptor.Timing.SequenceNumber))
+				(gpuFrame is not null && !gpuFrame.IsNewerThan(ProgramGpuFrame)))
 				return;
-			if (gpuFrame is not null && !gpuFrame.IsNewerThan(ProgramGpuFrame))
+			if (!_programFreshness.Observe(sourceId, observation.ProgramRouteVersion,
+					observation.ConnectionEpoch, observation.ReceivedAt, descriptor.Timing.SequenceNumber,
+					gpuFrame?.Resource.ProviderInstanceId.ToString()))
 				return;
 
 			if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
@@ -261,7 +262,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			confirmedPreview = gpuFrame is null || gpuFrame.IsNewerThan(PreviewGpuFrame);
 			confirmedPreview = confirmedPreview && _previewFreshness.Observe(
 				sourceId, observation.PreviewRouteVersion, observation.ConnectionEpoch,
-				observation.ReceivedAt, descriptor.Timing.SequenceNumber);
+				observation.ReceivedAt, descriptor.Timing.SequenceNumber,
+				gpuFrame?.Resource.ProviderInstanceId.ToString());
 			if (confirmedPreview)
 			{
 				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
