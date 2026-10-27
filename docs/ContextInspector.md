@@ -32,6 +32,10 @@ per-target review. Pins never imply a cross-object transaction.
 
 Changing the production identity invalidates the pinned Inspector context:
 the pin visibly becomes **STALE**, and typed Apply is gated until UNPIN.
+The Inspector's legacy direct-action panels are disabled while the pin is
+stale, without disabling the header's UNPIN action. A clip pin is also
+not eligible to edit another currently loaded Media Deck asset, and a
+pinned Graphics item detects replacement of its content identity.
 Likewise, a mixer-selected audio input that no longer matches the Inspector's
 original source **and stream** disables direct gain Apply. This guard also
 applies without an active pin, preventing a previously selected audio draft
