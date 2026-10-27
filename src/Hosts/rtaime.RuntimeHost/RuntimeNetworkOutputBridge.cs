@@ -75,10 +75,13 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                         now - _lastRateAtUtc >= TimeSpan.FromMilliseconds(250))
                     {
                         var elapsed = (now - _lastRateAtUtc).TotalSeconds;
-                        _observedBytesPerSecond = snapshot.Statistics.BytesSent >= _lastRateBytes
-                            ? (ulong)Math.Min(ulong.MaxValue,
-                                (double)(snapshot.Statistics.BytesSent - _lastRateBytes) / elapsed)
-                            : null;
+                        if (snapshot.Statistics.BytesSent >= _lastRateBytes)
+                        {
+                            var rate = (double)(snapshot.Statistics.BytesSent - _lastRateBytes) / elapsed;
+                            _observedBytesPerSecond = rate >= (double)ulong.MaxValue
+                                ? ulong.MaxValue : (ulong)Math.Max(0, rate);
+                        }
+                        else _observedBytesPerSecond = null;
                         _lastRateBytes = snapshot.Statistics.BytesSent;
                         _lastRateAtUtc = now;
                     }
