@@ -69,9 +69,11 @@ public sealed class SequenceBoundNativePlaybackIntegrationTests
         var indexes = new int[4];
         Assert.True(decks.TrySelectBoundSequenceBoundary(
             reference, slot, selected, requests, ownerRequests, frames, indexes,
-            out var position, out var clipCount, out var ownerCount, out var failure),
+            out var position, out var sliceEndTick,
+            out var clipCount, out var ownerCount, out var failure),
             failure?.Message);
         Assert.Equal(0L, position.Tick);
+        Assert.Equal(20 * 4800L, sliceEndTick);
         Assert.Equal(4, clipCount);
         Assert.Equal(2, ownerCount);
         Assert.Equal(new[] { 0, 1, 0, 1 }, indexes);
@@ -90,7 +92,7 @@ public sealed class SequenceBoundNativePlaybackIntegrationTests
         Array.Clear(frames);
         Assert.False(decks.TrySelectBoundSequenceBoundary(
             reference, slot, selected, requests, ownerRequests, frames, indexes,
-            out _, out var rejectedClips, out var rejectedOwners, out var stoppedFailure));
+            out _, out _, out var rejectedClips, out var rejectedOwners, out var stoppedFailure));
         Assert.Equal("runtime.sequence.boundary_stale", stoppedFailure?.Code);
         Assert.Equal(0, rejectedClips);
         Assert.Equal(0, rejectedOwners);
