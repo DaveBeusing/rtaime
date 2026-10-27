@@ -128,6 +128,18 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 	}
 
 	[Fact]
+	public void Provider_replacement_starts_independent_sequence_epoch_without_transport_reconnect()
+	{
+		var now = DateTimeOffset.UnixEpoch.AddDays(10);
+		var program = new MonitoringViewerFreshness();
+		program.SelectSource("program", 1, 1);
+		Assert.True(program.Observe("program", 1, 1, now, 400, providerInstanceId: "provider-a"));
+		Assert.False(program.Observe("program", 1, 1, now.AddMilliseconds(10), 399, providerInstanceId: "provider-a"));
+		Assert.True(program.Observe("program", 1, 1, now.AddMilliseconds(20), 1, providerInstanceId: "provider-b"));
+		Assert.Equal("LIVE", program.Status(true, now.AddMilliseconds(20)));
+	}
+
+	[Fact]
 	public void Blocked_dispatcher_cannot_refresh_expired_frame_using_delivery_time()
 	{
 		var receivedAt = DateTimeOffset.UnixEpoch.AddDays(10);
