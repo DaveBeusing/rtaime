@@ -304,12 +304,35 @@ public sealed class OutputCanvasEditorWorkflowTests
         await editor.ValidateAsync();
         await editor.ApplyAsync();
         gateway.AdvanceStored();
+        await editor.ReloadAsync(); // Fresh saved read cannot rewrite the original uncertain intent.
         gateway.ConfirmMapping();
         await editor.ReconcileAsync();
         Assert.True(editor.HasSavedConflict);
         Assert.True(editor.ApplyOutcomeUnconfirmed);
         Assert.False(editor.CanEdit);
         Assert.False(editor.ApplyCommand.CanExecute(null));
+        Assert.Equal(1, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Reconciliation_rechecks_authorized_targets_instead_of_older_selector_entries()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway { DropApplyResponse = true };
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.ConfirmMapping();
+        gateway.HideAuthorizedTarget = true;
+        await editor.ReconcileAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.Equal(1, gateway.Applies);
+        gateway.HideAuthorizedTarget = false;
+        await editor.ReconcileAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.True(editor.IsActiveMappingConfirmed);
         Assert.Equal(1, gateway.Applies);
     }
 
@@ -366,12 +389,14 @@ public sealed class OutputCanvasEditorWorkflowTests
         public bool DropDisableResponse { get; set; }
         public bool ReturnStaleUnmapped { get; set; }
         public bool ReturnStaleActive { get; set; }
+        public bool HideAuthorizedTarget { get; set; }
 
         public ValueTask<OutputCanvasSnapshot> GetAsync(CancellationToken token = default) =>
             ValueTask.FromResult(new OutputCanvasSnapshot(Stored,Stored.EditRevision,
                 _runtime.ActiveRenderRevision,
-                [new("reference","virtual-program","production",1920,1080,
-                    "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
+                HideAuthorizedTarget ? Array.Empty<OutputCanvasTarget>() :
+                    [new("reference","virtual-program","production",1920,1080,
+                        "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
 
         public ValueTask<OutputCanvasActivationResult> EvidenceAsync(CancellationToken token = default) =>
             ValueTask.FromResult(ReturnStaleUnmapped ? new OutputCanvasActivationResult(null,null,"UNMAPPED") :
