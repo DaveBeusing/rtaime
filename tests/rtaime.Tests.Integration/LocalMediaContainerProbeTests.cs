@@ -265,6 +265,31 @@ public sealed class LocalMediaContainerProbeTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Source_capability_description_keeps_container_clock_and_native_output_distinct(bool mov)
+    {
+        WithFile(Movie(mov: mov, audioEntry: mov ? "sowt" : "mp4a"), path => {
+            ILocalMediaProbe probe = mov ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+            var source = probe.Read(path);
+            var normalized = new LocalMediaProbe(MediaContractVersion.Current,
+                MediaAssetId.New(), MediaSourceId.New(), "fixture",
+                source.Container, MediaVideoCodec.H264, mov ? MediaAudioCodec.Pcm : MediaAudioCodec.Aac,
+                VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32, source.Duration);
+            var evidence = LocalMediaSourceEvidence.Describe(source, normalized);
+            Assert.Contains("timebase 1/1000", evidence);
+            Assert.Contains("stts 300 samples", evidence);
+            Assert.Contains("delta 20 ticks (CFR)", evidence);
+            Assert.Contains("1920x1080 @ 50/1 avg", evidence);
+            Assert.Contains("2ch, 48000Hz, 16-bit declared", evidence);
+            Assert.Contains(mov ? "AUDIO entry sowt" : "AUDIO entry mp4a", evidence);
+            Assert.Contains(mov ? "negotiated Pcm" : "negotiated Aac", evidence);
+            Assert.Contains("selected MFT UNVERIFIED", evidence);
+            Assert.DoesNotContain("SOFTWARE QUALIFIED", evidence);
+        }, mov ? ".mov" : ".mp4");
+    }
+
     [Fact]
     public void Encrypted_MP4_audio_is_rejected_as_unsupported_before_native_open()
     {
