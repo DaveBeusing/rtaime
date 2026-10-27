@@ -19,6 +19,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private string _disabledReason = "Synchronize authoritative audio state.";
 	private string _mutationState = "CONFIRMED";
 	private bool _showProcessing;
+	private long _draftSessionEpoch;
 
 	internal OperatorAudioMixerViewModel(OperatorViewModel owner)
 	{
@@ -96,14 +97,25 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 
 	internal void SetEvidenceAvailability(string availability)
 	{
+		// Reconnects and lost Runtime confidence revoke old draft authorization
+		// even if the authoritative numeric revision remains unchanged.
+		if (string.Equals(_availability, "CONFIRMED", StringComparison.Ordinal) !=
+		    string.Equals(availability, "CONFIRMED", StringComparison.Ordinal))
+			_draftSessionEpoch++;
 		Availability = availability;
 		OnPropertyChanged(nameof(EvidenceIsCurrent));
 		OnPropertyChanged(nameof(MeteringLabel));
         OnPropertyChanged(nameof(CompactSignalState));
 		foreach (var source in Sources)
+		{
 			source.RefreshEvidenceState();
+			source.NotifyDraftReview();
+		}
 		foreach (var bus in Buses)
+		{
 			bus.RefreshEvidenceState();
+			bus.NotifyDraftReview();
+		}
 	}
 
 	internal void Apply(OperatorStatusSnapshot snapshot, bool refreshDrafts)
@@ -207,7 +219,9 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 				string.Equals(source.SourceId, _owner.AudioRoutingSourceId, StringComparison.Ordinal))
 			?? Sources.FirstOrDefault();
 
-		SetEvidenceAvailability("CONFIRMED");
+		SetEvidenceAvailability(_owner.Client is null ? "CONFIRMED" :
+			_owner.IsStale ? "STALE" : !_owner.IsConnected ? "OFFLINE" :
+			_owner.RuntimeStatus != "READY" ? "UNVERIFIED" : "CONFIRMED");
 		var ducking = production.Configuration.Ducking;
 		DuckingEvidence = ducking?.Enabled == true
 			? $"{ducking.BusId.Value.ToUpperInvariant()} · SIDECHAIN {ducking.SidechainSourceId} · " +
@@ -236,12 +250,17 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	}
 
 	internal string? AttributeRevision => _owner.Client?.Snapshot is { } snapshot ? snapshot.Production.ProductionId + ":" + snapshot.Production.Revision.Value : null;
+	// Production revision fences output-role edits; configuration revision fences
+	// source/bus mutations; session epoch fences reconnect and evidence loss.
+	internal string? CurrentAudioDraftToken => _owner.Client?.Snapshot is { AudioProduction: { } audio } snapshot
+		? $"{snapshot.Production.ProductionId}:{snapshot.Production.Revision.Value}:{audio.Configuration.Revision}:{_draftSessionEpoch}"
+		: null;
 	internal bool CanMutate() => CanEdit && _owner.Client?.Snapshot?.AudioProduction is not null;
 
 	internal async Task<bool> ApplySourceAsync(OperatorAudioSourceStripViewModel strip)
 	{
 		var production = _owner.Client?.Snapshot?.AudioProduction;
-		if (production is null || !CanMutate() || !strip.InputsValid)
+		if (production is null || !CanMutate() || !strip.InputsValid || strip.NeedsReview)
 			return false;
 
 		var sourceId = new MediaSourceId(Identity.Parse(strip.SourceId));
@@ -363,7 +382,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	internal async Task<bool> ApplyBusAsync(OperatorAudioBusStripViewModel strip)
 	{
 		var production = _owner.Client?.Snapshot?.AudioProduction;
-		if (production is null || !CanMutate() || !strip.InputsValid)
+		if (production is null || !CanMutate() || !strip.InputsValid || strip.NeedsReview)
 			return false;
 
 		var busId = new AudioBusId(strip.BusId);
@@ -518,6 +537,7 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
             _owner.SelectedSource = this;
             return Task.CompletedTask;
         });
+		InitializeDraftReview();
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -579,7 +599,9 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
 	public bool HasDraftChanges => !DraftMatches(_confirmed) || Assignments.Any(a => a.HasDraftChanges);
-	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
+	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState == "PENDING" ? "PENDING" :
+		NeedsReview ? "REVIEW REQUIRED" : MutationState == "REJECTED" ? "REJECTED" :
+		HasDraftChanges ? "DRAFT" : MutationState;
 
 	internal void Apply(
 		AudioProductionSourceConfiguration source,
@@ -647,7 +669,7 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 		OnPropertyChanged(nameof(HasDraftChanges));
 	}
 
-	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && MutationState != "PENDING";
+	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && !NeedsReview && MutationState != "PENDING";
 
 	private void LoadDraft(AudioProductionSourceConfiguration source)
 	{
@@ -710,6 +732,7 @@ public sealed partial class OperatorAudioSourceStripViewModel : INotifyPropertyC
 
 	private void DraftChanged()
 	{
+		TrackDraftRevision();
 		OnPropertyChanged(nameof(HasDraftChanges));
 		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
@@ -849,6 +872,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 			return Task.CompletedTask;
 		}, () => MutationState != "PENDING");
 		ToggleMuteCommand = new AsyncRelayCommand(() => { Muted = !Muted; return Task.CompletedTask; }, () => _owner.CanMutate() && CanEditDraft);
+		InitializeDraftReview();
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -903,7 +927,9 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 
 	public string MutationState { get => _mutationState; private set => Set(ref _mutationState, value); }
 	public bool HasDraftChanges => !DraftMatches(_confirmed);
-	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState is "PENDING" or "REJECTED" ? MutationState : HasDraftChanges ? "DRAFT" : MutationState;
+	public string DraftState => !InputsValid ? "INVALID INPUT" : MutationState == "PENDING" ? "PENDING" :
+		NeedsReview ? "REVIEW REQUIRED" : MutationState == "REJECTED" ? "REJECTED" :
+		HasDraftChanges ? "DRAFT" : MutationState;
 	public string MuteActionLabel => _confirmed.Muted ? "MUTE OFF" : "MUTE";
 
 	internal void Apply(
@@ -986,7 +1012,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 		OnPropertyChanged(nameof(DraftState));
 	}
 
-	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && MutationState != "PENDING";
+	private bool CanApply() => _owner.CanMutate() && InputsValid && HasDraftChanges && !NeedsReview && MutationState != "PENDING";
 
 	private void LoadDraft(AudioProductionBusConfiguration bus)
 	{
@@ -1032,6 +1058,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 
 	private void DraftChanged()
 	{
+		TrackDraftRevision();
 		OnPropertyChanged(nameof(HasDraftChanges));
 		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
