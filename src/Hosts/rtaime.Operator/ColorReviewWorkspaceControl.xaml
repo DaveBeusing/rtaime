@@ -7,6 +7,14 @@
     MinWidth="0" MinHeight="0" SnapsToDevicePixels="True"
     UseLayoutRounding="True" Focusable="True"
     controls:OperatorControlPresentation.Enabled="True">
+    <UserControl.Resources>
+        <Style x:Key="ColorReviewScopePanel" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource OperatorDiagnosticSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+    </UserControl.Resources>
     <Grid Margin="4,0,4,2">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -170,12 +178,4 @@
             </StackPanel>
         </Border>
     </Grid>
-    <UserControl.Resources>
-        <Style x:Key="ColorReviewScopePanel" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource OperatorDiagnosticSurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="4" />
-        </Style>
-    </UserControl.Resources>
 </UserControl>
