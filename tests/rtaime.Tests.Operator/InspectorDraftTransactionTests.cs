@@ -285,7 +285,7 @@ public sealed class InspectorDraftTransactionTests
         Assert.False(f.Model.ToggleInspectorSelectionPinCommand.CanExecute(null));
         Assert.False(f.Model.IsInspectorSelectionPinned);
         Assert.Contains("MULTIPLE", f.Model.InspectorContextBreadcrumb);
-        Assert.Contains("FOLLOW SELECTION", f.Model.InspectorSelectionPinStatus);
+        Assert.Contains("MULTIPLE SELECTION", f.Model.InspectorSelectionPinStatus);
         Assert.Equal(0, f.Transport.MutationCalls);
     }
 
