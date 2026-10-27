@@ -97,6 +97,32 @@ public sealed class NetworkOutputFoundationTests
 	}
 
 
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Zero_configured_retries_use_finite_default_without_a_new_episode_per_frame(bool ndi)
+	{
+		var attempts = 0;
+		await using INetworkOutputSession session = ndi
+			? new NdiNetworkOutputSession(NdiConfiguration("Finite default", reconnectMaximumAttempts: 0),
+				_ => { Interlocked.Increment(ref attempts); throw new IOException("Offline NDI sender."); })
+			: new SrtNetworkOutputSession(
+				Configuration(new Uri("srt://127.0.0.1:9000/live"), reconnectMaximumAttempts: 0),
+				() => { Interlocked.Increment(ref attempts); return new FailingTransport(); },
+				() => new PassThroughEncoder());
+		Assert.True(session.TrySubmit(Sample(1)).Accepted);
+		await WaitUntilAsync(() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Faulted,
+			TimeSpan.FromSeconds(12));
+		Assert.Equal(NetworkOutputReconnectPolicy.DefaultMaximumAttempts, Volatile.Read(ref attempts));
+		Assert.Equal("network.output.reconnect_exhausted", session.Snapshot.Failure?.Code);
+		var extra = Sample(2);
+		Assert.Equal(NetworkOutputEnqueueStatus.Rejected, session.TrySubmit(extra).Status);
+		Assert.Equal(1, extra.VideoLease.DisposeCount);
+		Assert.Equal(NetworkOutputReconnectPolicy.DefaultMaximumAttempts, Volatile.Read(ref attempts));
+	}
+
+
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
