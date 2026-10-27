@@ -48,10 +48,15 @@ public sealed partial class MediaPoolInspectorViewModel
     // A stable selection can be followed through revised observations while pinned.
     // A new production or an externally changed audio target cannot be used as
     // authority to submit the old Inspector's draft.
-    private bool InspectorPinnedAudioTargetMatches =>
-        _activeInspectorTarget is not { Kind: "gain" } target ||
+    // Existing audio Apply relies on the mixer's selected input. It must still
+    // refer to the exact Inspector source/stream, including when not pinned.
+    private bool InspectorAudioSelectionMatches =>
+        _activeInspectorTarget is { Kind: "gain" } target &&
         _operator.SelectedAudioInput is { } input &&
         input.SourceId == target.Id && input.StreamId == target.ChildId;
+
+    private bool InspectorPinnedAudioTargetMatches =>
+        _activeInspectorTarget is not { Kind: "gain" } || InspectorAudioSelectionMatches;
 
     private bool InspectorPinMatchesCurrent => _inspectorPinnedIdentity is null ||
         string.Equals(_inspectorPinnedIdentity, EditingSelectionIdentity, StringComparison.Ordinal) &&
