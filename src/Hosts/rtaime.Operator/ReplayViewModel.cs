@@ -243,7 +243,7 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		{
 			await operation();
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException or TimeoutException or OperationCanceledException)
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException or TimeoutException or OperationCanceledException or NotSupportedException or UnauthorizedAccessException)
 		{
 			LastError = exception.Message;
 		}
