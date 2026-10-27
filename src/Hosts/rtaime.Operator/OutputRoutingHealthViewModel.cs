@@ -158,10 +158,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public PerformanceMetricViewModel TemperatureMetric => _metrics["temperature"];
 	public ICommand RoutePreviewToProgramCommand => _control.CutCommand;
 	// Network transmission is a Runtime observation, never an Operator command state.
-	public string ProgramTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
-	public string AuxTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
-	public string ProgramTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
-	public string AuxTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
+	public string ProgramTransmissionState => TransmissionStateForRole(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program"),
+		_control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
+	public string AuxTransmissionState => TransmissionStateForRole(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux"),
+		_control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
+	public string ProgramTransmissionDetail => TransmissionDetail(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program"));
+	public string AuxTransmissionDetail => TransmissionDetail(
+		_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux"));
 
 
 	public OutputStatusViewModel? SelectedOutput
@@ -221,6 +227,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var programRole = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "program", StringComparison.Ordinal));
 		var programNetwork = programRole?.NetworkOutput;
+		var programNetworks = programRole?.NetworkOutputs ?? [];
 		var programEvidence = RoleEvidence(programRole, _control.IsConnected, _control.IsStale, runtimeEvidence);
 		var programTarget = programRole is null
 			? Unavailable
@@ -238,15 +245,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			colorSpace: Unavailable,
 			status: ToOperatorStatus(programEvidence),
 			evidenceState: programEvidence,
-			detail: AppendNetworkDetail(programDetail, programNetwork),
+			detail: AppendNetworkDetail(programDetail, programRole),
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
-			streamingStatus: ResolveStreamingStatus(programNetwork),
-			streamingTarget: programNetwork?.SafeTargetIdentity ?? Unavailable,
-			streamingProvider: programNetwork is null ? Unavailable : $"{programNetwork.Provider} · {programNetwork.Protocol}",
-			streamingBitrate: FormatNetworkBitrate(programNetwork),
-			streamingQueue: FormatNetworkQueue(programNetwork),
-			streamingDrops: FormatNetworkDrops(programNetwork),
-			streamingReconnects: programNetwork?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
+			streamingStatus: TransmissionStateForRole(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow),
+			streamingTarget: FormatTargetIdentities(programNetworks),
+			streamingProvider: FormatTargetProviders(programNetworks),
+			streamingBitrate: programNetworks.Count == 1 ? FormatNetworkBitrate(programNetwork) : "SEE PER-TARGET CAPABILITIES",
+			streamingQueue: FormatNetworkQueue(programNetworks),
+			streamingDrops: FormatNetworkDrops(programNetworks),
+			streamingReconnects: FormatNetworkReconnects(programNetworks));
+		_program.UpdateNetworkTargets(ProjectNetworkTargets(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow));
 
 		var previewEvidence = !_control.IsConnected || _control.IsStale
 			? "UNVERIFIED" : NormalizeEvidence(_control.ControlHealth);
@@ -270,6 +278,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingDrops: Unavailable,
 			streamingReconnects: Unavailable);
 
+		_preview.UpdateNetworkTargets([]);
 		var aux = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "aux", StringComparison.Ordinal));
 		if (aux is null)
@@ -292,6 +301,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				streamingQueue: Unavailable,
 				streamingDrops: Unavailable,
 				streamingReconnects: Unavailable);
+			_aux.UpdateNetworkTargets([]);
 		}
 		else
 		{
@@ -312,15 +322,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				colorSpace: Unavailable,
 				status: ToOperatorStatus(evidence),
 				evidenceState: evidence,
-				detail: AppendNetworkDetail(detail, aux.NetworkOutput),
+				detail: AppendNetworkDetail(detail, aux),
 				recordingStatus: Unavailable,
-				streamingStatus: ResolveStreamingStatus(aux.NetworkOutput),
-				streamingTarget: aux.NetworkOutput?.SafeTargetIdentity ?? Unavailable,
-				streamingProvider: aux.NetworkOutput is null ? Unavailable : $"{aux.NetworkOutput.Provider} · {aux.NetworkOutput.Protocol}",
-				streamingBitrate: FormatNetworkBitrate(aux.NetworkOutput),
-				streamingQueue: FormatNetworkQueue(aux.NetworkOutput),
-				streamingDrops: FormatNetworkDrops(aux.NetworkOutput),
-				streamingReconnects: aux.NetworkOutput?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
+				streamingStatus: TransmissionStateForRole(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow),
+				streamingTarget: FormatTargetIdentities(aux.NetworkOutputs),
+				streamingProvider: FormatTargetProviders(aux.NetworkOutputs),
+				streamingBitrate: aux.NetworkOutputs.Count == 1 ? FormatNetworkBitrate(aux.NetworkOutput) : "SEE PER-TARGET CAPABILITIES",
+				streamingQueue: FormatNetworkQueue(aux.NetworkOutputs),
+				streamingDrops: FormatNetworkDrops(aux.NetworkOutputs),
+				streamingReconnects: FormatNetworkReconnects(aux.NetworkOutputs));
+			_aux.UpdateNetworkTargets(ProjectNetworkTargets(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow));
 		}
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
@@ -344,6 +355,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingDrops: Unavailable,
 			streamingReconnects: Unavailable);
 
+		_cleanProgram.UpdateNetworkTargets([]);
 		var hasRuntimePerformance = NormalizeAvailability(_control.CurrentFormat) != Unavailable &&
 			NormalizeAvailability(_control.FrameTime) != Unavailable;
 		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
@@ -419,22 +431,17 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			"No disk telemetry is published by the current health contract.",
 			null,
 			sampleHistory);
-		var networkOutputs = _control.OutputRoles
-			.Select(role => role.NetworkOutput)
-			.Where(output => output is not null)
-			.Cast<OperatorNetworkOutputDescriptor>()
-			.ToArray();
-		var connectedNetworkOutputs = networkOutputs.Count(output => output.Connected);
+		var networkOutputs = _control.OutputRoles.SelectMany(role => role.NetworkOutputs).ToArray();
+		var now = DateTimeOffset.UtcNow;
+		var networkStates = networkOutputs
+			.Select(output => TransmissionState(output, _control.IsConnected, _control.IsStale, now)).ToArray();
+		var locallySending = networkStates.Count(state => state == "LIVE");
 		var networkEvidence = networkOutputs.Length == 0
-			? "UNVERIFIED"
-			: networkOutputs.Any(output => output.Failure is not null)
-				? "FAIL"
-				: connectedNetworkOutputs == networkOutputs.Length
-					? "PASS"
-					: "UNVERIFIED";
+			? "UNVERIFIED" : networkStates.Any(state => state == "FAILED")
+				? "FAIL" : locallySending == networkOutputs.Length ? "PASS" : "UNVERIFIED";
 		var networkValue = networkOutputs.Length == 0
 			? Unavailable
-			: $"{connectedNetworkOutputs}/{networkOutputs.Length} LIVE";
+			: $"{locallySending}/{networkOutputs.Length} SENDER ACTIVE";
 		UpdateMetric(
 			"network",
 			networkValue,
