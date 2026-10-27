@@ -23,6 +23,14 @@ public sealed class LocalMediaContainerProbeTests
             Assert.Equal(MediaVideoCodec.H264, result.VideoCodec);
             Assert.Equal(100, result.Profile); Assert.Equal(8, result.BitDepth); Assert.Equal(1, result.ChromaFormat);
             Assert.Equal(50, result.FrameRateNumerator); Assert.Equal(1, result.FrameRateDenominator);
+            Assert.False(result.VariableFrameRate);
+            Assert.Equal(1000u, result.VideoTimeScale);
+            Assert.Equal(300UL, result.VideoSampleCount);
+            Assert.Equal(20u, result.MinimumFrameDeltaTicks);
+            Assert.Equal(20u, result.MaximumFrameDeltaTicks);
+            Assert.Null(result.AudioTimeScale);
+            Assert.Null(result.AudioChannels);
+            Assert.Null(result.AudioSampleRateHz);
             Assert.Equal(TimeSpan.FromSeconds(6), result.Duration);
         });
     }
@@ -60,8 +68,30 @@ public sealed class LocalMediaContainerProbeTests
             var result = new Mp4LocalMediaProbe().Read(path);
             Assert.True(result.VariableFrameRate);
             Assert.Equal(100, result.FrameRateNumerator); Assert.Equal(3, result.FrameRateDenominator);
+            Assert.Equal(1000u, result.VideoTimeScale);
+            Assert.Equal(200UL, result.VideoSampleCount);
+            Assert.Equal(20u, result.MinimumFrameDeltaTicks);
+            Assert.Equal(40u, result.MaximumFrameDeltaTicks);
             Assert.Equal("nclx:1/1/1", result.ColorDescription);
         });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Equal_duration_timing_runs_are_CFR_and_retain_exact_rational_timebase(bool mov)
+    {
+        WithFile(Movie(mov: mov, mutation: "split-cfr"), path => {
+            ILocalMediaProbe probe = mov ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+            var metadata = probe.Read(path);
+            Assert.False(metadata.VariableFrameRate);
+            Assert.Equal(50, metadata.FrameRateNumerator);
+            Assert.Equal(1, metadata.FrameRateDenominator);
+            Assert.Equal(1000u, metadata.VideoTimeScale);
+            Assert.Equal(300UL, metadata.VideoSampleCount);
+            Assert.Equal(20u, metadata.MinimumFrameDeltaTicks);
+            Assert.Equal(20u, metadata.MaximumFrameDeltaTicks);
+        }, mov ? ".mov" : ".mp4");
     }
 
     [Theory]
@@ -227,7 +257,65 @@ public sealed class LocalMediaContainerProbeTests
             var metadata = new QuickTimeLocalMediaProbe().Read(path);
             Assert.Equal("avc1", metadata.SampleEntry);
             Assert.Equal(entry, metadata.AudioSampleEntry);
+            Assert.Equal(1000u, metadata.AudioTimeScale);
+            Assert.Equal((ushort)2, metadata.AudioChannels);
+            Assert.Equal((ushort)16, metadata.AudioSampleSizeBits);
+            Assert.Equal(48000u, metadata.AudioSampleRateHz);
             // Metadata acceptance is not a real decoder or required-audio claim.
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Source_capability_description_keeps_container_clock_and_native_output_distinct(bool mov)
+    {
+        WithFile(Movie(mov: mov, audioEntry: mov ? "sowt" : "mp4a"), path => {
+            ILocalMediaProbe probe = mov ? new QuickTimeLocalMediaProbe() : new Mp4LocalMediaProbe();
+            var source = probe.Read(path);
+            var normalized = new LocalMediaProbe(MediaContractVersion.Current,
+                MediaAssetId.New(), MediaSourceId.New(), "fixture",
+                source.Container, MediaVideoCodec.H264, mov ? MediaAudioCodec.Pcm : MediaAudioCodec.Aac,
+                VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32, source.Duration);
+            var evidence = LocalMediaSourceEvidence.Describe(source, normalized);
+            Assert.Contains("timebase 1/1000", evidence);
+            Assert.Contains("stts 300 samples", evidence);
+            Assert.Contains("delta 20 ticks (CFR)", evidence);
+            Assert.Contains("1920x1080 @ 50/1 avg", evidence);
+            Assert.Contains("2ch, 48000Hz, 16-bit declared", evidence);
+            Assert.Contains("audio timebase 1/1000", evidence);
+            Assert.Contains(mov ? "AUDIO entry sowt" : "AUDIO entry mp4a", evidence);
+            Assert.Contains(mov ? "negotiated Pcm" : "negotiated Aac", evidence);
+            Assert.Contains("selected MFT UNVERIFIED", evidence);
+            Assert.DoesNotContain("SOFTWARE QUALIFIED", evidence);
+        }, mov ? ".mov" : ".mp4");
+    }
+
+    [Fact]
+    public void Encrypted_MP4_audio_is_rejected_as_unsupported_before_native_open()
+    {
+        WithFile(Movie(audioEntry: "enca"), path =>
+            Assert.Equal("media.file.audio_codec_unsupported",
+                Assert.Throws<LocalMediaProbeException>(() => new Mp4LocalMediaProbe().Read(path)).Code));
+    }
+
+    [Fact]
+    public void Unsupported_rational_source_rate_is_rejected_before_native_reader_negotiation()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // The sample table spans exactly the declared 6-s media duration,
+        // but 2,000 samples / 6 s requires >240 fps. Metadata alone suffices
+        // for a deterministic rejection before SourceReader creation.
+        WithFile(Movie(mutation: "fast-rate"), path => {
+            var metadata = new Mp4LocalMediaProbe().Read(path);
+            Assert.Equal(1000, metadata.FrameRateNumerator);
+            Assert.Equal(3, metadata.FrameRateDenominator);
+            Assert.Equal(2000UL, metadata.VideoSampleCount);
+            var result = new LocalMediaFileProvider().TryOpen(path, MediaSourceId.New());
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Source);
+            Assert.Equal("media.file.frame_rate_unsupported", result.Failure?.Code);
+            Assert.Contains("MP4/avc1", result.Failure?.Message, StringComparison.OrdinalIgnoreCase);
         });
     }
 
@@ -261,9 +349,12 @@ public sealed class LocalMediaContainerProbeTests
             mutation == "hdr" ? (byte)16 : (byte)1, 0, 1, 0];
         var entry = Box(sampleEntry ?? (mutation == "prores" ? "apch" : "avc1"), Join(visual, Box("avcC", avcc), pasp, Box("colr", color)));
         var stsd = Box("stsd", Join(U32(0), U32(mutation == "descriptions" ? 2u : 1u), entry));
-        var stts = Box("stts", mutation == "vfr"
-            ? Join(U32(0), U32(2), U32(100), U32(20), U32(100), U32(40))
-            : Join(U32(0), U32(mutation == "timing-count" ? uint.MaxValue : 1), U32(300), U32(20)));
+        var stts = Box("stts", mutation switch {
+            "vfr" => Join(U32(0), U32(2), U32(100), U32(20), U32(100), U32(40)),
+            "split-cfr" => Join(U32(0), U32(2), U32(150), U32(20), U32(150), U32(20)),
+            "fast-rate" => Join(U32(0), U32(1), U32(2000), U32(3)),
+            _ => Join(U32(0), U32(mutation == "timing-count" ? uint.MaxValue : 1), U32(300), U32(20))
+        });
         var edit = Box("edts", Box("elst", Join(U32(0), U32(1), U32(6000),
             U32(mutation == "edit" ? uint.MaxValue : mutation.StartsWith("composition", StringComparison.Ordinal) ? 40u : 0u), U32(65536))));
         var track = Box("trak", Join(Box("tkhd", tkhd), edit, Box("mdia", Join(Box("mdhd", mdhd),

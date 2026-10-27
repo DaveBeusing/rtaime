@@ -71,12 +71,12 @@ The import path accepts a broad native MP4 input envelope before normalizing to 
 | Average video bitrate | up to 300 Mbit/s when Media Foundation reports `MF_MT_AVG_BITRATE` |
 | H.264 decode-rate guard | Level 5.1 macroblock envelope remains enforced for H.264 |
 | Runtime output | normalized to 1920×1080p50 or 1920×1080p59.94 |
-| Audio | AAC, MP3 or PCM when decodable; absent/unsupported audio falls back to video-only playback |
+| Audio | AAC, MP3 or PCM when decodable; absence/unavailable native audio may retain legacy MP4 video-only playback, but encrypted `enca` is rejected and explicit required-audio preflight never silently falls back |
 | Pixel/audio runtime representation | RGBA8 video, optional 48 kHz stereo Float32 audio |
 
 The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second and applies only to H.264. It intentionally permits common H.264 profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting H.264 combinations such as 4K60. Other admitted codecs use the general resolution, frame-rate and bitrate envelope and still depend on an installed Media Foundation decoder.
 
-Variable-frame-rate files are admitted from bounded sample timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. Bitrate is not used to alter production timing; it is an input decode-admission property only.
+Variable-frame-rate files are admitted from bounded sample timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. A source is identified as VFR only when its checked `stts` decode-duration deltas differ; multiple same-duration timing runs remain CFR. The original rational source timebase/sample count and declared audio characteristics are shown separately from negotiated native codecs and normalized output in asset-preflight evidence. Resolution/rate/H.264 macroblock policy rejection now occurs before opening the native Source Reader. Bitrate is not used to alter production timing; it is an input decode-admission property only.
 
 Acceptance by this software policy is not hardware-performance qualification. UHD/high-bitrate/high-frame-rate decoding remains `UNVERIFIED` on the reference hardware until dedicated sustained-load qualification evidence exists.
 

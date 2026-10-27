@@ -80,11 +80,13 @@ public sealed class LocalMediaFileSource : IDisposable
     private long? _previousVideoTimestamp;
     private double? _expectedAudioSeconds;
 
-	internal LocalMediaFileSource(string path, LocalMediaProbe probe, ILocalMediaDecoder decoder, double openMilliseconds = 0)
+	internal LocalMediaFileSource(string path, LocalMediaProbe probe, ILocalMediaDecoder decoder,
+        double openMilliseconds = 0, string? sourceFormatEvidence = null)
 	{
 		Path = path ?? throw new ArgumentNullException(nameof(path));
 		Probe = probe ?? throw new ArgumentNullException(nameof(probe));
 		_decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
+        SourceFormatEvidence = sourceFormatEvidence ?? "SOURCE PROFILE UNVERIFIED";
         _measurements = new LocalMediaPlaybackMeasurements { OpenMilliseconds = openMilliseconds };
 	}
 
@@ -95,6 +97,9 @@ public sealed class LocalMediaFileSource : IDisposable
 
 	public string Path { get; }
 	public LocalMediaProbe Probe { get; }
+    // A bounded source/decoder admission description for the existing preflight
+    // UI; not a new public wire/format schema or selected-MFT qualification.
+    public string SourceFormatEvidence { get; }
 	public MediaAssetId AssetId => Probe.AssetId;
 	public MediaSourceId SourceId => Probe.SourceId;
 
@@ -309,12 +314,31 @@ public sealed class LocalMediaFileProvider
         { return LocalMediaOpenResult.Rejected(exception.Code, exception.Message); }
         catch (Exception exception) when (exception is InvalidDataException or IOException or OverflowException or UnauthorizedAccessException)
         { return LocalMediaOpenResult.Rejected("media.file.probe_failed", $"The container metadata could not be read: {exception.Message}"); }
+
+        // Do not instantiate a native Source Reader for a profile already
+        // rejected by bounded source geometry, rational cadence or H.264 rate
+        // policy. Native negotiation remains authoritative for transform
+        // availability, color/layout and reported bitrate.
+        if (metadata.VideoCodec is not { } videoCodec)
+            return LocalMediaOpenResult.Rejected("media.file.video_codec_unsupported",
+                $"Container sample entry '{metadata.SampleEntry}' has no admitted decoder profile.");
+        if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
+            return LocalMediaOpenResult.Rejected("media.file.metadata_invalid",
+                "The container source frame rate is invalid.");
+        var sourceProfile = new LocalMediaInputProfile(videoCodec, metadata.Width, metadata.Height,
+            new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator), null);
+        if (LocalMediaInputPolicy.Validate(sourceProfile) is { } unsupported)
+            return LocalMediaOpenResult.Rejected(unsupported.Code,
+                $"{metadata.Container}/{metadata.SampleEntry}: {unsupported.Message}");
+
         var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat, metadata);
 		if (!open.Succeeded)
 			return LocalMediaOpenResult.Rejected(open.Failure!.Value.Code, open.Failure.Value.Message);
 
 		var decoder = open.Decoder!;
-		return LocalMediaOpenResult.Ready(new LocalMediaFileSource(fullPath, decoder.Probe, decoder, Stopwatch.GetElapsedTime(openStarted).TotalMilliseconds));
+		return LocalMediaOpenResult.Ready(new LocalMediaFileSource(fullPath, decoder.Probe, decoder,
+            Stopwatch.GetElapsedTime(openStarted).TotalMilliseconds,
+            LocalMediaSourceEvidence.Describe(metadata, decoder.Probe)));
 	}
 }
 

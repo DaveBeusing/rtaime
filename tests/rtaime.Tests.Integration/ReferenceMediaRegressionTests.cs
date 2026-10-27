@@ -334,7 +334,21 @@ public sealed class ReferenceMediaRegressionTests
         var metadata = containerProbe.Read(asset.Path);
         Assert.Equal(asset.Manifest.Container == "MP4" ? MediaContainerFormat.Mp4 : MediaContainerFormat.QuickTimeMov, metadata.Container);
         Assert.Equal(profile == "hevc-main10" ? 10 : 8, metadata.BitDepth);
-        if (profile == "vfr") Assert.True(metadata.VariableFrameRate);
+        Assert.True(metadata.VideoTimeScale > 0);
+        Assert.True(metadata.VideoSampleCount > 0);
+        Assert.InRange(metadata.MinimumFrameDeltaTicks, 1u, uint.MaxValue);
+        Assert.True(metadata.MaximumFrameDeltaTicks >= metadata.MinimumFrameDeltaTicks);
+        if (profile == "vfr")
+        {
+            Assert.True(metadata.VariableFrameRate);
+            Assert.True(metadata.MaximumFrameDeltaTicks > metadata.MinimumFrameDeltaTicks);
+        }
+        else if (!metadata.VariableFrameRate)
+            Assert.Equal(metadata.MinimumFrameDeltaTicks, metadata.MaximumFrameDeltaTicks);
+        Assert.NotEmpty(metadata.AudioSampleEntry);
+        Assert.True(metadata.AudioTimeScale is > 0);
+        // Container declaration is evidence of a track, not successful native
+        // audio negotiation or PCM in the Program path.
         using var deck = new LocalMediaDeckRuntimeService(VideoFormat.Hd1080p50Rgba8);
         var source = MediaSourceId.New();
         var opened = deck.Open(new MediaDeckOpenRequest(MediaContractVersion.Current, source, asset.Path), Prepared(deck, source));

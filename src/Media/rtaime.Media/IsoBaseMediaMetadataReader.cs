@@ -30,6 +30,10 @@ internal static class IsoBaseMediaMetadataReader
 		LocalMediaStreamMetadata? result = null;
         var trackCount = 0;
         string audioEntry = "";
+        uint? audioTimeScale = null;
+        ushort? audioChannels = null;
+        ushort? audioSampleSizeBits = null;
+        uint? audioSampleRateHz = null;
         uint? width = null;
 		uint? height = null;
 		long? frameRateNumerator = null;
@@ -56,16 +60,41 @@ internal static class IsoBaseMediaMetadataReader
                 var videoEntry = ReadFirstSampleEntry(moov, sampleDescription);
 				(width, height) = ReadVisualSampleEntryDimensions(moov, videoEntry);
 				var timing = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stts, "stts");
-				(frameRateNumerator, frameRateDenominator) = ReadFrameRate(moov, timing, mediaTimescale);
+				var frameTiming = ReadFrameRate(moov, timing, mediaTimescale);
+                (frameRateNumerator, frameRateDenominator) = (frameTiming.Numerator, frameTiming.Denominator);
                 result = ReadVideoDetails(moov, videoEntry, new LocalMediaStreamMetadata(container,
                     width.Value, height.Value, frameRateNumerator.Value, frameRateDenominator.Value, duration)
-                    { VariableFrameRate = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(timing.PayloadOffset + 4, 4)) > 1 });
+                    {
+                        VariableFrameRate = frameTiming.VariableFrameRate,
+                        VideoTimeScale = mediaTimescale,
+                        VideoSampleCount = frameTiming.SampleCount,
+                        MinimumFrameDeltaTicks = frameTiming.MinimumDelta,
+                        MaximumFrameDeltaTicks = frameTiming.MaximumDelta
+                    });
             }
             else if (handlerType == 0x736F756E)
             {
                 if (audioEntry.Length != 0) throw new InvalidDataException("Multiple audio tracks are not supported.");
                 var entry = ReadFirstSampleEntry(moov, sampleDescription);
                 audioEntry = FourCc(entry.Type);
+                audioTimeScale = mediaTimescale;
+                // Audio sample-entry fields describe the file, not the MF decoded
+                // output. Unknown values stay nullable rather than pretending the
+                // native transform or 48-kHz stereo negotiation is qualified.
+                if (entry.PayloadLength >= 28)
+                {
+                    var channels = BinaryPrimitives.ReadUInt16BigEndian(moov.AsSpan(entry.PayloadOffset + 16, 2));
+                    var bits = BinaryPrimitives.ReadUInt16BigEndian(moov.AsSpan(entry.PayloadOffset + 18, 2));
+                    var fixedRate = BinaryPrimitives.ReadUInt32BigEndian(moov.AsSpan(entry.PayloadOffset + 24, 4));
+                    audioChannels = channels == 0 ? null : channels;
+                    audioSampleSizeBits = bits == 0 ? null : bits;
+                    audioSampleRateHz = (fixedRate & 0xFFFF) == 0 && (fixedRate >> 16) != 0
+                        ? fixedRate >> 16 : null;
+                }
+                if (container == MediaContainerFormat.Mp4 && audioEntry == "enca")
+                    throw new LocalMediaProbeException("media.file.audio_codec_unsupported",
+                        "Encrypted MP4 audio cannot be admitted as clear audio. Import a source with qualified AAC/MP3/PCM.");
+
                 if (container == MediaContainerFormat.QuickTimeMov &&
                     audioEntry is not ("mp4a" or "sowt"))
                     throw new LocalMediaProbeException("media.file.audio_codec_unsupported",
@@ -100,7 +129,14 @@ internal static class IsoBaseMediaMetadataReader
 		if (duration <= TimeSpan.Zero)
 			throw new InvalidDataException("MP4 duration must be greater than zero.");
 
-		return result! with { AudioSampleEntry = audioEntry };
+		return result! with
+        {
+            AudioSampleEntry = audioEntry,
+            AudioTimeScale = audioTimeScale,
+            AudioChannels = audioChannels,
+            AudioSampleSizeBits = audioSampleSizeBits,
+            AudioSampleRateHz = audioSampleRateHz
+        };
 	}
 
 	private static byte[] ReadMoovPayload(FileStream stream, MediaContainerFormat container)
@@ -315,7 +351,8 @@ internal static class IsoBaseMediaMetadataReader
 		return (width, height);
 	}
 
-	private static (long Numerator, long Denominator) ReadFrameRate(byte[] buffer, BufferBox stts, uint timescale)
+	private static (long Numerator, long Denominator, bool VariableFrameRate, ulong SampleCount, uint MinimumDelta, uint MaximumDelta)
+        ReadFrameRate(byte[] buffer, BufferBox stts, uint timescale)
 	{
 		EnsurePayloadLength(stts, 16, "stts");
 		var entryCount = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(stts.PayloadOffset + 4, 4));
@@ -326,6 +363,8 @@ internal static class IsoBaseMediaMetadataReader
 
 		ulong totalSamples = 0;
 		ulong totalMediaTicks = 0;
+        uint minimumDelta = uint.MaxValue;
+        uint maximumDelta = 0;
 		for (var index = 0u; index < entryCount; index++)
 		{
 			var offset = checked(stts.PayloadOffset + 8 + (int)index * 8);
@@ -335,6 +374,8 @@ internal static class IsoBaseMediaMetadataReader
 				throw new InvalidDataException("MP4 stts contains a zero sample count or sample delta.");
 			totalSamples = checked(totalSamples + sampleCount);
 			totalMediaTicks = checked(totalMediaTicks + (ulong)sampleCount * sampleDelta);
+            minimumDelta = Math.Min(minimumDelta, sampleDelta);
+            maximumDelta = Math.Max(maximumDelta, sampleDelta);
 		}
 
 		var numerator = checked((ulong)timescale * totalSamples);
@@ -344,7 +385,8 @@ internal static class IsoBaseMediaMetadataReader
 		denominator /= gcd;
 		if (numerator > long.MaxValue || denominator > long.MaxValue)
 			throw new InvalidDataException("MP4 frame rate exceeds the supported rational range.");
-		return ((long)numerator, (long)denominator);
+		return ((long)numerator, (long)denominator, minimumDelta != maximumDelta,
+            totalSamples, minimumDelta, maximumDelta);
 	}
 
 

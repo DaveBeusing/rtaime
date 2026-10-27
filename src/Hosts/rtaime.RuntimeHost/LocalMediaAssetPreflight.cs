@@ -182,9 +182,11 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (source is null) throw new IOException(opened.Failure?.Code + ": " + opened.Failure?.Message);
             token.ThrowIfCancellationRequested();
             PublishPreflight(value with { Running = true, State = MediaAssetReadinessState.DecoderAvailable,
-                Detail = "Decoder negotiated; representative seek/decode verification is running." });
+                Detail = $"Decoder negotiated; {source.SourceFormatEvidence}. " +
+                    "Representative seek/decode verification is running." });
             if (options.RequireAudio && source.Probe.AudioCodec == MediaAudioCodec.None)
-                throw new IOException("Required audio was not admitted by the decoder.");
+                throw new IOException("media.file.required_audio_missing: Required audio has no admitted AAC/MP3/PCM " +
+                    "stream for this Windows decoder. Select another source or import one with qualified audio.");
             var total = Math.Max(1L, (long)(source.Probe.Duration.TotalSeconds *
                 source.Probe.VideoFormat.FrameRate.Numerator / source.Probe.VideoFormat.FrameRate.Denominator));
             for (var point = 0; point < options.SeekPoints; point++)
@@ -198,9 +200,12 @@ public sealed partial class LocalMediaDeckRuntimeService
                 {
                     token.ThrowIfCancellationRequested();
                     var result = source.ReadNext((ulong)value.VerifiedFrames, token);
-                    if (!result.Succeeded || result.Frame is null ||
-                        options.RequireAudio && result.Frame.AudioPayload.IsEmpty)
-                        throw new IOException(result.Failure?.Code + ": representative video/required audio could not be decoded.");
+                    if (!result.Succeeded || result.Frame is null)
+                        throw new IOException((result.Failure?.Code ?? "media.file.required_video_missing") +
+                            ": representative video decode failed; the source is not conditionally ready.");
+                    if (options.RequireAudio && result.Frame.AudioPayload.IsEmpty)
+                        throw new IOException("media.file.required_audio_samples_missing: Required audio was " +
+                            "absent in a verified source window. Check the track/codec and retry after correcting the media.");
                     value = value with { VerifiedFrames = value.VerifiedFrames + 1 };
                 }
             }
@@ -209,7 +214,8 @@ public sealed partial class LocalMediaDeckRuntimeService
             if (file.Length != value.LengthBytes || file.LastWriteTimeUtc.Ticks != value.LastWriteUtcTicks)
                 throw new IOException("File or decoder environment changed during verification.");
             value = value with { EnvironmentIdentity = PreflightEnvironmentIdentity(capture: true), State = MediaAssetReadinessState.ConditionallyReady,
-                Detail = "Representative seek/decode passed. Whole-file, sustained hardware and future deck capacity remain UNVERIFIED; no route was changed." };
+                Detail = $"Representative seek/decode passed. {source.SourceFormatEvidence}. " +
+                    "Whole-file, sustained hardware and future deck capacity remain UNVERIFIED; no route was changed." };
         }
         catch (OperationCanceledException)
         {

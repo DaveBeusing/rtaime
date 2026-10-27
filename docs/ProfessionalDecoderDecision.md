@@ -46,6 +46,33 @@ production decoder selection or a license/security acceptance. A future candidat
 must be assessed against current upstream security advisories and exact build flags;
 this ADR does not recommend reusing that old test binary in Runtime.
 
+## Implemented local-format admission refinement (no dependency adoption)
+
+The accepted Windows Media Foundation path now retains additional bounded
+**declared source** facts internally: video sample-entry/profile/chroma/depth,
+rational video timebase, sample count and distinct stts durations, plus
+available audio entry/channel/rate/sample-size/timebase declarations.
+These are clearly distinguished in asset-preflight detail from the normalized
+48-kHz stereo/RGBA8 output and actual native audio negotiation. Unavailable
+selected-MFT identity is labelled **UNVERIFIED**, not inferred from OS presence.
+
+A deterministic source profile outside the existing frame-size/frame-rate/
+H.264 rate envelope is rejected before constructing a native Source Reader.
+Encrypted MP4 audio entry `enca` is explicitly rejected. A legacy MP4 with
+unavailable audio can still be opened as video-only when audio is not required;
+a bounded explicit required-audio preflight distinguishes absent codec from
+missing representative PCM samples. Neither path extends the approved codecs,
+source ownership budget or support commitments. Native average bitrate,
+RGB32 and PCM16 layouts still require the existing Media Foundation checks.
+
+The [source compatibility inventory](LocalMediaDecoderCapabilities.md) records
+the updated error cases, test fixtures and evidence status. The
+[generated support matrix](SupportCompatibilityMatrix.md) continues to be
+controlled by its support-policy JSON and remains **UNVERIFIED** for the
+reference hardware and release channels. These changes do not constitute
+Product Owner approval to ship any alternative decoder, SDK, DLL, MXF,
+ProRes or DNx input.
+
 ## Required adoption record
 
 Before implementation, obtain a Product Owner decision listing exact input tuples

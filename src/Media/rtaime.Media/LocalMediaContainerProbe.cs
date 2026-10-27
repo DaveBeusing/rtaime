@@ -26,6 +26,16 @@ internal sealed record LocalMediaStreamMetadata(
     public int? BitDepth { get; init; }
     public int? ChromaFormat { get; init; }
     public bool VariableFrameRate { get; init; }
+    // Source timebase and stts evidence are not the normalized output clock.
+    public uint VideoTimeScale { get; init; }
+    public ulong VideoSampleCount { get; init; }
+    public uint MinimumFrameDeltaTicks { get; init; }
+    public uint MaximumFrameDeltaTicks { get; init; }
+    // Container-declared audio fields are not proof of the native decoded layout.
+    public uint? AudioTimeScale { get; init; }
+    public ushort? AudioChannels { get; init; }
+    public ushort? AudioSampleSizeBits { get; init; }
+    public uint? AudioSampleRateHz { get; init; }
     public string ColorDescription { get; init; } = "unspecified";
 }
 
