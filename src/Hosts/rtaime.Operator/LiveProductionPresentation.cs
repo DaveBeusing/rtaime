@@ -7,6 +7,26 @@ namespace rtaime.Operator;
 // promoted to confirmed output authority by this projection.
 internal static class LiveProductionPresentation
 {
+    internal static string PreviewEvidence(string? selectedSourceName,
+        bool connected, bool stale, bool pending, string transitionStatus)
+    {
+        if (!connected || stale)
+            return "PREVIEW UNVERIFIED · synchronize Control before routing another source.";
+        if (pending)
+            return "PREVIEW REQUEST PENDING · await Control confirmation, do not repeat.";
+        if (transitionStatus.EndsWith("REJECTED", StringComparison.OrdinalIgnoreCase) &&
+            transitionStatus.Contains("PREVIEW", StringComparison.OrdinalIgnoreCase))
+            return "PREVIEW REJECTED · confirmed routing is unchanged; inspect the failure.";
+        if (transitionStatus.EndsWith("FAILED", StringComparison.OrdinalIgnoreCase) &&
+            transitionStatus.Contains("PREVIEW", StringComparison.OrdinalIgnoreCase))
+            return "PREVIEW OUTCOME UNCONFIRMED · synchronize before another request.";
+        if (string.IsNullOrWhiteSpace(selectedSourceName))
+            return "SELECT SOURCE · selection never changes Preview or Program by itself.";
+        if (string.Equals(transitionStatus, "PREVIEW CONFIRMED", StringComparison.OrdinalIgnoreCase))
+            return $"PREVIEW CONTROL CONFIRMED · selected {selectedSourceName}; matching monitor frames remain separate evidence.";
+        return $"SELECTED {selectedSourceName} → SET PVW REQUEST · Program is never changed by local selection.";
+    }
+
     internal static string TakeEvidence(
         bool connected, bool stale, bool pending, bool hasControlSnapshot,
         bool productionBlocked, string runtimeStatus, string transitionStatus,
