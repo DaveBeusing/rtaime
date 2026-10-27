@@ -268,7 +268,6 @@ public sealed class HealthCenterIncidentTests
 		Assert.Contains("UNVERIFIED", targets[0].PhysicalEvidence, StringComparison.Ordinal);
 		Assert.Contains("UNAVAILABLE", targets[1].ConfiguredCapability, StringComparison.Ordinal);
 
-		var onlyStale = role with { };
 		// Simulate a current/connected NDI sender whose last successful
 		// publication has expired: it must not be counted as LIVE.
 		var stale = new OperatorNetworkOutputDescriptor(
