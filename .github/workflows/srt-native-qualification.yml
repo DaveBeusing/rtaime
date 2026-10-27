@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/srt-native-qualification.yml"
       - "build/qualification/Invoke-SrtNativeQualification.ps1"
+      - "qualification/soak/production-playout-coverage.json"
       - "docs/SrtTransportQualification.md"
       - "src/Providers/rtaime.Provider.Srt/**"
       - "src/Contracts/rtaime.Media.Contracts/**"
@@ -24,6 +25,7 @@ on:
     paths:
       - ".github/workflows/srt-native-qualification.yml"
       - "build/qualification/Invoke-SrtNativeQualification.ps1"
+      - "qualification/soak/production-playout-coverage.json"
       - "docs/SrtTransportQualification.md"
       - "src/Providers/rtaime.Provider.Srt/**"
       - "src/Contracts/rtaime.Media.Contracts/**"
