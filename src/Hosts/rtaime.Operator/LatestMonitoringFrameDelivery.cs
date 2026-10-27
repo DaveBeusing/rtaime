@@ -56,14 +56,21 @@ internal sealed class LatestMonitoringFrameDelivery : IDisposable
 			if (_disposed) return;
 			if (observation.Frame.Descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
-				if (_program is not null) _dropped++;
+				if (_program is { } pendingProgram)
+				{
+					_dropped++;
+					if (!IsNewerObservation(observation, pendingProgram)) return;
+				}
 				_program = observation;
 			}
 			else
 			{
 				var key = observation.Frame.Descriptor.SourceId.ToString();
-				if (_sources.ContainsKey(key))
+				if (_sources.TryGetValue(key, out var pendingSource))
+				{
 					_dropped++;
+					if (!IsNewerObservation(observation, pendingSource.Observation)) return;
+				}
 				else if (_sources.Count == MaximumPendingSources)
 				{
 					var oldest = _sources.MinBy(entry => entry.Value.Order).Key;
@@ -78,6 +85,36 @@ internal sealed class LatestMonitoringFrameDelivery : IDisposable
 
 		if (schedule)
 			_post(Drain);
+	}
+
+
+	// A delayed or reordered sample must not evict a newer pending observation
+	// merely because it was received later on the monitoring transport.
+	private static bool IsNewerObservation(MonitoringObservation incoming, MonitoringObservation pending)
+	{
+		if (incoming.ConnectionEpoch != pending.ConnectionEpoch)
+			return incoming.ConnectionEpoch > pending.ConnectionEpoch;
+
+		var next = incoming.Frame.Descriptor;
+		var current = pending.Frame.Descriptor;
+		var nextRoute = next.StreamKind == MonitoringStreamKind.Program
+			? incoming.ProgramRouteVersion : incoming.PreviewRouteVersion;
+		var currentRoute = current.StreamKind == MonitoringStreamKind.Program
+			? pending.ProgramRouteVersion : pending.PreviewRouteVersion;
+		if (nextRoute != currentRoute)
+			return nextRoute > currentRoute;
+		if (next.StreamKind != current.StreamKind || next.SourceId != current.SourceId)
+			return incoming.ReceivedAt >= pending.ReceivedAt;
+
+		if (next.SharedResource is { } nextResource && current.SharedResource is { } currentResource)
+		{
+			if (nextResource.ProviderInstanceId != currentResource.ProviderInstanceId)
+				return incoming.ReceivedAt >= pending.ReceivedAt;
+			if (nextResource.Lifetime.Generation.Value != currentResource.Lifetime.Generation.Value)
+				return nextResource.Lifetime.Generation.Value > currentResource.Lifetime.Generation.Value;
+		}
+
+		return next.Timing.SequenceNumber > current.Timing.SequenceNumber;
 	}
 
 	// Invalidates pending callbacks without waiting for a potentially blocked Dispatcher.
