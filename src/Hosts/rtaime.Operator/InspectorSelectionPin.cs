@@ -18,7 +18,13 @@ public sealed partial class MediaPoolInspectorViewModel
         get
         {
             if (_inspectorPinnedIdentity is null)
+            {
+                if (HasMultipleSelection)
+                    return "MULTIPLE SELECTION · PIN unavailable; use read-only mixed review or sequential batch";
+                if (!HasSelection)
+                    return "NO SELECTION · choose one stable target before PIN";
                 return "FOLLOW SELECTION · context changes retain typed local intent for review";
+            }
             if (!string.Equals(_inspectorPinnedIdentity, EditingSelectionIdentity, StringComparison.Ordinal))
                 return "PIN STALE · production or identity changed; edits blocked until UNPIN";
             if (!InspectorPinnedAudioTargetMatches)
