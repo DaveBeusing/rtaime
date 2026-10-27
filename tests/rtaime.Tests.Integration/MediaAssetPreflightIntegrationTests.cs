@@ -265,9 +265,24 @@ public sealed class MediaAssetPreflightIntegrationTests
         decks.PreflightOpen = (_, _, _) => LocalMediaOpenResult.Ready(new LocalMediaFileSource(asset.Path, noAudio, decoder));
         var audio = await Completed(decks, decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash, new(RequireAudio: true)).JobId);
         Assert.Equal(MediaAssetReadinessState.Unavailable, audio.State);
+        Assert.Contains("media.file.required_audio_missing", audio.Detail);
         Assert.Contains("Required audio", audio.Detail);
         Assert.Equal(0, decoder.Reads);
         Assert.Equal(1, decoder.DisposeCalls);
+        Until(() => decks.Resources.Reserved == 0);
+
+        // A declared AAC/PCM track is still not proof that a representative
+        // source window has usable PCM. Preserve the exact fault classification.
+        var emptyPcm = new ControlledDecoder { EmptyAudio = true };
+        decks.PreflightOpen = (_, _, _) => LocalMediaOpenResult.Ready(Source(emptyPcm));
+        var missingSamples = await Completed(decks,
+            decks.BeginPreflight(asset.Path, MediaAssetId.New(), hash,
+                new(RequireAudio: true, SeekPoints: 1, FramesPerPoint: 1)).JobId);
+        Assert.Equal(MediaAssetReadinessState.Unavailable, missingSamples.State);
+        Assert.Contains("media.file.required_audio_samples_missing", missingSamples.Detail);
+        Assert.Equal(1, emptyPcm.Reads);
+        Assert.Equal(1, emptyPcm.DisposeCalls);
+        Until(() => decks.Resources.Reserved == 0);
     }
 
     private static async Task<MediaAssetPreflightObservation> Completed(LocalMediaDeckRuntimeService decks, string job)
@@ -308,6 +323,7 @@ public sealed class MediaAssetPreflightIntegrationTests
         public int MaximumConcurrentOperations { get; private set; }
         public int BlockCall { get; init; }
         public bool FailReads { get; set; }
+        public bool EmptyAudio { get; init; }
         public bool IgnoreCancellation { get; init; }
         public int DisposeCalls { get; private set; }
         public bool FailCancellation { get; init; }
@@ -359,7 +375,7 @@ public sealed class MediaAssetPreflightIntegrationTests
                     Probe.AudioFormat, Identity.New(),
                     new AudioBufferTiming((ulong)(timestamp * 48_000 / 10_000_000), 960, timestamp, new Timebase(1, 10_000_000)),
                     new OpaqueAudioHandle("test", "owned"));
-                frame = new(video, _video, audio, _audio);
+                frame = new(video, _video, audio, EmptyAudio ? Array.Empty<byte>() : _audio);
                 _position++;
                 return true;
             }
