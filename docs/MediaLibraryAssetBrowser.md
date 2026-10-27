@@ -203,7 +203,7 @@ state and the actual reason. Analysis never upgrades preparation readiness.
 
 ## Filmstrip preview preparation
 
-A reusable \`MediaAssetFilmstripService\` now provides catalogue-fenced
+A reusable `MediaAssetFilmstripService` now provides catalogue-fenced
 filmstrip data for a subsequent Library and sequence visual presentation.
 It composes up to eight existing time-indexed independent analysis requests,
 aligns representative samples with the source's rational nominal frame rate
