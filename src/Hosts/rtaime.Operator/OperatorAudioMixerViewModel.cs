@@ -20,6 +20,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	private string _mutationState = "CONFIRMED";
 	private bool _showProcessing;
 	private long _draftSessionEpoch;
+	private string? _presentedAudioAuthority;
 
 	internal OperatorAudioMixerViewModel(OperatorViewModel owner)
 	{
@@ -123,6 +124,7 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		ArgumentNullException.ThrowIfNull(snapshot);
 		if (snapshot.AudioProduction is not { } production)
 		{
+			_presentedAudioAuthority = null;
 			Sources.Clear();
 			Buses.Clear();
             CompactBuses.Clear();
@@ -133,6 +135,9 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 			return;
 		}
 
+		// Capture the authority actually projected into the strips, not a newer
+		// Client snapshot that might have arrived before this UI update.
+		_presentedAudioAuthority = $"{snapshot.Production.ProductionId}:{snapshot.Production.Revision.Value}:{production.Configuration.Revision}";
 		ApplyProjection(
 			production,
 			snapshot.Sources,
@@ -252,6 +257,8 @@ public sealed partial class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	internal string? AttributeRevision => _owner.Client?.Snapshot is { } snapshot ? snapshot.Production.ProductionId + ":" + snapshot.Production.Revision.Value : null;
 	// Production revision fences output-role edits; configuration revision fences
 	// source/bus mutations; session epoch fences reconnect and evidence loss.
+	internal string? PresentedAudioDraftToken => _presentedAudioAuthority is { } identity
+		? $"{identity}:{_draftSessionEpoch}" : null;
 	internal string? CurrentAudioDraftToken => _owner.Client?.Snapshot is { AudioProduction: { } audio } snapshot
 		? $"{snapshot.Production.ProductionId}:{snapshot.Production.Revision.Value}:{audio.Configuration.Revision}:{_draftSessionEpoch}"
 		: null;
