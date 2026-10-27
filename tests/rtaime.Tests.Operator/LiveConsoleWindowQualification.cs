@@ -97,6 +97,8 @@ internal static class LiveConsoleWindowQualification
             Assert.Same(liveButtons[1], LiveConsoleInput.FindButton(liveButtons[1]));
             Assert.Equal(((OperatorViewModel)window.DataContext).LiveTakeEvidence,
                 Assert.IsType<TextBlock>(window.FindName("LiveAuthorityDetail")).Text);
+            window.Shell.SelectCompactBusCommand.Execute("PROGRAM");
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
                 AutomationProperties.GetName(text) == "Program monitoring receipt age" &&
                 text.Text == monitoring.ProgramFrameAge);
