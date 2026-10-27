@@ -169,7 +169,12 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         get => _editCursor;
         set
         {
-            var next = Math.Clamp(value, 0, Math.Max(0, DurationTicks - 1));
+            var upper = Math.Max(0, DurationTicks - 1);
+            var bounded = Math.Clamp(value, 0, upper);
+            var next = Sequence is { } sequence
+                ? Math.Min(SequenceTimelineGeometry.Quantize(bounded, sequence.FrameRate),
+                    SequenceTimelineGeometry.FloorFrameTick(upper, sequence.FrameRate))
+                : bounded;
             if (_editCursor == next) return;
             _editCursor = next; Changed(); Changed(nameof(EditCursorLabel));
             Changed(nameof(CursorLeft)); UpdateSelectedStatus();
