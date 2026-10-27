@@ -56,7 +56,7 @@ internal static class CompositingWorkspaceQualification
                 ReferenceEquals(compare.FrameB, monitoring.PreviewImage));
         color.SelectScopeSourceCommand.Execute("PREVIEW");
         await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
-        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Preview, monitoring.ActiveScopeStream);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Source, monitoring.ActiveScopeStream);
         Assert.True(gpuScopes.AnalyzePreview);
         Assert.Null(color.SelectedScopes);
         Assert.Contains("NO CURRENT", color.ScopeFrameLabel);
@@ -71,7 +71,7 @@ internal static class CompositingWorkspaceQualification
         Assert.Equal(scopesBeforeReview, monitoring.ScopesEnabled);
         window.Shell.SelectWorkspace("COMPOSITING");
         Assert.True(monitoring.ScopesEnabled);
-        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Preview, monitoring.ActiveScopeStream);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Source, monitoring.ActiveScopeStream);
         color.ShowGraphCommand.Execute(null);
         await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         Assert.True(control.IsVisible);
