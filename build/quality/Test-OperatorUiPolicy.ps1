@@ -1054,7 +1054,7 @@ Assert-Condition ($viewModel -match 'ProgramViewerState = MapViewerSourceState' 
 Assert-Condition ($window -match 'Monitoring\.PreviewState' -and $window -match 'Monitoring\.ProgramState') "Production viewers must use monitoring-aware presentation state."
 Assert-Condition ($monitorViewModel -match 'PreviewState => ResolveViewerState' -and $monitorViewModel -match 'ProgramState => ResolveViewerState') "Monitoring availability must be combined with confirmed production state for viewer presentation."
 Assert-Condition ($monitorViewModel -match 'PreviewImage = null' -and $monitorViewModel -match 'No Preview monitor frame received for current source') "Changing Preview to a source without a monitor frame must clear the previous source image."
-Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\), "STALE"|string\.Equals\(State, "STALE"') "Stale monitoring must remain explicitly detectable without affecting Program authority."
+Assert-Condition ($monitorViewModel -match 'State\s*=\s*"STALE"' -and $monitorViewModel -match '_previewFreshness\.Status' -and $monitorViewModel -match '_programFreshness\.Status') "Stale monitoring must be detectable per source and independently from Program authority."
 
 Assert-Condition ($keyboard -match 'new\("fullscreen".+Key\.F11.+shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
 Assert-Condition ($keyboard -match 'new\("exit-fullscreen".+Key\.Escape.+shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
