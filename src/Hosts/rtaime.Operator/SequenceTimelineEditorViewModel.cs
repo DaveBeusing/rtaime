@@ -44,6 +44,12 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     private long _visibleStart;
     private int _firstTrack;
     private int _visibleTrackCount = 8;
+    private Guid _rulerSequenceId;
+    private int _rulerNumerator;
+    private int _rulerDenominator;
+    private long _rulerStart = -1;
+    private long _rulerEnd = -1;
+    private double _rulerWidth = -1;
     private long _editCursor;
     private long _requestGeneration;
 
@@ -163,6 +169,9 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public long VisibleSpan => Math.Max(1, checked((long)Math.Ceiling((double)DurationTicks / _zoom)));
     public double CursorLeft => Sequence is null ? 0 :
         SequenceTimelineGeometry.Pixel(EditCursorTick, VisibleStart, VisibleEnd, _viewportWidth);
+    public double CursorRulerOpacity => Sequence is not null &&
+        EditCursorTick >= VisibleStart && EditCursorTick <= VisibleEnd ? 1 : 0;
+    public double CursorTrackOpacity => CursorRulerOpacity * 0.55;
     public IReadOnlyList<SequenceRulerMark> RulerMarks { get; private set; } = [];
     public long EditCursorTick
     {
@@ -177,7 +186,8 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                 : bounded;
             if (_editCursor == next) return;
             _editCursor = next; Changed(); Changed(nameof(EditCursorLabel));
-            Changed(nameof(CursorLeft)); UpdateSelectedStatus();
+            Changed(nameof(CursorLeft)); Changed(nameof(CursorRulerOpacity));
+            Changed(nameof(CursorTrackOpacity)); UpdateSelectedStatus();
         }
     }
     public string EditCursorLabel => SequenceTimelineGeometry.Timecode(_editCursor,
@@ -797,10 +807,28 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             VisibleRows.RemoveAt(VisibleRows.Count - 1);
             changedRows = true;
         }
-        RulerMarks = Sequence is { } source
-            ? SequenceTimelineGeometry.Ruler(VisibleStart, VisibleEnd, _viewportWidth, source.FrameRate)
-            : [];
-        Changed(nameof(RulerMarks)); Changed(nameof(CursorLeft));
+        // Reproject bounded frame marks only when the saved identity, rate or
+        // horizontal viewport changes, not on each selection/trim mouse move.
+        var source = Sequence;
+        var sequenceId = source?.SequenceId ?? Guid.Empty;
+        var numerator = source?.FrameRate.Numerator ?? 0;
+        var denominator = source?.FrameRate.Denominator ?? 0;
+        if (_rulerSequenceId != sequenceId || _rulerNumerator != numerator ||
+            _rulerDenominator != denominator || _rulerStart != VisibleStart ||
+            _rulerEnd != VisibleEnd || _rulerWidth != _viewportWidth)
+        {
+            _rulerSequenceId = sequenceId;
+            _rulerNumerator = numerator;
+            _rulerDenominator = denominator;
+            _rulerStart = VisibleStart;
+            _rulerEnd = VisibleEnd;
+            _rulerWidth = _viewportWidth;
+            RulerMarks = source is null ? [] :
+                SequenceTimelineGeometry.Ruler(VisibleStart, VisibleEnd, _viewportWidth, source.FrameRate);
+            Changed(nameof(RulerMarks));
+        }
+        Changed(nameof(CursorLeft)); Changed(nameof(CursorRulerOpacity));
+        Changed(nameof(CursorTrackOpacity));
         Changed(nameof(VisibleStart)); Changed(nameof(VisibleEnd));
         Changed(nameof(VisibleSpan));
         if (changedRows) Changed(nameof(VisibleRows));
