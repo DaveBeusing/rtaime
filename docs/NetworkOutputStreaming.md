@@ -289,6 +289,39 @@ For SRT the Operator may show H.264/AAC bitrate. For NDI it shows NDI High Bandw
 
 No SDK path, native library path or secret is projected into output snapshots.
 
+## Per-target capability and observed sender evidence
+
+The Runtime output graph still reserves every configured session before
+activation, subject to its advertised exact provider format and finite
+per-provider slots. The **requested role/source** belongs to ControlHost.
+A committed Runtime role now includes an additive, bounded array of up to
+eight **independent target** snapshots, plus the Runtime execution revision;
+ControlHost attaches its distinct authoritative production revision and
+continues to project the legacy first target unchanged for compatibility.
+Older peers lacking the array remain readable but cannot be interpreted
+as proving additional targets.
+
+`RuntimeNetworkOutputTargetEvidence` also distinguishes each target's
+configured protocol/profile, declared capability/admission, local enqueue
+count and last sequence/time from observed provider send count/bytes,
+queue depth, failures, last send age and measured byte-rate deltas.
+A locally connected sender is not automatically active: no recent
+successful provider send means `UNKNOWN`, expired local send evidence
+means `STALE`, a terminal provider fault means `FAILED`.
+Only a fresh successful local send can become `SENDER_ACTIVE`;
+SRT/NDI receiver delivery, end-to-end network latency, physical SDI
+scan-out and real peer compatibility remain **UNVERIFIED**. Configured
+SRT latency is not a measured peer RTT; NDI encoded bitrate and SRT peer
+latency are not fabricated for NDI. Every target can fail independently
+without changing Program authority, recording or the other targets.
+
+The Operator's OUTPUTS technical section displays a bounded per-target
+row for the confirmed role/source and Control/Runtime revision evidence,
+configured provider/profile, recent local send, age, bytes and queue/errors.
+The aggregate Program/Aux sender status is never `LIVE` when a sibling
+target is failed, stale, unknown or disconnected. Missing or stale Control
+observations never borrow Runtime delivery truth.
+
 ## Qualification boundary
 
 Repository tests and CI qualify:
