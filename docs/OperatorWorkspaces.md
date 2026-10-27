@@ -145,11 +145,13 @@ single horizontal row, so compact LIVE retains direct switching access while
 secondary identity, Rundown, recording and network evidence scroll within the
 same bounded strip. SET PVW describes a local selection request; Take status
 distinguishes requested, pending, rejected, unconfirmed and confirmed Control
-state and never promotes a monitoring frame into Program authority. Preview
-and Program headers display separate matching monitoring receipt ages (or
-explicit unavailable/stale states) from the existing watchdog; these are not
-physical output timing measurements. The right-side panel adds read-only
-NEXT rundown evidence without duplicating GO, ARM, cue or Scene TAKE commands. Scene/cue ARM/GO semantics remain separate.
+state and never promotes a monitoring frame into Program authority. An
+ambiguous Take failure latches LIVE operations closed until explicit successful
+Control synchronization, not a monitoring refresh. Preview and Program headers
+display separate matching monitoring receipt ages (or explicit unavailable/stale
+states) from the existing watchdog; these are not physical output timing
+measurements. The right-side MULTIVIEW Live Controls panel adds read-only NEXT
+rundown evidence without duplicating GO, ARM, cue or Scene TAKE commands. Scene/cue ARM/GO semantics remain separate.
 
 Show/project identity, synchronization, readiness, Program identity and incident access
 remain in the shell. Library/Inspector toggles reopen the existing panes. At compact
