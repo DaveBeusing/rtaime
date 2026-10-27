@@ -27,6 +27,10 @@ public sealed class MediaAssetPreflightIntegrationTests
         result.Validate();
         Assert.Equal(fractionalOutput ? "1080p59.94" : "1080p50", result.TargetFormat);
         Assert.True(result.RepresentativeVerificationPassed, result.Detail);
+        Assert.Contains("SOURCE Mp4/avc1", result.Detail);
+        Assert.Contains("timebase 1/", result.Detail);
+        Assert.Contains("negotiated Aac", result.Detail);
+        Assert.Contains("selected MFT UNVERIFIED", result.Detail);
         Assert.Equal(6, result.VerifiedFrames);
         Assert.Equal(3, result.VerifiedSeeks);
         Assert.Equal("UNVERIFIED", result.PhysicalQualification);
