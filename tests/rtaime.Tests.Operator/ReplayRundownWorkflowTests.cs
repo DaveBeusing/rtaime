@@ -12,13 +12,17 @@ public sealed class ReplayRundownWorkflowTests
 {
     private static readonly string Fingerprint = new('A', 64);
 
-    private static MediaAssetDescriptor Asset(MediaAssetAvailability availability = MediaAssetAvailability.Online)
+    private static MediaAssetDescriptor Asset(
+        MediaAssetAvailability availability = MediaAssetAvailability.Online,
+        MediaAssetId? assetId = null,
+        TimeSpan? duration = null,
+        MediaAudioCodec audioCodec = MediaAudioCodec.Aac)
     {
         var now = new UtcTimestamp(DateTimeOffset.UtcNow);
-        return new MediaAssetDescriptor(MediaAssetId.New(), MediaAssetOriginKind.LocalFile,
+        return new MediaAssetDescriptor(assetId ?? MediaAssetId.New(), MediaAssetOriginKind.LocalFile,
             @"C:\replay\clips\highlight.mp4", "Highlight.mp4", MediaContainerFormat.Mp4,
-            MediaVideoCodec.H264, MediaAudioCodec.Aac, VideoFormat.Hd1080p50Rgba8,
-            AudioFormat.Stereo48kFloat32, TimeSpan.FromSeconds(3), 1024,
+            MediaVideoCodec.H264, audioCodec, VideoFormat.Hd1080p50Rgba8,
+            AudioFormat.Stereo48kFloat32, duration ?? TimeSpan.FromSeconds(3), 1024,
             Fingerprint, now, now, availability);
     }
 
@@ -42,11 +46,11 @@ public sealed class ReplayRundownWorkflowTests
         Assert.False(ReplayRundownEligibility.TryVerifyAsset(
             clip with { Succeeded = false }, asset, out _));
         Assert.False(ReplayRundownEligibility.TryVerifyAsset(
-            clip, Asset(MediaAssetAvailability.Missing), out _));
+            clip, Asset(MediaAssetAvailability.Missing, asset.AssetId), out _));
         Assert.False(ReplayRundownEligibility.TryVerifyAsset(
-            clip, asset with { Duration = TimeSpan.FromSeconds(1) }, out _));
+            clip, Asset(assetId: asset.AssetId, duration: TimeSpan.FromSeconds(1)), out _));
         Assert.False(ReplayRundownEligibility.TryVerifyAsset(
-            clip, asset with { AudioCodec = MediaAudioCodec.None }, out _));
+            clip, Asset(assetId: asset.AssetId, audioCodec: MediaAudioCodec.None), out _));
         Assert.False(ReplayRundownEligibility.TryVerifyAsset(
             clip, null, out _));
     }
@@ -54,7 +58,7 @@ public sealed class ReplayRundownWorkflowTests
     [Fact]
     public async Task Replay_selection_advertises_candidate_not_ready_when_gap_storage_or_range_is_stale()
     {
-        var client = new OperatorControlClient(new UnavailableOperatorControlTransport());
+        var client = new OperatorControlClient(new ObservingTransport());
         await using var deck = new MediaDeckViewModel(new MediaDeckController(client), () => null, () => null);
         using var replay = new ReplayViewModel(client, deck);
         var marked = ReplayControlSnapshot.Unavailable with
