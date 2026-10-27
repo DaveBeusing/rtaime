@@ -61,6 +61,7 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
     private void OnStageUnloaded(object sender, RoutedEventArgs e)
     {
         CancelDrag();
+        Editor?.SetPointerPosition(null);
         if (IsMouseCaptured) ReleaseMouseCapture();
         DetachEditor();
     }
@@ -166,9 +167,48 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
             }
         }
 
+        if (editor.ShowSafeAreas)
+        {
+            // Design-only logical safe-area guides: never change crop, output
+            // routing or hardware calibration. Use the same projection as hits.
+            foreach (var fraction in new[] { .05, .10 })
+            {
+                var safe = view.SafeAreaBounds(fraction);
+                if (safe.IsEmpty || safe.Width < 12 || safe.Height < 12) continue;
+                var guide = new Pen(new SolidColorBrush(Color.FromArgb(170, 111, 192, 220)), 1)
+                { DashStyle = DashStyles.Dash };
+                dc.DrawRectangle(null, guide, safe);
+                Label(dc, $"DESIGN SAFE {fraction * 100:0}%",
+                    safe.TopLeft + new Vector(3, 2), text, 9);
+            }
+        }
+
+        if (editor.ShowGuides)
+        {
+            // Visible rulers are bounded to 64 marks per axis and use the
+            // exact zoom/pan/size mapping of canvas pointer coordinates.
+            var rulerPen = new Pen(new SolidColorBrush(Color.FromArgb(150, 138, 185, 209)), 1);
+            var rulerY = Math.Clamp(upper.Y, 0, Math.Max(0, ActualHeight - 21));
+            var rulerX = Math.Clamp(upper.X, 0, Math.Max(0, ActualWidth - 38));
+            foreach (var mark in view.Ruler(horizontal: true))
+            {
+                dc.DrawLine(rulerPen, new(mark.ViewPosition, rulerY),
+                    new(mark.ViewPosition, rulerY + 6));
+                Label(dc, mark.LogicalPixel.ToString(CultureInfo.InvariantCulture),
+                    new(mark.ViewPosition + 3, rulerY + 7), text, 8);
+            }
+            foreach (var mark in view.Ruler(horizontal: false))
+            {
+                dc.DrawLine(rulerPen, new(rulerX, mark.ViewPosition),
+                    new(rulerX + 6, mark.ViewPosition));
+                Label(dc, mark.LogicalPixel.ToString(CultureInfo.InvariantCulture),
+                    new(rulerX + 8, mark.ViewPosition + 1), text, 8);
+            }
+        }
+
         dc.Pop();
         Label(dc,"GEOMETRY DRAFT · NOT PROGRAM PIXELS",new Point(12,12),text,10);
-        Label(dc,$"{editor.CanvasWidth} × {editor.CanvasHeight}  ·  {editor.Zoom*100:0}%  ·  " +
+        Label(dc,$"{editor.CanvasWidth} × {editor.CanvasHeight}  ·  {editor.Zoom:0.##}× FIT  ·  {view.Scale:0.###} DIP/logical px  ·  " +
             (editor.SnapEnabled?"SNAP 10":"FREE"),new Point(12,Math.Max(30,ActualHeight-23)),text,10);
     }
 
@@ -253,13 +293,15 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (Editor is not { } editor || _drag==DragKind.None) return;
+        if (Editor is not { } editor) return;
+        var pointer = e.GetPosition(this);
+        editor.SetPointerPosition(View.Scale > 0 ? View.ToCanvas(pointer) : null);
+        if (_drag == DragKind.None) return;
         if (!IsMouseCaptured)
         {
             CancelDrag();
             return;
         }
-        var pointer=e.GetPosition(this);
         if (_drag==DragKind.Pan)
         {
             editor.Pan(pointer.X-_previousView.X,pointer.Y-_previousView.Y);
@@ -279,9 +321,11 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
             _originalQuad.TopLeft,_originalQuad.TopRight,_originalQuad.BottomRight,_originalQuad.BottomLeft];
         if(_drag==DragKind.Move)
         {
-            for(var i=0;i<4;i++)
-                points[i]=OutputCanvasViewport.Snap(new(points[i].X+dx,points[i].Y+dy),
-                    editor.SnapEnabled,(Keyboard.Modifiers&ModifierKeys.Control)!=0);
+            // Snapping four independently rounded corners changes perspective.
+            // Translation must preserve the original quad exactly.
+            var moved=OutputCanvasViewport.TranslateRigid(_originalQuad,dx,dy,
+                editor.SnapEnabled,(Keyboard.Modifiers&ModifierKeys.Control)!=0);
+            points=[moved.TopLeft,moved.TopRight,moved.BottomRight,moved.BottomLeft];
         }
         else if(_drag==DragKind.Corner)
         {
@@ -332,6 +376,12 @@ public sealed class OutputCanvasStageSurface : FrameworkElement
         _originalQuad=null;
         _gestureEditor=null;
         _drag=DragKind.None;
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        Editor?.SetPointerPosition(null);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
