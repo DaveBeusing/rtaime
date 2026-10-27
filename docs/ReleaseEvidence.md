@@ -352,3 +352,25 @@ A valid release-evidence bundle is therefore necessary but not sufficient for St
 ## Evidence-bound readiness index
 
 See [EvidenceBoundReleaseReadiness.md](EvidenceBoundReleaseReadiness.md) for exact-source Required Gates correlation, the retained candidate evidence inventory, individual long-profile scopes and the NO-GO operational handoff. The workflow collects this report after the five required jobs; missing physical, production-trust and approved support evidence remains UNVERIFIED. Run `build/release/Test-ReleaseReadinessRegression.ps1` for stale/pending/cancelled evidence and no-false-Stable regressions.
+
+## Sustained playout evidence is supplementary, never publication authority
+
+The existing Required Gates/Stable readiness verifiers remain authoritative.
+The source-controlled [production soak coverage](EvidenceBoundReleaseReadiness.md#production-soak-coverage-and-unresolved-release-risks-27-october-2026)
+collects provenance for 25/50/59.94 software and self-hosted profiles, but does
+not allocate a prerelease tag, sign/publish a release, resolve an ambiguous
+ControlHost commit, provide hardware calibration or upgrade support policy.
+`New-ProductionSoakCoverageReport.ps1` writes a source-matched, write-once,
+SHA-256-referenced **NO-GO** observation inventory. A missing or failed
+`Test-SsdPlaybackEvidence.ps1` or
+a failed 512-MiB private-growth budget is not rewritten as PASS based on a
+separate five-point replay memory sidecar. Physical timing, A/V, SDI, professional
+GPU/driver and SSD support remain UNVERIFIED without accepted same-source
+qualification bindings.
+
+A future production release must separately close/reassess the open replay-memory
+investigation #401, verify GitHub `master` rule enforcement per #347 through
+repository administration, bind known-issues/security assessments and obtain all
+five exact-source Required Gates and mandated self-hosted physical evidence.
+Only the established Stable readiness/release pipeline can evaluate release
+eligibility and trusted publication. No software evidence collector promotes DEV.

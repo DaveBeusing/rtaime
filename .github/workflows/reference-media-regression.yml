@@ -231,6 +231,15 @@ jobs:
         env:
           RTAIME_SELECTED_FORMAT: ${{ matrix.format }}
         run: ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -Format $env:RTAIME_SELECTED_FORMAT -NoBuild
+      - name: Verify replay memory diagnostic from the exact tested build
+        shell: pwsh
+        env:
+          RTAIME_SELECTED_FORMAT: ${{ matrix.format }}
+        run: |
+          $reports = @(Get-ChildItem -LiteralPath "artifacts/qualification/ssd-playback" -Recurse -File -Filter "ssd-playback-memory-diagnostic.json")
+          if ($reports.Count -ne 1) { throw "Expected one sparse replay memory diagnostic from this exact SSD run." }
+          ./build/qualification/Test-SsdPlaybackMemoryDiagnostic.ps1 -EvidencePath $reports[0].FullName -ExpectedSourceCommit $env:RTAIME_SOURCE_COMMIT -ExpectedProfile "10m" -ExpectedFormat $env:RTAIME_SELECTED_FORMAT
+
       - name: Retain bounded SSD observations without media redistribution
         if: always()
         uses: actions/upload-artifact@v6

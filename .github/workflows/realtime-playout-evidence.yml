@@ -10,6 +10,12 @@ on:
       - "build/qualification/Test-RealtimePlayoutEvidence.ps1"
       - "build/qualification/Test-RealtimePlayoutVerifierRegressions.ps1"
       - "qualification/performance/realtime-playout-matrix.json"
+      - "qualification/soak/production-playout-coverage.json"
+      - "build/qualification/New-ProductionSoakCoverageReport.ps1"
+      - "build/qualification/Test-ProductionSoakCoveragePolicy.ps1"
+      - "build/qualification/Test-ProductionSoakCoverageRegression.ps1"
+      - "build/qualification/Test-SsdPlaybackMemoryDiagnostic.ps1"
+      - "build/qualification/Test-SsdPlaybackMemoryVerifierRegression.ps1"
       - "tests/rtaime.Tests.Integration/RealtimePlayoutEvidenceMatrixTests.cs"
       - "tests/rtaime.Tests.Integration/SequenceNativeProgramOutputIntegrationTests.cs"
       - "tests/rtaime.Tests.Integration/ReferenceSequenceDistinctSourcesOutputTests.cs"
@@ -54,6 +60,12 @@ jobs:
       - name: Verify fail-closed evidence parser regressions
         shell: pwsh
         run: ./build/qualification/Test-RealtimePlayoutVerifierRegressions.ps1
+
+      - name: Verify production-soak evidence policy and no-Go negative fixtures
+        shell: pwsh
+        run: |
+          ./build/qualification/Test-ProductionSoakCoverageRegression.ps1
+          ./build/qualification/Test-SsdPlaybackMemoryVerifierRegression.ps1
 
       - name: Collect existing Program GC native SSD sequence and mixed evidence
         shell: pwsh

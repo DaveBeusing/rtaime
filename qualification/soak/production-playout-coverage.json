@@ -1,0 +1,179 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-production-soak-coverage",
+  "sdk": "10.0.401",
+  "releaseDecisionWithoutExternalEvidence": "NO-GO",
+  "sourceBinding": "EXACT_SOURCE_BUILD_WORKLOAD_ARTIFACT_HASH_NOT_PRIOR_PR_OR_MERGE_BASE",
+  "requiredChecks": [
+    "CI",
+    "Quality",
+    "Security",
+    "Packaged E2E",
+    "Provider Smoke"
+  ],
+  "cadences": [
+    {
+      "format": "1080p25",
+      "nominalFrameMilliseconds": 40,
+      "admission": "UNVERIFIED_NATIVE_PROGRAM_NO_QUALIFIED_PRODUCER"
+    },
+    {
+      "format": "1080p50",
+      "nominalFrameMilliseconds": 20,
+      "admission": "SOURCE_BOUND_QUALIFICATION_REQUIRED"
+    },
+    {
+      "format": "1080p59.94",
+      "nominalFrameMilliseconds": 16.683333333333334,
+      "admission": "SOURCE_BOUND_QUALIFICATION_REQUIRED"
+    }
+  ],
+  "ssd": {
+    "descriptor": "qualification/soak/ssd-playback.json",
+    "formats": [
+      "1080p50",
+      "1080p59.94"
+    ],
+    "profiles": [
+      {
+        "id": "smoke",
+        "seconds": 30
+      },
+      {
+        "id": "10m",
+        "seconds": 600
+      },
+      {
+        "id": "60m",
+        "seconds": 3600
+      },
+      {
+        "id": "8h",
+        "seconds": 28800
+      },
+      {
+        "id": "24h",
+        "seconds": 86400
+      },
+      {
+        "id": "72h",
+        "seconds": 259200
+      }
+    ],
+    "resourceBudget": {
+      "maximumPrivateGrowthBytes": 536870912,
+      "maximumHandleGrowth": 64
+    },
+    "evidenceVerifier": "build/qualification/Test-SsdPlaybackEvidence.ps1",
+    "diagnosticVerifier": "build/qualification/Test-SsdPlaybackMemoryDiagnostic.ps1",
+    "scope": "EXACT_TWO_DECK_CONTROL_RUNTIME_SOFTWARE_PROGRAM_NOT_PHYSICAL_OUTPUT"
+  },
+  "mixed": {
+    "descriptor": "qualification/soak/sustained-mixed-load.json",
+    "profiles": [
+      {
+        "id": "smoke",
+        "minimumSeconds": 0
+      },
+      {
+        "id": "8h",
+        "minimumSeconds": 28800
+      },
+      {
+        "id": "24h",
+        "minimumSeconds": 86400
+      },
+      {
+        "id": "72h",
+        "minimumSeconds": 259200
+      }
+    ],
+    "resourceBudget": {
+      "maximumPrivateGrowthBytes": 536870912,
+      "maximumHandleGrowth": 128
+    },
+    "evidenceVerifier": "build/qualification/Test-SustainedMixedLoadEvidence.ps1",
+    "scope": "STAGED_MANAGED_SESSIONS_NOT_UNINTERRUPTED_PRODUCTION_OR_NATIVE_NETWORK"
+  },
+  "renderer": {
+    "descriptor": "qualification/renderer/renderer-qualification.json",
+    "longProfiles": [
+      "soak8h",
+      "soak24h",
+      "soak72h"
+    ],
+    "evidenceVerifier": "build/qualification/Test-RendererReferenceQualification.ps1",
+    "scope": "SELF_HOSTED_NVIDIA_HARDWARE_EXACT_SOURCE_BINDING_REQUIRED"
+  },
+  "softwareMatrix": {
+    "descriptor": "qualification/performance/realtime-playout-matrix.json",
+    "evidenceVerifier": "build/qualification/Test-RealtimePlayoutEvidence.ps1",
+    "scope": "PRODUCER_COMPOSITION_NOT_25FPS_NATIVE_OR_PHYSICAL_AV"
+  },
+  "faultCoverage": [
+    {
+      "scenario": "DECODE_FAILURE_OR_EXHAUSTED_CAPACITY",
+      "evidence": "AsynchronousLocalMediaDecodeTests;LocalMediaDecoderSafetyTests;RuntimeResourceCapacityAdmissionTests",
+      "scope": "SOFTWARE_FAULT"
+    },
+    {
+      "scenario": "CONTROL_HOST_KILL_AND_RESYNC",
+      "evidence": "OperatorProcessRecoveryTests;ProcessSupervisionRecoveryTests;ProductionIpcIntegrationTests",
+      "scope": "SOFTWARE_FAULT"
+    },
+    {
+      "scenario": "GPU_SHARED_RESOURCE_LOSS",
+      "evidence": "GpuLifecycleRecoveryTests;GpuDrawingSurfaceTests",
+      "scope": "SOFTWARE_FAULT_PHYSICAL_DEVICE_UNVERIFIED"
+    },
+    {
+      "scenario": "RECORDING_DISK_EXHAUSTION",
+      "evidence": "RecordingStorageExhaustionIntegrationTests",
+      "scope": "SOFTWARE_STORAGE_FAILURE"
+    },
+    {
+      "scenario": "REPLAY_QUOTA_PIN_CLEANUP",
+      "evidence": "ReplayCaptureIsolationTests;ReplayClipOwnershipIntegrationTests;SsdPlaybackMemoryDiagnosticTests",
+      "scope": "SOFTWARE_REPLAY_STALE_PIN_AND_ACCOUNTING"
+    },
+    {
+      "scenario": "NETWORK_DISCONNECT_RECONNECT",
+      "evidence": "SrtNativeLoopbackQualificationTests;SrtTransportPacketizationTests;NetworkOutputFoundationTests",
+      "scope": "SOFTWARE_LOOPBACK_PHYSICAL_NDI_SRT_UNVERIFIED"
+    },
+    {
+      "scenario": "AUDIO_SYNC_METER",
+      "evidence": "AudioFollowVideoPerformanceTests;ExternalPcmUnderrunIntegrationTests",
+      "scope": "IN_PROCESS_PCM_NOT_PHYSICAL_AV_SYNC"
+    }
+  ],
+  "requiredPhysical": [
+    "EXTERNAL_AV_SYNC",
+    "PHYSICAL_FRAME_DELIVERY",
+    "REAL_DEVICE_DRIVER_GPU_VRAM",
+    "TIMING_REFERENCE_LOCK_AND_RELOCK",
+    "PROFESSIONAL_MEDIA_IO",
+    "NETWORK_TARGET_REAL_RECEIVER",
+    "PHYSICAL_STORAGE_PRESSURE_AND_CACHE",
+    "UNINTERRUPTED_SUSTAINED_PRODUCTION"
+  ],
+  "unresolvedRiskReviews": [
+    {
+      "issue": 401,
+      "meaning": "REFERENCE_5994_PRIVATE_GROWTH_966_57_MIB_OVER_512_MIB",
+      "requirement": "SAME_SOURCE_REPEAT_CAUSAL_ANALYSIS_AND_NOT_LOWERED_LIMIT"
+    },
+    {
+      "issue": 347,
+      "meaning": "MASTER_PROTECTION_UNVERIFIED_IN_LIVE_GITHUB",
+      "requirement": "ADMINISTRATOR_ENABLE_AND_VERIFY_PR_ONLY_STRICT_FIVE_CHECKS"
+    }
+  ],
+  "reportStatusVocabulary": [
+    "PASS",
+    "FAIL",
+    "UNVERIFIED"
+  ],
+  "releaseScope": "READ_ONLY_EVIDENCE_INVENTORY_NOT_STABLE_APPROVAL"
+}

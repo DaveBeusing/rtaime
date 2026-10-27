@@ -23,6 +23,11 @@ on:
         description: "Existing local reference file on the selected runner, deck B"
         required: true
         type: string
+      memory_diagnostic:
+        description: "Bounded 5-point writer/GC/private-byte diagnostics; never changes resource limits"
+        required: true
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -47,8 +52,17 @@ jobs:
           RTAIME_SELECTED_FORMAT: ${{ inputs.format }}
           RTAIME_SELECTED_MEDIA_A: ${{ inputs.media_a }}
           RTAIME_SELECTED_MEDIA_B: ${{ inputs.media_b }}
+          RTAIME_MEMORY_DIAGNOSTIC: ${{ inputs.memory_diagnostic }}
         run: |
-          ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile $env:RTAIME_SELECTED_PROFILE -Format $env:RTAIME_SELECTED_FORMAT -MediaA $env:RTAIME_SELECTED_MEDIA_A -MediaB $env:RTAIME_SELECTED_MEDIA_B
+          $output = "artifacts/qualification/ssd-playback/endurance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile $env:RTAIME_SELECTED_PROFILE -Format $env:RTAIME_SELECTED_FORMAT -MediaA $env:RTAIME_SELECTED_MEDIA_A -MediaB $env:RTAIME_SELECTED_MEDIA_B -OutputRoot $output -CaptureMemoryDiagnostic:($env:RTAIME_MEMORY_DIAGNOSTIC -eq "true")
+          if ($env:RTAIME_MEMORY_DIAGNOSTIC -eq "true") {
+            $runs = @(Get-ChildItem -LiteralPath $output -Directory)
+            if ($runs.Count -ne 1) { throw "Expected exactly one current-run SSD qualification directory." }
+            $report = Join-Path $runs[0].FullName "ssd-playback-memory-diagnostic.json"
+            $source = (git rev-parse HEAD).Trim()
+            ./build/qualification/Test-SsdPlaybackMemoryDiagnostic.ps1 -EvidencePath $report -ExpectedSourceCommit $source -ExpectedProfile $env:RTAIME_SELECTED_PROFILE -ExpectedFormat $env:RTAIME_SELECTED_FORMAT
+          }
       - name: Preserve evidence even on failed playback
         if: always()
         uses: actions/upload-artifact@v6

@@ -59,3 +59,74 @@ The applicable renderer matrix remains 1080p50 and 1080p59.94, CUT/DISSOLVE and 
 Before release, collect missing evidence on the exact final source, preserve run/configuration/device identities and bytes, resolve failed criteria, and obtain approved support and security commitments. Bind physical, security and known-issue evidence through their existing mechanisms before signing. Revalidate offline deployment, coordinated recovery and the old 1.0 checkpoint without altering saved production. Verify external production trust, independent build reproducibility and live repository enforcement. Regenerate the index for the intended candidate and use the established channel/tag/publication policy; the report itself never authorizes a promotion.
 
 Run `build/release/Test-ReleaseReadinessRegression.ps1` for correlation and no-false-Stable regressions. Its positive/negative fixtures are synthetic mechanism tests and must never enter release qualification as actual completed workloads.
+
+## Production-soak coverage and unresolved release risks (27 October 2026)
+
+The repeatable source-bound production profile inventory is
+`qualification/soak/production-playout-coverage.json`. Its static verifier
+`build/qualification/Test-ProductionSoakCoveragePolicy.ps1` cross-checks existing
+SSD, staged-mixed, real-time software and renderer descriptors rather than
+establishing a new performance threshold. In particular:
+
+| Profile / lane | Existing actual producer | Qualifies only | Remaining proof |
+| --- | --- | --- | --- |
+| 1080p25 | No exact native Program producer | UNVERIFIED | Real 25 fps decoded source/Program, timing, A/V and physical delivery |
+| 1080p50 / 59.94, dual-deck 30s / 10m / 60m / 8h / 24h / 72h | `Invoke-SsdPlaybackQualification.ps1` | Real two-deck software Control/Runtime if exact-source verification passes | Device/cache pressure, selected decoder, GPU/VRAM, Program scan-out, external A/V |
+| 1080p50 / 59.94, managed 8h / 24h / 72h | `Invoke-SustainedMixedLoadQualification.ps1` | Bounded staged consumer sessions | One uninterrupted real native Program, actual SRT/NDI receiver and physical timing |
+| CUDA 8h / 24h / 72h total | `Invoke-RendererReferenceQualification.ps1` on authorized NVIDIA runner | Named renderer/workload on tested device only | Genlock, AJA/SDI, independent latency/A-V and physical network evidence |
+| SRT loopback / fault cases | `Invoke-SrtNativeQualification.ps1` and existing network tests | Native software loopback and finite reconnect behavior | Real receiver, link impairments and external sync |
+| Replay / storage, host kill, decoder/GPU faults | Existing bounded integration and negative resource tests | Specific fault simulation and ownership/cleanup | Real power loss, driver reset, SSD wear, a production failover and no-loss guarantees |
+
+An independent companion assessment can inventory the existing evidence without
+claiming hardware or signing trust:
+
+```powershell
+$source = (git rev-parse HEAD).Trim()
+./build/qualification/New-ProductionSoakCoverageReport.ps1 `
+  -ExpectedSourceCommit $source `
+  -SsdEvidencePaths @("./artifacts/qualification/ssd-playback/<run>/ssd-playback.outcome.json") `
+  -ReplayMemoryDiagnosticPaths @("./artifacts/qualification/ssd-playback/<failed-run>/ssd-playback-memory-diagnostic.json") `
+  -MixedEvidencePaths @("./artifacts/qualification/sustained-mixed-load/<run>/summary.json") `
+  -RealtimeEvidencePath "./artifacts/qualification/realtime-playout/<run>/manifest.json" `
+  -RequiredGatesPath "./artifacts/readiness/required-gates.json" `
+  -OutputPath "./artifacts/readiness/production-soak-<unique>.json"
+```
+
+Replace every placeholder with the *actual* completed artifact path, or omit that
+parameter and preserve UNVERIFIED. Supplied files pass the canonical domain
+verifier; a malformed or stale source is FAIL, a completed software producer is
+PASS only for its narrow software scope. Input SHA-256 and the exact checked-out
+source are recorded; reports are write-once and limited to 128 KiB. The optional
+`-ReplayMemoryDiagnosticPaths` retains verified sparse observations even when
+the original SSD outcome was a failure: `playbackFailed` or unclean shutdown
+is **FAIL**, while apparently clean sparse samples remain **UNVERIFIED** and
+never supply missing actual full-duration playback evidence. Overall
+production decision is deliberately **NO-GO** regardless of the number of hosted
+software PASS labels. This companion is **not** the authoritative
+`New-ReleaseReadinessIndex.ps1`, candidate, Stable check, trusted Actions
+attestation, offline artifact or signed support record. The machine-generated
+`SupportCompatibilityMatrix.md` remains UNVERIFIED until approved platform
+policy and same-source physical bindings are supplied.
+
+**Live preflight risks at the assessed 2026-10-27 baseline:**
+[issue #401](https://github.com/DaveBeusing/rtaime/issues/401) reports
+966.57 MiB private-byte growth on a 600-second 1080p59.94 dual-deck + continuous
+Replay run against an unchanged **512 MiB** bound; this is an observed failure,
+**not** confirmed native leak attribution. Compare the unchanged source-bound
+repeat and 50 fps control, distinguish managed-heap commit from writer lifecycle,
+retain the original failure and requalify the eventual fix at its own SHA.
+[issue #347](https://github.com/DaveBeusing/rtaime/issues/347) records absent live
+`master` ruleset enforcement. The GitHub branch/rulesets read APIs also showed
+`protected: false` / `[]` in the current inventory. An authorized GitHub
+administrator must activate and re-verify the existing PR-only strict five-check
+ruleset before administrative enforcement can become PASS. Source-controlled
+policy and CI jobs alone cannot enforce a protected branch.
+
+The 10-minute SSD reference workflow already samples replay/GC/writer statistics
+at bounded checkpoints. `Test-SsdPlaybackMemoryDiagnostic.ps1` validates their
+exact compiled source/build SHA, media identity, sparse checkpoints, native
+writer counters and finite queue. A failed workload may still provide useful
+diagnostic observations; **diagnostic OBSERVED never overrides** a failed 512-MiB
+resource assertion, emitted timing failure, missing completion or physical NO-GO.
+The opt-in self-hosted SSD workflow can enable this same five-point diagnostic for
+longer durations without forcing GC or changing the run's acceptance thresholds.
