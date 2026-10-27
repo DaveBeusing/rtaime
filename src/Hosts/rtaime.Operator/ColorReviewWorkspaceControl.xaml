@@ -1,0 +1,181 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.ColorReviewWorkspaceControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:rtaime.Operator"
+    xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+    MinWidth="0" MinHeight="0" SnapsToDevicePixels="True"
+    UseLayoutRounding="True" Focusable="True"
+    controls:OperatorControlPresentation.Enabled="True">
+    <Grid Margin="4,0,4,2">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="124" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="*" MinHeight="152" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,1,0,7">
+            <TextBlock Text="COLOR REVIEW · PROGRAM A / CONFIRMED PREVIEW B"
+                Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+            <TextBlock Text="READ-ONLY MONITORING" DockPanel.Dock="Right"
+                Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right"
+                VerticalAlignment="Center" Margin="9,0,0,0"/>
+        </DockPanel>
+
+        <Border Grid.Row="1" Background="{DynamicResource OperatorThumbnailCanvasBrush}"
+            BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+            CornerRadius="{StaticResource OperatorRadiusPanel}" ClipToBounds="True">
+            <Grid>
+                <local:MonitorView x:Name="ColorProgramMonitor"
+                    Frame="{Binding Monitoring.ProgramImage}"
+                    GpuFrame="{Binding Monitoring.ProgramGpuFrame}"
+                    Diagnostics="{Binding Monitoring.ProgramDiagnostics}"
+                    State="{Binding Monitoring.ProgramState}"
+                    Format="{Binding Monitoring.ProgramFormat}"
+                    SourceName="PROGRAM A · COLOR REVIEW"
+                    ZoomMode="FIT" />
+                <controls:RtaimeMediaCompareView
+                    FrameA="{Binding Monitoring.ProgramImage}"
+                    FrameB="{Binding Monitoring.PreviewImage}"
+                    DifferenceFrame="{Binding Monitoring.DifferenceImage}"
+                    CompareMode="{Binding Monitoring.CompareMode}"
+                    WipePosition="0.5" SnapsToDevicePixels="True">
+                    <controls:RtaimeMediaCompareView.Style>
+                        <Style TargetType="{x:Type controls:RtaimeMediaCompareView}">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Monitoring.IsGpuComparisonActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </controls:RtaimeMediaCompareView.Style>
+                </controls:RtaimeMediaCompareView>
+                <controls:GpuMediaCompareSurface
+                    Monitoring="{Binding Monitoring}"
+                    FrameA="{Binding Monitoring.ProgramGpuFrame}"
+                    FrameB="{Binding Monitoring.PreviewGpuFrame}"
+                    CompareMode="{Binding Monitoring.CompareMode}"
+                    WipePosition="0.5" Panel.ZIndex="2" />
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Orientation="Horizontal"
+                    Margin="6" Panel.ZIndex="3">
+                    <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand, ElementName=ColorProgramMonitor}"
+                        IsCompact="True" Margin="0,0,3,0" />
+                    <controls:RtaimeButton Content="100%" Command="{Binding Zoom100Command, ElementName=ColorProgramMonitor}"
+                        IsCompact="True" Margin="0,0,3,0" />
+                    <controls:RtaimeButton Content="ROI" Command="{Binding ToggleRoiSelectionCommand, ElementName=ColorProgramMonitor}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Select a source-pixel ROI for local inspection; never changes Program." />
+                    <controls:RtaimeButton Content="CLEAR ROI" Command="{Binding ClearRoiCommand, ElementName=ColorProgramMonitor}"
+                        IsCompact="True" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" MinHeight="152">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <controls:RtaimeButton Content="SCOPE: PROGRAM" Command="{Binding SelectScopeSourceCommand}"
+                        CommandParameter="PROGRAM" IsCompact="True" Margin="0,0,3,0" />
+                    <controls:RtaimeButton Content="SCOPE: PREVIEW" Command="{Binding SelectScopeSourceCommand}"
+                        CommandParameter="PREVIEW" IsCompact="True" />
+                </StackPanel>
+                <TextBlock Text="{Binding ScopeSourceLabel}" Style="{StaticResource OperatorLabel}"
+                    VerticalAlignment="Center" />
+            </DockPanel>
+            <Grid Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:GpuScopeAnalysisSurface
+                    Width="1" Height="1" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Panel.ZIndex="-1"
+                    Monitoring="{Binding Monitoring}" GpuFrame="{Binding SelectedScopeGpuFrame}"
+                    AnalyzePreview="{Binding IsPreviewScope}" AnalysisEnabled="{Binding AnalysisEnabled}" />
+                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ColorReviewScopePanel}">
+                    <Grid>
+                        <TextBlock Text="HISTOGRAM" Style="{StaticResource OperatorLabel}" />
+                        <controls:RtaimeMediaScope Margin="0,15,0,0" Snapshot="{Binding SelectedScopes}"
+                            ScopeKind="Histogram" Foreground="{DynamicResource OperatorTextBrush}" />
+                    </Grid>
+                </Border>
+                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource ColorReviewScopePanel}">
+                    <Grid>
+                        <TextBlock Text="WAVEFORM" Style="{StaticResource OperatorLabel}" />
+                        <controls:RtaimeMediaScope Margin="0,15,0,0" Snapshot="{Binding SelectedScopes}"
+                            ScopeKind="Waveform" Foreground="{DynamicResource OperatorTextBrush}" />
+                    </Grid>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource ColorReviewScopePanel}">
+                    <Grid>
+                        <TextBlock Text="RGB PARADE" Style="{StaticResource OperatorLabel}" />
+                        <controls:RtaimeMediaScope Margin="0,15,0,0" Snapshot="{Binding SelectedScopes}"
+                            ScopeKind="RgbParade" Foreground="{DynamicResource OperatorTextBrush}" />
+                    </Grid>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource ColorReviewScopePanel}">
+                    <Grid>
+                        <TextBlock Text="VECTORSCOPE" Style="{StaticResource OperatorLabel}" />
+                        <controls:RtaimeMediaScope Margin="0,15,0,0" Snapshot="{Binding SelectedScopes}"
+                            ScopeKind="Vectorscope" Foreground="{DynamicResource OperatorTextBrush}" />
+                    </Grid>
+                </Border>
+            </Grid>
+            <StackPanel Grid.Row="2" Margin="0,4,0,3">
+                <TextBlock Text="{Binding ScopeFrameLabel}" Style="{StaticResource OperatorLabel}" />
+                <TextBlock Text="{Binding ColorBasisLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SourceFormatLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="4" Background="{DynamicResource OperatorSurfaceBrush}"
+            BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+            CornerRadius="{StaticResource OperatorRadiusPanel}" Padding="6" Margin="0,5,0,0">
+            <StackPanel>
+                <TextBlock Text="A/B COMPARISON · PROGRAM=A · CONFIRMED PREVIEW=B"
+                    Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
+                <WrapPanel Margin="0,0,0,3">
+                    <controls:RtaimeButton Content="OFF" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="Off" IsCompact="True" Margin="0,0,3,3" />
+                    <controls:RtaimeButton Content="SPLIT V" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="SplitVertical" IsCompact="True" Margin="0,0,3,3" />
+                    <controls:RtaimeButton Content="SPLIT H" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="SplitHorizontal" IsCompact="True" Margin="0,0,3,3" />
+                    <controls:RtaimeButton Content="WIPE V" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="WipeVertical" IsCompact="True" Margin="0,0,3,3" />
+                    <controls:RtaimeButton Content="WIPE H" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="WipeHorizontal" IsCompact="True" Margin="0,0,3,3" />
+                    <controls:RtaimeButton Content="DIFFERENCE" Command="{Binding Monitoring.SetCompareModeCommand}" CommandParameter="Difference" IsCompact="True" Margin="0,0,3,3" />
+                </WrapPanel>
+                <TextBlock Text="{Binding Monitoring.ComparisonDetail}" Style="{StaticResource OperatorLabel}"
+                    TextWrapping="Wrap" />
+                <DockPanel Margin="0,5,0,0">
+                    <controls:RtaimeButton Content="+ COLOR GRADE" DockPanel.Dock="Right"
+                        Command="{Binding Inspector.AddColorGradeProcessingNodeCommand}"
+                        IsCompact="True" ToolTip="Add supported Color Grade to the selected authoritative layer; editing and Apply remain in the shared Inspector." />
+                    <StackPanel>
+                        <TextBlock Text="{Binding GradeStatus}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                        <TextBlock Text="Brightness −1..1 · Contrast 0..2 · Saturation 0..2 · validated Inspector draft &amp; Apply only"
+                            Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+    <UserControl.Resources>
+        <Style x:Key="ColorReviewScopePanel" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource OperatorDiagnosticSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+    </UserControl.Resources>
+</UserControl>
