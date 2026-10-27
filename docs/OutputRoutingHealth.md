@@ -121,7 +121,7 @@ distinct target and expose it beneath **TECHNICAL DETAILS**, including
 configured source and target identity, Control production revision,
 separate Runtime execution revision, protocol/format capability,
 local provider lifecycle, queued samples, dropped/rejected counts,
-reconnects, sent bytes and last successful local send age.
+reconnects, sent bytes, measured local sender KiB/s from two consecutive identity-matched health observations and last successful local send age. Fewer than two samples, a restarted counter, stale control or a changed route reports sender rate UNVERIFIED.
 
 Network display states are deliberately more precise than a configured
 route: `UNKNOWN` means there is no matching recent send evidence,
