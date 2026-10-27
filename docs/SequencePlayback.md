@@ -438,6 +438,57 @@ migration. This stage must remain **Draft / NO-GO** until exact-head
 Windows, actual two-distinct-source RGB/PCM and failure/recovery E2E
 results pass and all five Required Gates are green.
 
+## Source-accurate native loop, end and PCM safety (pending qualification)
+
+A sequence loop does **not** create a second clock or restart Program. The
+existing rational `SequenceRuntimePositionMap` still maps the sole Runtime
+Program slot to authored 240000-tick positions. A loop-pass transition
+invalidates the old Preview, pending Take and last confirmed Program slot.
+The source remains **BUFFERING** and is marked unavailable until one
+background *management-owned* native repreroll has joined the old decode
+generations and all admitted owners have confirmed the next loop pass.
+The shared native group uses one ten-second preroll deadline, not ten
+seconds per owner. Program and unrelated sinks continue their own
+cadence; no decoder seek runs inside the Program callback.
+
+Once genuine native owners are prepared, the immutable position map
+reanchors to the *current* Runtime Program slot with the absolute new
+loop-pass identity, preserving the current execution generation and
+preventing any old-pass frame lease from being published. The next
+actual Runtime Preview/Program boundary must still prove delivered
+source pixels and PCM: successful preroll alone never reports
+`PREVIEW_READY` or `PROGRAM_CONFIRMED`. Previously committed Program
+remains the same Control-authorized output; **no second Take** is issued.
+A failed/replaced/preroll-quarantined native owner remains FAILED or
+unavailable until explicit controlled recovery. Seek/Stop/Cue, host
+replacement and authority changes revoke old evidence before
+continuation. The natural end of a non-looped sequence reports
+`UNAVAILABLE` with `runtime.sequence.end_reached`, not endlessly
+BUFFERING or a held final frame; explicit Stop/Seek requires a new
+generation before output may resume.
+
+For each native frame, 48-kHz stereo PCM is bounded to the exact
+source-relative rational frame window. 25/1, 50/1 and 60000/1001
+produce 1920, 960 and alternating 800/801 sample frames respectively.
+A compiled audio slice ending inside a Program frame zeros only
+the trailing samples, preserving the full Program audio window.
+An authored black/silent gap uses the already supported genuine
+black/zero source; native PCM missing from a required clip remains
+BUFFERING/UNAVAILABLE rather than invented samples.
+
+In-process `GetSequenceOutputPerformance` exposes attempted versus
+published frame counts, last/worst native select+GPU/PCM compose
+duration, frame-budget overruns, actual native decoder queue/
+starvation values, loop preroll counts/time and resource-ledger
+managed/native/GPU/unknown/quarantine pressure. It is read-only
+qualification evidence, **not** an authority or a new monitoring IPC.
+The current native reference test uses actual 1080p50 H.264/AAC,
+loop Preview→Program and post-loop re-confirmation. The 25/1
+and 60000/1001 results are **deterministic clock/PCM software
+regressions only** until independent native format/provider evidence
+qualifies them. Physical I/O and 30-minute reference-soak evidence
+remain UNVERIFIED.
+
 ## Required productive execution qualification
 
 The source-bound implementation is integrated into `master`.
