@@ -325,7 +325,7 @@ public sealed partial class OperatorDockController : IDisposable
             Header = panel,
             Background = Brush("OperatorTopBarBrush", "OperatorBackgroundBrush"),
             BorderBrush = Brush("OperatorBorderBrush", "OperatorBackgroundBrush"),
-            Padding = new Thickness(8, 3)
+            Padding = new Thickness(8, 3, 8, 3)
         };
         var actions = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Stretch };
         var tally = new TextBlock
