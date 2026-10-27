@@ -244,7 +244,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				return;
 			if (!_programFreshness.Observe(sourceId, observation.ProgramRouteVersion,
 					observation.ConnectionEpoch, observation.ReceivedAt, descriptor.Timing.SequenceNumber,
-					gpuFrame?.Resource.ProviderInstanceId.ToString()))
+					descriptor.SharedResource?.ProviderInstanceId.ToString(),
+					descriptor.SharedResource?.Lifetime.Generation.Value))
 				return;
 
 			if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
@@ -263,7 +264,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			confirmedPreview = confirmedPreview && _previewFreshness.Observe(
 				sourceId, observation.PreviewRouteVersion, observation.ConnectionEpoch,
 				observation.ReceivedAt, descriptor.Timing.SequenceNumber,
-				gpuFrame?.Resource.ProviderInstanceId.ToString());
+				descriptor.SharedResource?.ProviderInstanceId.ToString(),
+					descriptor.SharedResource?.Lifetime.Generation.Value);
 			if (confirmedPreview)
 			{
 				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
