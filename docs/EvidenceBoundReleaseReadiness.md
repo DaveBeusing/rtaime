@@ -85,6 +85,7 @@ $source = (git rev-parse HEAD).Trim()
 ./build/qualification/New-ProductionSoakCoverageReport.ps1 `
   -ExpectedSourceCommit $source `
   -SsdEvidencePaths @("./artifacts/qualification/ssd-playback/<run>/ssd-playback.outcome.json") `
+  -ReplayMemoryDiagnosticPaths @("./artifacts/qualification/ssd-playback/<failed-run>/ssd-playback-memory-diagnostic.json") `
   -MixedEvidencePaths @("./artifacts/qualification/sustained-mixed-load/<run>/summary.json") `
   -RealtimeEvidencePath "./artifacts/qualification/realtime-playout/<run>/manifest.json" `
   -RequiredGatesPath "./artifacts/readiness/required-gates.json" `
@@ -95,7 +96,11 @@ Replace every placeholder with the *actual* completed artifact path, or omit tha
 parameter and preserve UNVERIFIED. Supplied files pass the canonical domain
 verifier; a malformed or stale source is FAIL, a completed software producer is
 PASS only for its narrow software scope. Input SHA-256 and the exact checked-out
-source are recorded; reports are write-once and limited to 128 KiB. Overall
+source are recorded; reports are write-once and limited to 128 KiB. The optional
+`-ReplayMemoryDiagnosticPaths` retains verified sparse observations even when
+the original SSD outcome was a failure: `playbackFailed` or unclean shutdown
+is **FAIL**, while apparently clean sparse samples remain **UNVERIFIED** and
+never supply missing actual full-duration playback evidence. Overall
 production decision is deliberately **NO-GO** regardless of the number of hosted
 software PASS labels. This companion is **not** the authoritative
 `New-ReleaseReadinessIndex.ps1`, candidate, Stable check, trusted Actions
