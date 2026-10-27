@@ -19,6 +19,22 @@ The Operator provides registered task-oriented workspaces over one shared produc
 
 The canonical workspaces are LIVE, SCENES, MULTIVIEW, MEDIA, EDIT, COMPOSITING, OUTPUTS, HEALTH, AI and SETTINGS. The original eight IDs remain valid. Switching workspaces never creates a second production snapshot or forks product state.
 
+## Shared shell and detached view model ownership
+
+The Operator dock controller reuses its five existing panel instances. Its
+header uses `RtaimePanelHeader` with a title slot and a wrapping action slot;
+active custom tabs have a visible accent indicator and retain keyboard focus.
+Neither the dock header nor floating windows own production commands or
+Program observations.
+
+When TIMELINE and MONITORS panels are detached, their nearest WPF Window
+changes. `OperatorPanelWindow` therefore exposes the **same**
+`MediaTimelineViewModel` and `SequenceTimelineEditorViewModel` instances as
+the owning MainWindow and binds both timeline-mode visibility dependency
+properties one-way to that owner. The media and sequence editors, mode
+transitions and Previous/Next Cue controls must retain those owners through
+float, dock, focus and Cinema transitions. The persisted schema remains 7.
+
 ## Accepted experience direction
 
 The [Operator Experience Design Contract](OperatorExperienceDesign.md), accepted on 2026-10-17, defines the cross-workspace target: a professional media-first Live Operator, dark graphite surfaces, restrained cyan interaction accents, contextual editing and compact operational evidence. A generic infrastructure dashboard is not the primary production surface. This document describes the existing workspace model; the [experience roadmap](OperatorExperienceRoadmap.md) separates present capabilities from proposed refinements and qualification work.

@@ -267,10 +267,12 @@ public sealed partial class OperatorDockController : IDisposable
     }
     private void AddGroup(OperatorDockGroup group, int column, int row, int span)
     {
-        var root = new Grid { Margin = new Thickness(3), Background = Brush("OperatorPanelBrush", "OperatorBackgroundBrush"), AllowDrop = true };
+        var root = new Grid { Margin = new Thickness(3), Background = Brush("OperatorSurfaceBrush", "OperatorBackgroundBrush"), AllowDrop = true, ClipToBounds = true, SnapsToDevicePixels = true };
         Grid.SetColumn(root, column); Grid.SetRow(root, row); Grid.SetColumnSpan(root, span);
         root.RowDefinitions.Add(new() { Height = GridLength.Auto }); root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        var tabs = new WrapPanel();
+        var active = group.Panels.Contains(group.ActivePanel) ? group.ActivePanel : group.Panels.FirstOrDefault();
+        if (group.Panels.Contains(_selected) && (_owner.Shell.IsCompactViewport || _focus is not null)) active = _selected;
+        var tabs = new WrapPanel { Background = Brush("OperatorTopBarBrush", "OperatorBackgroundBrush") };
         foreach (var panel in group.Panels)
         {
             var tab = Button(panel, $"Show {panel}; drag to another group. Ctrl+Shift+N cycles panels.", () =>
@@ -279,6 +281,8 @@ public sealed partial class OperatorDockController : IDisposable
                 var home = _owner.Shell.Docking.Groups.Single(g => g.Panels.Contains(panel));
                 _owner.Shell.SetDocking(_owner.Shell.Docking.SelectTab(home.Id, panel));
             });
+            tab.Style = (Style)_owner.FindResource(panel == active ? "OperatorDockTabSelected" : "OperatorDockTab");
+            AutomationProperties.SetItemStatus(tab, panel == active ? "Selected dock panel" : "Inactive dock panel");
             var start = new Point();
             tab.PreviewMouseLeftButtonDown += (_, e) => start = e.GetPosition(tab);
             tab.PreviewMouseMove += (_, e) =>
@@ -292,8 +296,6 @@ public sealed partial class OperatorDockController : IDisposable
             tabs.Children.Add(tab);
         }
         root.Children.Add(tabs);
-        var active = group.Panels.Contains(group.ActivePanel) ? group.ActivePanel : group.Panels.FirstOrDefault();
-        if (group.Panels.Contains(_selected) && (_owner.Shell.IsCompactViewport || _focus is not null)) active = _selected;
         if (active is not null)
         {
             var content = Chrome(active, _panels[active]); Grid.SetRow(content, 1); root.Children.Add(content);
@@ -313,10 +315,28 @@ public sealed partial class OperatorDockController : IDisposable
     }
     private Grid Chrome(string panel, FrameworkElement view)
     {
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        var header = new WrapPanel { Background = Brush("OperatorTopBarBrush", "OperatorBackgroundBrush") };
-        var tally = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4), Style = _owner.TryFindResource("OperatorLabel") as Style };
+        var grid = new Grid { ClipToBounds = true };
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
+        // Shared two-slot header: the identity never competes with the panel action strip.
+        // Only the existing panel instance is reparented; no view model or Program owner is cloned.
+        var header = new RtaimePanelHeader
+        {
+            Header = panel,
+            Background = Brush("OperatorTopBarBrush", "OperatorBackgroundBrush"),
+            BorderBrush = Brush("OperatorBorderBrush", "OperatorBackgroundBrush"),
+            Padding = new Thickness(8, 3, 8, 3)
+        };
+        var actions = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var tally = new TextBlock
+        {
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 180,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4),
+            Style = _owner.TryFindResource("OperatorLabel") as Style
+        };
         var status = new MultiBinding { StringFormat = "PROGRAM {0} · {1} · {2}" };
         status.Bindings.Add(new Binding("ProgramSourceName") { Source = _owner.DataContext });
         status.Bindings.Add(new Binding("ConnectionState") { Source = _owner.DataContext });
@@ -324,15 +344,24 @@ public sealed partial class OperatorDockController : IDisposable
         BindingOperations.SetBinding(tally, TextBlock.TextProperty, status);
         AutomationProperties.SetName(tally, "Current Program identity, connection and safety");
         AutomationProperties.SetLiveSetting(tally, AutomationLiveSetting.Polite);
-        header.Children.Add(tally);
-        header.Children.Add(Button("RESTORE", "Restore presentation arrangement (Escape).", () => _owner.Shell.RestorePresentation()));
-        header.Children.Add(Button(panel, "Focus panel. Ctrl+Shift+F restores the previous arrangement.", () => { _selected = panel; FocusCommand.Execute(null); }));
-        header.Children.Add(Button("FLOAT", "Detach panel to a secondary window. Ctrl+Shift+W.", () => Float(panel)));
-        foreach (var group in OperatorDockLayout.GroupIds) header.Children.Add(Button(group, $"Dock {panel} to {group}; existing panels become tabs.", () => Dock(panel, group)));
-        var presenter = new ContentControl { Content = view, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+        actions.Children.Add(tally);
+        actions.Children.Add(Button("RESTORE", "Restore presentation arrangement (Escape).", () => _owner.Shell.RestorePresentation()));
+        actions.Children.Add(Button(panel, "Focus panel. Ctrl+Shift+F restores the previous arrangement.", () => { _selected = panel; FocusCommand.Execute(null); }));
+        actions.Children.Add(Button("FLOAT", "Detach panel to a secondary window. Ctrl+Shift+W.", () => Float(panel)));
+        foreach (var group in OperatorDockLayout.GroupIds)
+            actions.Children.Add(Button(group, $"Dock {panel} to {group}; existing panels become tabs.", () => Dock(panel, group)));
+        header.Content = actions;
+        var presenter = new ContentControl
+        {
+            Content = view,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch
+        };
         presenter.PreviewGotKeyboardFocus += (_, _) => _selected = panel;
         _presenters[panel] = presenter;
-        Grid.SetRow(presenter, 1); grid.Children.Add(header); grid.Children.Add(presenter);
+        Grid.SetRow(presenter, 1);
+        grid.Children.Add(header);
+        grid.Children.Add(presenter);
         return grid;
     }
     private void AddSplitter(int column, bool vertical)

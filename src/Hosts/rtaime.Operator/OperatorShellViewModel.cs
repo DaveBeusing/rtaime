@@ -432,6 +432,15 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 			_viewportHeight / OperatorLayoutSettings.ReferenceViewportHeight),
 		OperatorLayoutSettings.MinimumWorkspaceScale,
 		1.0);
+	// Keep Program, readiness and production timecode legible at the minimum viewport.
+	// These are transient client widths, not persisted layout geometry.
+	public GridLength TopBarBrandWidth => new(IsCompactViewport ? 58 : 105);
+	public GridLength TopBarProjectWidth => new(IsCompactViewport ? 155 : 185);
+	public GridLength TopBarEngineWidth => new(IsCompactViewport ? 150 : 190);
+	public GridLength TopBarTimecodeWidth => new(IsCompactViewport ? 112 : 120);
+	public GridLength TopBarTransmissionWidth => new(IsCompactViewport ? 72 : 70);
+	public GridLength TopBarProgramWidth => new(IsCompactViewport ? 130 : 140);
+	public GridLength TopBarSettingsWidth => new(IsCompactViewport ? 40 : 46);
 	public double NavigationRailWidth =>
 		_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth ? 68 : 92;
 	public Visibility NavigationLabelVisibility =>
@@ -754,6 +763,13 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 		}
 		if (previousCompactWorkspace != IsCompactViewport)
 		{
+			OnPropertyChanged(nameof(TopBarBrandWidth));
+			OnPropertyChanged(nameof(TopBarProjectWidth));
+			OnPropertyChanged(nameof(TopBarEngineWidth));
+			OnPropertyChanged(nameof(TopBarTimecodeWidth));
+			OnPropertyChanged(nameof(TopBarTransmissionWidth));
+			OnPropertyChanged(nameof(TopBarProgramWidth));
+			OnPropertyChanged(nameof(TopBarSettingsWidth));
 			OnPropertyChanged(nameof(IsCompactViewport));
 			OnPropertyChanged(nameof(CompactOptionalVisibility));
 			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));

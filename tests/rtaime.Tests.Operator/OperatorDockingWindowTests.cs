@@ -35,6 +35,10 @@ internal static class OperatorDockingWindowTests
         owner.Shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
         await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Visible, dockHost.Visibility);
+        Assert.Contains(Descendants(dockHost).OfType<RtaimePanelHeader>(),
+            header => header.Header is string);
+        Assert.Contains(Descendants(dockHost).OfType<RtaimeButton>(),
+            tab => ReferenceEquals(tab.Style, owner.FindResource("OperatorDockTabSelected")));
         owner.Shell.SetDocking(OperatorDockLayout.Default);
         var identities = owner.Docking.Panels.ToDictionary(p => p.Key, p => p.Value);
         var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
@@ -120,6 +124,7 @@ internal static class OperatorDockingWindowTests
         Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
         Assert.False(((OperatorViewModel)owner.DataContext).CutCommand.CanExecute(null));
         Assert.InRange(watch.Elapsed.TotalSeconds, 0, 10);
+        await VerifyDetachedTimelineOwnershipAsync(owner, dispatcher);
         var beforeMode = JsonSerializer.Serialize(owner.Shell.CurrentWorkspaceLayout());
         var fullscreen = owner.Shell.IsFullscreen;
         owner.Docking.FocusCommand.Execute(null);
@@ -169,6 +174,77 @@ internal static class OperatorDockingWindowTests
         // The caller closes MainWindow through its actual asynchronous lifecycle, exercising owned-window teardown.
         Console.WriteLine("DOCK WORKSPACE PASS: existing panels, tabs, float/dock cycles, shared bindings/shortcuts, compact layout and unchanged source identities.");
     }
+    private static async Task VerifyDetachedTimelineOwnershipAsync(MainWindow owner, Dispatcher dispatcher)
+    {
+        var originalWorkspace = owner.Shell.SelectedWorkspace;
+        var originalDocking = owner.Shell.Docking;
+        var originalSequence = owner.TimelineSequenceVisibility;
+        var originalMedia = owner.TimelineMediaVisibility;
+        var timeline = owner.Timeline;
+        var sequence = owner.SequenceTimeline;
+        var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
+        var program = ((OperatorViewModel)owner.DataContext).ProgramSourceId;
+        try
+        {
+            owner.Shell.SelectWorkspace("EDIT");
+            owner.Shell.SetDocking(OperatorDockLayout.Default);
+            owner.Docking.Float("TIMELINE");
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var floating = owner.Docking.FloatingWindows["TIMELINE"];
+            var mediaControl = Assert.Single(Descendants(floating).OfType<MediaTimelineControl>());
+            var sequenceControl = Assert.Single(Descendants(floating).OfType<SequenceTimelineControl>());
+            Assert.Same(timeline, floating.Timeline);
+            Assert.Same(sequence, floating.SequenceTimeline);
+            Assert.Same(timeline, mediaControl.DataContext);
+            Assert.Same(sequence, sequenceControl.DataContext);
+
+            owner.TimelineMediaVisibility = Visibility.Visible;
+            owner.TimelineSequenceVisibility = Visibility.Collapsed;
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind).Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(Visibility.Visible, floating.TimelineMediaVisibility);
+            Assert.Equal(Visibility.Collapsed, floating.TimelineSequenceVisibility);
+            Assert.Equal(Visibility.Visible, mediaControl.Visibility);
+            Assert.Equal(Visibility.Collapsed, sequenceControl.Visibility);
+
+            owner.TimelineMediaVisibility = Visibility.Collapsed;
+            owner.TimelineSequenceVisibility = Visibility.Visible;
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind).Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(Visibility.Collapsed, mediaControl.Visibility);
+            Assert.Equal(Visibility.Visible, sequenceControl.Visibility);
+            floating.Close();
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            owner.Docking.Float("MONITORS");
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var floatingMonitors = owner.Docking.FloatingWindows["MONITORS"];
+            Assert.Same(timeline, floatingMonitors.Timeline);
+            var previewControls = Descendants(floatingMonitors).OfType<PreviewViewer>().ToArray();
+            Assert.NotEmpty(previewControls);
+            Assert.All(previewControls, previewControl =>
+            {
+                Assert.Same(timeline.PreviousCueCommand, previewControl.PreviousCueCommand);
+                Assert.Same(timeline.NextCueCommand, previewControl.NextCueCommand);
+            });
+            floatingMonitors.Close();
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Same(timeline, owner.Timeline);
+            Assert.Same(sequence, owner.SequenceTimeline);
+            Assert.Equal(preview, ((OperatorViewModel)owner.DataContext).PreviewSourceId);
+            Assert.Equal(program, ((OperatorViewModel)owner.DataContext).ProgramSourceId);
+            Console.WriteLine("DETACHED TIMELINE PASS: both modes, preserved editors, cue commands and unchanged Program/Preview identity.");
+        }
+        finally
+        {
+            foreach (var floating in owner.Docking.FloatingWindows.Values.ToArray()) floating.Close();
+            owner.TimelineSequenceVisibility = originalSequence;
+            owner.TimelineMediaVisibility = originalMedia;
+            owner.Shell.SelectWorkspace(originalWorkspace);
+            owner.Shell.SetDocking(originalDocking);
+        }
+    }
+
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
         for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)

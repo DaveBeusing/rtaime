@@ -82,6 +82,36 @@ public sealed partial class WorkspacePresentationTemplateTests
     }
 
     [Theory]
+    [InlineData(1920,1080,105,185,190,120,70,140,46)]
+    [InlineData(1600,900,105,185,190,120,70,140,46)]
+    [InlineData(1280,720,105,185,190,120,70,140,46)]
+    [InlineData(960,540,58,155,150,112,72,130,40)]
+    [InlineData(960,500,58,155,150,112,72,130,40)]
+    public async Task Compact_shell_retains_readiness_program_and_timecode_space_without_persisting_geometry(
+        double width, double height, double brand, double project, double engine, double timecode,
+        double transmission, double program, double settings)
+    {
+        await using var fixture = await Fixture.Create(false);
+        var shell = fixture.Shell;
+        var before = JsonSerializer.Serialize(shell.CurrentWorkspaceLayout());
+        shell.UpdateViewportSize(width, height);
+        Assert.Equal(brand, shell.TopBarBrandWidth.Value);
+        Assert.Equal(project, shell.TopBarProjectWidth.Value);
+        Assert.Equal(engine, shell.TopBarEngineWidth.Value);
+        Assert.Equal(timecode, shell.TopBarTimecodeWidth.Value);
+        Assert.Equal(transmission, shell.TopBarTransmissionWidth.Value);
+        Assert.Equal(program, shell.TopBarProgramWidth.Value);
+        Assert.Equal(settings, shell.TopBarSettingsWidth.Value);
+        // Two 1-DIP separators. All other widths must leave positive readiness capacity.
+        var fixedWidth = brand + project + engine + timecode + transmission + program + settings + 2;
+        Assert.True(width - fixedWidth >= 180, $"Readiness capacity: {width - fixedWidth}");
+        Assert.Equal(before, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+        shell.UpdateViewportSize(1920, 1080);
+        Assert.Equal(105, shell.TopBarBrandWidth.Value);
+        Assert.Equal(before, JsonSerializer.Serialize(shell.CurrentWorkspaceLayout()));
+    }
+
+    [Theory]
     [InlineData(1920,1080)] [InlineData(1600,900)] [InlineData(1536,864)] [InlineData(1280,720)] [InlineData(960,540)]
     public async Task Live_media_allocation_and_compact_bus_switch_preserve_reference_intent(double width, double height)
     {
