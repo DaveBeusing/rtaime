@@ -55,8 +55,8 @@ The initial implementation verifies the catalogue fingerprint from a bounded, th
 
 ## Bounded thumbnail filmstrip preparation
 
-The Operator now exposes \`MediaAssetFilmstripService\` as a reusable read-only
-library/sequence preview consumer. A \`MediaFilmstripRequest\` binds the catalogue
+The Operator now exposes `MediaAssetFilmstripService` as a reusable read-only
+library/sequence preview consumer. A `MediaFilmstripRequest` binds the catalogue
 asset ID, current SHA-256 fingerprint, length/update identity, duration, exact
 source-tick range, rational nominal frame rate, requested dimensions,
 sample count and compact/detailed quality. This is a client composition of
