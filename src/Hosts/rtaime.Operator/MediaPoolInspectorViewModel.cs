@@ -174,6 +174,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	private string? _confirmedProcessingSignature;
 	private string _emptyState = "No assets are available.";
 	private MediaAssetCatalogSnapshot _catalogSnapshot = MediaAssetCatalogSnapshot.Empty;
+    private bool _reprojectingLibrary;
+    public bool IsReprojectingLibrary => _reprojectingLibrary;
 	private bool _catalogBusy;
 	private string? _catalogError;
 
@@ -978,7 +980,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		var search = MediaLibrarySearch.Parse(bin.Search);
 		SearchStatus = search.Error ?? "AND terms · quotes for phrases · -term to exclude";
-		var filtered = Library.Filter(bin, search, SortOrder);
+        MediaPoolItemViewModel[] filtered;
+        _reprojectingLibrary = true;
+        try { filtered = Library.Filter(bin, search, SortOrder); }
+        finally { _reprojectingLibrary = false; }
         // Every catalogue refresh recreates view rows. Retain stable asset keys while
         // rebinding selected items to the current projection, not stale descriptors.
         // Passive refresh/filter/sort must not count as a new user visit.
