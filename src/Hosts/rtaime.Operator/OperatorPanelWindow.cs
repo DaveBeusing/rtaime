@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -10,6 +11,20 @@ public sealed class OperatorPanelWindow : Window
 {
     private readonly MainWindow _owner;
     private readonly OperatorDockController _controller;
+
+    // Detached panels change their nearest Window. Bind presentation flags to the
+    // MainWindow owner rather than introducing a second timeline or mode selection.
+    public static readonly DependencyProperty TimelineSequenceVisibilityProperty =
+        DependencyProperty.Register(nameof(TimelineSequenceVisibility), typeof(Visibility),
+            typeof(OperatorPanelWindow), new PropertyMetadata(Visibility.Visible));
+
+    public static readonly DependencyProperty TimelineMediaVisibilityProperty =
+        DependencyProperty.Register(nameof(TimelineMediaVisibility), typeof(Visibility),
+            typeof(OperatorPanelWindow), new PropertyMetadata(Visibility.Collapsed));
+
+    public Visibility TimelineSequenceVisibility => (Visibility)GetValue(TimelineSequenceVisibilityProperty);
+    public Visibility TimelineMediaVisibility => (Visibility)GetValue(TimelineMediaVisibilityProperty);
+
     public string PanelId { get; }
     internal OperatorPanelWindow(MainWindow owner, OperatorDockController controller, string panel, OperatorPanelPlacement placement)
     {
@@ -22,6 +37,10 @@ public sealed class OperatorPanelWindow : Window
         KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
         NameScope.SetNameScope(this, new NameScope());
         RegisterName("RootWindow", owner);
+        BindingOperations.SetBinding(this, TimelineSequenceVisibilityProperty,
+            new Binding(nameof(MainWindow.TimelineSequenceVisibility)) { Source = owner, Mode = BindingMode.OneWay });
+        BindingOperations.SetBinding(this, TimelineMediaVisibilityProperty,
+            new Binding(nameof(MainWindow.TimelineMediaVisibility)) { Source = owner, Mode = BindingMode.OneWay });
     }
     public StartupLifecycleViewModel Startup => _owner.Startup;
     public OperatorNotificationCenterViewModel Notifications => _owner.Notifications;
@@ -34,6 +53,8 @@ public sealed class OperatorPanelWindow : Window
     public HealthCenterViewModel HealthCenter => _owner.HealthCenter;
     public OperatorShellViewModel Shell => _owner.Shell;
     public MediaDeckViewModel MediaDeck => _owner.MediaDeck;
+    public MediaTimelineViewModel Timeline => _owner.Timeline;
+    public SequenceTimelineEditorViewModel SequenceTimeline => _owner.SequenceTimeline;
     public ReplayViewModel Replay => _owner.Replay;
     public DemoProductionPackageController DemoProduction => _owner.DemoProduction;
     public MediaPoolInspectorViewModel MediaPool => _owner.MediaPool;
