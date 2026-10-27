@@ -14,6 +14,7 @@ internal sealed class MonitoringViewerFreshness
 	private long _connectionEpoch;
 	private DateTimeOffset _lastReceipt;
 	private ulong _lastSequence;
+	private ulong? _lastResourceGeneration;
 	private bool _hasSequence;
 	private string? _providerInstanceId;
 
@@ -24,12 +25,13 @@ internal sealed class MonitoringViewerFreshness
 		_connectionEpoch = connectionEpoch;
 		_lastReceipt = default;
 		_lastSequence = 0;
+		_lastResourceGeneration = null;
 		_hasSequence = false;
 		_providerInstanceId = null;
 	}
 
 	internal bool Observe(string sourceId, long routeVersion, long connectionEpoch, DateTimeOffset receivedAt, ulong sequenceNumber,
-		string? providerInstanceId = null)
+		string? providerInstanceId = null, ulong? resourceGeneration = null)
 	{
 		if (!string.Equals(sourceId, _sourceId, StringComparison.Ordinal) ||
 			routeVersion != _routeVersion ||
@@ -43,13 +45,25 @@ internal sealed class MonitoringViewerFreshness
 			return false;
 		var providerChanged = providerInstanceId is not null &&
 			!string.Equals(providerInstanceId, _providerInstanceId, StringComparison.Ordinal);
-		if (_hasSequence && !providerChanged && sequenceNumber <= _lastSequence)
-			return false;
+		if (_hasSequence && !providerChanged)
+		{
+			// Resource replacement can restart frame sequencing, but an older
+			// generation or reordered sample must never supersede current evidence.
+			if (resourceGeneration is { } generation && _lastResourceGeneration is { } previousGeneration)
+			{
+				if (generation < previousGeneration ||
+					(generation == previousGeneration && sequenceNumber <= _lastSequence))
+					return false;
+			}
+			else if (sequenceNumber <= _lastSequence)
+				return false;
+		}
 
 		_lastReceipt = receivedAt;
 		if (providerInstanceId is not null)
 			_providerInstanceId = providerInstanceId;
 		_lastSequence = sequenceNumber;
+		_lastResourceGeneration = resourceGeneration;
 		_hasSequence = true;
 		return true;
 	}
