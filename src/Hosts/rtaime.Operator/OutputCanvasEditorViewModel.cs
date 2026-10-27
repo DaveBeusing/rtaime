@@ -54,7 +54,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private OutputCanvasQuad? _previewQuad;
     private double _zoom = 1;
     private double _panX, _panY;
-    private bool _snapEnabled = true, _showGuides = true;
+    private bool _snapEnabled = true, _showGuides = true, _showSafeAreas;
+    private OutputCanvasPoint? _pointerPosition;
     private bool _workspaceVisible;
 
     internal OutputCanvasEditorViewModel(OperatorViewModel owner, IOutputCanvasGateway? gateway = null)
@@ -91,6 +92,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ZoomInCommand = new AsyncRelayCommand(() => { Zoom = Math.Min(16, Zoom * 1.25); return Task.CompletedTask; });
         ZoomOutCommand = new AsyncRelayCommand(() => { Zoom = Math.Max(.1, Zoom / 1.25); return Task.CompletedTask; });
         ToggleGeometryDetailsCommand = new AsyncRelayCommand(() => { ShowGeometryDetails = !ShowGeometryDetails; return Task.CompletedTask; });
+        AlignHorizontalCommand = new AsyncRelayCommand(() => { AlignSelected(true, false); return Task.CompletedTask; },
+            () => CanEdit && CurrentSurface is not null);
+        AlignVerticalCommand = new AsyncRelayCommand(() => { AlignSelected(false, true); return Task.CompletedTask; },
+            () => CanEdit && CurrentSurface is not null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -119,6 +124,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
     public ICommand ToggleGeometryDetailsCommand { get; }
+    public ICommand AlignHorizontalCommand { get; }
+    public ICommand AlignVerticalCommand { get; }
 
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string ResultDetail { get => _resultDetail; private set => Set(ref _resultDetail, value); }
@@ -204,6 +211,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(CanvasWidth));
             OnPropertyChanged(nameof(CanvasHeight));
             OnPropertyChanged(nameof(VisibleSurfaces));
+            OnPropertyChanged(nameof(SelectedGeometryEvidence));
+            OnPropertyChanged(nameof(PointerCoordinates));
             RaiseCommandState();
         }
     }
@@ -218,6 +227,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(SelectedSurfaceId));
             OnPropertyChanged(nameof(IsSurfaceEnabled));
             OnPropertyChanged(nameof(SelectedBlendCurve));
+            OnPropertyChanged(nameof(SelectedGeometryEvidence));
             RaiseCommandState();
         }
     }
@@ -260,6 +270,43 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public double PanY { get => _panY; private set => Set(ref _panY, value); }
     public bool SnapEnabled { get => _snapEnabled; set => Set(ref _snapEnabled, value); }
     public bool ShowGuides { get => _showGuides; set => Set(ref _showGuides, value); }
+    public bool ShowSafeAreas { get => _showSafeAreas; set => Set(ref _showSafeAreas, value); }
+
+    // Stage pixels and physical target pixels are different coordinate systems.
+    // Neither pointer inspection nor local alignment sends a Control mutation.
+    public string PointerCoordinates => _pointerPosition is not { } p || CanvasWidth <= 0 || CanvasHeight <= 0
+        ? "POINTER · hover the stage for logical / normalized destination coordinates"
+        : $"POINTER · X {p.X.ToString("0.0", CultureInfo.InvariantCulture)} px · " +
+          $"Y {p.Y.ToString("0.0", CultureInfo.InvariantCulture)} px · " +
+          $"U {(p.X / CanvasWidth).ToString("0.0000", CultureInfo.InvariantCulture)} · " +
+          $"V {(p.Y / CanvasHeight).ToString("0.0000", CultureInfo.InvariantCulture)}" +
+          (p.X < 0 || p.X > CanvasWidth || p.Y < 0 || p.Y > CanvasHeight ? " · OFF-CANVAS" : "");
+
+    public string SelectedGeometryEvidence
+    {
+        get
+        {
+            if (CurrentSurface is not { } surface || CanvasWidth <= 0 || CanvasHeight <= 0)
+                return "NO SELECTED SURFACE · destination coordinates unavailable";
+            var q = surface.Destination;
+            var centerX = (q.TopLeft.X + q.TopRight.X + q.BottomRight.X + q.BottomLeft.X) / 4;
+            var centerY = (q.TopLeft.Y + q.TopRight.Y + q.BottomRight.Y + q.BottomLeft.Y) / 4;
+            return $"DESTINATION CENTER · X {centerX.ToString("0.##", CultureInfo.InvariantCulture)} px / " +
+                $"Y {centerY.ToString("0.##", CultureInfo.InvariantCulture)} px · " +
+                $"U {(centerX / CanvasWidth).ToString("0.0000", CultureInfo.InvariantCulture)} / " +
+                $"V {(centerY / CanvasHeight).ToString("0.0000", CultureInfo.InvariantCulture)} · " +
+                "normalized to LOGICAL CANVAS, not crop or device";
+        }
+    }
+
+    public void SetPointerPosition(OutputCanvasPoint? position)
+    {
+        if (position is { } p && (!double.IsFinite(p.X) || !double.IsFinite(p.Y)))
+            position = null;
+        if (_pointerPosition == position) return;
+        _pointerPosition = position;
+        OnPropertyChanged(nameof(PointerCoordinates));
+    }
     public bool ShowGeometryDetails { get => _showGeometryDetails; set => Set(ref _showGeometryDetails, value); }
     public string? SelectedSurfaceIssue => Issues.FirstOrDefault(issue =>
         SelectedSurfaceId is { } id && issue.Path.Contains(id.ToString(), StringComparison.OrdinalIgnoreCase))?.Message;
@@ -632,6 +679,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         OnPropertyChanged(nameof(VisibleSurfaces));
         OnPropertyChanged(nameof(CanvasWidth));
         OnPropertyChanged(nameof(CanvasHeight));
+        OnPropertyChanged(nameof(PointerCoordinates));
+        OnPropertyChanged(nameof(SelectedGeometryEvidence));
         LoadFields();
         SelectInput();
         RaiseCommandState();
@@ -752,9 +801,20 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ChangeSurface(s => s with { Destination = quad }, "Canvas geometry committed as local draft only.");
     }
 
+    public void AlignSelected(bool horizontal, bool vertical)
+    {
+        if (!CanEdit || CurrentSurface is not { } surface || SelectedCanvas is not { } canvas ||
+            (!horizontal && !vertical)) return;
+        var q = surface.Destination;
+        var centerX = (q.TopLeft.X + q.TopRight.X + q.BottomRight.X + q.BottomLeft.X) / 4;
+        var centerY = (q.TopLeft.Y + q.TopRight.Y + q.BottomRight.Y + q.BottomLeft.Y) / 4;
+        NudgeSelected(horizontal ? canvas.Width / 2d - centerX : 0,
+            vertical ? canvas.Height / 2d - centerY : 0);
+    }
+
     public void NudgeSelected(double x, double y)
     {
-        if (CurrentSurface is not { } s) return;
+        if (!CanEdit || CurrentSurface is not { } s) return;
         var q = s.Destination;
         OutputCanvasPoint Move(OutputCanvasPoint p) => new(p.X+x,p.Y+y);
         CommitSurfaceQuad(s.SurfaceId, new(Move(q.TopLeft),Move(q.TopRight),
@@ -876,7 +936,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             nameof(IsDraftValidated), nameof(IsActiveMappingConfirmed), nameof(WorkflowStage),
             nameof(SavedRevision), nameof(DraftRevision),
             nameof(DraftSafety), nameof(EditingSafety), nameof(SelectedSurfaceIssue),
-            nameof(VisibleSurfaces), nameof(SelectedBlendCurve), nameof(IsSurfaceEnabled) })
+            nameof(VisibleSurfaces), nameof(SelectedBlendCurve), nameof(IsSurfaceEnabled),
+            nameof(SelectedGeometryEvidence), nameof(PointerCoordinates) })
             OnPropertyChanged(name);
         RaiseCommandState();
     }
@@ -886,7 +947,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         foreach (var command in new[] { ReloadCommand,DiscardAndReloadCommand,ValidateCommand,
             SaveCommand,ApplyCommand,DisableCommand,UndoCommand,RedoCommand,
             AddCanvasCommand,RemoveCanvasCommand,AddSurfaceCommand,RemoveSurfaceCommand,
-            BindProgramCommand,ApplyNumericCommand,ToggleGeometryDetailsCommand })
+            BindProgramCommand,ApplyNumericCommand,ToggleGeometryDetailsCommand,
+            AlignHorizontalCommand,AlignVerticalCommand })
             if (command is AsyncRelayCommand relay) relay.RaiseCanExecuteChanged();
     }
 
