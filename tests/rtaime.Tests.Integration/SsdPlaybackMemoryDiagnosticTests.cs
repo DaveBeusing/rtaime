@@ -40,6 +40,9 @@ public sealed class SsdPlaybackMemoryDiagnosticTests
                 .GetProperty("Opened").GetUInt64());
             Assert.Equal(8, data.GetProperty("points")[0].GetProperty("captureQueue")
                 .GetProperty("QueueCapacity").GetInt32());
+            var native = data.GetProperty("points")[0].GetProperty("nativeWriterLifetime");
+            Assert.True(native.GetProperty("ActiveSinks").GetInt64() >= 0);
+            Assert.True(native.GetProperty("ActiveScratchBuffers").GetInt64() >= 0);
         }
         finally
         {
