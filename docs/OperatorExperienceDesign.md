@@ -88,6 +88,35 @@ The confirmed Program name and bus state must remain visible when optional panes
 
 The main LIVE workspace uses its existing Media Library, production Preview/Program viewers, contextual Inspector and persistent Rundown/timeline rather than introducing another media or authority pipeline. The action row now projects selected source, confirmed Preview and Program identities, NEXT rundown context, the already-governed SET PVW/CUT/AUTO commands and the current Preview Take eligibility detail. It remains one locally horizontally scrollable row, with navigation/restore affordances, preventing toolbar wrapping from competing with the real media viewport. Network send, recording and observed audio are compact evidence only; network transmission does not establish hardware scan-out and an in-progress recording does not establish a finalized file. Full WPF, hardware and operator review acceptance still depends on their separate evidence and is not inferred from this layout.
 
+### LIVE command feedback and role-frame receipt evidence
+
+The LIVE action strip now puts the existing **SET PVW, CUT, AUTO** commands
+first within its single horizontally scrollable row. At a 960×540 logical
+viewport the primary controls remain the first focusable/actionable content;
+secondary workspace toggles, selected/confirmed identities, cue, send and
+recording evidence follow inside the same existing scroll surface. Command
+bindings and the global shortcut safety owner are unchanged.
+
+The existing right-side Transitions panel keeps **local source selection**,
+confirmed NEXT/PVW and LIVE/PGM separately labelled. Its read-only rundown
+NEXT detail is sourced from the existing `RundownViewModel`: showing a cue is
+not ARM, GO, Scene TAKE or Program routing. SET PVW describes a requested
+Preview target; CUT/AUTO describe the last synchronized Preview target, not a
+locally selected thumbnail. Operator feedback distinguishes pending requests,
+known Control rejection, unresolved transport failure and Control commit.
+An uncertain response never becomes a claimed successful Take on UI arrival;
+explicit authoritative resynchronization is required before interpreting
+the outcome. This presentation neither creates nor replays production commands.
+
+The existing Preview and Program viewer header slots show **receipt age** for
+independently verified matching monitoring frames. The time is relative to
+transport receipt *before* Dispatcher delivery and follows the existing
+monitoring watchdog; it does not measure decoded media age, production sink
+latency, physical scan-out or external network output. No extra UI timer,
+analysis decoder or monitoring subscription is introduced. Missing, stale,
+replaced-route and recovered generations remain separate from last-image
+retention and Control authority.
+
 ### Required LIVE target and measurable acceptance
 
 This layout reuses the existing LIVE media/Preview/Program workspace; SCENES,
