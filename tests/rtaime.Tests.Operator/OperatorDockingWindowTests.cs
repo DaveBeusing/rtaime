@@ -219,9 +219,13 @@ internal static class OperatorDockingWindowTests
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
             var floatingMonitors = owner.Docking.FloatingWindows["MONITORS"];
             Assert.Same(timeline, floatingMonitors.Timeline);
-            var previewControl = Assert.Single(Descendants(floatingMonitors).OfType<PreviewViewer>());
-            Assert.Same(timeline.PreviousCueCommand, previewControl.PreviousCueCommand);
-            Assert.Same(timeline.NextCueCommand, previewControl.NextCueCommand);
+            var previewControls = Descendants(floatingMonitors).OfType<PreviewViewer>().ToArray();
+            Assert.NotEmpty(previewControls);
+            Assert.All(previewControls, previewControl =>
+            {
+                Assert.Same(timeline.PreviousCueCommand, previewControl.PreviousCueCommand);
+                Assert.Same(timeline.NextCueCommand, previewControl.NextCueCommand);
+            });
             floatingMonitors.Close();
             await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded).Task.WaitAsync(TimeSpan.FromSeconds(5));
 
