@@ -21,8 +21,11 @@ being optimistically counted as released.
 
 The opt-in SSD memory sidecar reads these counters and the independent bounded
 queue depth at four sparse playback checkpoints and once after host drain.
-It records process private bytes, managed heap/GC evidence and replay file
-retention without retaining any Program pixels. The original 600-second
+It records process private bytes, managed heap/GC evidence, native MP4
+sink-owner/startup/shutdown and scratch-buffer transition counts, and replay
+file retention without retaining any Program pixels. The native counters show
+whether code released COM owners and pooled buffers; they do not prove that
+all Media Foundation internal allocations have been returned to the OS. The original 600-second
 memory ceiling (512 MiB process-private growth) and Replay continuity
 requirements are unchanged. High-watermark and post-drain memory evidence are
 different observations; neither alone establishes native allocation roots.
