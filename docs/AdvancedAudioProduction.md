@@ -301,7 +301,14 @@ remains explicit. The current Mixer does not acquire additional DSP, a second
 poller, a new signal clock or independent Program authority.
 
 Both modes preserve all local drafts, source selection, pending/rejected
-mutation state and controller revision requirements. Neither preset changes
+mutation state and controller revision requirements. Dirty source and bus
+drafts now retain their original production/configuration revision and
+connection session. A changed revision or interrupted synchronization shows
+REVIEW REQUIRED and blocks Apply until the operator explicitly rebases that
+strip against current authoritative evidence, or discards it. Rebase itself
+never sends a command or changes Program; an additional Apply is required.
+Compact bus cards now expose the existing compressor/limiter and missing-source
+evidence; this adds no Runtime samples or processing path. Neither preset changes
 audio configuration, stores a mix, recalls production state or creates another
 layout-persistence mechanism. Existing workspace Save Layout/Reset Layout
 remains the presentation persistence path. A production Solo command is not

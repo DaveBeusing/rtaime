@@ -31,11 +31,11 @@ public sealed partial class OperatorAudioSourceStripViewModel : IAudioMixerDraft
     public string DraftContributionLabel => FollowRoutedSource ? "DRAFT ROUTED" : "DRAFT ALWAYS";
     public string DraftRoutingSummary => string.Join(" · ", Assignments.Where(a => a.DraftAssigned).Select(a => a.BusLabel));
     public void UnityDraft() { if (CanEditDraft) Gain = 1; }
-    public InspectorAttributePayload? CopyGain() => InputsValid && _owner.AttributeRevision is { } revision
+    public InspectorAttributePayload? CopyGain() => InputsValid && !NeedsReview && _owner.AttributeRevision is { } revision
         ? new(1, revision, new InspectorGainAttributes(Gain)) : null;
     public bool PasteGain(InspectorAttributePayload payload)
     {
-        if (!CanEditDraft || payload.Version != 1 || payload.RevisionToken != _owner.AttributeRevision ||
+        if (!CanEditDraft || NeedsReview || payload.Version != 1 || payload.RevisionToken != _owner.AttributeRevision ||
             payload.Values is not InspectorGainAttributes { IsValid: true } gain) return false;
         Gain = gain.Gain; return true;
     }
@@ -50,11 +50,11 @@ public sealed partial class OperatorAudioBusStripViewModel : IAudioMixerDraftStr
     public double GainDb { get => AudioMixerPresentation.ToDb(MasterGain); set { if (AudioMixerPresentation.GainDb.Accepts(value)) MasterGain = AudioMixerPresentation.FromDb(value); } }
     public string DraftMuteLabel => Muted ? "DRAFT MUTED" : "DRAFT OPEN";
     public void UnityDraft() { if (CanEditDraft) MasterGain = 1; }
-    public InspectorAttributePayload? CopyGain() => InputsValid && _owner.AttributeRevision is { } revision
+    public InspectorAttributePayload? CopyGain() => InputsValid && !NeedsReview && _owner.AttributeRevision is { } revision
         ? new(1, revision, new InspectorGainAttributes(MasterGain)) : null;
     public bool PasteGain(InspectorAttributePayload payload)
     {
-        if (!CanEditDraft || payload.Version != 1 || payload.RevisionToken != _owner.AttributeRevision ||
+        if (!CanEditDraft || NeedsReview || payload.Version != 1 || payload.RevisionToken != _owner.AttributeRevision ||
             payload.Values is not InspectorGainAttributes { IsValid: true } gain) return false;
         MasterGain = gain.Gain; return true;
     }

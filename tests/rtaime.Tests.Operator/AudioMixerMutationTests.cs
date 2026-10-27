@@ -87,16 +87,156 @@ public sealed partial class AudioMixerMutationTests
 		Assert.True(source.ToggleMuteCommand.CanExecute(null));
 	}
 
+
+    [Fact]
+    public async Task Unpresented_client_revision_cannot_be_silently_accepted_by_a_new_draft()
+    {
+        var transport = new AudioTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var source = owner.AudioMixer.Sources[0];
+        transport.AdvanceConfigurationRevision();
+        await client.SynchronizeAsync(); // Client is ahead; Operator strips have not been reprojected.
+
+        source.Gain = 0.9;
+        Assert.True(source.NeedsReview);
+        Assert.False(source.ApplyCommand.CanExecute(null));
+        Assert.False(source.RebaseDraftCommand.CanExecute(null));
+        Assert.False(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.Equal(0, transport.MutationCalls);
+
+        owner.SynchronizeCommand.Execute(null);
+        Assert.True(source.NeedsReview);
+        Assert.True(source.RebaseDraftCommand.CanExecute(null));
+        source.RebaseDraftCommand.Execute(null);
+        Assert.False(source.NeedsReview);
+        Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.Equal(0.9, transport.Configuration.Sources[0].Gain);
+    }
+
+    [Fact]
+    public async Task Competing_audio_configuration_revision_requires_explicit_source_and_bus_rebase()
+    {
+        var transport = new AudioTransport();
+        await using var owner = new OperatorViewModel(new OperatorControlClient(transport), runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var source = owner.AudioMixer.Sources[0];
+        var bus = owner.AudioMixer.Buses[0];
+        source.Gain = 0.6;
+        bus.MasterGain = 0.8;
+        Assert.Equal("DRAFT", source.DraftState);
+        Assert.Equal("DRAFT", bus.DraftState);
+
+        // Another authorized editor advances configuration while these local
+        // drafts remain visible. They must not auto-rebase on synchronization.
+        transport.AdvanceConfigurationRevision();
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Same(source, owner.AudioMixer.Sources[0]);
+        Assert.Same(bus, owner.AudioMixer.Buses[0]);
+        Assert.Equal(0.6, source.Gain);
+        Assert.Equal(0.8, bus.MasterGain);
+        Assert.Equal("REVIEW REQUIRED", source.DraftState);
+        Assert.True(source.NeedsReview);
+        Assert.True(bus.NeedsReview);
+        Assert.False(source.ApplyCommand.CanExecute(null));
+        Assert.False(bus.ApplyCommand.CanExecute(null));
+        Assert.False(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.False(await owner.AudioMixer.ApplyBusAsync(bus));
+        Assert.Equal(0, transport.MutationCalls);
+
+        source.RebaseDraftCommand.Execute(null);
+        Assert.False(source.NeedsReview);
+        Assert.True(source.HasDraftChanges);
+        Assert.True(source.ApplyCommand.CanExecute(null));
+        Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.Equal(0.6, transport.Configuration.Sources[0].Gain);
+        Assert.True(bus.NeedsReview); // The source commit moved the authority again.
+        bus.DiscardDraftCommand.Execute(null);
+        Assert.False(bus.NeedsReview);
+        Assert.False(bus.HasDraftChanges);
+        Assert.Equal(1, transport.MutationCalls);
+    }
+
+    [Fact]
+    public async Task Output_role_revision_change_requires_review_without_an_audio_configuration_change()
+    {
+        var transport = new AudioTransport();
+        await using var owner = new OperatorViewModel(new OperatorControlClient(transport), runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var strip = owner.AudioMixer.Sources[0];
+        strip.ToggleMuteCommand.Execute(null);
+        Assert.True(strip.Muted);
+        var audioRevision = transport.Configuration.Revision;
+
+        transport.AdvanceProductionRevision();
+        owner.SynchronizeCommand.Execute(null);
+        Assert.Equal(audioRevision, transport.Configuration.Revision);
+        Assert.True(strip.NeedsReview);
+        Assert.Equal("REVIEW REQUIRED", strip.DraftState);
+        Assert.Contains("production revision", strip.DraftReviewDetail);
+        Assert.False(await owner.AudioMixer.ApplySourceAsync(strip));
+        Assert.Equal(0, transport.MutationCalls);
+        strip.RebaseDraftCommand.Execute(null);
+        Assert.False(strip.NeedsReview);
+        Assert.True(strip.Muted);
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.True(await owner.AudioMixer.ApplySourceAsync(strip));
+        Assert.True(transport.Configuration.Sources[0].Muted);
+    }
+
+    [Fact]
+    public async Task Mixer_reconnect_requires_local_review_even_when_remote_revisions_do_not_change()
+    {
+        var transport = new AudioTransport();
+        await using var owner = new OperatorViewModel(new OperatorControlClient(transport), runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var strip = owner.AudioMixer.Sources[0];
+        var bus = owner.AudioMixer.Buses[0];
+        strip.Gain = 0.7;
+        bus.MasterGain = 0.65;
+        var originalRevision = transport.Configuration.Revision;
+
+        transport.FailSnapshots = true;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.True(owner.IsStale);
+        Assert.False(strip.ApplyCommand.CanExecute(null));
+        transport.FailSnapshots = false;
+        owner.SynchronizeCommand.Execute(null);
+        Assert.False(owner.IsStale);
+        Assert.Equal(originalRevision, transport.Configuration.Revision);
+        Assert.Equal(0.7, strip.Gain);
+        Assert.Equal(0.65, bus.MasterGain);
+        Assert.True(strip.NeedsReview);
+        Assert.True(bus.NeedsReview);
+        Assert.False(await owner.AudioMixer.ApplySourceAsync(strip));
+        Assert.False(await owner.AudioMixer.ApplyBusAsync(bus));
+        Assert.Equal(0, transport.MutationCalls);
+        Assert.True(bus.RebaseDraftCommand.CanExecute(null));
+        bus.RebaseDraftCommand.Execute(null);
+        Assert.Equal("DRAFT", bus.DraftState);
+        Assert.True(await owner.AudioMixer.ApplyBusAsync(bus));
+        Assert.Equal(0.65, transport.Configuration.Buses[0].MasterGain);
+        Assert.True(strip.NeedsReview);
+    }
+
 	private sealed class AudioTransport : IOperatorControlTransport
 	{
 		private readonly MediaSourceId[] _sources = [new(Identity.New()), new(Identity.New())];
 		private readonly ProductionId _production = ProductionId.New();
+		private ulong _productionRevision = 1;
 		internal AudioProductionConfiguration Configuration { get; private set; }
 		internal TaskCompletionSource? Hold { get; set; }
 		internal bool Reject { get; set; }
 		internal bool FailSnapshots { get; set; }
 		internal int MutationCalls { get; private set; }
 		internal int SnapshotCalls { get; private set; }
+
+		internal void AdvanceProductionRevision() => _productionRevision++;
+
+		internal void AdvanceConfigurationRevision() => Configuration = new AudioProductionConfiguration(
+			checked(Configuration.Revision + 1), Configuration.Buses, Configuration.Sources,
+			Configuration.Crossfade, Configuration.Ducking, Configuration.ClipStrategy);
 
 		internal AudioTransport() => Configuration = new AudioProductionConfiguration(1,
 			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1, false) },
@@ -113,7 +253,7 @@ public sealed partial class AudioMixerMutationTests
 				return ValueTask.FromException<OperatorStatusSnapshot>(new TimeoutException("Control unavailable."));
 			var id = new ProductionSourceId(_sources[0].Value);
 			return ValueTask.FromResult(new OperatorStatusSnapshot(
-				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(1), new ProductionRoutingState(id, id)),
+				new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(_productionRevision), new ProductionRoutingState(id, id)),
 				_sources.Select((source, index) => new OperatorSourceDescriptor(source.ToString(), $"Camera {index + 1}")).ToArray(),
 				"READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0.2,
 				audioInputs: Configuration.Sources.Select(source => new OperatorAudioInputDescriptor(source.SourceId.ToString(),

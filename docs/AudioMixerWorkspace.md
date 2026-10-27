@@ -77,6 +77,32 @@ Pending disables the submitted strip. Reject retains the requested draft and con
 so the operator can inspect, correct or discard it. Host revision conflicts and lost connections
 reuse existing rejection/resynchronization behavior. No local undo can reverse a Program action.
 
+### Revision-bound review before applying retained drafts
+
+Each dirty source and bus strip captures the production identity/revision,
+audio-configuration revision and current connection/evidence session when editing
+begins. A concurrent mixer change, output-role production revision, lost connection
+or unverified-to-confirmed transition cannot automatically authorize an older
+draft. The original values remain visible, but Apply becomes disabled with
+**REVIEW REQUIRED**. Source and bus review messages distinguish held local
+intent from current confirmed gain, mute, routing, EQ and dynamics.
+
+The explicit **REBASE DRAFT** action acknowledges the newly synchronized
+authoritative baseline **only in the local editor**. It does not modify audio,
+route, output or saved state. The operator must compare confirmed values and
+then choose a separate Apply; **DISCARD** restores the confirmed strip without
+mutating ControlHost. Other strips remain dirty and must each be reviewed after
+a competing revision, including one caused by another strip's successful Apply.
+Pending edits stay locked, invalid numeric fields cannot be rebased, and
+Inspector gain transfer does not copy/paste drafts requiring review.
+
+The compact bus cards additionally show the existing confirmed compressor
+bypass/active state, current Runtime compressor reduction, limiter reduction
+or cumulative hit counter, and missing-source evidence. No new measurements,
+cue feed, device monitor, sample poller, DSP processing or automation lane is
+claimed. The compact strip cards are bounded by the measured scroll viewport
+so local gain/mute controls stay reachable when the panel narrows.
+
 ## Compatible Inspector transfer
 
 Copy Gain and Paste Gain exchange the existing version-1 InspectorGainAttributes payload and

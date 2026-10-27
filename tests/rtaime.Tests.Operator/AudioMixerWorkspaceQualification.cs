@@ -52,6 +52,21 @@ internal static class AudioMixerWorkspaceQualification
                     AutomationProperties.GetName(slider) == "Source gain draft fader");
             Assert.True(Descendants<RtaimeMetricBar>(view).Count(bar =>
                 AutomationProperties.GetName(bar).StartsWith("Live ", StringComparison.Ordinal)) >= 4);
+            // Both compact banks must expose the local revision guard without
+            // creating another authority or hiding faders behind fixed card widths.
+            Assert.Contains(Descendants<RtaimeButton>(view), button =>
+                AutomationProperties.GetName(button) == "Review and rebase retained source draft" &&
+                button.DataContext is OperatorAudioSourceStripViewModel source &&
+                ReferenceEquals(button.Command, source.RebaseDraftCommand));
+            Assert.Contains(Descendants<RtaimeButton>(view), button =>
+                AutomationProperties.GetName(button) == "Review and rebase retained bus draft" &&
+                button.DataContext is OperatorAudioBusStripViewModel bus &&
+                ReferenceEquals(button.Command, bus.RebaseDraftCommand));
+            Assert.Contains(Descendants<Border>(view), card =>
+                card.DataContext is OperatorAudioBusStripViewModel && card.Width == 290 &&
+                System.Windows.Data.BindingOperations.GetBinding(card, FrameworkElement.MaxWidthProperty)?.Path.Path == "ViewportWidth");
+            Assert.Contains(Descendants<TextBlock>(view), label =>
+                System.Windows.Data.BindingOperations.GetBinding(label, TextBlock.TextProperty)?.Path.Path == "CompressorActivity");
             Capture(floating,"mixer-compact");
             mixer.DetailedPresentationCommand.Execute(null);
             await dispatcher.InvokeAsync(floating.UpdateLayout,DispatcherPriority.Render);
@@ -61,6 +76,14 @@ internal static class AudioMixerWorkspaceQualification
             var faders = Descendants<RtaimeSlider>(view).Where(f => f.Orientation == Orientation.Vertical).ToArray();
             Assert.NotEmpty(faders);
             Assert.All(faders, f => { Assert.Equal(104,f.Height); Assert.True(f.ActualWidth>=30); });
+            Assert.Contains(Descendants<RtaimeButton>(view), button =>
+                AutomationProperties.GetName(button) == "Review and rebase advanced source draft" &&
+                button.DataContext is OperatorAudioSourceStripViewModel source &&
+                ReferenceEquals(button.Command, source.RebaseDraftCommand));
+            Assert.Contains(Descendants<RtaimeButton>(view), button =>
+                AutomationProperties.GetName(button) == "Review and rebase advanced bus draft" &&
+                button.DataContext is OperatorAudioBusStripViewModel bus &&
+                ReferenceEquals(button.Command, bus.RebaseDraftCommand));
             var field = Descendants<RtaimeNumericField>(view).First(f => f.Definition.Id=="audio.gain");
             field.Focus(); field.Text="NaN";
             Assert.True(field.HasInputError);
