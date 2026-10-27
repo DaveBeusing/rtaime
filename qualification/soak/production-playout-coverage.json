@@ -139,7 +139,7 @@
     },
     {
       "scenario": "NETWORK_DISCONNECT_RECONNECT",
-      "evidence": "SrtNetworkOutputTests;NetworkOutputFoundationTests",
+      "evidence": "SrtNativeLoopbackQualificationTests;SrtTransportPacketizationTests;NetworkOutputFoundationTests",
       "scope": "SOFTWARE_LOOPBACK_PHYSICAL_NDI_SRT_UNVERIFIED"
     },
     {
