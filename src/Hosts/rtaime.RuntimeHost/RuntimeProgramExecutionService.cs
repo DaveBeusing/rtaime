@@ -2745,6 +2745,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		return result;
 	}
 
+    // Inspection only: writer counters are local to the Runtime owner, not part of Program IPC.
+    public ReplayCaptureWriterLifetimeStatistics? GetReplayWriterLifetimeStatistics() =>
+        _replay?.WriterLifetimeStatistics;
+
 	public ReplayBufferSnapshot GetReplaySnapshot() =>
 		_replay?.Snapshot ?? new ReplayBufferSnapshot(
 			ReplayContractVersion.Current,
