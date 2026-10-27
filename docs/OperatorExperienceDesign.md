@@ -108,6 +108,8 @@ An uncertain response never becomes a claimed successful Take on UI arrival;
 explicit authoritative resynchronization is required before interpreting
 the outcome. This presentation neither creates nor replays production commands.
 
+An ambiguous failed CUT/AUTO transport or response is now latched as **Take outcome unresolved**: subsequent SET PVW, CUT/AUTO, Scene TAKE, Rundown GO and Show Control live commands remain unavailable until an explicit successful Control synchronization. Routine monitoring refresh does not reset that latch. A known Control rejection, in contrast, does not imply an ambiguous commit and retains its distinct reason. This UI lock is not a replacement for ControlHost authorization or production reconciliation.
+
 The existing Preview and Program viewer header slots show **receipt age** for
 independently verified matching monitoring frames. The time is relative to
 transport receipt *before* Dispatcher delivery and follows the existing
