@@ -7,6 +7,21 @@ namespace rtaime.Operator;
 
 public sealed record MediaLibraryReviewSample(BitmapSource? Image, string Timecode, string Status);
 
+// Non-destructive inspection markers only. These are source-relative fractions;
+// authoring trim and production deck IN/OUT remain with their existing owners.
+public static class MediaLibraryReviewRange
+{
+    public static (long Start, long End)? Map(TimeSpan duration, double inPercent, double outPercent)
+    {
+        if (duration.Ticks < 2 || !double.IsFinite(inPercent) || !double.IsFinite(outPercent) ||
+            inPercent < 0 || outPercent > 100 || inPercent >= outPercent)
+            return null;
+        var start = (long)decimal.Floor(duration.Ticks * (decimal)inPercent / 100);
+        var end = (long)decimal.Ceiling(duration.Ticks * (decimal)outPercent / 100);
+        return start >= 0 && end > start && end <= duration.Ticks ? (start, end) : null;
+    }
+}
+
 // One explicitly requested, selected-asset filmstrip. The analysis service owns
 // bounded decoder admission and source-fingerprint checks; the Operator never
 // opens files or changes resident Preview/Program playback to inspect frames.
@@ -19,7 +34,29 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool _reviewDisposed;
     private string? _reviewAssetId;
     private string? _reviewFingerprint;
-    private long _reviewLength;
+    private double _reviewInPercent;
+    private double _reviewOutPercent = 100;
+    public double ReviewInPercent
+    {
+        get => _reviewInPercent;
+        set
+        {
+            if (!double.IsFinite(value) || !Set(ref _reviewInPercent, Math.Clamp(value, 0, 99))) return;
+            CancelFrameReview("IN marker changed; review again.");
+            CancelAudioReview("IN marker changed; review audio again.");
+        }
+    }
+    public double ReviewOutPercent
+    {
+        get => _reviewOutPercent;
+        set
+        {
+            if (!double.IsFinite(value) || !Set(ref _reviewOutPercent, Math.Clamp(value, 1, 100))) return;
+            CancelFrameReview("OUT marker changed; review again.");
+            CancelAudioReview("OUT marker changed; review audio again.");
+        }
+    }
+        private long _reviewLength;
     private long _reviewUpdatedTicks;
     private IReadOnlyList<MediaLibraryReviewSample> _frameReviewSamples = [];
     private string _frameReviewStatus = "Select one online catalogue clip and choose REVIEW FRAMES.";
@@ -48,6 +85,7 @@ public sealed partial class MediaPoolInspectorViewModel
             CancelFrameReview("Review cancelled. No production routing was changed.");
             return Task.CompletedTask;
         }, () => _reviewRunning || FrameReviewSamples.Count > 0);
+        InitializeAudioReview();
     }
 
     private MediaAssetDescriptor? ReviewSelectedAsset()
@@ -65,11 +103,13 @@ public sealed partial class MediaPoolInspectorViewModel
         !_catalogBusy && !_batchRunning && !_operator.IsBusy &&
         _operator.IsConnected && !_operator.IsStale &&
         !MediaLibraryHoverPreview.IsUnderPressure(_operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow) &&
-        ReviewSelectedAsset() is not null;
+        ReviewSelectedAsset() is { } asset &&
+        MediaLibraryReviewRange.Map(asset.Duration, ReviewInPercent, ReviewOutPercent) is not null;
 
     private async Task ReviewSelectedFramesAsync()
     {
-        if (!CanReviewSelectedFrames() || ReviewSelectedAsset() is not { } asset || _reviewService is null)
+        if (!CanReviewSelectedFrames() || ReviewSelectedAsset() is not { } asset || _reviewService is null ||
+            MediaLibraryReviewRange.Map(asset.Duration, ReviewInPercent, ReviewOutPercent) is not { } range)
             return;
 
         CancelFrameReview("Starting a new selected-asset review.");
@@ -87,7 +127,7 @@ public sealed partial class MediaPoolInspectorViewModel
         try
         {
             var result = await _reviewService.RequestAsync(
-                asset, 0, asset.Duration.Ticks, 112, 63, 5,
+                asset, range.Start, range.End, 112, 63, 5,
                 MediaFilmstripQuality.Detailed, cancellationToken: stop.Token);
 
             if (!ReviewIsCurrent(generation, stop.Token, asset)) return;
@@ -160,6 +200,7 @@ public sealed partial class MediaPoolInspectorViewModel
                 !_operator.IsConnected || _operator.IsStale)
                 CancelFrameReview("STALE · selection or asset identity changed; review again.");
         }
+        ReconcileAudioReviewContext();
         RaiseReviewCommands();
     }
 
@@ -181,6 +222,7 @@ public sealed partial class MediaPoolInspectorViewModel
     {
         (ReviewFramesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (CancelFrameReviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        RaiseAudioReviewCommands();
     }
 
     private void DisposeMediaReview()
@@ -189,5 +231,6 @@ public sealed partial class MediaPoolInspectorViewModel
         _reviewDisposed = true;
         CancelFrameReview("Review closed.");
         _reviewService?.Dispose();
+        DisposeAudioReview();
     }
 }
