@@ -309,6 +309,23 @@ public sealed class LocalMediaFileProvider
         { return LocalMediaOpenResult.Rejected(exception.Code, exception.Message); }
         catch (Exception exception) when (exception is InvalidDataException or IOException or OverflowException or UnauthorizedAccessException)
         { return LocalMediaOpenResult.Rejected("media.file.probe_failed", $"The container metadata could not be read: {exception.Message}"); }
+
+        // Do not instantiate a native Source Reader for a profile already
+        // rejected by bounded source geometry, rational cadence or H.264 rate
+        // policy. Native negotiation remains authoritative for transform
+        // availability, color/layout and reported bitrate.
+        if (metadata.VideoCodec is not { } videoCodec)
+            return LocalMediaOpenResult.Rejected("media.file.video_codec_unsupported",
+                $"Container sample entry '{metadata.SampleEntry}' has no admitted decoder profile.");
+        if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
+            return LocalMediaOpenResult.Rejected("media.file.metadata_invalid",
+                "The container source frame rate is invalid.");
+        var sourceProfile = new LocalMediaInputProfile(videoCodec, metadata.Width, metadata.Height,
+            new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator), null);
+        if (LocalMediaInputPolicy.Validate(sourceProfile) is { } unsupported)
+            return LocalMediaOpenResult.Rejected(unsupported.Code,
+                $"{metadata.Container}/{metadata.SampleEntry}: {unsupported.Message}");
+
         var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat, metadata);
 		if (!open.Succeeded)
 			return LocalMediaOpenResult.Rejected(open.Failure!.Value.Code, open.Failure.Value.Message);
