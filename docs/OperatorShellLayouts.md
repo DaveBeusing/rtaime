@@ -34,6 +34,12 @@ workspace layout. The remaining `*` column belongs to global readiness:
 | 1280 × 720 | 105 | 185 | 190 | 120 | 70 | 140 | 46 | 422 |
 | 960 × 540 | 58 | 155 | 150 | 112 | 72 | 130 | 40 | 241 |
 
+Before the compact-width adjustment, the 960-DIP window kept the full
+105/185/190/120/70/140/46-DIP status columns, leaving **102 DIPs** for
+readiness. After the adjustment, the 960-DIP compact window has **241 DIPs**
+for readiness, a gain of 139 DIPs without shrinking the native media viewer.
+At 1280 and 1920 DIPs, the original reference widths remain unchanged.
+
 Widths are DIPs; the readiness remainder subtracts two 1-DIP separators.
 The compact header keeps recording/transmission status, Program source and
 timecode accessible; only the adjacent product wordmark is suppressed, while
