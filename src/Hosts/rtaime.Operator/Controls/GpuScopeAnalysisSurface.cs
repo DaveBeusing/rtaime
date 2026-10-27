@@ -50,6 +50,10 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		typeof(GpuScopeAnalysisSurface),
 		new FrameworkPropertyMetadata(false, OnAnalysisStateChanged));
 
+	public static readonly DependencyProperty AnalyzePreviewProperty = DependencyProperty.Register(
+		nameof(AnalyzePreview), typeof(bool), typeof(GpuScopeAnalysisSurface),
+		new FrameworkPropertyMetadata(false, OnFrameChanged));
+
 	public GpuScopeAnalysisSurface()
 	{
 		DepthStencilFormat = Format.Unknown;
@@ -58,7 +62,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		SurfaceStateChanged += (_, _) =>
 		{
 			if (SurfaceState != OperatorSurfaceState.Ready)
-				Monitoring?.SetGpuScopesUnavailable(SurfaceDetail);
+				Monitoring?.SetGpuScopesUnavailable(SurfaceDetail, AnalyzePreview);
 		};
 		LoadContent += OnLoadContent;
 		Draw += OnDraw;
@@ -83,6 +87,13 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 	{
 		get => (bool)GetValue(AnalysisEnabledProperty);
 		set => SetValue(AnalysisEnabledProperty, value);
+	}
+
+	/// <summary>Opt-in confirmed Preview scope path. Program remains the default.</summary>
+	public bool AnalyzePreview
+	{
+		get => (bool)GetValue(AnalyzePreviewProperty);
+		set => SetValue(AnalyzePreviewProperty, value);
 	}
 
 	private static void OnFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -167,18 +178,18 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		var frame = GpuFrame;
 		if (frame is null)
 		{
-			Monitoring?.SetGpuScopesUnavailable("GPU scope analysis is waiting for a Program shared resource.");
+			Monitoring?.SetGpuScopesUnavailable($"GPU scope analysis is waiting for a confirmed {(AnalyzePreview ? "Preview" : "Program")} shared resource.", AnalyzePreview);
 			return;
 		}
 		if (_shader is null || _colorBuffer is null || _scopeConstants is null ||
 			_results is null || _readback is null || _resultsView is null)
 		{
-			Monitoring?.SetGpuScopesUnavailable("GPU scope compute capability is unavailable.");
+			Monitoring?.SetGpuScopesUnavailable("GPU scope compute capability is unavailable.", AnalyzePreview);
 			return;
 		}
 		if (!TryOpenSharedResource(frame, e.Device))
 		{
-			Monitoring?.SetGpuScopesUnavailable("Program shared resource cannot be opened on the scope-analysis adapter.");
+			Monitoring?.SetGpuScopesUnavailable($"{(AnalyzePreview ? "Preview" : "Program")} shared resource cannot be opened on the scope-analysis adapter.", AnalyzePreview);
 			return;
 		}
 
@@ -203,7 +214,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		{
 			_lastAnalysisAt = DateTimeOffset.UtcNow;
 			_lastAnalysisSequence = frame.SequenceNumber;
-			Monitoring?.SetGpuScopesUnavailable("GPU scope analysis failed; CPU fallback remains eligible.");
+			Monitoring?.SetGpuScopesUnavailable("GPU scope analysis failed; CPU fallback remains eligible.", AnalyzePreview);
 			CloseSharedResource();
 		}
 	}
@@ -245,7 +256,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 				sampleCount,
 				results,
 				Stopwatch.GetElapsedTime(started));
-			Monitoring?.ApplyGpuScopes(snapshot);
+			Monitoring?.ApplyGpuScopes(snapshot, frame, AnalyzePreview);
 		}
 		finally
 		{
