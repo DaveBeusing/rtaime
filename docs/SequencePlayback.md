@@ -427,10 +427,11 @@ public status contract.
 at most four native owner requests per frame, eight video layers and
 eight 48-kHz audio tracks, program-bus audio only. The playout hook
 currently rejects Graphics clips and unsupported bus mappings instead
-of publishing an incomplete show. Reverse/multirate shuttle, reliable
-automatic native loop repreroll, long-running real-time cadence headroom,
+of publishing an incomplete show. Reverse/multirate shuttle, long-running real-time cadence headroom,
 physical SDI/NDI/GPU hardware activation and source-format expansion
-remain separate qualification obligations. The existing Preview source
+remain separate qualification obligations. Bounded automatic native loop
+repreroll is implemented below, but exact-source loop/Program qualification
+remains PENDING, not a general compatibility claim. The existing Preview source
 is temporarily reused as the bound sequence identity; a dedicated
 catalogued production sequence source is not yet a proven durable
 migration. This stage must remain **Draft / NO-GO** until exact-head
