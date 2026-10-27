@@ -116,7 +116,7 @@ public sealed partial class MediaPoolInspectorViewModel
 			return Task.CompletedTask;
 		});
 		ClearLibrarySelectionCommand = new AsyncRelayCommand(() => { UpdateSelection([]); return Task.CompletedTask; });
-        InitializeMediaReview();
+
 	}
 
 	public MediaDurationFilter DurationFilter
