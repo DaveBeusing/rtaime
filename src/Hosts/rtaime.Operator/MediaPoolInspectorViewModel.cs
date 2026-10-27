@@ -1389,7 +1389,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			HoverStatus = "UNAVAILABLE · Control disconnected or stale; reconnect and focus to retry";
 		}
 		if (e.PropertyName is nameof(OperatorViewModel.HealthObserved) or nameof(OperatorViewModel.FrameTime) or nameof(OperatorViewModel.RuntimeHealth))
+        {
 			ReconcileHoverPressure();
+            ReconcileMediaReviewPressure();
+        }
 		if (e.PropertyName is nameof(OperatorViewModel.SelectedAudioInput) or
             nameof(OperatorViewModel.RevisionLabel) or
             nameof(OperatorViewModel.LastError) or
