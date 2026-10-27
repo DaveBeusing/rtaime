@@ -155,6 +155,7 @@ public partial class SequenceTimelineControl : UserControl
         if (Keyboard.FocusedElement is TextBoxBase or ComboBox) return;
         if ((Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Windows)) != 0) return;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (e.Key == Key.Escape)
         {
             model.CancelGesture();
