@@ -192,6 +192,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		Selection = new(this);
 		InitializeBrowsing();
 		SelectedItems = [];
+        InitializeMediaReview();
         InitializePreparation();
 		InspectorProperties = [];
 		InspectorMetadataProperties = [];
