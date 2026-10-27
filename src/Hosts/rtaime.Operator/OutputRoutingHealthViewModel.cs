@@ -893,6 +893,11 @@ public sealed class SystemHealthStatusViewModel : INotifyPropertyChanged
 	}
 }
 
+public sealed record OutputNetworkTargetPresentation(
+	string TargetId, string Protocol, string SafeTargetIdentity, string RouteRevision,
+	string RouteEvidence, string ConfiguredCapability, string TransmissionState,
+	string ProviderSendEvidence, string PhysicalEvidence);
+
 public sealed class OutputStatusViewModel : INotifyPropertyChanged
 {
 	private string _target = "UNAVAILABLE";
@@ -912,6 +917,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	private string _streamingQueue = "UNAVAILABLE";
 	private string _streamingDrops = "UNAVAILABLE";
 	private string _streamingReconnects = "UNAVAILABLE";
+	private IReadOnlyList<OutputNetworkTargetPresentation> _networkTargets = [];
 
 	public OutputStatusViewModel(string id, string name)
 	{
@@ -940,6 +946,13 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	public string StreamingQueue { get => _streamingQueue; private set => Set(ref _streamingQueue, value); }
 	public string StreamingDrops { get => _streamingDrops; private set => Set(ref _streamingDrops, value); }
 	public string StreamingReconnects { get => _streamingReconnects; private set => Set(ref _streamingReconnects, value); }
+	public IReadOnlyList<OutputNetworkTargetPresentation> NetworkTargets
+	{
+		get => _networkTargets;
+		private set => Set(ref _networkTargets, value);
+	}
+	internal void UpdateNetworkTargets(IReadOnlyList<OutputNetworkTargetPresentation> targets) =>
+		NetworkTargets = targets ?? [];
 	public string OutputKind => Id switch
 	{
 		"program" => "GOVERNED PROGRAM ROLE · PHYSICAL SCAN-OUT UNVERIFIED",
