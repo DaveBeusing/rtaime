@@ -99,7 +99,8 @@ internal sealed class SsdPlaybackMemoryDiagnostic(
                 },
                 replay,
                 writerLifetime = writers,
-                captureQueue = queue
+                captureQueue = queue,
+                nativeWriterLifetime = WindowsMediaFoundationMp4RecordingWriter.NativeLifetimeStatistics
             });
         }
         catch (Exception exception) { RecordFailure("capture", exception); }
