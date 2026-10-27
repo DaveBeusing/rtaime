@@ -81,7 +81,7 @@ foreach ($path in @($SsdEvidencePaths)) {
             $ssdRows[$key].reason += " Sparse writer/GC/private-byte observations checked; attribution and physical retention not proven."
         }
     } catch {
-        if ($ssdRows.ContainsKey($key)) { throw "Ambiguous SSD evidence for $key: $($_.Exception.Message)" }
+        if ($ssdRows.ContainsKey($key)) { throw "Ambiguous SSD evidence for $($key): $($_.Exception.Message)" }
         $ssdRows[$key] = @{ status="FAIL"; reason="Provided SSD evidence invalid: $($_.Exception.Message)" }
     }
 }
