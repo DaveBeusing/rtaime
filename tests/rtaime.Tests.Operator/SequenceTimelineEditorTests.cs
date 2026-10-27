@@ -139,6 +139,27 @@ public sealed class SequenceTimelineEditorTests
     }
 
     [Fact]
+    public void Trim_handles_never_expose_a_clipped_offscreen_source_edge()
+    {
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Select, 1, 100, true, true));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 1, 100, false, true));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 99, 100, true, false));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 40, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.TrimStart,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Trim, 3, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.TrimEnd,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Trim, 98, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.Move,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Move, 50, 100, false, false));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Move, double.NaN, 100, true, true));
+    }
+
+    [Fact]
     public void Magnetic_sequence_edits_use_clip_edges_not_pointer_and_preserve_linked_members()
     {
         const long frame = 4800L;
