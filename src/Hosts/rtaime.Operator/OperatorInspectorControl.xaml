@@ -120,7 +120,7 @@
 						<ColumnDefinition Width="72" />
 						<ColumnDefinition Width="9" />
 						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="28" />
+						<ColumnDefinition Width="44" />
 					</Grid.ColumnDefinitions>
 					<Border
 						Width="72"
@@ -148,17 +148,20 @@
 							FontSize="{StaticResource OperatorFontSizeMicro}"
 							TextTrimming="CharacterEllipsis"
 							Margin="0,1,0,0" />
+                        <TextBlock Text="{Binding InspectorContextBreadcrumb}"
+                            Style="{StaticResource OperatorLabel}"
+                            FontSize="{StaticResource OperatorFontSizeMicro}"
+                            TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
+                            ToolTip="{Binding EditingSelectionIdentity}"
+                            AutomationProperties.Name="Inspector selection breadcrumb" />
 					</StackPanel>
-					<controls:RtaimeIconButton
-						Grid.Column="3"
-						IconData="{StaticResource RtaimeIconMoreGeometry}"
-						Width="26"
-						Height="26"
-						HorizontalAlignment="Right"
-						VerticalAlignment="Top"
-						IsEnabled="False"
-						ToolTip="Context actions remain available from the originating workspace."
-						AutomationProperties.Name="Selection context actions unavailable here" />
+                    <controls:RtaimeButton Grid.Column="3"
+                        Content="{Binding InspectorSelectionPinLabel}"
+                        Command="{Binding ToggleInspectorSelectionPinCommand}"
+                        IsCompact="True" Width="42" Height="26"
+                        Padding="2,0" VerticalAlignment="Top" HorizontalAlignment="Right"
+                        ToolTip="{Binding InspectorSelectionPinStatus}"
+                        AutomationProperties.Name="Pin or unpin current Inspector selection" />
 				</Grid>
 			</Border>
 		</DataTemplate>
