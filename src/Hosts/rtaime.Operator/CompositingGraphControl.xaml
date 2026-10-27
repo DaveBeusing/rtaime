@@ -176,6 +176,18 @@
 					<controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Fit the complete graph into the current viewport." />
 					<controls:RtaimeButton Content="100%" Command="{Binding ResetViewCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Reset presentation zoom to 100 percent." />
 					<controls:RtaimeButton Content="AUTO LAYOUT" Command="{Binding AutoLayoutCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Restore the deterministic presentation layout without changing Runtime routing." />
+                    <controls:RtaimeButton x:Name="StageFxEarlierButton" Content="FX DRAFT ←"
+                        Command="{Binding MoveProcessingEarlierDraftCommand}" Style="{StaticResource GraphToolbarButton}"
+                        ToolTip="Stage the selected processing node earlier locally. Program unchanged until APPLY FX ORDER." />
+                    <controls:RtaimeButton x:Name="StageFxLaterButton" Content="FX DRAFT →"
+                        Command="{Binding MoveProcessingLaterDraftCommand}" Style="{StaticResource GraphToolbarButton}"
+                        ToolTip="Stage the selected processing node later locally. Program unchanged until APPLY FX ORDER." />
+                    <controls:RtaimeButton x:Name="ApplyFxOrderButton" Content="APPLY FX ORDER"
+                        Command="{Binding ApplyProcessingOrderDraftCommand}" Style="{StaticResource GraphToolbarButton}"
+                        ToolTip="Submit revision-bound FX ordering via ControlHost and require Runtime observation." />
+                    <controls:RtaimeButton x:Name="DiscardFxOrderButton" Content="DISCARD FX ORDER"
+                        Command="{Binding DiscardProcessingOrderDraftCommand}" Style="{StaticResource GraphToolbarButton}"
+                        ToolTip="Discard local FX order without altering Program." />
                     </StackPanel>
 					<Border Width="1" Height="18" Background="{DynamicResource OperatorBorderBrush}" Margin="1,0,7,0" />
 					<controls:RtaimeButton Content="ORDER DRAFT ↓" Command="{Binding MoveSelectedLayerDownCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Stage a local layer order change; Program is unchanged until APPLY ORDER." />
@@ -219,6 +231,9 @@
                     FontWeight="SemiBold" TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
                 <TextBlock Text="{Binding RuntimeEvidence}" Style="{StaticResource GraphLabel}" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding WorkspaceNotice}" Style="{StaticResource GraphLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding RuntimeRevisionEvidence}" Style="{StaticResource GraphLabel}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding TopologyEvidence}" Style="{StaticResource GraphLabel}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding FxOrderEvidence}" Style="{StaticResource GraphLabel}" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
         <Grid Grid.Row="2">
@@ -436,14 +451,14 @@
 												</StackPanel>
 											</DockPanel>
 
-											<TextBlock Grid.Row="1"
-												Text="{Binding Detail}"
-												Style="{StaticResource GraphLabel}"
-												FontSize="{StaticResource OperatorFontSizeCompact}"
-												TextWrapping="Wrap"
-												TextTrimming="CharacterEllipsis"
-												MaxHeight="30"
-												Margin="0,5,0,4" />
+											<StackPanel Grid.Row="1" Margin="0,3,0,4">
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource GraphLabel}"
+                                                    FontSize="{StaticResource OperatorFontSizeCompact}" TextWrapping="Wrap"
+                                                    TextTrimming="CharacterEllipsis" MaxHeight="28" />
+                                                <TextBlock Text="{Binding CapabilityLabel}" Style="{StaticResource GraphLabel}"
+                                                    FontSize="{StaticResource OperatorFontSizeFinePrint}"
+                                                    TextTrimming="CharacterEllipsis" ToolTip="{Binding CapabilityLabel}" />
+                                            </StackPanel>
 
 											<Grid Grid.Row="2">
 												<Grid.ColumnDefinitions>
@@ -479,7 +494,14 @@
 				VerticalAlignment="Bottom"
 				Margin="10"
 				Style="{StaticResource OperatorGraphOverlay}">
-				<TextBlock Text="Wheel: zoom · Pan mode / middle mouse: move · Node click: inspect" Style="{StaticResource GraphLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+				<StackPanel MaxWidth="420">
+                    <TextBlock Text="Wheel zoom · middle mouse pan · Alt+drag local node · Ctrl+arrows nudge · Enter inspect link"
+                        Style="{StaticResource GraphLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ConnectionEvidence}" Style="{StaticResource GraphLabel}"
+                        FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding LayoutEvidence}" Style="{StaticResource GraphLabel}"
+                        FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
 			</Border>
 		</Grid>
         </Grid>
