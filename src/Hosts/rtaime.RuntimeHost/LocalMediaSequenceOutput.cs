@@ -261,7 +261,8 @@ public sealed partial class LocalMediaDeckRuntimeService
                 if (!TrySelectBoundSequenceBoundary(session.Reference, programSlot,
                     session.Clips, session.ClipRequests, session.OwnerRequests,
                     session.Frames, session.Indices,
-                    out var position, out count, out ownerCount, out var readFailure))
+                    out var position, out var sliceEndTick,
+                    out count, out ownerCount, out var readFailure))
                 {
                     session.OutputState = "BUFFERING";
                     session.FailureCode = readFailure?.Code;
@@ -294,19 +295,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                     }
                 }
 
-                var audioPosition = checked((ulong)(position.Tick / 5));
-                // Decoder samples are positioned in the authored sequence
-                // timeline, not the absolute Program frame number. A prepared
-                // seek or Preroll reanchors the sequence at a later Program
-                // slot without advancing the source PCM clock.
-                var nextSourceTick = checked((long)((Int128)position.Tick +
-                    (Int128)SequenceContract.TicksPerSecond *
-                    runtime.Format.FrameRate.Denominator /
-                    runtime.Format.FrameRate.Numerator));
-                var sampleCount = checked((uint)(
-                    nextSourceTick / 5 - position.Tick / 5));
-                if (sampleCount == 0 || sampleCount > SequenceFrameComposition.MaximumAudioSamples)
-                    throw new InvalidOperationException("Sequence Program PCM window exceeds bounded stereo sample capacity.");
+                // The sample window belongs to authored source time, not the
+                // absolute Program slot; 25/50/60000/1001 rates preserve their
+                // exact 48-kHz cadence across Seek, Loop and non-frame cuts.
+                var (audioPosition, sampleCount) =
+                    SourcePcmWindow(position.Tick, runtime.Format.FrameRate);
 
                 var slice = session.Pcm.AsSpan(0, checked((int)sampleCount * 2));
                 var composed = session.Composer.TryCompose(this, session.Reference.SequenceId,
@@ -326,6 +319,11 @@ public sealed partial class LocalMediaDeckRuntimeService
                     runtime.MarkSequenceInputUnavailable(session.SourceId);
                     return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
                 }
+                // The final authored slice can end mid-Program-frame. Silence
+                // only its trailing source samples; never pad missing native
+                // decoder audio and never shorten the Program PCM clock.
+                if (audios > 0)
+                    SilenceBeyondSourceSlice(slice, audioPosition, sampleCount, sliceEndTick);
                 using (frame)
                     runtime.PresentSequenceInput(session.SourceId, frame, slice);
 
@@ -850,6 +848,50 @@ public sealed partial class LocalMediaDeckRuntimeService
             result.Validate();
             return result;
         }
+    }
+
+    /// <summary>
+    /// One bounded native sequence PCM window at the original source's rational
+    /// frame clock. The existing Program clock determines the presentation
+    /// slot; this function never schedules one.
+    /// </summary>
+    internal static (ulong SamplePosition, uint SampleCount) SourcePcmWindow(
+        long sequenceTick, FrameRate rate)
+    {
+        if (sequenceTick < 0 || rate.Numerator <= 0 || rate.Denominator <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sequenceTick));
+        const int sourceRate = 240_000;
+        const int authoredTicksPerPcmSample = 5;
+        var nextTick = (Int128)sequenceTick +
+            (Int128)sourceRate * rate.Denominator / rate.Numerator;
+        var first = (Int128)sequenceTick / authoredTicksPerPcmSample;
+        var end = nextTick / authoredTicksPerPcmSample;
+        var count = end - first;
+        if (first < 0 || first > ulong.MaxValue ||
+            count is < 1 or > SequenceFrameComposition.MaximumAudioSamples)
+            throw new InvalidOperationException(
+                "Sequence frame rate requires a larger native PCM window than admitted.");
+        return ((ulong)first, (uint)count);
+    }
+
+    /// <summary>
+    /// Audio from a clip which ends inside this rational Program frame must not
+    /// continue beyond its compiled source slice. No sample is synthesized to
+    /// substitute an absent native PCM track.
+    /// </summary>
+    internal static int SilenceBeyondSourceSlice(Span<float> stereo,
+        ulong sourceStartSample, uint frameSamples, long sliceEndTick)
+    {
+        if (sliceEndTick < 0 || frameSamples == 0 ||
+            stereo.Length != checked((int)frameSamples * 2))
+            throw new ArgumentException("Invalid bounded stereo source PCM slice.");
+        var exclusiveEndSample = ((Int128)sliceEndTick + 4) / 5;
+        var available = Math.Clamp(exclusiveEndSample - sourceStartSample,
+            0, (Int128)frameSamples);
+        var count = (int)frameSamples - (int)available;
+        if (count > 0)
+            stereo[((int)available * 2)..].Clear();
+        return count;
     }
 
     private static byte Weight(SequenceExecutionClip clip, long tick)
