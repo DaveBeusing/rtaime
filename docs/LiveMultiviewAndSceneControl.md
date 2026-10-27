@@ -67,8 +67,13 @@ pending/rejected/uncertain/Control-confirmed outcomes, plus existing dissolve
 duration. NEXT rundown item/status are read-only projections; all actual
 Rundown GO, Scene TAKE and Show Control cue commands stay at their existing
 owners. Failed/unconfirmed Take does not auto-retry or optimistically
-advance Program. The Operator must reconcile an uncertain result with
-ControlHost before attempting another governed command.
+advance Program. An ambiguous CUT/AUTO failure retains a local fail-closed
+lock on SET PVW, CUT/AUTO, Scene TAKE and Rundown/Show Control live actions,
+which only an explicit successful Control synchronization clears. Neither
+an ordinary polling refresh nor the old monitor image clears the lock.
+Known rejected commands retain their own distinct failure status. The Operator
+must reconcile an uncertain result with ControlHost before attempting another
+governed command.
 
 ## Live Controls
 
