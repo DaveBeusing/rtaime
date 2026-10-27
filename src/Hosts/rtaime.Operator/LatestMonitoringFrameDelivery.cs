@@ -103,8 +103,9 @@ internal sealed class LatestMonitoringFrameDelivery : IDisposable
 				return;
 			}
 			version = _version;
+			// Present a coherent source set before computing Program A/B comparison.
 			batch = (_program is { } program
-				? new[] { program }.Concat(_sources.Values.OrderBy(value => value.Order).Select(value => value.Observation))
+				? _sources.Values.OrderBy(value => value.Order).Select(value => value.Observation).Append(program)
 				: _sources.Values.OrderBy(value => value.Order).Select(value => value.Observation)).ToArray();
 			_program = null;
 			_sources.Clear();
