@@ -228,10 +228,13 @@ public sealed class InspectorDraftTransactionTests
 
         f.Transport.RevisionValue++;
         f.Owner.SynchronizeCommand.Execute(null);
+        await Until(() => f.Model.HasDraftReviews && f.Model.SelectedLayerPositionX == 0.1);
         Assert.True(f.Model.IsInspectorSelectionPinned);
         Assert.Equal(before, f.Model.EditingSelectionIdentity);
         Assert.Contains("REV", f.Model.InspectorContextBreadcrumb);
-        Assert.False(f.Model.ApplyCompositingTransformCommand.CanExecute(null));
+        Assert.Contains(f.Model.InspectorDraftReviews, review =>
+            review.Target.Id == "bitmap-graphics" && review.Draft is InspectorTransformAttributes { X: 0.375 });
+        Assert.Equal(0, f.Transport.MutationCalls);
 
         f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
         Assert.False(f.Model.IsInspectorSelectionPinned);
