@@ -38,6 +38,60 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 		Assert.Equal(MonitoringStreamKind.Program, delivered[^1].Frame.Descriptor.StreamKind);
 	}
 
+
+	[Fact]
+	public void Delayed_reordered_frames_cannot_evict_newer_pending_Program_or_source()
+	{
+		var callbacks = new Queue<Action>();
+		var delivered = new List<MonitoringObservation>();
+		using var delivery = new LatestMonitoringFrameDelivery(callbacks.Enqueue, delivered.Add);
+		var program = MediaSourceId.New();
+		var source = MediaSourceId.New();
+
+		foreach (var (kind, id) in new[]
+		{
+			(MonitoringStreamKind.Program, program),
+			(MonitoringStreamKind.Source, source)
+		})
+		{
+			var newer = Observation(kind, id, 100);
+			delivery.Enqueue(newer);
+			var delayed = Observation(kind, id, 90) with { ReceivedAt = newer.ReceivedAt.AddSeconds(1) };
+			delivery.Enqueue(delayed);
+		}
+
+		Assert.Single(callbacks);
+		Assert.Equal(2, delivery.PendingFrameCount);
+		Assert.Equal(2, delivery.DroppedFrames);
+		callbacks.Dequeue().Invoke();
+		Assert.Equal(2, delivered.Count);
+		Assert.All(delivered, sample => Assert.Equal(100UL, sample.Frame.Descriptor.Timing.SequenceNumber));
+	}
+
+	[Fact]
+	public void Pending_observations_reject_older_connection_or_route_even_if_sequence_is_higher()
+	{
+		var callbacks = new Queue<Action>();
+		var delivered = new List<MonitoringObservation>();
+		using var delivery = new LatestMonitoringFrameDelivery(callbacks.Enqueue, delivered.Add);
+		var program = MediaSourceId.New();
+		var source = MediaSourceId.New();
+
+		delivery.Enqueue(Observation(MonitoringStreamKind.Program, program, 900));
+		delivery.Enqueue(Observation(MonitoringStreamKind.Program, program, 1) with { ConnectionEpoch = 2 });
+		delivery.Enqueue(Observation(MonitoringStreamKind.Program, program, 999) with { ConnectionEpoch = 1 });
+		delivery.Enqueue(Observation(MonitoringStreamKind.Source, source, 900));
+		delivery.Enqueue(Observation(MonitoringStreamKind.Source, source, 1) with { PreviewRouteVersion = 2 });
+		delivery.Enqueue(Observation(MonitoringStreamKind.Source, source, 999) with { PreviewRouteVersion = 1 });
+
+		Assert.Single(callbacks);
+		callbacks.Dequeue().Invoke();
+		Assert.Equal(2, delivered.Count);
+		Assert.All(delivered, item => Assert.Equal(1UL, item.Frame.Descriptor.Timing.SequenceNumber));
+		Assert.Contains(delivered, item => item.ConnectionEpoch == 2);
+		Assert.Contains(delivered, item => item.PreviewRouteVersion == 2);
+	}
+
 	[Fact]
 	public void Many_independent_source_bursts_are_bounded_without_eviction_of_Program()
 	{
@@ -160,6 +214,20 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 		Assert.False(program.Observe("program", 1, 1, now.AddMilliseconds(10), 399, providerInstanceId: "provider-a"));
 		Assert.True(program.Observe("program", 1, 1, now.AddMilliseconds(20), 1, providerInstanceId: "provider-b"));
 		Assert.Equal("LIVE", program.Status(true, now.AddMilliseconds(20)));
+	}
+
+	[Fact]
+	public void New_shared_resource_generation_accepts_reset_sequence_but_rejects_old_generation()
+	{
+		var now = DateTimeOffset.UnixEpoch.AddDays(10);
+		var program = new MonitoringViewerFreshness();
+		program.SelectSource("program", 4, 2);
+		Assert.True(program.Observe("program", 4, 2, now, 1000, "provider-a", resourceGeneration: 9));
+		Assert.True(program.Observe("program", 4, 2, now.AddMilliseconds(10), 1, "provider-a", resourceGeneration: 10));
+		Assert.False(program.Observe("program", 4, 2, now.AddMilliseconds(20), 2000, "provider-a", resourceGeneration: 9));
+		Assert.False(program.Observe("program", 4, 2, now.AddMilliseconds(30), 1, "provider-a", resourceGeneration: 10));
+		Assert.True(program.Observe("program", 4, 2, now.AddMilliseconds(40), 2, "provider-a", resourceGeneration: 10));
+		Assert.Equal("LIVE", program.Status(true, now.AddMilliseconds(40)));
 	}
 
 	[Fact]
