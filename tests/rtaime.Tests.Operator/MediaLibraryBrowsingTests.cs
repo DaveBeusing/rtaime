@@ -53,6 +53,25 @@ public sealed class MediaLibraryBrowsingTests
 		Assert.Contains("NOT READY", Item(online: true, ready: false).ReadinessLabel);
 	}
 
+    [Theory]
+    [InlineData(0d, 100d, 0L, 10000000L)]
+    [InlineData(25d, 75d, 2500000L, 7500000L)]
+    [InlineData(99d, 100d, 9900000L, 10000000L)]
+    public void Library_source_inspection_ranges_are_bounded_and_non_destructive(
+        double inPercent, double outPercent, long startTicks, long endTicks)
+    {
+        var range = MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), inPercent, outPercent);
+        Assert.NotNull(range);
+        Assert.Equal(startTicks, range.Value.Start);
+        Assert.Equal(endTicks, range.Value.End);
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 70, 50));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 30, 30));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), double.NaN, 70));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.Zero, 0, 100));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), -1, 100));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 0, 101));
+    }
+
     [Fact]
     public void Library_sorting_uses_bounded_projection_and_keeps_stable_asset_identity()
     {
@@ -497,6 +516,17 @@ public sealed class MediaLibraryBrowsingTests
         var frameStrip = Assert.Single(Descendants(owner.MediaLibraryView).OfType<ItemsControl>(),
             element => AutomationProperties.GetName(element) == "Selected media source frame strip");
         Assert.Same(owner.MediaPool.FrameReviewSamples, frameStrip.ItemsSource);
+        Assert.Equal("Media Library source review IN percent",
+            AutomationProperties.GetName(Assert.Single(Descendants(owner.MediaLibraryView).OfType<RtaimeSlider>(),
+                control => AutomationProperties.GetName(control) == "Media Library source review IN percent")));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Review selected source PCM waveform" &&
+            ReferenceEquals(button.Command, owner.MediaPool.ReviewAudioCommand));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Cancel and clear Library audio review" &&
+            ReferenceEquals(button.Command, owner.MediaPool.CancelAudioReviewCommand));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<SequenceWaveformGlyph>(), element =>
+            AutomationProperties.GetName(element) == "Media Library decoded source audio waveform");
         var search = Assert.IsType<RtaimeSearchBox>(owner.MediaLibraryView.FindName("MediaSearchBox"));
         Assert.Equal(180, System.Windows.Data.BindingOperations.GetBindingExpression(search, TextBox.TextProperty)!.ParentBinding.Delay);
         var results = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaBatchResults"));
