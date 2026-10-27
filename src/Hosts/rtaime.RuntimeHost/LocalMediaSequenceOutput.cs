@@ -460,8 +460,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                         owners.SequenceId != session.Reference.SequenceId ||
                         owners.Generation != target.Generation ||
                         owners.LoopPass >= target.LoopPass)
-                        throw new InvalidOperationException(
-                            "Native loop preroll was superseded by another source generation.");
+                        return; // Explicit Seek/Stop superseded this pending loop before native mutation.
                 }
                 // Reposition joins the old native worker generation; it retains
                 // the same admitted decoder owners and resource-ledger charges.
