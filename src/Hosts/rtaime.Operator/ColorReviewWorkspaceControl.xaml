@@ -49,7 +49,7 @@
                     FrameB="{Binding ConfirmedPreviewImage}"
                     DifferenceFrame="{Binding Monitoring.DifferenceImage}"
                     CompareMode="{Binding Monitoring.CompareMode}"
-                    WipePosition="0.5" SnapsToDevicePixels="True" IsHitTestVisible="False"
+                    WipePosition="0.5" SnapsToDevicePixels="True" IsHitTestVisible="True"
                     Visibility="{Binding CpuCompareVisibility}">
                 </controls:RtaimeMediaCompareView>
                 <controls:GpuMediaCompareSurface
@@ -57,17 +57,21 @@
                     FrameA="{Binding ConfirmedProgramGpuFrame}"
                     FrameB="{Binding ConfirmedPreviewGpuFrame}"
                     CompareMode="{Binding Monitoring.CompareMode}"
-                    WipePosition="0.5" Panel.ZIndex="2" IsHitTestVisible="False"
+                    WipePosition="0.5" Panel.ZIndex="2" IsHitTestVisible="True"
                     Visibility="{Binding CompareVisibility}" />
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Orientation="Horizontal"
                     Margin="6" Panel.ZIndex="3">
                     <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand, ElementName=ColorProgramMonitor}"
+                        IsEnabled="{Binding SingleFrameInspectionEnabled}"
                         IsCompact="True" Margin="0,0,3,0" />
                     <controls:RtaimeButton Content="100%" Command="{Binding Zoom100Command, ElementName=ColorProgramMonitor}"
+                        IsEnabled="{Binding SingleFrameInspectionEnabled}"
                         IsCompact="True" Margin="0,0,3,0" />
                     <controls:RtaimeButton Content="ROI" Command="{Binding ToggleRoiSelectionCommand, ElementName=ColorProgramMonitor}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="Select a source-pixel ROI for local inspection; never changes Program." />
+                        IsEnabled="{Binding SingleFrameInspectionEnabled}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Program source-pixel inspection only when A/B compare is inactive; never changes Program." />
                     <controls:RtaimeButton Content="CLEAR ROI" Command="{Binding ClearRoiCommand, ElementName=ColorProgramMonitor}"
+                        IsEnabled="{Binding SingleFrameInspectionEnabled}"
                         IsCompact="True" />
                 </StackPanel>
             </Grid>
@@ -157,6 +161,8 @@
                 </WrapPanel>
                 <TextBlock Text="{Binding Monitoring.ComparisonDetail}" Style="{StaticResource OperatorLabel}"
                     TextWrapping="Wrap" />
+                <TextBlock Text="Comparison uses independent FIT geometry. Disable comparison for pixel-exact ROI and zoom inspection."
+                    Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,0" />
                 <DockPanel Margin="0,5,0,0">
                     <controls:RtaimeButton Content="+ COLOR GRADE" DockPanel.Dock="Right"
                         Command="{Binding Inspector.AddColorGradeProcessingNodeCommand}"
