@@ -201,6 +201,25 @@ verification and resident PREPARED are separate: each preparation evidence row
 shows the current catalogue availability, sample state, observation age, resident-deck
 state and the actual reason. Analysis never upgrades preparation readiness.
 
+## Filmstrip preview preparation
+
+A reusable `MediaAssetFilmstripService` now provides catalogue-fenced
+filmstrip data for a subsequent Library and sequence visual presentation.
+It composes up to eight existing time-indexed independent analysis requests,
+aligns representative samples with the source's rational nominal frame rate
+and retains *actual decoded PTS* for display. Library hover continues to show
+its existing independently scrubbed single image; a multi-image Library
+filmstrip layout is **not yet wired** by this change.
+
+The optional client has one replaceable operation, 150-ms debounce,
+coalesced identical in-flight requests, 45-second overall time budget and
+frozen local image-cache limits of **16 strips / 8 MiB / ten seconds**.
+Before reuse it confirms the current authoritative catalogue fingerprint,
+asset identity, online state and source rate. A changed/offline asset yields
+STALE with no returned old pixels. The Runtime decoder owns all actual frame
+extraction, file identity checks and disk caching; no Program playback path
+is used. See [IndependentMediaAnalysis](IndependentMediaAnalysis.md).
+
 ## Performance and authority boundaries
 
 Search, filtering, selection and scrolling remain in-process Operator projection work and perform no blocking media reads. File hashing and Runtime probing occur only during explicit catalogue operations and are outside production-critical media/render paths.

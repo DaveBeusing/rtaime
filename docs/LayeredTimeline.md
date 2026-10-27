@@ -81,6 +81,21 @@ acquire production decoder authority. Requests longer than the
 bounded range are explicitly PARTIAL. Additional fully populated
 multi-clip and multi-resolution coverage remains open.
 
+### Source-accurate video filmstrip foundation
+
+`MediaAssetFilmstripService` is now an available Operator-side read-only
+filmstrip data source for visible video-clip ranges. Requests carry asset
+fingerprint and catalogue identity, rational nominal source rate, time
+range, sample count and bounded preview size. It selects at most eight
+distinct frame seek positions and returns the Runtime-decoded actual PTS,
+never extrapolated VFR pixels. Cache reuse and cancellation share the existing
+independent media-analysis authority, not the sequence playback scheduler.
+
+This change does **not** introduce a new WPF clip-filmstrip glyph or alter
+the live sequence transport. Visual placement of returned stills alongside
+the existing audio PCM waveform remains a separate UI integration step.
+Unsupported/offline/truncated clips must remain visibly unverified.
+
 ### Playback boundary
 
 Durable `rtaime.sequence-authoring.v1` List/Get still reports
