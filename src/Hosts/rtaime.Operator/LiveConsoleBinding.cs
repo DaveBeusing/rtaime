@@ -24,6 +24,9 @@ internal sealed class LiveConsoleBinding : IDisposable
         if (e.PropertyName is not (nameof(OperatorViewModel.IsBusy) or nameof(OperatorViewModel.IsConnected) or
             nameof(OperatorViewModel.IsStale) or nameof(OperatorViewModel.RuntimeStatus) or
             nameof(OperatorViewModel.ProgramSafety) or nameof(OperatorViewModel.SelectedScene) or
+            nameof(OperatorViewModel.SelectedSource) or nameof(OperatorViewModel.TransitionFrames) or
+            nameof(OperatorViewModel.TransitionStatus) or nameof(OperatorViewModel.CommitStatus) or
+            nameof(OperatorViewModel.CommandStatus) or nameof(OperatorViewModel.LastError) or
             nameof(OperatorViewModel.PreviewSourceName) or nameof(OperatorViewModel.ProgramSourceName))) return;
         if (!ReferenceEquals(sender, _owner) && e.PropertyName == nameof(OperatorViewModel.IsBusy)) _owner.InvalidateLiveObservation();
         _owner.NotifyLiveCommandsChanged();
