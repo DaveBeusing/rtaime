@@ -91,6 +91,7 @@ public partial class MainWindow : Window
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
+		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
@@ -201,6 +202,7 @@ public partial class MainWindow : Window
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
+		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
