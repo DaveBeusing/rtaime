@@ -23,6 +23,10 @@ public sealed partial class MediaPoolInspectorViewModel
                 return "PIN STALE · production or identity changed; edits blocked until UNPIN";
             if (!InspectorPinnedAudioTargetMatches)
                 return "PIN HELD · audio selection changed outside Inspector; Apply blocked";
+            if (!InspectorPinnedClipTargetMatches)
+                return "PIN HELD · another media asset is loaded; clip Apply blocked";
+            if (!InspectorPinnedGraphicsTargetMatches)
+                return "PIN HELD · graphics content was replaced; Apply blocked";
             return "PINNED INSPECTOR · " + _inspectorPinnedIdentity +
                 (_inspectorIgnoredSelections == 0 ? " · following confirmed revisions" :
                     " · " + _inspectorIgnoredSelections + " other selection(s) ignored");
@@ -58,9 +62,19 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool InspectorPinnedAudioTargetMatches =>
         _activeInspectorTarget is not { Kind: "gain" } || InspectorAudioSelectionMatches;
 
+    private bool InspectorPinnedClipTargetMatches =>
+        SelectedItem is not { Kind: MediaPoolItemKind.Clip } clip ||
+        string.Equals(clip.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal);
+
+    private bool InspectorPinnedGraphicsTargetMatches =>
+        SelectedItem is not { Kind: MediaPoolItemKind.Graphics } graphics ||
+        string.Equals(graphics.Key, "graphics:" + _operator.GraphicsAssetName, StringComparison.Ordinal);
+
     private bool InspectorPinMatchesCurrent => _inspectorPinnedIdentity is null ||
         string.Equals(_inspectorPinnedIdentity, EditingSelectionIdentity, StringComparison.Ordinal) &&
-        InspectorPinnedAudioTargetMatches;
+        InspectorPinnedAudioTargetMatches && InspectorPinnedClipTargetMatches &&
+        InspectorPinnedGraphicsTargetMatches;
+    public bool InspectorPinAllowsActions => InspectorPinMatchesCurrent;
 
     public ICommand ToggleInspectorSelectionPinCommand => _toggleInspectorSelectionPin ??=
         new OperatorShellCommand(() =>
@@ -93,6 +107,7 @@ public sealed partial class MediaPoolInspectorViewModel
         OnPropertyChanged(nameof(IsInspectorSelectionPinned));
         OnPropertyChanged(nameof(InspectorSelectionPinLabel));
         OnPropertyChanged(nameof(InspectorSelectionPinStatus));
+        OnPropertyChanged(nameof(InspectorPinAllowsActions));
         OnPropertyChanged(nameof(InspectorContextBreadcrumb));
         (_toggleInspectorSelectionPin as OperatorShellCommand)?.RaiseCanExecuteChanged();
     }
