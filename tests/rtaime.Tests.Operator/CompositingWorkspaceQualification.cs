@@ -54,6 +54,15 @@ internal static class CompositingWorkspaceQualification
         Assert.Contains(Descendants(review).OfType<RtaimeMediaCompareView>(),
             compare => ReferenceEquals(compare.FrameA, monitoring.ProgramImage) &&
                 ReferenceEquals(compare.FrameB, monitoring.PreviewImage));
+        Assert.True(color.SingleFrameInspectionEnabled);
+        var roiButton = Assert.Single(Descendants(review).OfType<RtaimeButton>(),
+            button => Equals(button.Content, "ROI"));
+        Assert.Equal("SingleFrameInspectionEnabled",
+            System.Windows.Data.BindingOperations.GetBinding(roiButton, UIElement.IsEnabledProperty)?.Path.Path);
+        Assert.All(Descendants(review).OfType<RtaimeMediaCompareView>(),
+            surface => Assert.True(surface.IsHitTestVisible));
+        Assert.All(Descendants(review).OfType<GpuMediaCompareSurface>(),
+            surface => Assert.True(surface.IsHitTestVisible));
         color.SelectScopeSourceCommand.Execute("PREVIEW");
         await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Source, monitoring.ActiveScopeStream);
