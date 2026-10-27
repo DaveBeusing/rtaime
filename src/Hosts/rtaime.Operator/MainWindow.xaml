@@ -274,6 +274,27 @@
                     <!-- Keep a single row. A narrow center may scroll locally instead of
                          shrinking or pushing the actual Preview/Program image out of view. -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,0,3">
+                        <!-- Keep the three deliberately governed actions reachable before
+                             locally scrollable secondary navigation/evidence at 960 DIP. -->
+                        <controls:RtaimeButton Content="SET PVW" IsCompact="True" Height="30"
+                            Command="{Binding SetPreviewCommand}" Margin="0,0,4,0"
+                            ToolTip="{Binding SetPreviewDetail}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Set selected source as Preview only"/>
+                        <controls:RtaimeButton Content="CUT" IsCompact="True" Height="30"
+                            Command="{Binding CutCommand}" Margin="0,0,4,0"
+                            Background="{DynamicResource OperatorAccentBrush}"
+                            BorderBrush="{DynamicResource OperatorAccentBrush}"
+                            Foreground="{DynamicResource OperatorBackgroundBrush}"
+                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Cut confirmed Preview to Program"/>
+                        <controls:RtaimeButton Content="AUTO" IsCompact="True" Height="30"
+                            Command="{Binding DissolveCommand}" Margin="0,0,5,0"
+                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Dissolve confirmed Preview to Program"/>
+                        <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" Style="{StaticResource OperatorLabel}"
+                            VerticalAlignment="Center" Margin="0,0,8,0"
+                            ToolTip="AUTO transition duration; CUT does not use this value."/>
+
                         <controls:RtaimeButton Content="LIBRARY" IsCompact="True" Height="30"
                             Command="{Binding Shell.ToggleLeftPanelCommand, ElementName=RootWindow}"
                             ToolTip="Show or hide the existing Media Library; selection alone never routes." />
@@ -315,20 +336,6 @@
                                 Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="5,0,0,0"/>
                         </StackPanel>
 
-                        <controls:RtaimeButton Content="SET PVW" IsCompact="True" Height="30"
-                            Command="{Binding SetPreviewCommand}" Margin="0,0,4,0"
-                            ToolTip="Request the selected source on Preview; Program is unchanged."/>
-                        <controls:RtaimeButton Content="CUT" IsCompact="True" Height="30"
-                            Command="{Binding CutCommand}" Margin="0,0,4,0"
-                            Background="{DynamicResource OperatorAccentBrush}"
-                            BorderBrush="{DynamicResource OperatorAccentBrush}"
-                            Foreground="{DynamicResource OperatorBackgroundBrush}"
-                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"/>
-                        <controls:RtaimeButton Content="AUTO" IsCompact="True" Height="30"
-                            Command="{Binding DissolveCommand}" Margin="0,0,5,0"
-                            ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True"/>
-                        <TextBlock Text="{Binding TransitionFrames, StringFormat={}{0} fr}" Style="{StaticResource OperatorLabel}"
-                            VerticalAlignment="Center" Margin="0,0,8,0"/>
 
                         <TextBlock Text="NEXT CUE" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <TextBlock x:Name="LiveCueIdentity" Text="{Binding Rundown.PendingNext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -336,7 +343,7 @@
                             VerticalAlignment="Center" Margin="0,0,8,0"
                             ToolTip="{Binding Rundown.FollowCountdown, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/>
 
-                        <TextBlock x:Name="LiveAuthorityDetail" Text="{Binding PreviewTakeDetail}"
+                        <TextBlock x:Name="LiveAuthorityDetail" Text="{Binding LiveTakeEvidence}"
                             Style="{StaticResource OperatorLabel}" MaxWidth="200" TextTrimming="CharacterEllipsis"
                             VerticalAlignment="Center" Margin="0,0,10,0"
                             ToolTip="{Binding PreviewTakeDetail}"/>
