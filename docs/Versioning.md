@@ -43,3 +43,21 @@ The SDK's automatic source suffix is disabled to avoid duplicate hashes. Metadat
 The central release orchestrator passes the resolved product version/stage/build ID into compilation without rewriting tracked files. Evidence generation checks each host binary's embedded informational version against the requested SemVer and full SHA. The checksummed artifact manifest records base/build version, repository, source/build SHA, UTC timestamp, build ID, configuration, pinned SDK, target frameworks, Windows x64 identity and tree cleanliness. All publication paths retain existing checksum/attestation/offline verification. Actions candidate artifacts use the repository retention policy; published release assets and tags are immutable and retained as release history.
 
 Run `build/release/Test-UnifiedVersioning.ps1` and `build/release/Test-ReleaseChannelPolicy.ps1` for versioning qualification, then the canonical managed and packaged Required Gates. A successful local check is not evidence that remote allocation/publication or hosted gates have run.
+
+## Source-bound sustained qualification and version allocation
+
+The optional `qualification/soak/production-playout-coverage.json` and its
+write-once `New-ProductionSoakCoverageReport.ps1` observation inventory
+follow the **existing** build/source identities. They do not alter VersionPrefix,
+assembly/file ABI, contract schemas, release stage or allocation rules. A 10-minute
+or multi-hour report from one revision, an earlier successful PR check, and an
+opt-in memory diagnostic from a diagnostic branch cannot authorize a later
+release tag or `master` merge.
+
+For any candidate, correlate the exact checked-out commit, compiled assemblies,
+actual GitHub run/attempt, media hashes, Windows x64 + SDK 10.0.401, tested
+profile and outcome bytes with the authoritative Required Gates snapshot and
+release evidence. Production signing, known-issues acceptance, physical support
+and immutable publication remain distinct steps in the existing orchestrator.
+A stale, cancelled, failed, missing or physical-UNVERIFIED input must never be
+reclassified as PASS to allocate a release version.
