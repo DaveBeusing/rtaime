@@ -104,6 +104,10 @@ Monitoring is subordinate to Program continuity:
 
 A slow, disconnected or failed Operator may therefore observe dropped or stale monitoring frames. That state never delays committed Program execution.
 
+Operator Dispatcher delivery has a second, independent capacity boundary: **one pending UI callback** retains at most **one Program** and **16 distinct latest source** observations. Newer samples replace their stream/source predecessor, and overflow evicts the oldest pending source while reserving the Program slot. Raw monitoring payloads are coalesced before WPF bitmap creation, scope analysis and Difference conversion; outdated payloads are released without decoding into UI resources. The read loop never awaits a slow Dispatcher and cannot backpressure committed Runtime cadence. Queued callbacks are invalidated on connection replacement and disposal; the watchdog itself permits one pending UI tick.
+
+Frame receipts are timestamped on the transport reader, not on delayed UI presentation. Preview and Program use independent **2-second freshness budgets** keyed by authoritative source ID, route version and monitoring pipe connection epoch. Each viewer expires even while another source or Program continues delivering. Freshness never asserts Runtime execution authority. A monitoring reconnect increments the client connection epoch, invalidates previous GPU/bitmap/analysis projections and remains UNKNOWN/RECOVERING until a matching observation for each viewer arrives. Older route revisions, epochs and out-of-order frame sequences cannot make a retained image LIVE.
+
 ## Dedicated transport
 
 RuntimeHost exposes a dedicated output-only Named Pipe at:
@@ -120,9 +124,9 @@ The transport carries frame observations only. It exposes no Set Preview, CUT, D
 
 ## Preview and Program behavior
 
-**Preview** selects source observations by the authoritative Preview routing received from ControlHost. When the active sampled Preview source has a presentable shared resource, the existing monitor uses that GPU resource; otherwise the cached WPF source image remains available.
+**Preview** selects source observations by the authoritative Preview routing received from ControlHost. When the active sampled Preview source has a presentable shared resource, the existing monitor uses that GPU resource; otherwise the cached WPF source image remains available. Switching the confirmed source always clears the previous GPU resource, format, diagnostics and comparison state first. A cached thumbnail is identified with its own source descriptor and presented as **UNKNOWN retained evidence**, never as a fresh new route, until a new matching observation arrives.
 
-**Program** consumes the post-composite Runtime monitoring observation and prefers its GPU resource when presentable. Program presentation never reconstructs transitions, graphics or output state in the Operator.
+**Program** consumes the post-composite Runtime monitoring observation and prefers its GPU resource when presentable. Program presentation never reconstructs transitions, graphics or output state in the Operator. A confirmed Program source change independently clears prior Program GPU/bitmap/scope evidence. Clean Program output health derives from the **Program viewer's own receipt freshness** rather than the aggregate monitoring state.
 
 Monitoring health remains separate from ControlHost connection health. Loss of the monitoring pipe can mark monitoring `STALE` without changing authoritative control state.
 
