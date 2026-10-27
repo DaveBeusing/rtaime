@@ -617,8 +617,8 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				cue.PositionFrame,
 				MediaTimelineTimecode.FormatFrame(cue.PositionFrame, _snapshot.Probe.VideoFormat.FrameRate))).ToArray()
 			: [];
-		if (!Cues.Select(cue => (cue.Id, cue.Name, cue.PositionFrame))
-			.SequenceEqual(refreshedCues.Select(cue => (cue.Id, cue.Name, cue.PositionFrame))))
+		if (!Cues.Select(cue => (cue.Id, cue.Name, cue.Frame))
+			.SequenceEqual(refreshedCues.Select(cue => (cue.Id, cue.Name, cue.Frame))))
 		{
 			Cues.Clear();
 			foreach (var cue in refreshedCues)
