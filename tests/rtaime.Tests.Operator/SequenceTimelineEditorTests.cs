@@ -114,6 +114,139 @@ public sealed class SequenceTimelineEditorTests
     }
 
     [Theory]
+    [InlineData(25, 1)]
+    [InlineData(50, 1)]
+    [InlineData(60000, 1001)]
+    public void Rational_ruler_ticks_align_with_clip_and_edit_cursor_at_any_zoom(
+        int numerator, int denominator)
+    {
+        var rate = new SequenceRate(numerator, denominator);
+        var start = SequenceTimelineGeometry.FrameTicks(100, rate);
+        var end = SequenceTimelineGeometry.FrameTicks(500, rate);
+        var marks = SequenceTimelineGeometry.Ruler(start, end, 975, rate);
+        Assert.NotEmpty(marks);
+        Assert.InRange(marks.Count, 1, 64);
+        Assert.All(marks, mark =>
+        {
+            Assert.Equal(mark.Tick, SequenceTimelineGeometry.Quantize(mark.Tick, rate));
+            Assert.Equal(SequenceTimelineGeometry.Pixel(mark.Tick, start, end, 975), mark.Left, 8);
+            Assert.InRange(mark.Left, 0, 975);
+            Assert.False(string.IsNullOrWhiteSpace(mark.Label));
+        });
+        Assert.True(marks.Zip(marks.Skip(1)).All(pair => pair.First.Tick < pair.Second.Tick &&
+            pair.First.Left < pair.Second.Left));
+        Assert.Empty(SequenceTimelineGeometry.Ruler(start, end, 0, rate));
+    }
+
+    [Fact]
+    public void Trim_handles_never_expose_a_clipped_offscreen_source_edge()
+    {
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Select, 1, 100, true, true));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 1, 100, false, true));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 99, 100, true, false));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Trim, 40, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.TrimStart,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Trim, 3, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.TrimEnd,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Trim, 98, 100, true, true));
+        Assert.Equal(SequenceEditorGestureKind.Move,
+            SequenceTimelineGeometry.HitTestGesture(SequenceEditorTool.Move, 50, 100, false, false));
+        Assert.Null(SequenceTimelineGeometry.HitTestGesture(
+            SequenceEditorTool.Move, double.NaN, 100, true, true));
+    }
+
+    [Fact]
+    public void Magnetic_sequence_edits_use_clip_edges_not_pointer_and_preserve_linked_members()
+    {
+        const long frame = 4800L;
+        var original = Sequence();
+        var groupId = Guid.NewGuid();
+        var video = original.Clips[0] with { TimelineStart = 10 * frame, LinkGroupId = groupId };
+        var audio = original.Clips[1] with { TimelineStart = 10 * frame, LinkGroupId = groupId };
+        var neighbor = video with
+        {
+            ClipId = Guid.NewGuid(), TimelineStart = 45 * frame, LinkGroupId = null,
+            SourceOut = 10 * frame, Duration = 10 * frame
+        };
+        var model = original with { Clips = [video, audio, neighbor] };
+        var span = 80 * frame;
+        // A 1-frame proximity is within 8 px at this zoom.
+        Assert.Equal(11 * frame, SequenceTimelineGeometry.SnapEditBoundary(
+            11 * frame, model, true, span, 400, -1, video.ClipId));
+        Assert.Equal(45 * frame, SequenceTimelineGeometry.SnapEditBoundary(
+            44 * frame, model, true, span, 400, -1, video.ClipId));
+        // Move with 20-frame duration: the trailing edge reaches the neighbor at 45.
+        Assert.Equal(25 * frame, SequenceTimelineGeometry.SnapEditBoundary(
+            24 * frame, model, true, span, 400, -1, video.ClipId, 20 * frame));
+        Assert.Equal(24 * frame, SequenceTimelineGeometry.SnapEditBoundary(
+            24 * frame, model, false, span, 400, -1, video.ClipId, 20 * frame));
+        // A narrower magnet in pixels must not jump one frame at 1000px.
+        Assert.Equal(44 * frame, SequenceTimelineGeometry.SnapEditBoundary(
+            44 * frame, model, true, span, 1000, -1, video.ClipId));
+    }
+
+    [Fact]
+    public async Task Sequence_tools_jog_local_frames_and_keep_zoom_anchored_to_cursor()
+    {
+        var transport = new RetainedSequenceTransport(Sequence());
+        using var vm = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(transport));
+        await vm.RefreshAsync();
+        await vm.LoadAsync();
+        vm.SetViewport(800, 2);
+        vm.MoveToolCommand.Execute(null);
+        Assert.Equal(SequenceEditorTool.Move, vm.Tool);
+        vm.TrimToolCommand.Execute(null);
+        Assert.Equal(SequenceEditorTool.Trim, vm.Tool);
+        vm.SelectToolCommand.Execute(null);
+        Assert.Equal(SequenceEditorTool.Select, vm.Tool);
+        vm.JogCursor(4);
+        Assert.Equal(4 * 4800L, vm.EditCursorTick);
+        var left = vm.CursorLeft;
+        vm.Zoom = 2;
+        Assert.InRange(Math.Abs(vm.CursorLeft - left), 0, 1);
+        Assert.NotEmpty(vm.RulerMarks);
+        var marks = vm.RulerMarks;
+        vm.SelectClip(vm.Sequence!.Clips[0].ClipId);
+        Assert.Same(marks, vm.RulerMarks); // Selection does not rebuild WPF ruler items.
+        vm.EditCursorTick = 0;
+        vm.Scroll(0.9);
+        Assert.Equal(0, vm.CursorRulerOpacity);
+        Assert.Equal(0, vm.CursorTrackOpacity);
+        vm.PlaceCursor(100, 800);
+        Assert.Equal(1, vm.CursorRulerOpacity);
+        Assert.Equal(0.55, vm.CursorTrackOpacity);
+        Assert.Equal(0, transport.CommittedEdits);
+        Assert.Equal(0, transport.ProductionActions);
+    }
+
+    [Fact]
+    public async Task Rejected_drag_retains_a_reviewable_local_draft_without_retry()
+    {
+        var transport = new RetainedSequenceTransport(Sequence()) { ForceConflict = true };
+        using var vm = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(transport));
+        await vm.RefreshAsync();
+        await vm.LoadAsync();
+        var clip = vm.Sequence!.Clips[0];
+        Assert.True(vm.BeginGesture(clip.ClipId, SequenceEditorGestureKind.Move, 0));
+        vm.UpdateGesture(2 * 4800);
+        await vm.CompleteGestureAsync();
+        Assert.Contains("CONFLICT", vm.Status);
+        Assert.Contains("RETAINED", vm.GestureLabel);
+        Assert.True(vm.DiscardDraftCommand.CanExecute(null));
+        Assert.Equal(1, transport.Attempts);
+        Assert.Equal(0, transport.CommittedEdits);
+        Assert.Equal(clip.TimelineStart, vm.Sequence!.Clips[0].TimelineStart);
+        vm.DiscardDraftCommand.Execute(null);
+        Assert.False(vm.DiscardDraftCommand.CanExecute(null));
+        Assert.Equal("NO PENDING EDIT", vm.GestureLabel);
+        Assert.Equal(1, transport.Attempts);
+    }
+
+    [Theory]
     [InlineData(50, 1, 4800)]
     [InlineData(60000, 1001, 4004)]
     public void Rational_source_time_and_subpixel_zoom_roundtrip_without_floating_drift(

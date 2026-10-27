@@ -28,7 +28,7 @@ public partial class SequenceTimelineControl : UserControl
 
     private void OnTrackScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (e.ViewportWidthChange != 0) UpdateRulerViewport();
+        if (e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0) UpdateRulerViewport();
     }
 
     private double VisibleTrackWidth()
@@ -46,7 +46,15 @@ public partial class SequenceTimelineControl : UserControl
     {
         var width = VisibleTrackWidth();
         if (Editor is { } editor && width > 0)
-            editor.SetViewport(width);
+        {
+            var height = SequenceTrackScroll.ViewportHeight > 0
+                ? SequenceTrackScroll.ViewportHeight : SequenceTrackScroll.ActualHeight;
+            var rows = height > 0
+                ? Math.Clamp((int)Math.Floor(height / SequenceTimelineGeometry.RowHeight),
+                    1, SequenceTimelineGeometry.MaximumRealizedRows)
+                : editor.VisibleTrackCount;
+            editor.SetViewport(width, rows);
+        }
     }
 
     private void OnRulerClick(object sender, MouseButtonEventArgs e)
@@ -71,12 +79,16 @@ public partial class SequenceTimelineControl : UserControl
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         model.SelectClip(clip.Id, toggle: ctrl, extend: shift);
-        if (ctrl || shift || !model.CanEdit) { e.Handled = true; return; }
+        if (ctrl || shift || !model.CanEdit || model.Tool == SequenceEditorTool.Select)
+        {
+            e.Handled = true;
+            return;
+        }
 
         var local = e.GetPosition(border).X;
-        var kind = local <= 9 ? SequenceEditorGestureKind.TrimStart :
-            local >= border.ActualWidth - 9 ? SequenceEditorGestureKind.TrimEnd :
-            SequenceEditorGestureKind.Move;
+        var kind = SequenceTimelineGeometry.HitTestGesture(model.Tool, local, border.ActualWidth,
+            clip.StartTick >= model.VisibleStart, clip.EndTick <= model.VisibleEnd);
+        if (kind is null) { e.Handled = true; return; }
         var absoluteX = e.GetPosition(SequenceRuler).X;
         var width = Math.Max(1, VisibleTrackWidth());
         var pointer = SequenceTimelineGeometry.ToTick(
@@ -84,10 +96,26 @@ public partial class SequenceTimelineControl : UserControl
             width,
             model.VisibleStart, model.VisibleEnd,
             model.Sequence!.FrameRate);
-        if (!model.BeginGesture(clip.Id, kind, pointer)) return;
+        if (!model.BeginGesture(clip.Id, kind.Value, pointer)) return;
         _gestureActive = CaptureMouse();
         if (!_gestureActive) model.CancelGesture();
         e.Handled = true;
+    }
+
+    private void OnClipPointerMoved(object sender, MouseEventArgs e)
+    {
+        if (sender is not Border border || Editor is not { } model || _gestureActive) return;
+        var local = e.GetPosition(border).X;
+        var clip = border.DataContext as SequenceEditorClip;
+        var kind = clip is null ? null : SequenceTimelineGeometry.HitTestGesture(model.Tool,
+            local, border.ActualWidth, clip.StartTick >= model.VisibleStart,
+            clip.EndTick <= model.VisibleEnd);
+        border.Cursor = !model.CanEdit ? Cursors.Arrow : kind switch
+        {
+            SequenceEditorGestureKind.Move => Cursors.SizeAll,
+            SequenceEditorGestureKind.TrimStart or SequenceEditorGestureKind.TrimEnd => Cursors.SizeWE,
+            _ => Cursors.Arrow
+        };
     }
 
     private void OnCapturedMouseMove(object sender, MouseEventArgs e)
@@ -125,10 +153,13 @@ public partial class SequenceTimelineControl : UserControl
     {
         if (Editor is not { } model) return;
         if (Keyboard.FocusedElement is TextBoxBase or ComboBox) return;
+        if ((Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Windows)) != 0) return;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (e.Key == Key.Escape)
         {
             model.CancelGesture();
+            if (!_gestureActive) model.DiscardDraft();
             _gestureActive = false;
             ReleaseMouseCapture();
             e.Handled = true;
@@ -141,10 +172,22 @@ public partial class SequenceTimelineControl : UserControl
             Key.C when ctrl => model.CopyCommand,
             Key.V when ctrl => model.PasteCommand,
             Key.Delete when !ctrl => model.DeleteCommand,
+            Key.B when !ctrl && !shift => model.SplitCommand,
+            Key.V when !ctrl && !shift => model.SelectToolCommand,
+            Key.M when !ctrl && !shift => model.MoveToolCommand,
+            Key.T when !ctrl && !shift => model.TrimToolCommand,
             Key.Add or Key.OemPlus when ctrl => model.ZoomInCommand,
             Key.Subtract or Key.OemMinus when ctrl => model.ZoomOutCommand,
             _ => null
         };
+        if (!ctrl && (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Home || e.Key == Key.End) && model.HasSequence)
+        {
+            if (e.Key is Key.Home or Key.End)
+                model.EditCursorTick = e.Key == Key.Home ? 0 : Math.Max(0, model.DurationTicks - 1);
+            else model.JogCursor(e.Key == Key.Right ? 1 : -1);
+            e.Handled = true;
+            return;
+        }
         if (command is not null && command.CanExecute(null))
         {
             command.Execute(null);

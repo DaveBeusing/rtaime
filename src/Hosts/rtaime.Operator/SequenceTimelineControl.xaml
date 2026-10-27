@@ -124,6 +124,16 @@
                             </Style>
                         </controls:RtaimeScrollViewer.Style>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="7,2">
+                    <controls:RtaimeButton Content="SELECT" Command="{Binding SelectToolCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="V · Select without changing clips." />
+                    <controls:RtaimeButton Content="MOVE" Command="{Binding MoveToolCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="M · Drag clip body to move linked clips." />
+                    <controls:RtaimeButton Content="TRIM" Command="{Binding TrimToolCommand}"
+                        IsCompact="True" Margin="0,0,4,0" ToolTip="T · Drag start or end handles (9 px)." />
+                    <TextBlock Text="{Binding ToolLabel}" Style="{StaticResource OperatorLabel}"
+                        VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <controls:RtaimeButton Content="CLEAR DRAFT" Command="{Binding DiscardDraftCommand}"
+                        IsCompact="True" Margin="0,0,8,0" ToolTip="Discard a rejected draft without resubmitting." />
                     <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
                         IsCompact="True" Margin="0,0,4,0" ToolTip="Undo persisted sequence transaction (ControlHost)." />
                     <controls:RtaimeButton Content="REDO" Command="{Binding RedoCommand}"
@@ -149,7 +159,17 @@
                     <controls:RtaimeButton Content="MUTE" Command="{Binding ToggleTrackMuteCommand}"
                         IsCompact="True" Margin="0,0,8,0" ToolTip="Persist mute state of selected track." />
                     <controls:RtaimeButton Content="PCM" Command="{Binding WaveformCommand}"
-                        IsCompact="True" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
+                        IsCompact="True" Margin="0,0,9,0" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
+                    <controls:RtaimeButton Content="◀ TIME" Command="{Binding ScrollBackwardCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Scroll visible sequence left." />
+                    <controls:RtaimeButton Content="−" Command="{Binding ZoomOutCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom out around edit cursor." />
+                    <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Fit all authored clips." />
+                    <controls:RtaimeButton Content="+" Command="{Binding ZoomInCommand}"
+                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom in around edit cursor." />
+                    <controls:RtaimeButton Content="TIME ▶" Command="{Binding ScrollForwardCommand}"
+                        IsCompact="True" ToolTip="Scroll visible sequence right." />
                 </StackPanel>
                     </controls:RtaimeScrollViewer>
                     <DockPanel LastChildFill="True">
@@ -238,27 +258,40 @@
                     x:Name="SequenceRuler"
                     SizeChanged="OnViewportSizeChanged"
                     ToolTip="Click to position local edit cursor. No Preview/Program seek.">
-                    <Grid>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                            <controls:RtaimeButton Content="◀" Command="{Binding ScrollBackwardCommand}"
-                                Width="27" IsCompact="True" ToolTip="Scroll visible time left." />
-                            <controls:RtaimeButton Content="−" Command="{Binding ZoomOutCommand}"
-                                Width="27" IsCompact="True" ToolTip="Zoom out." />
-                            <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
-                                Width="36" IsCompact="True" ToolTip="Fit all authored clips." />
-                            <controls:RtaimeButton Content="+" Command="{Binding ZoomInCommand}"
-                                Width="27" IsCompact="True" ToolTip="Zoom in." />
-                            <controls:RtaimeButton Content="▶" Command="{Binding ScrollForwardCommand}"
-                                Width="27" IsCompact="True" ToolTip="Scroll visible time right." />
-                        </StackPanel>
-                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"
-                            Text="{Binding Zoom, StringFormat=ZOOM {0:0}×}" Style="{StaticResource OperatorLabel}"
-                            IsHitTestVisible="False"/>
+                    <Grid ClipToBounds="True">
+                        <ItemsControl ItemsSource="{Binding RulerMarks}" IsHitTestVisible="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas Height="26" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="{x:Type ContentPresenter}">
+                                    <Setter Property="Canvas.Left" Value="{Binding Left}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="1" Height="13" Background="{DynamicResource OperatorSecondaryTextBrush}" />
+                                        <TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}"
+                                            Margin="4,0,9,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Canvas IsHitTestVisible="False">
+                            <Border Canvas.Left="{Binding CursorLeft}" Width="2" Height="26"
+                                Background="{DynamicResource OperatorAccentBrush}" Opacity="{Binding CursorRulerOpacity}" />
+                        </Canvas>
+                        <TextBlock Text="{Binding Zoom, StringFormat=ZOOM {0:0}×}"
+                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Background="{DynamicResource OperatorTimelineTrackOverlayBrush}"
+                            Style="{StaticResource OperatorLabel}" Margin="0,0,5,0"
+                            IsHitTestVisible="False" />
                     </Grid>
                 </Border>
             </Grid>
 
-            <Grid Grid.Row="4" ClipToBounds="True">
+            <Grid x:Name="SequenceTrackViewport" Grid.Row="4" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="190" />
                     <ColumnDefinition Width="*" />
@@ -314,7 +347,7 @@
                                                     <Border Width="{Binding Width}" Height="38"
                                                         Style="{StaticResource SequenceClipSurface}" Margin="0,2,0,0"
                                                         ToolTip="{Binding Id}"
-                                                        MouseLeftButtonDown="OnClipMouseDown">
+                                                        MouseLeftButtonDown="OnClipMouseDown" MouseMove="OnClipPointerMoved">
                                                         <Grid ClipToBounds="True">
                                                             <TextBlock Text="{Binding AssetId}" Margin="7,1,7,0"
                                                                 FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis"
@@ -334,6 +367,11 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </controls:RtaimeScrollViewer>
+                <Canvas Grid.Column="1" IsHitTestVisible="False" ClipToBounds="True">
+                    <Border Canvas.Left="{Binding CursorLeft}" Width="1"
+                        Height="{Binding ElementName=SequenceTrackViewport, Path=ActualHeight}"
+                        Background="{DynamicResource OperatorAccentBrush}" Opacity="{Binding CursorTrackOpacity}" />
+                </Canvas>
             </Grid>
 
             <Grid Grid.Row="5" Margin="8,0,8,0">

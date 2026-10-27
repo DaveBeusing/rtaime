@@ -12,6 +12,7 @@ using rtaime.Media.Contracts;
 namespace rtaime.Operator;
 
 public enum SequenceEditorGestureKind { Move, TrimStart, TrimEnd }
+public enum SequenceEditorTool { Select, Move, Trim }
 
 /// <summary>
 /// Editor state is a projection of durable ControlHost sequences. Only authoring
@@ -31,9 +32,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     private readonly List<Guid> _selectedOrder = [];
     private SequenceClip? _clipboard;
     private SequenceEditorGesture? _gesture;
+    private SequenceEditorGesture? _retainedDraft;
     private bool _busy;
     private bool _disposed;
     private bool _snapping = true;
+    private SequenceEditorTool _tool = SequenceEditorTool.Select;
     private string _status = "SEQUENCE AUTHORING · UNAVAILABLE";
     private string _feedback = "Connect to ControlHost and refresh saved sequences.";
     private double _zoom = 1.0;
@@ -41,6 +44,12 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     private long _visibleStart;
     private int _firstTrack;
     private int _visibleTrackCount = 8;
+    private Guid _rulerSequenceId;
+    private int _rulerNumerator;
+    private int _rulerDenominator;
+    private long _rulerStart = -1;
+    private long _rulerEnd = -1;
+    private double _rulerWidth = -1;
     private long _editCursor;
     private long _requestGeneration;
 
@@ -87,6 +96,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         TransitionCommand = new AsyncRelayCommand(TransitionAsync, () => CanEdit && _selectedClips.Count == 2);
         ToggleTrackEnabledCommand = new AsyncRelayCommand(() => ToggleTrackAsync(false), () => CanEditSelection);
         ToggleTrackMuteCommand = new AsyncRelayCommand(() => ToggleTrackAsync(true), () => CanEditSelection);
+        SelectToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Select; return Task.CompletedTask; });
+        MoveToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Move; return Task.CompletedTask; });
+        TrimToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Trim; return Task.CompletedTask; });
+        DiscardDraftCommand = new AsyncRelayCommand(() => { DiscardDraft(); return Task.CompletedTask; }, () => _retainedDraft is not null);
         WaveformCommand = new AsyncRelayCommand(LoadWaveformAsync,
             () => CanEditSelection && SelectedClip?.Media.Kind == SequenceMediaKind.Audio && _waveforms is not null);
         ZoomInCommand = new AsyncRelayCommand(() => { Zoom = Math.Min(64, Zoom * 2); return Task.CompletedTask; }, () => _snapshot is not null && Zoom < 64);
@@ -113,6 +126,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public ICommand TransitionCommand { get; }
     public ICommand ToggleTrackEnabledCommand { get; }
     public ICommand ToggleTrackMuteCommand { get; }
+    public ICommand SelectToolCommand { get; }
+    public ICommand MoveToolCommand { get; }
+    public ICommand TrimToolCommand { get; }
+    public ICommand DiscardDraftCommand { get; }
     public ICommand WaveformCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
@@ -150,18 +167,43 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public long VisibleStart => _visibleStart;
     public long VisibleEnd => checked(_visibleStart + VisibleSpan);
     public long VisibleSpan => Math.Max(1, checked((long)Math.Ceiling((double)DurationTicks / _zoom)));
+    public double CursorLeft => Sequence is null ? 0 :
+        SequenceTimelineGeometry.Pixel(EditCursorTick, VisibleStart, VisibleEnd, _viewportWidth);
+    public double CursorRulerOpacity => Sequence is not null &&
+        EditCursorTick >= VisibleStart && EditCursorTick <= VisibleEnd ? 1 : 0;
+    public double CursorTrackOpacity => CursorRulerOpacity * 0.55;
+    public IReadOnlyList<SequenceRulerMark> RulerMarks { get; private set; } = [];
     public long EditCursorTick
     {
         get => _editCursor;
         set
         {
-            var next = Math.Clamp(value, 0, Math.Max(0, DurationTicks - 1));
+            var upper = Math.Max(0, DurationTicks - 1);
+            var bounded = Math.Clamp(value, 0, upper);
+            var next = Sequence is { } sequence
+                ? Math.Min(SequenceTimelineGeometry.Quantize(bounded, sequence.FrameRate),
+                    SequenceTimelineGeometry.FloorFrameTick(upper, sequence.FrameRate))
+                : bounded;
             if (_editCursor == next) return;
-            _editCursor = next; Changed(); Changed(nameof(EditCursorLabel)); UpdateSelectedStatus();
+            _editCursor = next; Changed(); Changed(nameof(EditCursorLabel));
+            Changed(nameof(CursorLeft)); Changed(nameof(CursorRulerOpacity));
+            Changed(nameof(CursorTrackOpacity)); UpdateSelectedStatus();
         }
     }
     public string EditCursorLabel => SequenceTimelineGeometry.Timecode(_editCursor,
         Sequence?.FrameRate ?? new SequenceRate(50, 1));
+    public SequenceEditorTool Tool
+    {
+        get => _tool;
+        set
+        {
+            if (_tool == value) return;
+            CancelGesture();
+            _tool = value;
+            Changed(); Changed(nameof(ToolLabel));
+        }
+    }
+    public string ToolLabel => $"TOOL {Tool.ToString().ToUpperInvariant()}";
     public bool Snapping
     {
         get => _snapping;
@@ -174,7 +216,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         {
             var next = Math.Clamp(value, 1, 64);
             if (_zoom == next) return;
-            _zoom = next; _visibleStart = Math.Min(_visibleStart, Math.Max(0, DurationTicks - VisibleSpan));
+            var cursorFraction = Math.Clamp((double)(EditCursorTick - _visibleStart) / VisibleSpan, 0, 1);
+            _zoom = next;
+            _visibleStart = Math.Clamp(checked(EditCursorTick - (long)Math.Round(VisibleSpan * cursorFraction)),
+                0, Math.Max(0, DurationTicks - VisibleSpan));
             Changed(); RefreshViewport(); RaiseCommands();
         }
     }
@@ -183,7 +228,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         get => _firstTrack;
         set
         {
-            var next = Math.Clamp(value, 0, Math.Max(0, TrackCount - 1));
+            var next = Math.Clamp(value, 0, Math.Max(0, TrackCount - VisibleTrackCount));
             if (_firstTrack == next) return;
             _firstTrack = next; Changed(); RefreshViewport(); RaiseCommands();
         }
@@ -194,8 +239,11 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         ? Sequence?.Tracks.SingleOrDefault(t => t.TrackId == c.TrackId) : null;
     public int SelectedCount => _selectedClips.Count;
     public IReadOnlyList<Guid> SelectedIds => _selectedOrder.AsReadOnly();
-    public string GestureLabel => _gesture is null ? "NO PENDING EDIT" :
-        $"DRAFT {_gesture.Kind.ToString().ToUpperInvariant()} · {SequenceTimelineGeometry.Timecode(_gesture.PreviewTick, Sequence!.FrameRate)} · RELEASE TO APPLY / ESC CANCEL";
+    public string GestureLabel => _gesture is { } active
+        ? $"DRAFT {active.Kind.ToString().ToUpperInvariant()} · {SequenceTimelineGeometry.Timecode(active.PreviewTick, Sequence!.FrameRate)} · RELEASE TO APPLY / ESC CANCEL"
+        : _retainedDraft is { } held
+            ? $"RETAINED {held.Kind.ToString().ToUpperInvariant()} DRAFT · REV {held.Revision} · reload/review then re-edit; never auto-replayed"
+            : "NO PENDING EDIT";
     public SequenceWaveformPresentation? SelectedWaveform { get; private set; }
     public string WaveformStatus { get; private set; } = "WAVEFORM · select audio clip to request real analysis";
 
@@ -223,7 +271,18 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         if (Sequence is null) return;
         var tick = SequenceTimelineGeometry.ToTick(x, width, VisibleStart, VisibleEnd, Sequence.FrameRate);
-        EditCursorTick = SequenceTimelineGeometry.Snap(tick, Sequence, Snapping);
+        EditCursorTick = SequenceTimelineGeometry.SnapEditBoundary(tick, Sequence, Snapping,
+            VisibleSpan, _viewportWidth, -1, Guid.Empty);
+    }
+
+    public void JogCursor(int frames)
+    {
+        if (Sequence is null || frames == 0) return;
+        var rate = Sequence.FrameRate;
+        var frameTick = SequenceTimelineGeometry.FrameTicks(1, rate);
+        var tick = Math.Clamp(checked(EditCursorTick + checked(frames * frameTick)),
+            0, Math.Max(0, DurationTicks - 1));
+        EditCursorTick = SequenceTimelineGeometry.Quantize(tick, rate);
     }
 
     public void SelectClip(Guid id, bool toggle = false, bool extend = false)
@@ -256,6 +315,13 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         UpdateSelectedStatus(); RefreshViewport(); RaiseCommands();
     }
 
+    public void DiscardDraft()
+    {
+        if (_retainedDraft is null) return;
+        _retainedDraft = null;
+        Changed(nameof(GestureLabel)); RefreshViewport(); RaiseCommands();
+    }
+
     public void CancelGesture()
     {
         if (_gesture is null) return;
@@ -265,6 +331,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public bool BeginGesture(Guid id, SequenceEditorGestureKind kind, long pointerTick)
     {
         if (!CanEdit) return false;
+        DiscardDraft();
         var clip = Sequence!.Clips.SingleOrDefault(c => c.ClipId == id);
         if (clip is null) return false;
         SelectClip(id);
@@ -276,7 +343,16 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public void UpdateGesture(long pointerTick)
     {
         if (_gesture is not { } g || _snapshot?.AuthoringRevision != g.Revision) { CancelGesture(); return; }
-        var tick = SequenceTimelineGeometry.Snap(Math.Max(0, pointerTick), Sequence!, Snapping);
+        // Snap the dragged start/end boundary, not the pointer grabbed inside it.
+        // Preserve the original pointer-to-clip offset throughout the gesture.
+        var delta = checked(pointerTick - g.StartPointerTick);
+        var anchor = g.Kind == SequenceEditorGestureKind.TrimEnd
+            ? SequenceTimelineGeometry.ClipEnd(g.Clip) : g.Clip.TimelineStart;
+        var offset = g.Kind == SequenceEditorGestureKind.Move ? g.Clip.Duration : 0;
+        var snapped = SequenceTimelineGeometry.SnapEditBoundary(checked(anchor + delta),
+            Sequence!, Snapping, VisibleSpan, _viewportWidth, EditCursorTick,
+            g.Clip.ClipId, offset);
+        var tick = checked(g.StartPointerTick + snapped - anchor);
         if (g.PreviewTick == tick) return;
         _gesture = g with { PreviewTick = tick };
         Changed(nameof(GestureLabel)); RefreshViewport();
@@ -286,8 +362,13 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         if (_gesture is not { } g) return;
         _gesture = null;
-        Changed(nameof(GestureLabel)); RefreshViewport();
-        if (_snapshot?.AuthoringRevision != g.Revision || !CanEdit) return;
+        _retainedDraft = g;
+        Changed(nameof(GestureLabel)); RefreshViewport(); RaiseCommands();
+        if (_snapshot?.AuthoringRevision != g.Revision || !CanEdit)
+        {
+            Feedback = "DRAFT RETAINED · saved revision changed or editing is disabled; reload and review before another edit.";
+            return;
+        }
         if (!TryDraftClip(g.Clip, g, out _))
         {
             Feedback = "REJECTED · drag would create an out-of-range timeline or source interval.";
@@ -305,6 +386,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             _ => null
         };
         if (edit is not null && delta != 0) await EditAsync([edit]);
+        else DiscardDraft();
     }
 
     public async Task RefreshAsync()
@@ -357,7 +439,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             SelectedSummary = summary;
             await ReadAsync(sequenceId);
             Feedback = "SAVED · new four-track sequence with no imported media; add catalogue clips to saved tracks.";
-        });
+        }, mutation: true);
     }
 
     /// <summary>
@@ -408,7 +490,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                 SelectClip(clip.ClipId);
                 Feedback = $"SAVED · {asset.DisplayName} added to {track.Name} at revision {result.AuthoringRevision}.";
             }
-        });
+        }, mutation: true);
     }
 
     public async Task LoadAsync()
@@ -428,6 +510,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         _libraryRevision = result.AuthoringRevision;
         _revisionConflict = !result.Validation.IsValid;
         _gesture = null;
+        Changed(nameof(GestureLabel));
         _selectedClips.RemoveWhere(c => result.Sequence.Clips.All(x => x.ClipId != c));
         _selectedOrder.RemoveAll(id => !_selectedClips.Contains(id));
         _visibleStart = Math.Clamp(_visibleStart, 0, Math.Max(0, DurationTicks - VisibleSpan));
@@ -454,7 +537,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             var result = await _authoring.EditAsync(new(SequenceContract.Version, Guid.NewGuid(),
                 old.AuthoringRevision, old.Sequence.SequenceId, Edits: edits));
             await ProcessResultAsync(old.Sequence.SequenceId, result);
-        });
+        }, mutation: true);
     }
 
     private async Task ProcessResultAsync(Guid selected, SequenceMutationResult result)
@@ -473,6 +556,8 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             }
             return;
         }
+        _retainedDraft = null;
+        Changed(nameof(GestureLabel)); RaiseCommands();
         await ReadAsync(selected);
         Feedback = $"SAVED · authoring revision {result.AuthoringRevision}; active Program is unchanged.";
     }
@@ -488,7 +573,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                 Guid.NewGuid(), expected, Guid.Empty);
             var result = undo ? await _authoring.UndoAsync(request) : await _authoring.RedoAsync(request);
             await ProcessResultAsync(id, result);
-        });
+        }, mutation: true);
     }
 
     private async Task DeleteAsync(bool ripple)
@@ -612,15 +697,20 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         Changed(nameof(SelectedWaveform)); Changed(nameof(WaveformStatus));
     }
 
-    private async Task ExecuteAsync(Func<Task> work)
+    private async Task ExecuteAsync(Func<Task> work, bool mutation = false)
     {
         if (_disposed || _busy) return;
         _busy = true; Changed(nameof(CanEdit)); RaiseCommands();
         try { await work(); }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            Status = "AUTHORING UNAVAILABLE";
-            Feedback = $"ControlHost request failed ({e.GetType().Name}). No local edit was committed.";
+            // A lost mutation acknowledgement may already be durable. Never send
+            // a second transaction with a fresh ID until the library is reloaded.
+            if (mutation) _revisionConflict = true;
+            Status = mutation ? "AUTHORING OUTCOME UNKNOWN · RELOAD REQUIRED" : "AUTHORING UNAVAILABLE";
+            Feedback = mutation
+                ? $"ControlHost reply unavailable ({e.GetType().Name}). Draft retained when present; refresh before another mutation. No automatic retry."
+                : $"ControlHost request failed ({e.GetType().Name}). No local edit was committed.";
         }
         finally { _busy = false; Changed(nameof(CanEdit)); RaiseCommands(); }
     }
@@ -669,7 +759,9 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                         Selected = _selectedClips.Contains(clip.Id),
                         Waveform = clip.Id == SelectedWaveform?.ClipId ? SelectedWaveform : null
                     };
-                    if (_gesture is not { } intent) return visible;
+                    var intent = _gesture ??
+                        (_retainedDraft?.Revision == _snapshot?.AuthoringRevision ? _retainedDraft : null);
+                    if (intent is null) return visible;
                     var source = definition.Clips.Single(c => c.ClipId == clip.Id);
                     if (source.ClipId != intent.Clip.ClipId &&
                         (intent.Clip.LinkGroupId is null ||
@@ -685,6 +777,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
                     return visible with
                     {
                         Pending = true,
+                        Invalid = _gesture is null,
                         StartTick = preview.TimelineStart,
                         EndTick = SequenceTimelineGeometry.ClipEnd(preview),
                         SourceIn = preview.SourceIn, SourceOut = preview.SourceOut,
@@ -714,6 +807,28 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
             VisibleRows.RemoveAt(VisibleRows.Count - 1);
             changedRows = true;
         }
+        // Reproject bounded frame marks only when the saved identity, rate or
+        // horizontal viewport changes, not on each selection/trim mouse move.
+        var source = Sequence;
+        var sequenceId = source?.SequenceId ?? Guid.Empty;
+        var numerator = source?.FrameRate.Numerator ?? 0;
+        var denominator = source?.FrameRate.Denominator ?? 0;
+        if (_rulerSequenceId != sequenceId || _rulerNumerator != numerator ||
+            _rulerDenominator != denominator || _rulerStart != VisibleStart ||
+            _rulerEnd != VisibleEnd || _rulerWidth != _viewportWidth)
+        {
+            _rulerSequenceId = sequenceId;
+            _rulerNumerator = numerator;
+            _rulerDenominator = denominator;
+            _rulerStart = VisibleStart;
+            _rulerEnd = VisibleEnd;
+            _rulerWidth = _viewportWidth;
+            RulerMarks = source is null ? [] :
+                SequenceTimelineGeometry.Ruler(VisibleStart, VisibleEnd, _viewportWidth, source.FrameRate);
+            Changed(nameof(RulerMarks));
+        }
+        Changed(nameof(CursorLeft)); Changed(nameof(CursorRulerOpacity));
+        Changed(nameof(CursorTrackOpacity));
         Changed(nameof(VisibleStart)); Changed(nameof(VisibleEnd));
         Changed(nameof(VisibleSpan));
         if (changedRows) Changed(nameof(VisibleRows));
@@ -744,7 +859,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         foreach (var command in new[] { RefreshCommand, CreateCommand, LoadCommand, UndoCommand, RedoCommand,
                  DeleteCommand, RippleDeleteCommand, SplitCommand, CopyCommand, PasteCommand, LinkCommand,
                  UnlinkCommand, TransitionCommand, ToggleTrackEnabledCommand, ToggleTrackMuteCommand,
-                 WaveformCommand, ZoomInCommand, ZoomOutCommand, FitCommand,
+                 WaveformCommand, DiscardDraftCommand, ZoomInCommand, ZoomOutCommand, FitCommand,
                  ScrollBackwardCommand, ScrollForwardCommand, NextTracksCommand, PreviousTracksCommand })
             if (command is AsyncRelayCommand c) c.RaiseCanExecuteChanged();
     }
@@ -758,7 +873,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         _disposed = true;
         Playout.Dispose();
         _waveforms?.Dispose();
-        _gesture = null;
+        _gesture = null; _retainedDraft = null;
         _selectedClips.Clear(); _selectedOrder.Clear();
     }
 

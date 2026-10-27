@@ -16,6 +16,28 @@ additional source reader, production control or shortcut router.
 
 Escape or Ctrl+K closes the palette. Cancellation restores the previous visible control's focus. Successful navigation keeps the destination focus; Ctrl+F reveals the MEDIA tools when required and focuses the existing media search. Detached panels share the central registry. Normal text fields retain typing suppression, numeric-edit Escape handling and local timeline editing precedence.
 
+## Sequence editor local keyboard controls
+
+With focus inside the saved sequence editor and outside text input, **V**
+selects the selection tool, **M** selects clip move, **T** selects trim,
+and **B** invokes the existing authored split command at the local edit
+cursor if the selected clip and saved revision allow it. **Left/Right**
+jog the local cursor by one rational frame; **Home/End** jump to the
+visible authoring horizon boundaries. **Ctrl+Z/Y** request durable
+ControlHost sequence Undo/Redo; **Ctrl+C/V** use the existing local
+clip-copy and explicit authoring paste. **Ctrl + Plus/Minus** changes
+zoom; **Escape** cancels pointer capture or discards a retained rejected
+draft. Mouse wheel scrolls tracks, Shift+wheel scrolls time, and
+Ctrl+wheel zooms around the edit cursor. The toolbar exposes the same
+SELECT/MOVE/TRIM tools and a CLEAR DRAFT operation.
+
+These gestures are local to the focused saved sequence surface,
+preserve text-entry suppression and never invoke TAKE, Program seek,
+rundown/Media Deck marker editing or the global production command
+router. Frame ruler marks and the cursor guide are local authoring
+coordinates, not confirmed Preview/Program evidence. Unsupported
+overwrite semantics are not mapped to a keyboard command.
+
 ## Profiles
 
 Select **Shortcut profiles**, choose an editable command, modifiers and key, then **Assign**. Collision errors explain the conflicting gesture and leave the whole active profile unchanged. **Remove override** restores one canonical binding; **Reset defaults** restores all canonical bindings. The editor shows the actual current gesture and focus area separately from the proposed key/modifier choices. Opening it moves focus to the profile name; returning to commands focuses search. Opening Commands or using Ctrl+K after closing the editor starts in command search again. Search is disabled and Execute is hidden while profiles are open, and the model also rejects command execution from that mode. Editing cannot activate a hidden result. The profile name is saved when an assignment/removal is applied. **Import** applies a validated JSON preset and saves it locally; **Export** writes the active profile.

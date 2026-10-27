@@ -59,6 +59,29 @@ drag are draft-only; backend undo/redo is **not** the legacy local
 cursor history. Editing a saved sequence never seeks Program, changes
 Runtime execution generation or activates a new sequence.
 
+The saved sequence editor uses explicit **SELECT**, **MOVE** and **TRIM**
+tools. SELECT never starts a mutation. MOVE drags the clip body; TRIM
+requires a clip's 9-pixel start/end handle. A single captured drag remains
+a local projection until pointer release submits one revisioned ControlHost
+edit, while Escape or capture loss cancels without persistence. A retained
+rejected drag is visibly marked and may be cleared, but never replayed
+against an updated authoring revision automatically. The editor does not
+advertise overwrite editing: the existing ControlHost contract supports
+an atomic ripple delete but no general overwrite operation.
+
+The visible frame ruler and edit-cursor guide share the same 240 kHz
+time-to-pixel projection as the tracks. Frame marks are chosen at bounded
+rational intervals for the current viewport; the playhead is a local edit
+cursor, **not** an observed Runtime/Program position. Frame quantization
+applies to mouse and keyboard navigation. Magnetic drag snapping acts on
+the actual moved/trimmed boundary, or either edge of a moved clip, with
+an 8-logical-pixel tolerance against saved clip/transition boundaries,
+the local cursor and zero. The dragged clip and its linked group are
+excluded from self-snapping. Zoom keeps the edit cursor at the same
+relative screen position where possible. Only visible track rows and clips
+are projected; track paging remains explicit. Unsupported authoring
+transactions are rejected by ControlHost rather than rendered as saved.
+
 The projection computes only the visible time interval and at most
 16 visible track rows / 256 clip rectangles; the horizontal zoom range
 is 1–64×. A stress test inspects 10,000 synthetic offscreen objects
