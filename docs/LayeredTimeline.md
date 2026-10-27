@@ -83,7 +83,7 @@ multi-clip and multi-resolution coverage remains open.
 
 ### Source-accurate video filmstrip foundation
 
-\`MediaAssetFilmstripService\` is now an available Operator-side read-only
+`MediaAssetFilmstripService` is now an available Operator-side read-only
 filmstrip data source for visible video-clip ranges. Requests carry asset
 fingerprint and catalogue identity, rational nominal source rate, time
 range, sample count and bounded preview size. It selects at most eight
