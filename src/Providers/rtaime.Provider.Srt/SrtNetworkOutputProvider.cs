@@ -177,19 +177,19 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 		ArgumentNullException.ThrowIfNull(sample);
 		lock (_gate)
 		{
-			if (_retryEpisodeExhausted)
-			{
-				_rejected++;
-				sample.Video.Dispose();
-				return NetworkOutputEnqueueResult.Rejected(_failure ??
-					new Failure("network.output.reconnect_exhausted", "SRT reconnect budget is exhausted."));
-			}
 			if (_disposed || _workerStopped || _shutdown.IsCancellationRequested)
 			{
 				_rejected++;
 				sample.Video.Dispose();
 				return NetworkOutputEnqueueResult.Rejected(
 					new Failure("network.output.stopped", "Network output session is stopping or stopped."));
+			}
+			if (_retryEpisodeExhausted)
+			{
+				_rejected++;
+				sample.Video.Dispose();
+				return NetworkOutputEnqueueResult.Rejected(_failure ??
+					new Failure("network.output.reconnect_exhausted", "SRT reconnect budget is exhausted."));
 			}
 
 			if (!sample.HasCompatibleRuntimeTiming(_configuration.VideoFormat, _configuration.AudioFormat))
