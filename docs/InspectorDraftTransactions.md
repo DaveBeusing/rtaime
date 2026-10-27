@@ -22,8 +22,11 @@ eight-context in-memory recovery mechanism. A pin is **not** a draft copy,
 an automatic rebase, a substitute for target revision validation, or a
 way to bypass supported command permissions. A new production identity
 makes the pin stale and blocks typed editing until explicit UNPIN.
-Direct gain Apply additionally verifies the mixer's current source and
-stream match the Inspector target even when PIN is off. Multi-selection
+The legacy direct-edit panels also become disabled for stale pins, for
+mismatched loaded clips, replaced graphics and another mixer-selected
+audio stream; the PIN/UNPIN header itself remains interactive. Direct
+gain Apply additionally verifies the mixer's current source and stream
+match the Inspector target even when PIN is off. Multi-selection
 cannot be pinned; its explicit sequential reviewed operations continue
 to report per-object confirmation, rejection and stop without atomic claims.
 
