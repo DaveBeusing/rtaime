@@ -160,6 +160,23 @@ public static class SequenceTimelineGeometry
     }
 
     /// <summary>
+    /// Only visible, actual source boundaries are trim handles. The viewport
+    /// edge of a horizontally clipped clip must never masquerade as its IN/OUT.
+    /// </summary>
+    public static SequenceEditorGestureKind? HitTestGesture(SequenceEditorTool tool,
+        double localX, double clipWidth, bool startVisible, bool endVisible)
+    {
+        if (!double.IsFinite(localX) || !double.IsFinite(clipWidth) ||
+            clipWidth <= 0 || localX < 0 || localX > clipWidth)
+            return null;
+        if (tool == SequenceEditorTool.Move) return SequenceEditorGestureKind.Move;
+        if (tool != SequenceEditorTool.Trim) return null;
+        if (startVisible && localX <= 9) return SequenceEditorGestureKind.TrimStart;
+        if (endVisible && localX >= clipWidth - 9) return SequenceEditorGestureKind.TrimEnd;
+        return null;
+    }
+
+    /// <summary>
     /// Snap a dragged clip boundary, rather than the pointer position. The optional
     /// trailing edge lets move gestures magnetize either edge without changing duration.
     /// Magnetic tolerance is measured in viewport pixels and converted to authoring
