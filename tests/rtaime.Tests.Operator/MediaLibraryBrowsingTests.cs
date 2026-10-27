@@ -490,6 +490,13 @@ public sealed class MediaLibraryBrowsingTests
         Assert.Same(composition.Library, owner.MediaLibraryView.Context);
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var combo = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaSmartBins"));
+        var sort = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaLibrarySort"));
+        Assert.Equal("Media Library sort order", AutomationProperties.GetName(sort));
+        Assert.Equal(MediaLibrarySortOrder.CategoryName, owner.MediaPool.SortOrder);
+        Assert.Same(owner.MediaPool.SortChoices, sort.ItemsSource);
+        var frameStrip = Assert.Single(Descendants(owner.MediaLibraryView).OfType<ItemsControl>(),
+            element => AutomationProperties.GetName(element) == "Selected media source frame strip");
+        Assert.Same(owner.MediaPool.FrameReviewSamples, frameStrip.ItemsSource);
         var search = Assert.IsType<RtaimeSearchBox>(owner.MediaLibraryView.FindName("MediaSearchBox"));
         Assert.Equal(180, System.Windows.Data.BindingOperations.GetBindingExpression(search, TextBox.TextProperty)!.ParentBinding.Delay);
         var results = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaBatchResults"));
@@ -528,12 +535,20 @@ public sealed class MediaLibraryBrowsingTests
                 button => AutomationProperties.GetName(button) == "Show advanced Media Library tools");
             Assert.Equal(Visibility.Collapsed, advanced.Visibility);
             Assert.Equal(Visibility.Collapsed, details.Visibility);
+            var reviewButton = Assert.Single(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
+                button => AutomationProperties.GetName(button) == "Review source-bound media filmstrip");
+            Assert.Same(owner.MediaPool.ReviewFramesCommand, reviewButton.Command);
+            Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+                AutomationProperties.GetName(button) == "Cancel and clear Library frame review" &&
+                ReferenceEquals(button.Command, owner.MediaPool.CancelFrameReviewCommand));
             Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
                 button => AutomationProperties.GetName(button) == "Open selected asset in confirmed Preview");
             tools.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
             Assert.Equal(Visibility.Visible, advanced.Visibility);
 			Assert.True(combo.IsVisible); Assert.True(combo.ActualWidth > 0); Assert.True(combo.Focus());
+            Assert.True(sort.IsVisible);
+            Assert.True(sort.ActualWidth > 0);
 			Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
 			Assert.Equal(Visibility.Collapsed, owner.MediaPool.MetadataFiltersVisibility);
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
