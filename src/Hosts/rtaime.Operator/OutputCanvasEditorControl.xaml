@@ -204,7 +204,7 @@
                     <TextBlock Text="Only Runtime-confirmed ACTIVE at the saved revision is live; no button alone changes Program."
                         Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,7" />
                     <WrapPanel Margin="0,0,0,7">
-                        <controls:RtaimeButton Content="VALIDATE DRAFT"
+                        <controls:RtaimeButton Content="{Binding ValidationActionLabel}"
                             Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
                             ToolTip="Server validates geometry, sources, providers and exact next saved revision." />
                         <controls:RtaimeButton Content="SAVE"
