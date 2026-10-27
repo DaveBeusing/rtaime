@@ -40,7 +40,7 @@ internal static class CompositingWorkspaceQualification
         Assert.True(review.IsVisible);
         Assert.Same(color, review.DataContext);
         Assert.False(control.IsVisible);
-        Assert.True(color.AnalysisEnabled);
+        Assert.False(color.AnalysisEnabled); // Not LIVE: no GPU work from retained/no evidence.
         Assert.True(monitoring.ScopesEnabled);
         Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Program, monitoring.ActiveScopeStream);
         var scopes = Descendants(review).OfType<RtaimeMediaScope>().ToArray();
@@ -48,7 +48,7 @@ internal static class CompositingWorkspaceQualification
         Assert.All(scopes, scope => Assert.Null(scope.Snapshot));
         Assert.Contains("COLOR EVIDENCE PENDING", color.ColorBasisLabel);
         var gpuScopes = Assert.Single(Descendants(review).OfType<GpuScopeAnalysisSurface>());
-        Assert.True(gpuScopes.AnalysisEnabled);
+        Assert.False(gpuScopes.AnalysisEnabled);
         var viewer = Assert.IsType<MonitorView>(review.FindName("ColorProgramMonitor"));
         Assert.Same(monitoring.ProgramImage, viewer.Frame);
         Assert.Contains(Descendants(review).OfType<RtaimeMediaCompareView>(),
@@ -60,7 +60,18 @@ internal static class CompositingWorkspaceQualification
         Assert.True(gpuScopes.AnalyzePreview);
         Assert.Null(color.SelectedScopes);
         Assert.Contains("NO CURRENT", color.ScopeFrameLabel);
-        Assert.Equal("COMPOSITING", window.Shell.SelectedWorkspace);
+        Assert.Null(color.ConfirmedPreviewImage);
+        Assert.Null(color.ConfirmedPreviewGpuFrame);
+        Assert.Equal(Visibility.Collapsed, color.CompareVisibility);
+        // Leaving the hosting workspace revokes active review analysis and
+        // restores the default source without changing any production state.
+        window.Shell.SelectWorkspace("LIVE");
+        Assert.False(color.AnalysisEnabled);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Program, monitoring.ActiveScopeStream);
+        Assert.Equal(scopesBeforeReview, monitoring.ScopesEnabled);
+        window.Shell.SelectWorkspace("COMPOSITING");
+        Assert.True(monitoring.ScopesEnabled);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Preview, monitoring.ActiveScopeStream);
         color.ShowGraphCommand.Execute(null);
         await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         Assert.True(control.IsVisible);
