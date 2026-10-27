@@ -180,6 +180,24 @@ runtime.media_deck.cleanup_failed. Replacement and probe are blocked until the
 supported RuntimeHost lifecycle restart; the Operator displays the returned failure
 and does not invent an automatic retry or successful close.
 
+## Replay-to-Rundown source identity handoff
+
+After confirmed replay MP4 finalization and ControlHost catalogue adoption,
+**OPEN IN MEDIA DECK** uses the existing selected A/B production source
+slot. The Replay **QUEUE IN RUNDOWN** action is enabled only while this
+loaded deck presents exactly the verified replay asset identity with
+a current source slot and no outstanding deck synchronization/error.
+It also obtains a fresh online catalogued SHA-256 and matches the
+materialized clip's source path, codec and range/duration evidence.
+
+Queueing performs no selection of Preview, CUT, DISSOLVE or Program TAKE;
+only the separate **SEND TO PREVIEW** button invokes the existing
+authoritative Preview selection. The queued Rundown row is an unsaved
+manual CUT until its user separately saves, prepares and executes it.
+The ordinary deck resource admission and expired resident-ticket
+fences remain mandatory. An operator cannot infer ready-to-air from
+a materialized file, local thumbnail or successful draft entry.
+
 ## Container admission feedback
 
 Open/import/relink offer MP4 and MOV; selecting an extension does not qualify it.
