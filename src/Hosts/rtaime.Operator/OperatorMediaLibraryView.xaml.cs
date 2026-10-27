@@ -210,49 +210,60 @@ public partial class OperatorMediaLibraryView : UserControl
 		finally { MediaPool.ClearDragIntent(); }
 	}
 
-	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
-	{
-		if (_syncingMediaPoolSelection || sender is not ListBox listBox || !listBox.IsVisible)
-			return;
+    private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingMediaPoolSelection || sender is not ListBox listBox || !listBox.IsVisible)
+            return;
+        if (MediaPool.IsReprojectingLibrary)
+        {
+            // Recycling containers can fire deselection during a FilteredItems Reset.
+            // Restore the complete selected-key set once WPF has applied its new items.
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                new Action(() =>
+                {
+                    if (listBox.IsVisible && Context is not null)
+                        RestoreMediaPoolSelection(listBox);
+                }));
+            return;
+        }
+        if (!MatchesSelection(listBox))
+            MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
+    }
 
-		if (!MatchesSelection(listBox))
-			MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
-	}
-
-	private bool MatchesSelection(ListBox listBox) =>
+    private bool MatchesSelection(ListBox listBox) =>
         listBox.SelectedItems.Count == MediaPool.SelectedItems.Count &&
         listBox.SelectedItems.Cast<MediaPoolItemViewModel>().All(item =>
             MediaPool.SelectedItems.Any(selected => ReferenceEquals(selected, item)));
 
-	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
-	{
-		MediaPool.CancelHover();
-		if (sender is not ListBox listBox || e.NewValue is not true)
-			return;
+    private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        MediaPool.CancelHover();
+        if (sender is ListBox listBox && e.NewValue is true)
+            RestoreMediaPoolSelection(listBox);
+    }
 
-		var selectedKeys = MediaPool.SelectedItems
-			.Select(item => item.Key)
-			.ToHashSet(StringComparer.Ordinal);
-		if (selectedKeys.Count == 0 && MediaPool.SelectedItem is { } primary)
-			selectedKeys.Add(primary.Key);
+    private void RestoreMediaPoolSelection(ListBox listBox)
+    {
+        var selectedKeys = MediaPool.SelectedItems
+            .Select(item => item.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        if (selectedKeys.Count == 0 && MediaPool.SelectedItem is { } primary)
+            selectedKeys.Add(primary.Key);
 
-		_syncingMediaPoolSelection = true;
-		try
-		{
-			listBox.SelectedItems.Clear();
-			foreach (var item in listBox.Items.Cast<MediaPoolItemViewModel>())
-			{
-				if (selectedKeys.Contains(item.Key))
-					listBox.SelectedItems.Add(item);
-			}
-		}
-		finally
-		{
-			_syncingMediaPoolSelection = false;
-		}
+        _syncingMediaPoolSelection = true;
+        try
+        {
+            listBox.SelectedItems.Clear();
+            foreach (var item in listBox.Items.Cast<MediaPoolItemViewModel>())
+                if (selectedKeys.Contains(item.Key))
+                    listBox.SelectedItems.Add(item);
+        }
+        finally { _syncingMediaPoolSelection = false; }
 
-		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
-	}
+        // This is UI reprojection, not a new operator selection or recent visit.
+        MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>(),
+            recordVisit: false);
+    }
 
 	private void OnMediaPoolPrepareClick(object sender, RoutedEventArgs e)
     {
