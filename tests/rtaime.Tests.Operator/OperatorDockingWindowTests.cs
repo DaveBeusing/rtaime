@@ -198,6 +198,26 @@ internal static class OperatorDockingWindowTests
             Assert.Same(sequence, floating.SequenceTimeline);
             Assert.Same(timeline, mediaControl.DataContext);
             Assert.Same(sequence, sequenceControl.DataContext);
+            // Exercise the actual detached WPF control bindings rather than
+            // a synthetic toolbar model; authoring tool changes stay local.
+            var editTools = Descendants(sequenceControl).OfType<RtaimeButton>().ToArray();
+            Assert.Contains(editTools, b => Equals(b.Content, "SELECT") &&
+                ReferenceEquals(b.Command, sequence.SelectToolCommand));
+            Assert.Contains(editTools, b => Equals(b.Content, "MOVE") &&
+                ReferenceEquals(b.Command, sequence.MoveToolCommand));
+            Assert.Contains(editTools, b => Equals(b.Content, "TRIM") &&
+                ReferenceEquals(b.Command, sequence.TrimToolCommand));
+            Assert.Contains(editTools, b => Equals(b.Content, "CLEAR DRAFT") &&
+                ReferenceEquals(b.Command, sequence.DiscardDraftCommand));
+            Assert.NotNull(sequenceControl.FindName("SequenceRuler"));
+            Assert.Contains(Descendants(sequenceControl).OfType<ItemsControl>(),
+                items => ReferenceEquals(items.ItemsSource, sequence.RulerMarks));
+            sequence.MoveToolCommand.Execute(null);
+            Assert.Equal(SequenceEditorTool.Move, sequence.Tool);
+            sequence.TrimToolCommand.Execute(null);
+            Assert.Equal(SequenceEditorTool.Trim, sequence.Tool);
+            sequence.SelectToolCommand.Execute(null);
+            Assert.Equal(SequenceEditorTool.Select, sequence.Tool);
 
             owner.TimelineMediaVisibility = Visibility.Visible;
             owner.TimelineSequenceVisibility = Visibility.Collapsed;
