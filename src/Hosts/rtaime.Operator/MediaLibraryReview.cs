@@ -204,6 +204,21 @@ public sealed partial class MediaPoolInspectorViewModel
         RaiseReviewCommands();
     }
 
+    private void ReconcileMediaReviewPressure()
+    {
+        if (!MediaLibraryHoverPreview.IsUnderPressure(
+                _operator.CurrentLibraryHealthEvidence, DateTimeOffset.UtcNow))
+        {
+            RaiseReviewCommands();
+            return;
+        }
+        if (_reviewRunning)
+            CancelFrameReview("PAUSED · Runtime frame budget is under pressure.");
+        if (_audioReviewRunning)
+            CancelAudioReview("PAUSED · Runtime frame budget is under pressure.");
+        RaiseReviewCommands();
+    }
+
     private void CancelFrameReview(string status)
     {
         ++_reviewGeneration;
