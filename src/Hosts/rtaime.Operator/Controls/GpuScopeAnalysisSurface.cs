@@ -178,7 +178,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		var frame = GpuFrame;
 		if (frame is null)
 		{
-			Monitoring?.SetGpuScopesUnavailable("GPU scope analysis is waiting for a Program shared resource.", AnalyzePreview);
+			Monitoring?.SetGpuScopesUnavailable($"GPU scope analysis is waiting for a confirmed {(AnalyzePreview ? "Preview" : "Program")} shared resource.", AnalyzePreview);
 			return;
 		}
 		if (_shader is null || _colorBuffer is null || _scopeConstants is null ||
@@ -189,7 +189,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		}
 		if (!TryOpenSharedResource(frame, e.Device))
 		{
-			Monitoring?.SetGpuScopesUnavailable("Program shared resource cannot be opened on the scope-analysis adapter.", AnalyzePreview);
+			Monitoring?.SetGpuScopesUnavailable($"{(AnalyzePreview ? "Preview" : "Program")} shared resource cannot be opened on the scope-analysis adapter.", AnalyzePreview);
 			return;
 		}
 
