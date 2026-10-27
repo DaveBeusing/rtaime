@@ -86,7 +86,7 @@ $source = (git rev-parse HEAD).Trim()
   -ExpectedSourceCommit $source `
   -SsdEvidencePaths @("./artifacts/qualification/ssd-playback/<run>/ssd-playback.outcome.json") `
   -MixedEvidencePaths @("./artifacts/qualification/sustained-mixed-load/<run>/summary.json") `
-  -RealtimeEvidencePath "./artifacts/qualification/realtime-playout/<run>/software-matrix.json" `
+  -RealtimeEvidencePath "./artifacts/qualification/realtime-playout/<run>/manifest.json" `
   -RequiredGatesPath "./artifacts/readiness/required-gates.json" `
   -OutputPath "./artifacts/readiness/production-soak-<unique>.json"
 ```
