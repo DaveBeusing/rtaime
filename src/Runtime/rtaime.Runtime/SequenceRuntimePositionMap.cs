@@ -17,7 +17,8 @@ public sealed class SequenceRuntimePositionMap
 
     private SequenceRuntimePositionMap(Guid sequenceId, ulong authoringRevision,
         FrameRate programRate, long durationTicks, ulong anchorProgramSlot,
-        long startTick, ulong generation, bool loop, SequenceRuntimeTransportState state)
+        long startTick, ulong generation, bool loop, SequenceRuntimeTransportState state,
+        ulong loopPassBase = 0)
     {
         SequenceId = sequenceId;
         AuthoringRevision = authoringRevision;
@@ -28,6 +29,7 @@ public sealed class SequenceRuntimePositionMap
         Generation = generation;
         Loop = loop;
         State = state;
+        LoopPassBase = loopPassBase;
     }
 
     public Guid SequenceId { get; }
@@ -39,6 +41,12 @@ public sealed class SequenceRuntimePositionMap
     public ulong Generation { get; }
     public bool Loop { get; }
     public SequenceRuntimeTransportState State { get; }
+    /// <summary>
+    /// Native decoder loop generations are absolute even when asynchronous
+    /// preroll reanchors source time to a later existing Program slot.
+    /// An explicit seek starts a new Generation and resets this pass to zero.
+    /// </summary>
+    public ulong LoopPassBase { get; }
 
     public static SequenceRuntimePositionMap Prepare(Guid sequenceId, ulong authoringRevision,
         FrameRate programRate, long durationTicks, ulong programSlot, ulong generation)
@@ -60,7 +68,7 @@ public sealed class SequenceRuntimePositionMap
             return false;
         if (State == SequenceRuntimeTransportState.Paused)
         {
-            position = new(StartTick, Generation, 0);
+            position = new(StartTick, Generation, LoopPassBase);
             return true;
         }
         var elapsed = (Int128)(programSlot - AnchorProgramSlot) *
@@ -68,9 +76,11 @@ public sealed class SequenceRuntimePositionMap
         var total = (Int128)StartTick + elapsed;
         if (total >= DurationTicks && !Loop) return false;
         var passes = total / DurationTicks;
-        if (passes > ulong.MaxValue)
+        if (passes > ulong.MaxValue ||
+            (Int128)LoopPassBase + passes > ulong.MaxValue)
             throw new OverflowException("Sequence loop generation would overflow.");
-        position = new((long)(total % DurationTicks), Generation, (ulong)passes);
+        position = new((long)(total % DurationTicks), Generation,
+            checked(LoopPassBase + (ulong)passes));
         return true;
     }
 
@@ -113,7 +123,26 @@ public sealed class SequenceRuntimePositionMap
         if (programSlot < AnchorProgramSlot)
             throw new ArgumentException("The Runtime Program slot cannot move backwards.", nameof(programSlot));
         return new(SequenceId, AuthoringRevision, ProgramRate, DurationTicks,
-            programSlot, StartTick, Generation, Loop, State);
+            programSlot, StartTick, Generation, Loop, State, LoopPassBase);
+    }
+
+    /// <summary>
+    /// Only the non-Program management lane may call this after every native
+    /// owner confirms the requested new loop pass. The normal Runtime clock
+    /// keeps increasing; the decoder may resume at the first frame of the
+    /// loop instead of trying to decode the lost wall-clock interval.
+    /// </summary>
+    public SequenceRuntimePositionMap WithConfirmedLoopPrerollAnchor(
+        ulong programSlot, SequenceRuntimePosition confirmed)
+    {
+        if (!Loop || State != SequenceRuntimeTransportState.Playing ||
+            programSlot < AnchorProgramSlot ||
+            confirmed.Generation != Generation ||
+            confirmed.LoopPass <= LoopPassBase ||
+            confirmed.Tick < 0 || confirmed.Tick >= DurationTicks)
+            throw new InvalidOperationException("A later verified native loop pass is required.");
+        return new(SequenceId, AuthoringRevision, ProgramRate, DurationTicks,
+            programSlot, confirmed.Tick, Generation, Loop, State, confirmed.LoopPass);
     }
 
     public SequenceRuntimePositionMap Play(ulong programSlot)
