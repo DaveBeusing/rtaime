@@ -116,6 +116,7 @@ public sealed class MediaAssetFilmstripService : IDisposable
     private readonly IMediaAssetCatalogClient _client;
     private readonly string _consumer = "operator-filmstrip-" + Guid.NewGuid().ToString("N");
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _analysisLane = new(1, 1);
     private readonly Dictionary<string, CacheEntry> _cache = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _lru = new();
     private CancellationTokenSource? _activeStop;
@@ -202,7 +203,7 @@ public sealed class MediaAssetFilmstripService : IDisposable
                 _activeStop = new CancellationTokenSource();
                 _activeKey = key;
                 _waiters = 1;
-                work = RunAsync(request, _activeStop.Token, progress);
+                work = RunOwnedAsync(request, _activeStop, progress);
                 _activeTask = work;
             }
         }
@@ -233,6 +234,13 @@ public sealed class MediaAssetFilmstripService : IDisposable
             current.VideoFormat.FrameRate.Denominator == request.FrameRateDenominator;
     }
 
+    private async Task<MediaFilmstripResult?> RunOwnedAsync(MediaFilmstripRequest request,
+        CancellationTokenSource stop, IProgress<MediaFilmstripProgress>? progress)
+    {
+        try { return await RunAsync(request, stop.Token, progress); }
+        finally { stop.Dispose(); }
+    }
+
     private async Task<MediaFilmstripResult?> RunAsync(MediaFilmstripRequest request,
         CancellationToken canceled, IProgress<MediaFilmstripProgress>? progress)
     {
@@ -242,34 +250,45 @@ public sealed class MediaAssetFilmstripService : IDisposable
             await Task.Delay(150, canceled);
             using var totalBudget = CancellationTokenSource.CreateLinkedTokenSource(canceled);
             totalBudget.CancelAfter(TimeSpan.FromSeconds(45));
-            var points = request.SamplePositions();
-            var output = new List<MediaFilmstripSample>(points.Length);
-            progress?.Report(new(0, points.Length, MediaAnalysisState.Running));
-            foreach (var position in points)
+            // A cancelled slow Begin/transport request cannot overlap the next
+            // filmstrip's decoder admission. Cancelled waiters leave this lane.
+            await _analysisLane.WaitAsync(totalBudget.Token);
+            try
             {
+                var points = request.SamplePositions();
+                var output = new List<MediaFilmstripSample>(points.Length);
+                progress?.Report(new(0, points.Length, MediaAnalysisState.Running));
+                foreach (var position in points)
+                {
+                    totalBudget.Token.ThrowIfCancellationRequested();
+                    var sample = await AnalyzeFrameAsync(request, position, totalBudget.Token);
+                    output.Add(sample);
+                    progress?.Report(new(output.Count, points.Length, MediaAnalysisState.Running));
+                }
+                // A relink during decode revokes old pixels before presentation.
+                if (!await IsCurrentAssetAsync(request, totalBudget.Token))
+                    return new(request, MediaAnalysisState.Stale, [],
+                        "Catalogue identity changed during thumbnail preparation.");
                 totalBudget.Token.ThrowIfCancellationRequested();
-                var sample = await AnalyzeFrameAsync(request, position, totalBudget.Token);
-                output.Add(sample);
-                progress?.Report(new(output.Count, points.Length, MediaAnalysisState.Running));
+                var completed = output.Count(sample => sample.State == MediaAnalysisState.Complete);
+                var state = completed == points.Length ? MediaAnalysisState.Complete :
+                    completed > 0 ? MediaAnalysisState.Partial : MediaAnalysisState.Unavailable;
+                var result = new MediaFilmstripResult(request, state, output.ToArray(),
+                    state == MediaAnalysisState.Complete ? "All thumbnails reflect confirmed decoded PTS." :
+                    "One or more thumbnails were unavailable; no synthetic frames were generated.");
+                if (state == MediaAnalysisState.Complete && !canceled.IsCancellationRequested)
+                    lock (_gate)
+                        if (!_disposed && _activeKey == request.CacheKey)
+                            AddCache(result);
+                progress?.Report(new(completed, points.Length, state));
+                return result;
             }
-            // A relink while a filmstrip was decoding revokes the old pictures
-            // before they can reach a visible Library or timeline presentation.
-            if (!await IsCurrentAssetAsync(request, totalBudget.Token))
-                return new(request, MediaAnalysisState.Stale, [],
-                    "Catalogue identity changed during thumbnail preparation.");
-            totalBudget.Token.ThrowIfCancellationRequested();
-            var completed = output.Count(sample => sample.State == MediaAnalysisState.Complete);
-            var state = completed == points.Length ? MediaAnalysisState.Complete :
-                completed > 0 ? MediaAnalysisState.Partial : MediaAnalysisState.Unavailable;
-            var result = new MediaFilmstripResult(request, state, output.ToArray(),
-                state == MediaAnalysisState.Complete ? "All thumbnails reflect confirmed decoded PTS." :
-                "One or more thumbnails were unavailable; no synthetic frames were generated.");
-            if (state == MediaAnalysisState.Complete && !canceled.IsCancellationRequested)
-                lock (_gate)
-                    if (!_disposed && _activeKey == request.CacheKey)
-                        AddCache(result);
-            progress?.Report(new(completed, points.Length, state));
-            return result;
+            finally { _analysisLane.Release(); }
+        }
+        catch (OperationCanceledException) when (!canceled.IsCancellationRequested)
+        {
+            return new(request, MediaAnalysisState.Unavailable, [],
+                "Bounded filmstrip analysis deadline exceeded.");
         }
         catch (OperationCanceledException) { return null; }
         catch (Exception exception) when (exception is not OutOfMemoryException)
