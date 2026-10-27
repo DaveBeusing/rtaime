@@ -100,6 +100,16 @@ DeleteTransition. Inapplicable/missing fields are rejected.
 - Track deletion requires an empty track. Edits must explicitly remove/repair affected
   transitions in the same batch. Linking existing linked clips requires explicit unlinking.
 
+The Operator's SELECT/MOVE/TRIM gestures are local drafts until pointer
+release submits one existing typed `MoveClip` or `TrimClip` mutation
+against the last loaded authoritative revision. The clip start/end, rather
+than the grabbed pointer location, is snapped to real saved edges and
+the rational frame grid. A rejected edit retains its local draft for
+review/discard; an ambiguous transport outcome blocks further mutations
+until a fresh read. Nothing is automatically resubmitted with a new
+transaction ID, and a stale draft must be explicitly reconstructed after
+refresh. No new edit type, wire version or persistence schema is required.
+
 Undo/Redo target the library (`SequenceId = Guid.Empty`, no definition/edits). They restore
 authored content and entity identities while issuing a **new monotonic revision**. They never
 invoke production commands. A new edit after Undo clears Redo.
