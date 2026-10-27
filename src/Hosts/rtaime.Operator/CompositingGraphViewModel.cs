@@ -798,8 +798,14 @@ public sealed partial class CompositingGraphViewModel : INotifyPropertyChanged, 
 	private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
         if (e.PropertyName is nameof(CompositingGraphNodeViewModel.HasStateDraft) or nameof(CompositingGraphNodeViewModel.StateConflict)) SynchronizeSelectedLayerDraft();
-		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y))
-			{ UpdateConnections(); RefreshViewportProjection(); }
+		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y) &&
+            sender is CompositingGraphNodeViewModel moved && !_nodeLayoutMoving)
+        {
+            foreach (var connection in Connections.Where(connection =>
+                connection.FromNodeId == moved.Id || connection.ToNodeId == moved.Id))
+                connection.UpdateGeometry();
+            RefreshViewportProjection();
+        }
 	}
 
 	private void PublishHealthRevision(IReadOnlyList<CompositingGraphNodeProjection> nodes)
