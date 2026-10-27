@@ -12,6 +12,8 @@
 				<RowDefinition Height="Auto" />
 				<RowDefinition Height="Auto" />
 				<RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
 			</Grid.RowDefinitions>
 
 			<DockPanel Grid.Row="0" Margin="0,0,0,12">
@@ -109,10 +111,34 @@
 					ToolTip="Open the replay asset in Media Deck and select that normal production source as Preview." />
 			</Grid>
 
-			<DockPanel Grid.Row="4">
-				<TextBlock Text="{Binding ClipResult}" Style="{StaticResource OperatorLabel}" />
-				<TextBlock DockPanel.Dock="Right" Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" />
-			</DockPanel>
+			<StackPanel Grid.Row="4" Margin="0,0,0,5">
+                <TextBlock Text="{Binding ReplayRangeEligibility}" Style="{StaticResource OperatorLabel}"
+                    AutomationProperties.Name="Replay capture selection continuity and materialization eligibility"
+                    TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ClipProvenance}" Style="{StaticResource OperatorLabel}"
+                    AutomationProperties.Name="Replay finalized clip identity and source capture time range"
+                    TextWrapping="Wrap" Margin="0,3,0,0" />
+                <TextBlock Text="{Binding ClipResult}" Style="{StaticResource OperatorValue}"
+                    TextWrapping="Wrap" Margin="0,3,0,0" />
+            </StackPanel>
+            <WrapPanel Grid.Row="5" Margin="0,0,0,5">
+                <controls:RtaimeButton Content="QUEUE IN RUNDOWN" Command="{Binding QueueInRundownCommand}"
+                    IsCompact="True" Margin="0,0,6,4"
+                    AutomationProperties.Name="Add verified replay to local rundown draft"
+                    ToolTip="Requires this exact adopted replay to be open on the confirmed production Media Deck. Adds a manual CUT draft only; SAVE, PREPARE and GO remain separate." />
+                <controls:RtaimeButton Content="REVIEW / NEW RANGE" Command="{Binding ReviewNewRangeCommand}"
+                    IsCompact="True" Margin="0,0,6,4"
+                    ToolTip="After an unknown CREATE outcome, inspect retained clips and catalogue. Read Runtime state, then explicitly start different IN/OUT marks; never retry the ambiguous request." />
+                <TextBlock Text="{Binding ClipState}" Style="{StaticResource OperatorLabel}"
+                    VerticalAlignment="Center" Margin="6,0,0,0" />
+            </WrapPanel>
+            <StackPanel Grid.Row="6">
+                <TextBlock Text="{Binding RundownFeedback}" Style="{StaticResource OperatorLabel}"
+                    AutomationProperties.Name="Replay to Rundown authoring and reconciliation state"
+                    TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LastError}" Style="{StaticResource OperatorLabel}"
+                    TextWrapping="Wrap" Margin="0,3,0,0" />
+            </StackPanel>
 		</Grid>
 	</Border>
 </UserControl>

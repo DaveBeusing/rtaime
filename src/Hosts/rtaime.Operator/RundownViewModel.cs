@@ -8,6 +8,7 @@ using System.Windows.Input;
 using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
@@ -174,6 +175,57 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 		AddDraft(item);
 		return Task.CompletedTask;
 	}
+
+    /// <summary>
+    /// Enqueue an already finalized, source-fingerprint-matched Replay asset
+    /// as a local manual CUT draft. SAVE and PREPARE/GO remain distinct actions.
+    /// </summary>
+    public bool CanStageReplayClip => CanAddDraft() && !_draftConflict &&
+        _observationAvailable && _confirmedSnapshot is not null &&
+        _operator.IsConnected && !_operator.IsStale;
+
+    public bool TryStageReplayClip(ReplayClipAssetResult clip,
+        MediaAssetDescriptor asset, ProductionSourceId sourceId, string name)
+    {
+        if (!CanStageReplayClip)
+        {
+            Detail = "Replay cannot enter the rundown while saved revisions, execution or Control authority are unverified.";
+            return false;
+        }
+        if (!_operator.Sources.Any(source => source.Id == sourceId.ToString()))
+        {
+            Detail = "Replay media deck source is not a current Control-authorized production source.";
+            return false;
+        }
+        if (!ReplayRundownEligibility.TryVerifyAsset(clip, asset, out var failure))
+        {
+            Detail = failure;
+            return false;
+        }
+
+        // Command re-entry must not duplicate the same replay without another
+        // explicit authoring decision. Existing + MEDIA can intentionally repeat.
+        var existing = Items.FirstOrDefault(row => row.Item is RundownMediaItem media &&
+            media.AssetId.ToString() == asset.AssetId.ToString() &&
+            media.SourceId == sourceId);
+        if (existing is not null)
+        {
+            SelectedItem = existing;
+            Detail = "Replay asset is already in this rundown. Select its row or SAVE the draft.";
+            return false;
+        }
+
+        var safeName = string.IsNullOrWhiteSpace(name) ? asset.DisplayName : name.Trim();
+        if (safeName.Length > RundownItem.MaximumNameLength)
+            safeName = safeName[..RundownItem.MaximumNameLength];
+        AddDraft(new RundownMediaItem(
+            RundownItemId.New(), safeName, asset.AssetId.Value,
+            sourceId, RundownTransition.Cut, followAction: RundownFollowAction.Manual,
+            repeat: RundownRepeatPolicy.None));
+        Detail = $"REPLAY DRAFT · {asset.AssetId} · source {sourceId} · " +
+            $"capture {clip.SourceIn:c}–{clip.SourceOut:c}. SAVE, then explicit PREPARE and GO. Not Program.";
+        return true;
+    }
 
 	private Task AddSceneAsync()
 	{
@@ -493,6 +545,7 @@ public sealed partial class RundownViewModel : INotifyPropertyChanged
 	private void RaiseCommandState()
 	{
 		OnPropertyChanged(nameof(CanEditAuthoring));
+        OnPropertyChanged(nameof(CanStageReplayClip));
 		OnPropertyChanged(nameof(LiveActionDetail));
 		OnPropertyChanged(nameof(CurrentItemName));
 		OnPropertyChanged(nameof(PreparedItemName));

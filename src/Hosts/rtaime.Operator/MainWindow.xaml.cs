@@ -89,6 +89,7 @@ public partial class MainWindow : Window
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck, client, PickLocalMediaFiles);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
+        Replay.AttachRundown(Rundown);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
@@ -200,6 +201,7 @@ public partial class MainWindow : Window
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
+        Replay.AttachRundown(Rundown);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
@@ -612,6 +614,7 @@ public partial class MainWindow : Window
 			RuntimePerformanceStatus.Dispose();
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
+            Replay.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;

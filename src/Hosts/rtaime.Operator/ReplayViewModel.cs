@@ -12,7 +12,7 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
-public sealed class ReplayViewModel : INotifyPropertyChanged
+public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposable
 {
 	private readonly OperatorControlClient _client;
 	private readonly MediaDeckViewModel _mediaDeck;
@@ -34,6 +34,7 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		CreateClipCommand = new AsyncRelayCommand(CreateClipAsync, () => CanCreateClip);
 		OpenInMediaDeckCommand = new AsyncRelayCommand(OpenInMediaDeckAsync, () => CanOpenClip);
 		SendToPreviewCommand = new AsyncRelayCommand(SendToPreviewAsync, () => CanOpenClip);
+        InitializeRundownWorkflow();
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -90,12 +91,20 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		}
 	}
 
-	public bool HasFailure => !string.IsNullOrWhiteSpace(LastError) || _snapshot.Failure is not null;
-	public bool CanMark => !IsBusy && _snapshot.CaptureState is ReplayControlCaptureState.Capturing or ReplayControlCaptureState.Degraded;
-	public bool CanCreateClip => !IsBusy && _snapshot.HasSelection && !string.IsNullOrWhiteSpace(ClipName);
+	public bool HasFailure => _clipOutcomeUnknown || !string.IsNullOrWhiteSpace(LastError) || _snapshot.Failure is not null;
+	public bool CanMark => !IsBusy && !_clipOutcomeUnknown &&
+        _snapshot.ClipState != ReplayControlClipState.Finalizing &&
+        _snapshot.CaptureState is ReplayControlCaptureState.Capturing or ReplayControlCaptureState.Degraded;
+	public bool CanCreateClip => !IsBusy && _lastClip is null && !_clipOutcomeUnknown && !_mustMarkNewRange &&
+        _snapshot.ClipState == ReplayControlClipState.Marked &&
+        _snapshot.HasSelection && _snapshot.MarkIn >= TimeSpan.Zero &&
+        _snapshot.SelectedDuration <= _snapshot.RetainedDuration &&
+        _snapshot.RetainedSegmentCount > 0 && _snapshot.MaximumStorageBytes > 0 &&
+        _snapshot.Failure?.Code is not ("replay.storage.unavailable" or "replay.storage.cleanup_pending") &&
+        !string.IsNullOrWhiteSpace(ClipName);
 	public bool CanOpenClip =>
-		!IsBusy &&
-		_lastClip is { Succeeded: true, AssetId: not null } &&
+		!IsBusy && !_clipOutcomeUnknown && _snapshot.ClipState == ReplayControlClipState.Ready &&
+		_lastClip is { Succeeded: true, AssetId: { Length: > 0 }, Sha256: { Length: 64 } } &&
 		!string.IsNullOrWhiteSpace(_lastClip.SourceLocation);
 
 	public string CaptureState => _snapshot.CaptureState.ToString().ToUpperInvariant();
@@ -118,7 +127,7 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 	public string ClipResult => _lastClip is null
 		? "NO MATERIALIZED CLIP"
 		: _lastClip.Succeeded
-			? $"READY · {_lastClip.AssetId} · {FormatTime(_lastClip.Duration)}"
+			? $"LIBRARY ADOPTED · {_lastClip.AssetId} · {FormatTime(_lastClip.Duration)} · verify current file/deck before Rundown"
 			: $"FAILED · {_lastClip.Failure?.Code ?? "UNKNOWN"}";
 	public string StatusDetail => LastError ?? _snapshot.Failure?.Message ??
 		(_snapshot.CaptureState == ReplayControlCaptureState.Capturing
@@ -136,13 +145,16 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 	}
 
 	private async Task RefreshAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync().ConfigureAwait(false)));
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync()));
 
 	private async Task MarkInAsync() =>
 		await RunAsync(async () =>
 		{
 			_lastClip = null;
-			var snapshot = await _client.MarkReplayInAsync(TimeSpan.FromSeconds(LookbackSeconds)).ConfigureAwait(false);
+            _materializedClipName = null;
+            RundownFeedback = "IN selection updated; any previous clip must be reviewed independently.";
+			var snapshot = await _client.MarkReplayInAsync(TimeSpan.FromSeconds(LookbackSeconds));
+            if (_mustMarkNewRange) _newRangeStarted = true;
 			ApplyConfirmedSnapshot(snapshot);
 			OnPropertyChanged(nameof(ClipResult));
 		});
@@ -151,27 +163,53 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		await RunAsync(async () =>
 		{
 			_lastClip = null;
-			var snapshot = await _client.MarkReplayOutAsync().ConfigureAwait(false);
+            _materializedClipName = null;
+			var snapshot = await _client.MarkReplayOutAsync();
+            if (_mustMarkNewRange && _newRangeStarted && snapshot.HasSelection)
+            {
+                _mustMarkNewRange = false;
+                _newRangeStarted = false;
+            }
 			ApplyConfirmedSnapshot(snapshot);
 			OnPropertyChanged(nameof(ClipResult));
 		});
 
-	private async Task CreateClipAsync() =>
-		await RunAsync(async () =>
-		{
-			var result = await _client.CreateReplayClipAsync(ClipName).ConfigureAwait(false);
+	private async Task CreateClipAsync()
+    {
+        if (!CanCreateClip) return;
+        await RunAsync(async () =>
+        {
+            var requestedName = ClipName.Trim();
+            ReplayClipAssetResult result;
+            try
+            {
+                result = await _client.CreateReplayClipAsync(requestedName);
+            }
+            catch (Exception exception) when (exception is IOException or TimeoutException or
+                InvalidOperationException or OperationCanceledException)
+            {
+                // A lost response may follow completed materialization and adoption.
+                // Never resubmit this same selected range under a new clip identity.
+                _clipOutcomeUnknown = true;
+                _lastClip = null;
+                _materializedClipName = null;
+                RundownFeedback = "CLIP OUTCOME UNKNOWN · inspect Media Library and finalized replay files before manually starting a different range.";
+                throw;
+            }
 			_lastClip = result;
+            _materializedClipName = result.Succeeded ? requestedName : null;
 			LastError = result.Failure?.Message;
-			ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync().ConfigureAwait(false));
+			ApplyConfirmedSnapshot(await _client.GetReplaySnapshotAsync());
 			OnPropertyChanged(nameof(ClipResult));
 			OnPropertyChanged(nameof(CanOpenClip));
 		});
+    }
 
 	private async Task OpenInMediaDeckAsync() =>
 		await RunAsync(async () =>
 		{
 			var clip = RequireReadyClip();
-			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!))).ConfigureAwait(false);
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!)));
 			if (!opened)
 				throw new InvalidOperationException("Replay clip could not be opened through the existing Media Deck.");
 		});
@@ -180,20 +218,22 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		await RunAsync(async () =>
 		{
 			var clip = RequireReadyClip();
-			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!))).ConfigureAwait(false);
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!)));
 			if (!opened)
 				throw new InvalidOperationException("Replay clip could not be opened through the existing Media Deck.");
 			if (string.IsNullOrWhiteSpace(_mediaDeck.SourceId) || _mediaDeck.SourceId == "—")
 				throw new InvalidOperationException("Media Deck did not confirm a production source slot for the replay clip.");
-			var response = await _client.SelectPreviewAsync(_mediaDeck.SourceId).ConfigureAwait(false);
+			var response = await _client.SelectPreviewAsync(_mediaDeck.SourceId);
 			if (!response.Accepted)
 				throw new InvalidOperationException(response.Failure?.Message ?? "Replay clip Preview selection was rejected.");
 		});
 
 	private ReplayClipAssetResult RequireReadyClip() =>
-		_lastClip is { Succeeded: true, AssetId: not null } && !string.IsNullOrWhiteSpace(_lastClip.SourceLocation)
-			? _lastClip
-			: throw new InvalidOperationException("Create and confirm a Media Library replay clip first.");
+        !_clipOutcomeUnknown && _snapshot.ClipState == ReplayControlClipState.Ready &&
+        _lastClip is { Succeeded: true, AssetId: { Length: > 0 },
+            SourceLocation: { Length: > 0 }, Sha256: { Length: 64 } } clip
+            ? clip
+            : throw new InvalidOperationException("Create and confirm a Media Library replay clip first.");
 
 	private async Task RunAsync(Func<Task> operation)
 	{
@@ -203,9 +243,9 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		LastError = null;
 		try
 		{
-			await operation().ConfigureAwait(false);
+			await operation();
 		}
-		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException or TimeoutException)
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException or TimeoutException or OperationCanceledException or NotSupportedException or UnauthorizedAccessException)
 		{
 			LastError = exception.Message;
 		}
@@ -226,12 +266,13 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 			nameof(HasFailure), nameof(CanMark), nameof(CanCreateClip), nameof(CanOpenClip)
 		})
 			OnPropertyChanged(name);
+        NotifyReplayJourney();
 		RaiseCommands();
 	}
 
 	private void RaiseCommands()
 	{
-		foreach (var command in new[] { RefreshCommand, MarkInCommand, MarkOutCommand, CreateClipCommand, OpenInMediaDeckCommand, SendToPreviewCommand }.OfType<AsyncRelayCommand>())
+		foreach (var command in new[] { RefreshCommand, MarkInCommand, MarkOutCommand, CreateClipCommand, OpenInMediaDeckCommand, SendToPreviewCommand, QueueInRundownCommand, ReviewNewRangeCommand }.OfType<AsyncRelayCommand>())
 			command.RaiseCanExecuteChanged();
 	}
 

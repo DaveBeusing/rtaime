@@ -119,8 +119,12 @@ public sealed class ReplayClipMaterializer
 					var decoded = source.ReadNext(outputSequence);
 					if (!decoded.Succeeded || decoded.Frame is null)
 					{
-						if (decoded.Status == LocalMediaFrameReadStatus.Ended)
-							break;
+                        // The selected materialization window was admitted before
+                        // decoding. Premature EOF must not publish a shortened MP4
+                        // under the original capture IN/OUT provenance.
+                        if (decoded.Status == LocalMediaFrameReadStatus.Ended)
+                            throw new InvalidDataException(
+                                $"Replay segment '{segment.SegmentId}' ended before requested frame {frameIndex} / {endExclusive}.");
 						throw new InvalidDataException(decoded.Failure?.Message ?? "Replay segment decode failed.");
 					}
 
