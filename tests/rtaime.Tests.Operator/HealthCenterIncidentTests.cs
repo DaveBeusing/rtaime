@@ -261,6 +261,10 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal(2, targets.Count);
 		Assert.Equal("LIVE", targets[0].TransmissionState);
 		Assert.Equal("FAILED", targets[1].TransmissionState);
+		var measured = OutputRoutingHealthViewModel.ProjectNetworkTargets(role, true, false, Start,
+			new Dictionary<string, double?> { ["program:program-srt"] = 1024 });
+		Assert.Contains("1 KiB/s", measured[0].ProviderSendEvidence, StringComparison.Ordinal);
+		Assert.Contains("rate UNVERIFIED", measured[1].ProviderSendEvidence, StringComparison.Ordinal);
 		Assert.Contains("CONTROL REV 25", targets[0].RouteRevision, StringComparison.Ordinal);
 		Assert.Contains("RUNTIME EXEC REV 9", targets[0].RouteRevision, StringComparison.Ordinal);
 		Assert.Contains("SOURCE source-id", targets[0].RouteRevision, StringComparison.Ordinal);
@@ -291,6 +295,21 @@ public sealed class HealthCenterIncidentTests
 			unconfirmed, true, false, Start));
 		Assert.Equal("UNKNOWN", Assert.Single(OutputRoutingHealthViewModel.ProjectNetworkTargets(
 			unconfirmed, true, false, Start)).TransmissionState);
+	}
+
+	[Fact]
+	public void Measured_local_sender_rates_require_monotonic_bytes_and_a_bounded_observation_interval()
+	{
+		Assert.Equal(2048d, OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 3072, TimeSpan.FromSeconds(1)));
+		Assert.Equal(0d, OutputRoutingHealthViewModel.CalculateSenderRate(
+			4096, 4096, TimeSpan.FromSeconds(1)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			4096, 2048, TimeSpan.FromSeconds(1)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 2048, TimeSpan.FromMilliseconds(100)));
+		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
+			1024, 2048, TimeSpan.FromSeconds(20)));
 	}
 
 	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>
