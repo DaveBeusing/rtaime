@@ -606,18 +606,26 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			_uiContext.Post(_ => Apply(), null);
 	}
 
-	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot, bool preview = false)
+	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot,
+		OperatorGpuMonitoringFrame origin, bool preview = false)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(origin);
 		var stream = preview ? MonitoringStreamKind.Source : MonitoringStreamKind.Program;
 		var current = preview ? PreviewGpuFrame : ProgramGpuFrame;
 		if (!ScopesEnabled || ActiveScopeStream != stream || current is null ||
 			(preview ? PreviewState : ProgramState) != "LIVE" ||
+			origin.Descriptor.StreamKind != stream ||
+			origin.Descriptor.SourceId != current.Descriptor.SourceId ||
+			origin.Resource.ResourceId != current.Resource.ResourceId ||
+			origin.Resource.ProviderInstanceId != current.Resource.ProviderInstanceId ||
+			origin.Resource.Lifetime.Generation != current.Resource.Lifetime.Generation ||
+			origin.SequenceNumber != current.SequenceNumber ||
 			snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource ||
-			snapshot.SequenceNumber != current.SequenceNumber ||
-			snapshot.SourceWidth != current.Resource.Format.Width ||
-			snapshot.SourceHeight != current.Resource.Format.Height ||
-			snapshot.Color != current.Resource.Format.Color)
+			snapshot.SequenceNumber != origin.SequenceNumber ||
+			snapshot.SourceWidth != origin.Resource.Format.Width ||
+			snapshot.SourceHeight != origin.Resource.Format.Height ||
+			snapshot.Color != origin.Resource.Format.Color)
 			return;
 
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
