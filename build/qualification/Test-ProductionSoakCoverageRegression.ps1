@@ -37,6 +37,8 @@ try {
     Reject-Policy $candidate "invented native 25-fps qualification"
     $candidate = Copy-Policy; $candidate.unresolvedRiskReviews = @()
     Reject-Policy $candidate "memory or branch-protection risk omitted"
+    $candidate = Copy-Policy; $candidate.faultCoverage[0].evidence = "InventedFaultTests"
+    Reject-Policy $candidate "nonexistent source test inserted in fault coverage"
 
     & (Join-Path $PSScriptRoot "New-ProductionSoakCoverageReport.ps1") -ExpectedSourceCommit $source -OutputPath $reportPath | Out-Null
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json -Depth 48
@@ -60,7 +62,7 @@ try {
         @($assessment.qualifications | Where-Object { $_.id -like "ssd/invalid/*" -and $_.status -eq "FAIL" }).Count -eq 0) {
         throw "Malformed supplied SSD evidence did not fail closed."
     }
-    Write-Host "Production soak matrix regression PASS: six rejected policy changes, missing-evidence NO-GO, immutable output and invalid SSD input rejection. No hardware workload was executed."
+    Write-Host "Production soak matrix regression PASS: seven rejected policy changes, missing-evidence NO-GO, immutable output and invalid SSD input rejection. No hardware workload was executed."
 } finally {
     if ([IO.Path]::GetFileName($root) -notlike "rtaime-soak-matrix-*") {
         throw "Unsafe temporary qualification cleanup target."
