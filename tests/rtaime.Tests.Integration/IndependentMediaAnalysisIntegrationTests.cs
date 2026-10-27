@@ -143,6 +143,65 @@ public sealed class IndependentMediaAnalysisIntegrationTests
         Assert.Equal(MediaAnalysisState.Complete, current.State);
     }
 
+
+    [Fact]
+    public void Disk_cache_limits_complete_manifests_and_blobs_under_concurrent_requests()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "rtaime-cache-bounded-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var cache = new MediaAnalysisDerivedCache(folder);
+            var request = Frame(MediaAssetId.New(), 1);
+            var result = new MediaAnalysisObservation(MediaAnalysisContract.Version,
+                Guid.NewGuid().ToString("D"), request.AssetId, request.ConsumerId,
+                request.Generation, Guid.NewGuid().ToString("N"), request.Kind,
+                MediaAnalysisState.Complete, 0, 0, 160, 90,
+                new byte[160 * 90 * 4], 0, 0, null, false, false, null, "Decoded.");
+            Parallel.For(0, 90, index => cache.Write("fingerprint-A:frame:" + index, result));
+            var manifests = Directory.GetFiles(folder, "*.json");
+            Assert.InRange(manifests.Length, 1, MediaAnalysisDerivedCache.MaximumEntries);
+            Assert.True(Directory.GetFiles(folder).Sum(file => new FileInfo(file).Length) <=
+                MediaAnalysisDerivedCache.MaximumBytes);
+            Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
+            // A newly written unchanged catalogue fingerprint remains readable after pruning.
+            cache.Write("fingerprint-A:frame:latest", result);
+            Assert.NotNull(cache.Read("fingerprint-A:frame:latest", request with { Width = 160, Height = 90 }));
+            Assert.Null(cache.Read("fingerprint-B:frame:latest", request with { Width = 160, Height = 90 }));
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public void Cached_waveform_needs_exact_requested_range_and_finite_bucket_values()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "rtaime-waveform-cache-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var request = Waveform(MediaAssetId.New(), 1) with { EndTicks = 1_000_000, BucketCount = 2 };
+            var buckets = new[]
+            {
+                new MediaAnalysisWaveformBucket(0, 500_000, 0, 2400, true, false,
+                    [-0.5f, -0.25f], [0.5f, 0.25f], [0.25f, 0.125f]),
+                new MediaAnalysisWaveformBucket(500_000, 1_000_000, 2400, 2400, true, false,
+                    [-0.5f, -0.25f], [0.5f, 0.25f], [0.25f, 0.125f])
+            };
+            var result = new MediaAnalysisObservation(MediaAnalysisContract.Version,
+                Guid.NewGuid().ToString("D"), request.AssetId, request.ConsumerId,
+                request.Generation, "runtime-epoch", MediaAnalysisKind.Waveform,
+                MediaAnalysisState.Complete, 0, null, 0, 0, null, 48000, 2,
+                buckets, false, false, null, "Decoded.");
+            var cache = new MediaAnalysisDerivedCache(folder);
+            cache.Write("fingerprint-A:peaks:0-1000000", result);
+            Assert.NotNull(cache.Read("fingerprint-A:peaks:0-1000000", request));
+            Assert.Null(cache.Read("fingerprint-A:peaks:0-1000000", request with { EndTicks = 900_000 }));
+            Assert.Null(cache.Read("fingerprint-A:peaks:0-1000000", request with { PositionTicks = 100 }));
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+    }
+
+
     [Fact]
     public void Atomic_cache_requires_valid_manifest_checksum_and_matching_request_identity()
     {
