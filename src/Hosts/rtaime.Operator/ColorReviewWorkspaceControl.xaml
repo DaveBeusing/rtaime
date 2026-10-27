@@ -49,24 +49,16 @@
                     FrameB="{Binding Monitoring.PreviewImage}"
                     DifferenceFrame="{Binding Monitoring.DifferenceImage}"
                     CompareMode="{Binding Monitoring.CompareMode}"
-                    WipePosition="0.5" SnapsToDevicePixels="True" IsHitTestVisible="False">
-                    <controls:RtaimeMediaCompareView.Style>
-                        <Style TargetType="{x:Type controls:RtaimeMediaCompareView}">
-                            <Setter Property="Visibility" Value="Visible" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Monitoring.IsGpuComparisonActive}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </controls:RtaimeMediaCompareView.Style>
+                    WipePosition="0.5" SnapsToDevicePixels="True" IsHitTestVisible="False"
+                    Visibility="{Binding CpuCompareVisibility}">
                 </controls:RtaimeMediaCompareView>
                 <controls:GpuMediaCompareSurface
                     Monitoring="{Binding Monitoring}"
                     FrameA="{Binding Monitoring.ProgramGpuFrame}"
                     FrameB="{Binding Monitoring.PreviewGpuFrame}"
                     CompareMode="{Binding Monitoring.CompareMode}"
-                    WipePosition="0.5" Panel.ZIndex="2" IsHitTestVisible="False" />
+                    WipePosition="0.5" Panel.ZIndex="2" IsHitTestVisible="False"
+                    Visibility="{Binding CompareVisibility}" />
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Orientation="Horizontal"
                     Margin="6" Panel.ZIndex="3">
                     <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand, ElementName=ColorProgramMonitor}"
