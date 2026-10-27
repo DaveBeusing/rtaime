@@ -394,7 +394,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public bool HasItems => FilteredItems.Count > 0;
 	public bool HasSelection => _compositingNode is not null || SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
 	public bool HasAuthoritativeCompositingSelection => SelectedCompositingLayer is { Kind: 2 or 3 };
-	public bool CanEditSelection => HasSelection && !HasMultipleSelection && (_compositingNode is null || CanEditAuthoritativeCompositingSelection());
+	public bool CanEditSelection => HasSelection && !HasMultipleSelection && InspectorPinMatchesCurrent &&
+        (_compositingNode is null || CanEditAuthoritativeCompositingSelection());
 	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
 	public bool HasEffects => InspectorEffectProperties.Count > 0;
 	public bool SupportsTransformRotation => HasAuthoritativeCompositingSelection;
@@ -1473,6 +1474,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
 		OnPropertyChanged(nameof(HasAuthoritativeCompositingSelection));
+        NotifyInspectorPinState();
 		OnPropertyChanged(nameof(SupportsTransformRotation));
 		OnPropertyChanged(nameof(SupportsTransformAnchor));
 		OnPropertyChanged(nameof(SupportsTransformCrop));
@@ -1551,7 +1553,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	}
 
 	private bool CanEditAuthoritativeCompositingSelection() =>
-		HasAuthoritativeCompositingSelection && InspectorInputsValid && _operator.CanManageCompositingLayers();
+		HasAuthoritativeCompositingSelection && InspectorInputsValid && InspectorPinMatchesCurrent &&
+        _operator.CanManageCompositingLayers();
 
 	private async Task ApplySelectedCompositingTransformAsync()
 	{
