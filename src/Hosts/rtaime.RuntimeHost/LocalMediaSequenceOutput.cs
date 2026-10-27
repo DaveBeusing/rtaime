@@ -264,9 +264,16 @@ public sealed partial class LocalMediaDeckRuntimeService
                     out var position, out var sliceEndTick,
                     out count, out ownerCount, out var readFailure))
                 {
-                    session.OutputState = "BUFFERING";
+                    // Real decoder exhaustion or a mismatched generation is
+                    // terminal for this prepared source. Only an ordinary
+                    // producer starvation may be retried at the next slot.
+                    session.OutputState = IsTerminalSequenceFailure(readFailure?.Code)
+                        ? "FAILED" : "BUFFERING";
                     session.FailureCode = readFailure?.Code;
                     session.FailedBoundaries++;
+                    session.LastPreviewSlot = null;
+                    session.LastProgramSlot = null;
+                    session.ArmedTake = null;
                     runtime.MarkSequenceInputUnavailable(session.SourceId);
                     return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
                 }
@@ -535,6 +542,14 @@ public sealed partial class LocalMediaDeckRuntimeService
     // A previously confirmed Preview frame remains eligible while the next
     // source frame is still passing through the existing Program boundary.
     // A two-frame gap, source failure or stale generation is not Take-ready.
+    internal static bool IsTerminalSequenceFailure(string? code) => code is
+        "runtime.sequence.ended" or
+        "runtime.sequence.stale_sample" or
+        "runtime.sequence.source_mismatch" or
+        "runtime.sequence.boundary_missing" or
+        "runtime.sequence.boundary_capacity" or
+        "runtime.sequence.boundary_fence";
+
     private static bool HasRecentConfirmedPreview(SequenceOutputSession session) =>
         session.LastPreviewSlot is { } confirmed &&
         session.LastPublishedSlot >= confirmed &&
