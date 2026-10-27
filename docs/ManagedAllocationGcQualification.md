@@ -12,7 +12,10 @@ observations (64 KiB total) during the **unchanged** 600-second 1080p50 or
 thread counts, live managed-byte estimate, cumulative allocations, GC pause and
 collection counts, last-completed-GC heap committed/fragmented/LOH/POH evidence,
 Replay queue depth/high-water/capacity, encoded segment retention, and actual
-writer lifecycle opens/finalize/abort and active owners. A fifth observation
+writer lifecycle opens/finalize/abort and active owners. The Media Foundation
+writer also reports successful native sink acquisitions/releases, MF startup/
+shutdown calls and active NV12 scratch buffer rentals at sparse checkpoints.
+These are software resource-owner balances, not ETW/native allocation stacks. A fifth observation
 is made after Runtime/Control shutdown. No per-frame statistics collection,
 forced GC, producer allocation or changed acceptance bound is introduced.
 
