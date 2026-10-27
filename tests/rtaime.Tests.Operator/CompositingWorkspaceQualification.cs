@@ -24,6 +24,50 @@ internal static class CompositingWorkspaceQualification
         var originalOwner = inspectorView.ControlState;
         var originalDeck = inspectorView.MediaDeck;
         var monitoring = window.Monitoring;
+        // The Color Review submode borrows exactly the existing monitoring and
+        // Inspector owners and preserves all registered workspace identities.
+        var review = Assert.IsType<ColorReviewWorkspaceControl>(
+            window.FindName("ColorReviewWorkspace"));
+        var color = window.ColorReview;
+        var scopesBeforeReview = monitoring.ScopesEnabled;
+        Assert.Same(monitoring, color.Monitoring);
+        Assert.Same(window.MediaPool, color.Inspector);
+        Assert.Equal(Visibility.Collapsed, color.ReviewVisibility);
+        Assert.True(control.IsVisible);
+        Assert.False(color.AnalysisEnabled);
+        color.ShowReviewCommand.Execute(null);
+        await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        Assert.True(review.IsVisible);
+        Assert.Same(color, review.DataContext);
+        Assert.False(control.IsVisible);
+        Assert.True(color.AnalysisEnabled);
+        Assert.True(monitoring.ScopesEnabled);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Program, monitoring.ActiveScopeStream);
+        var scopes = Descendants(review).OfType<RtaimeMediaScope>().ToArray();
+        Assert.Equal(4, scopes.Length);
+        Assert.All(scopes, scope => Assert.Null(scope.Snapshot));
+        Assert.Contains("COLOR EVIDENCE PENDING", color.ColorBasisLabel);
+        var gpuScopes = Assert.Single(Descendants(review).OfType<GpuScopeAnalysisSurface>());
+        Assert.True(gpuScopes.AnalysisEnabled);
+        var viewer = Assert.IsType<MonitorView>(review.FindName("ColorProgramMonitor"));
+        Assert.Same(monitoring.ProgramImage, viewer.Frame);
+        Assert.Contains(Descendants(review).OfType<RtaimeMediaCompareView>(),
+            compare => ReferenceEquals(compare.FrameA, monitoring.ProgramImage) &&
+                ReferenceEquals(compare.FrameB, monitoring.PreviewImage));
+        color.SelectScopeSourceCommand.Execute("PREVIEW");
+        await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Preview, monitoring.ActiveScopeStream);
+        Assert.True(gpuScopes.AnalyzePreview);
+        Assert.Null(color.SelectedScopes);
+        Assert.Contains("NO CURRENT", color.ScopeFrameLabel);
+        Assert.Equal("COMPOSITING", window.Shell.SelectedWorkspace);
+        color.ShowGraphCommand.Execute(null);
+        await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+        Assert.True(control.IsVisible);
+        Assert.False(review.IsVisible);
+        Assert.False(color.AnalysisEnabled);
+        Assert.Equal(rtaime.Media.Contracts.MonitoringStreamKind.Program, monitoring.ActiveScopeStream);
+        Assert.Equal(scopesBeforeReview, monitoring.ScopesEnabled);
         var transport = new InspectorPrecisionTests.InspectorTransport { ManyLayers = true };
         var client = new OperatorControlClient(transport);
         await using var owner = new OperatorViewModel(client, runtimeReadiness: new InspectorPrecisionTests.ReadyService());
