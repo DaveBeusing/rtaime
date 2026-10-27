@@ -23,11 +23,13 @@ public sealed partial class LocalMediaDeckRuntimeService
         Span<SequenceMediaFrameLease?> ownerFrames,
         Span<int> clipOwnerIndices,
         out SequenceRuntimePosition position,
+        out long sliceEndTick,
         out int clipCount,
         out int ownerCount,
         out Failure? failure)
     {
         position = default;
+        sliceEndTick = 0;
         clipCount = 0;
         ownerCount = 0;
         reference.Validate();
@@ -74,6 +76,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 return false;
             }
 
+            sliceEndTick = selected.EndTick;
             if (selected.Clips.Length > selectedClips.Length ||
                 selected.Clips.Length > clipRequests.Length ||
                 selected.Clips.Length > clipOwnerIndices.Length ||
