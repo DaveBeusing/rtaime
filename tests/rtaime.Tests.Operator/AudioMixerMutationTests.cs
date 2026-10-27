@@ -89,6 +89,33 @@ public sealed partial class AudioMixerMutationTests
 
 
     [Fact]
+    public async Task Unpresented_client_revision_cannot_be_silently_accepted_by_a_new_draft()
+    {
+        var transport = new AudioTransport();
+        var client = new OperatorControlClient(transport);
+        await using var owner = new OperatorViewModel(client, runtimeReadiness: new ReadyService());
+        owner.SynchronizeCommand.Execute(null);
+        var source = owner.AudioMixer.Sources[0];
+        transport.AdvanceConfigurationRevision();
+        await client.SynchronizeAsync(); // Client is ahead; Operator strips have not been reprojected.
+
+        source.Gain = 0.9;
+        Assert.True(source.NeedsReview);
+        Assert.False(source.ApplyCommand.CanExecute(null));
+        Assert.False(source.RebaseDraftCommand.CanExecute(null));
+        Assert.False(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.Equal(0, transport.MutationCalls);
+
+        owner.SynchronizeCommand.Execute(null);
+        Assert.True(source.NeedsReview);
+        Assert.True(source.RebaseDraftCommand.CanExecute(null));
+        source.RebaseDraftCommand.Execute(null);
+        Assert.False(source.NeedsReview);
+        Assert.True(await owner.AudioMixer.ApplySourceAsync(source));
+        Assert.Equal(0.9, transport.Configuration.Sources[0].Gain);
+    }
+
+    [Fact]
     public async Task Competing_audio_configuration_revision_requires_explicit_source_and_bus_rebase()
     {
         var transport = new AudioTransport();
