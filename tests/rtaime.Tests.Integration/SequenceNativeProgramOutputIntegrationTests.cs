@@ -395,6 +395,86 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal("PREVIEW_READY", decks.GetSequenceOutput(reference, host).OutputState);
         Assert.Equal(0, decks.GetSequenceOutputPerformance(reference)?.QuarantinedOwners);
 
+        // A single explicitly authorized Take is committed once. The next
+        // native loop must recover the SAME Program authority, not CUT again.
+        var beforeTake = control.State.Revision;
+        var take = new SequenceOutputCommand(SequenceOutputContract.Version,
+            reference, previewSource.ToString(), beforeTake.Value, Guid.NewGuid());
+        Assert.Equal("TAKE_PENDING", decks.ArmSequenceTake(take,
+            authority.ProductionId.Value, beforeTake, runtime, host).OutputState);
+        var cut = control.CutProgram(new CutProgramCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current,
+                CommandId.New(), control.State.ProductionId, beforeTake), b));
+        Assert.True(cut.Accepted, cut.Failure?.Message);
+        var package = Assert.IsType<ControlHostExecutionPackage>(cut.Execution);
+        Assert.Equal(take, decks.RequireArmedSequenceTake(
+            package.PreparedExecution, package.ProgramTransition));
+        var committed = decks.CommitArmedSequenceTake(take, package.PreparedExecution,
+            () => runtime.ApplyArmedSequenceTake(package.PreparedExecution,
+                package.ProgramSinkId, package.ProgramTransition,
+                () => decks.AuthorizeSequenceProgram(reference, previewSource,
+                    authority.ProductionId.Value, beforeTake,
+                    package.PreparedExecution.AuthoritySnapshot.Revision, runtime)));
+        Assert.True(committed.Committed, committed.Commit?.Failure?.Message ??
+            committed.Prepare.Failure?.Message);
+        Assert.True(control.ConfirmRuntimeCommit(
+            package.PreparedExecution.PreparedExecutionId, committed.Commit!).Committed);
+        Assert.Equal(previewSource, runtime.CommittedProgramSourceId);
+        var committedRevision = control.State.Revision;
+
+        // The first recovered Preview frame occupied slot zero of pass 1.
+        // Four additional native frames consume the rest of that pass.
+        for (var index = 1; index < 5; index++)
+        {
+            var input = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+            Assert.True(input.Published, input.FailureCode);
+            using var programFrame = runtime.ProcessNextBoundary();
+            decks.ObserveSequenceProgramBoundary(programFrame);
+            Assert.Equal(previewSource, programFrame.CommittedProgramSourceId);
+            Assert.Equal(previewSource, programFrame.ProgramFrame.SourceId);
+            Assert.Equal(960 * 2 * sizeof(float), programFrame.ProgramAudioPayload.Length);
+            await Task.Delay(10);
+        }
+        Assert.Equal("PROGRAM_CONFIRMED",
+            decks.GetSequenceOutput(reference, host).OutputState);
+
+        // A loop in committed Program produces explicit signal loss until
+        // native worker generations re-preroll; the old last frame is never
+        // silently held or offered as fresh Program confirmation.
+        var secondLoop = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.False(secondLoop.Published);
+        Assert.Equal("runtime.sequence.loop_preroll_pending", secondLoop.FailureCode);
+        using (var gap = runtime.ProcessNextBoundary())
+        {
+            decks.ObserveSequenceProgramBoundary(gap);
+            Assert.Equal(previewSource, gap.CommittedProgramSourceId);
+            Assert.Equal((byte)0, gap.ProgramPixels.Span[0]);
+            Assert.Equal((byte)0, gap.ProgramPixels.Span[1]);
+            Assert.Equal((byte)0, gap.ProgramPixels.Span[2]);
+        }
+        deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (decks.GetSequenceOutputPerformance(reference)?.CompletedLoopPrerolls != 2 &&
+            DateTimeOffset.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.Equal(2UL,
+            decks.GetSequenceOutputPerformance(reference)?.CompletedLoopPrerolls);
+        var resumedProgram = decks.PresentSequenceBoundary(
+            runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(resumedProgram.Published, resumedProgram.FailureCode);
+        using (var restored = runtime.ProcessNextBoundary())
+        {
+            decks.ObserveSequenceProgramBoundary(restored);
+            Assert.Equal(previewSource, restored.CommittedProgramSourceId);
+            Assert.Equal(960 * 2 * sizeof(float), restored.ProgramAudioPayload.Length);
+        }
+        var final = decks.GetSequenceOutput(reference, host);
+        Assert.Equal("PROGRAM_CONFIRMED", final.OutputState);
+        Assert.Equal(committedRevision.Value, final.ProductionRevision);
+        Assert.NotNull(final.LastProgramSlot);
+        Assert.Equal(committedRevision, control.State.Revision);
+        Assert.True(decks.GetSequenceOutputPerformance(reference)?.MaximumBoundaryDuration >=
+            TimeSpan.Zero);
+
         Assert.Equal("CANCELED", decks.CancelPreparedSequence(reference, host).State);
         Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
     }
