@@ -146,6 +146,9 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 	private readonly Task _worker;
 
 	private INdiSender? _sender;
+	// Persist failed initialization attempts across queued Program samples.
+	private int _retryEpisodeAttempts;
+	private bool _retryEpisodeExhausted;
 	private NetworkOutputLifecycleState _lifecycle = NetworkOutputLifecycleState.Disabled;
 	private bool _connected;
 	private ulong _accepted;
@@ -224,6 +227,14 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 				sample.Video.Dispose();
 				return NetworkOutputEnqueueResult.Rejected(
 					new Failure("network.output.stopped", "Network output session is stopping or stopped."));
+			}
+
+			if (_retryEpisodeExhausted)
+			{
+				_rejected++;
+				sample.Video.Dispose();
+				return NetworkOutputEnqueueResult.Rejected(_failure ??
+					new Failure("network.output.reconnect_exhausted", "NDI reconnect budget is exhausted."));
 			}
 
 			if (!sample.HasCompatibleRuntimeTiming(_configuration.VideoFormat, _configuration.AudioFormat))
@@ -342,20 +353,21 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 		if (_sender is { IsReady: true })
 			return true;
 
-		var attempt = 0;
 		var delay = _configuration.ReconnectInitialDelayMilliseconds;
 		while (!cancellationToken.IsCancellationRequested)
 		{
-			attempt++;
-			if (_configuration.ReconnectMaximumAttempts > 0 && attempt > _configuration.ReconnectMaximumAttempts)
+			int attempt;
+			lock (_gate)
 			{
-				lock (_gate)
+				if (_retryEpisodeExhausted) return false;
+				if (_configuration.ReconnectMaximumAttempts > 0 &&
+					_retryEpisodeAttempts >= _configuration.ReconnectMaximumAttempts)
 				{
-					_connected = false;
-					_lifecycle = NetworkOutputLifecycleState.Faulted;
-					_failure = new Failure("network.output.reconnect_exhausted", "Configured NDI sender restart attempts were exhausted.");
+					ExhaustRetryEpisodeLocked();
+					return false;
 				}
-				return false;
+				attempt = _retryEpisodeAttempts < int.MaxValue
+					? ++_retryEpisodeAttempts : int.MaxValue;
 			}
 
 			try
@@ -380,6 +392,8 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 						_reconnects++;
 					_lifecycle = NetworkOutputLifecycleState.Connected;
 					_connected = true;
+					_retryEpisodeAttempts = 0;
+					_retryEpisodeExhausted = false;
 					_failure = null;
 				}
 				return true;
@@ -398,6 +412,7 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 				{
 					_connected = false;
 					_lifecycle = NetworkOutputLifecycleState.Faulted;
+					_retryEpisodeExhausted = true; // Installing a compatible native runtime requires an explicit target restart.
 					_failure = new Failure(
 						"network.output.ndi_runtime_unavailable",
 						$"NDI runtime is unavailable or incompatible: {exception.GetType().Name}.");
@@ -415,11 +430,29 @@ public sealed class NdiNetworkOutputSession : INetworkOutputSession
 						$"NDI sender initialization failed: {exception.GetType().Name}.");
 				}
 				await ReleaseSenderAsync().ConfigureAwait(false);
+				lock (_gate)
+				{
+					if (_configuration.ReconnectMaximumAttempts > 0 &&
+						_retryEpisodeAttempts >= _configuration.ReconnectMaximumAttempts)
+					{
+						ExhaustRetryEpisodeLocked();
+						return false;
+					}
+				}
 				await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
 				delay = Math.Min(checked(delay * 2), _configuration.ReconnectMaximumDelayMilliseconds);
 			}
 		}
 		return false;
+	}
+
+	private void ExhaustRetryEpisodeLocked()
+	{
+		_retryEpisodeExhausted = true;
+		_connected = false;
+		_lifecycle = NetworkOutputLifecycleState.Faulted;
+		_failure = new Failure("network.output.reconnect_exhausted",
+			$"Configured NDI sender restart attempts ({_configuration.ReconnectMaximumAttempts}) were exhausted; explicitly restart the target.");
 	}
 
 	private async ValueTask ResetSenderAsync(Failure failure)
