@@ -1651,7 +1651,10 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 				output.LifecycleState, output.AuthoritativeActive, output.HealthState, output.Evidence,
 				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message),
 				output.NetworkOutput is null ? null : FromWire(output.NetworkOutput),
-				output.AudioBusId ?? AudioBusId.Program.Value))
+				output.AudioBusId ?? AudioBusId.Program.Value,
+				output.NetworkOutputs?.Select(FromWire).ToArray(),
+				output.ControlRevision,
+				output.RuntimeExecutionRevision))
 			.ToArray(),
 		(wire.CompositingLayers ?? Array.Empty<WireCompositingLayer>())
 			.Select(FromWire)
@@ -2255,7 +2258,7 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null, WireNetworkOutput[]? NetworkOutputs = null, ulong? ControlRevision = null, ulong? RuntimeExecutionRevision = null);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
