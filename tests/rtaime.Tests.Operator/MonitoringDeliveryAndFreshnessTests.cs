@@ -9,6 +9,30 @@ namespace rtaime.Tests.Operator;
 
 public sealed class MonitoringDeliveryAndFreshnessTests
 {
+    [Fact]
+    public void Receipt_age_is_source_bound_and_stale_evidence_is_not_misreported_as_live()
+    {
+        var now = DateTimeOffset.UnixEpoch.AddDays(10);
+        var fresh = new MonitoringViewerFreshness();
+        fresh.SelectSource("preview-a", 3, 1);
+        Assert.Contains("RECOVERING", fresh.FrameAgeEvidence(false, now));
+        Assert.True(fresh.Observe("preview-a", 3, 1, now, 1));
+        Assert.Equal("RECEIVED 100 ms AGO · LIVE",
+            fresh.FrameAgeEvidence(true, now.AddMilliseconds(100)));
+        Assert.Equal("RECEIVED 2100 ms AGO · STALE",
+            fresh.FrameAgeEvidence(true, now.AddMilliseconds(2100)));
+        Assert.Contains("UNKNOWN", fresh.FrameAgeEvidence(false, now.AddMilliseconds(100)));
+        Assert.Contains("CLOCK UNVERIFIED", fresh.FrameAgeEvidence(true, now.AddMilliseconds(-1)));
+
+        // Another source or a new route/connection cannot inherit receipt age.
+        fresh.SelectSource("preview-b", 4, 2);
+        Assert.Contains("RECOVERING", fresh.FrameAgeEvidence(false, now.AddSeconds(5)));
+        Assert.False(fresh.Observe("preview-a", 3, 1, now.AddSeconds(5), 2));
+        Assert.Contains("RECOVERING", fresh.FrameAgeEvidence(false, now.AddSeconds(5)));
+        Assert.True(fresh.Observe("preview-b", 4, 2, now.AddSeconds(5), 1));
+        Assert.Contains("LIVE", fresh.FrameAgeEvidence(true, now.AddSeconds(5)));
+    }
+
 	[Fact]
 	public void Blocked_dispatcher_keeps_one_callback_and_only_newest_Program_and_source_frames()
 	{
