@@ -160,7 +160,7 @@
                         Command="{Binding ToggleInspectorSelectionPinCommand}"
                         IsCompact="True" Width="42" Height="26"
                         Padding="2,0" VerticalAlignment="Top" HorizontalAlignment="Right"
-                        ToolTip="{Binding InspectorSelectionPinStatus}"
+                        ToolTip="{Binding InspectorSelectionPinStatus}" ToolTipService.ShowOnDisabled="True"
                         AutomationProperties.Name="Pin or unpin current Inspector selection" />
 				</Grid>
 			</Border>
