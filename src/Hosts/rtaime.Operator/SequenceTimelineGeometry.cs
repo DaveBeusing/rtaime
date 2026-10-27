@@ -194,7 +194,7 @@ public static class SequenceTimelineGeometry
         }
 
         Consider(0);
-        Consider(Math.Max(0, cursorTick));
+        if (cursorTick >= 0) Consider(cursorTick);
         foreach (var clip in definition.Clips)
         {
             if (clip.ClipId == editedClipId ||
@@ -231,7 +231,7 @@ public static class SequenceTimelineGeometry
         else if (step / 2.0 >= desiredStep) step /= 2;
 
         var aligned = checked((firstFrame / step + (firstFrame % step == 0 ? 0 : 1)) * step);
-        var marks = new List<SequenceRulerMark>(Math.Min(64, (int)(width / 70) + 1));
+        var marks = new List<SequenceRulerMark>((int)Math.Clamp(Math.Floor(width / 70) + 1, 1, 64));
         for (var frame = aligned; marks.Count < 64; frame = checked(frame + step))
         {
             var tick = FrameTicks(frame, rate);
