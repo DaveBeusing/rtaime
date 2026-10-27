@@ -12,6 +12,7 @@ using rtaime.Media.Contracts;
 namespace rtaime.Operator;
 
 public enum SequenceEditorGestureKind { Move, TrimStart, TrimEnd }
+public enum SequenceEditorTool { Select, Move, Trim }
 
 /// <summary>
 /// Editor state is a projection of durable ControlHost sequences. Only authoring
@@ -34,6 +35,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     private bool _busy;
     private bool _disposed;
     private bool _snapping = true;
+    private SequenceEditorTool _tool = SequenceEditorTool.Select;
     private string _status = "SEQUENCE AUTHORING · UNAVAILABLE";
     private string _feedback = "Connect to ControlHost and refresh saved sequences.";
     private double _zoom = 1.0;
@@ -87,6 +89,9 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         TransitionCommand = new AsyncRelayCommand(TransitionAsync, () => CanEdit && _selectedClips.Count == 2);
         ToggleTrackEnabledCommand = new AsyncRelayCommand(() => ToggleTrackAsync(false), () => CanEditSelection);
         ToggleTrackMuteCommand = new AsyncRelayCommand(() => ToggleTrackAsync(true), () => CanEditSelection);
+        SelectToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Select; return Task.CompletedTask; });
+        MoveToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Move; return Task.CompletedTask; });
+        TrimToolCommand = new AsyncRelayCommand(() => { Tool = SequenceEditorTool.Trim; return Task.CompletedTask; });
         WaveformCommand = new AsyncRelayCommand(LoadWaveformAsync,
             () => CanEditSelection && SelectedClip?.Media.Kind == SequenceMediaKind.Audio && _waveforms is not null);
         ZoomInCommand = new AsyncRelayCommand(() => { Zoom = Math.Min(64, Zoom * 2); return Task.CompletedTask; }, () => _snapshot is not null && Zoom < 64);
@@ -113,6 +118,9 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public ICommand TransitionCommand { get; }
     public ICommand ToggleTrackEnabledCommand { get; }
     public ICommand ToggleTrackMuteCommand { get; }
+    public ICommand SelectToolCommand { get; }
+    public ICommand MoveToolCommand { get; }
+    public ICommand TrimToolCommand { get; }
     public ICommand WaveformCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
@@ -157,11 +165,24 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         {
             var next = Math.Clamp(value, 0, Math.Max(0, DurationTicks - 1));
             if (_editCursor == next) return;
-            _editCursor = next; Changed(); Changed(nameof(EditCursorLabel)); UpdateSelectedStatus();
+            _editCursor = next; Changed(); Changed(nameof(EditCursorLabel));
+            Changed(nameof(CursorLeft)); UpdateSelectedStatus();
         }
     }
     public string EditCursorLabel => SequenceTimelineGeometry.Timecode(_editCursor,
         Sequence?.FrameRate ?? new SequenceRate(50, 1));
+    public SequenceEditorTool Tool
+    {
+        get => _tool;
+        set
+        {
+            if (_tool == value) return;
+            CancelGesture();
+            _tool = value;
+            Changed(); Changed(nameof(ToolLabel));
+        }
+    }
+    public string ToolLabel => $"TOOL {Tool.ToString().ToUpperInvariant()}";
     public bool Snapping
     {
         get => _snapping;
@@ -174,7 +195,10 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         {
             var next = Math.Clamp(value, 1, 64);
             if (_zoom == next) return;
-            _zoom = next; _visibleStart = Math.Min(_visibleStart, Math.Max(0, DurationTicks - VisibleSpan));
+            var cursorFraction = Math.Clamp((double)(EditCursorTick - _visibleStart) / VisibleSpan, 0, 1);
+            _zoom = next;
+            _visibleStart = Math.Clamp(checked(EditCursorTick - (long)Math.Round(VisibleSpan * cursorFraction)),
+                0, Math.Max(0, DurationTicks - VisibleSpan));
             Changed(); RefreshViewport(); RaiseCommands();
         }
     }
@@ -183,7 +207,7 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
         get => _firstTrack;
         set
         {
-            var next = Math.Clamp(value, 0, Math.Max(0, TrackCount - 1));
+            var next = Math.Clamp(value, 0, Math.Max(0, TrackCount - VisibleTrackCount));
             if (_firstTrack == next) return;
             _firstTrack = next; Changed(); RefreshViewport(); RaiseCommands();
         }
@@ -223,7 +247,18 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     {
         if (Sequence is null) return;
         var tick = SequenceTimelineGeometry.ToTick(x, width, VisibleStart, VisibleEnd, Sequence.FrameRate);
-        EditCursorTick = SequenceTimelineGeometry.Snap(tick, Sequence, Snapping);
+        EditCursorTick = SequenceTimelineGeometry.SnapEditBoundary(tick, Sequence, Snapping,
+            VisibleSpan, _viewportWidth, -1, Guid.Empty);
+    }
+
+    public void JogCursor(int frames)
+    {
+        if (Sequence is null || frames == 0) return;
+        var rate = Sequence.FrameRate;
+        var frameTick = SequenceTimelineGeometry.FrameTicks(1, rate);
+        var tick = Math.Clamp(checked(EditCursorTick + checked(frames * frameTick)),
+            0, Math.Max(0, DurationTicks - 1));
+        EditCursorTick = SequenceTimelineGeometry.Quantize(tick, rate);
     }
 
     public void SelectClip(Guid id, bool toggle = false, bool extend = false)
@@ -276,7 +311,16 @@ public sealed class SequenceTimelineEditorViewModel : INotifyPropertyChanged, ID
     public void UpdateGesture(long pointerTick)
     {
         if (_gesture is not { } g || _snapshot?.AuthoringRevision != g.Revision) { CancelGesture(); return; }
-        var tick = SequenceTimelineGeometry.Snap(Math.Max(0, pointerTick), Sequence!, Snapping);
+        // Snap the dragged start/end boundary, not the pointer grabbed inside it.
+        // Preserve the original pointer-to-clip offset throughout the gesture.
+        var delta = checked(pointerTick - g.StartPointerTick);
+        var anchor = g.Kind == SequenceEditorGestureKind.TrimEnd
+            ? SequenceTimelineGeometry.ClipEnd(g.Clip) : g.Clip.TimelineStart;
+        var offset = g.Kind == SequenceEditorGestureKind.Move ? g.Clip.Duration : 0;
+        var snapped = SequenceTimelineGeometry.SnapEditBoundary(checked(anchor + delta),
+            Sequence!, Snapping, VisibleSpan, _viewportWidth, EditCursorTick,
+            g.Clip.ClipId, offset);
+        var tick = checked(g.StartPointerTick + snapped - anchor);
         if (g.PreviewTick == tick) return;
         _gesture = g with { PreviewTick = tick };
         Changed(nameof(GestureLabel)); RefreshViewport();
