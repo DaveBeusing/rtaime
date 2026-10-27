@@ -53,6 +53,27 @@ public sealed class MediaLibraryBrowsingTests
 		Assert.Contains("NOT READY", Item(online: true, ready: false).ReadinessLabel);
 	}
 
+    [Fact]
+    public void Library_sorting_uses_bounded_projection_and_keeps_stable_asset_identity()
+    {
+        var projection = new MediaLibraryProjection();
+        var longClip = Item(75, ready: false, key: "clip:long") with { Name = "A-long.mp4" };
+        var shortClip = Item(15, ready: true, key: "clip:short") with { Name = "B-short.mp4" };
+        var unknown = Item(online: false, ready: false, key: "clip:unknown") with { Name = "C-unknown.mp4" };
+        projection.Items.AddRange([longClip, shortClip, unknown]);
+        var bin = Bin();
+        var search = MediaLibrarySearch.Parse("");
+        string[] Keys(MediaLibrarySortOrder order) => projection.Filter(bin, search, order).Select(item => item.Key).ToArray();
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.CategoryName));
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.Name));
+        Assert.Equal(["clip:short", "clip:long", "clip:unknown"], Keys(MediaLibrarySortOrder.DurationShortFirst));
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.DurationLongFirst));
+        Assert.Equal(["clip:short", "clip:long", "clip:unknown"], Keys(MediaLibrarySortOrder.ReadyFirst));
+        Assert.Equal(3, projection.FilteredItems.Count);
+        Assert.All(projection.FilteredItems, item => Assert.Same(
+            projection.Items.Single(source => source.Key == item.Key), item));
+    }
+
 	[Fact]
 	public async Task Preferences_roundtrip_are_bounded_and_reject_malformed_future_or_oversized_documents()
 	{
@@ -253,6 +274,22 @@ public sealed class MediaLibraryBrowsingTests
 				pool.SearchText = index % 2 == 0 ? "clip000" : "";
 				Assert.InRange(pool.FilteredItems.Count, 1, 4096);
 			}
+            // Sorting and catalogue refresh may replace projected records but never asset IDs.
+            var primary = pool.FilteredItems.First();
+            pool.UpdateSelection([primary]);
+            var passiveVisits = 0;
+            void PassiveVisit(MediaPoolItemViewModel _) => passiveVisits++;
+            pool.LibraryItemVisited += PassiveVisit;
+            pool.SortOrder = MediaLibrarySortOrder.DurationLongFirst;
+            Assert.Equal(primary.Key, pool.SelectedItem?.Key);
+            pool.Refresh();
+            Assert.Equal(primary.Key, pool.SelectedItem?.Key);
+            Assert.Same(pool.FilteredItems.Single(asset => asset.Key == primary.Key), pool.SelectedItem);
+            Assert.All(pool.SelectedItems, item => Assert.Same(
+                pool.FilteredItems.Single(asset => asset.Key == item.Key), item));
+            Assert.Equal(0, passiveVisits);
+            pool.SortOrder = MediaLibrarySortOrder.CategoryName;
+            pool.LibraryItemVisited -= PassiveVisit;
 			pool.UpdateSelection(pool.FilteredItems.Take(3)); Assert.True(pool.HasMultipleSelection);
 			pool.SearchText = "no-matches"; Assert.Empty(pool.SelectedItems);
 			pool.SearchText = "";
