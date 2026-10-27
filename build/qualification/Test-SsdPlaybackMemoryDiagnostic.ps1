@@ -64,8 +64,8 @@ for ($i=0; $i -lt $points.Count; $i++) {
     if ($null -ne $p.captureQueue) {
         Require ([int]$p.captureQueue.QueueCapacity -ge 1 -and
             [int]$p.captureQueue.QueueCapacity -le 64 -and
-            [int]$p.captureQueue.CurrentDepth -ge 0 -and
-            [int]$p.captureQueue.CurrentDepth -le [int]$p.captureQueue.QueueCapacity) "Replay queue exceeds finite limit."
+            [int]$p.captureQueue.QueueDepth -ge 0 -and
+            [int]$p.captureQueue.QueueDepth -le [int]$p.captureQueue.QueueCapacity) "Replay queue exceeds finite limit."
     }
     if ($null -ne $p.nativeWriterLifetime) {
         Require ([long]$p.nativeWriterLifetime.ActiveSinks -ge 0 -and
