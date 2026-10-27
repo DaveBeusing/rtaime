@@ -10,6 +10,25 @@ namespace rtaime.Tests.Operator;
 public sealed class LiveConsoleTests
 {
     [Fact]
+    public void Preview_selection_is_not_routing_and_failed_requests_do_not_claim_confirmation()
+    {
+        static string Preview(string? selected, bool connected = true, bool stale = false,
+            bool pending = false, string transition = "READY") =>
+            LiveProductionPresentation.PreviewEvidence(selected, connected, stale, pending, transition);
+
+        Assert.Contains("SELECT SOURCE", Preview(null));
+        Assert.Contains("SET PVW REQUEST", Preview("Camera A"));
+        Assert.Contains("Program is never changed", Preview("Camera A"));
+        Assert.Contains("REQUEST PENDING", Preview("Camera A", pending: true));
+        Assert.Contains("PREVIEW REJECTED", Preview("Camera A", transition: "Set Preview REJECTED"));
+        Assert.Contains("OUTCOME UNCONFIRMED", Preview("Camera A", transition: "SET PREVIEW FAILED"));
+        Assert.Contains("CONTROL CONFIRMED", Preview("Camera A", transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("monitor frames remain separate", Preview("Camera A", transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Preview("Camera A", stale: true, transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Preview("Camera A", connected: false, transition: "PREVIEW CONFIRMED"));
+    }
+
+    [Fact]
     public void Production_take_evidence_keeps_requests_rejections_and_unknown_outcomes_distinct()
     {
         static string Evidence(bool connected = true, bool stale = false, bool pending = false,
