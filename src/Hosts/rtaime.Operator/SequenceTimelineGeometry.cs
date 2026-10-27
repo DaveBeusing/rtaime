@@ -31,6 +31,16 @@ public static class SequenceTimelineGeometry
         return FrameTicks(checked((long)frame), rate);
     }
 
+    /// <summary>Last exact frame-grid tick not greater than the supplied authoring tick.</summary>
+    public static long FloorFrameTick(long tick, SequenceRate rate)
+    {
+        if (tick < 0 || rate.Numerator <= 0 || rate.Denominator <= 0)
+            throw new ArgumentOutOfRangeException(nameof(tick));
+        var frame = (BigInteger)tick * rate.Numerator /
+            ((BigInteger)TicksPerSecond * rate.Denominator);
+        return FrameTicks(checked((long)frame), rate);
+    }
+
     public static long ClipEnd(SequenceClip clip) => checked(clip.TimelineStart + clip.Duration);
 
     public static long ToTick(double x, double width, long from, long end, SequenceRate rate)
