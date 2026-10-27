@@ -149,6 +149,30 @@ The timeline has a separate local history scope; see [Layered Timeline](LayeredT
 
 Rundown name groups end on keyboard-focus or selected-item change. A later name edit creates a fresh history entry; editing after Undo invalidates Redo. Inspector attribute history is an independent bounded context and never includes rundown execution or SAVE.
 
+## Replay clip authoring and admitted playout
+
+The Replay panel may pass a **verified, finalized, online catalogued replay
+asset** into the same rundown draft owner as ordinary media entries.
+The handoff requires the current Media Deck to contain precisely that
+asset on a Control-authorized production source, and refuses missing,
+relinked, fingerprint-mismatched, truncated, unsupported or stale
+results. Repeating the handoff selects an already-staged matching
+asset/source entry rather than silently creating a second local row.
+
+Replay authoring intentionally constructs a manual CUT with no
+repeat/automatic follow: it is a bounded local item, not an automatic
+take or a separate replay scheduler. The item uses existing
+`RundownMediaItem` v1.1 persistence (stable asset/source IDs) and the
+usual 32-step draft history, optimistic SAVE and explicit PREPARE/GO.
+Original Program capture timestamps and the finalized SHA-256 are
+reviewed on the Replay surface; the materialized clip is rebased to
+file-local time zero. Rundown does not invent a new IN/OUT edit contract
+for these timestamps. On SAVE conflict or active/recovering execution,
+transfer is rejected or preserved locally without forcing production
+state. Preview, resident decoder, NEXT_READY, expiry and actual Program
+all remain separate Control/Runtime evidence. A Media Library online
+asset is **not** proof that an off-Program resident deck can take.
+
 ## Resident next-clip preparation
 
 Rundown PREPARE can now preroll the explicitly selected off-Program A/B clip before
