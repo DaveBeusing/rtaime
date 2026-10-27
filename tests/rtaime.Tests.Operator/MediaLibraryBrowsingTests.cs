@@ -254,6 +254,17 @@ public sealed class MediaLibraryBrowsingTests
 		try
 		{
 			await pool.LoadCatalogAsync();
+            // Detached media inspection never bypasses disconnected Control or
+            // creates a decoder/route even when local catalogue records exist.
+            Assert.False(pool.ReviewFramesCommand.CanExecute(null));
+            Assert.False(pool.ReviewAudioCommand.CanExecute(null));
+            pool.ReviewInPercent = 25;
+            pool.ReviewOutPercent = 75;
+            Assert.Empty(pool.FrameReviewSamples);
+            Assert.Null(pool.AudioReviewPresentation);
+            Assert.Equal(0, catalog.Mutations);
+            pool.ReviewInPercent = 0;
+            pool.ReviewOutPercent = 100;
             Assert.Same(pool.FilteredItems, pool.Library.FilteredItems);
             Assert.Same(pool.SelectedItems, pool.Selection.Items);
             var selection = pool.Selection;
