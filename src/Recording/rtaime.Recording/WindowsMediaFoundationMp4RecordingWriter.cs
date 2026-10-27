@@ -8,6 +8,12 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Recording;
 
+// Software lifetime counters for this process's native writer owners, not a native heap profile.
+public readonly record struct Mp4WriterNativeLifetimeStatistics(
+    long SinkCreated, long SinkReleased, long ActiveSinks,
+    long MediaFoundationStarts, long MediaFoundationShutdownCalls, long ActiveMediaFoundationSessions,
+    long ScratchRents, long ScratchReturns, long ActiveScratchBuffers);
+
 /// <summary>
 /// Windows Media Foundation MP4 delivery writer for committed Program video/audio.
 /// Storage and encoder work execute on the existing ProgramRecorder worker.
@@ -16,6 +22,17 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	IProgramRecordingPayloadWriter,
 	IReplaySegmentWriter
 {
+    private static long _sinkCreated, _sinkReleased, _activeSinks;
+    private static long _mfStarted, _mfShutdownCalls, _activeMfSessions;
+    private static long _scratchRents, _scratchReturns, _activeScratch;
+
+    public static Mp4WriterNativeLifetimeStatistics NativeLifetimeStatistics => new(
+        Interlocked.Read(ref _sinkCreated), Interlocked.Read(ref _sinkReleased),
+        Interlocked.Read(ref _activeSinks), Interlocked.Read(ref _mfStarted),
+        Interlocked.Read(ref _mfShutdownCalls), Interlocked.Read(ref _activeMfSessions),
+        Interlocked.Read(ref _scratchRents), Interlocked.Read(ref _scratchReturns),
+        Interlocked.Read(ref _activeScratch));
+
 	private readonly object _gate = new();
 	private readonly string _defaultRootDirectory;
 	private readonly long? _maximumPayloadBytes;
@@ -339,6 +356,8 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		{
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFStartup(MediaFoundation.MfVersion, MediaFoundation.MfStartupFull));
 			_mediaFoundationStarted = true;
+            Interlocked.Increment(ref _mfStarted);
+            Interlocked.Increment(ref _activeMfSessions);
 
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSinkWriterFromURL(_partialPath!, IntPtr.Zero, null, out sink));
 
@@ -363,11 +382,15 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 
 			_sinkWriter = sink;
 			sink = null;
+            Interlocked.Increment(ref _sinkCreated);
+            Interlocked.Increment(ref _activeSinks);
 			_videoFormat = videoFormat;
 			_audioFormat = audioFormat;
 			_originHundredNanoseconds = Math.Min(videoTime, audioTime);
 			_nv12ByteLength = checked((int)((long)videoFormat.Width * videoFormat.Height * 3 / 2));
             _nv12Buffer = _conversionBuffers.Rent(_nv12ByteLength);
+            Interlocked.Increment(ref _scratchRents);
+            Interlocked.Increment(ref _activeScratch);
 			_sinkStarted = true;
 		}
 		catch
@@ -665,7 +688,12 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
         _sinkStarted = false;
         try
         {
-            if (sink is not null) MediaFoundation.ReleaseComObject(sink);
+            if (sink is not null)
+            {
+                MediaFoundation.ReleaseComObject(sink);
+                Interlocked.Increment(ref _sinkReleased);
+                Interlocked.Decrement(ref _activeSinks);
+            }
         }
         finally
         {
@@ -675,6 +703,8 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
                 {
                     _mediaFoundationStarted = false;
                     MediaFoundation.MFShutdown();
+                    Interlocked.Increment(ref _mfShutdownCalls);
+                    Interlocked.Decrement(ref _activeMfSessions);
                 }
             }
             finally
@@ -682,7 +712,12 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
                 var buffer = _nv12Buffer;
                 _nv12Buffer = null;
                 _nv12ByteLength = 0;
-                if (buffer is not null) _conversionBuffers.Return(buffer);
+                if (buffer is not null)
+                {
+                    _conversionBuffers.Return(buffer);
+                    Interlocked.Increment(ref _scratchReturns);
+                    Interlocked.Decrement(ref _activeScratch);
+                }
                 _pcm16Buffer = null;
             }
         }

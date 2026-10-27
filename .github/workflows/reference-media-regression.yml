@@ -198,6 +198,9 @@ jobs:
 
   ssd-playback:
     name: Staged dual-deck ten-minute playback (${{ matrix.format }})
+    env:
+      RTAIME_SSD_MEMORY_DIAGNOSTIC: "1"
+      RTAIME_SSD_MEMORY_ORIGIN_COMMIT: a1c7fa4aabd6d1ab9b0ca2460852c9cfdfd5b440
     strategy:
       fail-fast: false
       matrix:
@@ -217,6 +220,12 @@ jobs:
       - name: Canonical Release build
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+      - name: Verify replay writer lifecycle
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReplayCaptureIsolationTests|FullyQualifiedName~ReplayCaptureContinuityTests"
+      - name: Verify bounded replay memory report
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~SsdPlaybackMemoryDiagnosticTests"
       - name: Real dual-deck duration and controlled fault prerequisites
         shell: pwsh
         env:

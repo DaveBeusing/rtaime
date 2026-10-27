@@ -68,6 +68,10 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
         string? failure = null, cleanupFailure = null;
         object? finalReport = null;
         var handleDiagnostics = new List<object>(4);
+        // Opt-in and strictly bounded: no per-frame diagnostic allocation or change in workload limits.
+        var memoryDiagnostic = Environment.GetEnvironmentVariable("RTAIME_SSD_MEMORY_DIAGNOSTIC") == "1"
+            ? new SsdPlaybackMemoryDiagnostic(sourceCommit, buildCommit, profile ?? "smoke", programFormat, media)
+            : null;
         var runtimeEndpoint = $"rtaime.test.dual.runtime.{Guid.NewGuid():N}";
         var controlEndpoint = $"rtaime.test.dual.control.{Guid.NewGuid():N}";
         using var runtimeStop = new CancellationTokenSource();
@@ -117,6 +121,10 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                     details = LocalPlaybackHandleDiagnostics.Capture() };
                 handleDiagnostics.Add(observation);
                 if (profile is not null) Console.WriteLine("SSD HANDLE DIAGNOSTIC: " + JsonSerializer.Serialize(observation));
+                memoryDiagnostic?.TryCapture("playback", clock.Elapsed,
+                    () => runtime.Runtime!.GetReplaySnapshot(), "current-replay-snapshot",
+                    () => runtime.Runtime?.GetReplayWriterLifetimeStatistics(),
+                    () => runtime.Runtime?.GetReplayQueueStatistics());
             }
             CaptureHandles();
             var nextHandleDiagnostic = 120;
@@ -292,6 +300,12 @@ public sealed class MultiDeckSsdPlaybackQualificationTests
                 runtimeExit == RuntimeHostExitCode.Success && runtime.RuntimeDisposed &&
                 (runtime.MediaDeck?.Resources.Reserved ?? 0) == 0 &&
                 runtime.FinalRuntimeSnapshot?.ActiveGpuSurfaces == 0;
+            memoryDiagnostic?.TryCapture(cleanup ? "post-host-drain" : "post-host-stop-attempt", clock.Elapsed,
+                () => runtime.FinalRuntimeSnapshot?.Replay, "final-runtime-snapshot",
+                () => runtime.Runtime?.GetReplayWriterLifetimeStatistics(),
+                () => runtime.Runtime?.GetReplayQueueStatistics());
+            memoryDiagnostic?.TryWrite(Environment.GetEnvironmentVariable("RTAIME_REFERENCE_MEDIA_OUTPUT"),
+                playbackFailed: failure is not null, cleanupSucceeded: cleanup);
             if (profile is not null)
             {
                 var output = Environment.GetEnvironmentVariable("RTAIME_REFERENCE_MEDIA_OUTPUT")!;

@@ -38,6 +38,10 @@ public sealed class ReplayCaptureContinuityTests
 		await fixture.Capture.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
 
 		var snapshot = fixture.Capture.Snapshot;
+        var writers = fixture.Capture.WriterLifetimeStatistics;
+        Assert.Equal(writers.Opened, writers.Finalized + writers.Aborted);
+        Assert.Equal(writers.Finalized, snapshot.Statistics.FinalizedSegments);
+        Assert.Equal(0, writers.Active);
 		Assert.Null(snapshot.Failure);
 		Assert.Equal(1UL, snapshot.Statistics.DroppedSamples);
 		Assert.All(snapshot.Segments, segment => Assert.False(segment.FirstProgramSequence <= missing && segment.LastProgramSequence >= missing));
