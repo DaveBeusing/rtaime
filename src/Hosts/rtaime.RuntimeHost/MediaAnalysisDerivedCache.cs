@@ -63,7 +63,9 @@ internal sealed class MediaAnalysisDerivedCache
                     (result.Waveform is null || result.Waveform.Length != request.BucketCount ||
                      result.Waveform[0].StartTicks != request.PositionTicks ||
                      result.Waveform[^1].EndTicks != request.EndTicks ||
-                     result.Waveform.Any(bucket => bucket.EndTicks <= bucket.StartTicks ||
+                     result.Waveform.Any(bucket => bucket is null ||
+                         bucket.EndTicks <= bucket.StartTicks ||
+                         bucket.Minimum is null || bucket.Maximum is null ||
                          bucket.Minimum.Any(value => !float.IsFinite(value)) ||
                          bucket.Maximum.Any(value => !float.IsFinite(value)) ||
                          bucket.Rms is { } rms && rms.Any(value => !float.IsFinite(value))))))
