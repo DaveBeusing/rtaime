@@ -29,13 +29,13 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 		}
 
 		Assert.Equal(3, delivery.PendingFrameCount);
-		Assert.Equal(3 * 1999, delivery.DroppedFrames);
+		Assert.Equal(3L * 1999, delivery.DroppedFrames);
 		queued.Dequeue().Invoke();
 		Assert.Empty(queued);
-		Assert.Empty(Enumerable.Repeat(0, delivery.PendingFrameCount));
+		Assert.Equal(0, delivery.PendingFrameCount);
 		Assert.Equal(3, delivered.Count);
 		Assert.All(delivered, observation => Assert.Equal(2000UL, observation.Frame.Descriptor.Timing.SequenceNumber));
-		Assert.Equal(MonitoringStreamKind.Program, delivered[0].Frame.Descriptor.StreamKind);
+		Assert.Equal(MonitoringStreamKind.Program, delivered[^1].Frame.Descriptor.StreamKind);
 	}
 
 	[Fact]
@@ -52,7 +52,7 @@ public sealed class MonitoringDeliveryAndFreshnessTests
 
 		Assert.Single(queued);
 		Assert.Equal(LatestMonitoringFrameDelivery.MaximumPendingFrames, delivery.PendingFrameCount);
-		Assert.Equal(84, delivery.DroppedFrames);
+		Assert.Equal(84L, delivery.DroppedFrames);
 		queued.Dequeue().Invoke();
 		Assert.Equal(LatestMonitoringFrameDelivery.MaximumPendingFrames, delivered.Count);
 		Assert.Contains(delivered, item => item.Frame.Descriptor.StreamKind == MonitoringStreamKind.Program);
