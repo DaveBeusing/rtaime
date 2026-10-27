@@ -129,8 +129,8 @@ public sealed partial class CompositingGraphViewModel
         : "NO AUTHORITATIVE REVISION · GRAPH UNVERIFIED";
     public string FxOrderEvidence => _fxOrderDraft is not { } draft
         ? _fxOrderResult
-        : (!IsFxOrderBaselineCurrent(draft) ? "STALE FX ORDER DRAFT · DISCARD REQUIRED" :
-            _fxOrderApplying ? "FX ORDER APPLYING · AWAITING RUNTIME OBSERVATION" :
+        : (_fxOrderApplying ? "FX ORDER APPLYING · AWAITING RUNTIME OBSERVATION" :
+            !IsFxOrderBaselineCurrent(draft) ? "STALE FX ORDER DRAFT · DISCARD REQUIRED" :
             _fxOrderResult.StartsWith("FX ORDER REJECTED", StringComparison.Ordinal) ? _fxOrderResult :
             ("LOCAL FX ORDER DRAFT · NOT ON PROGRAM · " + draft.LayerId + " · REV " +
                 draft.Revision + " · " + string.Join(" → ", draft.OrderedIds)));
