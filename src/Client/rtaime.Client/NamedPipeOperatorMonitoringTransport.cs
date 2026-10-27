@@ -15,6 +15,7 @@ public sealed class NamedPipeOperatorMonitoringTransport
 	private readonly string _endpoint;
 	private readonly TimeSpan _connectTimeout;
 	private readonly TimeSpan _reconnectDelay;
+	private long _connectionEpoch;
 
 	public NamedPipeOperatorMonitoringTransport(
 		string endpoint,
@@ -30,6 +31,10 @@ public sealed class NamedPipeOperatorMonitoringTransport
 	}
 
 	public string Endpoint => _endpoint;
+
+	// Advances after each successful pipe connection, including server restarts.
+	// An observer must invalidate old presentation evidence on epoch replacement.
+	public long ConnectionEpoch => Interlocked.Read(ref _connectionEpoch);
 
 	public async IAsyncEnumerable<MonitoringFrame> ReadFramesAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -49,6 +54,7 @@ public sealed class NamedPipeOperatorMonitoringTransport
 				continue;
 			}
 
+			Interlocked.Increment(ref _connectionEpoch);
 			var header = new byte[MonitoringFrameWire.HeaderSize];
 			while (pipe.IsConnected && !cancellationToken.IsCancellationRequested)
 			{
