@@ -203,13 +203,38 @@ state and the actual reason. Analysis never upgrades preparation readiness.
 
 ## Filmstrip preview preparation
 
-A reusable `MediaAssetFilmstripService` now provides catalogue-fenced
-filmstrip data for a subsequent Library and sequence visual presentation.
-It composes up to eight existing time-indexed independent analysis requests,
-aligns representative samples with the source's rational nominal frame rate
-and retains *actual decoded PTS* for display. Library hover continues to show
-its existing independently scrubbed single image; a multi-image Library
-filmstrip layout is **not yet wired** by this change.
+A reusable `MediaAssetFilmstripService` provides catalogue-fenced filmstrip
+data. **Inspect → REVIEW FRAMES** explicitly starts one read-only operation
+for the selected online catalogue Clip and publishes up to **five** bounded,
+time-indexed source images inside a horizontally scrollable inspection strip.
+It aligns samples with the source's rational nominal frame rate and labels
+*actual decoded PTS* where confirmed; failures and unavailable pixels retain
+their own visible state. **CLEAR REVIEW** cancels and removes samples.
+Library hover remains an independent, single-frame scrubbing consumer.
+
+The selected Inspector also offers source-relative **IN % / OUT %** inspection
+sliders (default 0–100). These are local, non-destructive observation windows:
+they do not change saved sequence trims, Media Deck IN/OUT, Preview or Program.
+An invalid/zero-width window cannot request analysis; changing markers cancels
+superseded jobs and clears old output. Filmstrip frame positions and timestamps
+refer to the selected window. **REVIEW AUDIO** reuses the existing
+`SequenceTimelineWaveformService` and `SequenceWaveformGlyph` to display at
+most 120 seconds and 128 actual decoded PCM buckets from the selected range.
+The temporary source reference is observation-only, never written to Sequence
+authoring. Missing/discontinuous samples remain gaps. Audio review verifies
+the authoritative fingerprint before and after the analysis operation and is
+canceled on selection, relink, offline or Control disconnect. One optional
+review runs at a time; frame and PCM admission never fan out for the full tile
+collection.
+
+Selection changes, multi-selection, catalogue revision/fingerprint/length/
+timestamp changes, offline/relink and Control disconnection cancel the
+review and clear old images. Passive refresh and the new local `SORT` control
+rebind selected projection records by stable asset key without creating a
+second recent-item visit. Sorting offers category/name, name, short/long
+known duration (unknown last), and ready-first; it does not rewrite catalogue
+order, Smart Bin preferences or Timeline asset IDs. The default sort remains
+category/name for saved workspace compatibility.
 
 The optional client has one replaceable operation, 150-ms debounce,
 coalesced identical in-flight requests, 45-second overall time budget and
@@ -235,6 +260,14 @@ The Operator UI policy gate verifies persistent catalogue projection, bounded/vi
 ## Smart Bin and hover qualification
 
 `MediaLibraryBrowsingTests` checks duration boundaries and unknown metadata, independent readiness/availability, bounded preference round-trip and corrupt/future/oversized files, cancellation without replacing valid preferences, 1000 rapid hover requests, existing-image/offline capability handling, clamped scrub timestamps, true decoded PTS and RGBA/BGRA transfer, latest-generation cancellation, stale identity rejection and a 30,000-record catalogue projected to at most 4096 items. Repeated search and saved-filter restoration assert no production transport calls, catalogue mutations or routing changes. Additional cases cover named save/rename/restart, valid v1 preservation, unsupported query feedback without rewriting, enable/disable cancellation storms, fresh/stale/future pressure and a pressure change during dwell with unchanged Preview/Program and no mutation requests. Hidden selections are pruned.
+
+Sorting, stable-instance rebinding after catalogue refresh, bounded
+source-relative IN/OUT math and accessible filmstrip/PCM actions are covered by
+focused Operator regressions. Existing `SequenceTimelineWaveformTests` and
+`MediaAssetFilmstripServiceTests` verify the reusable analysis consumers.
+These checks do not qualify physical presentation or hardware audio output.
+Library review markers are not authored per-asset IN/OUT edits: the
+established Media Deck and sequence editor retain transport/editing authority.
 
 The real `OperatorXamlStartupTests` window verifies custom control keyboard focus/accessibility names and scrolls both 4096-item Grid/List views while bounding realized containers. Existing compact-window and source-bound functional/visual checks remain required. The independent Runtime/Client host-path tests are owned by `IndependentMediaAnalysisIntegrationTests`; Operator regression coverage does not replace them. Physical keyboard/screen-reader usability, mixed-DPI interaction, VFR/audio-only availability and hardware Program render/IPC latency under real analysis load remain **UNVERIFIED** until reference-platform execution. Source-level tests or hosted geometry do not substitute for those measurements.
 

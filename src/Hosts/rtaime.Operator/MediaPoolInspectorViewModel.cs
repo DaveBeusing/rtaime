@@ -174,6 +174,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	private string? _confirmedProcessingSignature;
 	private string _emptyState = "No assets are available.";
 	private MediaAssetCatalogSnapshot _catalogSnapshot = MediaAssetCatalogSnapshot.Empty;
+    private bool _reprojectingLibrary;
+    public bool IsReprojectingLibrary => _reprojectingLibrary;
 	private bool _catalogBusy;
 	private string? _catalogError;
 
@@ -192,6 +194,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		Selection = new(this);
 		InitializeBrowsing();
 		SelectedItems = [];
+        InitializeMediaReview();
         InitializePreparation();
 		InspectorProperties = [];
 		InspectorMetadataProperties = [];
@@ -376,12 +379,13 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		get => _selectedItem;
 		set
 		{
-                if (ReferenceEquals(_selectedItem, value)) return;
+            if (ReferenceEquals(_selectedItem, value)) return;
             if (ShouldSuppressInspectorSelection(value?.Key)) return;
 			if (!Set(ref _selectedItem, value))
 				return;
 			if (_hoverKey is not null && value?.Key != _hoverKey)
 				CancelHover();
+            ReconcileMediaReviewContext();
 			_timelineItem = null;
 			_timelineItems.Clear();
 			_timelineCue = null;
@@ -655,14 +659,20 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		set => SetGroupExpansion("metadata", value);
 	}
 
-	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items)
+	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items, bool recordVisit = true)
 	{
 		ArgumentNullException.ThrowIfNull(items);
 		var selected = items
 			.GroupBy(item => item.Key, StringComparer.Ordinal)
 			.Select(group => group.First())
 			.ToArray();
-        if (ShouldSuppressInspectorSelection(selected.Length == 1 ? selected[0].Key : "multi")) return;
+        // A pinned Inspector blocks a new selection identity, while projection
+        // refreshes may replace records with the same stable key.
+        var sameIdentity = selected.Length == SelectedItems.Count &&
+            selected.Select(item => item.Key).SequenceEqual(
+                SelectedItems.Select(item => item.Key), StringComparer.Ordinal);
+        if ((!sameIdentity || recordVisit) && ShouldSuppressInspectorSelection(
+                selected.Length == 1 ? selected[0].Key : "multi")) return;
 
 		SelectedItems.Clear();
 		foreach (var item in selected)
@@ -685,7 +695,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionSummary));
         NotifyInspectorPinState();
 		OnPropertyChanged(nameof(CanEditSelection));
-        if (SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
+        if (recordVisit && SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
+        ReconcileMediaReviewContext();
 	}
 
 
@@ -698,6 +709,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		CatalogObservedAtUtc = DateTimeOffset.UtcNow;
 		OnPropertyChanged(nameof(CatalogEvidence));
 		OnPropertyChanged(nameof(CatalogObservedAtUtc));
+        ReconcileMediaReviewContext();
 	}
 
 	public async Task LoadCatalogAsync()
@@ -944,6 +956,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		Library.Refresh(_operator, _mediaDeck, _catalogSnapshot, AssetPreparationState);
 		ReconcileHoverContext();
 		ApplyFilter(selectedKey, cancelHover: false);
+        ReconcileMediaReviewContext();
         RefreshInspectorDraftContext();
 		RaiseTestSignalState();
 	}
@@ -983,10 +996,20 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		var search = MediaLibrarySearch.Parse(bin.Search);
 		SearchStatus = search.Error ?? "AND terms · quotes for phrases · -term to exclude";
-		var filtered = Library.Filter(bin, search);
-		var keys = filtered.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
-		if (SelectedItems.Any(item => !keys.Contains(item.Key)))
-			UpdateSelection(SelectedItems.Where(item => keys.Contains(item.Key)).ToArray());
+        MediaPoolItemViewModel[] filtered;
+        _reprojectingLibrary = true;
+        try { filtered = Library.Filter(bin, search, SortOrder); }
+        finally { _reprojectingLibrary = false; }
+        // Every catalogue refresh recreates view rows. Retain stable asset keys while
+        // rebinding selected items to the current projection, not stale descriptors.
+        // Passive refresh/filter/sort must not count as a new user visit.
+        var byKey = filtered.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var previous = SelectedItems.ToArray();
+        var current = previous.Where(item => byKey.ContainsKey(item.Key))
+            .Select(item => byKey[item.Key]).ToArray();
+        if (previous.Length != current.Length ||
+            previous.Where((item, index) => !ReferenceEquals(item, current[index])).Any())
+            UpdateSelection(current, recordVisit: false);
 
 		var preferred = preferredSelectionKey is null
 			? null
@@ -1387,7 +1410,10 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			HoverStatus = "UNAVAILABLE · Control disconnected or stale; reconnect and focus to retry";
 		}
 		if (e.PropertyName is nameof(OperatorViewModel.HealthObserved) or nameof(OperatorViewModel.FrameTime) or nameof(OperatorViewModel.RuntimeHealth))
+        {
 			ReconcileHoverPressure();
+            ReconcileMediaReviewPressure();
+        }
 		if (e.PropertyName is nameof(OperatorViewModel.SelectedAudioInput) or
             nameof(OperatorViewModel.RevisionLabel) or
             nameof(OperatorViewModel.LastError) or
@@ -1473,9 +1499,9 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionCount));
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
+        NotifyInspectorPinState();
 		OnPropertyChanged(nameof(CanEditSelection));
 		OnPropertyChanged(nameof(HasAuthoritativeCompositingSelection));
-        NotifyInspectorPinState();
 		OnPropertyChanged(nameof(SupportsTransformRotation));
 		OnPropertyChanged(nameof(SupportsTransformAnchor));
 		OnPropertyChanged(nameof(SupportsTransformCrop));

@@ -53,6 +53,46 @@ public sealed class MediaLibraryBrowsingTests
 		Assert.Contains("NOT READY", Item(online: true, ready: false).ReadinessLabel);
 	}
 
+    [Theory]
+    [InlineData(0d, 100d, 0L, 10000000L)]
+    [InlineData(25d, 75d, 2500000L, 7500000L)]
+    [InlineData(99d, 100d, 9900000L, 10000000L)]
+    public void Library_source_inspection_ranges_are_bounded_and_non_destructive(
+        double inPercent, double outPercent, long startTicks, long endTicks)
+    {
+        var range = MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), inPercent, outPercent);
+        Assert.NotNull(range);
+        Assert.Equal(startTicks, range.Value.Start);
+        Assert.Equal(endTicks, range.Value.End);
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 70, 50));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 30, 30));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), double.NaN, 70));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.Zero, 0, 100));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), -1, 100));
+        Assert.Null(MediaLibraryReviewRange.Map(TimeSpan.FromSeconds(1), 0, 101));
+    }
+
+    [Fact]
+    public void Library_sorting_uses_bounded_projection_and_keeps_stable_asset_identity()
+    {
+        var projection = new MediaLibraryProjection();
+        var longClip = Item(75, ready: false, key: "clip:long") with { Name = "A-long.mp4" };
+        var shortClip = Item(15, ready: true, key: "clip:short") with { Name = "B-short.mp4" };
+        var unknown = Item(online: false, ready: false, key: "clip:unknown") with { Name = "C-unknown.mp4" };
+        projection.Items.AddRange([longClip, shortClip, unknown]);
+        var bin = Bin();
+        var search = MediaLibrarySearch.Parse("");
+        string[] Keys(MediaLibrarySortOrder order) => projection.Filter(bin, search, order).Select(item => item.Key).ToArray();
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.CategoryName));
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.Name));
+        Assert.Equal(["clip:short", "clip:long", "clip:unknown"], Keys(MediaLibrarySortOrder.DurationShortFirst));
+        Assert.Equal(["clip:long", "clip:short", "clip:unknown"], Keys(MediaLibrarySortOrder.DurationLongFirst));
+        Assert.Equal(["clip:short", "clip:long", "clip:unknown"], Keys(MediaLibrarySortOrder.ReadyFirst));
+        Assert.Equal(3, projection.FilteredItems.Count);
+        Assert.All(projection.FilteredItems, item => Assert.Same(
+            projection.Items.Single(source => source.Key == item.Key), item));
+    }
+
 	[Fact]
 	public async Task Preferences_roundtrip_are_bounded_and_reject_malformed_future_or_oversized_documents()
 	{
@@ -214,6 +254,17 @@ public sealed class MediaLibraryBrowsingTests
 		try
 		{
 			await pool.LoadCatalogAsync();
+            // Detached media inspection never bypasses disconnected Control or
+            // creates a decoder/route even when local catalogue records exist.
+            Assert.False(pool.ReviewFramesCommand.CanExecute(null));
+            Assert.False(pool.ReviewAudioCommand.CanExecute(null));
+            pool.ReviewInPercent = 25;
+            pool.ReviewOutPercent = 75;
+            Assert.Empty(pool.FrameReviewSamples);
+            Assert.Null(pool.AudioReviewPresentation);
+            Assert.Equal(0, catalog.Mutations);
+            pool.ReviewInPercent = 0;
+            pool.ReviewOutPercent = 100;
             Assert.Same(pool.FilteredItems, pool.Library.FilteredItems);
             Assert.Same(pool.SelectedItems, pool.Selection.Items);
             var selection = pool.Selection;
@@ -253,6 +304,22 @@ public sealed class MediaLibraryBrowsingTests
 				pool.SearchText = index % 2 == 0 ? "clip000" : "";
 				Assert.InRange(pool.FilteredItems.Count, 1, 4096);
 			}
+            // Sorting and catalogue refresh may replace projected records but never asset IDs.
+            var primary = pool.FilteredItems.First();
+            pool.UpdateSelection([primary]);
+            var passiveVisits = 0;
+            void PassiveVisit(MediaPoolItemViewModel _) => passiveVisits++;
+            pool.LibraryItemVisited += PassiveVisit;
+            pool.SortOrder = MediaLibrarySortOrder.DurationLongFirst;
+            Assert.Equal(primary.Key, pool.SelectedItem?.Key);
+            pool.Refresh();
+            Assert.Equal(primary.Key, pool.SelectedItem?.Key);
+            Assert.Same(pool.FilteredItems.Single(asset => asset.Key == primary.Key), pool.SelectedItem);
+            Assert.All(pool.SelectedItems, item => Assert.Same(
+                pool.FilteredItems.Single(asset => asset.Key == item.Key), item));
+            Assert.Equal(0, passiveVisits);
+            pool.SortOrder = MediaLibrarySortOrder.CategoryName;
+            pool.LibraryItemVisited -= PassiveVisit;
 			pool.UpdateSelection(pool.FilteredItems.Take(3)); Assert.True(pool.HasMultipleSelection);
 			pool.SearchText = "no-matches"; Assert.Empty(pool.SelectedItems);
 			pool.SearchText = "";
@@ -453,6 +520,24 @@ public sealed class MediaLibraryBrowsingTests
         Assert.Same(composition.Library, owner.MediaLibraryView.Context);
 		await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
 		var combo = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaSmartBins"));
+        var sort = Assert.IsType<RtaimeComboBox>(owner.MediaLibraryView.FindName("MediaLibrarySort"));
+        Assert.Equal("Media Library sort order", AutomationProperties.GetName(sort));
+        Assert.Equal(MediaLibrarySortOrder.CategoryName, owner.MediaPool.SortOrder);
+        Assert.Same(owner.MediaPool.SortChoices, sort.ItemsSource);
+        var frameStrip = Assert.Single(Descendants(owner.MediaLibraryView).OfType<ItemsControl>(),
+            element => AutomationProperties.GetName(element) == "Selected media source frame strip");
+        Assert.Same(owner.MediaPool.FrameReviewSamples, frameStrip.ItemsSource);
+        Assert.Equal("Media Library source review IN percent",
+            AutomationProperties.GetName(Assert.Single(Descendants(owner.MediaLibraryView).OfType<RtaimeSlider>(),
+                control => AutomationProperties.GetName(control) == "Media Library source review IN percent")));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Review selected source PCM waveform" &&
+            ReferenceEquals(button.Command, owner.MediaPool.ReviewAudioCommand));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+            AutomationProperties.GetName(button) == "Cancel and clear Library audio review" &&
+            ReferenceEquals(button.Command, owner.MediaPool.CancelAudioReviewCommand));
+        Assert.Contains(Descendants(owner.MediaLibraryView).OfType<SequenceWaveformGlyph>(), element =>
+            AutomationProperties.GetName(element) == "Media Library decoded source audio waveform");
         var search = Assert.IsType<RtaimeSearchBox>(owner.MediaLibraryView.FindName("MediaSearchBox"));
         Assert.Equal(180, System.Windows.Data.BindingOperations.GetBindingExpression(search, TextBox.TextProperty)!.ParentBinding.Delay);
         var results = Assert.IsType<RtaimeListBox>(owner.MediaLibraryView.FindName("MediaBatchResults"));
@@ -491,12 +576,20 @@ public sealed class MediaLibraryBrowsingTests
                 button => AutomationProperties.GetName(button) == "Show advanced Media Library tools");
             Assert.Equal(Visibility.Collapsed, advanced.Visibility);
             Assert.Equal(Visibility.Collapsed, details.Visibility);
+            var reviewButton = Assert.Single(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
+                button => AutomationProperties.GetName(button) == "Review source-bound media filmstrip");
+            Assert.Same(owner.MediaPool.ReviewFramesCommand, reviewButton.Command);
+            Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(), button =>
+                AutomationProperties.GetName(button) == "Cancel and clear Library frame review" &&
+                ReferenceEquals(button.Command, owner.MediaPool.CancelFrameReviewCommand));
             Assert.Contains(Descendants(owner.MediaLibraryView).OfType<RtaimeButton>(),
                 button => AutomationProperties.GetName(button) == "Open selected asset in confirmed Preview");
             tools.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
             Assert.Equal(Visibility.Visible, advanced.Visibility);
 			Assert.True(combo.IsVisible); Assert.True(combo.ActualWidth > 0); Assert.True(combo.Focus());
+            Assert.True(sort.IsVisible);
+            Assert.True(sort.ActualWidth > 0);
 			Assert.Equal("Saved Smart Bin", AutomationProperties.GetName(combo));
 			Assert.Equal(Visibility.Collapsed, owner.MediaPool.MetadataFiltersVisibility);
 			owner.MediaPool.ToggleMetadataFiltersCommand.Execute(null);
@@ -610,6 +703,27 @@ public sealed class MediaLibraryBrowsingTests
                         Console.WriteLine("MEDIA CONTEXT PASS [" + browser.Name + "]: real menu; multi-selection guards; single-selection recovery; hover canceled; Program unchanged.");
                     }
 				}
+                // Sorting a visible, virtualized ListBox must preserve all selected keys
+                // across WPF's recycling/reset notifications, not just the primary item.
+                browser.SelectedItems.Clear();
+                browser.SelectedItems.Add(browser.Items[0]);
+                browser.SelectedItems.Add(browser.Items[1]);
+                owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
+                var keysBeforeSort = owner.MediaPool.SelectedItems.Select(item => item.Key)
+                    .OrderBy(key => key).ToArray();
+                owner.MediaPool.SortOrder = MediaLibrarySortOrder.DurationShortFirst;
+                await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Assert.Equal(keysBeforeSort, owner.MediaPool.SelectedItems.Select(item => item.Key).OrderBy(key => key));
+                Assert.Equal(keysBeforeSort, browser.SelectedItems.Cast<MediaPoolItemViewModel>()
+                    .Select(item => item.Key).OrderBy(key => key));
+                Assert.All(owner.MediaPool.SelectedItems, item => Assert.Same(
+                    owner.MediaPool.FilteredItems.Single(current => current.Key == item.Key), item));
+                owner.MediaPool.SortOrder = MediaLibrarySortOrder.CategoryName;
+                await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                browser.SelectedItems.Clear();
+                owner.MediaPool.UpdateSelection([]);
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));
 			}
