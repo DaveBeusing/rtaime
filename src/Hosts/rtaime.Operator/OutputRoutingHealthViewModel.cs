@@ -57,6 +57,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly OutputStatusViewModel _cleanProgram;
 	private readonly Dictionary<string, PerformanceMetricViewModel> _metrics;
 	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
+	private readonly Dictionary<string, SenderRateObservation> _senderRates = new(StringComparer.Ordinal);
+	private sealed record SenderRateObservation(
+		string SafeTarget, ulong? ControlRevision, ulong? RuntimeRevision,
+		ulong BytesSent, DateTimeOffset ObservedAt, double? BytesPerSecond);
 	private OutputStatusViewModel? _selectedOutput;
 	private bool _disposed;
 	private bool _isCanvasMode;
@@ -213,6 +217,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private void Refresh(bool sampleHistory)
 	{
+		if (sampleHistory) RefreshSenderRates(DateTimeOffset.UtcNow);
 		var format = ParseFormat(_control.CurrentFormat);
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
 		var performanceEvidence = ResolvePerformanceEvidence(runtimeEvidence);
@@ -254,7 +259,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			streamingQueue: FormatNetworkQueue(programNetworks),
 			streamingDrops: FormatNetworkDrops(programNetworks),
 			streamingReconnects: FormatNetworkReconnects(programNetworks));
-		_program.UpdateNetworkTargets(ProjectNetworkTargets(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow));
+		_program.UpdateNetworkTargets(ProjectNetworkTargets(programRole, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow, SnapshotSenderRates()));
 
 		var previewEvidence = !_control.IsConnected || _control.IsStale
 			? "UNVERIFIED" : NormalizeEvidence(_control.ControlHealth);
@@ -331,7 +336,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				streamingQueue: FormatNetworkQueue(aux.NetworkOutputs),
 				streamingDrops: FormatNetworkDrops(aux.NetworkOutputs),
 				streamingReconnects: FormatNetworkReconnects(aux.NetworkOutputs));
-			_aux.UpdateNetworkTargets(ProjectNetworkTargets(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow));
+			_aux.UpdateNetworkTargets(ProjectNetworkTargets(aux, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow, SnapshotSenderRates()));
 		}
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
@@ -597,7 +602,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		$"{detail} Network send evidence: {TransmissionDetail(role)}. Receiver and physical output UNVERIFIED.";
 
 	internal static IReadOnlyList<OutputNetworkTargetPresentation> ProjectNetworkTargets(
-		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now)
+		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now,
+		IReadOnlyDictionary<string, double?>? measuredSenderRates = null)
 	{
 		if (role is null) return [];
 		var routeConfirmed = connected && !stale && role.AuthoritativeActive && role.HealthState == "PASS";
@@ -613,6 +619,11 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				: $"{target.VideoCodec}/{target.AudioCodec} · configured " +
 					$"{target.VideoBitRate / 1_000_000d:0.##} Mb/s video · {target.LatencyMilliseconds} ms SRT latency";
 			var failure = target.Failure is { } reason ? $" · {reason.Code}: {reason.Message}" : string.Empty;
+			var rateKey = role.RoleId + ":" + target.TargetId;
+			var rate = state == "LIVE" && measuredSenderRates is not null &&
+				measuredSenderRates.TryGetValue(rateKey, out var observedRate) && observedRate is >= 0
+				? $" · measured local sender rate {observedRate.Value / 1024d:0.#} KiB/s"
+				: " · measured local sender rate UNVERIFIED";
 			output.Add(new OutputNetworkTargetPresentation(
 				target.TargetId, target.Protocol, target.SafeTargetIdentity,
 				$"CONTROL REV {(role.ControlRevision?.ToString(CultureInfo.InvariantCulture) ?? "UNAVAILABLE")} · " +
@@ -621,13 +632,62 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				routeConfirmed ? "ROUTE CONFIRMED" : "ROUTE UNVERIFIED",
 				codec, state,
 				$"{target.BytesSent:N0} local sender bytes · {target.SentSamples:N0} submitted sends · " +
-				$"provider state {senderState} · " +
+				$"provider state {senderState}{rate} · " +
 					$"age {age} · queued {target.QueueDepth} · {target.DroppedSamples:N0} dropped / " +
 					$"{target.RejectedSamples:N0} rejected · {target.ReconnectCount} reconnects{failure}",
 				"PEER RECEPTION / PHYSICAL OUTPUT UNVERIFIED"));
 		}
 		return output.AsReadOnly();
 	}
+
+
+	internal static double? CalculateSenderRate(ulong priorBytes, ulong currentBytes, TimeSpan interval)
+	{
+		if (currentBytes < priorBytes || interval < TimeSpan.FromMilliseconds(250) ||
+			interval > TimeSpan.FromSeconds(15))
+			return null;
+		var rate = (double)(currentBytes - priorBytes) / interval.TotalSeconds;
+		return double.IsFinite(rate) ? rate : null;
+	}
+
+	private void RefreshSenderRates(DateTimeOffset now)
+	{
+		if (!_control.IsConnected || _control.IsStale)
+		{
+			_senderRates.Clear();
+			return;
+		}
+		var keys = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var role in _control.OutputRoles)
+		{
+			foreach (var target in role.NetworkOutputs)
+			{
+				var key = role.RoleId + ":" + target.TargetId;
+				keys.Add(key);
+				if (!role.AuthoritativeActive || role.HealthState != "PASS" ||
+					role.RuntimeExecutionRevision is null)
+				{
+					_senderRates.Remove(key);
+					continue;
+				}
+				double? rate = null;
+				if (_senderRates.TryGetValue(key, out var prior) &&
+					prior.SafeTarget == target.SafeTargetIdentity &&
+					prior.ControlRevision == role.ControlRevision &&
+					prior.RuntimeRevision == role.RuntimeExecutionRevision)
+				{
+					rate = CalculateSenderRate(prior.BytesSent, target.BytesSent, now - prior.ObservedAt);
+				}
+				_senderRates[key] = new SenderRateObservation(target.SafeTargetIdentity,
+					role.ControlRevision, role.RuntimeExecutionRevision, target.BytesSent, now, rate);
+			}
+		}
+		foreach (var key in _senderRates.Keys.Where(key => !keys.Contains(key)).ToArray())
+			_senderRates.Remove(key);
+	}
+
+	private IReadOnlyDictionary<string, double?> SnapshotSenderRates() =>
+		_senderRates.ToDictionary(pair => pair.Key, pair => pair.Value.BytesPerSecond, StringComparer.Ordinal);
 
 	private void UpdateSystemHealth(string key, string evidenceState)
 	{
