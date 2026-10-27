@@ -164,9 +164,10 @@ public sealed class IndependentMediaAnalysisIntegrationTests
             Assert.True(Directory.GetFiles(folder).Sum(file => new FileInfo(file).Length) <=
                 MediaAnalysisDerivedCache.MaximumBytes);
             Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
-            // An unchanged catalogue fingerprint may reuse the newest verified observation.
-            Assert.NotNull(cache.Read("fingerprint-A:frame:89", request with { Width = 160, Height = 90 }));
-            Assert.Null(cache.Read("fingerprint-B:frame:89", request with { Width = 160, Height = 90 }));
+            // A newly written unchanged catalogue fingerprint remains readable after pruning.
+            cache.Write("fingerprint-A:frame:latest", result);
+            Assert.NotNull(cache.Read("fingerprint-A:frame:latest", request with { Width = 160, Height = 90 }));
+            Assert.Null(cache.Read("fingerprint-B:frame:latest", request with { Width = 160, Height = 90 }));
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
     }
