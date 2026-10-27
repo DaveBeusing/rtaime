@@ -44,6 +44,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private FrameDiagnosticsSnapshot _previewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private FrameDiagnosticsSnapshot _programDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private MediaScopeSnapshot? _programScopes;
+	private MediaScopeSnapshot? _previewScopes;
+	private MonitoringStreamKind _activeScopeStream = MonitoringStreamKind.Program;
 	private DateTimeOffset _lastScopeAnalysisAt;
 	private bool _scopesEnabled;
 	private string _scopeProcessingDetail = "Scopes are disabled.";
@@ -145,6 +147,22 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
 	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
 	public MediaScopeSnapshot? ProgramScopes { get => _programScopes; private set => Set(ref _programScopes, value); }
+	public MediaScopeSnapshot? PreviewScopes { get => _previewScopes; private set => Set(ref _previewScopes, value); }
+	/// <summary>Only one selected monitoring source is analyzed at a time.</summary>
+	public MonitoringStreamKind ActiveScopeStream
+	{
+		get => _activeScopeStream;
+		set
+		{
+			if (value is not (MonitoringStreamKind.Program or MonitoringStreamKind.Preview) ||
+			    !Set(ref _activeScopeStream, value)) return;
+			_programScopes = null; _previewScopes = null;
+			OnPropertyChanged(nameof(ProgramScopes)); OnPropertyChanged(nameof(PreviewScopes));
+			_lastScopeAnalysisAt = default;
+			Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+			ScopeProcessingDetail = "Waiting for current selected source and bounded scopes.";
+		}
+	}
 	public string ScopeProcessingDetail { get => _scopeProcessingDetail; private set => Set(ref _scopeProcessingDetail, value); }
 	public MediaCompareMode CompareMode { get => _compareMode; private set => Set(ref _compareMode, value); }
 	public ImageSource? DifferenceImage { get => _differenceImage; private set => Set(ref _differenceImage, value); }
@@ -159,6 +177,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			if (!value)
 			{
 				ProgramScopes = null;
+				PreviewScopes = null;
 				ScopeProcessingDetail = "Scopes are disabled.";
 				return;
 			}
@@ -270,6 +289,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			{
 				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
 				{
+					PreviewScopes = null;
+					Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
 					Volatile.Write(ref _gpuComparisonUnavailable, false);
 					PreviewImage = null;
 					DifferenceImage = null;
@@ -305,7 +326,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 		MediaScopeSnapshot? scopes = null;
 		var cpuScopesRequired = !descriptor.HasSharedResource || Volatile.Read(ref _gpuScopeAnalysisUnavailable);
-		if (isProgram && frame.HasFallbackPayload && ScopesEnabled && cpuScopesRequired &&
+		if ((isProgram || confirmedPreview) && frame.HasFallbackPayload && ScopesEnabled &&
+			descriptor.StreamKind == ActiveScopeStream && cpuScopesRequired &&
 			observation.ReceivedAt - _lastScopeAnalysisAt >= GpuMonitoringAnalysisPolicy.ScopeUpdateInterval)
 		{
 			scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: GpuMonitoringAnalysisPolicy.MinimumScopeSampleStride);
@@ -381,6 +403,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				}
 				if (ProgramState != "LIVE")
 					ProgramScopes = null;
+				if (PreviewState != "LIVE")
+					PreviewScopes = null;
 				OnPropertyChanged(nameof(PreviewState));
 				OnPropertyChanged(nameof(ProgramState));
 			}, null);
@@ -401,6 +425,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	private void ClearPreviewPresentation()
 	{
+		PreviewScopes = null;
 		PreviewGpuFrame = null;
 		PreviewImage = null;
 		PreviewFormat = "Current Preview monitoring is unverified.";
@@ -480,6 +505,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (confirmedPreview)
 		{
 			PreviewImage = bitmap;
+			if (scopes is not null)
+			{
+				PreviewScopes = scopes;
+				ScopeProcessingDetail = FormatScopeProcessingDetail(scopes);
+			}
 			PreviewFormat = format;
 			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 		}
@@ -576,21 +606,30 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			_uiContext.Post(_ => Apply(), null);
 	}
 
-	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot)
+	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot, bool preview = false)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
-		if (!ScopesEnabled || ProgramGpuFrame is null || ProgramState != "LIVE" ||
-			snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource)
+		var stream = preview ? MonitoringStreamKind.Preview : MonitoringStreamKind.Program;
+		var current = preview ? PreviewGpuFrame : ProgramGpuFrame;
+		if (!ScopesEnabled || ActiveScopeStream != stream || current is null ||
+			(preview ? PreviewState : ProgramState) != "LIVE" ||
+			snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource ||
+			snapshot.SequenceNumber != current.SequenceNumber ||
+			snapshot.SourceWidth != current.Resource.Format.Width ||
+			snapshot.SourceHeight != current.Resource.Format.Height ||
+			snapshot.Color != current.Resource.Format.Color)
 			return;
 
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
-		ProgramScopes = snapshot;
+		if (preview) PreviewScopes = snapshot;
+		else ProgramScopes = snapshot;
 		ScopeProcessingDetail = FormatScopeProcessingDetail(snapshot);
 	}
 
-	internal void SetGpuScopesUnavailable(string detail)
+	internal void SetGpuScopesUnavailable(string detail, bool preview = false)
 	{
-		if (!ScopesEnabled)
+		if (!ScopesEnabled || ActiveScopeStream !=
+			(preview ? MonitoringStreamKind.Preview : MonitoringStreamKind.Program))
 			return;
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, true);
 		ScopeProcessingDetail = $"CPU fallback eligible · {detail}";
