@@ -216,3 +216,41 @@ qualify a hardware class. No SATA/NVMe tuple is currently declared SUPPORTED.
 The existing physical qualification binding policy and Stable-readiness rules
 remain authoritative; missing 60m/8h, output/A-V, decoder and recovery proof is
 UNVERIFIED and any unresolved durability or Program loss blocks acceptance.
+
+## Sustained playout incident, recovery and rollback boundary
+
+The maintained source-based matrix is
+[production soak coverage](EvidenceBoundReleaseReadiness.md#production-soak-coverage-and-unresolved-release-risks-27-october-2026).
+Hosted 30s/10m playback, staged 8h/24h/72h sessions and native SRT loopback
+measure different finite software lanes. Neither a clean replay encoder teardown
+nor a successful self-hosted software report proves actual connector output,
+physical timing reference, SDI/NDI receiver correctness or external audio/video
+synchronization. The support/platform matrix remains generated from governed
+JSON policy; operators must not hand-edit a SUPPORTED designation into the
+published matrix.
+
+For a live incident involving Program loss, rising private bytes, replay quota,
+SRT disconnect, encoder exhaustion or host/device recovery, preserve the exact
+source/build SHA, pinned runtime/provider/driver versions, ControlHost execution
+revision, Program frame/drop counters, A/V evidence and redacted bounded support
+bundle. Do **not** repeat an ambiguous CUT/GO/Apply/Disable or infer current
+Program from an old Preview/monitoring frame. Hold automatic rundown follow only
+through the existing authorized ControlHost action where still safe and available.
+Recording/replay disk or encoder failure is a separately isolated consumer fault;
+do not stop or reroute a healthy Program merely because a support panel reports
+an incomplete optional consumer. A fatal host/device loss requires fresh host
+identity, storage/journal state and actual target evidence before resuming.
+
+If continued production cannot be justified, follow the existing offline
+installer/update rollback and coordinated state-recovery procedures using the
+last separately verified package and a compatible, backed-up Show database.
+Check migration/downgrade compatibility before attempting to open a newer show
+with an older binary. Preserve failed evidence, isolate the affected device and
+revalidate Control/Runtime service readiness, production source bindings, resource
+release and physical output before any explicit new Take. A rollback or process
+restart is **not** an automatic replay of an ambiguous earlier production command.
+
+As of 27 October 2026, [#401](https://github.com/DaveBeusing/rtaime/issues/401)
+needs same-workload causal memory analysis and [#347](https://github.com/DaveBeusing/rtaime/issues/347)
+needs authorized live GitHub branch protection. Both must be reassessed against
+the exact intended release source; a prior passing run is never a substitute.
