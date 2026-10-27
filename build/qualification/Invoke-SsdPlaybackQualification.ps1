@@ -6,7 +6,8 @@ param(
     [ValidateSet("1080p50","1080p59.94")][string]$Format = "1080p50",
     [string]$OutputRoot = "artifacts/qualification/ssd-playback",
     [switch]$NoBuild,
-    [switch]$RequirePhysicalPass
+    [switch]$RequirePhysicalPass,
+    [switch]$CaptureMemoryDiagnostic
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -46,7 +47,7 @@ $inventory | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $run
 
 $names = @("RTAIME_SSD_PLAYBACK_PROFILE","RTAIME_SSD_PROGRAM_FORMAT","RTAIME_SSD_MEDIA_A","RTAIME_SSD_MEDIA_B",
     "RTAIME_REFERENCE_MEDIA_REGRESSION","RTAIME_REFERENCE_MEDIA_OUTPUT","RTAIME_SOURCE_COMMIT",
-    "RTAIME_BUILD_COMMIT","RTAIME_BASELINE_SDK")
+    "RTAIME_BUILD_COMMIT","RTAIME_BASELINE_SDK","RTAIME_SSD_MEMORY_DIAGNOSTIC")
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 Push-Location $repo
@@ -68,6 +69,7 @@ try {
     $env:RTAIME_SOURCE_COMMIT = $source
     $env:RTAIME_BUILD_COMMIT = $source
     $env:RTAIME_BASELINE_SDK = "10.0.401"
+    if ($CaptureMemoryDiagnostic) { $env:RTAIME_SSD_MEMORY_DIAGNOSTIC = "1" }
     dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~MultiDeckSsdPlaybackQualificationTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=playback.trx" --results-directory $run
     if ($LASTEXITCODE -ne 0) { throw "Actual dual-deck playback or cleanup failed; retain failed reports." }
     [xml]$trx = Get-Content -LiteralPath (Join-Path $run "playback.trx") -Raw
@@ -108,6 +110,16 @@ try {
             "GPU/VRAM", "Physical output/A-V", "Physical storage latency", "Approved hardware acceptance")
     }
     $support | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $run "support-profile.json") -Encoding utf8
+    $memoryDiagnosticPath = Join-Path $run "ssd-playback-memory-diagnostic.json"
+    $memoryDiagnosticRecord = if (Test-Path -LiteralPath $memoryDiagnosticPath -PathType Leaf) {
+        # Supplemental observation only: cannot override playback assertions or
+        # the same-source SSD verifier, and never certifies native memory ownership.
+        @{
+            path = "ssd-playback-memory-diagnostic.json"
+            sha256 = (Get-FileHash -LiteralPath $memoryDiagnosticPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            status = "UNVERIFIED_UNTIL_INDEPENDENT_DIAGNOSTIC_VALIDATION"
+        }
+    } else { $null }
     $manifest = [ordered]@{
         schemaVersion = "1.0"; qualification = "rtaime-ssd-playback"; sourceCommit = $source
         buildCommit = $source; profile = $Profile; programFormat = $Format; runId = $env:GITHUB_RUN_ID; runAttempt = $env:GITHUB_RUN_ATTEMPT
@@ -116,6 +128,7 @@ try {
             @{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $run $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
         })
         softwareStatus = "PASS"; physicalStatus = "UNVERIFIED"
+        memoryDiagnostic = $memoryDiagnosticRecord
         nextAction = "Retain exact device/controller/decoder identities and measured cache, storage pressure, GPU/VRAM and physical output/A-V evidence; execute each required duration and fault profile."
     }
     $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $run "manifest.json") -Encoding utf8
