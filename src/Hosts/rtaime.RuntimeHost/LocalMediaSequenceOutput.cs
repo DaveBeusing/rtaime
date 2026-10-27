@@ -101,6 +101,7 @@ public sealed partial class LocalMediaDeckRuntimeService
         // At most one native loop repreroll is admitted per output session.
         // This is management work and never runs on the Program frame callback.
         internal Task? LoopPreroll { get; set; }
+        internal bool EndReached { get; set; }
         internal ulong LoopReprerollCount { get; set; }
         internal TimeSpan LastLoopReprerollDuration { get; set; }
         internal TimeSpan LastComposeDuration { get; set; }
@@ -178,7 +179,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
-            if (session.OutputState == "ENDED")
+            if (session.EndReached)
             {
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
@@ -194,13 +195,19 @@ public sealed partial class LocalMediaDeckRuntimeService
             // An actual sink failure is terminal for this prepared owner.
             // A new native ingress cannot requalify a failed Program output
             // without an explicit cancellation and fresh preparation.
-            if (session.OutputState == "FAILED")
+            if (session.OutputState is "FAILED" or "STALE")
             {
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
                 return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
             }
 
             if (TryStartSequenceLoopRepreroll(session, programSlot))
+            {
+                session.FailedBoundaries++;
+                runtime.MarkSequenceInputUnavailable(session.SourceId);
+                return (false, session.OutputState, session.FailureCode, session.LastPublishedSlot);
+            }
+            if (TryReachSequenceEnd(session, programSlot))
             {
                 session.FailedBoundaries++;
                 runtime.MarkSequenceInputUnavailable(session.SourceId);
@@ -334,6 +341,30 @@ public sealed partial class LocalMediaDeckRuntimeService
     /// ever executes under this Program boundary callback.
     /// Must be called with _sequenceOutputGate held.
     /// </summary>
+    private bool TryReachSequenceEnd(SequenceOutputSession session, ulong programSlot)
+    {
+        lock (_sequenceGate)
+        {
+            var map = _sequenceShuttleMap;
+            if (map is null || map.Loop ||
+                map.State != SequenceRuntimeTransportState.Playing ||
+                programSlot < map.AnchorProgramSlot ||
+                map.TryMap(programSlot, out _))
+                return false;
+        }
+        // End is a deliberately unavailable signal, not a fabricated held
+        // native frame or an endlessly retrying decoder. A later explicit
+        // Seek/Stop/Play must acquire a new generation before publication.
+        session.EndReached = true;
+        session.ArmedTake = null;
+        session.LastPreviewSlot = null;
+        session.LastProgramSlot = null;
+        session.LastPublishedSlot = ulong.MaxValue;
+        session.OutputState = "UNAVAILABLE";
+        session.FailureCode = "runtime.sequence.end_reached";
+        return true;
+    }
+
     private bool TryStartSequenceLoopRepreroll(
         SequenceOutputSession session, ulong programSlot)
     {
@@ -548,6 +579,7 @@ public sealed partial class LocalMediaDeckRuntimeService
                 return;
             }
             session.ArmedTake = null;
+            session.EndReached = false;
             session.LastPreviewSlot = null;
             session.LastProgramSlot = null;
             session.LastPublishedSlot = ulong.MaxValue;
@@ -714,7 +746,8 @@ public sealed partial class LocalMediaDeckRuntimeService
         {
             var session = _sequenceOutput;
             if (session is null || session.LastPublishedSlot != boundary.SequenceNumber ||
-                session.OutputState is "FAILED" or "STALE" or "BUFFERING" or "ENDED")
+                session.OutputState is "FAILED" or "STALE" or "BUFFERING" ||
+                session.EndReached)
                 return; // Late feedback cannot revive terminal owner/authority loss.
             if (session.ProgramAuthorized)
             {
