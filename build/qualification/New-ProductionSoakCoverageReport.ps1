@@ -38,18 +38,18 @@ function Read-Input([string]$path, [long]$maxBytes) {
     $hash = (Get-FileHash -LiteralPath $absolute -Algorithm SHA256).Hash.ToLowerInvariant()
     return @{ file=$file.FullName; sha256=$hash; data=(Get-Content -LiteralPath $absolute -Raw | ConvertFrom-Json -Depth 64) }
 }
-function Add-Artifact([string]$key, $input) {
-    $artifacts.Add([ordered]@{ key=$key; path=$input.file; sha256=$input.sha256 })
+function Add-Artifact([string]$key, $artifact) {
+    $artifacts.Add([ordered]@{ key=$key; path=$artifact.file; sha256=$artifact.sha256 })
 }
 $gateState = "UNVERIFIED"
 $gateReason = "No authenticated same-run GitHub Required Gates snapshot supplied."
 if ($RequiredGatesPath) {
     try {
-        $input = Read-Input $RequiredGatesPath (2MB)
-        & (Join-Path $root "build/release/Test-RequiredGateEvidence.ps1") -EvidencePath $input.file -ExpectedSourceCommit $ExpectedSourceCommit | Out-Null
+        $artifact = Read-Input $RequiredGatesPath (2MB)
+        & (Join-Path $root "build/release/Test-RequiredGateEvidence.ps1") -EvidencePath $artifact.file -ExpectedSourceCommit $ExpectedSourceCommit | Out-Null
         $gateState = "PASS"
         $gateReason = "Existing five-gate verifier accepted the exact-source GitHub run/jobs snapshot."
-        Add-Artifact "requiredGates" $input
+        Add-Artifact "requiredGates" $artifact
     } catch {
         $gateState = "FAIL"
         $gateReason = "Supplied Required Gates input rejected: " + $_.Exception.Message
@@ -60,20 +60,20 @@ $ssdRows = @{}
 foreach ($path in @($SsdEvidencePaths)) {
     $key = "unknown"
     try {
-        $input = Read-Input $path (256KB)
-        $p = [string]$input.data.profile
-        $format = [string]$input.data.result.programFormat
+        $artifact = Read-Input $path (256KB)
+        $p = [string]$artifact.data.profile
+        $format = [string]$artifact.data.result.programFormat
         $key = "$format/$p"
         if ($p -cnotin @($policy.ssd.profiles | ForEach-Object id) -or
             $format -cnotin @($policy.ssd.formats) -or $ssdRows.ContainsKey($key)) {
             throw "Unknown or duplicate actual SSD format/profile."
         }
-        & (Join-Path $PSScriptRoot "Test-SsdPlaybackEvidence.ps1") -EvidencePath $input.file -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $p -ExpectedFormat $format | Out-Null
-        $ssdRows[$key] = @{ status= if ($input.data.result.timingStatus -eq "FAIL") { "FAIL" } else { "PASS" }
-            reason= "Existing verifier accepted exact source, elapsed duration, two media hashes, resource limit, host teardown; timing=$($input.data.result.timingStatus); not physical scan-out."
+        & (Join-Path $PSScriptRoot "Test-SsdPlaybackEvidence.ps1") -EvidencePath $artifact.file -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $p -ExpectedFormat $format | Out-Null
+        $ssdRows[$key] = @{ status= if ($artifact.data.result.timingStatus -eq "FAIL") { "FAIL" } else { "PASS" }
+            reason= "Existing verifier accepted exact source, elapsed duration, two media hashes, resource limit, host teardown; timing=$($artifact.data.result.timingStatus); not physical scan-out."
         }
-        Add-Artifact "ssd/$key" $input
-        $diagnostic = Join-Path (Split-Path -Parent $input.file) "ssd-playback-memory-diagnostic.json"
+        Add-Artifact "ssd/$key" $artifact
+        $diagnostic = Join-Path (Split-Path -Parent $artifact.file) "ssd-playback-memory-diagnostic.json"
         if (Test-Path -LiteralPath $diagnostic -PathType Leaf) {
             $memory = Read-Input $diagnostic 65536
             & (Join-Path $PSScriptRoot "Test-SsdPlaybackMemoryDiagnostic.ps1") -EvidencePath $memory.file -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $p -ExpectedFormat $format | Out-Null
@@ -107,14 +107,14 @@ $mixedRows = @{}
 foreach ($path in @($MixedEvidencePaths)) {
     $key = "unknown"
     try {
-        $input = Read-Input $path (2MB)
-        $key = [string]$input.data.profile
+        $artifact = Read-Input $path (2MB)
+        $key = [string]$artifact.data.profile
         if ($key -cnotin @($policy.mixed.profiles | ForEach-Object id) -or $mixedRows.ContainsKey($key)) {
             throw "Unknown or duplicate staged mixed soak profile."
         }
-        & (Join-Path $PSScriptRoot "Test-SustainedMixedLoadEvidence.ps1") -EvidencePath $input.file -DescriptorPath (Join-Path $root $policy.mixed.descriptor) -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $key | Out-Null
+        & (Join-Path $PSScriptRoot "Test-SustainedMixedLoadEvidence.ps1") -EvidencePath $artifact.file -DescriptorPath (Join-Path $root $policy.mixed.descriptor) -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedProfile $key | Out-Null
         $mixedRows[$key] = @{ status="PASS"; reason="Bounded staged sessions verified; NOT uninterrupted Program, native network or physical A/V." }
-        Add-Artifact "stagedMixed/$key" $input
+        Add-Artifact "stagedMixed/$key" $artifact
     } catch {
         $mixedRows[$key] = @{ status="FAIL"; reason="Rejected staged mixed-soak evidence: $($_.Exception.Message)" }
     }
@@ -134,11 +134,11 @@ $software = "UNVERIFIED"
 $softwareReason = "No complete real-time software producer-composition evidence supplied."
 if ($RealtimeEvidencePath) {
     try {
-        $input = Read-Input $RealtimeEvidencePath (2MB)
-        & (Join-Path $PSScriptRoot "Test-RealtimePlayoutEvidence.ps1") -EvidencePath $input.file -ExpectedSourceCommit $ExpectedSourceCommit | Out-Null
+        $artifact = Read-Input $RealtimeEvidencePath (2MB)
+        & (Join-Path $PSScriptRoot "Test-RealtimePlayoutEvidence.ps1") -EvidencePath $artifact.file -ExpectedSourceCommit $ExpectedSourceCommit | Out-Null
         $software = "PASS"
         $softwareReason = "Software producer matrix checked; native 25 fps, uninterrupted Program and physical A/V remain UNVERIFIED."
-        Add-Artifact "realtimeSoftware" $input
+        Add-Artifact "realtimeSoftware" $artifact
     } catch {
         $software = "FAIL"
         $softwareReason = "Rejected realtime software evidence: $($_.Exception.Message)"
@@ -166,11 +166,17 @@ $report = [ordered]@{
     productionSigning="UNVERIFIED"; unbrokenProductionSoak="UNVERIFIED"
     upstreamAuthority="build/release/New-ReleaseReadinessIndex.ps1 and Test-StableReadiness.ps1; this inventory does not override them."
 }
-$bytes = [Text.Encoding]::UTF8.GetBytes(($report | ConvertTo-Json -Depth 32))
+$bytes = [System.Text.Encoding]::UTF8.GetBytes(($report | ConvertTo-Json -Depth 32))
 if ($bytes.Length -gt 131072) { throw "Production coverage report exceeded fixed 128-KiB bound." }
 $out = if ([IO.Path]::IsPathRooted($OutputPath)) { [IO.Path]::GetFullPath($OutputPath) }
     else { [IO.Path]::GetFullPath((Join-Path $root $OutputPath)) }
 if (Test-Path -LiteralPath $out) { throw "Cannot overwrite a prior production evidence inventory." }
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($out))
-[IO.File]::WriteAllBytes($out, $bytes)
+$temp = $out + "." + [Guid]::NewGuid().ToString("N") + ".partial"
+try {
+    [IO.File]::WriteAllBytes($temp, $bytes)
+    [IO.File]::Move($temp, $out)
+} finally {
+    if (Test-Path -LiteralPath $temp -PathType Leaf) { Remove-Item -LiteralPath $temp -Force }
+}
 Write-Host "Production-soak inventory NO-GO: $($statuses.Count) explicit domains; source $ExpectedSourceCommit. No release, signing or physical qualification performed."
