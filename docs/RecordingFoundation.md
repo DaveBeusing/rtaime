@@ -340,7 +340,10 @@ The long dual-deck Replay workload has an opt-in, fixed-size memory diagnostic
 sidecar. Alongside the unchanged 600-second 50/59.94 software tests, it records
 live/committed managed heap, GC, process private/working-set bytes and handles,
 Replay encoded-store size, queue occupancy and per-writer open/finalize/abort
-ownership counts. Tests in `ReplayCaptureIsolationTests` and
+ownership counts. Media Foundation native writer counters additionally record
+configured COM sink acquisitions/releases, MF startup/shutdown calls and
+rented/returned NV12 scratch buffers without retaining COM objects, encoded
+segments or Program payloads in diagnostic collections. Tests in `ReplayCaptureIsolationTests` and
 `ReplayCaptureContinuityTests` verify the lifecycle counters across success,
 failed open, cancellation, drop-induced rotations and complete drain. The
 diagnostic is never a substitute for the original 512 MiB assertion or
