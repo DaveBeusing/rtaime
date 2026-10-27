@@ -78,14 +78,7 @@ try {
     # source-bound readiness inventory, even though its sparse memory sidecar
     # is structurally valid. No synthetic PASS can qualify playback.
     $source = (& git -C (Join-Path $PSScriptRoot "../..") rev-parse HEAD).Trim().ToLowerInvariant()
-    if ($LASTEXITCODE -ne 0 -or $source -cnotmatch '^[0-9a-f]{40}
-} finally {
-    if ([IO.Path]::GetFileName($root) -notlike "rtaime-memory-verifier-*") {
-        throw "Unsafe temporary verifier directory."
-    }
-    Remove-Item -LiteralPath $root -Recurse -Force
-}
-) {
+    if ($LASTEXITCODE -ne 0 -or $source -cnotmatch '^[0-9a-f]{40}$') {
         throw "Exact checked-out source is required for failed-sidecar regression."
     }
     $supplied = Copy-Fixture
@@ -93,9 +86,7 @@ try {
         "compiledDiagnosticSourceCommit")) { $supplied[$field] = $source }
     Write-Fixture $supplied
     $assessmentPath = Join-Path $root "failed-sidecar-assessment.json"
-    & (Join-Path $PSScriptRoot "New-ProductionSoakCoverageReport.ps1") `
-        -ExpectedSourceCommit $source -ReplayMemoryDiagnosticPaths @($path) `
-        -OutputPath $assessmentPath | Out-Null
+    & (Join-Path $PSScriptRoot "New-ProductionSoakCoverageReport.ps1") -ExpectedSourceCommit $source -ReplayMemoryDiagnosticPaths @($path) -OutputPath $assessmentPath | Out-Null
     $assessment = Get-Content -LiteralPath $assessmentPath -Raw | ConvertFrom-Json -Depth 48
     $sidecar = @($assessment.qualifications | Where-Object id -EQ "diagnosticOnly/1080p59.94/10m")
     $playback = @($assessment.qualifications | Where-Object id -EQ "ssd/1080p59.94/10m")
