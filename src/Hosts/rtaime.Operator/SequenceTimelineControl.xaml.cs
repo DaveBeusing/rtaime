@@ -86,13 +86,8 @@ public partial class SequenceTimelineControl : UserControl
         }
 
         var local = e.GetPosition(border).X;
-        var kind = model.Tool switch
-        {
-            SequenceEditorTool.Move => SequenceEditorGestureKind.Move,
-            SequenceEditorTool.Trim when local <= 9 => SequenceEditorGestureKind.TrimStart,
-            SequenceEditorTool.Trim when local >= border.ActualWidth - 9 => SequenceEditorGestureKind.TrimEnd,
-            _ => (SequenceEditorGestureKind?)null
-        };
+        var kind = SequenceTimelineGeometry.HitTestGesture(model.Tool, local, border.ActualWidth,
+            clip.StartTick >= model.VisibleStart, clip.EndTick <= model.VisibleEnd);
         if (kind is null) { e.Handled = true; return; }
         var absoluteX = e.GetPosition(SequenceRuler).X;
         var width = Math.Max(1, VisibleTrackWidth());
@@ -111,10 +106,16 @@ public partial class SequenceTimelineControl : UserControl
     {
         if (sender is not Border border || Editor is not { } model || _gestureActive) return;
         var local = e.GetPosition(border).X;
-        border.Cursor = !model.CanEdit || model.Tool == SequenceEditorTool.Select
-            ? Cursors.Arrow
-            : model.Tool == SequenceEditorTool.Move ? Cursors.SizeAll
-            : local <= 9 || local >= border.ActualWidth - 9 ? Cursors.SizeWE : Cursors.Arrow;
+        var clip = border.DataContext as SequenceEditorClip;
+        var kind = clip is null ? null : SequenceTimelineGeometry.HitTestGesture(model.Tool,
+            local, border.ActualWidth, clip.StartTick >= model.VisibleStart,
+            clip.EndTick <= model.VisibleEnd);
+        border.Cursor = !model.CanEdit ? Cursors.Arrow : kind switch
+        {
+            SequenceEditorGestureKind.Move => Cursors.SizeAll,
+            SequenceEditorGestureKind.TrimStart or SequenceEditorGestureKind.TrimEnd => Cursors.SizeWE,
+            _ => Cursors.Arrow
+        };
     }
 
     private void OnCapturedMouseMove(object sender, MouseEventArgs e)
@@ -152,6 +153,7 @@ public partial class SequenceTimelineControl : UserControl
     {
         if (Editor is not { } model) return;
         if (Keyboard.FocusedElement is TextBoxBase or ComboBox) return;
+        if ((Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Windows)) != 0) return;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (e.Key == Key.Escape)
         {
