@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -65,6 +67,39 @@ internal static class LiveConsoleWindowQualification
             registry.TryHandle(textEnter);
             Assert.Equal(0, autoCalls);
             Assert.True(OperatorKeyboardCommandRegistry.IsTextEntryContext(name));
+            Assert.Same(monitoring, window.Monitoring);
+
+            // Compact LIVE keeps the deliberate guarded switching actions first.
+            // The rest of the status/selection/navigation row may scroll locally.
+            window.Shell.SelectWorkspace("LIVE");
+            root.Width = 960; root.Height = 540; root.LayoutTransform = Transform.Identity;
+            window.Width = 960; window.Height = 540;
+            await dispatcher.InvokeAsync(() => {
+                window.Shell.UpdateViewportSize(960, 540);
+                window.UpdateLayout();
+            }, DispatcherPriority.Loaded);
+            var strip = Assert.IsAssignableFrom<ScrollViewer>(window.FindName("LiveActionStrip"));
+            Assert.True(strip.IsVisible);
+            Assert.True(strip.ViewportWidth > 0);
+            strip.ScrollToHorizontalOffset(0);
+            var liveButtons = Descendants(strip).OfType<RtaimeButton>().ToArray();
+            Assert.True(liveButtons.Length >= 6);
+            Assert.Equal(new[] { "SET PVW", "CUT", "AUTO" },
+                liveButtons.Take(3).Select(button => button.Content?.ToString()).ToArray());
+            Assert.Same(((OperatorViewModel)window.DataContext).SetPreviewCommand, liveButtons[0].Command);
+            Assert.Same(((OperatorViewModel)window.DataContext).CutCommand, liveButtons[1].Command);
+            Assert.Same(((OperatorViewModel)window.DataContext).DissolveCommand, liveButtons[2].Command);
+            Assert.Equal(((OperatorViewModel)window.DataContext).LiveTakeEvidence,
+                Assert.IsType<TextBlock>(window.FindName("LiveAuthorityDetail")).Text);
+            Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
+                AutomationProperties.GetName(text) == "Program monitoring receipt age" &&
+                text.Text == monitoring.ProgramFrameAge);
+            Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
+                AutomationProperties.GetName(text) == "Preview monitoring receipt age" &&
+                text.Text == monitoring.PreviewFrameAge);
+            var programViewer = Descendants(window).OfType<ProgramViewer>().First(viewer => viewer.IsVisible);
+            Assert.DoesNotContain(Descendants(programViewer).OfType<RtaimeIconButton>(), button =>
+                AutomationProperties.GetName(button) is "Stop Preview" or "Play or pause" or "Set IN");
             Assert.Same(monitoring, window.Monitoring);
         }
         finally {
