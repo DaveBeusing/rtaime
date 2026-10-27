@@ -96,6 +96,69 @@ public sealed class NetworkOutputFoundationTests
 		Assert.False(snapshot.Connected);
 	}
 
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Exhausted_retry_budget_remains_terminal_across_new_Program_samples(bool ndi)
+	{
+		var attempts = 0;
+		await using INetworkOutputSession session = ndi
+			? new NdiNetworkOutputSession(NdiConfiguration("Retry limited", reconnectMaximumAttempts: 2),
+				_ => { Interlocked.Increment(ref attempts); throw new IOException("Synthetic offline NDI sender."); })
+			: new SrtNetworkOutputSession(
+				Configuration(new Uri("srt://127.0.0.1:9000/live"), reconnectMaximumAttempts: 2),
+				() => { Interlocked.Increment(ref attempts); return new FailingTransport(); },
+				() => new PassThroughEncoder());
+
+		var initial = Sample(1);
+		Assert.True(session.TrySubmit(initial).Accepted);
+		await WaitUntilAsync(() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Faulted,
+			TimeSpan.FromSeconds(5));
+		Assert.Equal(2, Volatile.Read(ref attempts));
+		Assert.Equal("network.output.reconnect_exhausted", session.Snapshot.Failure?.Code);
+		Assert.True(initial.VideoLease.IsDisposed);
+
+		for (ulong sequence = 2; sequence <= 100; sequence++)
+		{
+			var rejected = Sample(sequence);
+			var result = session.TrySubmit(rejected);
+			Assert.Equal(NetworkOutputEnqueueStatus.Rejected, result.Status);
+			Assert.Equal("network.output.reconnect_exhausted", result.Failure?.Code);
+			Assert.Equal(1, rejected.VideoLease.DisposeCount);
+		}
+		Assert.Equal(2, Volatile.Read(ref attempts));
+		Assert.Equal(NetworkOutputLifecycleState.Faulted, session.Snapshot.Lifecycle);
+		Assert.Equal("network.output.reconnect_exhausted", session.Snapshot.Failure?.Code);
+		Assert.Equal(0, session.Snapshot.Statistics.QueueDepth);
+	}
+
+	[Fact]
+	public async Task Successful_NDI_sender_recovery_resets_the_next_failure_episode_budget()
+	{
+		var attempts = 0;
+		var failing = new FailingNdiSender();
+		var recovered = new CapturingNdiSender();
+		await using var session = new NdiNetworkOutputSession(
+			NdiConfiguration("Recovery epochs", reconnectMaximumAttempts: 2),
+			_ => Interlocked.Increment(ref attempts) switch
+			{
+				1 => throw new IOException("Transient creation failure."),
+				2 => failing,
+				_ => recovered
+			});
+
+		Assert.True(session.TrySubmit(Sample(1)).Accepted);
+		await failing.SendAttempted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+		await WaitUntilAsync(() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Reconnecting,
+			TimeSpan.FromSeconds(3));
+		Assert.True(session.TrySubmit(Sample(2)).Accepted);
+		await recovered.SampleReceived.Task.WaitAsync(TimeSpan.FromSeconds(3));
+		Assert.Equal(3, Volatile.Read(ref attempts));
+		Assert.Equal(NetworkOutputLifecycleState.Connected, session.Snapshot.Lifecycle);
+		Assert.True(session.Snapshot.Statistics.SentSamples > 0);
+	}
+
 	[Fact]
 	public async Task Cancelling_pending_SRT_connect_releases_attempt_resources_and_frame_once()
 	{
