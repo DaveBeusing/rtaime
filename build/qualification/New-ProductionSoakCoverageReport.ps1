@@ -152,11 +152,15 @@ foreach ($path in @($ReplayMemoryDiagnosticPaths)) {
             samples=@($memory.data.points).Count
             sparsePrivateGrowthBytes=([long]$playbackPoints[-1].privateBytes - [long]$playbackPoints[0].privateBytes)
             workloadFailed=[bool]$memory.data.playbackFailed
+            cleanupSucceeded=[bool]$memory.data.cleanupSucceeded
             replayOpenedStart=$playbackPoints[0].writerLifetime.Opened
             replayOpenedLast=$playbackPoints[-1].writerLifetime.Opened
             lastObservedManagedCommittedBytes=[long]$playbackPoints[-1].lastGc.committedManagedBytes
         })
-        Add-Status "diagnosticOnly/$key" "UNVERIFIED" "SPARSE_FAILED_OR_SUCCESSFUL_SSD_SIDECAR" "Observations verified; cannot replace original full-duration pass, resource assertion or physical output evidence."
+        $diagnosticStatus = if ([bool]$memory.data.playbackFailed -or -not [bool]$memory.data.cleanupSucceeded) {
+            "FAIL"
+        } else { "UNVERIFIED" }
+        Add-Status "diagnosticOnly/$key" $diagnosticStatus "SPARSE_FAILED_OR_SUCCESSFUL_SSD_SIDECAR" "Diagnostic observations verified; reported workload/cleanup failure is FAIL, clean sparse samples are UNVERIFIED, and neither replaces the full-duration SSD result."
     } catch {
         Add-Status "diagnosticOnly/invalid/$key" "FAIL" "INVALID_DIAGNOSTIC" ("Rejected optional sparse diagnostic: " + $_.Exception.Message)
     }
