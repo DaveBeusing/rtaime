@@ -53,6 +53,50 @@ The runtime rejects optional media analysis beside resident production under the
 
 The initial implementation verifies the catalogue fingerprint from a bounded, throttled read before requesting decode/cache publication. Fingerprint changes at the same path, file length, timestamp, decoder profile or analysis version invalidate the cache. Entries are **regenerable derived data** only, not a persisted asset authority or conditional readiness claim.
 
+## Bounded thumbnail filmstrip preparation
+
+The Operator now exposes \`MediaAssetFilmstripService\` as a reusable read-only
+library/sequence preview consumer. A \`MediaFilmstripRequest\` binds the catalogue
+asset ID, current SHA-256 fingerprint, length/update identity, duration, exact
+source-tick range, rational nominal frame rate, requested dimensions,
+sample count and compact/detailed quality. This is a client composition of
+existing versioned **Frame** analysis requests, not a new media contract,
+codec provider, bulk management IPC, production deck seek or second index.
+
+The source-aligned plan takes up to **eight** distinct representative
+frame positions in a visible range. Compact requests are at most 80×45,
+detailed at most 160×90; one strip contains no more than **460,800** RGBA
+source bytes before frozen WPF presentation. Each requested position is
+matched against the actual decoded PTS returned by Runtime; nominal
+25/50/60000/1001 timebases determine *request positions*, never fabricate
+VFR presentation timestamps. Only successful, verified local observations
+become thumbnails. Failed, timed-out, offline or unavailable positions remain
+explicitly absent; a partial strip cannot claim COMPLETE.
+
+Identical in-flight strip requests share one cancellable operation. A
+150-ms replacement debounce and one active consumer bound scroll/scrub
+pressure; when the final waiter cancels, an admitted job is explicitly
+canceled after Begin returns. Per-frame deadlines are eight seconds and the
+whole optional strip has a 45-second budget. Progress reports completed
+observations, not an assumed decoder or Program readiness. Frozen images are
+cached in the Operator for at most 16 strips / 8 MiB / ten seconds. A current
+catalogue read precedes *every* cache use; changed fingerprint or offline
+identity evicts old images. Runtime's existing content-addressed, SHA-verified
+single-frame disk cache remains authoritative for reusable decoded evidence.
+
+The persistent derived cache now serializes same-instance reads/writes,
+validates waveform range boundaries before reuse, and counts *manifests plus
+blobs* toward its existing 32-MiB/64-entry disk quota. Temporary files use
+the existing atomic-manifest-last failure boundary. No original media,
+full-size frame series or PCM is persisted. Consumers still must refresh
+catalogue availability when external media changes; a locally cached image
+is not independent physical-file or current Program evidence.
+
+The filmstrip API is ready for subsequent Library/sequence visual bindings;
+existing single-position Library hover and decoded-PCM timeline waveforms
+continue as their current presentation paths. Do not claim an installed
+filmstrip glyph or an expanded audio-only provider based on this foundation.
+
 ## Observation-only transport
 
 All frame pixels travel on `<runtime-endpoint>.analysis`, **not** in the existing management envelopes, root dispatch bulk payload or Program monitoring stream. The local client receives an opaque 256-bit per-job token from the authorized Control begin response and opens the Runtime-owned observations-only named pipe. The pipe authenticates the token, current job generation and completion state; replies are fixed-length bounded raw RGBA8 or a negative acknowledgement. Existing Operator pipe ACLs or the current-user pipe restriction apply.
