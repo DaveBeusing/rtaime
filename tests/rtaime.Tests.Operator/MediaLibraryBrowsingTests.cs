@@ -692,6 +692,27 @@ public sealed class MediaLibraryBrowsingTests
                         Console.WriteLine("MEDIA CONTEXT PASS [" + browser.Name + "]: real menu; multi-selection guards; single-selection recovery; hover canceled; Program unchanged.");
                     }
 				}
+                // Sorting a visible, virtualized ListBox must preserve all selected keys
+                // across WPF's recycling/reset notifications, not just the primary item.
+                browser.SelectedItems.Clear();
+                browser.SelectedItems.Add(browser.Items[0]);
+                browser.SelectedItems.Add(browser.Items[1]);
+                owner.MediaPool.UpdateSelection(browser.SelectedItems.Cast<MediaPoolItemViewModel>());
+                var keysBeforeSort = owner.MediaPool.SelectedItems.Select(item => item.Key)
+                    .OrderBy(key => key).ToArray();
+                owner.MediaPool.SortOrder = MediaLibrarySortOrder.DurationShortFirst;
+                await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Assert.Equal(keysBeforeSort, owner.MediaPool.SelectedItems.Select(item => item.Key).OrderBy(key => key));
+                Assert.Equal(keysBeforeSort, browser.SelectedItems.Cast<MediaPoolItemViewModel>()
+                    .Select(item => item.Key).OrderBy(key => key));
+                Assert.All(owner.MediaPool.SelectedItems, item => Assert.Same(
+                    owner.MediaPool.FilteredItems.Single(current => current.Key == item.Key), item));
+                owner.MediaPool.SortOrder = MediaLibrarySortOrder.CategoryName;
+                await dispatcher.InvokeAsync(owner.UpdateLayout, DispatcherPriority.Loaded);
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                browser.SelectedItems.Clear();
+                owner.MediaPool.UpdateSelection([]);
 				Assert.True(VirtualizingPanel.GetIsVirtualizing(browser));
 				Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(browser));
 			}
