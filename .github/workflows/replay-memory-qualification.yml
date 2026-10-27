@@ -1,0 +1,64 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+name: Replay memory software qualification
+
+on:
+  push:
+    branches:
+      - performance/replay-session-memory-bounds
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RTAIME_SOURCE_COMMIT: ${{ github.sha }}
+  RTAIME_BASELINE_SDK: "10.0.401"
+  RTAIME_SSD_MEMORY_DIAGNOSTIC: "1"
+  RTAIME_SSD_MEMORY_ORIGIN_COMMIT: a1c7fa4aabd6d1ab9b0ca2460852c9cfdfd5b440
+
+concurrency:
+  group: replay-memory-software-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sustained-replay:
+    name: 600s replay ${{ matrix.format }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        format: ["1080p50", "1080p59.94"]
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - name: Setup pinned SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Install pinned reference media encoder
+        shell: pwsh
+        run: ./build/testmedia/Install-ReferenceMediaEncoder.ps1
+      - name: Canonical Release build
+        shell: pwsh
+        run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+      - name: Verify writer lifecycle and continuity
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~ReplayCaptureIsolationTests|FullyQualifiedName~ReplayCaptureContinuityTests"
+      - name: Verify bounded diagnostic sidecar
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~SsdPlaybackMemoryDiagnosticTests"
+      - name: Observe unchanged ten-minute dual-deck workload
+        shell: pwsh
+        run: ./build/qualification/Invoke-SsdPlaybackQualification.ps1 -Profile 10m -Format ${{ matrix.format }} -NoBuild
+      - name: Retain diagnostic and qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-replay-memory-${{ matrix.format }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/qualification/ssd-playback/**/*.json
+            artifacts/qualification/ssd-playback/**/*.trx
+          if-no-files-found: warn
