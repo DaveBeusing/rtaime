@@ -48,6 +48,33 @@ Media cues reuse MediaDeckViewModel.Cues and SelectedCue. Selecting a cue change
 
 The Scene contract may bundle Preview/Program routing with the bounded versioned multi-layer compositing state already covered by the same Control → Runtime prepared-execution boundary. TAKE SCENE submits that complete desired state as one mutation. Runtime rejects missing or mismatched required layer resources before commit, so routing and graphics cannot become partially confirmed. Output roles remain outside Scene recall.
 
+## LIVE Preview/Program switching evidence
+
+LIVE retains the original two-up professional production viewers (Preview
+left/green, Program right/red). MULTIVIEW remains a separate destination,
+with no replacement or second production canvas. Viewer headers reuse the
+existing source/route/generation-fenced monitoring owners and report the age
+of each matching **transport receipt**, not a claim of delivered hardware
+frames. The monitoring watchdog refreshes the text using its existing
+cadence; unavailable frames never become fabricated black or zero-latency
+evidence.
+
+The compact LIVE row prioritizes SET PVW, CUT and AUTO ahead of horizontally
+scrolling auxiliary controls. Local selection, confirmed Preview and
+authoritative Program are distinct. The separate right-side transitions
+panel presents Preview request pending/rejected/confirmed and Program Take
+pending/rejected/uncertain/Control-confirmed outcomes, plus existing dissolve
+duration. NEXT rundown item/status are read-only projections; all actual
+Rundown GO, Scene TAKE and Show Control cue commands stay at their existing
+owners. Failed/unconfirmed Take does not auto-retry or optimistically
+advance Program. An ambiguous CUT/AUTO failure retains a local fail-closed
+lock on SET PVW, CUT/AUTO, Scene TAKE and Rundown/Show Control live actions,
+which only an explicit successful Control synchronization clears. Neither
+an ordinary polling refresh nor the old monitor image clears the lock.
+Known rejected commands retain their own distinct failure status. The Operator
+must reconcile an uncertain result with ControlHost before attempting another
+governed command.
+
 ## Live Controls
 
 The right 420-pixel LIVE region is divided into four compact sections:

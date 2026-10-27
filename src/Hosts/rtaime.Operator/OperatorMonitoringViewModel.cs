@@ -89,6 +89,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				return;
 			OnPropertyChanged(nameof(HasPreview));
 			OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 		}
 	}
 
@@ -101,6 +102,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				return;
 			OnPropertyChanged(nameof(HasProgram));
 			OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 		}
 	}
 
@@ -112,6 +114,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			if (!Set(ref _previewGpuFrame, value)) return;
 			OnPropertyChanged(nameof(HasPreview));
 			OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 		}
 	}
 
@@ -123,6 +126,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			if (!Set(ref _programGpuFrame, value)) return;
 			OnPropertyChanged(nameof(HasProgram));
 			OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 		}
 	}
 
@@ -134,7 +138,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			if (!Set(ref _state, value))
 				return;
 			OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 			OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 		}
 	}
 
@@ -170,6 +176,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public bool HasProgram => ProgramGpuFrame is not null || ProgramImage is not null;
 	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, _previewFreshness.Status(HasPreview, DateTimeOffset.UtcNow));
 	public string ProgramState => ResolveViewerState(_controlState.ProgramViewerState, _programFreshness.Status(HasProgram, DateTimeOffset.UtcNow));
+	public string PreviewFrameAge => _previewFreshness.FrameAgeEvidence(HasPreview, DateTimeOffset.UtcNow);
+	public string ProgramFrameAge => _programFreshness.FrameAgeEvidence(HasProgram, DateTimeOffset.UtcNow);
 
 	public void Start()
 	{
@@ -318,7 +326,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (isProgram && CompareMode == MediaCompareMode.Difference)
 			UpdateDifferenceForProgram(frame, gpuFrame);
 		OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 		OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 	}
 
 	private void UpdateDifferenceForProgram(MonitoringFrame frame, OperatorGpuMonitoringFrame? gpuFrame)
@@ -382,7 +392,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				if (ProgramState != "LIVE")
 					ProgramScopes = null;
 				OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 				OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 			}, null);
 		}
 	}
@@ -412,6 +424,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		ComparisonDetail = "Waiting for current Preview observations.";
 		Volatile.Write(ref _gpuComparisonUnavailable, false);
 		OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 	}
 
 	private void ClearProgramPresentation()
@@ -428,6 +441,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
 		Volatile.Write(ref _gpuComparisonUnavailable, false);
 		OnPropertyChanged(nameof(ProgramState));
+			OnPropertyChanged(nameof(ProgramFrameAge));
 	}
 
 	private void ApplyGpuFrame(MonitoringFrameDescriptor descriptor, OperatorGpuMonitoringFrame? gpuFrame)
@@ -663,6 +677,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(cached.Descriptor);
 		}
 		OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(PreviewFrameAge));
 	}
 
 	private static string ResolveViewerState(string controlState, string monitoringState)

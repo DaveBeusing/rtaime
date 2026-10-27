@@ -19,6 +19,13 @@
 		PlaceholderDetail="{Binding WorkspaceStates.Preview.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 		FrameUnavailableText="Preview frame unavailable"
 		OverlayControlsEnabled="{Binding IsTransportSource, ElementName=Root}">
+		<controls:RtaimeMonitorPresentation.HeaderContent>
+			<TextBlock Text="{Binding Monitoring.PreviewFrameAge, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+				Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}"
+				MaxWidth="185" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+				ToolTip="Actual matching Preview monitoring receipt age; not source decoding, Program output or sink latency."
+				AutomationProperties.Name="Preview monitoring receipt age" />
+		</controls:RtaimeMonitorPresentation.HeaderContent>
 
 
 

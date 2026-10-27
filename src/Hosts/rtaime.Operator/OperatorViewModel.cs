@@ -569,13 +569,13 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		ProgramSafety != OperatorProgramSafetyStates.Blocked &&
 		string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase);
 
-	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
+	private bool CanSetPreview() => CanControl() && !LiveTakeNeedsReconciliation && SelectedSource is not null;
 
-	private bool CanActivateScene() => CanControl() && SelectedScene is not null;
+	private bool CanActivateScene() => CanControl() && !LiveTakeNeedsReconciliation && SelectedScene is not null;
 
 	private bool CanToggleTestPattern() => CanControl() && SelectedSource is not null;
 
-	private bool CanTakePreview() => CanControl() && _client?.Snapshot is not null;
+	private bool CanTakePreview() => CanControl() && !LiveTakeNeedsReconciliation && _client?.Snapshot is not null;
 
 	private bool CanApplyGraphics() =>
 		CanControl() &&
@@ -744,6 +744,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		await ExecuteAsync("SYNCHRONIZE", async () =>
 		{
 			Apply(await _client.SynchronizeAsync());
+			ClearLiveTakeReconciliation();
 			CommandStatus = "SYNCHRONIZED";
 			TransitionStatus = "READY";
 			LastEvent = "Authoritative state synchronized from ControlHost.";
@@ -752,7 +753,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 
 	private async Task SetPreviewAsync()
 	{
-		if (_client is null || SelectedSource is null) return;
+		if (_client is null || !CanSetPreview() || SelectedSource is null) return;
 		var source = SelectedSource;
 		await ExecuteAsync("SET PREVIEW", async () =>
 		{
@@ -767,7 +768,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 
 	private async Task ActivateSceneAsync()
 	{
-		if (_client is null || SelectedScene is null)
+		if (_client is null || !CanActivateScene() || SelectedScene is null)
 			return;
 
 		var scene = SelectedScene;
@@ -864,7 +865,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 
 	private async Task CutAsync()
 	{
-		if (_client is null || _client.Snapshot is null) return;
+		if (_client is null || !CanTakePreview() || _client.Snapshot is null) return;
 		var previewName = PreviewSourceName;
 		await ExecuteAsync("CUT", async () =>
 		{
@@ -880,7 +881,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 
 	private async Task DissolveAsync()
 	{
-		if (_client is null || _client.Snapshot is null) return;
+		if (_client is null || !CanTakePreview() || _client.Snapshot is null) return;
 		var previewName = PreviewSourceName;
 		var durationFrames = TransitionFrames;
 		await ExecuteAsync("DISSOLVE", async () =>
@@ -1480,6 +1481,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		}
 		catch (RemoteHostSessionChangedException) when (_client is not null)
 		{
+			RequireLiveTakeReconciliation(operation);
 			IsStale = true;
 			ConnectionState = "RESYNCING";
 			ConnectionDetail = "ControlHost session changed. Full authoritative resynchronization is required.";
@@ -1502,6 +1504,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		}
 		catch (Exception exception)
 		{
+			RequireLiveTakeReconciliation(operation);
 			var connectivityFailure = exception is IOException or TimeoutException or OperationCanceledException;
 			var startupWaiting = connectivityFailure && !_hasSynchronized;
 			if (connectivityFailure)

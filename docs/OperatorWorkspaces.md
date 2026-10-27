@@ -140,7 +140,18 @@ Preview/Program pair is central, the contextual Inspector is right and the exist
 Rundown/Timeline is below. Preview remains left/green and Program right/red with
 equal allocation in dual mode. Detailed EDIT diagnostic cards are hidden in LIVE.
 The action strip provides one explicit Set Preview, CUT and AUTO context; playback
-remains in the existing Preview viewer. Scene/cue ARM/GO semantics remain separate.
+remains in the existing Preview viewer. The three deliberate actions now lead the
+single horizontal row, so compact LIVE retains direct switching access while
+secondary identity, Rundown, recording and network evidence scroll within the
+same bounded strip. SET PVW describes a local selection request; Take status
+distinguishes requested, pending, rejected, unconfirmed and confirmed Control
+state and never promotes a monitoring frame into Program authority. An
+ambiguous Take failure latches LIVE operations closed until explicit successful
+Control synchronization, not a monitoring refresh. Preview and Program headers
+display separate matching monitoring receipt ages (or explicit unavailable/stale
+states) from the existing watchdog; these are not physical output timing
+measurements. The right-side MULTIVIEW Live Controls panel adds read-only NEXT
+rundown evidence without duplicating GO, ARM, cue or Scene TAKE commands. Scene/cue ARM/GO semantics remain separate.
 
 Show/project identity, synchronization, readiness, Program identity and incident access
 remain in the shell. Library/Inspector toggles reopen the existing panes. At compact

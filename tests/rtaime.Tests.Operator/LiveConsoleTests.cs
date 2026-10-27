@@ -10,6 +10,54 @@ namespace rtaime.Tests.Operator;
 public sealed class LiveConsoleTests
 {
     [Fact]
+    public void Preview_selection_is_not_routing_and_failed_requests_do_not_claim_confirmation()
+    {
+        static string Preview(string? selected, bool connected = true, bool stale = false,
+            bool pending = false, string transition = "READY") =>
+            LiveProductionPresentation.PreviewEvidence(selected, connected, stale, pending, transition);
+
+        Assert.Contains("SELECT SOURCE", Preview(null));
+        Assert.Contains("SET PVW REQUEST", Preview("Camera A"));
+        Assert.Contains("Program is never changed", Preview("Camera A"));
+        Assert.Contains("REQUEST PENDING", Preview("Camera A", pending: true));
+        Assert.Contains("PREVIEW REJECTED", Preview("Camera A", transition: "Set Preview REJECTED"));
+        Assert.Contains("OUTCOME UNCONFIRMED", Preview("Camera A", transition: "SET PREVIEW FAILED"));
+        Assert.Contains("CONTROL CONFIRMED", Preview("Camera A", transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("monitor frames remain separate", Preview("Camera A", transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Preview("Camera A", stale: true, transition: "PREVIEW CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Preview("Camera A", connected: false, transition: "PREVIEW CONFIRMED"));
+    }
+
+    [Fact]
+    public void Production_take_evidence_keeps_requests_rejections_and_unknown_outcomes_distinct()
+    {
+        static string Evidence(bool connected = true, bool stale = false, bool pending = false,
+            bool hasSnapshot = true, bool blocked = false, string runtime = "READY",
+            string transition = "READY", bool previewKnown = true, uint frames = 12) =>
+            LiveProductionPresentation.TakeEvidence(connected, stale, pending, hasSnapshot,
+                blocked, runtime, transition, previewKnown, frames);
+
+        Assert.Contains("REQUEST ELIGIBLE", Evidence());
+        Assert.Contains("PENDING", Evidence(pending: true));
+        Assert.Contains("REJECTED BY CONTROL", Evidence(transition: "CUT REJECTED"));
+        Assert.Contains("REJECTED BY CONTROL", Evidence(transition: "DISSOLVE REJECTED"));
+        Assert.Contains("UNCONFIRMED TAKE", Evidence(transition: "CUT FAILED"));
+        Assert.Contains("UNCONFIRMED TAKE", Evidence(transition: "DISSOLVE 12F FAILED"));
+        Assert.Contains("UNVERIFIED", Evidence(stale: true));
+        Assert.Contains("UNVERIFIED", Evidence(connected: false));
+        Assert.Contains("UNVERIFIED", Evidence(hasSnapshot: false));
+        Assert.Contains("UNVERIFIED", Evidence(previewKnown: false));
+        Assert.Contains("BLOCKED", Evidence(blocked: true));
+        Assert.Contains("BLOCKED", Evidence(runtime: "RECOVERING"));
+        Assert.Contains("AUTO needs at least two frames", Evidence(frames: 1));
+        Assert.Contains("CONTROL COMMIT CONFIRMED", Evidence(transition: "CUT CONFIRMED"));
+        Assert.Contains("output delivery", Evidence());
+        // Disconnected authority wins over retained success/failure presentation.
+        Assert.Contains("UNVERIFIED", Evidence(stale: true, transition: "CUT CONFIRMED"));
+        Assert.Contains("UNVERIFIED", Evidence(connected: false, transition: "CUT FAILED"));
+    }
+
+    [Fact]
     public async Task Observations_preserve_local_reorder_undo_and_selection_but_surface_storage_conflict()
     {
         var transport = new ReadOnlyTransport();

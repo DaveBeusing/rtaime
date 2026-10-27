@@ -87,13 +87,15 @@
 								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
 							<controls:RtaimeButton Grid.Column="0"
-								Content="SET NEXT"
+								Content="SET PVW"
 								Command="{Binding SetPreviewCommand}"
 								IsCompact="True"
-								ToolTip="Route the selected source to Preview." />
+								AutomationProperties.Name="Set selected source on Preview only"
+								ToolTip="{Binding SetPreviewDetail}" ToolTipService.ShowOnDisabled="True" />
 							<controls:RtaimeButton Grid.Column="2"
 								Content="CUT"
 								Command="{Binding CutCommand}"
+								AutomationProperties.Name="Cut confirmed Preview source to Program"
 								IsCompact="True"
 								Background="{DynamicResource OperatorAccentBrush}"
 								BorderBrush="{DynamicResource OperatorAccentBrush}"
@@ -102,6 +104,7 @@
 							<controls:RtaimeButton Grid.Column="4"
 								Content="AUTO"
 								Command="{Binding DissolveCommand}"
+								AutomationProperties.Name="Dissolve confirmed Preview source to Program"
 								IsCompact="True"
 								ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True" />
 						</Grid>
@@ -111,9 +114,26 @@
 							<TextBlock Text="{Binding PreviewTakeDetail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 							<controls:RtaimeTextBox Grid.Column="1"
 								Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}"
-								Height="30"
-								ToolTip="Dissolve duration in frames." />
+								Height="30" AutomationProperties.Name="AUTO transition duration in frames"
+								ToolTip="AUTO duration in frames; at least two frames required. CUT ignores this draft." />
 						</Grid>
+						<TextBlock Text="{Binding LiveTakeEvidence}" Style="{StaticResource OperatorLabel}" Margin="0,6,0,2"
+							TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Authoritative LIVE Take evidence" />
+						<TextBlock Text="{Binding CommitStatus, StringFormat={}CONTROL {0}}" Style="{StaticResource OperatorLabel}"
+							TextWrapping="Wrap" ToolTip="Control confirmation is distinct from executed, presented and externally delivered Program." />
+						<TextBlock Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"
+							Margin="0,2,0,0" ToolTip="Previous production request detail; do not retry an uncertain request without synchronization." />
+						<Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusControl}" Padding="6" Margin="0,8,0,0">
+							<StackPanel>
+								<TextBlock Text="NEXT RUNDOWN · OBSERVED, NOT TAKEN" Style="{StaticResource OperatorLabel}"
+									FontWeight="SemiBold" />
+								<TextBlock Text="{Binding Rundown.PendingNext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" ToolTip="Rundown GO and Scene TAKE use their own authoritative commands." />
+								<TextBlock Text="{Binding Rundown.NextItemStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							</StackPanel>
+						</Border>
 					</StackPanel>
 				</Border>
 

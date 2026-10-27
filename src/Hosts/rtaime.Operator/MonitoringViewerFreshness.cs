@@ -77,5 +77,19 @@ internal sealed class MonitoringViewerFreshness
 		return hasFrame ? "LIVE" : "UNKNOWN";
 	}
 
+	// Display-only elapsed receipt age. It is not a decoder, presentation, sink
+	// or native Program frame latency measurement. The existing 500-ms monitoring
+	// watchdog refreshes this label; no dedicated UI timer is introduced.
+	internal string FrameAgeEvidence(bool hasFrame, DateTimeOffset now)
+	{
+		var state = Status(hasFrame, now);
+		if (_lastReceipt == default || state is "UNKNOWN" or "RECOVERING")
+			return $"FRAME AGE — · {state}";
+		if (now < _lastReceipt)
+			return "FRAME AGE — · CLOCK UNVERIFIED";
+		var ageMilliseconds = Math.Max(0, (long)(now - _lastReceipt).TotalMilliseconds);
+		return $"RECEIVED {ageMilliseconds} ms AGO · {state}";
+	}
+
 	internal DateTimeOffset LastReceipt => _lastReceipt;
 }
