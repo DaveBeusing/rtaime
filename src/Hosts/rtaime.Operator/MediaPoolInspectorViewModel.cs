@@ -652,7 +652,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		set => SetGroupExpansion("metadata", value);
 	}
 
-	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items)
+	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items, bool recordVisit = true)
 	{
 		ArgumentNullException.ThrowIfNull(items);
 		var selected = items
@@ -680,7 +680,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
-        if (SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
+        if (recordVisit && SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
 	}
 
 
@@ -973,10 +973,17 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		var search = MediaLibrarySearch.Parse(bin.Search);
 		SearchStatus = search.Error ?? "AND terms · quotes for phrases · -term to exclude";
-		var filtered = Library.Filter(bin, search);
-		var keys = filtered.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
-		if (SelectedItems.Any(item => !keys.Contains(item.Key)))
-			UpdateSelection(SelectedItems.Where(item => keys.Contains(item.Key)).ToArray());
+		var filtered = Library.Filter(bin, search, SortOrder);
+        // Every catalogue refresh recreates view rows. Retain stable asset keys while
+        // rebinding selected items to the current projection, not stale descriptors.
+        // Passive refresh/filter/sort must not count as a new user visit.
+        var byKey = filtered.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var previous = SelectedItems.ToArray();
+        var current = previous.Where(item => byKey.ContainsKey(item.Key))
+            .Select(item => byKey[item.Key]).ToArray();
+        if (previous.Length != current.Length ||
+            previous.Where((item, index) => !ReferenceEquals(item, current[index])).Any())
+            UpdateSelection(current, recordVisit: false);
 
 		var preferred = preferredSelectionKey is null
 			? null
