@@ -305,7 +305,7 @@ as proving additional targets.
 `RuntimeNetworkOutputTargetEvidence` also distinguishes each target's
 configured protocol/profile, declared capability/admission, local enqueue
 count and last sequence/time from observed provider send count/bytes,
-queue depth, failures, last send age and measured byte-rate deltas.
+queue depth, failures, last send age and measured byte-rate deltas. The Runtime in-process observer measures provider byte deltas only when at least 250 ms separates polls; the Operator independently derives displayed local sender KiB/s from consecutive fresh health observations at the same source/target and Control/Runtime revisions. A missing, stale, changed or sub-250-ms observation reports rate UNVERIFIED; it never claims network or peer throughput.
 A locally connected sender is not automatically active: no recent
 successful provider send means `UNKNOWN`, expired local send evidence
 means `STALE`, a terminal provider fault means `FAILED`.
