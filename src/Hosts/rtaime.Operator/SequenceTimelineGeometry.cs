@@ -289,7 +289,7 @@ public static class SequenceTimelineGeometry
 }
 
 public sealed record SequenceRulerMark(long Tick, double Left, string Label);
-\npublic sealed record SequenceEditorRow(Guid Id, string Name, SequenceMediaKind Kind,
+public sealed record SequenceEditorRow(Guid Id, string Name, SequenceMediaKind Kind,
     bool Enabled, bool Muted, int Layer, IReadOnlyList<SequenceEditorClip> Clips);
 
 public sealed record SequenceEditorClip(Guid Id, Guid TrackId, Guid AssetId,
