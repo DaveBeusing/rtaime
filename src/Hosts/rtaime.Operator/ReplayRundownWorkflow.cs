@@ -108,9 +108,12 @@ public sealed partial class ReplayViewModel
             NotifyReplayJourney();
     }
 
-    private async Task QueueInRundownAsync() => await RunAsync(async () =>
+    private async Task QueueInRundownAsync()
     {
-        if (!CanQueueInRundown || _rundown is null) return;
+        if (!CanQueueInRundown) return;
+        await RunAsync(async () =>
+        {
+        if (_rundown is null) return;
         var clip = RequireReadyClip();
         var catalog = await _client.GetMediaAssetCatalogAsync().ConfigureAwait(false);
         var asset = catalog.Assets.SingleOrDefault(value =>
@@ -133,7 +136,8 @@ public sealed partial class ReplayViewModel
             return;
         }
         RundownFeedback = "RUNDOWN DRAFT · verified replay asset and source slot · SAVE in Rundown, then PREPARE, then explicit GO. Program unchanged.";
-    });
+        });
+    }
 
     private async Task ReviewNewRangeAsync() => await RunAsync(async () =>
     {
