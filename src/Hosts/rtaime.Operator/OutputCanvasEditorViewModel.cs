@@ -49,6 +49,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private ulong? _validatedSavedRevision;
     private ulong? _validatedDraftRevision;
     private ulong? _requestedRevision;
+    private ulong? _uncertainSavedRevision;
     private Guid _pendingSaveTransaction;
     private DateTimeOffset _nextObservationAt = DateTimeOffset.MinValue;
     private OutputCanvasQuad? _previewQuad;
@@ -538,6 +539,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
             _applyOutcomeUnknown = false;
             _unknownDisable = false;
+            _uncertainSavedRevision = null;
             _requestedRevision = _awaitingBoundary ? _session.Saved.EditRevision : null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary
@@ -550,6 +552,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             // revision through the existing health refresh; suppress retries.
             _applyOutcomeUnknown = true;
             _unknownDisable = false;
+            _uncertainSavedRevision = _session.Saved.EditRevision;
             _awaitingBoundary = true;
             _requestedRevision = _session.Saved.EditRevision;
             _nextObservationAt = DateTimeOffset.MinValue;
@@ -573,6 +576,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
             _applyOutcomeUnknown = false;
             _unknownDisable = false;
+            _uncertainSavedRevision = null;
             _requestedRevision = null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary ? "Disable requested; the active Program route remains until Runtime confirms the next boundary."
@@ -583,6 +587,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             // A missing response must not turn into an automatic second disable.
             _applyOutcomeUnknown = true;
             _unknownDisable = true;
+            _uncertainSavedRevision = _session.Saved.EditRevision;
             _awaitingBoundary = true;
             _requestedRevision = null;
             _nextObservationAt = DateTimeOffset.MinValue;
@@ -635,10 +640,11 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     }
 
     private bool ObservedIntendedTerminal(OutputCanvasActivationResult observed) =>
-        _unknownDisable
+        _uncertainSavedRevision is { } expected && _session?.Saved.EditRevision == expected &&
+        (_unknownDisable
             ? observed.ActivationState == "UNMAPPED" && observed.ActiveRenderRevision is null
-            : _requestedRevision is { } requested && observed.ActivationState == "ACTIVE" &&
-              observed.ActiveRenderRevision == requested && ObservedTargetMatchesSavedProgram;
+            : _requestedRevision == expected && observed.ActivationState == "ACTIVE" &&
+              observed.ActiveRenderRevision == expected && ObservedTargetMatchesSavedProgram);
 
     /// <summary>
     /// Explicit read-only reconciliation after an uncertain activation result.
@@ -655,12 +661,14 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             if (_disposed) return;
             if (current.Saved.ConfigurationId != _session.Saved.ConfigurationId ||
                 current.SavedRevision != _session.Saved.EditRevision ||
-                current.Saved.EditRevision != current.SavedRevision)
+                current.Saved.EditRevision != current.SavedRevision ||
+                _uncertainSavedRevision != current.SavedRevision)
             {
                 _savedConflict = true;
                 Status = "RECONCILE BLOCKED · saved revision changed. Preserve local intent and explicitly reload.";
                 return;
             }
+            RebuildTargets(current.AvailableTargets); // Fresh admission, not a cached selector.
             var observed = await _gateway.EvidenceAsync();
             if (_disposed) return;
             SetEvidence(observed);
@@ -671,6 +679,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             }
             _applyOutcomeUnknown = false;
             _unknownDisable = false;
+            _uncertainSavedRevision = null;
             _awaitingBoundary = false;
             _requestedRevision = null;
             Status = observed.ActivationState == "ACTIVE"
