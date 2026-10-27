@@ -9,7 +9,20 @@ namespace rtaime.RuntimeHost;
 
 public sealed record RuntimeNetworkOutputTargetEvidence(
     string RoleId, string TargetId, NetworkOutputHealthSnapshot ProviderHealth,
-    long EnqueuedVideoFrames, long EnqueuedAudioSampleFrames);
+    long EnqueuedVideoFrames, long EnqueuedAudioSampleFrames)
+{
+    // Requested versus observed are intentionally separate: queued Program frames
+    // and provider send success cannot certify reception or physical scan-out.
+    public NetworkOutputConfiguration? RequestedConfiguration { get; init; }
+    public string CapabilityEvidence { get; init; } = "UNVERIFIED";
+    public DateTimeOffset ObservedAtUtc { get; init; }
+    public DateTimeOffset? LastAcceptedAtUtc { get; init; }
+    public ulong? LastAcceptedSequence { get; init; }
+    public TimeSpan? LastSendAge { get; init; }
+    public ulong? ObservedBytesPerSecond { get; init; }
+    public string DeliveryState { get; init; } = "UNKNOWN";
+    public string PhysicalDeliveryEvidence { get; init; } = "UNVERIFIED";
+}
 
 /// <summary>
 /// Runtime-owned output graph. Every provider session is constructed before the
@@ -20,25 +33,88 @@ public sealed record RuntimeNetworkOutputTargetEvidence(
 /// </summary>
 internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 {
-    private sealed class TargetSession(string roleId, string targetId, INetworkOutputSession session)
+    private sealed class TargetSession(RuntimeNetworkOutputTarget target,
+        INetworkOutputSession session, string capabilityEvidence)
     {
         private long _enqueuedVideoFrames;
         private long _enqueuedAudioSampleFrames;
+        private long _lastAcceptedSequence = -1;
+        private long _lastAcceptedUtcTicks;
+        private readonly object _observeGate = new();
+        private DateTimeOffset _lastRateAtUtc;
+        private ulong _lastRateBytes;
+        private ulong? _observedBytesPerSecond;
 
-        public string RoleId { get; } = roleId;
-        public string TargetId { get; } = targetId;
+        public string RoleId { get; } = target.RoleId;
+        public string TargetId { get; } = target.Configuration.TargetId;
+        public NetworkOutputConfiguration Configuration { get; } = target.Configuration;
+        public string CapabilityEvidence { get; } = capabilityEvidence;
         public INetworkOutputSession Session { get; } = session;
 
-        public void ObserveEnqueued(long audioSampleFrames)
+        public void ObserveEnqueued(long audioSampleFrames, ulong sequence)
         {
             Interlocked.Increment(ref _enqueuedVideoFrames);
             Interlocked.Add(ref _enqueuedAudioSampleFrames, audioSampleFrames);
+            Interlocked.Exchange(ref _lastAcceptedUtcTicks, DateTimeOffset.UtcNow.UtcTicks);
+            if (sequence <= long.MaxValue)
+                Interlocked.Exchange(ref _lastAcceptedSequence, (long)sequence);
         }
 
-        public RuntimeNetworkOutputTargetEvidence Evidence => new(
-            RoleId, TargetId, Session.Snapshot,
-            Interlocked.Read(ref _enqueuedVideoFrames),
-            Interlocked.Read(ref _enqueuedAudioSampleFrames));
+        public RuntimeNetworkOutputTargetEvidence Evidence
+        {
+            get
+            {
+                var snapshot = Session.Snapshot;
+                var now = DateTimeOffset.UtcNow;
+                var age = snapshot.LastSuccessfulSendUtc is { } sent && sent <= now
+                    ? now - sent : (TimeSpan?)null;
+                ulong? bytesPerSecond;
+                lock (_observeGate)
+                {
+                    if (_lastRateAtUtc != default &&
+                        now - _lastRateAtUtc >= TimeSpan.FromMilliseconds(250))
+                    {
+                        var elapsed = (now - _lastRateAtUtc).TotalSeconds;
+                        _observedBytesPerSecond = snapshot.Statistics.BytesSent >= _lastRateBytes
+                            ? (ulong)Math.Min(ulong.MaxValue,
+                                (double)(snapshot.Statistics.BytesSent - _lastRateBytes) / elapsed)
+                            : null;
+                        _lastRateBytes = snapshot.Statistics.BytesSent;
+                        _lastRateAtUtc = now;
+                    }
+                    else if (_lastRateAtUtc == default)
+                    {
+                        _lastRateBytes = snapshot.Statistics.BytesSent;
+                        _lastRateAtUtc = now;
+                    }
+                    bytesPerSecond = _observedBytesPerSecond;
+                }
+                var lastAcceptedAt = Interlocked.Read(ref _lastAcceptedUtcTicks);
+                var lastSequence = Interlocked.Read(ref _lastAcceptedSequence);
+                var delivery = snapshot.Lifecycle == NetworkOutputLifecycleState.Faulted ||
+                    snapshot.Failure is not null ? "FAILED" :
+                    snapshot.Connected && snapshot.Lifecycle == NetworkOutputLifecycleState.Connected &&
+                    age is { } fresh && fresh <= TimeSpan.FromSeconds(5) &&
+                    snapshot.Statistics.SentSamples > 0 ? "SENDER_ACTIVE" :
+                    snapshot.Connected && age is { } stale && stale > TimeSpan.FromSeconds(5)
+                        ? "STALE" : "UNKNOWN";
+                return new RuntimeNetworkOutputTargetEvidence(
+                    RoleId, TargetId, snapshot,
+                    Interlocked.Read(ref _enqueuedVideoFrames),
+                    Interlocked.Read(ref _enqueuedAudioSampleFrames))
+                {
+                    RequestedConfiguration = Configuration,
+                    CapabilityEvidence = CapabilityEvidence,
+                    ObservedAtUtc = now,
+                    LastAcceptedAtUtc = lastAcceptedAt == 0 ? null : new DateTimeOffset(lastAcceptedAt, TimeSpan.Zero),
+                    LastAcceptedSequence = lastSequence < 0 ? null : (ulong)lastSequence,
+                    LastSendAge = age,
+                    ObservedBytesPerSecond = bytesPerSecond,
+                    DeliveryState = delivery,
+                    PhysicalDeliveryEvidence = "UNVERIFIED"
+                };
+            }
+        }
     }
 
     private readonly IReadOnlyDictionary<string, TargetSession> _sessions;
@@ -96,8 +172,10 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
             foreach (var target in targets)
             {
                 var session = providerRegistry.CreateSession(target);
+                var capabilityEvidence = descriptors.Count > 0
+                    ? "DECLARED_AVAILABLE_AND_ADMITTED" : "UNVERIFIED_TEST_PROVIDER";
                 provisional.Add(target.Configuration.TargetId,
-                    new TargetSession(target.RoleId, target.Configuration.TargetId, session));
+                    new TargetSession(target, session, capabilityEvidence));
             }
         }
         catch (Exception original)
@@ -206,7 +284,7 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
                 payload = null;
                 if (outcome.Status == NetworkOutputEnqueueStatus.DroppedOldest) dropped++;
                 if (outcome.Accepted)
-                    targets[i].ObserveEnqueued(audio.Timing.SampleCount);
+                    targets[i].ObserveEnqueued(audio.Timing.SampleCount, videoTiming.SequenceNumber);
                 else
                 {
                     rejected++;
