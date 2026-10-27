@@ -170,7 +170,7 @@ Backpressure is represented through:
 
 Connection/runtime/send failures move the provider through connecting, reconnecting or faulted observational lifecycle states.
 
-Reconnect uses configured initial and maximum delays. A maximum-attempt value of zero means retry until shutdown where retry is meaningful; a positive value bounds attempts.
+Reconnect uses configured initial and maximum delays subject to a maximum effective automatic backoff of five seconds. A positive `reconnectMaximumAttempts` caps attempts within one failure episode; a configured zero is retained as a wire-compatible input but now uses a **finite safety default of eight attempts**, not unlimited retries. Independently, each episode has a 45-second elapsed budget, and SRT connect/encoder initialization has an eight-second per-attempt cancellation budget. These bounds do not certify cancellation of a noncooperative native SDK call; ownership is retained until cleanup is confirmed.
 
 Runtime-unavailable failures such as a missing/incompatible NDI native library fail closed rather than spinning indefinitely.
 
@@ -180,10 +180,11 @@ Shutdown cancels reconnect work, disposes queued payload leases and releases pro
 
 ## Connection retry episodes and fail-closed admission
 
-A configured positive `reconnectMaximumAttempts` is a limit for the **entire
-failed connection episode**, not a fresh allowance per queued Program sample.
+A configured `reconnectMaximumAttempts` is a limit for the **entire
+failed connection episode**, not a fresh allowance per queued Program sample;
+zero means the finite eight-attempt safety default rather than unlimited reconnects.
 SRT transport connection and NDI sender creation retain a session-owned
-attempt counter across subsequent samples. After the final permitted failure,
+attempt counter across subsequent samples. After the final permitted attempt or 45-second budget,
 the target remains `FAULTED` with `network.output.reconnect_exhausted`.
 Later Program samples are rejected synchronously by that **target only** and
 their readback leases are returned without a new native retry. A successfully
