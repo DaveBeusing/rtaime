@@ -263,11 +263,13 @@ public sealed class InspectorDraftTransactionTests
         Assert.Equal(audios[0].Key, f.Model.SelectedItem!.Key);
         Assert.Equal(2.25, f.Model.AudioGainDraft);
         Assert.Contains("audio selection changed", f.Model.InspectorSelectionPinStatus);
+        Assert.False(f.Model.InspectorPinAllowsActions);
         Assert.False(f.Model.ApplyAudioDraftCommand.CanExecute(null));
         f.Model.ApplyAudioDraftCommand.Execute(null);
         Assert.Equal(0, f.Transport.MutationCalls);
         Assert.Equal(program, f.Owner.ProgramSourceId);
         f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
+        Assert.True(f.Model.InspectorPinAllowsActions);
         f.Model.Selection.Select([audios[1]]);
         Assert.NotEqual(original, f.Model.EditingSelectionIdentity);
     }
