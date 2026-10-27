@@ -6,6 +6,25 @@
 
 The shared theme keeps all existing resource keys, font families, semantic Preview/Program/Armed/Healthy roles and persisted reference geometry. This change is limited to presentation. Native WPF command routing, text editing, IME, selection and undo remain the underlying mechanisms. Native file dialogs are unchanged. No production command, source, clock, persistence schema or version target changes.
 
+## Inspector selection chrome
+
+The shared Inspector reuses `RtaimeButton` in the compact selection
+header for PIN/UNPIN, replacing a disabled decorative context action.
+The header also exposes a single-line truncated breadcrumb for the
+selected media, timeline, graph or cue identity and observed Control
+revision. The full identity is available via tooltip and the live
+PIN/status text resides alongside confirmed/local draft evidence.
+
+PIN is deliberately limited to a single active Inspector selection.
+Its feedback is textual and screen-reader accessible, not solely a
+color badge. The shared numeric-field template already displays
+`InspectorPropertyDefinition.Unit` next to the editable number,
+retains a themed error/focus border, and supports precise keyboard,
+localized parsing and Alt+drag local scrubbing. This change does not
+replace its `PART_ContentHost`, alter native IME/text focus routing,
+submit on Enter, or modify Program authorization. Visual contrast and
+actual mixed-DPI hardware remain separate reference qualification.
+
 ## Additive resources
 
 | Key | Value | Consumer / meaning |

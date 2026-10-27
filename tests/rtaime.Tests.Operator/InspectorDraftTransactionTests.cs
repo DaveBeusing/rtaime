@@ -202,6 +202,94 @@ public sealed class InspectorDraftTransactionTests
     }
 
     [Fact]
+    public async Task Inspector_pin_holds_exact_graph_identity_across_selection_churn_without_program_mutation()
+    {
+        await using var f = await Fixture.Create();
+        var before = f.Model.EditingSelectionIdentity;
+        var program = f.Owner.ProgramSourceId;
+        f.Model.SelectedLayerPositionX = 0.375;
+        Assert.True(f.Model.ToggleInspectorSelectionPinCommand.CanExecute(null));
+        f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
+        Assert.True(f.Model.IsInspectorSelectionPinned);
+        Assert.Contains("GRAPH", f.Model.InspectorContextBreadcrumb);
+        Assert.Contains("PINNED", f.Model.InspectorSelectionPinStatus);
+
+        for (var i = 0; i < 20; i++)
+        {
+            f.Model.SelectCompositingNode(Node("layer:other"));
+            f.Model.Selection.Select(f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).Take(1));
+            f.Model.ClearTimelineSelection();
+            Assert.Equal(before, f.Model.EditingSelectionIdentity);
+            Assert.Equal(0.375, f.Model.SelectedLayerPositionX);
+        }
+        Assert.Contains("ignored", f.Model.InspectorSelectionPinStatus);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        Assert.Equal(program, f.Owner.ProgramSourceId);
+
+        f.Transport.RevisionValue++;
+        f.Owner.SynchronizeCommand.Execute(null);
+        await Until(() => f.Model.HasDraftReviews && f.Model.SelectedLayerPositionX == 0.1);
+        Assert.True(f.Model.IsInspectorSelectionPinned);
+        Assert.Equal(before, f.Model.EditingSelectionIdentity);
+        Assert.Contains("REV", f.Model.InspectorContextBreadcrumb);
+        Assert.Contains(f.Model.InspectorDraftReviews, review =>
+            review.Target.Id == "bitmap-graphics" && review.Draft is InspectorTransformAttributes { X: 0.375 });
+        Assert.Equal(0, f.Transport.MutationCalls);
+
+        f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
+        Assert.False(f.Model.IsInspectorSelectionPinned);
+        f.Model.SelectCompositingNode(Node("layer:other"));
+        Assert.NotEqual(before, f.Model.EditingSelectionIdentity);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        Assert.Equal(program, f.Owner.ProgramSourceId);
+    }
+
+    [Fact]
+    public async Task Pinned_audio_gain_does_not_follow_a_different_external_audio_target()
+    {
+        await using var f = await Fixture.Create();
+        var audios = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        Assert.True(audios.Length >= 2);
+        f.Model.Selection.Select([audios[0]]);
+        var original = f.Model.EditingSelectionIdentity;
+        var program = f.Owner.ProgramSourceId;
+        f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
+        f.Model.AudioGainDraft = 2.25;
+        Assert.True(f.Model.ApplyAudioDraftCommand.CanExecute(null));
+
+        f.Owner.SelectedAudioInput = f.Owner.AudioInputs.Single(input => input.SourceId == audios[1].ReferenceId);
+        f.Model.Selection.Select([audios[1]]);
+        Assert.Equal(original, f.Model.EditingSelectionIdentity);
+        Assert.Equal(audios[0].Key, f.Model.SelectedItem!.Key);
+        Assert.Equal(2.25, f.Model.AudioGainDraft);
+        Assert.Contains("audio selection changed", f.Model.InspectorSelectionPinStatus);
+        Assert.False(f.Model.InspectorPinAllowsActions);
+        Assert.False(f.Model.ApplyAudioDraftCommand.CanExecute(null));
+        f.Model.ApplyAudioDraftCommand.Execute(null);
+        Assert.Equal(0, f.Transport.MutationCalls);
+        Assert.Equal(program, f.Owner.ProgramSourceId);
+        f.Model.ToggleInspectorSelectionPinCommand.Execute(null);
+        Assert.True(f.Model.InspectorPinAllowsActions);
+        f.Model.Selection.Select([audios[1]]);
+        Assert.NotEqual(original, f.Model.EditingSelectionIdentity);
+    }
+
+    [Fact]
+    public async Task Multi_selection_cannot_be_pinned_and_existing_sequential_batch_remains_available()
+    {
+        await using var f = await Fixture.Create();
+        var audio = f.Model.FilteredItems.Where(item => item.Kind == MediaPoolItemKind.Audio).ToArray();
+        Assert.True(audio.Length >= 2);
+        f.Model.Selection.Select(audio);
+        Assert.True(f.Model.HasMultipleSelection);
+        Assert.False(f.Model.ToggleInspectorSelectionPinCommand.CanExecute(null));
+        Assert.False(f.Model.IsInspectorSelectionPinned);
+        Assert.Contains("MULTIPLE", f.Model.InspectorContextBreadcrumb);
+        Assert.Contains("MULTIPLE SELECTION", f.Model.InspectorSelectionPinStatus);
+        Assert.Equal(0, f.Transport.MutationCalls);
+    }
+
+    [Fact]
     public async Task Dirty_selection_retains_audio_intent_and_applies_original_identity_without_changing_library_selection()
     {
         await using var f = await Fixture.Create();
@@ -376,6 +464,14 @@ public sealed class InspectorDraftTransactionTests
         try
         {
             await dispatcher.InvokeAsync(main.UpdateLayout, DispatcherPriority.Loaded);
+            var pin = Descendants(control).OfType<RtaimeButton>().First(button =>
+                button.IsVisible && AutomationProperties.GetName(button) == "Pin or unpin current Inspector selection");
+            Assert.True(pin.Command!.CanExecute(null));
+            pin.Command.Execute(null);
+            Assert.True(f.Model.IsInspectorSelectionPinned);
+            Assert.Contains("PINNED", f.Model.InspectorSelectionPinStatus);
+            pin.Command.Execute(null);
+            Assert.False(f.Model.IsInspectorSelectionPinned);
             Assert.True(field.Focus());
             var up = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(field)!, 0, Key.Up) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
             field.RaiseEvent(up); field.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(field)!, 0, Key.Up) { RoutedEvent = Keyboard.PreviewKeyDownEvent });

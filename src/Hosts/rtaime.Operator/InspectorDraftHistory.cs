@@ -46,7 +46,8 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool HasInspectorDraft => _transformDraftDirty || _processingDraftDirty ||
         _activeDraft is { } draft && draft.Current != draft.Baseline;
     private bool TransactionChanged => _transactionStart is not null && _activeDraft?.Current != _transactionStart;
-    private bool CanEditInspectorDraft => !_inspectorTransactionsStopped && _activeDraft is not null && InspectorInputsValid && !HasMultipleSelection &&
+    private bool CanEditInspectorDraft => !_inspectorTransactionsStopped && _activeDraft is not null && InspectorInputsValid &&
+        InspectorPinMatchesCurrent && !HasMultipleSelection &&
         _operator.IsConnected && !_operator.IsStale && !_operator.IsBusy && !_mediaDeck.IsBusy && CurrentRevisionToken == _draftRevision;
     public string InspectorDraftHistoryLabel => _activeDraft is null ? "LOCAL DRAFT · no editable context" :
         $"LOCAL UNDO {_activeDraft.History.UndoCount + (TransactionChanged ? 1 : 0)} / REDO {(TransactionChanged ? 0 : _activeDraft.History.RedoCount)} · APPLY / live operations excluded";
@@ -66,10 +67,11 @@ public sealed partial class MediaPoolInspectorViewModel
         ApplyAudioDraftCommand = new OperatorShellCommand(() =>
         {
             EndDraftTransaction();
-            if (_operator.SelectedAudioInput is not { } input) return;
+            if (!InspectorAudioSelectionMatches || _operator.SelectedAudioInput is not { } input) return;
             input.Gain = AudioGainDraft;
             _operator.ApplyAudioGainCommand.Execute(null);
-        }, () => CanEditInspectorDraft && _activeDraft?.Current is InspectorGainAttributes { IsValid: true } &&
+        }, () => CanEditInspectorDraft && InspectorAudioSelectionMatches &&
+            _activeDraft?.Current is InspectorGainAttributes { IsValid: true } &&
             _operator.ApplyAudioGainCommand.CanExecute(null));
         ApplyCueDraftCommand = new OperatorShellCommand(() =>
         {
