@@ -1,6 +1,9 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using Xunit;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using rtaime.Operator;
@@ -73,6 +76,22 @@ internal static class OutputCanvasWorkspaceQualification
                 $"compact={window.Shell.IsCompactViewport}, auxiliary={window.Shell.AuxiliaryWorkspaceColumnWidth}, " +
                 $"editor visible={editor.IsVisible}.");
             Assert.True(stage.ActualHeight >= 180);
+            var canvas = window.OutputHealth.CanvasEditor;
+            Assert.Contains(Descendants<RtaimeButton>(editor), button =>
+                Equals(button.Content, "CENTER X") && ReferenceEquals(button.Command, canvas.AlignHorizontalCommand));
+            Assert.Contains(Descendants<RtaimeButton>(editor), button =>
+                Equals(button.Content, "CENTER Y") && ReferenceEquals(button.Command, canvas.AlignVerticalCommand));
+            Assert.Contains(Descendants<RtaimeButton>(editor), button =>
+                Equals(button.Content, "RECONCILE UNKNOWN") &&
+                ReferenceEquals(button.Command, canvas.ReconcileCommand));
+            Assert.Contains(Descendants<RtaimeCheckBox>(editor), check =>
+                AutomationProperties.GetName(check) == "Show optional logical design safe area guides" &&
+                BindingOperations.GetBinding(check, System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty)?.Path.Path == "ShowSafeAreas");
+            Assert.Contains(Descendants<TextBlock>(editor), label =>
+                BindingOperations.GetBinding(label, TextBlock.TextProperty)?.Path.Path == "PointerCoordinates");
+            Assert.Contains(Descendants<TextBlock>(editor), label =>
+                BindingOperations.GetBinding(label, TextBlock.TextProperty)?.Path.Path == "ObservedTargetEvidence");
+            Assert.False(canvas.ReconcileCommand.CanExecute(null));
             Assert.False(window.OutputHealth.CanvasEditor.ApplyCommand.CanExecute(null));
             Assert.Equal("UNVERIFIED", window.OutputHealth.CanvasEditor.ActiveRevision);
 
@@ -82,6 +101,7 @@ internal static class OutputCanvasWorkspaceQualification
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.True(routing.IsVisible);
             Assert.False(stage.IsVisible);
+            Assert.False(stage.IsMouseCaptured);
             window.OutputHealth.ShowCanvasModeCommand.Execute(null);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             Assert.False(routing.IsVisible);
