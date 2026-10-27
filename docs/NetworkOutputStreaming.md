@@ -178,6 +178,24 @@ A provider/runtime/encoder/secret/endpoint failure affects only its network-outp
 
 Shutdown cancels reconnect work, disposes queued payload leases and releases provider/native resources.
 
+## Connection retry episodes and fail-closed admission
+
+A configured positive `reconnectMaximumAttempts` is a limit for the **entire
+failed connection episode**, not a fresh allowance per queued Program sample.
+SRT transport connection and NDI sender creation retain a session-owned
+attempt counter across subsequent samples. After the final permitted failure,
+the target remains `FAULTED` with `network.output.reconnect_exhausted`.
+Later Program samples are rejected synchronously by that **target only** and
+their readback leases are returned without a new native retry. A successfully
+established connection resets the budget for a genuinely later loss;
+recreating a target session through the already governed lifecycle resets it
+explicitly. Missing/incompatible NDI runtime remains a separate terminal
+`network.output.ndi_runtime_unavailable` condition until target restart.
+
+A failed reconnect must not overwrite its terminal cause with a misleading
+cancellation error. Actual shutdown cancellation is separate and retains
+the existing resource/cleanup ownership and SRT completion limits.
+
 ## Configuration
 
 RuntimeHost reads network targets from `--network-outputs=<json>` or `RTAIME_NETWORK_OUTPUTS`.
