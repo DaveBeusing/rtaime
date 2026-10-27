@@ -100,9 +100,17 @@ internal static class LiveConsoleWindowQualification
             Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
                 AutomationProperties.GetName(text) == "Program monitoring receipt age" &&
                 text.Text == monitoring.ProgramFrameAge);
-            Assert.Contains(Descendants(window).OfType<TextBlock>(), text =>
+            // At 960 DIP only one bus is active by design. Realize the Preview
+            // viewer through the existing presentation-only selector; do not
+            // require a collapsed WPF template to expose its visual children.
+            window.Shell.SelectCompactBusCommand.Execute("PREVIEW");
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+            var previewViewer = Descendants(window).OfType<PreviewViewer>().First(viewer => viewer.IsVisible);
+            Assert.Contains(Descendants(previewViewer).OfType<TextBlock>(), text =>
                 AutomationProperties.GetName(text) == "Preview monitoring receipt age" &&
                 text.Text == monitoring.PreviewFrameAge);
+            window.Shell.SelectCompactBusCommand.Execute("PROGRAM");
+            await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
             var programViewer = Descendants(window).OfType<ProgramViewer>().First(viewer => viewer.IsVisible);
             Assert.DoesNotContain(Descendants(programViewer).OfType<RtaimeIconButton>(), button =>
                 AutomationProperties.GetName(button) is "Stop Preview" or "Play or pause" or "Set IN");
