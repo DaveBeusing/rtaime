@@ -51,10 +51,22 @@ public sealed record MediaFilmstripRequest(
             throw new ArgumentException("Filmstrip request exceeds source identity, range or preview capacity.");
     }
 
-    internal string CacheKey => FormattableString.Invariant(
-        $"{AssetId}|{FingerprintSha256.ToUpperInvariant()}|{LengthBytes}|{UpdatedUtcTicks}|" +
-        $"{DurationTicks}|{StartTicks}|{EndTicks}|{FrameRateNumerator}|{FrameRateDenominator}|" +
-        $"{Width}|{Height}|{SampleCount}|{(int)Quality}|{MediaAnalysisContract.Version}");
+    internal string CacheKey => string.Join("|", new[]
+    {
+        AssetId, FingerprintSha256.ToUpperInvariant(),
+        LengthBytes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        UpdatedUtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DurationTicks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        StartTicks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        EndTicks.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        FrameRateNumerator.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        FrameRateDenominator.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Height.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        SampleCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ((int)Quality).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        MediaAnalysisContract.Version
+    });
 
     /// <summary>
     /// Use rational nominal frame boundaries only for selecting seek positions.
