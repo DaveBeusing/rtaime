@@ -4,6 +4,8 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:controls="clr-namespace:rtaime.Operator.Controls">
  <StackPanel>
+  <TextBlock Text="{Binding InspectorSelectionPinStatus}" Style="{StaticResource OperatorLabel}"
+    TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
   <TextBlock Text="{Binding InspectorContextEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
   <Border BorderBrush="{DynamicResource OperatorWarningBrush}" BorderThickness="1" Padding="6" Margin="0,6">
    <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers>
