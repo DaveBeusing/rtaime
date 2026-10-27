@@ -56,6 +56,7 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 
 	public int QueueCapacity => _capture.QueueCapacity;
 	public ReplayCaptureQueueStatistics QueueStatistics => _capture.QueueStatistics;
+    public ReplayCaptureWriterLifetimeStatistics WriterLifetimeStatistics => _capture.WriterLifetimeStatistics;
 	public ReplayClipResult? LastClip
 	{
 		get { lock (_gate) return _lastClip; }
