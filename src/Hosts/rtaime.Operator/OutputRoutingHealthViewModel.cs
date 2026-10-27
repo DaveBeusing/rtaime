@@ -500,74 +500,115 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private static readonly TimeSpan SendFreshnessLimit = TimeSpan.FromSeconds(5);
 
-	private string TransmissionState(OperatorNetworkOutputDescriptor? output) =>
-		TransmissionState(output, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
-
 	internal static string TransmissionState(
 		OperatorNetworkOutputDescriptor? output, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (!connected || stale)
-			return "OFFLINE";
-		if (output is null)
-			return "OFFLINE";
-		if (output.Failure is not null)
-			return "FAILED";
+		if (!connected || stale) return "OFFLINE";
+		if (output is null) return "OFFLINE";
+		if (output.Failure is not null || output.Lifecycle == "FAULTED") return "FAILED";
 		var lifecycle = output.Lifecycle.ToUpperInvariant();
 		if (lifecycle is "STOPPING" or "STOPPED" or "DISPOSING")
 			return lifecycle == "STOPPED" ? "OFFLINE" : "STOPPING";
-		if (lifecycle is "RECONNECTING" or "RETRYING")
-			return "RECONNECTING";
-		if (lifecycle is "CONNECTING" or "STARTING" or "INITIALIZING")
-			return "CONNECTING";
-		if (!output.Connected || lifecycle != "CONNECTED")
-			return "OFFLINE";
-		var send = output.LastSuccessfulSendUtc;
-		var age = send is null ? TimeSpan.MaxValue : now - send.Value;
-		if (age < TimeSpan.Zero || age > SendFreshnessLimit)
-			return "DEGRADED";
-		return output.DroppedSamples > 0 || output.RejectedSamples > 0
-			? "DEGRADED"
-			: "LIVE";
+		if (lifecycle is "RECONNECTING" or "RETRYING") return "RECONNECTING";
+		if (lifecycle is "CONNECTING" or "STARTING" or "INITIALIZING") return "CONNECTING";
+		if (!output.Connected || lifecycle != "CONNECTED") return "UNKNOWN";
+		if (output.LastSuccessfulSendUtc is not { } sent || now < sent) return "UNKNOWN";
+		if (now - sent > SendFreshnessLimit) return "STALE";
+		return output.DroppedSamples > 0 || output.RejectedSamples > 0 ? "DEGRADED" : "LIVE";
 	}
 
-	private string TransmissionDetail(OperatorNetworkOutputDescriptor? output)
+	internal static string TransmissionStateForRole(
+		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (output is null)
-			return "No network output configured.";
-		var lastSend = output.LastSuccessfulSendUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never";
-		var failure = output.Failure is { } error ? $" {error.Code}: {error.Message}" : string.Empty;
-		return $"{output.Protocol} · {output.SafeTargetIdentity} · {TransmissionState(output)} · " +
-			$"{output.QueueDepth} queued · {output.DroppedSamples} dropped · {output.RejectedSamples} rejected · " +
-			$"{output.ReconnectCount} reconnects · {output.BytesSent} bytes sent · last send {lastSend}.{failure}";
+		if (!connected || stale || role is null || role.NetworkOutputs.Count == 0)
+			return "OFFLINE";
+		var states = role.NetworkOutputs.Select(target =>
+			TransmissionState(target, connected, stale, now)).ToArray();
+		if (states.All(state => state == "LIVE")) return "LIVE";
+		foreach (var state in new[] { "FAILED", "STALE", "RECONNECTING", "CONNECTING",
+			"DEGRADED", "UNKNOWN", "STOPPING" })
+			if (states.Contains(state, StringComparer.Ordinal)) return state;
+		return "OFFLINE";
 	}
 
-	private string ResolveStreamingStatus(OperatorNetworkOutputDescriptor? output) => TransmissionState(output);
+	private string TransmissionDetail(OperatorOutputRoleDescriptor? role)
+	{
+		if (role is null || role.NetworkOutputs.Count == 0)
+			return "No network output configured.";
+		return $"{role.NetworkOutputs.Count} independently admitted sender(s) · " +
+			$"{TransmissionStateForRole(role, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow)} · " +
+			string.Join("; ", role.NetworkOutputs.Select(target =>
+			{
+				var last = target.LastSuccessfulSendUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never";
+				return $"{target.TargetId} {target.Protocol}/{target.Lifecycle}: {target.BytesSent:N0} local bytes, " +
+					$"queue {target.QueueDepth}, last provider send {last}" +
+					(target.Failure is { } failure ? $" · {failure.Code}" : "");
+			}));
+	}
+
+	private static string FormatTargetIdentities(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		targets.Count == 1 ? targets[0].SafeTargetIdentity : $"{targets.Count} separate targets";
+
+	private static string FormatTargetProviders(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		string.Join(" / ", targets.Select(target => target.Protocol).Distinct(StringComparer.OrdinalIgnoreCase));
 
 	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output)
 	{
-		if (output is null)
-			return Unavailable;
+		if (output is null) return Unavailable;
 		if (string.Equals(output.Protocol, "NDI", StringComparison.OrdinalIgnoreCase))
-			return "NDI High Bandwidth · 48 kHz Float32";
-		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + {output.AudioBitRate / 1_000d:0} kb/s AAC";
+			return "NDI High Bandwidth · 48 kHz Float32; encoded bitrate UNAVAILABLE";
+		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + " +
+			$"{output.AudioBitRate / 1_000d:0} kb/s AAC (configured)";
 	}
 
-	private static string FormatNetworkQueue(OperatorNetworkOutputDescriptor? output) =>
-		output is null ? Unavailable : $"{output.QueueDepth} queued";
+	private static string FormatNetworkQueue(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (long)target.QueueDepth)} queued across {targets.Count} targets";
 
-	private static string FormatNetworkDrops(OperatorNetworkOutputDescriptor? output) =>
-		output is null
-			? Unavailable
-			: $"{output.DroppedSamples} dropped · {output.RejectedSamples} rejected";
+	private static string FormatNetworkDrops(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (decimal)target.DroppedSamples):N0} dropped · " +
+		$"{targets.Sum(target => (decimal)target.RejectedSamples):N0} rejected";
 
-	private static string AppendNetworkDetail(string detail, OperatorNetworkOutputDescriptor? output)
+	private static string FormatNetworkReconnects(IReadOnlyList<OperatorNetworkOutputDescriptor> targets) =>
+		targets.Count == 0 ? Unavailable :
+		$"{targets.Sum(target => (decimal)target.ReconnectCount):N0} total";
+
+	private string AppendNetworkDetail(string detail, OperatorOutputRoleDescriptor? role) =>
+		role is null || role.NetworkOutputs.Count == 0 ? detail :
+		$"{detail} Network send evidence: {TransmissionDetail(role)}. Receiver and physical output UNVERIFIED.";
+
+	internal static IReadOnlyList<OutputNetworkTargetPresentation> ProjectNetworkTargets(
+		OperatorOutputRoleDescriptor? role, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (output is null)
-			return detail;
-		var transport = $"{output.Protocol} {output.Lifecycle}; {output.SafeTargetIdentity}; queue {output.QueueDepth}; {output.DroppedSamples} dropped; {output.RejectedSamples} rejected; {output.ReconnectCount} reconnects.";
-		if (output.Failure is { } failure)
-			transport += $" {failure.Code}: {failure.Message}";
-		return $"{detail} Network output: {transport}";
+		if (role is null) return [];
+		var routeConfirmed = connected && !stale && role.AuthoritativeActive && role.HealthState == "PASS";
+		var output = new List<OutputNetworkTargetPresentation>(role.NetworkOutputs.Count);
+		foreach (var target in role.NetworkOutputs)
+		{
+			var state = TransmissionState(target, connected, stale, now);
+			var age = target.LastSuccessfulSendUtc is { } sent && now >= sent
+				? $"{(now - sent).TotalSeconds:0.#} s" : "UNKNOWN";
+			var codec = target.Protocol == "NDI"
+				? "NDI High Bandwidth / Float32 · bitrate, peer latency UNAVAILABLE"
+				: $"{target.VideoCodec}/{target.AudioCodec} · configured " +
+					$"{target.VideoBitRate / 1_000_000d:0.##} Mb/s video · {target.LatencyMilliseconds} ms SRT latency";
+			var failure = target.Failure is { } reason ? $" · {reason.Code}: {reason.Message}" : string.Empty;
+			output.Add(new OutputNetworkTargetPresentation(
+				target.TargetId, target.Protocol, target.SafeTargetIdentity,
+				$"CONTROL REV {(role.ControlRevision?.ToString(CultureInfo.InvariantCulture) ?? "UNAVAILABLE")} · " +
+					$"RUNTIME EXEC REV {(routeConfirmed ? role.RuntimeExecutionRevision?.ToString(CultureInfo.InvariantCulture) : null) ?? "UNVERIFIED"} · " +
+					$"SOURCE {role.SourceId}",
+				routeConfirmed ? "ROUTE CONFIRMED" : "ROUTE UNVERIFIED",
+				codec, state,
+				$"{target.BytesSent:N0} local sender bytes · {target.SentSamples:N0} submitted sends · " +
+					$"age {age} · queued {target.QueueDepth} · {target.DroppedSamples:N0} dropped / " +
+					$"{target.RejectedSamples:N0} rejected · {target.ReconnectCount} reconnects{failure}",
+				"PEER RECEPTION / PHYSICAL OUTPUT UNVERIFIED"));
+		}
+		return output.AsReadOnly();
 	}
 
 	private void UpdateSystemHealth(string key, string evidenceState)
