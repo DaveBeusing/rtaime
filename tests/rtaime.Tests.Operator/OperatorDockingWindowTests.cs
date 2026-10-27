@@ -35,6 +35,10 @@ internal static class OperatorDockingWindowTests
         owner.Shell.SetDocking(OperatorDockLayout.Default with { Enabled = true });
         await dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
         Assert.Equal(Visibility.Visible, dockHost.Visibility);
+        Assert.Contains(Descendants(dockHost).OfType<RtaimePanelHeader>(),
+            header => header.Header is string);
+        Assert.Contains(Descendants(dockHost).OfType<RtaimeButton>(),
+            tab => ReferenceEquals(tab.Style, owner.FindResource("OperatorDockTabSelected")));
         owner.Shell.SetDocking(OperatorDockLayout.Default);
         var identities = owner.Docking.Panels.ToDictionary(p => p.Key, p => p.Value);
         var preview = ((OperatorViewModel)owner.DataContext).PreviewSourceId;
