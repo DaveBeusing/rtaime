@@ -8,6 +8,12 @@ The Operator visual qualification protects responsive geometry, DPI behavior and
 
 The qualification intentionally does not require pixel-identical golden images. Windows text rendering, GPU drivers, font rasterization and monitor profiles can produce harmless pixel differences even when the layout contract is unchanged.
 
+## Output canvas mapping visual acceptance
+
+The OUTPUTS canvas stage shares one logical-pixel → WPF DIP transform for mouse gestures, projected rulers, grid and optional 5%/10% design-safe boundaries. `OutputCanvasViewportTests` covers finite viewport marks (at most 64 per axis), pan/zoom round-trip, 125%/150%/200% DPI-aligned edge projection, normalized off-canvas coordinates and rigid translation of nonrectangular quads without shape distortion. `OutputCanvasEditorWorkflowTests` additionally verifies local alignment/undo versus persisted saves, revision conflict, ambiguous activation fencing, explicit read-only reconciliation and saved-target/observed-target mismatch rejection.
+
+`OutputCanvasWorkspaceQualification` loads the real WPF OUTPUTS canvas mode and verifies center buttons, safe-area toggle, pointer/Runtime-evidence bindings and hidden-stage release of pointer capture. It does **not** establish physical projector safe-area, GPU scan-out pixel precision, calibrated blend, real multi-monitor DPI, device-specific timing or HDR: those remain **UNVERIFIED** until independently measured. All five Required Gates must be successful for the final exact source commit before this software change is considered qualified.
+
 ## Qualification matrix
 
 The following logical viewports are the supported automated qualification surfaces:
