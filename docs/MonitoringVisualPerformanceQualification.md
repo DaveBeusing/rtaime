@@ -31,7 +31,9 @@ Software-only CI must never promote physical evidence from `UNVERIFIED` to `PASS
 | Presentation color transform | `MonitoringDisplayTransformTests` | Semantic | Qualified |
 | Channel / scope / compare color basis | `GpuChannelAndRoiInspectionTests`, `GpuScopesAndFrameComparisonTests` | Semantic | Qualified |
 | Unknown color metadata behavior | `MonitoringDisplayTransformTests`, `MediaScopeAnalysisTests` | Semantic | Qualified |
-| GPU frame generation ordering | `OperatorGpuMonitoringFrameTests` | Semantic / recovery | Qualified |
+| GPU frame generation ordering | `OperatorGpuMonitoringFrameTests` | Semantic / recovery | PENDING on revised PR head |
+| Current-source/route/connection freshness | `MonitoringDeliveryAndFreshnessTests`, `OperatorMonitoringPlaneTests` | Semantic / recovery | PENDING exact-head CI |
+| Bounded Operator Dispatcher frame delivery | `MonitoringDeliveryAndFreshnessTests` (one callback; at most 17 raw pending observations) | Performance / recovery | PENDING exact-head CI |
 | Preview follows confirmed route | `OperatorMonitoringPlaneTests`, Operator monitoring policy | Semantic | Qualified |
 | Program is actual post-composite observation | `OperatorMonitoringPlaneTests`, Program-frame ownership policy | Semantic | Qualified |
 | Exact 1x1 inspection | `MediaPixelInspectionTests` | Semantic | Qualified |
@@ -67,6 +69,8 @@ The software qualification envelope is intentionally deterministic and hardware-
 - Replaced shared monitoring resources must be released; unchanged descriptor and lifetime identity reuses the opened Operator texture, while replaced provider/handle/lease identity cannot reuse it. After replacement settles the active provider count returns to two, and disconnect returns it to zero.
 - Geometry and target-stabilization qualification uses allocation measurements after warmup and rejects material steady-state managed growth.
 - Monitoring subscriptions are bounded and latest-wins under pressure rather than blocking Program.
+- Operator Dispatcher delivery is separately bounded to one callback, one reserved latest Program observation and at most 16 latest distinct source observations. Frame conversion and optional analysis occur after coalescing, not for every transport-read sample.
+- Program and confirmed Preview each use a two-second source/route/connection-epoch-bound receipt budget. A blocked UI does not reset the age of a delayed observation.
 
 Measured GPU shader execution duration is diagnostic evidence only. It is not a physical CUDA or reference-platform PASS unless the dedicated physical qualification path records that evidence.
 
@@ -80,12 +84,15 @@ The checkerboard, pixel grid and ROI overlay are projected from the same present
 
 ## Frame identity and temporal correctness
 
-GPU monitoring ordering is scoped to a provider epoch:
+GPU monitoring ordering is scoped to a source/stream identity and provider epoch:
 
 1. a newer sequence in the same generation may replace the current resource;
 2. a newer generation may replace an older generation;
 3. stale generations and stale sequences may not replace the current resource;
 4. a provider-instance change establishes a new presentation epoch after provider restart.
+5. a source/stream switch has its own independent ordering; an unrelated source's higher generation cannot block the newly selected source.
+6. confirmed source changes and monitoring pipe reconnects clear old GPU, bitmap and analysis ownership before new route/connection evidence can be treated as current. Cached thumbnails may be shown only as explicitly retained UNKNOWN evidence.
+7. timestamps are captured at monitoring ingress. Old, reordered or delayed observations cannot become LIVE because the Dispatcher completed later.
 
 Program observations are accepted only as Program stream observations. Preview GPU comparison uses only the source matching the confirmed Preview route.
 

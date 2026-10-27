@@ -355,6 +355,7 @@ public sealed class OperatorMonitoringPlaneTests
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 		await using var enumerator = transport.ReadFramesAsync(timeout.Token).GetAsyncEnumerator();
 
+		long firstEpoch = 0;
 		await using (var firstServer = new RuntimeHostMonitoringServer(endpoint, hub))
 		{
 			await firstServer.StartAsync(timeout.Token);
@@ -364,6 +365,8 @@ public sealed class OperatorMonitoringPlaneTests
 
 			Assert.True(await firstReceive);
 			Assert.Equal(10UL, enumerator.Current.Descriptor.Timing.SequenceNumber);
+			firstEpoch = transport.ConnectionEpoch;
+			Assert.True(firstEpoch > 0);
 		}
 
 		await WaitForSubscriberCountAsync(hub, expected: 0, timeout.Token);
@@ -377,6 +380,7 @@ public sealed class OperatorMonitoringPlaneTests
 
 			Assert.True(await secondReceive);
 			Assert.Equal(11UL, enumerator.Current.Descriptor.Timing.SequenceNumber);
+			Assert.True(transport.ConnectionEpoch > firstEpoch);
 			Assert.Equal(SourceB, enumerator.Current.Descriptor.SourceId);
 		}
 	}

@@ -612,11 +612,17 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
 		DateTimeOffset now)
 	{
+		var preview = _monitoring.PreviewState;
+		var program = _monitoring.ProgramState;
+		var viewersLive = preview == "LIVE" && program == "LIVE";
+		var viewerStale = preview is "STALE" or "DISCONNECTED" ||
+			program is "STALE" or "DISCONNECTED";
 		var state = _monitoring.State switch
 		{
-			"LIVE" => SubsystemHealthState.Healthy,
-			"RECOVERING" or "STALE" => SubsystemHealthState.Recovering,
 			"DISCONNECTED" => SubsystemHealthState.Failed,
+			"RECOVERING" or "STALE" => SubsystemHealthState.Recovering,
+			"LIVE" when viewersLive => SubsystemHealthState.Healthy,
+			"LIVE" when viewerStale => SubsystemHealthState.Recovering,
 			"STARTING" => SubsystemHealthState.Warning,
 			_ => SubsystemHealthState.Unknown
 		};
@@ -630,13 +636,13 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			now,
 			[
 				new("Plane", _monitoring.State),
-				new("Evidence status", _monitoring.State == "LIVE" ? "OBSERVED" : _monitoring.State == "STALE" ? "STALE" : "UNAVAILABLE"),
+				new("Evidence status", viewersLive ? "OBSERVED" : viewerStale ? "STALE" : "UNVERIFIED"),
 				new("Preview", _monitoring.PreviewState),
 				new("Program", _monitoring.ProgramState)
 			],
 			state == SubsystemHealthState.Healthy
 				? "Monitoring is observational; confirm production changes in Control state."
-				: "Any retained image is STALE and is not current output evidence. Monitoring reconnect follows the existing monitoring lifecycle. Review Health and export diagnostics if it persists.",
+				: "Retained images may be stale or unverified and are not current output evidence. Monitoring reconnect follows the existing monitoring lifecycle. Review Health and export diagnostics if it persists.",
 			$"Preview={_monitoring.PreviewState}; Program={_monitoring.ProgramState}; State={_monitoring.State}",
 			state switch
 			{

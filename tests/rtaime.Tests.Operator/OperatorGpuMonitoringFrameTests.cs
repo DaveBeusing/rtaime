@@ -33,7 +33,23 @@ public sealed class OperatorGpuMonitoringFrameTests
 		Assert.True(afterRestart.IsNewerThan(beforeRestart));
 	}
 
-	private static OperatorGpuMonitoringFrame Create(Identity providerInstanceId, ulong generation, ulong sequence)
+	[Fact]
+	public void Different_sources_or_streams_have_independent_generation_order()
+	{
+		var provider = Identity.New();
+		var oldSource = Create(provider, generation: 80, sequence: 900);
+		var newSource = Create(provider, generation: 1, sequence: 1, sourceId: MediaSourceId.New());
+		var newStream = Create(provider, generation: 1, sequence: 1, streamKind: MonitoringStreamKind.Source);
+
+		Assert.True(newSource.IsNewerThan(oldSource));
+		Assert.True(newStream.IsNewerThan(oldSource));
+	}
+
+	private static readonly MediaSourceId ProgramSource = new(Identity.Parse("ac300000-0000-0000-0000-000000000001"));
+
+	private static OperatorGpuMonitoringFrame Create(
+		Identity providerInstanceId, ulong generation, ulong sequence,
+		MediaSourceId? sourceId = null, MonitoringStreamKind streamKind = MonitoringStreamKind.Program)
 	{
 		var resourceId = MonitoringResourceId.New();
 		var resource = new MonitoringSharedResourceDescriptor(
@@ -50,8 +66,8 @@ public sealed class OperatorGpuMonitoringFrameTests
 				sharedHandle: 0x1234));
 		var descriptor = new MonitoringFrameDescriptor(
 			MonitoringContractVersion.Current,
-			MonitoringStreamKind.Program,
-			MediaSourceId.New(),
+			streamKind,
+			sourceId ?? ProgramSource,
 			320,
 			180,
 			PixelFormat.Rgba8,

@@ -17,7 +17,18 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private readonly NamedPipeOperatorMonitoringTransport _transport;
 	private readonly SynchronizationContext _uiContext;
 	private readonly CancellationTokenSource _stop = new();
-	private readonly Dictionary<string, BitmapSource> _sourceFrames = new(StringComparer.Ordinal);
+	private const int MaximumCachedSources = 16;
+	private readonly Dictionary<string, CachedSourceFrame> _sourceFrames = new(StringComparer.Ordinal);
+	private readonly LatestMonitoringFrameDelivery _delivery;
+	private readonly MonitoringViewerFreshness _previewFreshness = new();
+	private readonly MonitoringViewerFreshness _programFreshness = new();
+	private sealed record CachedSourceFrame(BitmapSource Bitmap, MonitoringFrameDescriptor Descriptor, long ConnectionEpoch, DateTimeOffset ReceivedAt);
+	private long _previewRouteVersion;
+	private long _programRouteVersion;
+	private long _readerConnectionEpoch;
+	private long _presentedConnectionEpoch;
+	private int _disposed;
+	private int _watchdogQueued;
 	private Task? _reader;
 	private Task? _watchdog;
 	private DateTimeOffset _lastFrameAt;
@@ -55,6 +66,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		_controlState = controlState ?? throw new ArgumentNullException(nameof(controlState));
 		_transport = transport ?? throw new ArgumentNullException(nameof(transport));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+		_delivery = new LatestMonitoringFrameDelivery(
+			work => _uiContext.Post(_ => work(), null),
+			ApplyObservation);
+		_previewFreshness.SelectSource(_controlState.PreviewSourceId, 0, 0);
+		_programFreshness.SelectSource(_controlState.ProgramSourceId, 0, 0);
 		_controlState.PropertyChanged += ControlStatePropertyChanged;
 		ToggleScopesCommand = new OperatorShellCommand(() => ScopesEnabled = !ScopesEnabled);
 		SetCompareModeCommand = new OperatorShellCommand(parameter => SetCompareMode(parameter?.ToString()));
@@ -152,11 +168,12 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	}
 	public bool HasPreview => PreviewGpuFrame is not null || PreviewImage is not null;
 	public bool HasProgram => ProgramGpuFrame is not null || ProgramImage is not null;
-	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
-	public string ProgramState => ResolveViewerState(_controlState.ProgramViewerState, HasProgram);
+	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, _previewFreshness.Status(HasPreview, DateTimeOffset.UtcNow));
+	public string ProgramState => ResolveViewerState(_controlState.ProgramViewerState, _programFreshness.Status(HasProgram, DateTimeOffset.UtcNow));
 
 	public void Start()
 	{
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 		if (_reader is not null) return;
 		_reader = Task.Run(() => ReadAsync(_stop.Token));
 		_watchdog = Task.Run(() => WatchdogAsync(_stop.Token));
@@ -164,7 +181,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	public async ValueTask DisposeAsync()
 	{
+		if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 		_controlState.PropertyChanged -= ControlStatePropertyChanged;
+		_delivery.Dispose();
 		_stop.Cancel();
 		if (_reader is not null)
 		{
@@ -183,84 +202,155 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	{
 		await foreach (var frame in _transport.ReadFramesAsync(cancellationToken).ConfigureAwait(false))
 		{
-			var descriptor = frame.Descriptor;
-			var gpuFrame = descriptor.SharedResource is { Interop.IsPresentable: true }
-				? new OperatorGpuMonitoringFrame(descriptor)
-				: null;
-			var bitmap = frame.HasFallbackPayload ? CreateBitmap(frame) : null;
-			var isConfirmedPreview = descriptor.StreamKind == MonitoringStreamKind.Source &&
-				string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal);
-			if (isConfirmedPreview)
+			if (Volatile.Read(ref _disposed) != 0) break;
+			var receivedAt = DateTimeOffset.UtcNow;
+			var connectionEpoch = _transport.ConnectionEpoch;
+			var previousEpoch = Interlocked.Exchange(ref _readerConnectionEpoch, connectionEpoch);
+			if (previousEpoch != 0 && previousEpoch != connectionEpoch)
+				_delivery.Invalidate();
+			lock (_gate) _lastFrameAt = receivedAt;
+			_delivery.Enqueue(new MonitoringObservation(
+				frame, connectionEpoch,
+				Volatile.Read(ref _previewRouteVersion),
+				Volatile.Read(ref _programRouteVersion),
+				receivedAt));
+		}
+	}
+
+	// All UI mutation and optional bitmap/scope/compare conversion happens after
+	// coalescing, never on the transport reader or the Runtime Program path.
+	private void ApplyObservation(MonitoringObservation observation)
+	{
+		if (Volatile.Read(ref _disposed) != 0 || observation.ConnectionEpoch < _presentedConnectionEpoch)
+			return;
+
+		if (observation.ConnectionEpoch != _presentedConnectionEpoch)
+			ResetForConnectionEpoch(observation.ConnectionEpoch);
+
+		var frame = observation.Frame;
+		var descriptor = frame.Descriptor;
+		var sourceId = descriptor.SourceId.ToString();
+		var isProgram = descriptor.StreamKind == MonitoringStreamKind.Program;
+		var confirmedPreview = !isProgram &&
+			string.Equals(sourceId, _controlState.PreviewSourceId, StringComparison.Ordinal);
+		var gpuFrame = descriptor.SharedResource is { Interop.IsPresentable: true }
+			? new OperatorGpuMonitoringFrame(descriptor)
+			: null;
+
+		if (isProgram)
+		{
+			if (!string.Equals(sourceId, _controlState.ProgramSourceId, StringComparison.Ordinal) ||
+				(gpuFrame is not null && !gpuFrame.IsNewerThan(ProgramGpuFrame)))
+				return;
+			if (!_programFreshness.Observe(sourceId, observation.ProgramRouteVersion,
+					observation.ConnectionEpoch, observation.ReceivedAt, descriptor.Timing.SequenceNumber,
+					descriptor.SharedResource?.ProviderInstanceId.ToString(),
+					descriptor.SharedResource?.Lifetime.Generation.Value))
+				return;
+
+			if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
 			{
-				_latestPreviewFrame = frame.HasFallbackPayload ? frame : null;
+				Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+				Volatile.Write(ref _gpuComparisonUnavailable, false);
+				ProgramScopes = null;
+				ProgramImage = null;
+			}
+			_latestProgramGpuFrame = gpuFrame;
+			_latestProgramFrame = frame.HasFallbackPayload ? frame : null;
+		}
+		else if (confirmedPreview)
+		{
+			confirmedPreview = gpuFrame is null || gpuFrame.IsNewerThan(PreviewGpuFrame);
+			confirmedPreview = confirmedPreview && _previewFreshness.Observe(
+				sourceId, observation.PreviewRouteVersion, observation.ConnectionEpoch,
+				observation.ReceivedAt, descriptor.Timing.SequenceNumber,
+				descriptor.SharedResource?.ProviderInstanceId.ToString(),
+					descriptor.SharedResource?.Lifetime.Generation.Value);
+			if (confirmedPreview)
+			{
 				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
+				{
 					Volatile.Write(ref _gpuComparisonUnavailable, false);
+					PreviewImage = null;
+					DifferenceImage = null;
+				}
 				_latestPreviewGpuFrame = gpuFrame;
+				_latestPreviewFrame = frame.HasFallbackPayload ? frame : null;
 			}
-			else if (descriptor.StreamKind == MonitoringStreamKind.Program)
-			{
-				_latestProgramFrame = frame.HasFallbackPayload ? frame : null;
-				if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
-				{
-					Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
-					Volatile.Write(ref _gpuComparisonUnavailable, false);
-				}
-				_latestProgramGpuFrame = gpuFrame;
-			}
+		}
 
-			ImageSource? difference = null;
-			string? comparisonDetail = null;
-			if (CompareMode == MediaCompareMode.Difference && descriptor.StreamKind == MonitoringStreamKind.Program)
+		// Source thumbnails can still be cached for future routing. They must not
+		// confer LIVE status on the selected viewer until post-selection evidence.
+		var bitmap = frame.HasFallbackPayload ? CreateBitmap(frame) : null;
+		State = "LIVE";
+		Detail = $"Independent monitoring endpoint {_transport.Endpoint}; monitor loss does not block Program.";
+		ApplySharedGpuMonitoringState(descriptor, frame.HasFallbackPayload);
+		if (isProgram || confirmedPreview)
+		{
+			ApplyGpuFrame(descriptor, gpuFrame);
+			var format = $"{descriptor.Width}x{descriptor.Height} RGBA8 • {MonitoringDisplayTransform.Describe(descriptor.Color)} • sequence {descriptor.Timing.SequenceNumber}";
+			if (isProgram)
 			{
-				var gpuCompatibility = MediaComparisonCompatibility.Evaluate(gpuFrame, _latestPreviewGpuFrame);
-				if (gpuCompatibility.IsCompatible && !Volatile.Read(ref _gpuComparisonUnavailable))
-				{
-					comparisonDetail = "GPU Difference selected · Program=A · confirmed Preview=B.";
-				}
-				else if (frame.HasFallbackPayload && _latestPreviewFrame is { HasFallbackPayload: true } previewFallback)
-				{
-					var cpuCompatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, previewFallback.Descriptor);
-					comparisonDetail = cpuCompatibility.IsCompatible
-						? $"CPU fallback Difference · {gpuCompatibility.Detail}"
-						: cpuCompatibility.Detail;
-					if (cpuCompatibility.IsCompatible)
-						difference = CreateDisplayDifferenceBitmap(frame, previewFallback);
-				}
-				else
-				{
-					comparisonDetail = gpuCompatibility.Detail;
-				}
+				if (bitmap is null) ProgramImage = null;
+				ProgramFormat = format;
+				ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 			}
-
-			MediaScopeSnapshot? scopes = null;
-			var cpuScopesRequired = !descriptor.HasSharedResource || Volatile.Read(ref _gpuScopeAnalysisUnavailable);
-			if (frame.HasFallbackPayload && ScopesEnabled && cpuScopesRequired &&
-				descriptor.StreamKind == MonitoringStreamKind.Program)
+			else
 			{
-				var now = DateTimeOffset.UtcNow;
-				if (now - _lastScopeAnalysisAt >= GpuMonitoringAnalysisPolicy.ScopeUpdateInterval)
-				{
-					scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: GpuMonitoringAnalysisPolicy.MinimumScopeSampleStride);
-					_lastScopeAnalysisAt = now;
-				}
+				if (bitmap is null) PreviewImage = null;
+				PreviewFormat = format;
+				PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 			}
+		}
 
-			lock (_gate) _lastFrameAt = DateTimeOffset.UtcNow;
-			_uiContext.Post(_ =>
-			{
-				ApplySharedGpuMonitoringState(descriptor, frame.HasFallbackPayload);
-				ApplyGpuFrame(descriptor, gpuFrame);
-				if (bitmap is not null)
-					ApplyFrame(descriptor, bitmap, scopes);
-				else if (descriptor.StreamKind == MonitoringStreamKind.Program)
-				{
-					State = "LIVE";
-					ProgramFormat = $"{descriptor.Width}x{descriptor.Height} RGBA8 • GPU resource observation • sequence {descriptor.Timing.SequenceNumber}";
-					ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
-				}
-				if (comparisonDetail is not null) ComparisonDetail = comparisonDetail;
-				if (difference is not null) DifferenceImage = difference;
-			}, null);
+		MediaScopeSnapshot? scopes = null;
+		var cpuScopesRequired = !descriptor.HasSharedResource || Volatile.Read(ref _gpuScopeAnalysisUnavailable);
+		if (isProgram && frame.HasFallbackPayload && ScopesEnabled && cpuScopesRequired &&
+			observation.ReceivedAt - _lastScopeAnalysisAt >= GpuMonitoringAnalysisPolicy.ScopeUpdateInterval)
+		{
+			scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: GpuMonitoringAnalysisPolicy.MinimumScopeSampleStride);
+			_lastScopeAnalysisAt = observation.ReceivedAt;
+		}
+
+		if (bitmap is not null)
+			ApplyFrame(descriptor, bitmap, scopes, confirmedPreview, observation.ConnectionEpoch, observation.ReceivedAt);
+
+		if (isProgram && CompareMode == MediaCompareMode.Difference)
+			UpdateDifferenceForProgram(frame, gpuFrame);
+		OnPropertyChanged(nameof(PreviewState));
+		OnPropertyChanged(nameof(ProgramState));
+	}
+
+	private void UpdateDifferenceForProgram(MonitoringFrame frame, OperatorGpuMonitoringFrame? gpuFrame)
+	{
+		if (ProgramState != "LIVE" || PreviewState != "LIVE")
+		{
+			DifferenceImage = null;
+			IsGpuComparisonActive = false;
+			ComparisonDetail = "Waiting for fresh Program and confirmed Preview observations.";
+			return;
+		}
+
+		var gpuCompatibility = MediaComparisonCompatibility.Evaluate(gpuFrame, _latestPreviewGpuFrame);
+		if (gpuCompatibility.IsCompatible && !Volatile.Read(ref _gpuComparisonUnavailable))
+		{
+			DifferenceImage = null;
+			ComparisonDetail = "GPU Difference selected · Program=A · confirmed Preview=B.";
+		}
+		else if (frame.HasFallbackPayload && _latestPreviewFrame is { HasFallbackPayload: true } previewFallback)
+		{
+			var cpuCompatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, previewFallback.Descriptor);
+			ComparisonDetail = cpuCompatibility.IsCompatible
+				? $"CPU fallback Difference · {gpuCompatibility.Detail}"
+				: cpuCompatibility.Detail;
+			DifferenceImage = cpuCompatibility.IsCompatible
+				? CreateDisplayDifferenceBitmap(frame, previewFallback)
+				: null;
+		}
+		else
+		{
+			DifferenceImage = null;
+			ComparisonDetail = gpuCompatibility.Detail;
 		}
 	}
 
@@ -269,16 +359,75 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		while (!cancellationToken.IsCancellationRequested)
 		{
 			await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-			DateTimeOffset last;
-			lock (_gate) last = _lastFrameAt;
-			if (last == default) continue;
-			if (DateTimeOffset.UtcNow - last <= TimeSpan.FromSeconds(2)) continue;
+			// The watchdog also coalesces so blocked Dispatchers cannot accumulate ticks.
+			if (Interlocked.CompareExchange(ref _watchdogQueued, 1, 0) != 0)
+				continue;
 			_uiContext.Post(_ =>
 			{
-				State = "STALE";
-				Detail = "Monitoring frames are stale. Control and Program continuity remain independent.";
+				Interlocked.Exchange(ref _watchdogQueued, 0);
+				if (Volatile.Read(ref _disposed) != 0) return;
+				DateTimeOffset last;
+				lock (_gate) last = _lastFrameAt;
+				if (last != default && DateTimeOffset.UtcNow - last > MonitoringViewerFreshness.Budget)
+				{
+					State = "STALE";
+					Detail = "Monitoring frames are stale. Control and Program continuity remain independent.";
+				}
+				if (CompareMode != MediaCompareMode.Off && (ProgramState != "LIVE" || PreviewState != "LIVE"))
+				{
+					DifferenceImage = null;
+					IsGpuComparisonActive = false;
+					ComparisonDetail = "Waiting for fresh Program and confirmed Preview observations.";
+				}
+				if (ProgramState != "LIVE")
+					ProgramScopes = null;
+				OnPropertyChanged(nameof(PreviewState));
+				OnPropertyChanged(nameof(ProgramState));
 			}, null);
 		}
+	}
+
+	private void ResetForConnectionEpoch(long connectionEpoch)
+	{
+		_presentedConnectionEpoch = connectionEpoch;
+		_sourceFrames.Clear();
+		_previewFreshness.SelectSource(_controlState.PreviewSourceId, Volatile.Read(ref _previewRouteVersion), connectionEpoch);
+		_programFreshness.SelectSource(_controlState.ProgramSourceId, Volatile.Read(ref _programRouteVersion), connectionEpoch);
+		ClearPreviewPresentation();
+		ClearProgramPresentation();
+		State = "WAITING";
+		Detail = "Monitoring transport reconnected; waiting for matching Preview and Program observations.";
+	}
+
+	private void ClearPreviewPresentation()
+	{
+		PreviewGpuFrame = null;
+		PreviewImage = null;
+		PreviewFormat = "Current Preview monitoring is unverified.";
+		PreviewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+		_latestPreviewFrame = null;
+		_latestPreviewGpuFrame = null;
+		DifferenceImage = null;
+		IsGpuComparisonActive = false;
+		ComparisonDetail = "Waiting for current Preview observations.";
+		Volatile.Write(ref _gpuComparisonUnavailable, false);
+		OnPropertyChanged(nameof(PreviewState));
+	}
+
+	private void ClearProgramPresentation()
+	{
+		ProgramGpuFrame = null;
+		ProgramImage = null;
+		ProgramFormat = "Current Program monitoring is unverified.";
+		ProgramDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+		ProgramScopes = null;
+		_latestProgramFrame = null;
+		_latestProgramGpuFrame = null;
+		DifferenceImage = null;
+		IsGpuComparisonActive = false;
+		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+		Volatile.Write(ref _gpuComparisonUnavailable, false);
+		OnPropertyChanged(nameof(ProgramState));
 	}
 
 	private void ApplyGpuFrame(MonitoringFrameDescriptor descriptor, OperatorGpuMonitoringFrame? gpuFrame)
@@ -296,10 +445,10 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			PreviewGpuFrame = gpuFrame;
 	}
 
-	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap, MediaScopeSnapshot? scopes)
+	private void ApplyFrame(
+		MonitoringFrameDescriptor descriptor, BitmapSource bitmap, MediaScopeSnapshot? scopes,
+		bool confirmedPreview, long connectionEpoch, DateTimeOffset receivedAt)
 	{
-		State = "LIVE";
-		Detail = $"Independent monitoring endpoint {_transport.Endpoint}; monitor loss does not block Program.";
 		var format = $"{descriptor.Width}x{descriptor.Height} RGBA8 • {MonitoringDisplayTransform.Describe(descriptor.Color)} • sequence {descriptor.Timing.SequenceNumber}";
 		if (descriptor.StreamKind == MonitoringStreamKind.Program)
 		{
@@ -315,9 +464,20 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		}
 
 		var sourceId = descriptor.SourceId.ToString();
-		_sourceFrames[sourceId] = bitmap;
-		_controlState.ApplySourceThumbnail(sourceId, bitmap, format);
-		if (string.Equals(sourceId, _controlState.PreviewSourceId, StringComparison.Ordinal))
+		if (!_sourceFrames.TryGetValue(sourceId, out var prior) ||
+			prior.ConnectionEpoch != connectionEpoch ||
+			descriptor.Timing.SequenceNumber > prior.Descriptor.Timing.SequenceNumber)
+		{
+			if (!_sourceFrames.ContainsKey(sourceId) && _sourceFrames.Count == MaximumCachedSources)
+			{
+				var oldest = _sourceFrames.MinBy(entry => entry.Value.ReceivedAt).Key;
+				_sourceFrames.Remove(oldest);
+			}
+			_sourceFrames[sourceId] = new CachedSourceFrame(bitmap, descriptor, connectionEpoch, receivedAt);
+			_controlState.ApplySourceThumbnail(sourceId, bitmap, format);
+		}
+
+		if (confirmedPreview)
 		{
 			PreviewImage = bitmap;
 			PreviewFormat = format;
@@ -370,25 +530,57 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	private void ControlStatePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
 	{
+		if (Volatile.Read(ref _disposed) != 0) return;
 		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewSourceId), StringComparison.Ordinal))
 		{
-			_latestPreviewFrame = null;
-			_latestPreviewGpuFrame = null;
-			Volatile.Write(ref _gpuComparisonUnavailable, false);
-			_uiContext.Post(_ => RefreshPreviewFromCache(), null);
+			var version = Interlocked.Increment(ref _previewRouteVersion);
+			var sourceId = _controlState.PreviewSourceId;
+			DispatchRouteChange(() =>
+			{
+				if (version != Volatile.Read(ref _previewRouteVersion)) return;
+				_previewFreshness.SelectSource(sourceId, version, _presentedConnectionEpoch);
+				ClearPreviewPresentation();
+				RefreshPreviewFromCache();
+			});
+			return;
+		}
+		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.ProgramSourceId), StringComparison.Ordinal))
+		{
+			var version = Interlocked.Increment(ref _programRouteVersion);
+			var sourceId = _controlState.ProgramSourceId;
+			DispatchRouteChange(() =>
+			{
+				if (version != Volatile.Read(ref _programRouteVersion)) return;
+				_programFreshness.SelectSource(sourceId, version, _presentedConnectionEpoch);
+				ClearProgramPresentation();
+			});
 			return;
 		}
 
 		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewViewerState), StringComparison.Ordinal))
-			_uiContext.Post(_ => OnPropertyChanged(nameof(PreviewState)), null);
+			DispatchRouteChange(() => OnPropertyChanged(nameof(PreviewState)));
 		else if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.ProgramViewerState), StringComparison.Ordinal))
-			_uiContext.Post(_ => OnPropertyChanged(nameof(ProgramState)), null);
+			DispatchRouteChange(() => OnPropertyChanged(nameof(ProgramState)));
+	}
+
+	private void DispatchRouteChange(Action change)
+	{
+		void Apply()
+		{
+			if (Volatile.Read(ref _disposed) == 0)
+				change();
+		}
+		if (ReferenceEquals(SynchronizationContext.Current, _uiContext))
+			Apply();
+		else
+			_uiContext.Post(_ => Apply(), null);
 	}
 
 	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
-		if (!ScopesEnabled || snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource)
+		if (!ScopesEnabled || ProgramGpuFrame is null || ProgramState != "LIVE" ||
+			snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource)
 			return;
 
 		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
@@ -406,7 +598,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	internal void SetGpuComparisonState(bool active, string detail)
 	{
-		if (CompareMode == MediaCompareMode.Off)
+		if (CompareMode == MediaCompareMode.Off || ProgramState != "LIVE" || PreviewState != "LIVE")
 		{
 			IsGpuComparisonActive = false;
 			return;
@@ -428,6 +620,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	private void RefreshCpuDifferenceFallback()
 	{
+		if (ProgramState != "LIVE" || PreviewState != "LIVE")
+		{
+			DifferenceImage = null;
+			return;
+		}
 		if (_latestProgramFrame is not { HasFallbackPayload: true } program ||
 			_latestPreviewFrame is not { HasFallbackPayload: true } preview)
 			return;
@@ -452,28 +649,29 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	private void RefreshPreviewFromCache()
 	{
-		if (_sourceFrames.TryGetValue(_controlState.PreviewSourceId, out var frame))
-		{
-			PreviewImage = frame;
-			return;
-		}
-
-		PreviewImage = null;
+		// Always invalidate the old GPU surface and associated metadata first.
+		// Cached source B is retained evidence, never proof that B is now LIVE.
 		PreviewGpuFrame = null;
-		PreviewFormat = "No Preview monitor frame received for current source.";
+		PreviewImage = null;
 		PreviewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+		PreviewFormat = "No Preview monitor frame received for current source.";
+		if (_sourceFrames.TryGetValue(_controlState.PreviewSourceId, out var cached) &&
+			cached.ConnectionEpoch == _presentedConnectionEpoch)
+		{
+			PreviewImage = cached.Bitmap;
+			PreviewFormat = $"{cached.Descriptor.Width}x{cached.Descriptor.Height} RGBA8 • retained source frame; waiting for current routing evidence.";
+			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(cached.Descriptor);
+		}
+		OnPropertyChanged(nameof(PreviewState));
 	}
 
-	private string ResolveViewerState(string controlState, bool hasFrame)
+	private static string ResolveViewerState(string controlState, string monitoringState)
 	{
 		if (controlState is "NO SIGNAL" or "SOURCE OFFLINE" or "DISCONNECTED")
 			return controlState;
-		if (string.Equals(State, "STALE", StringComparison.Ordinal) ||
-			string.Equals(State, "DISCONNECTED", StringComparison.Ordinal))
-			return "DISCONNECTED";
-		if (string.Equals(controlState, "RECOVERING", StringComparison.Ordinal) || !hasFrame)
+		if (string.Equals(controlState, "RECOVERING", StringComparison.Ordinal))
 			return "RECOVERING";
-		return "LIVE";
+		return monitoringState;
 	}
 
 	private static BitmapSource CreateDisplayDifferenceBitmap(MonitoringFrame program, MonitoringFrame preview)

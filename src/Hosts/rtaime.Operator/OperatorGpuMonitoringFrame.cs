@@ -21,6 +21,8 @@ public sealed record OperatorGpuMonitoringFrame
 
 	public bool IsNewerThan(OperatorGpuMonitoringFrame? other) =>
 		other is null ||
+		Descriptor.StreamKind != other.Descriptor.StreamKind ||
+		Descriptor.SourceId != other.Descriptor.SourceId ||
 		Resource.ProviderInstanceId != other.Resource.ProviderInstanceId ||
 		Resource.Lifetime.Generation.Value > other.Resource.Lifetime.Generation.Value ||
 		(Resource.Lifetime.Generation == other.Resource.Lifetime.Generation && SequenceNumber > other.SequenceNumber);
