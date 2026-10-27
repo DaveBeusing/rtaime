@@ -328,9 +328,10 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 
 	private void MonitoringPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName is not (nameof(OperatorMonitoringViewModel.State)
+		if (e.PropertyName is not (nameof(OperatorMonitoringViewModel.ProgramState)
 			or nameof(OperatorMonitoringViewModel.HasProgram)
-			or nameof(OperatorMonitoringViewModel.ProgramImage)))
+			or nameof(OperatorMonitoringViewModel.ProgramImage)
+			or nameof(OperatorMonitoringViewModel.ProgramGpuFrame)))
 		{
 			return;
 		}
@@ -368,23 +369,21 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 			return;
 		}
 
-		if (string.Equals(_monitoring.State, "STALE", StringComparison.Ordinal))
+		if (string.Equals(_monitoring.ProgramState, "STALE", StringComparison.Ordinal))
 		{
 			Health = "STALE";
 			Detail = "Program monitoring is stale; production continuity remains owned by RuntimeHost.";
 			return;
 		}
 
-		if (!_monitoring.HasProgram)
+		if (!_monitoring.HasProgram || string.Equals(_monitoring.ProgramState, "RECOVERING", StringComparison.Ordinal))
 		{
 			Health = "WAITING";
 			Detail = $"Waiting for the RuntimeHost Program monitor on {SelectedDisplay.Label}.";
 			return;
 		}
 
-		Health = string.Equals(_monitoring.State, "LIVE", StringComparison.Ordinal)
-			? "LIVE"
-			: _monitoring.State;
+		Health = _monitoring.ProgramState;
 		Detail = $"{SelectedDisplay.Label} • {Mode} • same RuntimeHost Program monitor frame as the Operator Program surface.";
 	}
 
