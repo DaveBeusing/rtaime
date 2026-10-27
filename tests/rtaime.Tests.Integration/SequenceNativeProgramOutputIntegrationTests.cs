@@ -278,6 +278,127 @@ public sealed class SequenceNativeProgramOutputIntegrationTests
         Assert.Equal(0, runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
     }
 
+    [Fact]
+    public async Task Native_loop_repreroll_reanchors_a_live_Preview_without_blocking_Program_or_reusing_old_pixels()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var media = LocalMediaTestAsset.ExtractReference1080p50();
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(media.Path)));
+        var format = VideoFormat.Hd1080p50Rgba8;
+        var a = ProductionSourceId.New();
+        var b = ProductionSourceId.New();
+        var previewSource = new MediaSourceId(b.Value);
+        await using var runtime = new RuntimeProgramExecutionService(
+            new MediaSourceId(a.Value), previewSource, format, new NoopRecordingWriter());
+        await using var journal = new BoundedProductionJournal(64);
+        var specification = new ProductionSpecification(ControlContractVersion.Current,
+            ProductionId.New(), "Bounded native loop recovery",
+            [new ProductionSourceSpecification(a, "Program"),
+             new ProductionSourceSpecification(b, "Native Preview")],
+            new ProductionRoutingState(a, a),
+            initialOutputRoles:
+            [ProductionOutputRoleState.Program(a), ProductionOutputRoleState.Aux(b)]);
+        var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
+        Confirm(control, runtime, control.Initialize());
+        Confirm(control, runtime, control.SelectPreview(new SelectPreviewCommand(
+            new ControlCommandMetadata(ControlContractVersion.Current, CommandId.New(),
+                control.State.ProductionId, control.State.Revision), b)));
+
+        using var decks = new LocalMediaDeckRuntimeService(format, 2);
+        var provider = decks.ProviderDescriptor;
+        var cap = provider.Capabilities.Single(item => item.Kind == "media.route");
+        var resource = provider.Resources.First(item => item.Kind == "media.route");
+        var owner = new SequenceMediaOwnerRequest(
+            MediaSourceId.New(), MediaAssetId.New(), media.Path, hash, 0, 0);
+        var authority = control.State;
+        var execution = new PreparedExecutionContract(RuntimeContractVersion.Current,
+            PreparedExecutionId.New(),
+            new AuthoritySnapshotReference(authority.ProductionId.Value, authority.Revision),
+            new Generation(1),
+            [new PreparedExecutionBinding(owner.SourceId.Value, cap.CapabilityId,
+                resource, owner.SourceId, null)]);
+        const long frameTicks = 4800;
+        const long duration = 5 * frameTicks;
+        var sequenceId = Guid.NewGuid();
+        var map = SequenceRuntimePositionMap.Prepare(
+            sequenceId, 7, format.FrameRate, duration, runtime.NextSequenceOutputSlot, 1);
+        SequenceExecutionClip Clip(SequenceMediaKind kind, int order) => new(
+            Guid.NewGuid(), Guid.Parse(owner.AssetId.ToString()), hash, kind,
+            owner.SourceId.ToString(), order,
+            kind == SequenceMediaKind.Audio ? "program" : null,
+            0, 0, null, 0, 0, false);
+        var snapshot = new SequenceExecutionSnapshot(
+            SequenceExecutionSnapshotContract.Version, sequenceId, 7,
+            new(50, 1), duration,
+            [new SequenceExecutionSlice(0, duration,
+                [Clip(SequenceMediaKind.Video, 0), Clip(SequenceMediaKind.Audio, 1)])]);
+        Assert.True(decks.PrepareSequenceMedia(execution, map, [owner],
+            executionSnapshot: snapshot).Prepared);
+        var host = Guid.NewGuid().ToString("D");
+        var reference = new SequencePreparationReference(SequencePreparationContract.Version,
+            sequenceId, 7, host, execution.PreparedExecutionId.ToString(), 1);
+        decks.BindSequencePreviewOutput(reference, previewSource,
+            authority.ProductionId.Value, authority.Revision, runtime);
+        var playing = decks.ApplySequenceShuttle(
+            new(SequenceShuttleContract.Version, reference, 0, SequenceShuttleAction.Play),
+            host, authority.ProductionId.Value, authority.Revision,
+            () => runtime.NextSequenceOutputSlot);
+        var looping = decks.ApplySequenceShuttle(
+            new(SequenceShuttleContract.Version, reference, playing.StateRevision,
+                SequenceShuttleAction.SetLoop, LoopEnabled: true),
+            host, authority.ProductionId.Value, authority.Revision,
+            () => runtime.NextSequenceOutputSlot);
+        Assert.True(looping.Loop);
+
+        for (var index = 0; index < 5; index++)
+        {
+            var input = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+            Assert.True(input.Published, input.FailureCode);
+            using var output = runtime.ProcessNextBoundary();
+            decks.ObserveSequenceProgramBoundary(output);
+            Assert.Equal(new MediaSourceId(a.Value), output.CommittedProgramSourceId);
+            await Task.Delay(10); // Independent native decode worker owns producer cadence.
+        }
+        Assert.Equal("PREVIEW_READY", decks.GetSequenceOutput(reference, host).OutputState);
+        var previousSlot = runtime.NextSequenceOutputSlot;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var boundary = decks.PresentSequenceBoundary(runtime, previousSlot);
+        started.Stop();
+        Assert.False(boundary.Published);
+        Assert.Equal("BUFFERING", boundary.State);
+        Assert.Equal("runtime.sequence.loop_preroll_pending", boundary.FailureCode);
+        Assert.InRange(started.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        using (var unavailable = runtime.ProcessNextBoundary())
+        {
+            decks.ObserveSequenceProgramBoundary(unavailable);
+            Assert.Equal(new MediaSourceId(a.Value), unavailable.CommittedProgramSourceId);
+        }
+
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (decks.GetSequenceOutputPerformance(reference)?.CompletedLoopPrerolls != 1 &&
+            DateTimeOffset.UtcNow < deadline)
+            await Task.Delay(20);
+        var metrics = Assert.IsType<LocalMediaDeckRuntimeService.SequenceOutputPerformanceEvidence>(
+            decks.GetSequenceOutputPerformance(reference));
+        Assert.Equal(1UL, metrics.CompletedLoopPrerolls);
+        Assert.Equal(1, metrics.NativeOwners);
+        Assert.InRange(metrics.QueuedDecoderFrames, 0, metrics.MaximumDecoderQueueFrames);
+        Assert.True(metrics.ReservedOwners >= 1);
+        Assert.True(metrics.KnownManagedBytes > 0);
+        Assert.Equal(0, metrics.QuarantinedOwners);
+
+        var recovered = decks.PresentSequenceBoundary(runtime, runtime.NextSequenceOutputSlot);
+        Assert.True(recovered.Published, recovered.FailureCode);
+        Assert.True(recovered.LastSlot > previousSlot);
+        using (var refreshed = runtime.ProcessNextBoundary())
+            decks.ObserveSequenceProgramBoundary(refreshed);
+        Assert.Equal("PREVIEW_READY", decks.GetSequenceOutput(reference, host).OutputState);
+        Assert.Equal(0, decks.GetSequenceOutputPerformance(reference)?.QuarantinedOwners);
+
+        Assert.Equal("CANCELED", decks.CancelPreparedSequence(reference, host).State);
+        Assert.Equal(0, decks.ResourceSnapshot.ReservedOwners);
+    }
+
     [Theory]
     [InlineData("seek")]
     [InlineData("stop")]
