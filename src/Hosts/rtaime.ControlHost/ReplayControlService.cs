@@ -135,7 +135,11 @@ public sealed class ReplayControlService
 			}
 
 			var asset = import.Snapshot.Assets.FirstOrDefault(candidate => candidate.AssetId == item.AssetId.Value);
-			if (asset is null || asset.Availability != MediaAssetAvailability.Online)
+			if (asset is null || asset.Availability != MediaAssetAvailability.Online ||
+                string.IsNullOrWhiteSpace(materialized.Sha256) ||
+                !string.Equals(asset.FingerprintSha256, materialized.Sha256, StringComparison.OrdinalIgnoreCase) ||
+                asset.VideoCodec != MediaVideoCodec.H264 ||
+                asset.AudioCodec != MediaAudioCodec.Aac)
 			{
 				return new ReplayClipAssetResult(
 					ReplayControlContractVersion.Current,
@@ -148,7 +152,7 @@ public sealed class ReplayControlService
 					materialized.Sha256,
 					new Failure(
 						"replay.clip.catalog_verification_failed",
-						"Replay clip import completed without a confirmed online Media Library asset."));
+						"Replay clip import lacks an online, matching SHA-256, H.264/AAC Media Library asset."));
 			}
 
 			_lastAdoptedClip = new ReplayClipAssetResult(
