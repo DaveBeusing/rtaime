@@ -22,7 +22,9 @@ public sealed partial class OperatorViewModel
         _client?.Snapshot is not null,
         ProgramSafety == OperatorProgramSafetyStates.Blocked,
         RuntimeStatus, TransitionStatus,
-        !string.IsNullOrWhiteSpace(PreviewSourceId) && PreviewSourceId != "—",
+        !string.IsNullOrWhiteSpace(PreviewSourceId) && PreviewSourceId != "—" &&
+        string.Equals(_client?.Snapshot?.Production.Routing.PreviewSourceId.ToString(),
+            PreviewSourceId, StringComparison.Ordinal),
         TransitionFrames);
     public string PreviewTakeDetail => $"CUT / AUTO → {PreviewSourceName} · {LiveTakeEvidence}";
     public string SceneTakeDetail => $"SCENE TAKE → {SelectedScene?.Name ?? "select a scene"} · {LiveAvailability}";
