@@ -161,12 +161,6 @@
                                                 AutomationProperties.Name="Review and rebase retained bus draft"
                                                 ToolTip="Acknowledge the new revision for this local draft. No production change is sent until Apply." />
                                         </StackPanel>
-                                        <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
-                                            <TextBlock Text="{Binding DraftReviewDetail}" TextWrapping="Wrap" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
-                                            <controls:RtaimeButton Content="REBASE DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True" HorizontalAlignment="Left"
-                                                AutomationProperties.Name="Review and rebase retained source draft"
-                                                ToolTip="Acknowledge the new revision for this local draft. No production change is sent until Apply." />
-                                        </StackPanel>
                                         <WrapPanel Margin="0,5,0,0">
                                             <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
                                                 IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local bus mute draft" />
@@ -233,6 +227,12 @@
                                             Orientation="Horizontal" Height="26" AutomationProperties.Name="Source gain draft fader"
                                             AutomationProperties.HelpText="Adjust local source gain only; Apply requests authoritative confirmation. Arrow steps 0.01x, Page 0.1x." />
                                         </Border>
+                                        <StackPanel Visibility="{Binding DraftReviewVisibility}" Margin="0,5,0,0">
+                                            <TextBlock Text="{Binding DraftReviewDetail}" TextWrapping="Wrap" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
+                                            <controls:RtaimeButton Content="REBASE DRAFT" Command="{Binding RebaseDraftCommand}" IsCompact="True" HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Review and rebase retained source draft"
+                                                ToolTip="Acknowledge the new revision for this local draft. No production change is sent until Apply." />
+                                        </StackPanel>
                                         <WrapPanel Margin="0,5,0,0">
                                             <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
                                                 IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local source mute draft" />
