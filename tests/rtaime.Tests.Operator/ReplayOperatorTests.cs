@@ -48,6 +48,33 @@ public sealed class ReplayOperatorTests
 		Assert.Contains("BackpressureStatus", surface, StringComparison.Ordinal);
 	}
 
+    [Fact]
+    public void Replay_handoff_controls_are_bound_to_the_single_authoring_owner()
+    {
+        var root = FindRepositoryRoot();
+        var document = XDocument.Load(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "ReplayControl.xaml"));
+        var buttons = document.Descendants().Where(element => element.Name.LocalName == "RtaimeButton").ToArray();
+        var queue = Assert.Single(buttons, button =>
+            (string?)button.Attribute("Content") == "QUEUE IN RUNDOWN");
+        Assert.Equal("{Binding QueueInRundownCommand}", (string?)queue.Attribute("Command"));
+        var recovery = Assert.Single(buttons, button =>
+            (string?)button.Attribute("Content") == "REVIEW / NEW RANGE");
+        Assert.Equal("{Binding ReviewNewRangeCommand}", (string?)recovery.Attribute("Command"));
+        Assert.Contains(document.Descendants(), element =>
+            (string?)element.Attribute("AutomationProperties.Name") ==
+                "Replay finalized clip identity and source capture time range");
+
+        var owner = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml.cs"));
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(owner,
+            @"Replay\.AttachRundown\(Rundown\)").Count);
+        Assert.Contains("Replay.Dispose();", owner, StringComparison.Ordinal);
+        var workflow = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "ReplayRundownWorkflow.cs"));
+        Assert.Contains("GetMediaAssetCatalogAsync", workflow, StringComparison.Ordinal);
+        Assert.Contains("TryStageReplayClip", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("GoRundownAsync", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("CutProgramAsync", workflow, StringComparison.Ordinal);
+    }
+
 	private static string FindRepositoryRoot()
 	{
 		DirectoryInfo? directory = new(AppContext.BaseDirectory);
