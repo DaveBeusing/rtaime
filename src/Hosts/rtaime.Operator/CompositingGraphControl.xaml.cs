@@ -12,6 +12,9 @@ public partial class CompositingGraphControl : UserControl
 {
 	private bool _isPanning;
 	private Point _lastPointer;
+    private CompositingGraphNodeViewModel? _nodeDrag;
+    private UIElement? _nodeDragSource;
+    private Point _nodeDragPointer;
     private Point _dragStart;
     private CompositingGraphNodeViewModel? _dragLayer;
     private sealed record LayerDrag(CompositingGraphViewModel Owner, string Id);
@@ -24,8 +27,17 @@ public partial class CompositingGraphControl : UserControl
 
 	private CompositingGraphViewModel? ViewModel => DataContext as CompositingGraphViewModel;
 
-	private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e) =>
-		UpdateViewport();
+	private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        EndPan();
+        EndNodeDrag();
+        UpdateViewport();
+    }
+
+    private void OnGraphVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is false) { EndNodeDrag(); EndPan(); }
+    }
 
     private void OnWorkspaceSizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -105,9 +117,82 @@ public partial class CompositingGraphControl : UserControl
 	}
     private void OnNodeSelectionModifiers(object sender, MouseButtonEventArgs e)
     {
-        if (ViewModel is { } model) model.ExtendSelection = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        if (ViewModel is not { } model) return;
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) == 0 ||
+            !model.IsSelectMode || sender is not UIElement source ||
+            (sender as FrameworkElement)?.DataContext is not CompositingGraphNodeViewModel node)
+        {
+            model.ExtendSelection = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+            return;
+        }
+
+        EndNodeDrag();
+        model.SelectNodeCommand.Execute(node);
+        _nodeDrag = node;
+        _nodeDragSource = source;
+        _nodeDragPointer = e.GetPosition(GraphViewport);
+        source.CaptureMouse();
+        source.Cursor = Cursors.SizeAll;
+        e.Handled = true;
     }
-    private void OnWorkspaceUnloaded(object sender, RoutedEventArgs e) { EndPan(); _dragLayer = null; }
+
+    private void OnNodeDragMove(object sender, MouseEventArgs e)
+    {
+        if (_nodeDrag is not { } node || ViewModel is not { } model ||
+            !ReferenceEquals(sender, _nodeDragSource)) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { EndNodeDrag(); return; }
+        var current = e.GetPosition(GraphViewport);
+        model.TryMoveNode(node, current.X - _nodeDragPointer.X, current.Y - _nodeDragPointer.Y);
+        _nodeDragPointer = current;
+        e.Handled = true;
+    }
+
+    private void OnNodeDragEnd(object sender, MouseButtonEventArgs e)
+    {
+        if (_nodeDrag is null || !ReferenceEquals(sender, _nodeDragSource)) return;
+        EndNodeDrag();
+        e.Handled = true; // Do not synthesize a second node click after a local move.
+    }
+
+    private void OnNodeDragLostCapture(object sender, MouseEventArgs e)
+    {
+        if (ReferenceEquals(sender, _nodeDragSource)) EndNodeDrag();
+    }
+
+    private void EndNodeDrag()
+    {
+        var source = _nodeDragSource;
+        _nodeDragSource = null;
+        _nodeDrag = null;
+        if (source is null) return;
+        source.Cursor = Cursors.Arrow;
+        if (source.IsMouseCaptured) source.ReleaseMouseCapture();
+    }
+
+    private void OnConnectionSelect(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is { } graph &&
+            (sender as FrameworkElement)?.DataContext is CompositingGraphConnectionViewModel connection)
+        {
+            graph.SelectConnection(connection);
+            (sender as UIElement)?.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void OnConnectionKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space) ||
+            ViewModel is not { } graph ||
+            (sender as FrameworkElement)?.DataContext is not CompositingGraphConnectionViewModel connection) return;
+        graph.SelectConnection(connection);
+        e.Handled = true;
+    }
+
+    private void OnWorkspaceUnloaded(object sender, RoutedEventArgs e)
+    {
+        EndNodeDrag(); EndPan(); _dragLayer = null;
+    }
     private void OnWorkspaceKeyDown(object sender, KeyEventArgs e)
     {
         if (ViewModel is not { } model || e.OriginalSource is TextBox) return;
@@ -115,6 +200,19 @@ public partial class CompositingGraphControl : UserControl
         else if (e.Key == Key.Home) { model.Fit(); e.Handled = true; }
         else if (e.Key is Key.Add or Key.OemPlus) { model.ZoomAt(1.12, GraphViewport.ActualWidth / 2, GraphViewport.ActualHeight / 2); e.Handled = true; }
         else if (e.Key is Key.Subtract or Key.OemMinus) { model.ZoomAt(1 / 1.12, GraphViewport.ActualWidth / 2, GraphViewport.ActualHeight / 2); e.Handled = true; }
+        else if (GraphViewport.IsKeyboardFocusWithin && Keyboard.Modifiers == ModifierKeys.Control &&
+            model.SelectedNode is { } selected)
+        {
+            var step = e.Key switch
+            {
+                Key.Left => new Vector(-8, 0),
+                Key.Right => new Vector(8, 0),
+                Key.Up => new Vector(0, -8),
+                Key.Down => new Vector(0, 8),
+                _ => default
+            };
+            if (step != default && model.TryMoveNode(selected, step.X, step.Y)) e.Handled = true;
+        }
     }
     private void OnLayerInputValidityChanged(object sender, RoutedEventArgs e)
     {
