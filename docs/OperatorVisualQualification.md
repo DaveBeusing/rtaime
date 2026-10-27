@@ -22,6 +22,28 @@ The following logical viewports are the supported automated qualification surfac
 
 The percentage is qualification metadata for the logical viewport expected from the Windows PerMonitorV2 environment. WPF device-independent layout remains the geometry authority inside the Operator.
 
+## Operator chrome and detached-panel regression coverage
+
+The compact shell width matrix (1920 × 1080, 1600 × 900, 1280 × 720,
+960 × 540 and 960 × 500) is checked in
+`WorkspacePresentationTemplateTests.Compact_shell_retains_readiness_program_and_timecode_space_without_persisting_geometry`.
+`OperatorVisualQualificationTests.Critical_top_bar_statuses_use_transient_compact_columns`
+protects the actual XAML bindings and the continuously exposed global readiness
+and recording status. The calculated client geometry is transient and must
+not mutate schema-7 reference layouts.
+
+`OperatorDockingWindowTests.VerifyAsync` exercises the real loaded WPF
+MainWindow, shared `RtaimePanelHeader` chrome, selected custom tabs and a
+detached TIMELINE in both sequence and media modes, then a detached MONITORS
+panel with previous/next cue commands. It asserts the original view models,
+source identities and mode visibility survive these transitions.
+
+**Evidence status: PENDING** until those tests and the five required
+source-bound checks (CI, Quality, Security, Provider Smoke, Packaged E2E)
+complete on the final PR head. Windows WPF software layout tests do not
+establish actual multimonitor/DPI, GPU, high-contrast or screen-reader hardware
+acceptance. Results must be recorded from the precise final checked commit.
+
 ## Automated layout invariants
 
 tests/rtaime.Tests.Operator/OperatorVisualQualificationTests.cs executes the complete matrix against every Operator workspace:
