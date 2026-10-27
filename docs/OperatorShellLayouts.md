@@ -15,6 +15,37 @@ LIVE through PreviewPlaybackVisibility. Other Timeline embeddings retain their
 established playback controls. Show/project identity, synchronization, global
 readiness, Program identity and incident navigation remain in the top shell.
 
+## Shared dock chrome and compact status geometry
+
+The dock layout reuses the existing `RtaimePanelHeader` header/action slots and
+custom dock tabs. The selected tab is indicated by an accent underline and a
+selected automation item status; focus remains the existing custom-button
+keyboard focus visual. No workspace IDs, groups or persistence fields change.
+The Program identity/connection/safety label remains in the dock chrome and
+uses ellipsis rather than forcing the entire panel wider than its container.
+
+Top-bar columns are calculated from the **current logical client viewport**.
+They are not a scaling transform and are not written to the saved schema-7
+workspace layout. The remaining `*` column belongs to global readiness:
+
+| Logical viewport | Brand | Project | Engine | Timecode | LIVE state | Program identity | Settings | Remaining readiness width |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1920 × 1080 | 105 | 185 | 190 | 120 | 70 | 140 | 46 | 1062 |
+| 1280 × 720 | 105 | 185 | 190 | 120 | 70 | 140 | 46 | 422 |
+| 960 × 540 | 58 | 155 | 150 | 112 | 72 | 130 | 40 | 241 |
+
+Widths are DIPs; the readiness remainder subtracts two 1-DIP separators.
+The compact header keeps recording/transmission status, Program source and
+timecode accessible; only the adjacent product wordmark is suppressed, while
+its emblem remains visible.
+
+Detached TIMELINE and MONITORS panels must bind to the original MainWindow
+`Timeline` and `SequenceTimeline` owners. The detached Window mirrors the
+MainWindow's two observable timeline-mode visibility properties, allowing
+SEQUENCE EDITOR / MEDIA DECK switching and cue commands to keep working.
+Floating or docking never creates a replacement view model, Program snapshot,
+transport or persisted layout schema.
+
 ## Destinations and feature connections
 
 OperatorWorkspaceRegistry supplies navigation groups, canonical layout defaults
