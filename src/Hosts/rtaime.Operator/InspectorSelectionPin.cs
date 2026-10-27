@@ -68,13 +68,19 @@ public sealed partial class MediaPoolInspectorViewModel
     private bool InspectorPinnedAudioTargetMatches =>
         _activeInspectorTarget is not { Kind: "gain" } || InspectorAudioSelectionMatches;
 
-    private bool InspectorPinnedClipTargetMatches =>
-        SelectedItem is not { Kind: MediaPoolItemKind.Clip } clip ||
-        string.Equals(clip.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal);
+    private bool InspectorPinnedClipTargetMatches => SelectedItem switch
+    {
+        { Kind: MediaPoolItemKind.Clip } clip =>
+            string.Equals(clip.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal),
+        _ => true
+    };
 
-    private bool InspectorPinnedGraphicsTargetMatches =>
-        SelectedItem is not { Kind: MediaPoolItemKind.Graphics } graphics ||
-        string.Equals(graphics.Key, "graphics:" + _operator.GraphicsAssetName, StringComparison.Ordinal);
+    private bool InspectorPinnedGraphicsTargetMatches => SelectedItem switch
+    {
+        { Kind: MediaPoolItemKind.Graphics } graphics =>
+            string.Equals(graphics.Key, "graphics:" + _operator.GraphicsAssetName, StringComparison.Ordinal),
+        _ => true
+    };
 
     private bool InspectorPinMatchesCurrent => _inspectorPinnedIdentity is null ||
         string.Equals(_inspectorPinnedIdentity, EditingSelectionIdentity, StringComparison.Ordinal) &&
