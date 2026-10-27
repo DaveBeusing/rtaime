@@ -64,14 +64,7 @@ foreach ($f in @($d.faultCoverage)) {
         $f.scope -cmatch '^SOFTWARE_|^IN_PROCESS_' -and
         $f.scope -cnotmatch '^PHYSICAL_PASS') "Fault simulation claimed physical proof."
     foreach ($testName in ([string]$f.evidence -split ';')) {
-        Require ($testName -cmatch '^[A-Za-z][A-Za-z0-9]*Tests
-Require (@($d.requiredPhysical).Count -eq 8 -and
-    @($d.requiredPhysical | Select-Object -Unique).Count -eq 8) "Missing hardware/signoff dimension."
-Require ((@($d.unresolvedRiskReviews | ForEach-Object issue) -join ",") -ceq "401,347" -and
-    $d.unresolvedRiskReviews[0].requirement -ceq "SAME_SOURCE_REPEAT_CAUSAL_ANALYSIS_AND_NOT_LOWERED_LIMIT" -and
-    $d.unresolvedRiskReviews[1].requirement -ceq "ADMINISTRATOR_ENABLE_AND_VERIFY_PR_ONLY_STRICT_FIVE_CHECKS") "Known sustained-memory or live branch-protection risk omitted."
-Write-Host "Production soak descriptor PASS: source-bound lanes and unchanged limits; no runtime tests/hardware/release qualification claimed."
- -and
+        Require ($testName -cmatch '^[A-Za-z][A-Za-z0-9]*Tests$' -and
             $testFiles -ccontains $testName) "Unknown/nonexistent qualification source: $testName."
     }
 }
