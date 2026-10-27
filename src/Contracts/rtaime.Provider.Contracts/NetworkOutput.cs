@@ -5,6 +5,21 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Provider.Contracts;
 
+/// <summary>
+/// Safety ceilings for optional SRT/NDI reconnect episodes. A zero configured
+/// maximum uses a finite default; it never grants unlimited retry work.
+/// </summary>
+public static class NetworkOutputReconnectPolicy
+{
+    public const int DefaultMaximumAttempts = 8;
+    public const int MaximumAutomaticBackoffMilliseconds = 5_000;
+    public static readonly TimeSpan MaximumEpisodeDuration = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan MaximumConnectAttemptDuration = TimeSpan.FromSeconds(8);
+
+    public static int EffectiveMaximumAttempts(int configured) =>
+        configured == 0 ? DefaultMaximumAttempts : configured;
+}
+
 public static class NetworkOutputCapabilityKinds
 {
 	public const string Output = "network.output";
