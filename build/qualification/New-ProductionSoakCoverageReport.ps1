@@ -94,8 +94,12 @@ foreach ($format in @($policy.ssd.formats)) {
         Add-Status "ssd/$key" $row.status "SOFTWARE_DUAL_DECK_NOT_PHYSICAL_OUTPUT" $row.reason
     }
 }
+$allowedSsdKeys = @($policy.ssd.formats | ForEach-Object {
+    $format = $_
+    foreach ($p in @($policy.ssd.profiles)) { "$format/$($p.id)" }
+})
 foreach ($key in @($ssdRows.Keys)) {
-    if ($key -notin @($policy.ssd.formats | ForEach-Object { $format = $_; $policy.ssd.profiles | ForEach-Object { "$format/$($_.id)" } })) {
+    if ($key -notin $allowedSsdKeys) {
         Add-Status "ssd/invalid/$key" "FAIL" "INVALID_INPUT" $ssdRows[$key].reason
     }
 }
@@ -121,8 +125,10 @@ foreach ($profile in @($policy.mixed.profiles)) {
     }
     Add-Status "stagedMixed/$($profile.id)" $row.status "MANAGED_STAGED_SOFTWARE_ONLY" $row.reason
 }
-if ($mixedRows.ContainsKey("unknown")) {
-    Add-Status "stagedMixed/invalid" "FAIL" "INVALID_INPUT" $mixedRows.unknown.reason
+foreach ($key in @($mixedRows.Keys)) {
+    if ($key -notin @($policy.mixed.profiles | ForEach-Object id)) {
+        Add-Status "stagedMixed/invalid/$key" "FAIL" "INVALID_INPUT" $mixedRows[$key].reason
+    }
 }
 $software = "UNVERIFIED"
 $softwareReason = "No complete real-time software producer-composition evidence supplied."
@@ -160,7 +166,7 @@ $report = [ordered]@{
     productionSigning="UNVERIFIED"; unbrokenProductionSoak="UNVERIFIED"
     upstreamAuthority="build/release/New-ReleaseReadinessIndex.ps1 and Test-StableReadiness.ps1; this inventory does not override them."
 }
-$bytes = [Text.Json.JsonSerializer]::SerializeToUtf8Bytes($report, [Text.Json.JsonSerializerOptions]@{ WriteIndented = $true })
+$bytes = [Text.Encoding]::UTF8.GetBytes(($report | ConvertTo-Json -Depth 32))
 if ($bytes.Length -gt 131072) { throw "Production coverage report exceeded fixed 128-KiB bound." }
 $out = if ([IO.Path]::IsPathRooted($OutputPath)) { [IO.Path]::GetFullPath($OutputPath) }
     else { [IO.Path]::GetFullPath((Join-Path $root $OutputPath)) }
