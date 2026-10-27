@@ -229,9 +229,11 @@ public sealed partial class ReplayViewModel : INotifyPropertyChanged, IDisposabl
 		});
 
 	private ReplayClipAssetResult RequireReadyClip() =>
-		CanOpenClip && _lastClip is { Succeeded: true, AssetId: not null }
-			? _lastClip
-			: throw new InvalidOperationException("Create and confirm a Media Library replay clip first.");
+        !_clipOutcomeUnknown && _snapshot.ClipState == ReplayControlClipState.Ready &&
+        _lastClip is { Succeeded: true, AssetId: { Length: > 0 },
+            SourceLocation: { Length: > 0 }, Sha256: { Length: 64 } } clip
+            ? clip
+            : throw new InvalidOperationException("Create and confirm a Media Library replay clip first.");
 
 	private async Task RunAsync(Func<Task> operation)
 	{
