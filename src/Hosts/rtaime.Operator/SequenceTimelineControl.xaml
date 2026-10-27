@@ -280,7 +280,7 @@
                         </ItemsControl>
                         <Canvas IsHitTestVisible="False">
                             <Border Canvas.Left="{Binding CursorLeft}" Width="2" Height="26"
-                                Background="{DynamicResource OperatorAccentBrush}" />
+                                Background="{DynamicResource OperatorAccentBrush}" Opacity="{Binding CursorRulerOpacity}" />
                         </Canvas>
                         <TextBlock Text="{Binding Zoom, StringFormat=ZOOM {0:0}×}"
                             HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -370,7 +370,7 @@
                 <Canvas Grid.Column="1" IsHitTestVisible="False" ClipToBounds="True">
                     <Border Canvas.Left="{Binding CursorLeft}" Width="1"
                         Height="{Binding ElementName=SequenceTrackViewport, Path=ActualHeight}"
-                        Background="{DynamicResource OperatorAccentBrush}" Opacity="0.55" />
+                        Background="{DynamicResource OperatorAccentBrush}" Opacity="{Binding CursorTrackOpacity}" />
                 </Canvas>
             </Grid>
 
