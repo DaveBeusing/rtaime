@@ -168,7 +168,8 @@ public sealed class MediaAssetFilmstripService : IDisposable
                 "Authoritative asset identity could not be verified.");
         }
 
-        Task<MediaFilmstripResult?> work;
+        Task<MediaFilmstripResult?>? work = null;
+        MediaFilmstripResult? cached = null;
         lock (_gate)
         {
             if (_disposed) return null;
@@ -185,19 +186,19 @@ public sealed class MediaAssetFilmstripService : IDisposable
                 {
                     _lru.Remove(entry.Node);
                     _lru.AddLast(entry.Node);
-                    progress?.Report(new(entry.Result.CompletedCount, entry.Result.Samples.Count,
-                        MediaAnalysisState.Complete));
-                    return entry.Result;
+                    CancelActive(); // A cached selection supersedes an unrelated pending strip.
+                    cached = entry.Result;
                 }
-                RemoveCache(key);
+                else RemoveCache(key);
             }
 
-            if (_activeTask is not null && !_activeTask.IsCompleted && _activeKey == key)
+            if (cached is null && _activeTask is not null &&
+                !_activeTask.IsCompleted && _activeKey == key)
             {
                 work = _activeTask;
                 _waiters++;
             }
-            else
+            else if (cached is null)
             {
                 CancelActive();
                 _activeStop = new CancellationTokenSource();
@@ -207,14 +208,19 @@ public sealed class MediaAssetFilmstripService : IDisposable
                 _activeTask = work;
             }
         }
+        if (cached is not null)
+        {
+            progress?.Report(new(cached.CompletedCount, cached.Samples.Count, MediaAnalysisState.Complete));
+            return cached;
+        }
 
-        try { return await work.WaitAsync(cancellationToken); }
+        try { return await work!.WaitAsync(cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return null; }
         finally
         {
             lock (_gate)
             {
-                if (ReferenceEquals(_activeTask, work) && --_waiters == 0 && !work.IsCompleted)
+                if (ReferenceEquals(_activeTask, work) && --_waiters == 0 && !work!.IsCompleted)
                     CancelActive();
             }
         }
