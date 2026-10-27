@@ -129,10 +129,23 @@
                 <controls:RtaimeCheckBox IsChecked="{Binding SnapEnabled, Mode=TwoWay}"
                     Margin="2,4,8,0"><TextBlock Text="Snap 10" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
                 <controls:RtaimeCheckBox IsChecked="{Binding ShowGuides, Mode=TwoWay}"
-                    Margin="2,4,0,0"><TextBlock Text="Guides" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                    Margin="2,4,8,0"><TextBlock Text="Grid / rulers" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                <controls:RtaimeCheckBox IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}"
+                    AutomationProperties.Name="Show optional logical design safe area guides"
+                    Margin="2,4,8,0"><TextBlock Text="Design safe 5% / 10%" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                <controls:RtaimeButton Content="CENTER X" Command="{Binding AlignHorizontalCommand}" IsCompact="True"
+                    Margin="0,0,5,4" ToolTip="Align selected quad's corner average to the logical canvas horizontal center; local draft only." />
+                <controls:RtaimeButton Content="CENTER Y" Command="{Binding AlignVerticalCommand}" IsCompact="True"
+                    ToolTip="Align selected quad's corner average to the logical canvas vertical center; local draft only." />
             </WrapPanel>
-            <TextBlock Text="Drag surface to move; drag corner handles to warp/resize; Alt-drag rotates. Middle-drag pans, wheel zooms; arrows nudge 1 px (Shift: 10 px). Ctrl bypasses snapping during gesture. No Program pixel rendering occurs in this editor."
-                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,10" />
+            <TextBlock Text="Drag surface to move rigidly; drag corner handles to warp/resize; Alt-drag rotates. Middle-drag pans, wheel zooms; arrows nudge 1 px (Shift: 10 px). Ctrl bypasses snapping. Guides/safe rectangles are logical design aids, never output calibration."
+                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
+            <TextBlock Text="{Binding PointerCoordinates}" Style="{StaticResource OperatorLabel}"
+                AutomationProperties.Name="Logical and normalized canvas pointer coordinates"
+                TextWrapping="Wrap" Margin="0,0,0,3" />
+            <TextBlock Text="{Binding SelectedGeometryEvidence}" Style="{StaticResource OperatorLabel}"
+                AutomationProperties.Name="Selected surface logical canvas center and normalized coordinates"
+                TextWrapping="Wrap" Margin="0,0,0,10" />
 
             <TextBlock Text="SURFACE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
             <controls:RtaimeComboBox ItemsSource="{Binding Inputs}"
@@ -191,7 +204,7 @@
                     <TextBlock Text="Only Runtime-confirmed ACTIVE at the saved revision is live; no button alone changes Program."
                         Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,7" />
                     <WrapPanel Margin="0,0,0,7">
-                        <controls:RtaimeButton Content="VALIDATE DRAFT"
+                        <controls:RtaimeButton Content="{Binding ValidationActionLabel}"
                             Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
                             ToolTip="Server validates geometry, sources, providers and exact next saved revision." />
                         <controls:RtaimeButton Content="SAVE"
@@ -204,8 +217,11 @@
                             Margin="0,0,5,4"
                             ToolTip="Explicit Runtime Prepare/Commit request for the saved and validated revision." />
                         <controls:RtaimeButton Content="DISABLE MAPPING"
-                            Command="{Binding DisableCommand}" IsCompact="True"
+                            Command="{Binding DisableCommand}" IsCompact="True" Margin="0,0,5,4"
                             ToolTip="Explicitly request identity Program output and observe the next Runtime boundary." />
+                        <controls:RtaimeButton Content="RECONCILE UNKNOWN" Command="{Binding ReconcileCommand}"
+                            IsCompact="True" AutomationProperties.Name="Read-only reconciliation of uncertain output mapping"
+                            ToolTip="Explicitly read saved Control state and current Runtime evidence; never repeats an APPLY or DISABLE." />
                     </WrapPanel>
                     <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding ResultDetail}" Style="{StaticResource OperatorLabel}"
@@ -231,6 +247,12 @@
                 BorderThickness="1" Padding="8">
                 <StackPanel>
                     <TextBlock Text="EXECUTION EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <TextBlock Text="{Binding SavedTargetEvidence}" Style="{StaticResource OperatorLabel}"
+                        TextWrapping="Wrap" Margin="0,0,0,5"
+                        AutomationProperties.Name="Saved output target and declared profile evidence" />
+                    <TextBlock Text="{Binding ObservedTargetEvidence}" Style="{StaticResource OperatorValue}"
+                        TextWrapping="Wrap" Margin="0,0,0,5"
+                        AutomationProperties.Name="Observed Runtime target and saved revision comparison" />
                     <TextBlock Text="{Binding RuntimeOutputTarget}" Style="{StaticResource OperatorValue}"
                         TextTrimming="CharacterEllipsis" ToolTip="{Binding RuntimeOutputTarget}" />
                     <TextBlock Text="{Binding RuntimeOutputSize}" Style="{StaticResource OperatorLabel}" />

@@ -5,7 +5,7 @@
 
 The single OUTPUTS workspace provides **ROUTING / SIGNAL** and **CANVAS / MAPPING** modes; switching modes changes presentation only. The canvas editor keeps the same durable-saved configuration, one local draft, undo/redo and existing authority/client transport across these changes. Its initial visibility is contextual; neither showing the editor nor selecting a target changes Program.
 
-Canvas actions are explicitly ordered: **VALIDATE DRAFT** must succeed at the current local edit before **SAVE** becomes available; after a successful Control-host save, **VALIDATE SAVED** must succeed for the authoritative saved revision before **REQUEST RUNTIME APPLY** can be issued. SAVE remains non-executing. A successful Apply reply reporting `PENDING_BOUNDARY` remains unconfirmed until Runtime returns `ACTIVE` with the matching saved render revision; a target may still be UNMAPPED, FAILED or missing. Changed local geometry invalidates validation. Conflicted saved revisions or lost-save replies block retries until reconciliation. An ambiguous Apply or Disable reply blocks further local edits and activation commands until Runtime confirms the *intended* terminal state: ACTIVE at the exact requested saved revision for Apply, or UNMAPPED with no active revision for Disable. A retained older UNMAPPED/ACTIVE observation is not sufficient and must not unlock a retry. If exact correlation is unavailable, the outcome remains UNKNOWN and requires an explicit operational reconciliation; it is never guessed to be FAILED or COMPLETED. No optimistic Program update or implicit retry is made.
+Canvas actions are explicitly ordered: **VALIDATE DRAFT** must succeed at the current local edit before **SAVE** becomes available; after a successful Control-host save, **VALIDATE SAVED** must succeed for the authoritative saved revision before **REQUEST RUNTIME APPLY** can be issued. SAVE remains non-executing. A successful Apply reply reporting `PENDING_BOUNDARY` remains unconfirmed until Runtime returns `ACTIVE` with the matching saved render revision; a target may still be UNMAPPED, FAILED or missing. Changed local geometry invalidates validation. Conflicted saved revisions or lost-save replies block retries until reconciliation. An ambiguous Apply or Disable reply blocks further local edits and activation commands until Runtime confirms the *intended* terminal state: ACTIVE at the exact requested saved revision for Apply, or UNMAPPED with no active revision for Disable. A retained older UNMAPPED/ACTIVE observation is not sufficient and must not unlock a retry. Even after passive monitoring observes a plausible terminal result, local mutation stays locked behind **RECONCILE UNKNOWN**, an explicit read-only Get of both Control's saved configuration/revision and Runtime's currently reported state. Reconciliation of APPLY additionally checks the authorized Program target identity, provider/profile binding, observed dimensions and exact saved revision; DISABLE requires currently UNMAPPED with no active revision. The UI reports a currently reconciled state, not causal proof that a lost request executed. Changed saved revisions preserve the UNKNOWN fence and require explicit recovery; no automatic request is replayed. If evidence is inadequate, the outcome remains UNKNOWN and is never guessed to be FAILED or COMPLETED. No optimistic Program update or implicit retry is made.
 
 The target selector lists only Control-authorized targets and exposes role, provider, target identity, profile and declared geometry. That authorization alone does **not** demonstrate device/driver compatibility, professional media-I/O or physical scan-out; absent evidence remains UNVERIFIED. Numerical warp, crop and edge-blend controls are behind **ADVANCED GEOMETRY / BLEND**, while the geometry stage and source/target binding remain accessible. Hiding numerical controls does not modify a draft or add another geometry render loop.
 
@@ -196,6 +196,19 @@ warp, Alt-drag rotates, Ctrl bypasses snapping and Shift constrains moves.
 Arrow keys move 1 logical pixel (Shift: 10); Home fits the stage. Numerical
 TL/TR/BR/BL, crop and blend values use the same validated authored geometry.
 
+The stage now projects bounded visible horizontal/vertical logical-pixel ruler ticks
+(at most 64 per axis) and optional 5%/10% **design safe** rectangles using the
+same inverse zoom/pan geometry as pointer hit-testing. These are editing aids,
+**not** physical-output overscan or color/edge-blend certification. Hover reports
+logical X/Y and normalized destination U/V, including off-canvas coordinates;
+source crop and physical sink dimensions remain separate. Center X/Y commands
+align the four-corner average of the selected convex quad to the logical canvas
+center as one local undoable edit. Snapped body translation snaps a single
+anchor and carries every warped corner by one identical offset; this prevents
+independent corner rounding from accidentally changing perspective. The stage
+reports its real DIP/logical-pixel scale rather than calling FIT 100% source pixels.
+No stage pointer operation bypasses draft validation or changes Program.
+
 The Editor reads `GetOutputCanvasAsync` and optional Runtime mapping
 evidence. It maintains a finite local 48-step draft history; Undo and Redo
 never perform a TAKE, edit Program or revert a previous live route.
@@ -212,7 +225,14 @@ is not represented as active. The existing Operator health stream triggers
 bounded follow-up evidence reads while activation awaits its Runtime boundary,
 without an independent ticker or global command registry. Target, output
 size, source identity, rendered sequence and failure reasons are taken from
-Runtime; no local editor-preview pixel is labeled a verified output.
+Runtime; no local editor-preview pixel is labeled a verified output. The
+configured, saved Program binding (provider/target/declared profile) and the
+Runtime-observed target, dimensions, frame sequence and mapping revision are
+displayed independently. Reported ACTIVE is distinguished from **confirmed**
+ACTIVE: the latter additionally needs connected nonstale authority, a matching
+saved revision and the currently authorized saved Program target/profile
+identity with observed target dimensions. Profile labels come from authorized
+configuration, not from a fabricated Runtime profile readback.
 
 Unconfirmed saves are reconciled by reading the authoritative snapshot. A
 matching saved revision/content can close a lost-response transaction;

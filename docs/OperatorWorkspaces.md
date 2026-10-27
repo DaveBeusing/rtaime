@@ -11,6 +11,8 @@ OUTPUTS uses one persistent **ROUTING / SIGNAL** versus **CANVAS / MAPPING** sel
 
 The mapping view retains the single governed `OutputCanvasEditorViewModel`, saved revision and local-draft ownership already present in the shell. Geometry editing remains local until explicit Validate, Save and Runtime Apply. Advanced numeric/warp/blend editing is contextual. The shell's navigation IDs, docking composition, panel instances, persisted layouts and central `MainWindow.xaml` wiring do not change when a mode is selected; selecting a view never mutates routing or Program.
 
+Its visual stage has bounded logical canvas rulers, optional 5%/10% design-only safe areas, shape-preserving snapped moves, independent corner handles, local Center X/Y, and exact pixel/normalized coordinate inspection under pan/zoom. Declared saved Program target/profile and Runtime-observed target/size/frame evidence are kept separate; ACTIVE is accepted as current only on matching revision and authorized target. A lost Apply/Disable reply requires the explicit read-only RECONCILE UNKNOWN action before editing or retry can become eligible. No new route authority, workspace ID, panel, schema migration or GPU compositor is introduced.
+
 
 
 ## Purpose

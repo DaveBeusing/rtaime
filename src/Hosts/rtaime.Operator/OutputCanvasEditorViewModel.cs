@@ -49,12 +49,14 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private ulong? _validatedSavedRevision;
     private ulong? _validatedDraftRevision;
     private ulong? _requestedRevision;
+    private ulong? _uncertainSavedRevision;
     private Guid _pendingSaveTransaction;
     private DateTimeOffset _nextObservationAt = DateTimeOffset.MinValue;
     private OutputCanvasQuad? _previewQuad;
     private double _zoom = 1;
     private double _panX, _panY;
-    private bool _snapEnabled = true, _showGuides = true;
+    private bool _snapEnabled = true, _showGuides = true, _showSafeAreas;
+    private OutputCanvasPoint? _pointerPosition;
     private bool _workspaceVisible;
 
     internal OutputCanvasEditorViewModel(OperatorViewModel owner, IOutputCanvasGateway? gateway = null)
@@ -73,9 +75,11 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => CanSubmit && IsDirty && !_savedConflict && !_saveOutcomeUnknown && !_applyOutcomeUnknown &&
             _validatedDraftRevision == _session?.Draft.EditRevision);
         ApplyCommand = new AsyncRelayCommand(ApplyAsync, () => CanSubmit && !IsDirty && !_savedConflict && !_awaitingBoundary && !_applyOutcomeUnknown &&
-            _validatedSavedRevision == _session?.Saved.EditRevision);
+            !IsActiveMappingConfirmed && _validatedSavedRevision == _session?.Saved.EditRevision);
         DisableCommand = new AsyncRelayCommand(DisableAsync, () => CanSubmit && !_applyOutcomeUnknown && !_saveOutcomeUnknown &&
             (_evidence?.ActiveRenderRevision is not null || _awaitingBoundary));
+        ReconcileCommand = new AsyncRelayCommand(ReconcileAsync, () => _gateway is not null && !_busy &&
+            _applyOutcomeUnknown && _owner.IsConnected && !_owner.IsStale);
         UndoCommand = new AsyncRelayCommand(() => { Undo(); return Task.CompletedTask; }, () => CanEdit && _session?.CanUndo == true);
         RedoCommand = new AsyncRelayCommand(() => { Redo(); return Task.CompletedTask; }, () => CanEdit && _session?.CanRedo == true);
         AddCanvasCommand = new AsyncRelayCommand(() => { AddCanvas(); return Task.CompletedTask; }, () => CanEdit &&
@@ -91,6 +95,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ZoomInCommand = new AsyncRelayCommand(() => { Zoom = Math.Min(16, Zoom * 1.25); return Task.CompletedTask; });
         ZoomOutCommand = new AsyncRelayCommand(() => { Zoom = Math.Max(.1, Zoom / 1.25); return Task.CompletedTask; });
         ToggleGeometryDetailsCommand = new AsyncRelayCommand(() => { ShowGeometryDetails = !ShowGeometryDetails; return Task.CompletedTask; });
+        AlignHorizontalCommand = new AsyncRelayCommand(() => { AlignSelected(true, false); return Task.CompletedTask; },
+            () => CanEdit && CurrentSurface is not null);
+        AlignVerticalCommand = new AsyncRelayCommand(() => { AlignSelected(false, true); return Task.CompletedTask; },
+            () => CanEdit && CurrentSurface is not null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -107,6 +115,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public ICommand SaveCommand { get; }
     public ICommand ApplyCommand { get; }
     public ICommand DisableCommand { get; }
+    public ICommand ReconcileCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand RedoCommand { get; }
     public ICommand AddCanvasCommand { get; }
@@ -119,23 +128,41 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
     public ICommand ToggleGeometryDetailsCommand { get; }
+    public ICommand AlignHorizontalCommand { get; }
+    public ICommand AlignVerticalCommand { get; }
 
     public string Status { get => _status; private set => Set(ref _status, value); }
     public string ResultDetail { get => _resultDetail; private set => Set(ref _resultDetail, value); }
     public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) RaiseCommandState(); } }
     public bool IsDirty => _session?.IsDirty == true;
+    public string ValidationActionLabel => IsDirty ? "VALIDATE DRAFT" : "VALIDATE SAVED";
     public bool HasSavedConflict => _savedConflict;
     public bool SaveOutcomeUnconfirmed => _saveOutcomeUnknown;
     public bool ApplyOutcomeUnconfirmed => _applyOutcomeUnknown;
     public bool IsDraftValidated => IsDirty && _validatedDraftRevision == _session?.Draft.EditRevision;
     public bool IsActiveMappingConfirmed => !_owner.IsStale && _owner.IsConnected && !_awaitingBoundary &&
-        _evidence?.ActivationState == "ACTIVE" && _evidence.ActiveRenderRevision == _session?.Saved.EditRevision;
+        !_applyOutcomeUnknown && _session is not null &&
+        _evidence?.ActivationState == "ACTIVE" &&
+        _evidence.ActiveRenderRevision == _session.Saved.EditRevision &&
+        ObservedTargetMatchesSavedProgram;
+
+    private bool ObservedTargetMatchesSavedProgram => _session is { } session &&
+        _evidence is { TargetId: { Length: > 0 }, TargetWidth: > 0, TargetHeight: > 0 } observed &&
+        session.Saved.Bindings.Any(binding => binding.Enabled &&
+            Targets.Any(choice => choice.Target.RoleId == "program" &&
+                choice.Target.ProviderId == binding.ProviderId &&
+                choice.Target.TargetId == binding.TargetId &&
+                choice.Target.ProfileId == binding.ProfileId &&
+                choice.Target.TargetId == observed.TargetId &&
+                choice.Target.Width == observed.TargetWidth &&
+                choice.Target.Height == observed.TargetHeight));
     public string WorkflowStage => _savedConflict ? "CONFLICT · REVIEW AUTHORITY" :
         _saveOutcomeUnknown ? "SAVE UNKNOWN · RECONCILE" :
         _applyOutcomeUnknown ? "APPLY UNKNOWN · RECONCILE" :
         IsDirty ? (IsDraftValidated ? "DRAFT VALIDATED · SAVE REQUIRED" : "DRAFT · VALIDATE REQUIRED") :
         _awaitingBoundary ? "APPLY ACCEPTED · RUNTIME CONFIRMATION PENDING" :
         IsActiveMappingConfirmed ? "RUNTIME CONFIRMED · ACTIVE MAPPING" :
+        _evidence?.ActivationState == "ACTIVE" ? "RUNTIME ACTIVE REPORTED · TARGET OR REVISION UNVERIFIED" :
         _session is null ? "NO SAVED CANVAS" :
         _validatedSavedRevision == _session.Saved.EditRevision ? "SAVED VALIDATED · READY TO APPLY" :
         "SAVED · VALIDATE BEFORE APPLY";
@@ -157,7 +184,30 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ? $"CONTROL-AUTHORIZED {target.RoleId?.ToUpperInvariant() ?? "OUTPUT"} · {target.ProviderId} · {target.TargetId} · " +
           $"{target.Width}×{target.Height} · {target.ProfileId} · PHYSICAL SCAN-OUT UNVERIFIED"
         : "NO CONTROL-AUTHORIZED OUTPUT TARGET · DO NOT APPLY";
-    public string ActivationState => _evidence?.ActivationState ?? "UNVERIFIED";
+    public string ActivationState => _evidence is null ? "UNVERIFIED" :
+        _evidence.ActivationState == "ACTIVE" && !IsActiveMappingConfirmed
+            ? "ACTIVE REPORTED · UNVERIFIED MATCH" : _evidence.ActivationState;
+    public string SavedTargetEvidence
+    {
+        get
+        {
+            var binding = _session?.Saved.Bindings.FirstOrDefault(b => b.Enabled);
+            if (binding is null) return "SAVED BINDING · NONE · NO ACTIVE TARGET IMPLIED";
+            var authorised = Targets.FirstOrDefault(t => t.Target.ProviderId == binding.ProviderId &&
+                t.Target.TargetId == binding.TargetId && t.Target.ProfileId == binding.ProfileId);
+            var declaredSize = authorised is null ? "NO CURRENT AUTHORIZED SIZE" :
+                $"{authorised.Target.Width}×{authorised.Target.Height}";
+            return $"SAVED TARGET · {binding.ProviderId} / {binding.TargetId} · " +
+                $"DECLARED PROFILE {binding.ProfileId} · {declaredSize} · PHYSICAL UNVERIFIED";
+        }
+    }
+    public string ObservedTargetEvidence => _evidence is not { } observation
+        ? "RUNTIME TARGET · UNVERIFIED · NO CURRENT OBSERVATION"
+        : $"RUNTIME {observation.ActivationState} · TARGET {observation.TargetId ?? "UNVERIFIED"} · " +
+          $"{(observation.TargetWidth > 0 && observation.TargetHeight > 0 ? $"{observation.TargetWidth}×{observation.TargetHeight}" : "SIZE UNVERIFIED")} · " +
+          $"RENDER SEQ {observation.LastRenderedSequence?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED"} · " +
+          (IsActiveMappingConfirmed ? "EXACT SAVED REVISION / TARGET MATCH" :
+              "NOT VERIFIED AS CURRENT AUTHORIZED TARGET");
     public string ActivationFailure => _evidence?.FailureCode ?? "—";
     public string RuntimeOutputTarget => _evidence?.TargetId ?? "UNVERIFIED";
     public string RuntimeOutputSize => _evidence is { TargetWidth: > 0, TargetHeight: > 0 } evidence
@@ -204,6 +254,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(CanvasWidth));
             OnPropertyChanged(nameof(CanvasHeight));
             OnPropertyChanged(nameof(VisibleSurfaces));
+            OnPropertyChanged(nameof(SelectedGeometryEvidence));
+            OnPropertyChanged(nameof(PointerCoordinates));
             RaiseCommandState();
         }
     }
@@ -218,6 +270,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             OnPropertyChanged(nameof(SelectedSurfaceId));
             OnPropertyChanged(nameof(IsSurfaceEnabled));
             OnPropertyChanged(nameof(SelectedBlendCurve));
+            OnPropertyChanged(nameof(SelectedGeometryEvidence));
             RaiseCommandState();
         }
     }
@@ -260,6 +313,43 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public double PanY { get => _panY; private set => Set(ref _panY, value); }
     public bool SnapEnabled { get => _snapEnabled; set => Set(ref _snapEnabled, value); }
     public bool ShowGuides { get => _showGuides; set => Set(ref _showGuides, value); }
+    public bool ShowSafeAreas { get => _showSafeAreas; set => Set(ref _showSafeAreas, value); }
+
+    // Stage pixels and physical target pixels are different coordinate systems.
+    // Neither pointer inspection nor local alignment sends a Control mutation.
+    public string PointerCoordinates => _pointerPosition is not { } p || CanvasWidth <= 0 || CanvasHeight <= 0
+        ? "POINTER · hover the stage for logical / normalized destination coordinates"
+        : $"POINTER · X {p.X.ToString("0.0", CultureInfo.InvariantCulture)} px · " +
+          $"Y {p.Y.ToString("0.0", CultureInfo.InvariantCulture)} px · " +
+          $"U {(p.X / CanvasWidth).ToString("0.0000", CultureInfo.InvariantCulture)} · " +
+          $"V {(p.Y / CanvasHeight).ToString("0.0000", CultureInfo.InvariantCulture)}" +
+          (p.X < 0 || p.X > CanvasWidth || p.Y < 0 || p.Y > CanvasHeight ? " · OFF-CANVAS" : "");
+
+    public string SelectedGeometryEvidence
+    {
+        get
+        {
+            if (CurrentSurface is not { } surface || CanvasWidth <= 0 || CanvasHeight <= 0)
+                return "NO SELECTED SURFACE · destination coordinates unavailable";
+            var q = surface.Destination;
+            var centerX = (q.TopLeft.X + q.TopRight.X + q.BottomRight.X + q.BottomLeft.X) / 4;
+            var centerY = (q.TopLeft.Y + q.TopRight.Y + q.BottomRight.Y + q.BottomLeft.Y) / 4;
+            return $"DESTINATION CENTER · X {centerX.ToString("0.##", CultureInfo.InvariantCulture)} px / " +
+                $"Y {centerY.ToString("0.##", CultureInfo.InvariantCulture)} px · " +
+                $"U {(centerX / CanvasWidth).ToString("0.0000", CultureInfo.InvariantCulture)} / " +
+                $"V {(centerY / CanvasHeight).ToString("0.0000", CultureInfo.InvariantCulture)} · " +
+                "normalized to LOGICAL CANVAS, not crop or device";
+        }
+    }
+
+    public void SetPointerPosition(OutputCanvasPoint? position)
+    {
+        if (position is { } p && (!double.IsFinite(p.X) || !double.IsFinite(p.Y)))
+            position = null;
+        if (_pointerPosition == position) return;
+        _pointerPosition = position;
+        OnPropertyChanged(nameof(PointerCoordinates));
+    }
     public bool ShowGeometryDetails { get => _showGeometryDetails; set => Set(ref _showGeometryDetails, value); }
     public string? SelectedSurfaceIssue => Issues.FirstOrDefault(issue =>
         SelectedSurfaceId is { } id && issue.Path.Contains(id.ToString(), StringComparison.OrdinalIgnoreCase))?.Message;
@@ -437,7 +527,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     public async Task ApplyAsync()
     {
         if (!CanSubmit || _gateway is null || _session is null || IsDirty || _savedConflict ||
-            _applyOutcomeUnknown || _awaitingBoundary ||
+            IsActiveMappingConfirmed || _applyOutcomeUnknown || _awaitingBoundary ||
             _validatedSavedRevision != _session.Saved.EditRevision) return;
         IsBusy = true;
         try
@@ -449,6 +539,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
             _applyOutcomeUnknown = false;
             _unknownDisable = false;
+            _uncertainSavedRevision = null;
             _requestedRevision = _awaitingBoundary ? _session.Saved.EditRevision : null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary
@@ -461,6 +552,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             // revision through the existing health refresh; suppress retries.
             _applyOutcomeUnknown = true;
             _unknownDisable = false;
+            _uncertainSavedRevision = _session.Saved.EditRevision;
             _awaitingBoundary = true;
             _requestedRevision = _session.Saved.EditRevision;
             _nextObservationAt = DateTimeOffset.MinValue;
@@ -484,6 +576,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             _awaitingBoundary = result.ActivationState == "PENDING_BOUNDARY";
             _applyOutcomeUnknown = false;
             _unknownDisable = false;
+            _uncertainSavedRevision = null;
             _requestedRevision = null;
             _nextObservationAt = DateTimeOffset.MinValue;
             Status = _awaitingBoundary ? "Disable requested; the active Program route remains until Runtime confirms the next boundary."
@@ -494,6 +587,7 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             // A missing response must not turn into an automatic second disable.
             _applyOutcomeUnknown = true;
             _unknownDisable = true;
+            _uncertainSavedRevision = _session.Saved.EditRevision;
             _awaitingBoundary = true;
             _requestedRevision = null;
             _nextObservationAt = DateTimeOffset.MinValue;
@@ -515,11 +609,13 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
             SetEvidence(evidence);
             if (_applyOutcomeUnknown)
             {
-                // UNMAPPED or a different active revision may predate an uncertain
-                // APPLY. Keep the request fenced until the desired revision is seen.
-                Status = $"Runtime reports {evidence.ActivationState}, but the previous " +
+                // No observation alone can causally prove a lost activation reply.
+                // Stop passive probing after a plausible terminal state; require
+                // an explicit read-only reconcile of both saved and Runtime owners.
+                if (ObservedIntendedTerminal(evidence)) _awaitingBoundary = false;
+                Status = $"Runtime reports {evidence.ActivationState}; uncertain " +
                     (_unknownDisable ? "DISABLE" : "APPLY") +
-                    " outcome remains unconfirmed. Do not retry; inspect Runtime authority.";
+                    " remains UNKNOWN. Request explicit read-only RECONCILE; never retry implicitly.";
             }
             else if (evidence.ActivationState != "PENDING_BOUNDARY")
             {
@@ -543,21 +639,63 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         finally { _observing = false; RaiseAll(); }
     }
 
+    private bool ObservedIntendedTerminal(OutputCanvasActivationResult observed) =>
+        _uncertainSavedRevision is { } expected && _session?.Saved.EditRevision == expected &&
+        (_unknownDisable
+            ? observed.ActivationState == "UNMAPPED" && observed.ActiveRenderRevision is null
+            : _requestedRevision == expected && observed.ActivationState == "ACTIVE" &&
+              observed.ActiveRenderRevision == expected && ObservedTargetMatchesSavedProgram);
+
+    /// <summary>
+    /// Explicit read-only reconciliation after an uncertain activation result.
+    /// Passive/potentially stale observations never unlock another mutation.
+    /// </summary>
+    public async Task ReconcileAsync()
+    {
+        if (_gateway is null || _busy || _disposed || !_applyOutcomeUnknown ||
+            _session is null || !_owner.IsConnected || _owner.IsStale) return;
+        IsBusy = true;
+        try
+        {
+            var current = await _gateway.GetAsync();
+            if (_disposed) return;
+            if (current.Saved.ConfigurationId != _session.Saved.ConfigurationId ||
+                current.SavedRevision != _session.Saved.EditRevision ||
+                current.Saved.EditRevision != current.SavedRevision ||
+                _uncertainSavedRevision != current.SavedRevision)
+            {
+                _savedConflict = true;
+                Status = "RECONCILE BLOCKED · saved revision changed. Preserve local intent and explicitly reload.";
+                return;
+            }
+            RebuildTargets(current.AvailableTargets); // Fresh admission, not a cached selector.
+            var observed = await _gateway.EvidenceAsync();
+            if (_disposed) return;
+            SetEvidence(observed);
+            if (!ObservedIntendedTerminal(observed))
+            {
+                Status = "RECONCILE UNCONFIRMED · current Runtime state does not verify the requested outcome.";
+                return;
+            }
+            _applyOutcomeUnknown = false;
+            _unknownDisable = false;
+            _uncertainSavedRevision = null;
+            _awaitingBoundary = false;
+            _requestedRevision = null;
+            Status = observed.ActivationState == "ACTIVE"
+                ? "RECONCILED · exact saved mapping revision and Program target currently confirmed."
+                : "RECONCILED · Runtime currently reports unmapped Program output.";
+        }
+        catch (Exception ex) when (RemoteFailure(ex))
+        {
+            Status = "RECONCILE UNAVAILABLE · activation remains UNKNOWN: " + ex.Message;
+        }
+        finally { IsBusy = false; RaiseAll(); PublishEvidence(); }
+    }
+
     private void SetEvidence(OutputCanvasActivationResult evidence)
     {
         _evidence = evidence;
-        // Only terminal evidence for the intended result can reconcile an
-        // ambiguous reply. A previous UNMAPPED/ACTIVE snapshot is insufficient.
-        if (_applyOutcomeUnknown && (_unknownDisable
-            ? evidence.ActivationState == "UNMAPPED" && evidence.ActiveRenderRevision is null
-            : _requestedRevision is { } revision &&
-              evidence.ActivationState == "ACTIVE" && evidence.ActiveRenderRevision == revision))
-        {
-            _applyOutcomeUnknown = false;
-            _unknownDisable = false;
-            _awaitingBoundary = false;
-            _requestedRevision = null;
-        }
         PublishEvidence();
     }
 
@@ -565,7 +703,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     {
         foreach (var name in new[] { nameof(ActiveRevision), nameof(PendingRevision),
             nameof(ActivationState), nameof(ActivationFailure), nameof(RuntimeOutputTarget),
-            nameof(RuntimeOutputSize), nameof(AppliedSource), nameof(RenderedSequence) })
+            nameof(RuntimeOutputSize), nameof(AppliedSource), nameof(RenderedSequence),
+            nameof(SavedTargetEvidence), nameof(ObservedTargetEvidence) })
             OnPropertyChanged(name);
         RaiseCommandState();
         OnPropertyChanged(nameof(WorkflowStage));
@@ -632,6 +771,8 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         OnPropertyChanged(nameof(VisibleSurfaces));
         OnPropertyChanged(nameof(CanvasWidth));
         OnPropertyChanged(nameof(CanvasHeight));
+        OnPropertyChanged(nameof(PointerCoordinates));
+        OnPropertyChanged(nameof(SelectedGeometryEvidence));
         LoadFields();
         SelectInput();
         RaiseCommandState();
@@ -752,9 +893,20 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
         ChangeSurface(s => s with { Destination = quad }, "Canvas geometry committed as local draft only.");
     }
 
+    public void AlignSelected(bool horizontal, bool vertical)
+    {
+        if (!CanEdit || CurrentSurface is not { } surface || SelectedCanvas is not { } canvas ||
+            (!horizontal && !vertical)) return;
+        var q = surface.Destination;
+        var centerX = (q.TopLeft.X + q.TopRight.X + q.BottomRight.X + q.BottomLeft.X) / 4;
+        var centerY = (q.TopLeft.Y + q.TopRight.Y + q.BottomRight.Y + q.BottomLeft.Y) / 4;
+        NudgeSelected(horizontal ? canvas.Width / 2d - centerX : 0,
+            vertical ? canvas.Height / 2d - centerY : 0);
+    }
+
     public void NudgeSelected(double x, double y)
     {
-        if (CurrentSurface is not { } s) return;
+        if (!CanEdit || CurrentSurface is not { } s) return;
         var q = s.Destination;
         OutputCanvasPoint Move(OutputCanvasPoint p) => new(p.X+x,p.Y+y);
         CommitSurfaceQuad(s.SurfaceId, new(Move(q.TopLeft),Move(q.TopRight),
@@ -871,12 +1023,14 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
 
     private void RaiseAll()
     {
-        foreach (var name in new[] { nameof(IsDirty), nameof(CanEdit), nameof(CanSubmit),
+        foreach (var name in new[] { nameof(IsDirty), nameof(ValidationActionLabel), nameof(CanEdit), nameof(CanSubmit),
             nameof(HasSavedConflict), nameof(SaveOutcomeUnconfirmed), nameof(ApplyOutcomeUnconfirmed),
             nameof(IsDraftValidated), nameof(IsActiveMappingConfirmed), nameof(WorkflowStage),
             nameof(SavedRevision), nameof(DraftRevision),
             nameof(DraftSafety), nameof(EditingSafety), nameof(SelectedSurfaceIssue),
-            nameof(VisibleSurfaces), nameof(SelectedBlendCurve), nameof(IsSurfaceEnabled) })
+            nameof(VisibleSurfaces), nameof(SelectedBlendCurve), nameof(IsSurfaceEnabled),
+            nameof(SelectedGeometryEvidence), nameof(PointerCoordinates),
+            nameof(SavedTargetEvidence), nameof(ObservedTargetEvidence), nameof(ActivationState) })
             OnPropertyChanged(name);
         RaiseCommandState();
     }
@@ -884,9 +1038,10 @@ public sealed class OutputCanvasEditorViewModel : INotifyPropertyChanged, IDispo
     private void RaiseCommandState()
     {
         foreach (var command in new[] { ReloadCommand,DiscardAndReloadCommand,ValidateCommand,
-            SaveCommand,ApplyCommand,DisableCommand,UndoCommand,RedoCommand,
+            SaveCommand,ApplyCommand,DisableCommand,ReconcileCommand,UndoCommand,RedoCommand,
             AddCanvasCommand,RemoveCanvasCommand,AddSurfaceCommand,RemoveSurfaceCommand,
-            BindProgramCommand,ApplyNumericCommand,ToggleGeometryDetailsCommand })
+            BindProgramCommand,ApplyNumericCommand,ToggleGeometryDetailsCommand,
+            AlignHorizontalCommand,AlignVerticalCommand })
             if (command is AsyncRelayCommand relay) relay.RaiseCanExecuteChanged();
     }
 

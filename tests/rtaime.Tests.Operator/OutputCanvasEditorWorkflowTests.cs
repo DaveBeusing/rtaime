@@ -179,6 +179,10 @@ public sealed class OutputCanvasEditorWorkflowTests
         gateway.ReturnStaleUnmapped = false;
         gateway.ConfirmMapping();
         await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.True(editor.ReconcileCommand.CanExecute(null));
+        await editor.ReconcileAsync(); // Explicit read-only Control + Runtime observation.
         Assert.False(editor.ApplyOutcomeUnconfirmed);
         Assert.True(editor.IsActiveMappingConfirmed);
         Assert.Equal(1, gateway.Applies);
@@ -213,6 +217,9 @@ public sealed class OutputCanvasEditorWorkflowTests
         gateway.ReturnStaleActive = false;
         gateway.ConfirmDisable();
         await editor.ObserveBoundaryAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        await editor.ReconcileAsync();
         Assert.False(editor.ApplyOutcomeUnconfirmed);
         Assert.Equal("UNMAPPED", editor.ActivationState);
         Assert.Equal("UNVERIFIED", editor.ActiveRevision);
@@ -234,6 +241,99 @@ public sealed class OutputCanvasEditorWorkflowTests
         Assert.False(editor.SaveCommand.CanExecute(null));
         Assert.Equal(0, gateway.Saves);
         Assert.Equal(0, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Canvas_alignment_and_pointer_normalization_are_local_draft_only()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        Assert.True(editor.AlignHorizontalCommand.CanExecute(null));
+        editor.SetPointerPosition(new(480, 270));
+        Assert.Contains("U 0.2500", editor.PointerCoordinates);
+        Assert.Contains("V 0.2500", editor.PointerCoordinates);
+        editor.SetPointerPosition(new(-5, 1100));
+        Assert.Contains("OFF-CANVAS", editor.PointerCoordinates);
+        editor.NudgeSelected(37, 52);
+        Assert.True(editor.IsDirty);
+        editor.AlignHorizontalCommand.Execute(null);
+        editor.AlignVerticalCommand.Execute(null);
+        var q = Assert.Single(editor.VisibleSurfaces).Destination;
+        Assert.Equal(960, (q.TopLeft.X + q.TopRight.X + q.BottomRight.X + q.BottomLeft.X) / 4, 7);
+        Assert.Equal(540, (q.TopLeft.Y + q.TopRight.Y + q.BottomRight.Y + q.BottomLeft.Y) / 4, 7);
+        Assert.Contains("U 0.5000", editor.SelectedGeometryEvidence);
+        Assert.Contains("V 0.5000", editor.SelectedGeometryEvidence);
+        Assert.Equal(0, gateway.Saves);
+        Assert.Equal(0, gateway.Applies);
+        editor.UndoCommand.Execute(null);
+        var undone = Assert.Single(editor.VisibleSurfaces).Destination;
+        Assert.Equal(592, (undone.TopLeft.Y + undone.TopRight.Y + undone.BottomRight.Y + undone.BottomLeft.Y) / 4, 7);
+        editor.SetPointerPosition(null);
+        Assert.Contains("hover", editor.PointerCoordinates);
+    }
+
+    [Fact]
+    public async Task Active_revision_without_matching_authorized_target_is_not_live_evidence()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway();
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.ConfirmMappingAtTarget("unexpected", 1920, 1080);
+        await editor.ObserveBoundaryAsync();
+        Assert.Equal("0", editor.ActiveRevision); // Raw reported revision is not target proof.
+        Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.Contains("UNVERIFIED", editor.ActivationState);
+        Assert.Contains("NOT VERIFIED", editor.ObservedTargetEvidence);
+        Assert.Contains("production", editor.SavedTargetEvidence);
+        Assert.True(editor.ApplyCommand.CanExecute(null)); // Revalidation still precedes any explicit new Apply.
+        Assert.Equal(1, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Reconciliation_never_overrides_a_changed_saved_revision()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway { DropApplyResponse = true };
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.AdvanceStored();
+        await editor.ReloadAsync(); // Fresh saved read cannot rewrite the original uncertain intent.
+        gateway.ConfirmMapping();
+        await editor.ReconcileAsync();
+        Assert.True(editor.HasSavedConflict);
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.CanEdit);
+        Assert.False(editor.ApplyCommand.CanExecute(null));
+        Assert.Equal(1, gateway.Applies);
+    }
+
+    [Fact]
+    public async Task Reconciliation_rechecks_authorized_targets_instead_of_older_selector_entries()
+    {
+        await using var owner = ReadyOwner();
+        var gateway = new ReferenceGateway { DropApplyResponse = true };
+        using var editor = new OutputCanvasEditorViewModel(owner, gateway);
+        await editor.ReloadAsync();
+        await editor.ValidateAsync();
+        await editor.ApplyAsync();
+        gateway.ConfirmMapping();
+        gateway.HideAuthorizedTarget = true;
+        await editor.ReconcileAsync();
+        Assert.True(editor.ApplyOutcomeUnconfirmed);
+        Assert.False(editor.IsActiveMappingConfirmed);
+        Assert.Equal(1, gateway.Applies);
+        gateway.HideAuthorizedTarget = false;
+        await editor.ReconcileAsync();
+        Assert.False(editor.ApplyOutcomeUnconfirmed);
+        Assert.True(editor.IsActiveMappingConfirmed);
+        Assert.Equal(1, gateway.Applies);
     }
 
     [Fact]
@@ -289,12 +389,14 @@ public sealed class OutputCanvasEditorWorkflowTests
         public bool DropDisableResponse { get; set; }
         public bool ReturnStaleUnmapped { get; set; }
         public bool ReturnStaleActive { get; set; }
+        public bool HideAuthorizedTarget { get; set; }
 
         public ValueTask<OutputCanvasSnapshot> GetAsync(CancellationToken token = default) =>
             ValueTask.FromResult(new OutputCanvasSnapshot(Stored,Stored.EditRevision,
                 _runtime.ActiveRenderRevision,
-                [new("reference","virtual-program","production",1920,1080,
-                    "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
+                HideAuthorizedTarget ? Array.Empty<OutputCanvasTarget>() :
+                    [new("reference","virtual-program","production",1920,1080,
+                        "Existing Runtime virtual sink",RoleId: "program")],_runtime.ActivationState));
 
         public ValueTask<OutputCanvasActivationResult> EvidenceAsync(CancellationToken token = default) =>
             ValueTask.FromResult(ReturnStaleUnmapped ? new OutputCanvasActivationResult(null,null,"UNMAPPED") :
@@ -338,9 +440,10 @@ public sealed class OutputCanvasEditorWorkflowTests
             return ValueTask.FromResult(_runtime);
         }
 
-        public void ConfirmMapping() => _runtime=new(Stored.EditRevision,null,
-            "ACTIVE",TargetId:"virtual-program",TargetWidth:1920,TargetHeight:1080,
-            LastRenderedSequence:8);
+        public void ConfirmMapping() => ConfirmMappingAtTarget("virtual-program", 1920, 1080);
+        public void ConfirmMappingAtTarget(string targetId, int width, int height) =>
+            _runtime = new(Stored.EditRevision, null, "ACTIVE", TargetId: targetId,
+                TargetWidth: width, TargetHeight: height, LastRenderedSequence: 8);
         public void ConfirmDisable() => _runtime=new(null,null,"UNMAPPED");
         public void AdvanceStored() => Stored=Stored with { EditRevision=Stored.EditRevision+1 };
     }
