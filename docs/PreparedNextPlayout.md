@@ -127,6 +127,18 @@ preparation deadline, fingerprint, revision, off-Program source and
 single-use ticket before GO. Neither ordinary Library readiness nor
 an observed Preview thumbnail can skip those conditions.
 
+## Sequence loop is not rundown autoplay
+
+The independent native multitrack Sequence source may now schedule
+bounded repreroll of an already authorized, opted-in sequence loop.
+It never creates a Rundown `NEXT_READY` ticket, seeks an ordinary
+resident A/B Media Deck, runs an unapproved follow cue or retries an
+ambiguous Program Take. The existing Program frame cadence continues
+while a native sequence source is unavailable. Prepared-next and
+single-use GO identities remain independent of sequence LoopPass,
+source and runtime execution generation. Long-running gapless
+cross-system or hardware playout remains UNVERIFIED.
+
 ## Operator and compatibility
 
 Rundown NOW/NEXT separates the confirmed candidate from the locally selected item.
