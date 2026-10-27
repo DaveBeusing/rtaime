@@ -10,6 +10,40 @@ The Inspector follows the existing media, timeline, layer and processing-node se
 
 The Inspector now shows the original stable target beside confirmed and local values. Apply, Discard and Keep are reachable after selection changes. Reconnect, revision conflict and missing targets retain intent for review instead of silently applying or substituting another source.
 
+## Pinned selection, breadcrumbs and live authority
+
+The same shared Inspector now exposes **PIN / UNPIN** in each selected-context
+header. This pins the existing `EditingSelectionIdentity` only: the active
+production identity plus the source, timeline/cue or graph-node identifier.
+It does not copy live Runtime state, create another property model, persist
+a pin in the Show, or pin a Preview frame. The compact breadcrumb identifies
+the current media, timeline, graph or no-selection context and latest observed
+Control revision. It carries the full selection key as an accessible tooltip.
+
+While pinned, requests to replace the Inspector context with another media
+item, timeline clip/cue or compositing node are ignored; the originating
+workspace continues to own its ordinary selection and actions. A bounded
+counter explicitly reports ignored Inspector selection requests. A repeated
+observation for the **same** key still updates its live status, so pinning
+does not freeze confirmed evidence. UNPIN restores normal follow-selection
+behavior. Multi-object selection is intentionally not pinnable and retains
+the existing read-only common/MIXED comparison and explicit sequential
+per-target review. Pins never imply a cross-object transaction.
+
+Changing the production identity invalidates the pinned Inspector context:
+the pin visibly becomes **STALE**, and typed Apply is gated until UNPIN.
+The Inspector's legacy direct-action panels are disabled while the pin is
+stale, without disabling the header's UNPIN action. A clip pin is also
+not eligible to edit another currently loaded Media Deck asset, and a
+pinned Graphics item detects replacement of its content identity.
+Likewise, a mixer-selected audio input that no longer matches the Inspector's
+original source **and stream** disables direct gain Apply. This guard also
+applies without an active pin, preventing a previously selected audio draft
+from being written to another mixer's current target. Dirty typed edits
+remain in the existing bounded Inspector review/history and can only be
+restored or applied using the established stable-target checks. The
+PIN control never sends a production command or silently replays intent.
+
 ## Shared numeric fields
 
 The 23 numeric Inspector fields share immutable property definitions for identity, label, range, unit, default, step and integral precision. Definitions describe an editor; existing view models retain draft values, and Control remains authoritative.

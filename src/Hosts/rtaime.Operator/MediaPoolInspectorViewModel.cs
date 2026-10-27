@@ -376,6 +376,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		get => _selectedItem;
 		set
 		{
+                if (ReferenceEquals(_selectedItem, value)) return;
+            if (ShouldSuppressInspectorSelection(value?.Key)) return;
 			if (!Set(ref _selectedItem, value))
 				return;
 			if (_hoverKey is not null && value?.Key != _hoverKey)
@@ -393,7 +395,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public bool HasItems => FilteredItems.Count > 0;
 	public bool HasSelection => _compositingNode is not null || SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
 	public bool HasAuthoritativeCompositingSelection => SelectedCompositingLayer is { Kind: 2 or 3 };
-	public bool CanEditSelection => HasSelection && !HasMultipleSelection && (_compositingNode is null || CanEditAuthoritativeCompositingSelection());
+	public bool CanEditSelection => HasSelection && !HasMultipleSelection && InspectorPinMatchesCurrent &&
+        (_compositingNode is null || CanEditAuthoritativeCompositingSelection());
 	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
 	public bool HasEffects => InspectorEffectProperties.Count > 0;
 	public bool SupportsTransformRotation => HasAuthoritativeCompositingSelection;
@@ -659,6 +662,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			.GroupBy(item => item.Key, StringComparer.Ordinal)
 			.Select(group => group.First())
 			.ToArray();
+        if (ShouldSuppressInspectorSelection(selected.Length == 1 ? selected[0].Key : "multi")) return;
 
 		SelectedItems.Clear();
 		foreach (var item in selected)
@@ -679,6 +683,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionCount));
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
+        NotifyInspectorPinState();
 		OnPropertyChanged(nameof(CanEditSelection));
         if (SelectedItem is { } visited) LibraryItemVisited?.Invoke(visited);
 	}
@@ -866,6 +871,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			.GroupBy(item => item.Id, StringComparer.Ordinal)
 			.Select(group => group.First())
 			.ToArray();
+        if (ShouldSuppressInspectorSelection(selected.Length == 1 ?
+            "item:" + _mediaDeck.AssetId + ":" + selected[0].Id : "timeline:multi")) return;
 
 		_compositingNode = null;
 		_timelineItems.Clear();
@@ -881,6 +888,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public void SelectTimelineCue(TimelineCueViewModel cue)
 	{
 		ArgumentNullException.ThrowIfNull(cue);
+        if (ShouldSuppressInspectorSelection("cue:" + _mediaDeck.AssetId + ":" + cue.Id)) return;
 		_compositingNode = null;
 		_timelineCue = cue;
 		_timelineItem = null;
@@ -892,6 +900,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	public void SelectCompositingNode(CompositingGraphNodeProjection node)
 	{
 		ArgumentNullException.ThrowIfNull(node);
+        if (ShouldSuppressInspectorSelection(node.Id)) return;
 		RetainCompositingIntent();
         var changed = _compositingNode?.Id != node.Id;
         _compositingReviewCount = 0;
@@ -921,6 +930,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	{
 		if (_timelineItem is null && _timelineItems.Count == 0 && _timelineCue is null)
 			return;
+        if (ShouldSuppressInspectorSelection("none")) return;
 		_timelineItem = null;
 		_timelineItems.Clear();
 		_timelineCue = null;
@@ -1465,6 +1475,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
 		OnPropertyChanged(nameof(HasAuthoritativeCompositingSelection));
+        NotifyInspectorPinState();
 		OnPropertyChanged(nameof(SupportsTransformRotation));
 		OnPropertyChanged(nameof(SupportsTransformAnchor));
 		OnPropertyChanged(nameof(SupportsTransformCrop));
@@ -1543,7 +1554,8 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 	}
 
 	private bool CanEditAuthoritativeCompositingSelection() =>
-		HasAuthoritativeCompositingSelection && InspectorInputsValid && _operator.CanManageCompositingLayers();
+		HasAuthoritativeCompositingSelection && InspectorInputsValid && InspectorPinMatchesCurrent &&
+        _operator.CanManageCompositingLayers();
 
 	private async Task ApplySelectedCompositingTransformAsync()
 	{

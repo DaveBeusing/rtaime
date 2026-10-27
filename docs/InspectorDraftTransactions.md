@@ -9,6 +9,33 @@ The shared numeric fields retain exact typed values, current-culture parsing, de
 
 A continuous focus edit or pointer gesture is one local undo transaction. Escape cancels that interaction; it does not reverse confirmed output. Ctrl+Z/Ctrl+Y in text editors retain native text undo, Inspector focus outside text uses its own draft history, and timeline/rundown histories stay separate. Typed paste and Reset each form one local transaction. History is bounded to 32 snapshots per context and eight Inspector contexts.
 
+## Selection pin and review separation
+
+PIN in the shared Inspector header locks only the presentation's current
+production/source/graph/cue selection identity. Selection events from other
+workspaces do not replace that Inspector context while pinned; repeated
+observations for the same identity continue to update confirmed values.
+PIN and UNPIN never call Client mutation methods or change active Program.
+
+The retained draft review cards remain a separate, already-existing
+eight-context in-memory recovery mechanism. A pin is **not** a draft copy,
+an automatic rebase, a substitute for target revision validation, or a
+way to bypass supported command permissions. A new production identity
+makes the pin stale and blocks typed editing until explicit UNPIN.
+The legacy direct-edit panels also become disabled for stale pins, for
+mismatched loaded clips, replaced graphics and another mixer-selected
+audio stream; the PIN/UNPIN header itself remains interactive. Direct
+gain Apply additionally verifies the mixer's current source and stream
+match the Inspector target even when PIN is off. Multi-selection
+cannot be pinned; its explicit sequential reviewed operations continue
+to report per-object confirmation, rejection and stop without atomic claims.
+
+The shared Inspector header presents context breadcrumb, selection pin
+button and explicit pin status in the review surface. The existing 23
+numeric controls still show units, use localized finite-range parsing
+and keep all pointer/keyboard adjustments local until explicit Apply.
+PIN has no persistent schema or protocol effect.
+
 ## Dirty selection and recovery
 
 Selection can move immediately while the previous typed intent stays visible in LOCAL DRAFTS. The card identifies the original target and compares CONFIRMED with LOCAL; it never labels the draft as a Runtime value.
