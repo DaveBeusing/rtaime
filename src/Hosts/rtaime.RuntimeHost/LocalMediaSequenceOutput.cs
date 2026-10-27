@@ -109,6 +109,46 @@ public sealed partial class LocalMediaDeckRuntimeService
         internal ulong LateComposeBoundaries { get; set; }
     }
 
+
+    /// <summary>Source-bound in-process qualification only; not receiver or physical I/O evidence.</summary>
+    internal sealed record SequenceOutputPerformanceEvidence(
+        string State, ulong PublishedBoundaries, ulong FailedBoundaries,
+        ulong CompletedLoopPrerolls, TimeSpan LastLoopPreroll,
+        TimeSpan LastBoundaryDuration, TimeSpan MaximumBoundaryDuration,
+        ulong LateBoundaries, TimeSpan FrameBudget,
+        int NativeOwners, int QueuedDecoderFrames, int MaximumDecoderQueueFrames,
+        ulong DecoderStarvations, int ReservedOwners, long KnownManagedBytes,
+        int QuarantinedOwners, long? NativeBytes, long? GpuBytes, string StoragePressure);
+
+    internal SequenceOutputPerformanceEvidence? GetSequenceOutputPerformance(
+        SequencePreparationReference reference)
+    {
+        reference.Validate();
+        lock (_sequenceOutputGate)
+        {
+            var session = _sequenceOutput;
+            if (session is null || session.Reference != reference) return null;
+            LocalMediaDecodeSnapshot[] native;
+            lock (_sequenceGate)
+                native = _sequenceOwners is { } owners && owners.SequenceId == reference.SequenceId
+                    ? owners.Owners.Select(owner => owner.Decode.Snapshot).ToArray()
+                    : [];
+            var capacity = _ledger.Snapshot;
+            return new SequenceOutputPerformanceEvidence(session.OutputState,
+                session.PublishedBoundaries, session.FailedBoundaries,
+                session.LoopReprerollCount, session.LastLoopReprerollDuration,
+                session.LastComposeDuration, session.MaximumComposeDuration,
+                session.LateComposeBoundaries,
+                TimeSpan.FromSeconds((double)session.Runtime.Format.FrameRate.Denominator /
+                    session.Runtime.Format.FrameRate.Numerator),
+                native.Length, native.Sum(snapshot => snapshot.QueuedFrames),
+                native.Sum(snapshot => snapshot.Capacity),
+                native.Aggregate(0UL, (sum, snapshot) => checked(sum + snapshot.Starvations)),
+                capacity.ReservedOwners, capacity.KnownManagedBytes, capacity.QuarantinedOwners,
+                capacity.NativeBytes, capacity.GpuBytes, capacity.StoragePressure);
+        }
+    }
+
     /// <summary>
     /// Activate a native sequence only on the currently committed Preview
     /// source, never on Program. A separate Control permission/transaction is
@@ -215,9 +255,9 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             var count = 0;
             var ownerCount = 0;
+            var composeStarted = Stopwatch.GetTimestamp();
             try
             {
-                var composeStarted = Stopwatch.GetTimestamp();
                 if (!TrySelectBoundSequenceBoundary(session.Reference, programSlot,
                     session.Clips, session.ClipRequests, session.OwnerRequests,
                     session.Frames, session.Indices,
@@ -289,15 +329,6 @@ public sealed partial class LocalMediaDeckRuntimeService
                 using (frame)
                     runtime.PresentSequenceInput(session.SourceId, frame, slice);
 
-                session.LastComposeDuration = Stopwatch.GetElapsedTime(composeStarted);
-                if (session.LastComposeDuration > session.MaximumComposeDuration)
-                    session.MaximumComposeDuration = session.LastComposeDuration;
-                var budget = TimeSpan.FromSeconds(
-                    (double)runtime.Format.FrameRate.Denominator /
-                    runtime.Format.FrameRate.Numerator);
-                if (session.LastComposeDuration > budget)
-                    session.LateComposeBoundaries++;
-
                 session.LastPublishedSlot = programSlot;
                 session.PublishedBoundaries++;
                 // A previously observed physical ProgramBoundaryResult
@@ -323,6 +354,16 @@ public sealed partial class LocalMediaDeckRuntimeService
             }
             finally
             {
+                // Measure the complete admitted native selection + GPU/PCM
+                // composition + Runtime ingress, including failed boundaries.
+                session.LastComposeDuration = Stopwatch.GetElapsedTime(composeStarted);
+                if (session.LastComposeDuration > session.MaximumComposeDuration)
+                    session.MaximumComposeDuration = session.LastComposeDuration;
+                var budget = TimeSpan.FromSeconds(
+                    (double)runtime.Format.FrameRate.Denominator /
+                    runtime.Format.FrameRate.Numerator);
+                if (session.LastComposeDuration > budget)
+                    session.LateComposeBoundaries++;
                 // Lease cleanup never depends on successful Program submission.
                 for (var index = 0; index < session.Frames.Length; index++)
                 {
