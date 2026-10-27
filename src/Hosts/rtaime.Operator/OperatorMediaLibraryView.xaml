@@ -172,6 +172,7 @@
             <Border Grid.Row="1" x:Name="MediaSelectedDetails" Visibility="Collapsed"
                 Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
                 BorderThickness="1" Margin="0,3,0,0" Padding="8,5">
+                <controls:RtaimeScrollViewer MaxHeight="184" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Text="INSPECT · CATALOGUE METADATA (NOT OUTPUT EVIDENCE)"
                         Style="{StaticResource OperatorSectionTitle}" />
@@ -186,7 +187,40 @@
                         ToolTip="{Binding Context.MediaPool.SelectedItem.LocalPath, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
                     <TextBlock Text="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                         Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                </StackPanel>
+                                    <WrapPanel Margin="0,5,0,0">
+                        <controls:RtaimeButton Content="REVIEW FRAMES" IsCompact="True"
+                            Command="{Binding Context.MediaPool.ReviewFramesCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Review source-bound media filmstrip"
+                            ToolTip="Up to five independent decoded source frames. No deck seek or Preview/Program route change." />
+                        <controls:RtaimeButton Content="CLEAR REVIEW" IsCompact="True" Margin="4,0,0,0"
+                            Command="{Binding Context.MediaPool.CancelFrameReviewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Cancel and clear Library frame review" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.FrameReviewStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media frame review status" />
+                    <controls:RtaimeScrollViewer MaxHeight="100" HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0">
+                        <ItemsControl ItemsSource="{Binding Context.MediaPool.FrameReviewSamples, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Selected media source frame strip">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="120" Margin="0,0,4,0">
+                                        <Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+                                            <Image Source="{Binding Image}" Width="112" Height="63" Stretch="Uniform" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource OperatorFontSizeCompact}" />
+                                        <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource OperatorFontSizeCompact}" ToolTip="{Binding Status}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </controls:RtaimeScrollViewer>
+</StackPanel>
+                </controls:RtaimeScrollViewer>
             </Border>
         </Grid>
 
