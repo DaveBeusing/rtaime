@@ -501,8 +501,8 @@
 						SnapsToDevicePixels="True">
 						<Grid>
 							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="*" />
 								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
 							<ContentPresenter
 								ContentSource="Header"
@@ -512,6 +512,7 @@
 								Grid.Column="1"
 								ContentSource="Content"
 								Margin="8,0,0,0"
+								HorizontalAlignment="Stretch"
 								VerticalAlignment="Center" />
 						</Grid>
 					</Border>
@@ -520,7 +521,23 @@
 		</Setter>
 	</Style>
 
-	<Style TargetType="{x:Type controls:RtaimeStatusBadge}">
+		<!-- Dock tabs use the custom button template, including high-contrast and keyboard focus. -->
+    <Style x:Key="OperatorDockTab" TargetType="{x:Type controls:RtaimeButton}"
+        BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,2" />
+        <Setter Property="Foreground" Value="{DynamicResource OperatorSecondaryTextBrush}" />
+        <Setter Property="Padding" Value="9,5" />
+    </Style>
+    <Style x:Key="OperatorDockTabSelected" TargetType="{x:Type controls:RtaimeButton}"
+        BasedOn="{StaticResource OperatorDockTab}">
+        <Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+    </Style>
+
+    <Style TargetType="{x:Type controls:RtaimeStatusBadge}">
 		<Setter Property="MinHeight" Value="24" />
 		<Setter Property="MaxHeight" Value="26" />
 		<Setter Property="Background" Value="{DynamicResource OperatorAlternateSurfaceBrush}" />
