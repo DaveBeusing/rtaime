@@ -476,7 +476,7 @@ internal sealed class ExternalControlSecurityPolicy
 			if (identity is not null)
 				return Accept(identity, clientName, clientVersion, "client-certificate");
 			// A valid but differently mapped certificate must not switch to a higher-privileged token identity.
-			Deny(declaredClientId);
+			return Deny(declaredClientId);
 		}
 
 		if (!_options.RequireMutualTls && !string.IsNullOrWhiteSpace(declaredClientId))
@@ -493,11 +493,10 @@ internal sealed class ExternalControlSecurityPolicy
 			}
 		}
 
-		Deny(declaredClientId);
-		throw new InvalidOperationException("Authentication denial must not return.");
+		return Deny(declaredClientId);
 	}
 
-	private void Deny(string? declaredClientId)
+	private ExternalControlPrincipal Deny(string? declaredClientId)
 	{
 		_audit.Add(new ExternalControlAuditRecord(DateTimeOffset.UtcNow, "authentication", declaredClientId ?? "unknown", "none", "connect", "denied", "Client authentication failed."));
 		throw new RpcException(new Status(StatusCode.Unauthenticated, "External control authentication failed."));
