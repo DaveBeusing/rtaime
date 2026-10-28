@@ -172,6 +172,94 @@ public sealed class NmosDiscoveryAndConnectionTests
 	}
 
 	[Fact]
+	public async Task Paged_query_follows_bounded_older_cursor_until_complete_without_partial_publication()
+	{
+		var resources = new NmosVirtualResources(Virtual());
+		var nodePages = 0;
+		using var http = new HttpClient(new FakeHttpHandler(request =>
+		{
+			var kind = request.RequestUri!.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+			if (kind == "nodes")
+			{
+				var current = nodePages++ == 0;
+				var result = Json(current ? new[] { resources.Node } : Array.Empty<JsonElement>());
+				result.Headers.TryAddWithoutValidation("X-Paging-Limit", "1");
+				result.Headers.TryAddWithoutValidation("X-Paging-Since", current ? "0:20" : "0:0");
+				result.Headers.TryAddWithoutValidation("X-Paging-Until", current ? "0:30" : "0:20");
+				return result;
+			}
+			return Json(kind switch
+			{
+				"devices" => new[] { resources.Device },
+				"senders" => new[] { resources.Sender },
+				"receivers" => new[] { resources.Receiver },
+				_ => Array.Empty<JsonElement>()
+			});
+		}));
+		var snapshot = await new NmosRegistryDiscoveryClient(http, Observer()).ReadAsync(CancellationToken.None);
+		Assert.Equal(4, snapshot.Resources.Count);
+		Assert.Equal(2, nodePages);
+		Assert.True(snapshot.IsFresh);
+		Assert.Single(snapshot.OfKind(NmosResourceKind.Node));
+	}
+
+	[Fact]
+	public async Task Repeated_paging_cursor_and_ambiguous_paging_links_fail_closed()
+	{
+		var resources = new NmosVirtualResources(Virtual());
+		foreach (var invalid in new[] { "repeated", "missing-metadata" })
+		{
+			var pages = 0;
+			using var http = new HttpClient(new FakeHttpHandler(request =>
+			{
+				var kind = request.RequestUri!.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+				if (kind != "nodes") return Json(Array.Empty<JsonElement>());
+				var response = Json(new[] { resources.Node });
+				if (invalid == "missing-metadata")
+				{
+					response.Headers.TryAddWithoutValidation("Link",
+						"<https://registry.example/x-nmos/query/v1.3/nodes/?paging.until=0:20>; rel=\"prev\"");
+					return response;
+				}
+				pages++;
+				response.Headers.TryAddWithoutValidation("X-Paging-Limit", "1");
+				response.Headers.TryAddWithoutValidation("X-Paging-Since", "0:20");
+				response.Headers.TryAddWithoutValidation("X-Paging-Until", "0:30");
+				return response;
+			}));
+			await Assert.ThrowsAsync<InvalidDataException>(() =>
+				new NmosRegistryDiscoveryClient(http, Observer()).ReadAsync(CancellationToken.None));
+		}
+	}
+
+	[Fact]
+	public async Task Unpaged_registry_uses_one_bounded_fallback_after_501()
+	{
+		var resources = new NmosVirtualResources(Virtual());
+		var rejectedPaging = 0;
+		using var http = new HttpClient(new FakeHttpHandler(request =>
+		{
+			if (request.RequestUri!.Query.Contains("paging.", StringComparison.Ordinal))
+			{
+				rejectedPaging++;
+				return new HttpResponseMessage(HttpStatusCode.NotImplemented);
+			}
+			var kind = request.RequestUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+			return Json(kind switch
+			{
+				"nodes" => new[] { resources.Node },
+				"devices" => new[] { resources.Device },
+				"senders" => new[] { resources.Sender },
+				"receivers" => new[] { resources.Receiver },
+				_ => Array.Empty<JsonElement>()
+			});
+		}));
+		var snapshot = await new NmosRegistryDiscoveryClient(http, Observer()).ReadAsync(CancellationToken.None);
+		Assert.Equal(4, snapshot.Resources.Count);
+		Assert.Equal(6, rejectedPaging);
+	}
+
+	[Fact]
 	public async Task Registry_non_success_and_oversized_collection_fail_without_partial_topology()
 	{
 		using var missing = new HttpClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
