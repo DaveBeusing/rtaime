@@ -200,7 +200,13 @@ foreach ($suite in @($matrix.suites)) {
         $expectedSuiteCount += [int]$parsed.counts[[string]$testClass]
     }
     Require ([int]$entry.testCount -eq $expectedSuiteCount -and $expectedSuiteCount -ge [int]$suite.minimumTests) "Suite count does not match executed TRX cases."
-    Require ([string]$entry.testDateUtc -eq $parsed.date) "Suite date differs from the recorded TRX."
+    # ConvertFrom-Json may materialize ISO-8601 values as DateTime objects.
+    # Compare the instant, not a culture-dependent string representation.
+    $recordedDate = [DateTimeOffset]$entry.testDateUtc
+    $parsedInstant = [DateTimeOffset]::Parse([string]$parsed.date,
+        [Globalization.CultureInfo]::InvariantCulture)
+    Require ($recordedDate.ToUniversalTime().Ticks -eq
+        $parsedInstant.ToUniversalTime().Ticks) "Suite date differs from the recorded TRX."
     $testDate = [DateTimeOffset]::MinValue
     Require ([DateTimeOffset]::TryParse([string]$parsed.date, [ref]$testDate) -and
         $testDate -le $reportDate.AddMinutes(2) -and
