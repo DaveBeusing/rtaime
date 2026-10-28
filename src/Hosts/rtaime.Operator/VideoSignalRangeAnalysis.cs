@@ -40,7 +40,8 @@ public enum VideoRangeSampleStatus
 {
 	Unavailable,
 	Unverified,
-	SampledWithinTolerance,
+	SampledWithinNominal,
+	SampledOutsideNominal,
 	SampledOutOfGamut,
 	SampledOutsideTotal
 }
@@ -151,7 +152,8 @@ public sealed record VideoSignalRangeSnapshot(
 		var union = Channel(counters, 12);
 		var status = union.OutsideTotal > 0 ? VideoRangeSampleStatus.SampledOutsideTotal :
 			(long)union.OutsidePreferred * 100 > samples ? VideoRangeSampleStatus.SampledOutOfGamut :
-			VideoRangeSampleStatus.SampledWithinTolerance;
+			union.OutsideNominal > 0 ? VideoRangeSampleStatus.SampledOutsideNominal :
+			VideoRangeSampleStatus.SampledWithinNominal;
 		return new(profile, sequence, stride, samples, status,
 			Channel(counters, 0), Channel(counters, 3), Channel(counters, 6), Channel(counters, 9), union,
 			"Measured from source code samples before display transform; 1% threshold applies only provisionally to measured active-image samples.");
