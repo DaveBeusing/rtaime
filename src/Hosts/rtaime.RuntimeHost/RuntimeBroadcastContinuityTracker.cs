@@ -100,10 +100,18 @@ internal sealed class RuntimeBroadcastContinuityTracker
 	{
 		if (!_roles.TryGetValue(roleId, out var role)) return;
 		if (role.LastCompleteVideo is { } previous && sequence < previous)
-			throw new InvalidDataException("Output completion went backwards without a new ControlHost-committed plan.");
+		{
+			ObserveFault(roleId, "runtime.continuity.video_regression",
+				"Software frame sequence moved backwards without a source-bound committed reanchor.");
+			return;
+		}
 		if (role.LastCompleteAudio is { } previousAudio &&
 			audioSamplePosition is { } currentAudio && currentAudio < previousAudio)
-			throw new InvalidDataException("Output audio sample position went backwards without committed recovery.");
+		{
+			ObserveFault(roleId, "runtime.continuity.audio_regression",
+				"Software audio sample position moved backwards without a qualified discontinuity.");
+			return;
+		}
 		role.LastCompleteVideo = sequence;
 		role.LastCompleteAudio = audioSamplePosition;
 		role.Phase = role.Phase switch
