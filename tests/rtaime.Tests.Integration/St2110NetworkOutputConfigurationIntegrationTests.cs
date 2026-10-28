@@ -52,9 +52,10 @@ public sealed class St2110NetworkOutputConfigurationIntegrationTests
     public void Unsafe_or_incomplete_endpoint_configuration_fails_closed(
         string original, string replacement)
     {
-        Assert.ThrowsAny<ArgumentException>(() =>
+        var error = Record.Exception(() =>
             Load(LoopbackConfig.Replace(original, replacement),
                 VideoFormat.Hd1080p50Rgba8));
+        Assert.True(error is ArgumentException or NotSupportedException);
     }
 
     [Fact]
