@@ -5,6 +5,7 @@ using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.St2110;
+using rtaime.Runtime;
 
 namespace rtaime.Tests.Unit;
 
@@ -128,7 +129,7 @@ public sealed class St2110SoftwareTransportTests
         var result = pcm.Packetize(bytes, 0);
         Assert.Equal(expectedPackets, result.Count);
         Assert.Equal(expectedSamples % 48, pcm.BufferedSampleFrames);
-        Assert.Equal(expectedSamples, pcm.NextExpectedSample);
+        Assert.Equal((long)expectedSamples, pcm.NextExpectedSample);
         var receiver = new St2110PcmRtpReceiver(222);
         Assert.True(receiver.TryReceive(result[0], TimeSpan.Zero, out var first));
         Assert.Equal(uint.MaxValue, first!.RtpTimestamp);
@@ -176,6 +177,42 @@ public sealed class St2110SoftwareTransportTests
         monitor.Observe(uint.MaxValue, 90000, TimeSpan.FromMilliseconds(3), 90000);
         Assert.Equal(1ul, monitor.DuplicatesOrLate);
         Assert.True(double.IsFinite(monitor.JitterTicks));
+    }
+
+    [Theory]
+    [InlineData(25, 1, 1000000ul)]
+    [InlineData(50, 1, 524287ul)]
+    [InlineData(60000, 1001, 987654ul)]
+    public void Reference_RTP_sender_reuses_Runtime_rational_clock_mapping(
+        long numerator, long denominator, ulong frameIndex)
+    {
+        var rate = new FrameRate(numerator, denominator);
+        var profile = new St2110SoftwareProfile(8, 2, rate);
+        Assert.Equal(RationalMediaClockMap.VideoRtpTimestamp(rate, frameIndex, uint.MaxValue),
+            St2110TransportAdmission.VideoTimestamp(profile, frameIndex, uint.MaxValue));
+        Assert.Equal(RationalMediaClockMap.AudioRtpTimestamp(rate, frameIndex, uint.MaxValue),
+            St2110TransportAdmission.AudioTimestamp(profile, frameIndex, uint.MaxValue));
+    }
+
+    [Fact]
+    public void Measured_sender_burst_windows_bound_video_and_audio_independently()
+    {
+        var monitor = new St2110SoftwareTrafficMonitor();
+        monitor.Observe(true, 1200, TimeSpan.Zero);
+        monitor.Observe(true, 1200, TimeSpan.FromTicks(1000));
+        monitor.Observe(false, 300, TimeSpan.Zero);
+        monitor.Observe(true, 1200, TimeSpan.FromMilliseconds(2));
+        var snapshot = monitor.Snapshot;
+        Assert.Equal(3ul, snapshot.VideoDatagrams);
+        Assert.Equal(1ul, snapshot.AudioDatagrams);
+        Assert.Equal(2400, snapshot.PeakVideoBytesInOneMillisecond);
+        Assert.Equal(2, snapshot.PeakVideoPacketsInOneMillisecond);
+        Assert.Equal(300, snapshot.PeakAudioBytesInOneMillisecond);
+        Assert.Equal(3, snapshot.ObservationWindowCount);
+        Assert.Throws<InvalidOperationException>(() =>
+            monitor.Observe(true, 1200, TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            monitor.Observe(true, 1400, TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
