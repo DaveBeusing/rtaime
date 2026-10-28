@@ -46,7 +46,7 @@ public sealed record St2110SoftwareProfile
         if (format != VideoFormat.Hd1080p50Rgba8 &&
             format != VideoFormat.Hd1080p59_94Rgba8)
             throw new NotSupportedException("Runtime ST 2110 reference requires a supported progressive 1080p RGBA8 format.");
-        return new St2110SoftwareProfile(format.Width, format.Height, format.FrameRate);
+        return new St2110SoftwareProfile(checked((int)format.Width), checked((int)format.Height), format.FrameRate);
     }
 }
 
@@ -103,9 +103,9 @@ public static class St2110TransportAdmission
     }
 
     public static uint VideoTimestamp(St2110SoftwareProfile profile, ulong frameIndex, uint epoch = 0) =>
-        unchecked(epoch + checked((uint)((Int128)frameIndex *
+        unchecked(epoch + (uint)((Int128)frameIndex *
             profile.FrameRate.Denominator * St2110SoftwareProfile.VideoRtpClockRate /
-            profile.FrameRate.Numerator)));
+            profile.FrameRate.Numerator));
 
     public static uint AudioTimestamp(St2110SoftwareProfile profile, ulong frameIndex, uint epoch = 0) =>
         unchecked(epoch + checked((uint)((Int128)frameIndex *
