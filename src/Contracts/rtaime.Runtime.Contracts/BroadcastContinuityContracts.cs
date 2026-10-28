@@ -64,6 +64,8 @@ public sealed record BroadcastFailurePolicy(
 /// </summary>
 public sealed record BroadcastContinuitySnapshot(
 	string RoleId,
+	string SourceId,
+	string SinkId,
 	BroadcastFailureAction ConfiguredAction,
 	BroadcastContinuityPhase Phase,
 	string AuthorityStateId,
@@ -82,7 +84,8 @@ public sealed record BroadcastContinuitySnapshot(
 
 	public void Validate()
 	{
-		if (RoleId is not ("program" or "aux") || !Enum.IsDefined(ConfiguredAction) ||
+		if (RoleId is not ("program" or "aux") || !Guid.TryParse(SourceId, out var sourceId) || sourceId == Guid.Empty ||
+			!Guid.TryParse(SinkId, out var sinkId) || sinkId == Guid.Empty || !Enum.IsDefined(ConfiguredAction) ||
 			!Enum.IsDefined(Phase) || !Guid.TryParse(AuthorityStateId, out var id) || id == Guid.Empty ||
 			RuntimeExecutionRevision == 0)
 			throw new InvalidDataException("Continuity observation has invalid role, authority identity or execution revision.");
