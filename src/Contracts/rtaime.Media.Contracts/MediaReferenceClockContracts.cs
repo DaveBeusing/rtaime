@@ -60,7 +60,10 @@ public sealed record MediaReferenceClockObservation(
 			throw new ArgumentException("Invalid or unbounded media reference clock observation.");
 
 		if (Source == MediaReferenceClockSource.HardwarePtp && (PtpDomain is null || GrandmasterId is null) ||
-			Source != MediaReferenceClockSource.HardwarePtp && (PtpDomain is not null || GrandmasterId is not null) ||
+			Source == MediaReferenceClockSource.Virtual && Evidence == MediaReferenceEvidence.Simulated &&
+				((PtpDomain is null) != (GrandmasterId is null)) ||
+			Source is MediaReferenceClockSource.Unknown or MediaReferenceClockSource.ExternalGenlock &&
+				(PtpDomain is not null || GrandmasterId is not null) ||
 			Evidence == MediaReferenceEvidence.HardwareQualified &&
 				(Source is not (MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock) ||
 				 LastSyncAtUtc is null || OffsetNanoseconds is null || DriftPartsPerBillion is null) ||
