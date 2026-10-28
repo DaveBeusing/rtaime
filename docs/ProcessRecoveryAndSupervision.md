@@ -220,3 +220,11 @@ Recovery does not resend the unconfirmed command or infer its outcome from the o
 Host/IPC faults use Windows Named Pipes and real managed host composition or actual child executables. GPU faults use a managed backend facade classified as CUDA to verify lifecycle policy; they are **not** physical device-loss tests. Mixed-consumer 1080p profiles and the renderer CUT/DISSOLVE 0/1/2/4/8-layer matrix remain covered by their existing suites rather than repeated for faults where layer count is irrelevant.
 
 Physical CUDA/device removal, driver/TDR recovery, professional I/O continuity, arbitrary OS handle-count baselines and long-duration soak remain **UNVERIFIED** without exact-source approved reference-platform evidence. Explicit owned PID, endpoint, IPC-session, surface, shared-resource and readback counters are the software resource evidence; process exit is not presented as graceful drain after a crash.
+
+
+
+## Broadcast Program continuity incident ownership
+
+In addition to existing host supervision, RuntimeHost records per-role, software-only Program/Aux continuity episodes bound to the ControlHost-prepared authority revision and the actually committed Runtime execution. The last **complete** frame/audio position is observational metadata rather than reusable GPU/PCM payload. A failed Program boundary follows the existing no-duplicate-slot reset; missing input or Aux provider faults cannot perform an unauthorized Program switch. Recovery must be observed as a fresh successful boundary and remains UNVERIFIED / RECOVERED AWAITING RE-ARM until an authorized re-arm protocol exists.
+
+Runtime-local incident history is limited to 32 records and is **not** durable after process loss. ControlHost startup and snapshot reconciliation remain the source of Production truth. An Operator or IntegrationHost failure cannot acquire recovery authority. The existing Host/Health Center notification acknowledgement is not a production repair or re-arm command. Hardware No-Black/automatic Failover and ST 2022-7 remain UNVERIFIED. Details: [Broadcast Fail-Safe Playout](BroadcastFailSafePlayout.md).
