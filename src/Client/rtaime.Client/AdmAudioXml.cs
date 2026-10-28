@@ -143,6 +143,34 @@ public static class AdmAudioXml
 		}
 		EnsureAcyclic(groups["audioObject"], "audioObjectIDRef", "audioComplementaryObjectIDRef");
 		EnsureAcyclic(groups["audioPackFormat"], "audioPackFormatIDRef");
+		// A syntactically valid but disconnected graph is not a complete
+		// ADM programme. Traverse only actually connected programme/content
+		// and object links; never manufacture semantic language ownership.
+		var connectedContent = new HashSet<string>(StringComparer.Ordinal);
+		var connectedObjects = new HashSet<string>(StringComparer.Ordinal);
+		void ReachObject(string objectId)
+		{
+			if (!connectedObjects.Add(objectId)) return;
+			var node = groups["audioObject"][objectId];
+			foreach (var child in DirectRefs(node, "audioObjectIDRef")
+				.Concat(DirectRefs(node, "audioComplementaryObjectIDRef")))
+				ReachObject(child);
+		}
+		foreach (var programme in groups["audioProgramme"].Values)
+		{
+			var contentIds = DirectRefs(programme, "audioContentIDRef");
+			if (contentIds.Length == 0)
+				throw new InvalidDataException("ADM programme has no linked audioContent.");
+			foreach (var contentId in contentIds)
+			{
+				connectedContent.Add(contentId);
+				foreach (var objectId in DirectRefs(groups["audioContent"][contentId], "audioObjectIDRef"))
+					ReachObject(objectId);
+			}
+		}
+		if (connectedContent.Count != groups["audioContent"].Count ||
+			connectedObjects.Count != groups["audioObject"].Count)
+			throw new InvalidDataException("ADM content/object graph contains unreachable definitions.");
 
 		var assigned = bundle.Assignments.ToDictionary(x => x.AudioTrackUid, StringComparer.Ordinal);
 		if (assigned.Count > 0 &&
@@ -174,8 +202,8 @@ public static class AdmAudioXml
 				!string.Equals(explicitTrack.Language, languageLabel, StringComparison.OrdinalIgnoreCase))
 				throw new InvalidDataException("Explicit R 123 track language contradicts ADM audioContentLanguage.");
 			var objectNode = owners[0].Value;
-			var start = (string?)objectNode.Attribute("start");
-			var duration = (string?)objectNode.Attribute("duration");
+			var start = owners.Length == 1 ? (string?)objectNode.Attribute("start") : null;
+			var duration = owners.Length == 1 ? (string?)objectNode.Attribute("duration") : null;
 			var end = ValidateAndCalculateTimes(start, duration);
 			var pack = DirectRefs(objectNode, "audioPackFormatIDRef").FirstOrDefault() ??
 				DirectRefs(track, "audioPackFormatIDRef").FirstOrDefault();
@@ -265,7 +293,7 @@ public static class AdmAudioXml
 			"pcm_frontright" or "frontright" => "R",
 			"pcm_frontcentre" or "frontcentre" or "pcm_frontcenter" => "C",
 			"pcm_lowfrequencyeffects" or "lowfrequencyeffects" => "LFE",
-			"pcm_sidetleft" or "pcm_sideleft" or "pcm_leftsurround" => "Ls",
+			"pcm_sideleft" or "pcm_leftsurround" => "Ls",
 			"pcm_sideright" or "pcm_rightsurround" => "Rs",
 			_ => null
 		};
@@ -279,7 +307,7 @@ public static class AdmAudioXml
 				CultureInfo.InvariantCulture, out var begin) ||
 			!TimeSpan.TryParseExact(duration, @"hh\:mm\:ss\.fffff",
 				CultureInfo.InvariantCulture, out var length) ||
-			length <= TimeSpan.Zero || begin > TimeSpan.MaxValue - length)
+			length <= TimeSpan.Zero || begin > TimeSpan.FromHours(24) - length)
 			throw new InvalidDataException("Supported ADM object timing requires 5-digit rational-looking decimal seconds, nonnegative start and positive duration.");
 		return (begin + length).ToString(@"hh\:mm\:ss\.fffff", CultureInfo.InvariantCulture);
 	}
