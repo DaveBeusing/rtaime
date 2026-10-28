@@ -469,11 +469,19 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			if (observation.Condition == OperationalObservationCondition.Stale &&
 				observation.LastGoodProjectedUtc is null)
 				continue;
+			// A broken log sink must not suppress Operator acknowledgement.
 			try
 			{
 				_logAlarmTransition?.Invoke(observation);
-				if (_notifications is null)
-					continue;
+			}
+			catch (Exception)
+			{
+				// Host logging is observational and best-effort.
+			}
+			if (_notifications is null)
+				continue;
+			try
+			{
 				var resolved = observation.Condition == OperationalObservationCondition.Clear;
 				var stale = observation.Condition == OperationalObservationCondition.Stale;
 				_notifications.Publish(new OperatorNotification(
@@ -482,9 +490,9 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 						observation.Severity == OperationalObservationSeverity.Error
 							? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
 					resolved ? OperatorNotificationCondition.Resolved : OperatorNotificationCondition.Active,
-					$"{observation.DisplayName}: {(resolved ? "resolved" : stale ? "evidence unavailable" : observation.Severity.ToString())}",
+					DiagnosticRedactor.RedactText($"{observation.DisplayName}: {(resolved ? "resolved" : stale ? "evidence unavailable" : observation.Severity.ToString())}"),
 					DiagnosticRedactor.RedactText(observation.Detail),
-					observation.DisplayName,
+					DiagnosticRedactor.RedactText(observation.DisplayName),
 					resolved ? "Review the recovered evidence before resuming operations." : DiagnosticRedactor.RedactText(observation.RecommendedAction),
 					observation.ProgramImpact.ToString(),
 					Persistent: !resolved,
@@ -494,7 +502,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			}
 			catch (Exception)
 			{
-				// Diagnostic/logging failure must not become an Operator or Program failure.
+				// A notification subscriber failure must not become a production failure.
 			}
 		}
 	}
