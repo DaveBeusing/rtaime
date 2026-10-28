@@ -379,8 +379,7 @@ public sealed class MediaAssetCatalogService
 				return _persisted.Snapshot;
 			assets[index] = asset with
 			{
-				InterchangeMetadata = MediaInterchangeJson.Import(nextJson, asset.FingerprintSha256),
-				UpdatedAt = new UtcTimestamp(DateTimeOffset.UtcNow)
+				InterchangeMetadata = MediaInterchangeJson.Import(nextJson, asset.FingerprintSha256)
 			};
 			await SaveAsync(assets, cancellationToken).ConfigureAwait(false);
 			return _persisted!.Snapshot;
