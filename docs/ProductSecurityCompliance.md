@@ -73,9 +73,9 @@ Important fail-closed rules:
 
 ## Release evidence integration
 
-Product Security & Compliance establishes policy and schema first. The release pipeline must subsequently bind a product-security assessment to the exact source commit and product identity before the `SECURITY` release-evidence domain may move from `UNVERIFIED` to `PASS`.
+Product Security & Compliance establishes the policy and schema. The existing product-security assessment binding now validates the exact source commit, build identity and security review evidence before the `SECURITY` release-evidence domain can move from `UNVERIFIED` to `PASS`.
 
-Until that binding exists, the current release-evidence generator must continue to report product security as `UNVERIFIED`.
+Without an externally substantiated, exact-source `PASS` assessment, the release-evidence generator must continue to report product security as `UNVERIFIED`. Repository Required Gates or the EBU R 143 control-matrix verifier alone do not promote the release security domain.
 
 ## Support period
 
