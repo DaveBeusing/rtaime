@@ -25,6 +25,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 	private string _text = "";
 	private string _detail = "TEXT-ONLY PREVIEW · no Runtime/Program overlay; native ANC output UNVERIFIED.";
 	private string _fontEvidence = "FONT/GLYPH QUALIFICATION UNAVAILABLE";
+	private string _layoutEvidence = "REGION/OVERLAP EVIDENCE UNAVAILABLE";
+	private IReadOnlyList<TimedTextIssue> _layoutIssues = Array.Empty<TimedTextIssue>();
 	private string _language = "—";
 	private bool _disposed;
 	private IReadOnlyList<TimedTextIssue> _fontIssues = Array.Empty<TimedTextIssue>();
@@ -36,6 +38,7 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 	public string PreviewText => _text;
 	public string Detail => _detail;
 	public string FontEvidence => _fontEvidence;
+	public string LayoutEvidence => _layoutEvidence;
 	public string Language => _language;
 	public bool IsLocalPreviewEnabled
 	{
@@ -87,6 +90,10 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 			var parsed = TimedTextInterchangeCodec.Parse(xml, profile);
 			if (_contextEpoch != expectedContextEpoch) return false;
 			_store.Import(_context, parsed);
+			_layoutIssues = parsed.InspectLayout();
+			_layoutEvidence = _layoutIssues.Count == 0
+				? "REGION/OVERLAP · no local review warnings; Program geometry UNVERIFIED"
+				: string.Join(" · ", _layoutIssues.Take(3).Select(issue => issue.Detail));
 			_fontIssues = ValidateFontsAndGlyphs(parsed);
 			_fontEvidence = _fontIssues.Count == 0
 				? "FONT/GLYPHS · installed typefaces and text glyph maps checked locally; Program/monitor calibration UNVERIFIED"
@@ -96,6 +103,7 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 					(text, next) => text.Contains(next, StringComparison.OrdinalIgnoreCase) ? text : text + ", " + next);
 			Changed(nameof(ImportedDocument));
 			Changed(nameof(FontEvidence));
+			Changed(nameof(LayoutEvidence));
 			Changed(nameof(Language));
 			Refresh();
 			return true;
@@ -105,6 +113,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 		{
 			_store.Clear();
 			_fontIssues = Array.Empty<TimedTextIssue>();
+			_layoutIssues = Array.Empty<TimedTextIssue>();
+			_layoutEvidence = "REGION/OVERLAP UNVERIFIED";
 			_text = "";
 			_status = "REJECTED · Timed Text XML import failed profile/security/layout validation.";
 			_detail = exception.Message.Length <= 200 ? exception.Message : exception.Message[..200];
@@ -122,6 +132,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 		_status = "UNAVAILABLE · Timed Text import not completed.";
 		_detail = reason.Length > 160 ? reason[..160] : reason;
 		_text = "";
+		_layoutIssues = Array.Empty<TimedTextIssue>();
+		_layoutEvidence = "REGION/OVERLAP UNVERIFIED";
 		_fontEvidence = "FONT/GLYPHS UNVERIFIED";
 		_language = "—";
 		NotifyAll();
@@ -152,6 +164,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 		_context = context;
 		_contextEpoch++;
 		_fontIssues = Array.Empty<TimedTextIssue>();
+		_layoutIssues = Array.Empty<TimedTextIssue>();
+		_layoutEvidence = "REGION/OVERLAP UNVERIFIED";
 		_fontEvidence = "FONT/GLYPHS UNVERIFIED";
 		_language = "—";
 		NotifyAll();
@@ -181,7 +195,7 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 			};
 			_detail = preview.Detail + (_store.Current is null ? "" :
 				$" · {_store.Current.Profile} · {_store.Current.Cues.Count} cues · " +
-				$"{_store.Current.InspectLayout().Count} region/timing warning(s)");
+				$"{_layoutIssues.Count} region/timing warning(s)");
 		}
 		NotifyAll();
 	}
@@ -232,6 +246,7 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 		Changed(nameof(PreviewText));
 		Changed(nameof(Detail));
 		Changed(nameof(FontEvidence));
+		Changed(nameof(LayoutEvidence));
 		Changed(nameof(Language));
 		Changed(nameof(ImportedDocument));
 	}
