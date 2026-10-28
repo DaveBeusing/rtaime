@@ -164,8 +164,27 @@ public sealed record VideoSignalRangeSnapshot(
 					? VideoRangeSampleStatus.Unavailable : VideoRangeSampleStatus.Unverified,
 				default, default, default, default, default, reason);
 
-		if (counters.Length != VideoSignalRangeAccumulator.CounterCount || samples <= 0)
+		if (counters.Length != VideoSignalRangeAccumulator.CounterCount || samples <= 0 ||
+			samples > profile.ActiveImage.PixelCount)
 			return Unavailable(profile, sequence, stride, "UNAVAILABLE: a matching raw-code sample/count buffer is required.");
+
+		for (var component = 0; component < VideoSignalRangeAccumulator.CounterCount; component += 3)
+		{
+			var nominal = counters[component];
+			var preferred = counters[component + 1];
+			var total = counters[component + 2];
+			if (total > preferred || preferred > nominal || nominal > samples)
+				return Unavailable(profile, sequence, stride, "UNAVAILABLE: inconsistent component excursion counts.");
+		}
+		for (var threshold = 0; threshold < 3; threshold++)
+		{
+			var unionCount = counters[12 + threshold];
+			for (var component = 0; component < 12; component += 3)
+			{
+				if (counters[component + threshold] > unionCount)
+					return Unavailable(profile, sequence, stride, "UNAVAILABLE: component counts exceed their pixel union.");
+			}
+		}
 
 		static VideoRangeChannelCounts Channel(ReadOnlySpan<uint> values, int offset) => new(
 			checked((int)values[offset]), checked((int)values[offset + 1]),
