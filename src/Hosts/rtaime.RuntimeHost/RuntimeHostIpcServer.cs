@@ -1035,7 +1035,8 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
 		(snapshot.CompositingLayers ?? Array.Empty<RuntimeHostCompositingLayerSnapshot>()).Select(ToWire).ToArray(),
-		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
+		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction),
+		snapshot.ClockReference);
 
 	private static WireReplaySnapshot ToWire(ReplayBufferSnapshot snapshot) => new(
 		(int)snapshot.CaptureState,
@@ -1751,7 +1752,8 @@ public sealed partial class RuntimeHostIpcServer : IAsyncDisposable
 		WireProductionCgTextSnapshot? ProductionCgText = null,
 		WireOutputRole[]? OutputRoles = null,
 		WireCompositingLayer[]? CompositingLayers = null,
-		WireAudioProductionSnapshot? AudioProduction = null);
+		WireAudioProductionSnapshot? AudioProduction = null,
+		MediaReferenceClockObservation? ClockReference = null);
 
 	private sealed class BoundedRequestCache
 	{
