@@ -11,4 +11,9 @@
 		<PackageReference Include="Grpc.Tools" PrivateAssets="all" />
 		<Protobuf Include="..\..\..\schemas\external-control\v1\external_control.proto" GrpcServices="Client" Link="Protos\external_control.proto" />
 	</ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Include="..\..\..\schemas\quality-control\ebu\2026-04\qc.xsd" LogicalName="rtaime.Qc202604.qc.xsd" />
+		<EmbeddedResource Include="..\..\..\schemas\quality-control\ebu\2026-04\TimingExtensionMediaPlaybackEditUnits.xsd" LogicalName="rtaime.Qc202604.timing.xsd" />
+		<EmbeddedResource Include="..\..\..\schemas\quality-control\ebu\2026-04\qc-catalogue-api-schema.xsd" LogicalName="rtaime.Qc202604.catalogue.xsd" />
+	</ItemGroup>
 </Project>
