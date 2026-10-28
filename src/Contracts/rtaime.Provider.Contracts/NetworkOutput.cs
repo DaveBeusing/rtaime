@@ -28,7 +28,8 @@ public static class NetworkOutputCapabilityKinds
 public enum NetworkOutputProtocolFamily
 {
 	Srt = 1,
-	Ndi = 2
+	Ndi = 2,
+	St2110 = 3
 }
 
 public enum NetworkOutputConnectionMode
@@ -41,13 +42,15 @@ public enum NetworkOutputConnectionMode
 public enum NetworkOutputVideoCodec
 {
 	H264 = 1,
-	NdiHighBandwidth = 2
+	NdiHighBandwidth = 2,
+	Rfc4175Ycbcr422TenBit = 3
 }
 
 public enum NetworkOutputAudioCodec
 {
 	AacLc = 1,
-	Float32 = 2
+	Float32 = 2,
+	Pcm24 = 3
 }
 
 public enum NetworkOutputLatencyMode
@@ -154,6 +157,18 @@ public sealed record NdiNetworkOutputSettings : NetworkOutputProtocolSettings
 	public override string SafeTargetIdentity => $"ndi://{SourceName}";
 }
 
+public sealed record St2110SoftwareNetworkOutputSettings : NetworkOutputProtocolSettings
+{
+    public St2110SoftwareNetworkOutputSettings(St2110SoftwareEndpoint endpoint)
+    {
+        Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+    }
+
+    public St2110SoftwareEndpoint Endpoint { get; }
+    public override NetworkOutputProtocolFamily Protocol => NetworkOutputProtocolFamily.St2110;
+    public override string SafeTargetIdentity => Endpoint.SafeIdentity;
+}
+
 public sealed record NetworkOutputConfiguration
 {
 	public NetworkOutputConfiguration(
@@ -251,6 +266,7 @@ public sealed record NetworkOutputConfiguration
 	public int ReconnectMaximumAttempts { get; }
 	public SrtNetworkOutputSettings? SrtSettings => Settings as SrtNetworkOutputSettings;
 	public NdiNetworkOutputSettings? NdiSettings => Settings as NdiNetworkOutputSettings;
+	public St2110SoftwareNetworkOutputSettings? St2110Settings => Settings as St2110SoftwareNetworkOutputSettings;
 	public string SafeTargetIdentity => Settings.SafeTargetIdentity;
 
 	public Uri Endpoint => RequireSrt().Endpoint;
@@ -259,12 +275,14 @@ public sealed record NetworkOutputConfiguration
 	{
 		SrtNetworkOutputSettings value => value.VideoCodec,
 		NdiNetworkOutputSettings => NetworkOutputVideoCodec.NdiHighBandwidth,
+		St2110SoftwareNetworkOutputSettings => NetworkOutputVideoCodec.Rfc4175Ycbcr422TenBit,
 		_ => throw new InvalidOperationException("Unknown network-output protocol settings.")
 	};
 	public NetworkOutputAudioCodec AudioCodec => Settings switch
 	{
 		SrtNetworkOutputSettings value => value.AudioCodec,
 		NdiNetworkOutputSettings => NetworkOutputAudioCodec.Float32,
+		St2110SoftwareNetworkOutputSettings => NetworkOutputAudioCodec.Pcm24,
 		_ => throw new InvalidOperationException("Unknown network-output protocol settings.")
 	};
 	public uint VideoBitRate => SrtSettings?.VideoBitRate ?? 0;
