@@ -184,7 +184,7 @@ public sealed class MediaAssetCatalogService
 
 					var fileInfo = new FileInfo(normalized);
 					var now = new UtcTimestamp(DateTimeOffset.UtcNow);
-					assets.Add(new MediaAssetDescriptor(
+					var importedAsset = new MediaAssetDescriptor(
 						assetId,
 						MediaAssetOriginKind.LocalFile,
 						normalized,
@@ -199,7 +199,8 @@ public sealed class MediaAssetCatalogService
 						fingerprint,
 						now,
 						now,
-						MediaAssetAvailability.Online));
+						MediaAssetAvailability.Online);
+					assets.Add(importedAsset with { InterchangeMetadata = MediaInterchangeMetadata.FromProbe(importedAsset) });
 					results.Add(new MediaAssetMutationItem(
 						normalized,
 						assetId,
@@ -323,7 +324,10 @@ public sealed class MediaAssetCatalogService
 				fingerprint,
 				current.ImportedAt,
 				new UtcTimestamp(DateTimeOffset.UtcNow),
-				MediaAssetAvailability.Online);
+				MediaAssetAvailability.Online)
+			{
+				InterchangeMetadata = current.InterchangeMetadata
+			};
 			await SaveAsync(assets, cancellationToken).ConfigureAwait(false);
 			return new MediaAssetCatalogMutationResult(
 				_persisted!.Snapshot,
@@ -341,6 +345,53 @@ public sealed class MediaAssetCatalogService
 			_gate.Release();
 		}
 	}
+
+	// Catalog-revision and fingerprint-fenced metadata authoring. No source file is changed.
+	// A single existing optimistic SQLite document write commits both descriptor and projection.
+	public async ValueTask<MediaAssetCatalogSnapshot> UpsertInterchangeAsync(
+		MediaAssetId assetId,
+		ulong expectedRevision,
+		string expectedFingerprint,
+		MediaInterchangeMetadata incoming,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(incoming);
+		incoming.Validate(expectedFingerprint);
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+			if (_persisted!.Snapshot.Revision != expectedRevision)
+				throw new InvalidOperationException("Media catalogue revision changed. Reinspect before editing metadata.");
+			var assets = _persisted.Snapshot.Assets.ToList();
+			var index = assets.FindIndex(asset => asset.AssetId == assetId);
+			if (index < 0)
+				throw new InvalidOperationException("The media asset is not present in the catalogue.");
+			var asset = assets[index];
+			if (!string.Equals(asset.FingerprintSha256, expectedFingerprint, StringComparison.OrdinalIgnoreCase))
+				throw new InvalidOperationException("Media asset fingerprint changed. Metadata import was rejected.");
+			var next = asset.InterchangeMetadata is null
+				? incoming : asset.InterchangeMetadata.Merge(incoming);
+			// Validate the serialized and IPC size before changing persisted state.
+			var nextJson = MediaInterchangeJson.Export(next);
+			if (asset.InterchangeMetadata is not null &&
+				MediaInterchangeJson.Export(asset.InterchangeMetadata) == nextJson)
+				return _persisted.Snapshot;
+			assets[index] = asset with
+			{
+				InterchangeMetadata = MediaInterchangeJson.Import(nextJson, asset.FingerprintSha256)
+			};
+			await SaveAsync(assets, cancellationToken).ConfigureAwait(false);
+			return _persisted!.Snapshot;
+		}
+		finally { _gate.Release(); }
+	}
+
+	public ValueTask<MediaAssetCatalogSnapshot> ImportInterchangeJsonAsync(
+		MediaAssetId assetId, ulong expectedRevision, string expectedFingerprint,
+		string json, CancellationToken cancellationToken = default) =>
+		UpsertInterchangeAsync(assetId, expectedRevision, expectedFingerprint,
+			MediaInterchangeJson.Import(json, expectedFingerprint), cancellationToken);
 
 	public async ValueTask<MediaAssetCatalogMutationResult> RemoveAsync(
 		MediaAssetId assetId,
@@ -428,7 +479,10 @@ public sealed class MediaAssetCatalogService
 				current.FingerprintSha256,
 				current.ImportedAt,
 				new UtcTimestamp(DateTimeOffset.UtcNow),
-				availability);
+				availability)
+			{
+				InterchangeMetadata = current.InterchangeMetadata
+			};
 			changed = true;
 		}
 

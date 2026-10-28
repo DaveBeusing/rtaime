@@ -1189,6 +1189,18 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 				Add("clip.duration", "Duration", item.DurationLabel, "METADATA");
 				Add("clip.format", "Format", item.Format, "METADATA");
 				Add("clip.availability", "Availability", item.AvailabilityLabel, "COMMITTED");
+				var interchange = _catalogSnapshot.Assets.FirstOrDefault(asset =>
+					asset.AssetId.ToString() == item.ReferenceId)?.InterchangeMetadata;
+				if (interchange is not null)
+				{
+					Add("clip.interchange.profile", "Interchange profile", interchange.Format, "METADATA");
+					foreach (var field in interchange.Fields.OrderBy(field => field.Path, StringComparer.Ordinal))
+						Add("clip.interchange." + field.Path, field.Path,
+							field.Value + " · " + field.Source + " (" + field.Evidence + ")", "METADATA");
+					if (interchange.Unmapped is not null)
+						foreach (var (key, value) in interchange.Unmapped.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+							Add("clip.interchange.unmapped." + key, "UNMAPPED " + key, value, "METADATA");
+				}
 				if (string.Equals(item.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal))
 				{
 					Add("clip.source", "Source", _mediaDeck.SourceId, "COMMITTED");

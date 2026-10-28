@@ -44,6 +44,22 @@ From the repository root:
 dotnet restore rtaime.slnx
 ```
 
+## Media interchange metadata regressions
+
+The Media Library's optional EBUCore 1.10-related JSON projection has focused
+contract and persistent-catalogue regression tests, including provenance,
+DF/NDF timecode, legacy document compatibility and relink identity preservation:
+
+```powershell
+dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-build --filter FullyQualifiedName~MediaInterchangeMetadataContractTests
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter FullyQualifiedName~MediaAssetCatalogIntegrationTests
+```
+
+Use the canonical Release build first. The project documents the supported
+metadata mapping and explicit limitations in
+[Media Interchange Metadata](MediaInterchangeMetadata.md); passing these tests
+does not assert EBUCore XML/XSD interoperability or hardware qualification.
+
 ## Standard builds
 
 The canonical local developer build entry point is:

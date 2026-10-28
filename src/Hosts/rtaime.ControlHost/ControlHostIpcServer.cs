@@ -3639,7 +3639,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		asset.FingerprintSha256,
 		asset.ImportedAt.ToString(),
 		asset.UpdatedAt.ToString(),
-		(int)asset.Availability);
+		(int)asset.Availability,
+		asset.InterchangeMetadata is null ? null : MediaInterchangeJson.Export(asset.InterchangeMetadata));
 
 	private static WireMediaAssetCatalogMutationResult ToWireMutation(MediaAssetCatalogMutationResult result) => new(
 		result.Snapshot.Revision,
@@ -4264,7 +4265,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		string FingerprintSha256,
 		string ImportedAt,
 		string UpdatedAt,
-		int Availability);
+		int Availability,
+		string? InterchangeJson = null);
 	private sealed record WireMediaAssetCatalogPage(string Version, ulong Revision, int TotalCount, WireMediaAssetDescriptor[] Assets);
 	private sealed record WireMediaAssetMutationItem(string SourceLocation, string? AssetId, int Disposition, WireFailure? Failure);
 	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);

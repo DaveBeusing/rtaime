@@ -26,6 +26,25 @@ The identity is independent of current Operator selection, production source slo
 
 The catalogue stores stable `AssetId`, local-file origin, canonical source path, display name, container/codec/format metadata, duration, source file length, SHA-256 content fingerprint, import/update timestamps and availability state.
 
+## Optional interchange metadata
+
+Imported assets can include an additive, versioned, EBUCore 1.10-related
+interchange projection. The projection retains field-by-field origin, evidence
+and exact rational video frame rates while leaving stable `MediaAssetId`,
+SHA-256 identity, availability and production execution unchanged.
+Existing catalogue records without interchange metadata remain valid.
+On new imports, only actually probed technical format fields are populated;
+unknown editorial, audio channel-role, HDR, caption and timecode fields remain
+absent rather than inferred. The existing Inspector shows the projection and
+any bounded `UNMAPPED` values without granting extra decoder capability.
+
+See [Media Interchange Metadata](MediaInterchangeMetadata.md) for the exact JSON
+profile, source conflict precedence, DF/NDF semantics, supported and unmapped
+field inventory, and import/export limitations. ControlHost alone governs
+metadata changes under catalogue revision and fingerprint checks. This is
+interchange preparation, not full EBUCore XML/XSD validation or an HDR
+output-support claim.
+
 ## Ownership and persistence
 
 The catalogue reuses `SqliteManagementStore`; no second persistence stack or DAM/MAM database is introduced.
