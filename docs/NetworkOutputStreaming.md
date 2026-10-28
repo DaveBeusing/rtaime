@@ -4,7 +4,7 @@
 	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
 </p>
 
-# Network Output: SRT and NDI
+# Network Output: SRT, NDI and ST 2110 software reference
 
 ## Purpose
 
@@ -40,6 +40,25 @@ Common network-output configuration owns:
 SRT-only settings are represented by `SrtNetworkOutputSettings`. NDI-only settings are represented by `NdiNetworkOutputSettings`. A configuration whose protocol does not match its typed settings is rejected.
 
 Stable Provider Contracts contain no NDI SDK/native types and no SRT transport implementation types.
+
+## ST 2110 software-reference transport
+
+An explicit ST 2110-20/-30 RTP software loopback provider is available only
+when the Runtime network-output descriptor selects protocol st2110,
+softwareLoopback=true, a literal loopback IPv4 address, and explicit video/audio
+RTP ports and distinct SSRCs. The Runtime still owns committed Program/Aux
+content and media timing. Source samples never cross management IPC.
+
+The provider packetizes progressive RGBA8 into packed YCbCr422 10-bit RTP
+reference frames and 48-kHz stereo PCM L24 1-ms packets. The bounded loopback
+receiver provides packet-loss/reorder/jitter and frame-reassembly observations
+but is **not** an admitted production input. No real NIC, PTP, Genlock,
+multicast, ST 2110-21 shaping, external AMWA interoperability or physical
+qualification is implied. Existing SRT/NDI defaults and their evidence
+semantics are preserved. Output health shows the ST 2110 software-reference
+profile instead of fabricating SRT bitrate or latency fields.
+
+See [software profile matrix and qualification gaps](St2110SoftwareInteropQualification.md).
 
 ## SRT reference path
 

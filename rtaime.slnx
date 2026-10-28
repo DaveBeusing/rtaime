@@ -31,6 +31,7 @@
     <Project Path="src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj" />
     <Project Path="src/Providers/rtaime.Provider.Srt/rtaime.Provider.Srt.csproj" />
     <Project Path="src/Providers/rtaime.Provider.Ndi/rtaime.Provider.Ndi.csproj" />
+    <Project Path="src/Providers/rtaime.Provider.St2110/rtaime.Provider.St2110.csproj" />
   </Folder>
   <Folder Name="/Client/">
     <Project Path="src/Client/rtaime.Client/rtaime.Client.csproj" />

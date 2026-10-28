@@ -39,6 +39,22 @@ public sealed class NetworkOutputArchitectureTests
 	}
 
 	[Fact]
+	public void St2110_provider_isolated_from_Control_and_host_implementations()
+	{
+        var root = FindRepositoryRoot();
+        var project = XDocument.Load(Path.Combine(root, "src", "Providers",
+            "rtaime.Provider.St2110", "rtaime.Provider.St2110.csproj"));
+        var references = project.Descendants("ProjectReference")
+            .Select(reference => (string?)reference.Attribute("Include"))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToArray();
+        Assert.DoesNotContain(references, reference =>
+            reference!.Contains("rtaime.Control", StringComparison.Ordinal) ||
+            reference.Contains("rtaime.RuntimeHost", StringComparison.Ordinal) ||
+            reference.Contains("rtaime.Operator", StringComparison.Ordinal));
+    }
+
+	[Fact]
 	public void Stable_network_output_contracts_do_not_leak_NDI_runtime_types()
 	{
 		var root = FindRepositoryRoot();
@@ -65,6 +81,7 @@ public sealed class NetworkOutputArchitectureTests
 		Assert.DoesNotContain("rtaime.Provider.Ndi", bridge, StringComparison.Ordinal);
 		Assert.Contains("NetworkOutputProtocolFamily.Srt", registry, StringComparison.Ordinal);
 		Assert.Contains("NetworkOutputProtocolFamily.Ndi", registry, StringComparison.Ordinal);
+        Assert.Contains("NetworkOutputProtocolFamily.St2110", registry, StringComparison.Ordinal);
 	}
 
 	[Fact]

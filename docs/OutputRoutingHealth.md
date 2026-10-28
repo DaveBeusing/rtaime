@@ -10,6 +10,22 @@
 
 The OUTPUTS workspace is the production-facing view for Program routing, output state and currently available performance evidence. It is a presentation layer over existing Operator state and does not create another routing, health, recording, streaming or telemetry authority.
 
+## ST 2110 software loopback evidence
+
+The existing Program/Aux network target view now distinguishes opt-in
+ST 2110 software loopback from SRT and NDI. It shows the typed wire format
+(RFC 4175 YCbCr422 10-bit and PCM24/48 kHz) and explicitly marks physical
+PTP, hardware interop and ST 2110-21 shaping UNVERIFIED. The generic
+network-output sender packet/byte/queue/last-send counters represent local
+submission, never a verified downstream receiver, timing lock or physical
+broadcast scan-out. Receiver-side packet loss, jitter and incomplete frames
+are separately observable in the loopback reference harness and are **not**
+silently conflated with Control-host production state.
+
+The loopback receiver does not create a routable ControlHost source; NMOS
+registration and activation remain governed by IntegrationHost's existing
+virtual observer. See [ST 2110 profile qualification](St2110SoftwareInteropQualification.md).
+
 ## Output model
 
 Four presentation roles are represented in the compact production workspace:

@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using System.Net;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 
@@ -65,6 +66,7 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 			{
 				NetworkOutputProtocolFamily.Srt => CreateSrtConfiguration(descriptor, format),
 				NetworkOutputProtocolFamily.Ndi => CreateNdiConfiguration(descriptor, format),
+				NetworkOutputProtocolFamily.St2110 => CreateSt2110Configuration(descriptor, format),
 				_ => throw new ArgumentException("Network output protocol is unsupported.", "network-outputs")
 			};
 
@@ -91,6 +93,8 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 	{
 		if (descriptor.SourceName is not null)
 			throw new ArgumentException("SRT network output must not define NDI sourceName.", "network-outputs");
+        if (HasSt2110OnlyFields(descriptor))
+            throw new ArgumentException("SRT network output must not define ST 2110 fields.", "network-outputs");
 
 		var endpoint = ParseEndpoint(descriptor.Endpoint);
 		return new NetworkOutputConfiguration(
@@ -118,7 +122,7 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 		RuntimeNetworkOutputConfigurationDto descriptor,
 		VideoFormat format)
 	{
-		if (HasSrtOnlyFields(descriptor))
+		if (HasSrtOnlyFields(descriptor) || HasSt2110OnlyFields(descriptor))
 			throw new ArgumentException(
 				"NDI network output must not define SRT endpoint, mode, codec bitrate, latency or passphrase fields.",
 				"network-outputs");
@@ -136,6 +140,40 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 			descriptor.ReconnectMaximumDelayMilliseconds ?? 5000,
 			descriptor.ReconnectMaximumAttempts ?? 0);
 	}
+
+	private static NetworkOutputConfiguration CreateSt2110Configuration(
+        RuntimeNetworkOutputConfigurationDto descriptor, VideoFormat format)
+    {
+        // An explicit softwareLoopback opt-in is required: physical ST 2110
+        // routes cannot be advertised without PTP/NIC/shaping qualification.
+        if (descriptor.SoftwareLoopback != true ||
+            descriptor.Address is null || descriptor.VideoPort is null ||
+            descriptor.AudioPort is null || descriptor.VideoSsrc is null ||
+            descriptor.AudioSsrc is null ||
+            HasSrtOnlyFields(descriptor) || descriptor.SourceName is not null)
+            throw new ArgumentException(
+                "ST 2110 requires softwareLoopback=true, explicit loopback address, separate RTP ports/SSRCs and no SRT/NDI settings.",
+                "network-outputs");
+
+        _ = St2110SoftwareProfile.FromRuntime(format);
+        if (!IPAddress.TryParse(descriptor.Address, out var ip))
+            throw new ArgumentException("ST 2110 software endpoint must be a literal IPv4 loopback address.", "network-outputs");
+        var settings = new St2110SoftwareNetworkOutputSettings(
+            new St2110SoftwareEndpoint(ip, descriptor.VideoPort.Value,
+                descriptor.AudioPort.Value, descriptor.VideoSsrc.Value,
+                descriptor.AudioSsrc.Value));
+        return new NetworkOutputConfiguration(descriptor.TargetId ?? string.Empty,
+            NetworkOutputProtocolFamily.St2110, format, AudioFormat.Stereo48kFloat32,
+            settings, descriptor.QueueCapacity ?? 2,
+            descriptor.ReconnectInitialDelayMilliseconds ?? 250,
+            descriptor.ReconnectMaximumDelayMilliseconds ?? 5000,
+            descriptor.ReconnectMaximumAttempts ?? 0);
+    }
+
+	private static bool HasSt2110OnlyFields(RuntimeNetworkOutputConfigurationDto descriptor) =>
+        descriptor.SoftwareLoopback is not null || descriptor.Address is not null ||
+        descriptor.VideoPort is not null || descriptor.AudioPort is not null ||
+        descriptor.VideoSsrc is not null || descriptor.AudioSsrc is not null;
 
 	private static bool HasSrtOnlyFields(RuntimeNetworkOutputConfigurationDto descriptor) =>
 		descriptor.Endpoint is not null ||
@@ -163,7 +201,8 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 	{
 		"srt" => NetworkOutputProtocolFamily.Srt,
 		"ndi" => NetworkOutputProtocolFamily.Ndi,
-		_ => throw new ArgumentException("Network output protocol must be 'srt' or 'ndi'.", "network-outputs")
+		"st2110" => NetworkOutputProtocolFamily.St2110,
+		_ => throw new ArgumentException("Network output protocol must be 'srt', 'ndi' or 'st2110'.", "network-outputs")
 	};
 
 	private static Uri ParseEndpoint(string? value)
@@ -199,6 +238,12 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 		public string? Protocol { get; init; }
 		public string? Endpoint { get; init; }
 		public string? SourceName { get; init; }
+        public bool? SoftwareLoopback { get; init; }
+        public string? Address { get; init; }
+        public int? VideoPort { get; init; }
+        public int? AudioPort { get; init; }
+        public uint? VideoSsrc { get; init; }
+        public uint? AudioSsrc { get; init; }
 		public string? Mode { get; init; }
 		public string? LatencyMode { get; init; }
 		public uint? VideoBitRate { get; init; }
