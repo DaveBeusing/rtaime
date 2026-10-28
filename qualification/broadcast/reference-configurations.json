@@ -1,0 +1,84 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "repository": "DaveBeusing/rtaime",
+  "qualificationDecision": "NO_GO_UNTIL_INDEPENDENT_HARDWARE_AND_RELEASE_APPROVAL",
+  "deviceInventoryPolicy": "Reference-hardware configuration fields null until independently inventoried; no model or vendor support implied",
+  "configurations": [
+    {
+      "id": "virtual-ip",
+      "class": "VIRTUAL",
+      "videoProfiles": [
+        "1080p50"
+      ],
+      "host": "Windows x64 .NET 10.0.401",
+      "gpu": "virtual software; no qualified GPU",
+      "driver": null,
+      "nic": "loopback only",
+      "switch": null,
+      "codec": "ST 2110 RTP software reference",
+      "display": null,
+      "recorder": null,
+      "receiver": "virtual / local",
+      "ptp": "virtual clock only",
+      "status": "UNVERIFIED"
+    },
+    {
+      "id": "software-hd",
+      "class": "SOFTWARE",
+      "videoProfiles": [
+        "1080p50",
+        "1080p60000/1001"
+      ],
+      "host": "Windows x64 .NET 10.0.401",
+      "gpu": "software reference / GPU unverified",
+      "driver": null,
+      "nic": "loopback only for ST2110",
+      "switch": null,
+      "codec": "RTP YCbCr422 10-bit / L24, local H264/AAC test",
+      "display": null,
+      "recorder": "in-process reference only",
+      "receiver": "software loopback",
+      "ptp": "no hardware PTP",
+      "status": "UNVERIFIED"
+    },
+    {
+      "id": "reference-hd",
+      "class": "REFERENCE_HARDWARE",
+      "videoProfiles": [
+        "1080p50",
+        "1080p60000/1001"
+      ],
+      "host": "Windows x64 .NET 10.0.401",
+      "gpu": null,
+      "driver": null,
+      "nic": null,
+      "switch": null,
+      "codec": null,
+      "display": null,
+      "recorder": null,
+      "receiver": null,
+      "ptp": null,
+      "status": "UNVERIFIED"
+    },
+    {
+      "id": "reference-uhd",
+      "class": "REFERENCE_HARDWARE",
+      "videoProfiles": [
+        "2160p50",
+        "2160p60000/1001"
+      ],
+      "host": "Windows x64 .NET 10.0.401",
+      "gpu": null,
+      "driver": null,
+      "nic": null,
+      "switch": null,
+      "codec": null,
+      "display": null,
+      "recorder": null,
+      "receiver": null,
+      "ptp": null,
+      "status": "UNVERIFIED"
+    }
+  ]
+}
