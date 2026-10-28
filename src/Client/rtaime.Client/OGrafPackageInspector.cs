@@ -26,6 +26,7 @@ public static class OGrafPackageInspector
             .ConfigureAwait(false);
         using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 20 });
         var node = document.RootElement;
+        RejectAmbiguousObjectKeys(node);
         if (node.ValueKind != JsonValueKind.Object)
             throw new InvalidDataException("OGraf manifest must be a JSON object.");
         if (ReadString(node, "$schema", 256) != OGrafV1Profile.ManifestSchema)
@@ -73,6 +74,25 @@ public static class OGrafPackageInspector
         if (inspected.ThumbnailPath is null) return null;
         return await ReadBoundedAsync(inspected.ThumbnailPath, OGrafV1Profile.MaxThumbnailBytes, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static void RejectAmbiguousObjectKeys(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var member in element.EnumerateObject())
+            {
+                if (!names.Add(member.Name))
+                    throw new InvalidDataException("OGraf JSON contains duplicate property keys.");
+                RejectAmbiguousObjectKeys(member.Value);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+                RejectAmbiguousObjectKeys(item);
+        }
     }
 
     private static string ReadString(JsonElement node, string key, int maxLength)
