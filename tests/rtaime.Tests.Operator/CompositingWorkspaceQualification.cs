@@ -49,6 +49,7 @@ internal static class CompositingWorkspaceQualification
         Assert.Contains("COLOR EVIDENCE PENDING", color.ColorBasisLabel);
         Assert.Null(color.SelectedSignalRange);
         Assert.Contains("UNAVAILABLE", color.SignalRangeStatusLabel);
+        Assert.Contains("UNAVAILABLE", color.SignalRangeChannelsLabel);
         Assert.Contains("Cb/Cr", color.SignalRangeChromaLabel);
         Assert.Contains(Descendants(review).OfType<TextBlock>(), label =>
             System.Windows.Data.BindingOperations.GetBinding(label, TextBlock.TextProperty)?.Path.Path ==
