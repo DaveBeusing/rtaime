@@ -144,16 +144,16 @@ public sealed record VideoSignalRangeSnapshot(
 		if (counters.Length != VideoSignalRangeAccumulator.CounterCount || samples <= 0)
 			return Unavailable(profile, sequence, stride, "UNAVAILABLE: a matching raw-code sample/count buffer is required.");
 
-		VideoRangeChannelCounts Channel(int offset) => new(
-			checked((int)counters[offset]), checked((int)counters[offset + 1]),
-			checked((int)counters[offset + 2]));
+		static VideoRangeChannelCounts Channel(ReadOnlySpan<uint> values, int offset) => new(
+			checked((int)values[offset]), checked((int)values[offset + 1]),
+			checked((int)values[offset + 2]));
 
-		var union = Channel(12);
+		var union = Channel(counters, 12);
 		var status = union.OutsideTotal > 0 ? VideoRangeSampleStatus.SampledOutsideTotal :
 			(long)union.OutsidePreferred * 100 > samples ? VideoRangeSampleStatus.SampledOutOfGamut :
 			VideoRangeSampleStatus.SampledWithinTolerance;
 		return new(profile, sequence, stride, samples, status,
-			Channel(0), Channel(3), Channel(6), Channel(9), union,
+			Channel(counters, 0), Channel(counters, 3), Channel(counters, 6), Channel(counters, 9), union,
 			"Measured from source code samples before display transform; 1% threshold applies only provisionally to measured active-image samples.");
 	}
 }
