@@ -33,7 +33,7 @@ public static class HdrNative422Packing
             var y0 = Sample(planar, layout.Planes[0], x, y);
             var cr = Sample(planar, layout.Planes[2], x / 2, y);
             var y1 = Sample(planar, layout.Planes[0], x + 1, y);
-            var start = checked((int)(y * rowPackedBytes + x / 2 * 5));
+            var start = checked((int)((long)y * rowPackedBytes + x / 2 * 5));
             result[start] = (byte)(cb >> 2);
             result[start + 1] = (byte)(((cb & 3) << 6) | (y0 >> 4));
             result[start + 2] = (byte)(((y0 & 15) << 4) | (cr >> 6));
@@ -54,7 +54,7 @@ public static class HdrNative422Packing
         for (uint y = 0; y < layout.Height; y++)
         for (uint x = 0; x < layout.Width; x += 2)
         {
-            var start = checked((int)(y * rowPackedBytes + x / 2 * 5));
+            var start = checked((int)((long)y * rowPackedBytes + x / 2 * 5));
             var cb = (ushort)((packed[start] << 2) | (packed[start + 1] >> 6));
             var y0 = (ushort)(((packed[start + 1] & 63) << 4) | (packed[start + 2] >> 4));
             var cr = (ushort)(((packed[start + 2] & 15) << 6) | (packed[start + 3] >> 2));
