@@ -117,11 +117,11 @@ Each allowed external client maps to a stable product-level identity and role.
 - optional `certificateThumbprint`;
 - optional `tokenEnvironmentVariable`.
 
-The descriptor may name the environment variable containing a bearer token, but the token itself must not be stored in source-controlled configuration.
+The descriptor may name the environment variable containing a bearer token, but the token itself must not be stored in source-controlled configuration. Certificate thumbprints and token environment references must each be unique across identities; cross-role reuse is rejected. Client IDs are restricted to bounded printable identifier characters. A presented mapped certificate cannot be relabeled to authenticate with another client's bearer credential.
 
 When mTLS is required, the TLS handshake requires a client certificate and the certificate thumbprint must match an allowed identity. Certificate validity is checked before the identity is accepted.
 
-When mTLS is not required, a configured certificate identity can still authenticate with a presented client certificate. A token-bound identity can authenticate with a bearer token loaded from the configured environment variable. Token comparison is constant-time after hashing.
+When mTLS is not required, a configured certificate identity can still authenticate with a presented client certificate. A token-bound identity can authenticate with a bearer token loaded from the configured environment variable only where mTLS is not required. Token comparison is constant-time after hashing. Cert/key rotation and revocation require deployment-specific PKI processes and are not qualified by these checks.
 
 ## Authorization
 
@@ -145,7 +145,7 @@ Supported server trust modes are:
 
 - `System` — normal platform certificate-chain and hostname validation;
 - `PinnedServerCertificate` — explicit certificate-thumbprint pinning plus validity-period validation;
-- `TestOnlyInsecure` — test-only certificate bypass and not an accepted production deployment mode.
+- `TestOnlyInsecure` — limited to HTTPS loopback endpoints for isolated tests only; not an accepted production deployment mode. IntegrationHost additionally requires both `testMode=true` and `dryRun=true`. Client/upstream HTTPS origins reject embedded URL credentials, paths, queries and fragments.
 
 The client can also load a PFX client certificate or a PEM certificate/private-key pair for mTLS.
 
@@ -202,7 +202,7 @@ ControlHost applies explicit limits to the remote surface:
 - bounded audit history;
 - bounded state-subscription cadence.
 
-A slow, disconnected or rate-limited remote client must not block ControlHost mutation progress or Runtime Program continuity.
+A slow, disconnected or rate-limited remote client must not block ControlHost mutation progress or Runtime Program continuity. Authenticated calls are charged against a bounded quota before operation payload decoding. Client IDs, audit details and other security event fields are sanitized and length-bounded, and startup-state details do not echo raw exception messages containing certificate or configuration paths.
 
 ## Lifecycle and readiness
 
@@ -245,3 +245,5 @@ Those capabilities must not be inferred from a green software CI run.
 ## Production integration gateway
 
 For OSC, MIDI, GPIO/GPI reference control and Companion-style HTTP/WebSocket integration, see [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md). IntegrationHost remains an external client of this secure boundary; it does not move Production Authority out of ControlHost.
+
+For individual EBU R 143 v3.0 P1/P2 control status, residual severity, negative tests and exact-source security evidence, see [BroadcastSecurityR143Assessment.md](BroadcastSecurityR143Assessment.md). This does not establish vendor certification, verified WAN exposure, durable AAA log forwarding or security compliance.
