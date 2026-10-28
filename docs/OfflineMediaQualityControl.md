@@ -67,6 +67,24 @@ The already implemented live Program loudness or Color Review measurements
 must **not** be reused to report a media file as compliant. Unsupported
 sources/checks are never replaced with a synthetic `PASS`.
 
+### Extension via separately measured checks
+
+`IMediaQcCheckAdapter` is the managed, **trusted built-in registration**
+contract for adding independently implemented offline checks later. Version
+and check-definition equality are enforced before a worker starts. Only
+the two currently unmeasured profile slots (`rtaime-loudness` and
+`rtaime-range`) can be registered, with at most two adapters. The
+registry rejects duplicates and foreign check IDs; it cannot replace
+the built-in container probe. Implementations receive the original
+catalogued asset, immutable SHA-256, length and catalogue revision and
+run sequentially in the existing single worker. An adapter's own result
+must validate against the exact declared check definition and report the
+identical full-file SHA-256 source identifier. The worker rehashes the file
+after adapter execution, so a modifying adapter cannot inherit earlier
+verification. Unexpected adapter failure produces no completed report.
+An explicitly unsupported adapter may return `UNSUPPORTED`, never a
+placeholder `PASS`. Synthetic adapter values are used only in tests.
+
 Internal states have exactly the following semantics:
 
 - `PASS` – the named check was actually executed and its declared,
