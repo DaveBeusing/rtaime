@@ -396,7 +396,8 @@ public sealed record RuntimeHostSnapshot(
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
 	IReadOnlyList<RuntimeHostCompositingLayerSnapshot>? CompositingLayers = null,
 	RuntimeHostAudioProductionSnapshot? AudioProduction = null,
-	ReplayBufferSnapshot? Replay = null);
+	ReplayBufferSnapshot? Replay = null,
+	MediaReferenceClockObservation? ClockReference = null);
 
 /// <summary>
 /// Windows Runtime composition root for committed execution, timed media, GPU composition,
@@ -411,6 +412,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	public const string ProductionCgLayerId = "production-cg";
 
 	private readonly object _gate = new();
+	private MediaReferenceClockObservation _clockReference = MediaReferenceClockObservation.Unverified(Guid.NewGuid());
+	private MediaReferenceClockRequirement _clockRequirement = MediaReferenceClockRequirement.Asynchronous;
 	private readonly object _boundaryExecutionGate = new();
 	private RuntimeTimingQualificationProbe? _pipelineTiming;
 	private readonly object _boundaryCaptureGate = new();
@@ -856,9 +859,46 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					OutputRoleSnapshotsUnsafe(),
 					CompositingLayerSnapshotsUnsafe(),
 					AudioProductionSnapshotUnsafe(),
-					_replay?.Snapshot);
+					_replay?.Snapshot,
+					_clockReference);
 			}
 		}
+	}
+
+	// Called only from the process composition/provider-observation boundary.
+	// The existing monotonic Program cadence is never slaved to an unverified clock.
+	public void ConfigureReferenceClockRequirement(MediaReferenceClockRequirement requirement)
+	{
+		if (!Enum.IsDefined(requirement))
+			throw new ArgumentOutOfRangeException(nameof(requirement));
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			_clockRequirement = requirement;
+		}
+	}
+
+	public void ObserveReferenceClock(MediaReferenceClockObservation observation)
+	{
+		ArgumentNullException.ThrowIfNull(observation);
+		observation.Validate();
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (observation.ProviderId == "virtual-reference-clock" &&
+				observation.Evidence == MediaReferenceEvidence.HardwareQualified)
+				throw new InvalidOperationException("Virtual reference cannot publish physical qualification.");
+			if (observation.ProviderId == _clockReference.ProviderId &&
+				observation.EpochId == _clockReference.EpochId &&
+				observation.ObservedAtUtc < _clockReference.ObservedAtUtc)
+				throw new InvalidOperationException("Clock observation moved backwards within its epoch.");
+			_clockReference = observation;
+		}
+	}
+
+	public MediaReferenceClockObservation ReferenceClock
+	{
+		get { lock (_gate) return _clockReference; }
 	}
 
 	public RuntimeHostApplyResult ApplyExecution(
@@ -882,6 +922,26 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				!string.Equals(programRoleId, "program", StringComparison.Ordinal))
 			{
 				throw new InvalidOperationException("Requested Program sink is bound to a different output role.");
+			}
+
+			// Opt-in synchronized-output policy fences admission before Runtime
+			// Prepare/Commit. Unknown, simulated, stale and unqualified sources
+			// must not move Control production authority or acquire resources.
+			if (!MediaReferenceAdmission.Allows(
+				_clockRequirement, _clockReference, DateTimeOffset.UtcNow))
+			{
+				var failure = new Failure(
+					"runtime.clock.reference_unverified",
+					"Required external media reference is not hardware-qualified and current; Program execution was not changed.");
+				Observe($"runtime.prepare.rejected:{failure.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(
+						RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId,
+						RuntimePrepareStatus.Rejected,
+						null,
+						failure),
+					null, null);
 			}
 
 			var auxBindings = preparedExecution.Bindings
