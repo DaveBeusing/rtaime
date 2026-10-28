@@ -87,7 +87,7 @@ public sealed record St2022SoftwareMergeHealth(
 /// </summary>
 public sealed class St2022SoftwarePacketMerger
 {
-    private sealed record Pending(byte[] Datagram, uint Timestamp, St2022RtpLeg Leg);
+    private sealed record Pending(byte[] Datagram, uint Timestamp, St2022RtpLeg Leg, TimeSpan Arrival);
 
     private readonly object _gate = new();
     private readonly St2022RtpMediaKind _kind;
@@ -154,6 +154,7 @@ public sealed class St2022SoftwarePacketMerger
                 var distance = unchecked((int)(sequence - expected));
                 if (distance < 0)
                 {
+                    ObserveLeg(leg, sequence, packet.Timestamp, monotonicArrival);
                     if (_recentCopies.TryGetValue(sequence, out var prior) &&
                         !datagram.Span.SequenceEqual(prior))
                         _conflicts++;
@@ -172,13 +173,7 @@ public sealed class St2022SoftwarePacketMerger
                 _next = sequence;
             }
 
-            var monitor = leg == St2022RtpLeg.Primary ? _primary : _secondary;
-            monitor.Observe(sequence, packet.Timestamp, monotonicArrival,
-                _kind == St2022RtpMediaKind.Video
-                    ? St2110SoftwareProfile.VideoRtpClockRate
-                    : St2110SoftwareProfile.AudioSampleRate);
-            if (leg == St2022RtpLeg.Primary) _primaryLastArrival = monotonicArrival;
-            else _secondaryLastArrival = monotonicArrival;
+            ObserveLeg(leg, sequence, packet.Timestamp, monotonicArrival);
             if (_highest is null || unchecked((int)(sequence - _highest.Value)) > 0)
                 _highest = sequence;
 
@@ -194,7 +189,7 @@ public sealed class St2022SoftwarePacketMerger
             else
             {
                 _pending.Add(sequence,
-                    new Pending(datagram.ToArray(), packet.Timestamp, leg));
+                    new Pending(datagram.ToArray(), packet.Timestamp, leg, monotonicArrival));
                 _maximumBuffered = Math.Max(_maximumBuffered, _pending.Count);
             }
             return Drain(monotonicArrival);
@@ -254,6 +249,26 @@ public sealed class St2022SoftwarePacketMerger
         _lastObservedTime = now;
     }
 
+    private void ObserveLeg(St2022RtpLeg leg, uint sequence,
+        uint timestamp, TimeSpan arrival)
+    {
+        var monitor = leg == St2022RtpLeg.Primary ? _primary : _secondary;
+        monitor.Observe(sequence, timestamp, arrival,
+            _kind == St2022RtpMediaKind.Video
+                ? St2110SoftwareProfile.VideoRtpClockRate
+                : St2110SoftwareProfile.AudioSampleRate);
+        if (leg == St2022RtpLeg.Primary) _primaryLastArrival = arrival;
+        else _secondaryLastArrival = arrival;
+    }
+
+    private TimeSpan FirstBufferedArrival()
+    {
+        var first = TimeSpan.MaxValue;
+        foreach (var entry in _pending.Values)
+            if (entry.Arrival < first) first = entry.Arrival;
+        return first;
+    }
+
     private uint ExtendAudioSequence(ushort sequence)
     {
         if (_highest is not { } highest) return sequence;
@@ -284,7 +299,9 @@ public sealed class St2022SoftwarePacketMerger
                 continue;
             }
 
-            _gapSince ??= now;
+            // For a second gap already buffered before Flush(), use its actual
+            // first downstream arrival rather than restarting the holdback now.
+            _gapSince ??= FirstBufferedArrival();
             if (now - _gapSince.Value < _options.RepairWindow &&
                 _pending.Count < _options.PressureThreshold)
                 break;
