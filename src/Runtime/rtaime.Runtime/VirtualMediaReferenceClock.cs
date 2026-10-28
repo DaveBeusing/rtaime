@@ -52,9 +52,12 @@ public sealed class VirtualMediaReferenceClock : IMediaReferenceClockProvider
 			offsetNanoseconds is < -1_000_000_000 or > 1_000_000_000 ||
 			!double.IsFinite(driftPpb) || Math.Abs(driftPpb) > 1_000_000)
 			throw new ArgumentOutOfRangeException(nameof(utc), "Simulated sync evidence is invalid.");
-		if (!string.Equals(grandmasterId, _grandmasterId, StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(grandmasterId, _grandmasterId, StringComparison.OrdinalIgnoreCase) ||
+			(_hasSync && monotonicAt - _lastSyncMonotonic > LockObservationBudget + HoldoverBudget))
 		{
-			_epoch = Guid.NewGuid(); // Explicit GM discontinuity fences old RTP/clock epoch.
+			// A different GM or a recovered LOST reference invalidates the
+			// previous RTP/PTP mapping, even when the same GM returns.
+			_epoch = Guid.NewGuid();
 			_grandmasterId = grandmasterId.ToUpperInvariant();
 		}
 		_lastMonotonic = monotonicAt;
