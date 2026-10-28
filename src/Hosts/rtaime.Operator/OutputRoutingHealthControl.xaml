@@ -259,7 +259,10 @@
 					</DockPanel>
 
 					<TextBlock Text="{Binding SelectedOutput.Name}" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" FontWeight="SemiBold" />
-					<TextBlock Text="{Binding SelectedOutput.Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,9" />
+					<TextBlock Text="{Binding SelectedOutput.Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,4" />
+					<TextBlock Text="{Binding SelectedOutput.ContinuityStatus}"
+						Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,9"
+						ToolTip="Recovery status from confirmed Runtime role evidence. A local notification acknowledgement does not authorize Program re-arm." />
 
 					<Grid>
 						<Grid.ColumnDefinitions>
