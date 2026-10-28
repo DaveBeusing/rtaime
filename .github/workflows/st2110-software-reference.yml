@@ -9,9 +9,9 @@ on:
       - "src/Contracts/rtaime.Provider.Contracts/NetworkOutput.cs"
       - "src/Contracts/rtaime.Provider.Contracts/St2110SoftwareTransport.cs"
       - "src/Hosts/rtaime.RuntimeHost/RuntimeNetworkOutput*"
-      - "tests/rtaime.Tests.Unit/St2110*"
-      - "tests/rtaime.Tests.Integration/St2110*"
-      - "docs/St2110SoftwareInteropQualification.md"
+      - "tests/rtaime.Tests.Unit/St2110*"\n      - "tests/rtaime.Tests.Unit/St2022*"
+      - "tests/rtaime.Tests.Integration/St2110*"\n      - "tests/rtaime.Tests.Integration/St2022*"
+      - "docs/St2110SoftwareInteropQualification.md"\n      - "docs/St2022SoftwareProtectionQualification.md"
       - ".github/workflows/st2110-software-reference.yml"
   workflow_dispatch:
 
@@ -40,6 +40,12 @@ jobs:
       - name: Qualify fail-closed Runtime admission and actual loopback UDP I/O
         shell: pwsh
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --filter "FullyQualifiedName~St2110NetworkOutputConfigurationIntegrationTests|FullyQualifiedName~St2110SoftwareLoopbackIntegrationTests" --logger "console;verbosity=normal"
+      - name: Qualify bounded dual-leg RTP software selection
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --filter "FullyQualifiedName~St2022SoftwarePacketMergeTests" --logger "console;verbosity=normal"
+      - name: Qualify merged ST 2110 receiver and fail-closed protection admission
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --filter "FullyQualifiedName~St2022SoftwareMergeIntegrationTests|FullyQualifiedName~St2110NetworkOutputConfigurationIntegrationTests" --logger "console;verbosity=normal"
       - name: Preserve SRT and NDI network-output regression behavior
         shell: pwsh
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~NetworkOutputConfigurationIntegrationTests|FullyQualifiedName~RuntimeNetworkOutputBridgeAdmissionTests" --logger "console;verbosity=normal"
