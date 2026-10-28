@@ -55,7 +55,7 @@ public sealed class HdrContributionContractTests
                 .IsExactR153LiveHlg);
         }
         Assert.Equal(ColorDescription.UnknownRgba8, VideoFormat.Hd1080p50Rgba8.Color);
-        Assert.Equal(1, MediaContractVersion.Current.Major);
+        Assert.Equal(1u, MediaContractVersion.Current.Major);
     }
 
     [Fact]
