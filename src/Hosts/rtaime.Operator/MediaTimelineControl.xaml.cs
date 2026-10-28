@@ -106,6 +106,7 @@ public partial class MediaTimelineControl : UserControl
 	private long _gestureContext;
 	private double _dragOriginX;
 	private CancellationTokenSource? _timedTextImport;
+	private long _timedTextImportGeneration;
 	public TimedTextReviewViewModel TimedTextReview { get; } = new();
 	public bool OwnsEscape => _trimKind is not null || (_pointerSeeking && ViewModel?.EditCursorMode == true);
 	public static readonly DependencyProperty PreviewSourceIdProperty = DependencyProperty.Register(nameof(PreviewSourceId), typeof(string), typeof(MediaTimelineControl), new PropertyMetadata(null, RoutingChanged));
@@ -131,6 +132,7 @@ public partial class MediaTimelineControl : UserControl
 		Loaded += (_, _) => TimedTextReview.Attach(ViewModel);
 		Unloaded += (_, _) =>
 		{
+			_timedTextImportGeneration++;
 			_timedTextImport?.Cancel();
 			TimedTextReview.Detach();
 		};
@@ -164,6 +166,7 @@ public partial class MediaTimelineControl : UserControl
 		if (selected.ShowDialog(Window.GetWindow(this)) != true)
 			return;
 		var epoch = TimedTextReview.ContextEpoch;
+		var importGeneration = ++_timedTextImportGeneration;
 		_timedTextImport?.Cancel();
 		_timedTextImport?.Dispose();
 		using var lifetime = new CancellationTokenSource();
@@ -182,12 +185,16 @@ public partial class MediaTimelineControl : UserControl
 				throw new InvalidDataException("Timed Text input exceeds the 256 KiB source size bound.");
 			var bytes = new byte[checked((int)file.Length)];
 			await file.ReadExactlyAsync(bytes, lifetime.Token);
-			TimedTextReview.Import(bytes, profile, epoch);
+			if (importGeneration == _timedTextImportGeneration &&
+				ReferenceEquals(_timedTextImport, lifetime))
+				TimedTextReview.Import(bytes, profile, epoch);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
 		{
-			TimedTextReview.ImportFailure(
-				"Caption file could not be read within the local file/size/lifetime safety limits.", epoch);
+			if (importGeneration == _timedTextImportGeneration &&
+				ReferenceEquals(_timedTextImport, lifetime))
+				TimedTextReview.ImportFailure(
+					"Caption file could not be read within the local file/size/lifetime safety limits.", epoch);
 		}
 		finally
 		{
