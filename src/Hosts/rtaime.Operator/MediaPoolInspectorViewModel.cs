@@ -193,6 +193,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 
 		Selection = new(this);
 		InitializeBrowsing();
+		InitializeQc();
 		SelectedItems = [];
         InitializeMediaReview();
         InitializePreparation();
@@ -393,6 +394,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			ProjectSelectionToExistingOperatorContext(value);
 			BuildInspector();
 			RaiseSelectionState();
+			OnQcSelectionChanged();
 		}
 	}
 
@@ -709,6 +711,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		CatalogObservedAtUtc = DateTimeOffset.UtcNow;
 		OnPropertyChanged(nameof(CatalogEvidence));
 		OnPropertyChanged(nameof(CatalogObservedAtUtc));
+		ReconcileQc(snapshot);
         ReconcileMediaReviewContext();
 	}
 
@@ -969,6 +972,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
         PropertyChanged -= OnInspectorDraftValueChanged;
         DisposePreparation();
 		DisposeBrowsing();
+		DisposeQc();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;
 		_operator.Sources.CollectionChanged -= OnSourcesChanged;

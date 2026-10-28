@@ -359,3 +359,26 @@ Runtime epoch and loaded OS native-module identity changes invalidate positive
 evidence. Every new Prepare hashes again. The UI timer only expires metadata; it
 does not scan files or trigger probes. Open in Preview remains the separate
 existing route/preroll workflow for actually retaining a prepared deck.
+
+## Independent offline Quality Control (EBU QC 2026-04)
+
+For an online, persistent catalogue **Clip**, **START OFFLINE QC** starts a
+separate, bounded, cancellable file-only quality-control worker. The Media
+Library shows one outcome per implemented check, explicitly distinguishing
+PASS, FAILED, UNSUPPORTED and NOT_EXECUTED; missing R 128/R 103 adapters
+must never be displayed as PASS. **CANCEL QC** stops background work.
+**EXPORT QC XML** emits a schema-validated 2026-04 report;
+**IMPORT QC XML** accepts only a compatible source-bound report for the
+currently selected immutable `MediaAssetId`, full SHA-256 and catalogue
+revision.
+
+The feature reuses existing asset identity and source metadata, and **does
+not** write to the ControlHost-owned catalogue or the Program/Preview
+pipeline. A catalogue mutation or file content change invalidates the
+observation. The Operator restores old completed reports only as
+**RETAINED / HISTORICAL**, not as renewed media readiness. Output and
+production admission stay governed by their existing services.
+A non-executed QC check does not make a media asset unplayable or block
+ongoing Program. For the exact EBU 2026-04 namespaces, XML licence,
+file quotas, check scope, statuses, recovery and unsupported limits, see
+[Offline Media Quality Control](OfflineMediaQualityControl.md).

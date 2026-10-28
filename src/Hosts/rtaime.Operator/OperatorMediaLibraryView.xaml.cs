@@ -65,7 +65,42 @@ public partial class OperatorMediaLibraryView : UserControl
         e.Handled = true;
     }
 
-	private static string? PickRelinkMediaFile()
+	private async void OnMediaQcExportClick(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		var dialog = new SaveFileDialog {
+			Title = "Export validated EBU QC 2026-04 report",
+			Filter = "EBU QC 2026-04 XML (*.xml)|*.xml",
+			DefaultExt = ".xml", AddExtension = true,
+			FileName = "media-qc-report.xml"
+		};
+		if (dialog.ShowDialog() != true) return;
+		try { await MediaPool.ExportSelectedQcAsync(dialog.FileName); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+			ArgumentException or InvalidOperationException or System.Xml.XmlException)
+		{
+			MediaPool.ReportQcOperationFailure("export", exception.GetType().Name);
+		}
+	}
+
+	private async void OnMediaQcImportClick(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		var dialog = new OpenFileDialog {
+			Title = "Import EBU QC 2026-04 report",
+			Filter = "EBU QC 2026-04 XML (*.xml)|*.xml",
+			CheckFileExists = true, Multiselect = false
+		};
+		if (dialog.ShowDialog() != true) return;
+		try { await MediaPool.ImportSelectedQcAsync(dialog.FileName); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+			ArgumentException or InvalidOperationException or System.Xml.XmlException or FormatException or OverflowException)
+		{
+			MediaPool.ReportQcOperationFailure("import", exception.GetType().Name);
+		}
+	}
+
+		private static string? PickRelinkMediaFile()
 	{
 		var dialog = new OpenFileDialog
 		{
