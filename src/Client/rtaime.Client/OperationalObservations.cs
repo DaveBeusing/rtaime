@@ -39,7 +39,8 @@ public sealed record OperationalObservation(
 	string Detail,
 	string RecommendedAction,
 	string? CorrelationId = null,
-	DateTimeOffset? ResolvedAtUtc = null)
+	DateTimeOffset? ResolvedAtUtc = null,
+	string? OwningProviderId = null)
 {
 	public const int CurrentFormatVersion = 1;
 }
@@ -120,7 +121,8 @@ public sealed class OperationalObservationProjector
 				source.ProgramImpact,
 				source.Detail,
 				source.RecoveryStatus,
-				ResolvedAtUtc: resolvedAt);
+				ResolvedAtUtc: resolvedAt,
+				OwningProviderId: KnownProviderId(source));
 			next.Add(source.Id, new Entry(current, sinceTick, hadActive));
 
 			if (previous is null
@@ -157,6 +159,17 @@ public sealed class OperationalObservationProjector
 
 		_current = next;
 		return transitions;
+	}
+
+	// Only use a provider identifier actually published by the source. The
+	// descriptive evidence source is retained independently as provenance.
+	private static string? KnownProviderId(SubsystemHealthSnapshot snapshot)
+	{
+		var value = snapshot.Metrics.FirstOrDefault(metric =>
+			string.Equals(metric.Label, "Provider", StringComparison.Ordinal))?.Value;
+		return string.IsNullOrWhiteSpace(value) ||
+			value is "UNKNOWN" or "UNAVAILABLE" or "UNVERIFIED" or "—"
+			? null : value;
 	}
 
 	public static string EvidenceAvailability(SubsystemHealthSnapshot snapshot)
