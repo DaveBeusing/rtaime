@@ -42,7 +42,7 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(sampled.AnyComponent, native.AnyComponent);
 		Assert.Equal(total == 1 ? VideoRangeSampleStatus.SampledOutsideTotal :
 			preferred == 1 ? VideoRangeSampleStatus.SampledOutOfGamut :
-			VideoRangeSampleStatus.SampledWithinPreferred, sampled.Status);
+			VideoRangeSampleStatus.SampledWithinTolerance, sampled.Status);
 		Assert.Equal(100.0, sampled.CoveragePercent);
 	}
 
@@ -92,7 +92,7 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(1, one.AnyComponent.OutsidePreferred);
 		Assert.Equal(1.0, one.AnyComponent.PreferredPercent(one.SampleCount));
 		Assert.False(one.PreferredAreaThresholdExceeded);
-		Assert.Equal(VideoRangeSampleStatus.SampledWithinPreferred, one.Status);
+		Assert.Equal(VideoRangeSampleStatus.SampledWithinTolerance, one.Status);
 
 		pixels[4] = pixels[5] = pixels[6] = 247;
 		var two = VideoSignalRangeAnalysis.AnalyzeRgba8(Frame(100, 1, pixels, Limited(8)));
@@ -100,7 +100,7 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.True(two.PreferredAreaThresholdExceeded);
 		Assert.Equal(VideoRangeSampleStatus.SampledOutOfGamut, two.Status);
 		Assert.Contains("sampled UNFILTERED diagnostic", two.DiagnosticLabel, StringComparison.Ordinal);
-		Assert.DoesNotContain("compliance PASS", two.DiagnosticLabel.Replace("no compliance PASS", string.Empty), StringComparison.Ordinal);
+		Assert.Contains("no compliance PASS", two.DiagnosticLabel, StringComparison.Ordinal);
 	}
 
 	[Fact]
@@ -178,7 +178,7 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(1, scope.SignalRange.Red.OutsidePreferred);
 		Assert.Equal(1, scope.SignalRange.AnyComponent.OutsidePreferred);
 		Assert.Equal(4, scope.SignalRange.SampleCount);
-		Assert.Equal(25, scope.SignalRange.CoveragePercent);
+		Assert.Equal(25.0, scope.SignalRange.CoveragePercent);
 		Assert.Equal(GpuMonitoringAnalysisPolicy.ScopeResultBytes + 15 * sizeof(uint), scope.ResultTransferBytes);
 		Assert.Equal(GpuMonitoringAnalysisPolicy.CombinedResultBytes, scope.ResultTransferBytes);
 	}
