@@ -42,6 +42,8 @@ public sealed class St2110SoftwareTransportTests
     {
         Assert.Throws<NotSupportedException>(() => new St2110SoftwareEndpoint(
             IPAddress.Parse("192.0.2.1"), 5004, 5006, 111, 222));
+        Assert.Throws<NotSupportedException>(() => new St2110SoftwareEndpoint(
+            IPAddress.Parse("127.0.0.2"), 5004, 5006, 111, 222));
         Assert.Throws<ArgumentOutOfRangeException>(() => new St2110SoftwareEndpoint(
             IPAddress.Loopback, 5005, 5007, 111, 222));
         Assert.Throws<ArgumentException>(() => new St2110SoftwareEndpoint(
