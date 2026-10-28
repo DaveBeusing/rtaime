@@ -62,7 +62,7 @@ public sealed record MediaReferenceClockObservation(
 		if (Source == MediaReferenceClockSource.HardwarePtp && (PtpDomain is null || GrandmasterId is null) ||
 			Source == MediaReferenceClockSource.Virtual && Evidence == MediaReferenceEvidence.Simulated &&
 				((PtpDomain is null) != (GrandmasterId is null)) ||
-			Source is MediaReferenceClockSource.Unknown or MediaReferenceClockSource.ExternalGenlock &&
+			(Source is MediaReferenceClockSource.Unknown or MediaReferenceClockSource.ExternalGenlock) &&
 				(PtpDomain is not null || GrandmasterId is not null) ||
 			Evidence == MediaReferenceEvidence.HardwareQualified &&
 				(Source is not (MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock) ||
