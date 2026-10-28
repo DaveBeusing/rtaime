@@ -133,6 +133,11 @@ public sealed class MediaQcFileInspectorTests
 			Assert.Equal(report.ReportId,
 				(await store.ReadAsync(asset, 7, CancellationToken.None))!.ReportId);
 			Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "reports"), "*.tmp"));
+			var other = report with { ReportId = Guid.NewGuid() };
+			await Assert.ThrowsAsync<InvalidDataException>(async () =>
+				await store.SaveAsync(other, xml, CancellationToken.None));
+			Assert.Equal(report.ReportId,
+				(await store.ReadAsync(asset, 7, CancellationToken.None))!.ReportId);
 		}
 		finally { Directory.Delete(root, true); }
 	}
