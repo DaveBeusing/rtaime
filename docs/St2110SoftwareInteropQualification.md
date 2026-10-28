@@ -43,7 +43,7 @@ Use the existing RuntimeHost --network-outputs= JSON or RTAIME_NETWORK_OUTPUTS e
 ]
 ~~~
 
-Only a literal IPv4 loopback destination is accepted. Missing softwareLoopback, DNS names, nonlocal addresses, unqualified PCM formats, unknown mixed settings or non-SSRC-separated streams fail closed. Old descriptors without a protocol field still default to SRT. Program/Aux role authority and provider reservations are unchanged.
+Only the literal IPv4 destination 127.0.0.1 is accepted; other 127/8 aliases are rejected because the reference receiver binds 127.0.0.1. Missing softwareLoopback, DNS names, nonlocal addresses, unqualified PCM formats, unknown mixed settings or non-SSRC-separated streams fail closed. Old descriptors without a protocol field still default to SRT. Program/Aux role authority and provider reservations are unchanged.
 
 This test/reference output is not intended for deployment at production shows: uncompressed 1080p RTP requires substantial per-frame memory/CPU and network throughput. No ST 2110-21 shaping, bounded latency or real-time guarantee has been established.
 
