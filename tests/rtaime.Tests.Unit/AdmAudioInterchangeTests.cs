@@ -42,6 +42,24 @@ public sealed class AdmAudioInterchangeTests
 	}
 
 	[Fact]
+	public void EBUCore_wrapped_ADM_XML_preserves_its_namespace_and_all_embedded_source_bytes()
+	{
+		const string ebucore = "urn:ebu:metadata-schema:ebuCore_2014";
+		var xml = Encoding.UTF8.GetString(Fixture("stereo.xml"));
+		xml = xml.Replace(
+			"<audioFormatExtended version=",
+			"<ebuCoreMain xmlns=\"" + ebucore + "\"><coreMetadata><format>" +
+			"<audioFormatExtended version=", StringComparison.Ordinal);
+		xml = xml.Replace("</audioFormatExtended>",
+			"</audioFormatExtended></format></coreMetadata></ebuCoreMain>", StringComparison.Ordinal);
+		var bytes = Encoding.UTF8.GetBytes(xml);
+		var observation = AdmAudioXml.ImportXml(bytes, Asset());
+		Assert.Equal(2, observation.Tracks.Count);
+		Assert.Equal(bytes, AdmAudioXml.ExportXml(observation));
+		Assert.Contains(ebucore, Encoding.UTF8.GetString(AdmAudioXml.ExportXml(observation)));
+	}
+
+		[Fact]
 	public void Stereo_bom_and_original_whitespace_survive_an_independent_json_exchange()
 	{
 		var source = Fixture("stereo.xml");
@@ -109,6 +127,8 @@ public sealed class AdmAudioInterchangeTests
 	[InlineData("missing-track")]
 	[InlineData("cycle")]
 	[InlineData("bad-time")]
+	[InlineData("orphan-content")]
+	[InlineData("missing-content-object")]
 	public void Broken_references_profiles_and_times_cannot_enter_the_interchange(string mutation)
 	{
 		var xml = Encoding.UTF8.GetString(Fixture("stereo.xml"));
@@ -123,6 +143,11 @@ public sealed class AdmAudioInterchangeTests
 			"cycle" => xml.Replace("</audioObject>",
 				"<audioObjectIDRef>AO_0001</audioObjectIDRef></audioObject>", StringComparison.Ordinal),
 			"bad-time" => xml.Replace("duration=\"00:00:10.00000\"", "duration=\"-10\"", StringComparison.Ordinal),
+			"orphan-content" => xml.Replace("</audioFormatExtended>",
+				"<audioContent audioContentID=\"ACO_9999\" audioContentName=\"Unused\"/></audioFormatExtended>",
+				StringComparison.Ordinal),
+			"missing-content-object" => xml.Replace("<audioObjectIDRef>AO_0001</audioObjectIDRef>",
+				"", StringComparison.Ordinal),
 			_ => throw new ArgumentOutOfRangeException(nameof(mutation))
 		};
 		Assert.ThrowsAny<Exception>(() => AdmAudioXml.ImportXml(Encoding.UTF8.GetBytes(xml), Asset()));
