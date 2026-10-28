@@ -58,14 +58,14 @@ public sealed class MediaReferenceClockAdmissionTests
 	[Fact]
 	public void Runtime_options_reject_invalid_external_clock_requirement_without_changing_defaults()
 	{
-		var baseline = RuntimeHostProcessOptions.Load([]);
+		var baseline = RuntimeHostProcessOptions.Load([], _ => null);
 		Assert.Equal(MediaReferenceClockRequirement.Asynchronous, baseline.ClockRequirement);
-		var checkedOptions = RuntimeHostProcessOptions.Load(["--clock-requirement=hardware-locked"]);
+		var checkedOptions = RuntimeHostProcessOptions.Load(["--clock-requirement=hardware-locked"], _ => null);
 		Assert.Equal(MediaReferenceClockRequirement.HardwareLocked, checkedOptions.ClockRequirement);
 		Assert.Equal(MediaReferenceClockRequirement.QualifiedHoldover,
-			RuntimeHostProcessOptions.Load(["--clock-requirement=qualified-holdover"]).ClockRequirement);
+			RuntimeHostProcessOptions.Load(["--clock-requirement=qualified-holdover"], _ => null).ClockRequirement);
 		Assert.Throws<ArgumentException>(() =>
-			RuntimeHostProcessOptions.Load(["--clock-requirement=unknown"]));
+			RuntimeHostProcessOptions.Load(["--clock-requirement=unknown"], _ => null));
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
 			(baseline with { ClockRequirement = (MediaReferenceClockRequirement)255 }).Validate());
 	}
