@@ -469,6 +469,19 @@ public sealed class NmosDiscoveryAndConnectionTests
 		using var accepted = await client.PatchAsync(
 			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/staged", disable);
 		Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+		using var atomicBulk = new StringContent(
+			"[{\"id\":\"" + ReceiverId + "\",\"params\":{\"master_enable\":false}}]",
+			Encoding.UTF8, "application/json");
+		using var bulkAccepted = await client.PostAsync(
+			"/x-nmos/connection/v1.2/bulk/receivers", atomicBulk);
+		Assert.Equal(HttpStatusCode.OK, bulkAccepted.StatusCode);
+		using var rejectedBulk = new StringContent(
+			"[{\"id\":\"" + ReceiverId + "\",\"params\":{\"master_enable\":true}}]",
+			Encoding.UTF8, "application/json");
+		using var bulkDenied = await client.PostAsync(
+			"/x-nmos/connection/v1.2/bulk/receivers", rejectedBulk);
+		Assert.Equal(HttpStatusCode.Conflict, bulkDenied.StatusCode);
+		Assert.Equal(2UL, adapter.VirtualConnectionRevision);
 		var active = await client.GetFromJsonAsync<JsonElement>(
 			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/active/");
 		Assert.False(active.GetProperty("master_enable").GetBoolean());
