@@ -69,8 +69,16 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 			if (_options.Mode == NmosOperatingMode.VirtualInterop)
 			{
 				var app = BuildVirtualServer();
-				await app.StartAsync(cancellationToken).ConfigureAwait(false);
-				_application = app;
+				try
+				{
+					await app.StartAsync(cancellationToken).ConfigureAwait(false);
+					_application = app;
+				}
+				catch
+				{
+					await app.DisposeAsync().ConfigureAwait(false);
+					throw;
+				}
 				if (_options.RegistrationApiUrl is not null)
 				{
 					_registration = new NmosRegistrationClient(_http, _options.RegistrationApiUrl, _resources!);
@@ -92,7 +100,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 			}
 			else
 			{
-				await RefreshDiscoveryAsync(cancellationToken).ConfigureAwait(false);
+				_ = await RefreshDiscoveryAsync(cancellationToken).ConfigureAwait(false);
 			}
 			_worker = Task.Run(() => PollAsync(lifetime.Token), CancellationToken.None);
 		}
@@ -123,7 +131,13 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 			{
 				await Task.Delay(TimeSpan.FromMilliseconds(wait), cancellationToken).ConfigureAwait(false);
 				if (_options.Mode == NmosOperatingMode.Observer)
-					await RefreshDiscoveryAsync(cancellationToken).ConfigureAwait(false);
+				{
+					if (!await RefreshDiscoveryAsync(cancellationToken).ConfigureAwait(false))
+					{
+						failures = Math.Min(5, failures + 1);
+						continue;
+					}
+				}
 				else if (_registration is not null)
 				{
 					if (!_registration.IsRegistered)
@@ -155,7 +169,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 		}
 	}
 
-	private async Task RefreshDiscoveryAsync(CancellationToken cancellationToken)
+	private async Task<bool> RefreshDiscoveryAsync(CancellationToken cancellationToken)
 	{
 		try
 		{
@@ -163,6 +177,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 			Volatile.Write(ref _topology, snapshot with { ObservationGeneration = NextObservationGeneration() });
 			SetHealth(IntegrationAdapterState.Healthy,
 				$"IS-04 v1.3 read-only discovery: {snapshot.Resources.Count} validated remote entries; no local RTP provider admitted.");
+			return true;
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
 		catch (Exception)
@@ -172,6 +187,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 				"Discovery failed; previously observed resources have been invalidated."));
 			SetHealth(IntegrationAdapterState.Degraded,
 				"NMOS Query API is unavailable or returned invalid resources; no topology admission.");
+			return false;
 		}
 	}
 
@@ -322,26 +338,29 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 			try { await app.StopAsync(cancellationToken).ConfigureAwait(false); }
 			finally { await app.DisposeAsync().ConfigureAwait(false); }
 		}
+		var unregisterUnverified = false;
 		if (_registration is not null)
 		{
 			using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 			try { await _registration.UnregisterAsync(cleanupTimeout.Token).ConfigureAwait(false); }
-			catch (Exception) { SetHealth(IntegrationAdapterState.Degraded,
-				"Virtual registry clean deregistration is unverified; registry TTL must remove stale resources."); }
+			catch (Exception) { unregisterUnverified = true; }
 		}
 		_registration = null;
 		Volatile.Write(ref _topology, NmosTopologySnapshot.Unavailable(
 			_options.QueryApiUrl ?? "", NextObservationGeneration(), "STOPPED", "NMOS observation stopped."));
 		lifetime.Dispose();
-		SetHealth(IntegrationAdapterState.Stopped, "NMOS adapter stopped; no active media connection.");
+		SetHealth(IntegrationAdapterState.Stopped, unregisterUnverified
+			? "NMOS stopped with UNVERIFIED registration cleanup; registry TTL must remove stale resources."
+			: "NMOS adapter stopped; no active media connection.");
 	}
 
 	private ulong NextObservationGeneration() => checked((ulong)Interlocked.Increment(ref _observationGeneration));
 
-	internal Task RefreshNowForQualificationAsync(CancellationToken cancellationToken) =>
-		_options.Mode == NmosOperatingMode.Observer
-			? RefreshDiscoveryAsync(cancellationToken)
-			: Task.CompletedTask;
+	internal async Task RefreshNowForQualificationAsync(CancellationToken cancellationToken)
+	{
+		if (_options.Mode == NmosOperatingMode.Observer)
+			_ = await RefreshDiscoveryAsync(cancellationToken).ConfigureAwait(false);
+	}
 
 	public override async ValueTask DisposeAsync()
 	{
