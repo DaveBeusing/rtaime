@@ -9,9 +9,12 @@ on:
       - "src/Contracts/rtaime.Provider.Contracts/NetworkOutput.cs"
       - "src/Contracts/rtaime.Provider.Contracts/St2110SoftwareTransport.cs"
       - "src/Hosts/rtaime.RuntimeHost/RuntimeNetworkOutput*"
-      - "tests/rtaime.Tests.Unit/St2110*"\n      - "tests/rtaime.Tests.Unit/St2022*"
-      - "tests/rtaime.Tests.Integration/St2110*"\n      - "tests/rtaime.Tests.Integration/St2022*"
-      - "docs/St2110SoftwareInteropQualification.md"\n      - "docs/St2022SoftwareProtectionQualification.md"
+      - "tests/rtaime.Tests.Unit/St2110*"
+      - "tests/rtaime.Tests.Unit/St2022*"
+      - "tests/rtaime.Tests.Integration/St2110*"
+      - "tests/rtaime.Tests.Integration/St2022*"
+      - "docs/St2110SoftwareInteropQualification.md"
+      - "docs/St2022SoftwareProtectionQualification.md"
       - ".github/workflows/st2110-software-reference.yml"
   workflow_dispatch:
 
