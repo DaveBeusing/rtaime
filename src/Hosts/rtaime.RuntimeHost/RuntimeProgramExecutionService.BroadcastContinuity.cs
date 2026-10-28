@@ -54,7 +54,15 @@ public sealed partial class RuntimeProgramExecutionService
 				"Committed Aux provider failed; Program routing remains unchanged.");
 		else if (_auxSinkId is not null && _confirmedAuxFrame is { } auxFrame &&
 			auxFrame.Frame.Timing.SequenceNumber == sequence)
-			_broadcastContinuity.ObserveComplete("aux", sequence, auxAudioSamplePosition);
+		{
+			if (_inputSignals.TryGetValue(auxFrame.Frame.SourceId, out var auxInput) &&
+				auxInput == RuntimeInputSignalState.Lost &&
+				!_broadcastTestPatternSources.Contains(auxFrame.Frame.SourceId))
+				_broadcastContinuity.ObserveFault("aux", "runtime.continuity.input_lost",
+					"Committed Aux input signal was LOST; any fallback-black frame is not qualified continuity.");
+			else
+				_broadcastContinuity.ObserveComplete("aux", sequence, auxAudioSamplePosition);
+		}
 	}
 
 	private void ObserveContinuityOnFailedBoundary(Exception failure)
