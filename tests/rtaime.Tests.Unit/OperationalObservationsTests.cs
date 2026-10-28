@@ -56,6 +56,12 @@ public sealed class OperationalObservationsTests
 		};
 		projector.Update([withProvider], Start);
 		Assert.Equal("native-recorder", Assert.Single(projector.Current).OwningProviderId);
+		var unsafeProvider = withProvider with
+		{
+			Metrics = [new HealthMetricSnapshot("Provider", "https://user:password@example.invalid")]
+		};
+		projector.Update([unsafeProvider], Start.AddMilliseconds(500));
+		Assert.Null(Assert.Single(projector.Current).OwningProviderId);
 
 		var unmeasured = Snapshot("ptp", SubsystemHealthState.Unknown);
 		projector.Update([withProvider, unmeasured], Start.AddSeconds(1));
