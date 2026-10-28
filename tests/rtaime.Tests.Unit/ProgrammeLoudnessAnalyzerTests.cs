@@ -81,6 +81,20 @@ public sealed class ProgrammeLoudnessAnalyzerTests
 	}
 
 	[Fact]
+	public void Shorter_than_interpolation_history_is_not_mislabeled_as_true_peak()
+	{
+		var analyzer = new ProgrammeLoudnessAnalyzer(ProgrammeLoudnessPolicy.EbuR128Linear);
+		var tinyBlock = new float[16];
+		for (var i = 0; i < tinyBlock.Length; i++)
+			tinyBlock[i] = 0.8f;
+		analyzer.Process(tinyBlock, 0, A);
+		var reading = analyzer.Read("program");
+		Assert.Null(reading.TruePeakDbtp);
+		Assert.Null(reading.IntegratedLufs);
+		Assert.Equal("WARMING", reading.State);
+	}
+
+		[Fact]
 	public void Source_change_gap_and_underrun_invalidate_previous_integrated_session()
 	{
 		var analyzer = new ProgrammeLoudnessAnalyzer(ProgrammeLoudnessPolicy.EbuR128Linear);
