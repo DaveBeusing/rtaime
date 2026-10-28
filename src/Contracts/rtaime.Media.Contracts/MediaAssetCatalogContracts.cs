@@ -104,6 +104,9 @@ public sealed record MediaAssetDescriptor
 	public UtcTimestamp ImportedAt { get; }
 	public UtcTimestamp UpdatedAt { get; }
 	public MediaAssetAvailability Availability { get; }
+
+	// Additive, optional interchange sidecar. Existing constructor and asset identity remain unchanged.
+	public MediaInterchangeMetadata? InterchangeMetadata { get; init; }
 }
 
 public sealed class MediaAssetCatalogSnapshot
