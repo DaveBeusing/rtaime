@@ -164,6 +164,57 @@
                             IsEnabled="{Binding Context.MediaPool.CanRelinkLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                             AutomationProperties.Name="Relink selected missing or moved media" />
                     </WrapPanel>
+                    <WrapPanel Margin="0,7,0,0">
+                        <controls:RtaimeButton Content="START OFFLINE QC" IsCompact="True" Margin="0,0,5,0"
+                            Command="{Binding Context.MediaPool.StartQcCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Run non-production file quality checks on selected catalogued clip" />
+                        <controls:RtaimeButton Content="CANCEL QC" IsCompact="True" Margin="0,0,5,0"
+                            Command="{Binding Context.MediaPool.CancelQcCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Cancel selected offline QC job" />
+                        <controls:RtaimeButton Content="IMPORT QC XML" IsCompact="True" Margin="0,0,5,0"
+                            Click="OnMediaQcImportClick"
+                            IsEnabled="{Binding Context.MediaPool.CanStartQc, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Import source-bound EBU 2026-04 QC report" />
+                        <controls:RtaimeButton Content="EXPORT QC XML" IsCompact="True"
+                            Click="OnMediaQcExportClick"
+                            IsEnabled="{Binding Context.MediaPool.HasQcResults, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                            AutomationProperties.Name="Export validated EBU 2026-04 QC report" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Context.MediaPool.QcStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                        Style="{StaticResource OperatorLabel}" Margin="0,5,0,0" TextWrapping="Wrap"
+                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Offline QC job status and evidence freshness" />
+                    <Border Margin="0,4,0,0" Padding="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Context.MediaPool.HasQcResults, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Context.MediaPool.QcReportIdentity, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <controls:RtaimeScrollViewer MaxHeight="126" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Context.MediaPool.QcResults, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                    AutomationProperties.Name="Per-check QC outcomes including NOT EXECUTED and UNSUPPORTED">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,4,0,2">
+                                                <DockPanel>
+                                                    <TextBlock Text="{Binding Definition.Name}" Style="{StaticResource OperatorValue}" />
+                                                    <TextBlock Text="{Binding State}" DockPanel.Dock="Right" FontWeight="SemiBold" />
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </controls:RtaimeScrollViewer>
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="{Binding Context.MediaPool.LibraryJourneyFeedback, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                         Style="{StaticResource OperatorLabel}" Margin="0,6,0,0" TextWrapping="Wrap"
                         AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media Library next action and confirmation" />
