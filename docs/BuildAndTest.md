@@ -60,6 +60,22 @@ metadata mapping and explicit limitations in
 [Media Interchange Metadata](MediaInterchangeMetadata.md); passing these tests
 does not assert EBUCore XML/XSD interoperability or hardware qualification.
 
+## Open Broadcast Graphics inspection
+
+The bounded local OGraf v1 **inspection-only** path is covered by
+`OGrafPackageInspectorTests`. It never interprets the JavaScript module,
+renders an OGraf frame or admits graphics to Program.
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~OGrafPackageInspectorTests"
+```
+
+See [OGraf Graphics Interoperability](OGrafGraphicsInterop.md) for security
+admission, supported v1 inspection fields and outstanding renderer-dependent
+tests. A successful manifest test is **not** OGraf Server API, HTML renderer or
+live broadcast qualification. Run the canonical Release build before
+`--no-build` testing.
+
 ## Standard builds
 
 The canonical local developer build entry point is:
