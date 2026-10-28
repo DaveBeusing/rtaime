@@ -70,8 +70,10 @@ public sealed record IntegrationUpstreamOptions
 	public void Validate()
 	{
 		if (!Uri.TryCreate(Endpoint, UriKind.Absolute, out var endpoint) ||
-			!string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-			throw new ArgumentException("Integration upstream endpoint must be an absolute HTTPS URI.", nameof(Endpoint));
+			!string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+			!string.IsNullOrEmpty(endpoint.UserInfo) || !string.IsNullOrEmpty(endpoint.Query) ||
+			!string.IsNullOrEmpty(endpoint.Fragment) || endpoint.AbsolutePath != "/")
+			throw new ArgumentException("Integration upstream endpoint must be an absolute HTTPS origin without embedded credentials, path, query or fragment.", nameof(Endpoint));
 		if (!Enum.IsDefined(TrustMode))
 			throw new ArgumentOutOfRangeException(nameof(TrustMode));
 		if (TrustMode == IntegrationTrustMode.PinnedServerCertificate && string.IsNullOrWhiteSpace(TrustedServerCertificateThumbprint))
@@ -110,8 +112,9 @@ public sealed record OscAdapterOptions
 
 	public void Validate()
 	{
-		if (!IPAddress.TryParse(ListenAddress, out _))
-			throw new ArgumentException("OSC listen address must be a literal IP address.", nameof(ListenAddress));
+		if (!IPAddress.TryParse(ListenAddress, out var listenAddress) ||
+			!IPAddress.IsLoopback(listenAddress) || listenAddress.AddressFamily != IPAddress.Loopback.AddressFamily)
+			throw new ArgumentException("Unauthenticated OSC UDP input is restricted to IPv4 loopback; use a secured local tunnel for remote sources.", nameof(ListenAddress));
 		if (ListenPort is < 1 or > 65535)
 			throw new ArgumentOutOfRangeException(nameof(ListenPort));
 		if (MaxPacketBytes is < 64 or > 65507)
@@ -182,8 +185,9 @@ public sealed record CompanionAdapterOptions
 
 	public void Validate()
 	{
-		if (!IPAddress.TryParse(BindAddress, out _))
-			throw new ArgumentException("Companion bind address must be a literal IP address.", nameof(BindAddress));
+		if (!IPAddress.TryParse(BindAddress, out var bindAddress) ||
+			!IPAddress.IsLoopback(bindAddress) || bindAddress.AddressFamily != IPAddress.Loopback.AddressFamily)
+			throw new ArgumentException("Companion HTTP bearer authentication is restricted to IPv4 loopback; use a TLS-terminating local proxy for remote clients.", nameof(BindAddress));
 		if (Port is < 1 or > 65535)
 			throw new ArgumentOutOfRangeException(nameof(Port));
 		IntegrationUpstreamOptions.ValidateEnvironmentReference(BearerTokenEnvironmentVariable, nameof(BearerTokenEnvironmentVariable));
@@ -372,6 +376,10 @@ public sealed record IntegrationGatewayOptions
 		if (SnapshotMinimumIntervalMs is < 100 or > 5000)
 			throw new ArgumentOutOfRangeException(nameof(SnapshotMinimumIntervalMs));
 		Upstream.Validate();
+		if (Upstream.TrustMode == IntegrationTrustMode.TestOnlyInsecure &&
+			(!TestMode || !DryRun || !Uri.TryCreate(Upstream.Endpoint, UriKind.Absolute, out var testEndpoint) ||
+			 !IPAddress.TryParse(testEndpoint.Host, out var testAddress) || !IPAddress.IsLoopback(testAddress)))
+			throw new ArgumentException("Insecure upstream certificate validation is allowed only for loopback testMode + dryRun configurations.", nameof(Upstream));
 		if (Adapters.Count is 0 or > 32)
 			throw new ArgumentException("Enabled integration gateway requires between 1 and 32 adapters.", nameof(Adapters));
 		if (Adapters.Select(adapter => adapter.Id).Distinct(StringComparer.Ordinal).Count() != Adapters.Count)
