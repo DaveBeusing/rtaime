@@ -61,7 +61,7 @@ public sealed record St2110SoftwareEndpoint
     {
         ArgumentNullException.ThrowIfNull(address);
         if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
-            !IPAddress.IsLoopback(address))
+            !address.Equals(IPAddress.Loopback))
             throw new NotSupportedException("Physical NIC, multicast and non-loopback ST 2110 routing are NOT_SUPPORTED.");
         if (videoPort is < 1024 or > 65532 || (videoPort & 1) != 0 ||
             audioPort != videoPort + 2 || audioPort > 65534)
