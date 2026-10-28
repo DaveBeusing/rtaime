@@ -78,6 +78,19 @@ public sealed class St2110NetworkOutputConfigurationIntegrationTests
         Assert.Throws<ArgumentException>(() => Load(srt, VideoFormat.Hd1080p50Rgba8));
     }
 
+    [Theory]
+    [InlineData("\"seamlessProtection\": true")]
+    [InlineData("\"seamlessProtection\": false")]
+    [InlineData("\"protectionMode\": \"st2022-7\"")]
+    public void Physical_dual_leg_protection_is_rejected_in_single_leg_software_profile(
+        string protectionField)
+    {
+        var json = LoopbackConfig.Replace("\"queueCapacity\": 2",
+            protectionField + ", \"queueCapacity\": 2");
+        Assert.Throws<NotSupportedException>(() =>
+            Load(json, VideoFormat.Hd1080p50Rgba8));
+    }
+
     [Fact]
     public void Default_network_outputs_remain_unchanged_without_explicit_opt_in()
     {

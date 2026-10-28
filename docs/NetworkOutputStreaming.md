@@ -381,3 +381,13 @@ The Runtime bridge attempts every session cleanup before propagating the first f
 
 The mixed-consumer qualification exercises real session queues with simulated NDI/SRT backends. It proves bounded admission and recovery behavior, not peer interoperability, encoder quality or native shutdown latency.
 
+
+
+### ST 2022-7 dual-leg protection status
+
+A bounded [dual-leg RTP software packet-merger reference](St2022SoftwareProtectionQualification.md)
+can be tested independently against the existing ST 2110 RTP codec.
+The shipping Runtime configuration remains single-leg software
+loopback only and rejects `seamlessProtection` or `protectionMode`
+as unqualified. It does not bind a second NIC, offer an Operator
+protection checkbox or advertise protected Program delivery.

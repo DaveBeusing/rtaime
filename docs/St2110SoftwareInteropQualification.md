@@ -20,6 +20,12 @@ The reference path is opt-in on the existing governed Runtime network-output gra
 | Admission | Explicit typed loopback opt-in and exact format, finite provider slots | Unknown format or external destination rejected |
 | Input | Receiver loopback has bounded video and PCM queues and packet health | Does not produce a routable ControlHost media source |
 
+A separate [ST 2022-7 software packet-merge reference](St2022SoftwareProtectionQualification.md)
+provides bounded dual-leg packet selection and impairment tests **without** enabling
+physical protection, dual network endpoints, a new Runtime source, or Operator admission.
+The production ST 2110 transport remains single-leg loopback; ST 2022-7 is
+UNSUPPORTED for physical deployment.
+
 The Runtime RGBA8 format may have unknown source colorimetry. The deterministic software BT.709/YCbCr conversion is not independent evidence of calibrated source colour or broadcast compliance.
 
 ## Opt-in configuration
@@ -69,7 +75,8 @@ Only exact-run evidence can be marked PASS. Required CI gates remain mandatory.
 
 Qualify dedicated NIC, PTP Grandmaster and hardware timestamp/frequency discipline; observed ST 2110-21 shaping on a switch; multicast join/leave; actual external sender/receiver interoperability; A/V lip-sync and drift at 25/50/59.94; color test pattern accuracy; soak under CPU/NIC pressure, receiver reordering and failover; timing loss and recovery. Do not market hardware or full standard compliance before this evidence is independently captured.
 
-NMOS registration and IS-05 activation remain with IntegrationHost's existing observer/virtual boundary. ST 2022-7 packet merging and ST 2110-22 compression remain out of scope.
+NMOS registration and IS-05 activation remain with IntegrationHost's existing observer/virtual boundary. Production ST 2022-7 protection and ST 2110-22 compression remain unsupported.
+A non-admitted ST 2022-7 software merger and qualification matrix are documented separately.
 
 ## References
 

@@ -144,6 +144,13 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 	private static NetworkOutputConfiguration CreateSt2110Configuration(
         RuntimeNetworkOutputConfigurationDto descriptor, VideoFormat format)
     {
+        // Physical ST 2022-7 requires independently admitted network/clock
+        // legs. The RTP merge reference is not a deployable dual-NIC provider.
+        if (descriptor.SeamlessProtection is not null ||
+            descriptor.ProtectionMode is not null)
+            throw new NotSupportedException(
+                "ST 2022-7 protection is NOT_SUPPORTED on the single-leg ST 2110 software loopback provider.");
+
         // An explicit softwareLoopback opt-in is required: physical ST 2110
         // routes cannot be advertised without PTP/NIC/shaping qualification.
         if (descriptor.SoftwareLoopback != true ||
@@ -173,7 +180,8 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 	private static bool HasSt2110OnlyFields(RuntimeNetworkOutputConfigurationDto descriptor) =>
         descriptor.SoftwareLoopback is not null || descriptor.Address is not null ||
         descriptor.VideoPort is not null || descriptor.AudioPort is not null ||
-        descriptor.VideoSsrc is not null || descriptor.AudioSsrc is not null;
+        descriptor.VideoSsrc is not null || descriptor.AudioSsrc is not null ||
+        descriptor.SeamlessProtection is not null || descriptor.ProtectionMode is not null;
 
 	private static bool HasSrtOnlyFields(RuntimeNetworkOutputConfigurationDto descriptor) =>
 		descriptor.Endpoint is not null ||
@@ -239,6 +247,8 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 		public string? Endpoint { get; init; }
 		public string? SourceName { get; init; }
         public bool? SoftwareLoopback { get; init; }
+        public bool? SeamlessProtection { get; init; }
+        public string? ProtectionMode { get; init; }
         public string? Address { get; init; }
         public int? VideoPort { get; init; }
         public int? AudioPort { get; init; }
