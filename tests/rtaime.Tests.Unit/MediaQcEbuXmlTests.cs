@@ -45,6 +45,8 @@ public sealed class MediaQcEbuXmlTests
 		Assert.Equal(5, doc.Descendants(qc + "ItemResult").Count());
 		Assert.Equal(7, doc.Descendants(qc + "CheckResultDefinition").Count());
 		Assert.Equal(7, doc.Descendants(rqc + "Outcome").Count());
+		Assert.Equal(2, doc.Descendants(rqc + "Outcome")
+			.Count(x => (string?)x.Attribute("state") == "NOT_EXECUTED"));
 		Assert.DoesNotContain("CheckResult</", string.Join("",
 			doc.Descendants(qc + "Output").Select(x => (string?)x.Element(qc + "Name"))));
 	}
