@@ -194,3 +194,11 @@ this authored model.
 ## Mixer interaction and signal flow
 
 The [Audio Mixer workspace](AudioMixerWorkspace.md) presents confirmed source → bus → Program/Aux routing with independent source/bus drafts, validated gain/EQ/dynamics fields, accessible routing cells and Runtime sample-peak evidence. Missing bus references, stale/unavailable meters, silence and clipping remain distinct. AUDIO can float through the existing docking system; layout v1 migrates additively to v2. Configuration still crosses Client/ControlHost and is executed by Runtime.
+
+
+
+## Broadcast continuity and manual recovery evidence
+
+Program and Aux continue to use existing RuntimeOutputRoleSnapshot/ControlHost evidence. The **Broadcast continuity** addition distinguishes AWAITING FIRST COMPLETE, SOFTWARE OBSERVED, FAILED and RECOVERED AWAITING RE-ARM. OUTPUTS shows these fields in read-only selected-role details, including the last completed software video frame, audio sample position, cause and Control/Runtime revisions when available; no extra output polling or independent route command exists. Preview remains Control-only monitoring and Clean Feed remains a local viewer, not independent scan-out.
+
+A Program/Aux source marked LOST cannot be promoted to PASS solely because the existing software graph generated a black fallback descriptor. The recovery latch prevents an incidental successful frame or unrelated state revision from clearing an active incident. Local Health Center ACK acknowledges an alarm display only; it does **not** re-arm Program or a physical sink. Unsupported HoldLast, AudioMute and Slate modes are rejected, not quietly enabled. Confirmed software frame progress is still not proof of packet loss-free, no-black or sample-exact external broadcast delivery. See [Broadcast Fail-Safe Playout](BroadcastFailSafePlayout.md).

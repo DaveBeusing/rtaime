@@ -75,3 +75,9 @@ Before production use verify that:
 A production deployment record should identify the exact product/release candidate, selected support-matrix configuration, evidence references, deployment-check results and known deviations.
 
 Deviations remain explicit. They do not automatically become accepted supported configurations.
+
+
+
+## Fail-safe playout deployment qualification
+
+[Broadcast Fail-Safe Playout](BroadcastFailSafePlayout.md) introduces software-only continuity incidents and explicit per-role failure-action admission. Only ReportAndPreserveAuthority is executable. HoldLast frame+audio, mute, safety slate, unattended device reroute, operator-mediated ControlHost re-arm and physical no-black-frame operation are **not** approved for production deployment by this feature. A green software CI run is not a hardware soak/SDI/clock certificate. Physical standby device admission, bounded fallback buffers, source identity, PTP/TAI behavior, A/V continuity and explicit manual re-arm must be separately qualified and deployed only after ControlHost-approved policy/persistence and recorded proof.

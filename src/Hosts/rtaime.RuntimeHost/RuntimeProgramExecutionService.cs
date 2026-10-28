@@ -1125,6 +1125,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			if (_activeOutputMapping is not null || _pendingOutputMapping is not null || _preparedOutputMapping is not null)
 				InvalidateOutputMappingUnsafe("mapping.execution_recommitted");
 			ndiBindings = CommitNdiBindingsUnsafe(preparedExecution.Bindings, commit.ExecutionRevision.Value);
+			ConfirmContinuityAfterRuntimeCommitUnsafe(preparedExecution, commit.ExecutionRevision.Value, programSinkId);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
@@ -1620,6 +1621,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						}
 
 						_nextSequenceNumber++;
+						TryObserveContinuityAtCompletedBoundaryUnsafe(committedSource, sequence,
+							programAudioBuffer.Timing.SamplePosition, auxAudioBuffer?.Timing.SamplePosition, auxFailure);
 						Observe($"program.frame:{sequence}:{committedSource}");
 					}
 
@@ -1644,8 +1647,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					throw;
 				}
 			}
-			catch
+			catch (Exception exception)
 			{
+				TryObserveContinuityOnFailedBoundary(exception);
 				// An unsuccessful Program boundary must not leave the source
 				// pipelines expecting a slot that the single Program clock never
 				// committed. Recovery runs only on the exceptional management
@@ -3072,7 +3076,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					$"Program output evidence targets sink '{programEvidence.SinkId}' while committed target is '{programSink}'.");
 			}
 
-			var hasEvidence = fault is null &&
+			fault ??= ContinuityRoleFaultUnsafe("program");
+			var hasEvidence = fault is null && ContinuityHealthyUnsafe("program") &&
 				programEvidence is not null &&
 				programEvidence.Frame.SourceId == programSource;
 			snapshots.Add(new RuntimeOutputRoleSnapshot(
@@ -3082,10 +3087,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				true,
 				fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
 				fault is not null
-					? fault.Value.Message
-					: hasEvidence
+					? fault.Value.Message + " · " + ContinuityRoleEvidenceUnsafe("program")
+					: (hasEvidence
 						? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber} for sink '{programSink}'."
-						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
+						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.") +
+						" · " + ContinuityRoleEvidenceUnsafe("program"),
 				fault,
 				_networkOutputBridge.SnapshotForRole("program"),
 				programBinding.AudioBusId ?? AudioBusId.Program.Value,
@@ -3127,8 +3133,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					$"Aux output evidence targets sink '{auxEvidence.SinkId}' while committed target is '{auxSink}'.");
 			}
 
-			var fault = bindingFault ?? _auxFailure;
-			var hasEvidence = fault is null &&
+			var fault = bindingFault ?? _auxFailure ?? ContinuityRoleFaultUnsafe("aux");
+			var hasEvidence = fault is null && ContinuityHealthyUnsafe("aux") &&
 				auxEvidence is not null &&
 				auxEvidence.Frame.SourceId == auxSource;
 			snapshots.Add(new RuntimeOutputRoleSnapshot(
@@ -3138,10 +3144,11 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				true,
 				fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
 				fault is not null
-					? fault.Value.Message
-					: hasEvidence
+					? fault.Value.Message + " · " + ContinuityRoleEvidenceUnsafe("aux")
+					: (hasEvidence
 						? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber} for sink '{auxSink}'."
-						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
+						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.") +
+						" · " + ContinuityRoleEvidenceUnsafe("aux"),
 				fault,
 				_networkOutputBridge.SnapshotForRole("aux"),
 				auxBinding.AudioBusId ?? AudioBusId.Program.Value,
