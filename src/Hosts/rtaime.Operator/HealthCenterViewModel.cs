@@ -24,6 +24,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	internal SubsystemHealthSnapshot CurrentSnapshot => _snapshot;
 	public string Id => _snapshot.Id;
 	public string DisplayName => _snapshot.DisplayName;
 	public string Category => _snapshot.Category;
@@ -374,10 +375,36 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 	private void ApplySnapshots(IReadOnlyList<SubsystemHealthSnapshot> snapshots)
 	{
-		var transitions = _alarmProjection.Update(snapshots, _clock());
+		var now = _clock();
+		var transitions = _alarmProjection.Update(snapshots, now);
 		var byId = Subsystems.ToDictionary(item => item.Id, StringComparer.Ordinal);
-		var ordered = new List<HealthCenterSubsystemViewModel>(snapshots.Count);
-		foreach (var snapshot in snapshots)
+		var incoming = snapshots.Take(OperationalObservationProjector.Capacity).ToList();
+		var incomingIds = incoming.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+		// An absent provider entry retains its last values as unavailable.
+		// Do not make an incident disappear merely because its source stopped reporting.
+		foreach (var item in Subsystems)
+		{
+			if (incoming.Count == OperationalObservationProjector.Capacity)
+				break;
+			if (!incomingIds.Add(item.Id))
+				continue;
+			var retained = item.CurrentSnapshot;
+			var alreadyUnavailable = retained.State == SubsystemHealthState.Unknown &&
+				retained.Metrics.Any(metric => metric.Label == "Evidence status" && metric.Value == "UNAVAILABLE");
+			incoming.Add(retained with
+			{
+				State = SubsystemHealthState.Unknown,
+				ProgramImpact = SubsystemProgramImpact.Unknown,
+				StatusSince = alreadyUnavailable ? retained.StatusSince : now,
+				Metrics = retained.Metrics.Where(metric => metric.Label != "Evidence status")
+					.Append(new HealthMetricSnapshot("Evidence status", "UNAVAILABLE")).ToArray(),
+				Detail = alreadyUnavailable ? retained.Detail :
+					"Source stopped publishing this subsystem; retained values are not current evidence.",
+				RecoveryStatus = "Await source recovery and new authoritative evidence; no automatic Program action is taken."
+			});
+		}
+		var ordered = new List<HealthCenterSubsystemViewModel>(incoming.Count);
+		foreach (var snapshot in incoming)
 		{
 			if (!byId.TryGetValue(snapshot.Id, out var item))
 				item = new HealthCenterSubsystemViewModel(snapshot);
@@ -456,12 +483,12 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 							? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
 					resolved ? OperatorNotificationCondition.Resolved : OperatorNotificationCondition.Active,
 					$"{observation.DisplayName}: {(resolved ? "resolved" : stale ? "evidence unavailable" : observation.Severity.ToString())}",
-					observation.Detail,
+					DiagnosticRedactor.RedactText(observation.Detail),
 					observation.DisplayName,
-					resolved ? "Review the recovered evidence before resuming operations." : observation.RecommendedAction,
+					resolved ? "Review the recovered evidence before resuming operations." : DiagnosticRedactor.RedactText(observation.RecommendedAction),
 					observation.ProgramImpact.ToString(),
 					Persistent: !resolved,
-					TechnicalDetail: $"Source={observation.EvidenceSource}; Evidence={observation.EvidenceAvailability}; ProjectedAtUtc={observation.ProjectedAtUtc:O}",
+					TechnicalDetail: DiagnosticRedactor.RedactText($"Source={observation.EvidenceSource}; Evidence={observation.EvidenceAvailability}; ProjectedAtUtc={observation.ProjectedAtUtc:O}"),
 					Lifetime: resolved ? TimeSpan.FromSeconds(12) : null,
 					TargetWorkspace: "HEALTH"));
 			}
