@@ -35,6 +35,22 @@ Known fields use `MediaInterchangeField` with `Path`, `Value`, `Source`, `Eviden
 
 There is no automatic embedded metadata reader. `ProviderProbe` initially populates only SHA-256, first probed video codec/width/height/exact frame rate and first audio codec/sample rate/channel count. Values such as HDR, rights, language, captions and start timecode stay absent until an identified source supplies them. Additional audio/video/caption tracks may be represented explicitly but do not imply those streams can be decoded.
 
+## Independently reopened MXF metadata
+
+The existing MXF OP1a output writer's independent FFprobe can now return a
+`MxfValidatedInterchangeEvidence` observation for the **actual finalized
+file**. If a caller separately hashes that stable file with SHA-256, the
+observation can be mapped into this existing `rtaime.media-interchange.ebucore-1.10.v1`
+JSON projection with exact rational video and audio timebases. It carries only
+observed transfer/primaries, language and material timecode when present,
+labelling timecode as **reported, not source-preserved**. Channel order, HDR
+and rights are not fabricated; track counts and PCM depth remain in the
+typed evidence, not claimed as standardized embedded MXF metadata.
+The process does not import MXF into the Media Library or export EBUCore XML.
+
+See [Broadcast File Interchange Profiles](BroadcastFileInterchangeProfiles.md)
+for limitations, per-file probe requirements and R 154 profile support.
+
 ## Timecode, interchange and conflict rules
 
 - All strings are Unicode/UTF-8 JSON. A single projection is limited to 2,048 encoded bytes, 24 known fields and eight bounded opaque unmapped fields. This keeps existing paged catalogue transport below its 1-MiB budget without raw media IPC.
