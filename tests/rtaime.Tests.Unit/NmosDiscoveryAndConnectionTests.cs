@@ -123,6 +123,55 @@ public sealed class NmosDiscoveryAndConnectionTests
 	}
 
 	[Fact]
+	public async Task Registry_outage_invalidates_previous_topology_and_recovery_uses_new_generation()
+	{
+		var published = false;
+		var resources = new NmosVirtualResources(Virtual());
+		using var client = new HttpClient(new FakeHttpHandler(request =>
+		{
+			if (!published) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+			var kind = request.RequestUri!.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+			return Json(kind switch
+			{
+				"nodes" => new[] { resources.Node },
+				"devices" => new[] { resources.Device },
+				"senders" => new[] { resources.Sender },
+				"receivers" => new[] { resources.Receiver },
+				_ => Array.Empty<JsonElement>()
+			});
+		}));
+		await using var adapter = new NmosIntegrationAdapter(new IntegrationAdapterOptions
+		{
+			Id = "nmos",
+			Kind = IntegrationAdapterKind.Nmos,
+			Nmos = Observer()
+		}, Gateway(Observer()), client);
+		await adapter.StartAsync(_ => throw new InvalidOperationException("NMOS observer must never emit a Production trigger."),
+			CancellationToken.None);
+		Assert.Equal("STALE", adapter.Topology.State);
+		Assert.Empty(adapter.Topology.Resources);
+		Assert.Equal(IntegrationAdapterState.Degraded, adapter.Health.State);
+		var firstGeneration = adapter.Topology.ObservationGeneration;
+
+		published = true;
+		await adapter.RefreshNowForQualificationAsync(CancellationToken.None);
+		Assert.Equal("OBSERVED", adapter.Topology.State);
+		Assert.Equal(4, adapter.Topology.Resources.Count);
+		Assert.True(adapter.Topology.ObservationGeneration > firstGeneration);
+		var observedGeneration = adapter.Topology.ObservationGeneration;
+
+		published = false;
+		await adapter.RefreshNowForQualificationAsync(CancellationToken.None);
+		Assert.Equal("STALE", adapter.Topology.State);
+		Assert.Empty(adapter.Topology.Resources);
+		Assert.True(adapter.Topology.ObservationGeneration > observedGeneration);
+		Assert.False(NmosConnectionPlanner.Preview(adapter.Topology, SenderId, ReceiverId)
+			.EligibleForProductionActivation);
+		await adapter.StopAsync(CancellationToken.None);
+		Assert.Equal("STOPPED", adapter.Topology.State);
+	}
+
+	[Fact]
 	public async Task Registry_non_success_and_oversized_collection_fail_without_partial_topology()
 	{
 		using var missing = new HttpClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
