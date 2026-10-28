@@ -156,8 +156,10 @@ public static class HdrContributionAdmission
 
             var budget = request.Budget;
             var activeNativeSinkCount = request.ActiveConsumers.Count(IsNativeSink);
-            if (budget.NativeFrameSlots < 1 || budget.LinearHalfGpuFrameSlots < 1 ||
+            if (budget.NativeFrameSlots is < 1 or > 256 ||
+                budget.LinearHalfGpuFrameSlots is < 1 or > 256 ||
                 budget.NativeSinkFrameSlots < activeNativeSinkCount ||
+                budget.NativeSinkFrameSlots > 512 ||
                 budget.ManagedBudgetBytes <= 0 || budget.GpuBudgetBytes <= 0 ||
                 budget.NativeBudgetBytes <= 0)
                 return HdrContributionAdmissionDecision.Reject("hdr.admission.resource_evidence_invalid",
