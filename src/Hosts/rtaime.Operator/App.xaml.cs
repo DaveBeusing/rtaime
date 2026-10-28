@@ -68,7 +68,40 @@ public partial class App : Application
 		base.OnExit(e);
 	}
 
-	internal void ReportSurfaceDiagnostic(Controls.OperatorSurfaceDiagnostic diagnostic) =>
+	internal void ReportOperationalObservation(OperationalObservation observation)
+	{
+		if (_log is null)
+			return;
+		try
+		{
+			_log.Write(
+				observation.Condition == OperationalObservationCondition.Clear
+					? DiagnosticSeverity.Information
+					: observation.Severity == OperationalObservationSeverity.Error
+						? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+				"operational-health",
+				"operator.operational-observation.changed",
+				"Observed subsystem alarm state changed.",
+				dimensions: new Dictionary<string, string>
+				{
+					["schemaVersion"] = observation.FormatVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
+					["component"] = observation.ComponentId,
+					["condition"] = observation.Condition.ToString(),
+					["severity"] = observation.Severity.ToString(),
+					["evidenceAvailability"] = observation.EvidenceAvailability,
+					["source"] = observation.EvidenceSource,
+					["programImpact"] = observation.ProgramImpact.ToString(),
+					["projectedAtUtc"] = observation.ProjectedAtUtc.ToString("O"),
+					["lastGoodProjectedUtc"] = observation.LastGoodProjectedUtc?.ToString("O") ?? "UNVERIFIED"
+				});
+		}
+		catch (Exception)
+		{
+			// Logging remains best-effort and cannot block Operator or Program execution.
+		}
+	}
+
+		internal void ReportSurfaceDiagnostic(Controls.OperatorSurfaceDiagnostic diagnostic) =>
 		_log?.Write(diagnostic.Severity, "gpu-surface", diagnostic.Code,
 			diagnostic.Message, diagnostic.Exception, diagnostic.Dimensions);
 
