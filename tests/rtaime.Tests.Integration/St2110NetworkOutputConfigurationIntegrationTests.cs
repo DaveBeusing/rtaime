@@ -46,6 +46,7 @@ public sealed class St2110NetworkOutputConfigurationIntegrationTests
     [Theory]
     [InlineData("\"softwareLoopback\": true", "\"softwareLoopback\": false")]
     [InlineData("\"127.0.0.1\"", "\"192.0.2.1\"")]
+    [InlineData("\"127.0.0.1\"", "\"127.0.0.2\"")]
     [InlineData("\"videoPort\": 5004", "\"videoPort\": 5005")]
     [InlineData("\"audioPort\": 5006", "\"audioPort\": 6000")]
     [InlineData("\"videoSsrc\": 2233", "\"videoSsrc\": 0")]
