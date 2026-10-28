@@ -245,6 +245,7 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 			{
 				foreach (var rune in cue.Text.EnumerateRunes())
 				{
+					if (rune.Value == '\n') continue; // TTML br is layout, never a font glyph.
 					if (glyphFace.CharacterToGlyphMap.TryGetValue(rune.Value, out var glyph) && glyph != 0)
 						continue;
 					missingGlyph = true;
