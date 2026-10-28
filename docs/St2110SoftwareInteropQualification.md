@@ -78,3 +78,16 @@ NMOS registration and IS-05 activation remain with IntegrationHost's existing ob
 - [AMWA NMOS specifications](https://specs.amwa.tv/nmos/by-type/)
 - [Media Reference Clock Qualification](MediaReferenceClockQualification.md)
 - [Output Routing and Health](OutputRoutingHealth.md)
+
+
+## HDR source precision and colour restriction
+
+The reference software sender **starts with legacy 1080p RGBA8** and
+derives 10-bit packet words through a BT.709 software conversion. This
+is not native 10-bit source preservation, HLG metadata carriage or
+3840×2160 HDR output. The new `HdrNative422Packing` off-line
+pgroup/planar roundtrip exercises a distinct original 10-bit
+signal contract; it does not upgrade the existing ST 2110 session,
+SDP or network clock. Exact HDR 10-bit/CICP source and physical
+ST 2110 HDR receiver/SDI output remain UNSUPPORTED or UNVERIFIED.
+See [HDR Contribution Color Decision](HdrContributionColorPipelineDecision.md).
