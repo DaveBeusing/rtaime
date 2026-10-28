@@ -3,6 +3,7 @@
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
+using System.Security.Cryptography;
 
 namespace rtaime.Tests.Integration;
 
@@ -68,6 +69,21 @@ public sealed class BmxOp1aRecordingIntegrationTests
             Assert.True(File.Exists(Path.Combine(root, "program.mxf")));
             Assert.False(File.Exists(Path.Combine(root, "program.partial.mxf")));
             Assert.False(File.Exists(Path.Combine(root, "program.mxf.lock")));
+            var finalFile = Path.Combine(root, "program.mxf");
+            var evidence = await MxfIndependentMediaProbe.InspectValidatedAsync(
+                ffprobe!, finalFile, format.FrameRate.ToString(), 2,
+                AudioPositionCeiling(2, format.FrameRate), CancellationToken.None);
+            await using var published = File.OpenRead(finalFile);
+            var fingerprint = Convert.ToHexString(await SHA256.HashDataAsync(published));
+            var interchange = evidence.ToInterchangeMetadata(fingerprint, DateTimeOffset.UtcNow);
+            Assert.Equal(fingerprint, interchange.FingerprintSha256);
+            Assert.Contains(interchange.Fields, field =>
+                field.Path == "video.0.frameRate" &&
+                field.Value == format.FrameRate.ToString());
+            Assert.Contains(interchange.Fields, field =>
+                field.Path == "audio.0.channelCount" && field.Value == "2");
+            Assert.DoesNotContain(interchange.Fields, field =>
+                field.Path == "video.0.hdr" || field.Path == "audio.0.channelRole");
         }
         finally
         {
@@ -79,6 +95,16 @@ public sealed class BmxOp1aRecordingIntegrationTests
     private static ulong AudioPosition(ulong index, FrameRate rate) =>
         checked((ulong)(((UInt128)index * 48000U * (ulong)rate.Denominator) /
                          (ulong)rate.Numerator));
+
+    // The MXF writer pads at most one terminal PCM sample frame at fractional
+    // rates before muxing, so independent reopen must verify the published
+    // sample count (ceil), not the last unpadded input boundary (floor).
+    private static ulong AudioPositionCeiling(ulong index, FrameRate rate)
+    {
+        var numerator = checked((UInt128)index * 48000U * (ulong)rate.Denominator);
+        var denominator = (ulong)rate.Numerator;
+        return checked((ulong)((numerator + denominator - 1) / denominator));
+    }
 
     private sealed class Lease(ReadOnlyMemory<byte> memory) : IProgramRecordingPayloadLease
     {

@@ -8,6 +8,22 @@ Program Recording exposes a provider-neutral catalog of concrete recording profi
 
 The catalog does not create production authority. Selecting a recording profile is configuration metadata for the next recording session and does not advance Production revision.
 
+## Broadcast interchange tuple visibility
+
+The existing provider-neutral catalog remains the sole recording-admission source.
+`DescribeFileInterchange()` now provides a read-only, exact container/codec/
+1920×1080/rational-rate/bit-depth/audio-topology inventory derived from the
+**actually registered** provider descriptors. Missing or disabled writers show
+`NOT_SUPPORTED` / `UNAVAILABLE`, never a fabricated codec capability.
+This inventory is not itself a recorder selection, per-file interoperability
+certificate, import decoder or hardware qualification.
+
+The current 1080p MXF OP1a UYVY/PCM16 output is **not** an EBU R 154 UHD/HDR
+deliverable; XAVC 4K Intra Class 300 and IMF App #6 / DPP ProRes profiles
+remain `NOT_SUPPORTED`. All recording UI availability still comes directly
+from the Runtime-confirmed catalog. See
+[Broadcast File Interchange Profiles](BroadcastFileInterchangeProfiles.md).
+
 ## Provider-neutral model
 
 Every production recording profile has a stable `RecordingProfileId` and every writer provider has a stable `RecordingWriterProviderId`.

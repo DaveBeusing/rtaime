@@ -25,6 +25,25 @@ The default `mp4-h264-aac` recording profile remains unchanged. The Operator rec
 - All final output is partial-first: `<name>.partial.mxf` is generated and independently validated before no-overwrite atomic publication to `<name>.mxf`. Target paths use `.lock` reservation, and session work files are cleaned after finalize or abort.
 - A failed/prohibited format, wrong Program frame size, discontinuous sequence/audio positions, quota exhaustion, missing tools or failed independent probe cannot publish a final `.mxf`.
 
+## Bounded FFprobe and EBUCore-oriented observations
+
+The independent FFprobe process now has a two-minute wall-clock budget,
+bounded stdout/stderr, cancellation/child termination on failure, finite JSON
+depth and explicit negative checks for conflicting field order, bit-depth and
+audio channel-layout reports. `InspectValidatedAsync` retains the established
+recording `ValidateAsync` entry point and returns per-file observed frame/
+sample counts, exact rational timebases and optional **reported** color,
+language and timecode tags. A caller can bind its observations to an
+independently computed final-file SHA-256 and the versioned
+`MediaInterchangeMetadata` JSON profile. Missing metadata remains absent;
+source timecode preservation, EBU R 123 order, rights, HDR and alpha semantics
+are **not** inferred.
+
+The dedicated native qualification now exercises recording, independent
+reopening and hash-bound metadata projection for both supported rates. See
+[Broadcast File Interchange Profiles](BroadcastFileInterchangeProfiles.md) for
+the exact tuple and EBU R 154 nonconformance boundary.
+
 ## Actual validation
 
 `MxfOp1aStructureProbe` independently reads the file's SMPTE KLV and MXF partition/primer structures, validates OP1a operational pattern, header/body/footer/index consistency, previous-partition chains and RIP offsets. It handles legal fixed-width BER lengths.
