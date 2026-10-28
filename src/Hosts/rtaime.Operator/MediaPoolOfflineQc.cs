@@ -216,7 +216,12 @@ public sealed partial class MediaPoolInspectorViewModel
 			PresentQcReport(report, retained: true);
 	}
 
-	private void NotifyQcState()
+	public void ReportQcOperationFailure(string operation, string reason)
+	{
+		QcStatus = $"Offline QC {operation} rejected ({reason}); previous evidence is unchanged.";
+	}
+
+		private void NotifyQcState()
 	{
 		OnPropertyChanged(nameof(CurrentQcReport));
 		OnPropertyChanged(nameof(QcReportIdentity));
