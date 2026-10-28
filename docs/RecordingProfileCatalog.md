@@ -166,3 +166,17 @@ Hardware acceleration and sustained storage throughput remain unverified. A comp
 ## Capability evidence
 
 The repository projection at `docs/qualification/RecordingCapabilityCatalog.json` provides a machine-readable statement of the current catalog and qualification boundary. Runtime availability remains authoritative for the running host because platform capabilities can differ from the repository reference declaration.
+
+
+## Native HLG recording compatibility
+
+The [HDR contribution color reference](HdrContributionColorPipelineDecision.md)
+introduces a separate native 10-bit signal identity, CICP and SHA-256
+reference sidecar, **not** a recording writer or a new
+`RecordingProfileId`. All existing writer `SupportedInputVideoFormats`
+still describe legacy RGBA8 HD formats. No MP4/MOV/MXF recording profile
+can preserve a native 2160p50/60000/1001 HLG 4:2:2 signal, CICP,
+timebase or audio metadata under this change. Output selection must
+reject these HDR tuples before authoritative recording commit until
+an actual provider demonstrates a validated native file and independent
+reopen; reference sidecar roundtrips alone are insufficient.
