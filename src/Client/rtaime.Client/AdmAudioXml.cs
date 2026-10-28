@@ -88,7 +88,9 @@ public static class AdmAudioXml
 		var parsed = ParseXml(xml);
 		var afe = parsed.Root!.Name.LocalName == "audioFormatExtended"
 			? parsed.Root
-			: parsed.Root.Descendants().SingleOrDefault(x => x.Name.LocalName == "audioFormatExtended")
+			: parsed.Root.Descendants().SingleOrDefault(x =>
+				x.Name.LocalName == "audioFormatExtended" &&
+				x.Name.NamespaceName is "" or EbuCoreNamespace)
 				?? throw new InvalidDataException("EBUCore document contains no single ADM audioFormatExtended.");
 		if (afe.Name.NamespaceName is not ("" or EbuCoreNamespace) ||
 			afe.Attribute("version")?.Value != AdmAudioInterchange.SupportedAdmVersion)
@@ -106,7 +108,8 @@ public static class AdmAudioXml
 			("audioTrackUID", "ATU", "UID", AdmAudioInterchange.MaximumTracks)
 		})
 		{
-			var elements = afe.Elements().Where(e => e.Name.LocalName == name).ToArray();
+			var elements = afe.Elements().Where(e =>
+				e.Name.Namespace == afe.Name.Namespace && e.Name.LocalName == name).ToArray();
 			if (elements.Length > maximum)
 				throw new InvalidDataException("ADM " + name + " count exceeds the bounded profile.");
 			var index = new Dictionary<string, XElement>(StringComparer.Ordinal);
@@ -136,7 +139,8 @@ public static class AdmAudioXml
 		};
 		foreach (var element in afe.Descendants())
 		{
-			if (!refs.TryGetValue(element.Name.LocalName, out var target)) continue;
+			if (element.Name.Namespace != afe.Name.Namespace ||
+				!refs.TryGetValue(element.Name.LocalName, out var target)) continue;
 			var id = element.Value.Trim();
 			if (!groups[target].ContainsKey(id))
 				throw new InvalidDataException("ADM reference is unresolved: " + element.Name.LocalName + ".");
@@ -285,7 +289,8 @@ public static class AdmAudioXml
 	}
 
 	private static string[] DirectRefs(XElement element, string localName) =>
-		element.Elements().Where(x => x.Name.LocalName == localName)
+		element.Elements().Where(x =>
+				x.Name.Namespace == element.Name.Namespace && x.Name.LocalName == localName)
 			.Select(x => x.Value.Trim()).ToArray();
 
 	private static void EnsureAcyclic(Dictionary<string, XElement> graph, params string[] referenceNames)
