@@ -30,7 +30,7 @@ public sealed class MediaInterchangeMetadataContractTests
             Field("timecode.start", "01:02:03;04"),
             Field("timecode.dropFrame", "true")) with
         {
-            Unmapped = new Dictionary<string, string> { ["supplier:opaque"] = "{\\"nested\\":[1,2]}" }
+            Unmapped = new Dictionary<string, string> { ["supplier:opaque"] = "{\"nested\":[1,2]}" }
         };
 
         var json = MediaInterchangeJson.Export(source);
@@ -100,7 +100,7 @@ public sealed class MediaInterchangeMetadataContractTests
     public void Unknown_json_properties_and_oversized_documents_are_not_silently_dropped()
     {
         var source = MediaInterchangeJson.Export(Projection(Field("title", "A")));
-        var malformed = source.Replace("\\"format\\":", "\\"unreviewed\\":1,\\"format\\":", StringComparison.Ordinal);
+        var malformed = source.Replace("\"format\":", "\"unreviewed\":1,\"format\":", StringComparison.Ordinal);
         Assert.ThrowsAny<Exception>(() => MediaInterchangeJson.Import(malformed));
         Assert.Throws<InvalidDataException>(() => MediaInterchangeJson.Import(new string('x', 2049)));
         Assert.Throws<InvalidDataException>(() => Projection(Field("video.0.frameRate", "29.97")).Validate());
