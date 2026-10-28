@@ -102,3 +102,24 @@ regressions. No 30–120-minute UHD soak, native 2160p source file, measured
 GPU deadline, driver-qualified DMA, media encoder/reopen, calibrated display,
 physical receiver or exact-source qualification evidence is supplied.
 **All three physical profile statuses remain UNVERIFIED / NO-GO.**
+
+
+## Native UHD HDR HLG reference qualification (2026-10-28)
+
+The [separate HLG color decision](HdrContributionColorPipelineDecision.md)
+adds deterministic software-contract/unit/integration suites for R 153
+v2.0 exact 2160p50/60000/1001 tuples, CICP 9/18/9 authoritative
+metadata, bounded planar 4:2:2/P010/linear-half plane extents, lossless
+10-bit pgroup conversion, HLG inverse reference vectors, alpha,
+preview-only SDR mapping, versioned source-hash/PTS evidence and
+per-sink native HDR preservation rejection.
+
+The tests use synthetic software and small native-code color samples;
+a single allocated full-size source frame may be used for hash
+binding. None is a hardware GPU/codec/display qualification, validated
+monitor EOTF/OOTF, live end-to-end continuity or compliant 10-bit
+output. Source/driver/device/OS identities, native GPU frame deadlines,
+native transport/recording, original CICP/timebase re-open proof,
+30–120 min sustained UHD concurrency and calibrated Tech 3320
+v4.1 checks remain **UNVERIFIED / NO-GO**. The 25p R 154 file
+exchange tuple must not be confused with the live R 153 baseline.

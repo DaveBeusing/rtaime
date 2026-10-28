@@ -624,3 +624,26 @@ exact 2160p25/50/60000/1001 RGB tuples, required consumers and
 memory/readback sizing. All three physical UHD profiles stay
 **UNVERIFIED / NO-GO** pending source-bound native and 30–120-minute
 hardware/receiver/recording soak evidence.
+
+
+## HDR BT.2100 HLG native-precision reference tests
+
+The source-bound, **non-Program** HLG reference is independently checked
+before the broader Required Gates stages. It does **not** add 2160p HDR
+runtime activation or software/hardware-output certification.
+
+```powershell
+dotnet restore rtaime.slnx
+dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-restore --filter "FullyQualifiedName~HdrContributionContractTests|FullyQualifiedName~HdrContributionFrameEvidenceWireTests"
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-restore --filter "FullyQualifiedName~HdrReferenceColorPipelineTests|FullyQualifiedName~HdrNative422PackingTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~HdrContributionAdmissionTests"
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+dotnet test rtaime.slnx --configuration Release --no-build -m:1
+```
+
+Run on Windows x64 using `.NET SDK 10.0.401`.
+Exact-source CI, Quality, Security, Provider Smoke and Packaged E2E are
+still required for a merge. Production HDR remains **UNSUPPORTED** and
+physical SDR/HDR source/driver/display/monitor/record/output qualification
+remains **UNVERIFIED**, irrespective of passing managed tests.
+See [HDR Contribution Color Decision](HdrContributionColorPipelineDecision.md).

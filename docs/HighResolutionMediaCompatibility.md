@@ -8,7 +8,7 @@ The [decision and approval gate](HighResolutionMediaDecision.md) applies.
 
 | Layer / source | Current HD behavior | 2160p25 / 50 / 59.94 SDR gap | Later 10-bit/HDR/alpha gap |
 | --- | --- | --- | --- |
-| `Media.Contracts/Contracts.cs`, `ColorContracts.cs` | Generic VideoFormat; only RGBA8/progressive pixels; named HD50/59.94 defaults carry UnknownRgba8 | Generic dimensions are representable but confer no output approval; define exact SDR color tuple and migration/identity policy | No P010/RGB10 plane contract, BT.2020/PQ/HLG or HDR metadata; numeric bit-depth alone is insufficient |
+| `Media.Contracts/Contracts.cs`, `ColorContracts.cs` | Generic VideoFormat; only RGBA8/progressive pixels; named HD50/59.94 defaults carry UnknownRgba8 | Generic dimensions are representable but confer no output approval; define exact SDR color tuple and migration/identity policy | Separate P010/planar 422/linear-half HDR reference layout and HLG/CICP contracts now exist; no approved native GPU, HDR Program or old-peer wire migration |
 | `Provider.Contracts/Contracts.cs` | Exact VideoFormat equality, including color, in capability matching | All required consumers must negotiate exact resolution/rate/color; resource unit counts do not prove byte capacity | Negotiate layout, semantics, conversions and metadata support, not only codec name |
 | `RuntimeHostProcess.cs` | CLI/env and Validate admit only HD50/59.94; default stays HD50 | All three UHD formats rejected today; 25 needs a new admitted cadence | Reject unsupported semantics before execution; no implicit tone map |
 | `LocalMediaInputPolicy.cs`, Windows decoder | Bounded input envelope, normalized HD RGBA8 output; H.264 UHD25/30 can pass policy, UHD50/59.94 exceeds its macroblock rate; other codecs have separate actual decoder checks | Input resolution does not select Program format; qualify actual MFT output sizes/rates and A/B residency | Main10 SDR normalization loses native precision; signaled HDR/wide-gamut remains unsupported |
@@ -134,3 +134,29 @@ the actual independently retained decoder/live/cache/GPU/record/output owners.
 The new in-process gate fails closed for absent or incompatible active consumers,
 byte/transfer capacity and managed/GPU/native budgets. Its success is not
 a verified provider reservation, activation, scan-out or performance PASS.
+
+
+## 2026-10-28 native HDR HLG reference boundary
+
+[HDR contribution color decision](HdrContributionColorPipelineDecision.md) adds
+**separate** BT.2100 HLG/BT.2020 limited 10-bit native profiles, an offline
+source-code and RGBA-half reference path, a versioned reference sidecar and
+fail-closed *capacity-only* per-consumer planning. Neither the HDR contracts
+nor the earlier [UHD SDR preflight](UhdSdrPipelineAdmission.md) expands live
+`PixelFormat.Rgba8`, `MediaContractVersion`, `MonitoringFrameWire` or
+`RuntimeHostProcessOptions` support.
+
+| Boundary | R 153 2160p50 / 60000/1001 HLG status |
+| --- | --- |
+| Native high-10-bit 4:2:2 planes, P010 and RGBA-half memory contracts | IMPLEMENTED (software layout/reference, not a GPU surface) |
+| 4:2:2 native/pgroup lossless offline reference and source-bound HLG metadata sidecar | IMPLEMENTED (deterministic, opt-in, no live writer) |
+| Explicit preview-only HLG→SDR/sRGB scene transform | IMPLEMENTED (offline reference only; calibrated OOTF UNVERIFIED) |
+| Real native HLG decode and precision-safe device-resident GPU compositor | UNSUPPORTED; physical qualification UNVERIFIED |
+| Real Preview/Program, WPF HDR display and timing/latency acceptance | UNSUPPORTED; Tech 3320 assessment UNVERIFIED |
+| HDR recording, MXF/IMF, NDI/SRT/ST 2110/SDI/MXO output and metadata roundtrip | UNSUPPORTED |
+| Accepted UHD HDR build and 30–120 minute reference hardware soak | UNVERIFIED / NO-GO |
+
+The existing ST 2110 loopback provider packs an **HD RGBA8**
+source into 10-bit RTP **with BT.709 software assumptions**. That
+packing does not regain 10-bit source precision, change the CICP
+tuple or establish any UHD HDR production capability.

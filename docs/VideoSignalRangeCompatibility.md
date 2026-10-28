@@ -33,3 +33,20 @@ EBU R 103 recommends a horizontal (1,2,3,4,3,2,1)/16 and vertical (1,2,1)/4 filt
 The `VideoRangeContractTests` and `VideoSignalRangeAnalysisTests` suites cover exact inclusive 8-/10-bit boundaries and neighbors; >1% versus exactly 1%; separate RGB/Y′/union counters; excluded border/active raster; unknown/inferred/full-range/HDR-like metadata; 10-bit source through 8-bit monitoring; legacy/current fixed GPU result shapes and raw-before-display shader order. CompositingWorkspaceQualification confirms the source-bound display and fail-closed unavailable state. Existing MediaScopeAnalysisTests and GpuScopesAndFrameComparisonTests protect histogram/Waveform/Parade/Vectorscope semantics, resource budgets and GPU/CPU fallback continuity.
 
 Required Gates CI/Quality validate the software checks. Physical CUDA/D3D11, monitor calibration, native codec/storage-to-output and SDI legal-level measurements remain UNVERIFIED until explicit qualified hardware evidence exists. No monitoring wire contract change or persisted state migration is introduced.
+
+
+## HLG 10-bit reference sample provenance
+
+`HdrNative422Packing` and the offline HLG decoder preserve/validate
+native high-ten-bit packed and planar code groups before optional
+preview mapping. The exact CICP tuple (9/18/9), range, native precision,
+source provenance, SHA-256 and frame PTS are modeled by the separate
+[HDR contribution reference](HdrContributionColorPipelineDecision.md).
+
+The existing Color Review R 103 implementation **still analyzes RGBA8
+monitoring**, not HLG 10-bit live GPU/Program codes. The offline
+HLG preview clips display data intentionally and is not a source
+R 103 range PASS. A native R 103 10-bit sampled analyzer for HLG
+YCbCr and calibrated output must be implemented and qualified
+separately; never derive a 10-bit compliance finding from an
+8-bit tone-mapped proxy.
