@@ -108,7 +108,8 @@ public sealed class MediaAssetCatalogPersistenceStore
 		asset.FingerprintSha256,
 		asset.ImportedAt.ToString(),
 		asset.UpdatedAt.ToString(),
-		(int)asset.Availability);
+		(int)asset.Availability,
+		asset.InterchangeMetadata is null ? null : MediaInterchangeJson.Export(asset.InterchangeMetadata));
 
 	private static MediaAssetDescriptor FromDocument(MediaAssetDocument asset)
 	{
@@ -155,7 +156,11 @@ public sealed class MediaAssetCatalogPersistenceStore
 			asset.FingerprintSha256,
 			UtcTimestamp.Parse(asset.ImportedAt),
 			UtcTimestamp.Parse(asset.UpdatedAt),
-			(MediaAssetAvailability)asset.Availability);
+			(MediaAssetAvailability)asset.Availability)
+		{
+			InterchangeMetadata = asset.InterchangeJson is null ? null
+				: MediaInterchangeJson.Import(asset.InterchangeJson, asset.FingerprintSha256)
+		};
 	}
 
 	private sealed record MediaAssetCatalogDocument(
@@ -185,5 +190,6 @@ public sealed class MediaAssetCatalogPersistenceStore
 		string FingerprintSha256,
 		string ImportedAt,
 		string UpdatedAt,
-		int Availability);
+		int Availability,
+		string? InterchangeJson = null);
 }
