@@ -191,8 +191,9 @@ public sealed class TimedTextInterchangeTests
 		Assert.Throws<InvalidDataException>(() => TimedTextInterchangeCodec.Parse(
 			new byte[TimedTextDocument.MaxXmlBytes + 1], TimedTextProfile.EbuTtDistribution101));
 		Assert.Throws<InvalidDataException>(() => TimedTextInterchangeCodec.Parse(
-			Encoding.UTF8.GetBytes(sample.Replace("<span>", "<span href=\"http://example.org\">",
-				StringComparison.Ordinal)), TimedTextProfile.EbuTtDistribution101));
+			Encoding.UTF8.GetBytes(sample.Replace("Caption</p>",
+				"<span href=\"http://example.org\">Caption</span></p>", StringComparison.Ordinal)),
+			TimedTextProfile.EbuTtDistribution101));
 	}
 
 	private static string Distribution(string paragraph, string? rate = null, string? multiplier = null) =>
