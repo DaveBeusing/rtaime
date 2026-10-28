@@ -108,7 +108,7 @@ public static class St2110TransportAdmission
             profile.FrameRate.Numerator));
 
     public static uint AudioTimestamp(St2110SoftwareProfile profile, ulong frameIndex, uint epoch = 0) =>
-        unchecked(epoch + checked((uint)((Int128)frameIndex *
+        unchecked(epoch + (uint)((Int128)frameIndex *
             profile.FrameRate.Denominator * St2110SoftwareProfile.AudioSampleRate /
-            profile.FrameRate.Numerator)));
+            profile.FrameRate.Numerator));
 }
