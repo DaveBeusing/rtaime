@@ -16,7 +16,7 @@ public sealed partial class OperatorViewModel
 		{
 			if (!Set(ref _referenceClock, value)) return;
 			foreach (var property in new[] {
-				nameof(ClockLockState), nameof(ClockEvidence), nameof(ClockProvider),
+				nameof(ClockLockState), nameof(ClockEvidence), nameof(ClockTimeQuality), nameof(ClockProvider),
 				nameof(ClockDomain), nameof(ClockEpoch), nameof(ClockGrandmaster),
 				nameof(ClockOffset), nameof(ClockDrift), nameof(ClockHoldover),
 				nameof(ClockLastSync), nameof(ClockDetail)
@@ -29,6 +29,8 @@ public sealed partial class OperatorViewModel
 
 	public string ClockLockState => !ClockCurrent ? "UNVERIFIED" :
 		_referenceClock!.LockState.ToString().ToUpperInvariant();
+	public string ClockTimeQuality => !ClockCurrent ? "UNVERIFIED" :
+		_referenceClock!.TimeQuality.ToString().ToUpperInvariant();
 	public string ClockEvidence => !ClockCurrent ? "UNVERIFIED" :
 		_referenceClock!.Evidence switch {
 			MediaReferenceEvidence.HardwareQualified => "HARDWARE-QUALIFIED SOURCE",
