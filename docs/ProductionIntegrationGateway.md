@@ -29,10 +29,10 @@ OSC / MIDI / GPI / Companion-style clients
 
 | Integration | Status | Qualification boundary |
 | --- | --- | --- |
-| OSC over UDP | Implemented | bounded message subset: int32, float32, string and bool; source allowlist; malformed/oversized rejection; string feedback |
+| OSC over UDP | Implemented, **loopback only** | bounded message subset: int32, float32, string and bool; source allowlist; malformed/oversized rejection; string feedback; direct remote UDP ingress is disallowed |
 | MIDI on Windows | Implemented | WinMM short messages for Note On/Off, Control Change and Program Change; deterministic virtual backend for CI; reconnect loop |
 | GPIO/GPI-style discrete control | Implemented reference boundary | deterministic virtual provider, edge/state input, output/tally, polarity; physical device drivers are not qualified |
-| Companion / Stream Deck-friendly HTTP | Implemented | authenticated bounded HTTP action surface plus WebSocket feedback; intended for generic HTTP integrations |
+| Companion / Stream Deck-friendly HTTP | Implemented, **loopback only** | bearer-authenticated HTTP action surface plus WebSocket feedback; plaintext remote binding is rejected; use only through a separately qualified secure local bridge |
 | NMOS IS-04 / IS-05 | **UNVERIFIED / future** | no NMOS discovery, registry or connection-management implementation is claimed |
 
 Physical GPIO device matrices, device-specific MIDI quirks and NMOS conformance are outside this capability until separately implemented and qualified.
@@ -90,7 +90,7 @@ $env:RTAIME_COMPANION_TOKEN = "<companion credential>"
 
 Alternatively set `RTAIME_INTEGRATION_CONFIG` to the configuration path.
 
-Bearer tokens and certificate passwords are referenced by environment-variable name; secret values are not valid mapping/configuration fields. The upstream endpoint must use HTTPS. Test-only insecure trust is accepted only when `testMode=true`.
+Bearer tokens and certificate passwords are referenced by environment-variable name; secret values are not valid mapping/configuration fields. The upstream endpoint must use an HTTPS origin without embedded credentials, paths, queries or fragments. Test-only insecure trust is accepted only when `testMode=true`, `dryRun=true` and the upstream is an IPv4/IPv6 loopback HTTPS origin.
 
 ## Failure behavior
 
@@ -105,7 +105,13 @@ Bearer tokens and certificate passwords are referenced by environment-variable n
 
 ## Test and diagnostic mode
 
-`testMode=true` selects deterministic virtual MIDI behavior where configured and permits the external-control test-only trust mode. `dryRun=true` admits and resolves mappings without applying Production mutations. The virtual MIDI and discrete providers are used by normal CI and do not require production hardware.
+`testMode=true` selects deterministic virtual MIDI behavior where configured. The external-control test-only TLS bypass additionally requires `dryRun=true` and a loopback HTTPS origin. `dryRun=true` admits and resolves mappings without applying Production mutations. The virtual MIDI and discrete providers are used by normal CI and do not require production hardware.
+
+## Broadcast security deployment boundary
+
+OSC UDP and Companion HTTP/WebSocket are unauthenticated-at-network-layer or bearer-over-HTTP protocols. Configuring either to listen on non-loopback IPv4, IPv6 or wildcard addresses fails at validation, including direct adapter construction. An empty OSC sender allowlist defaults to **loopback sources only**. Companion HTTP enforces bounded request size and bounded Kestrel connections. Do not bind unencrypted adapters through a publicly exposed proxy without independent TLS, client authorization, anti-replay policy, firewall and monitoring qualification. The security review and remaining EBU R 143 v3.0 P1/P2 controls are tracked in [BroadcastSecurityR143Assessment.md](BroadcastSecurityR143Assessment.md).
+
+The schema remains version `1.0`; existing remote listener configurations must migrate to local binding and a separately qualified secure bridge/tunnel. NMOS IS-04/IS-05, ST 2110 control, and web-graphics adapters are not present and must remain fail-closed/disabled until explicitly implemented and qualified.
 
 ## NMOS path
 

@@ -119,6 +119,7 @@ public sealed class OscIntegrationAdapter : IntegrationAdapterBase
 		: base(adapter.Id, IntegrationAdapterKind.Osc, adapter.Required)
 	{
 		_options = adapter.Osc ?? throw new ArgumentException("OSC options are required.", nameof(adapter));
+		_options.Validate();
 		_feedbackMappings = feedbackMappings ?? throw new ArgumentNullException(nameof(feedbackMappings));
 		_allowlist = _options.SourceAllowlist.Select(IPAddress.Parse).ToHashSet();
 	}
@@ -180,7 +181,8 @@ public sealed class OscIntegrationAdapter : IntegrationAdapterBase
 			while (!cancellationToken.IsCancellationRequested)
 			{
 				var packet = await _receiver!.ReceiveAsync(cancellationToken).ConfigureAwait(false);
-				if (_allowlist.Count > 0 && !_allowlist.Contains(packet.RemoteEndPoint.Address))
+				if ((_allowlist.Count > 0 && !_allowlist.Contains(packet.RemoteEndPoint.Address)) ||
+					(_allowlist.Count == 0 && !IPAddress.IsLoopback(packet.RemoteEndPoint.Address)))
 					continue;
 				if (packet.Buffer.Length > _options.MaxPacketBytes || !OscCodec.TryDecode(packet.Buffer, out var message) || message is null)
 				{

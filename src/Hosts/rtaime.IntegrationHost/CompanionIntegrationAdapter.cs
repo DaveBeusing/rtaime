@@ -33,6 +33,7 @@ public sealed class CompanionIntegrationAdapter : IntegrationAdapterBase
 		: base(adapter.Id, IntegrationAdapterKind.Companion, adapter.Required)
 	{
 		_options = adapter.Companion ?? throw new ArgumentException("Companion options are required.", nameof(adapter));
+		_options.Validate();
 		_mappings = mappings ?? throw new ArgumentNullException(nameof(mappings));
 		_feedbackMappings = feedbackMappings ?? throw new ArgumentNullException(nameof(feedbackMappings));
 	}
@@ -55,6 +56,9 @@ public sealed class CompanionIntegrationAdapter : IntegrationAdapterBase
 		builder.WebHost.ConfigureKestrel(server =>
 		{
 			server.Limits.MaxRequestBodySize = _options.MaxRequestBytes;
+			server.Limits.MaxConcurrentConnections = 32;
+			server.Limits.MaxConcurrentUpgradedConnections = 16;
+			server.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10);
 			server.Listen(IPAddress.Parse(_options.BindAddress), _options.Port);
 		});
 		var app = builder.Build();

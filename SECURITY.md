@@ -79,6 +79,15 @@ Public-Internet exposure, enterprise certificate lifecycle operations, external 
 
 See `docs/ExternalControlDeployment.md`.
 
+### Broadcast-facing EBU R 143 security boundary
+
+The scoped [EBU R 143 v3.0 broadcast security assessment](docs/BroadcastSecurityR143Assessment.md) maps relevant Annex B P1/P2 requirements to concrete source, negative tests and unresolved deployment evidence. Its machine-readable matrix is in `qualification/security/r143-v3-control-matrix.json`. Required Gates bind a separately generated matrix verification artifact to the exact checked-out SHA; the verification is not a third-party audit or certification.
+
+Unencrypted OSC UDP and Companion HTTP/WebSocket integration listeners are restricted to local IPv4 loopback. Do not expose these protocols directly to a remote network or the public internet; independently qualify an authenticated, encrypted local bridge if external devices are needed. Test-only disabled certificate validation is limited to loopback and, in IntegrationHost, to `testMode=true` plus `dryRun=true`.
+
+External client certificate thumbprints and token secret references must not be reused between different ControlHost identities. Enterprise PKI rotation/revocation, tamper-resistant centralized AAA logging, management/media network segmentation, remote deployment, incident response and physical qualification remain **UNVERIFIED**. Internet-facing services are not an approved deployment profile and must not be enabled without separate security qualification including MFA.
+
+
 ## Supported versions
 
 Supported-version and support-lifecycle policy is source-controlled in `docs/Governance/ProductSupportPolicy.json`.

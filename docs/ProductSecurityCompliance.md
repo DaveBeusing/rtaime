@@ -73,9 +73,9 @@ Important fail-closed rules:
 
 ## Release evidence integration
 
-Product Security & Compliance establishes policy and schema first. The release pipeline must subsequently bind a product-security assessment to the exact source commit and product identity before the `SECURITY` release-evidence domain may move from `UNVERIFIED` to `PASS`.
+Product Security & Compliance establishes the policy and schema. The existing product-security assessment binding now validates the exact source commit, build identity and security review evidence before the `SECURITY` release-evidence domain can move from `UNVERIFIED` to `PASS`.
 
-Until that binding exists, the current release-evidence generator must continue to report product security as `UNVERIFIED`.
+Without an externally substantiated, exact-source `PASS` assessment, the release-evidence generator must continue to report product security as `UNVERIFIED`. Repository Required Gates or the EBU R 143 control-matrix verifier alone do not promote the release security domain.
 
 ## Support period
 
@@ -89,6 +89,10 @@ A future support-period decision must define at least:
 - end-of-support communication;
 - relationship to maintained release channels;
 - evidence retention requirements.
+
+## Broadcast cybersecurity requirements
+
+A scoped EBU R 143 v3.0 Annex B P1/P2 assessment is maintained separately in [`BroadcastSecurityR143Assessment.md`](BroadcastSecurityR143Assessment.md), with the authoritative control matrix at `qualification/security/r143-v3-control-matrix.json`. The Required Gates Security job binds the source SHA and listed test declarations to a retained **UNVERIFIED** assessment artifact. That artifact does not replace the product-security assessment, alter CRA reporting/attestation rules or elevate release `SECURITY` status. External deployment, centralized log receipt, PKI lifecycle and network segmentation remain explicit findings.
 
 ## Evidence boundaries
 
