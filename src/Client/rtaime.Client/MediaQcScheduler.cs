@@ -313,13 +313,26 @@ public sealed class MediaQcReportStore
 	public async Task SaveAsync(MediaQcReport report, string xml, CancellationToken cancellationToken)
 	{
 		report.Validate();
-		MediaQcEbuXml.ValidateSchema(xml);
+		cancellationToken.ThrowIfCancellationRequested();
+		// A caller may supply a schema-valid but unrelated report. Validate
+		// binding and check outcomes before atomic publication, then save
+		// canonical XML only, not arbitrary imported extension markup.
+		var parsed = MediaQcEbuXml.Import(xml);
+		if (parsed.ReportId != report.ReportId || parsed.AssetId != report.AssetId ||
+			parsed.CatalogueRevision != report.CatalogueRevision ||
+			parsed.FingerprintSha256 != report.FingerprintSha256 ||
+			parsed.CreatedUtc != report.CreatedUtc ||
+			parsed.Results.Count != report.Results.Count ||
+			parsed.Results.Where((item, index) =>
+				item != report.Results[index]).Any())
+			throw new InvalidDataException("QC report bytes differ from the admitted immutable result.");
+		var canonical = MediaQcEbuXml.Export(report);
 		var path = ReportPath(report.AssetId);
 		Directory.CreateDirectory(_root);
 		var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 		try
 		{
-			await File.WriteAllTextAsync(temporary, xml, cancellationToken).ConfigureAwait(false);
+			await File.WriteAllTextAsync(temporary, canonical, cancellationToken).ConfigureAwait(false);
 			cancellationToken.ThrowIfCancellationRequested();
 			File.Move(temporary, path, overwrite: true);
 		}
