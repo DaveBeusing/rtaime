@@ -81,3 +81,19 @@ Deviations remain explicit. They do not automatically become accepted supported 
 ## Fail-safe playout deployment qualification
 
 [Broadcast Fail-Safe Playout](BroadcastFailSafePlayout.md) introduces software-only continuity incidents and explicit per-role failure-action admission. Only ReportAndPreserveAuthority is executable. HoldLast frame+audio, mute, safety slate, unattended device reroute, operator-mediated ControlHost re-arm and physical no-black-frame operation are **not** approved for production deployment by this feature. A green software CI run is not a hardware soak/SDI/clock certificate. Physical standby device admission, bounded fallback buffers, source identity, PTP/TAI behavior, A/V continuity and explicit manual re-arm must be separately qualified and deployed only after ControlHost-approved policy/persistence and recorded proof.
+
+
+## ST 2022-7 protection deployment boundary
+
+The [ST 2022-7 software merge reference](St2022SoftwareProtectionQualification.md)
+tests deterministic RTP packet selection, per-leg observations, bounded
+reordering and common-mode loss handling. It is **not** connected to any
+physical Runtime output or input provider. A single 127.0.0.1 ST 2110 route,
+two ports on one NIC, or software HEALTHY state must not be recorded as
+an approved seamless protection configuration.
+
+Hardware protection remains UNSUPPORTED / UNVERIFIED until a verified
+two-NIC/switch/flow plan, provider and reference-clock qualification,
+recorded per-leg packet captures and loss/jitter/recovery/continuity
+measurements are available. PTP holdover (at least five minutes) must
+be qualified independently from packet-merger loss recovery.
