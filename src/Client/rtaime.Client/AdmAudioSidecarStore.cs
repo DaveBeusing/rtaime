@@ -32,11 +32,16 @@ public sealed class AdmAudioSidecarStore
 		{
 			var path = PathFor(asset);
 			if (!File.Exists(path)) return null;
-			var info = new FileInfo(path);
-			if (info.Length is < 1 or > AdmAudioInterchange.MaximumJsonBytes)
+			await using var file = new FileStream(path, FileMode.Open, FileAccess.Read,
+				FileShare.Read, bufferSize: 16 * 1024,
+				FileOptions.Asynchronous | FileOptions.SequentialScan);
+			if (file.Length is < 1 or > AdmAudioInterchange.MaximumJsonBytes)
 				throw new InvalidDataException("ADM sidecar length is outside its quota.");
-			var json = await File.ReadAllTextAsync(path, Utf8, cancellationToken).ConfigureAwait(false);
-			return AdmAudioXml.ImportSidecarJson(json, asset);
+			var bytes = new byte[checked((int)file.Length)];
+			await file.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+			if (file.ReadByte() != -1)
+				throw new InvalidDataException("ADM sidecar grew during its bounded read.");
+			return AdmAudioXml.ImportSidecarJson(Utf8.GetString(bytes), asset);
 		}
 		finally { _gate.Release(); }
 	}
