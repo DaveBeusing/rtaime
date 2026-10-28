@@ -28,8 +28,8 @@ public static class Program
 				{
 					IntegrationTrustMode.System => ExternalControlTrustMode.System,
 					IntegrationTrustMode.PinnedServerCertificate => ExternalControlTrustMode.PinnedServerCertificate,
-					IntegrationTrustMode.TestOnlyInsecure when options.TestMode => ExternalControlTrustMode.TestOnlyInsecure,
-					IntegrationTrustMode.TestOnlyInsecure => throw new InvalidOperationException("Test-only insecure upstream trust requires testMode=true."),
+					IntegrationTrustMode.TestOnlyInsecure when options.TestMode && options.DryRun => ExternalControlTrustMode.TestOnlyInsecure,
+					IntegrationTrustMode.TestOnlyInsecure => throw new InvalidOperationException("Test-only insecure upstream trust requires testMode=true and dryRun=true."),
 					_ => throw new ArgumentOutOfRangeException()
 				},
 				TrustedServerCertificateThumbprint = options.Upstream.TrustedServerCertificateThumbprint,
