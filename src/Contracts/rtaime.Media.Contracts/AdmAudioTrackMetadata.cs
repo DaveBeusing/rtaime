@@ -147,7 +147,8 @@ public sealed record AdmTrackMetadataRow(
 	string? Start,
 	string? End,
 	string? Duration,
-	string SourceKind)
+	string SourceKind,
+	string? R123AssignedRole = null)
 {
 	public string DisplayTrack => PhysicalTrackNumber is int number
 		? "Track " + number : "TRACK UNMAPPED · " + AudioTrackUid;
