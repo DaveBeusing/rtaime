@@ -19,10 +19,10 @@ public sealed class St2110SoftwareLoopbackReceiver : IAsyncDisposable
     private readonly St2110PcmRtpReceiver _audio;
     private readonly Channel<St2110PackedVideoFrame> _videoFrames =
         Channel.CreateBounded<St2110PackedVideoFrame>(
-            new BoundedChannelOptions(2) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.DropWrite });
+            new BoundedChannelOptions(2) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly Channel<St2110PcmPacket> _audioPackets =
         Channel.CreateBounded<St2110PcmPacket>(
-            new BoundedChannelOptions(64) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.DropWrite });
+            new BoundedChannelOptions(64) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly CancellationTokenSource _shutdown = new();
     private readonly Task _videoWorker;
     private readonly Task _audioWorker;
