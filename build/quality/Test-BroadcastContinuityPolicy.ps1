@@ -49,8 +49,9 @@ Assert-Condition ($source.tracker.Contains("old.Source == source && old.Sink == 
 Assert-Condition ($source.runtime.Contains("ConfirmContinuityAfterRuntimeCommitUnsafe(preparedExecution, commit.ExecutionRevision.Value, programSinkId)") -and
 	$source.projection.Contains("_broadcastContinuity.ConfirmCommittedExecution(prepared, executionRevision, programSinkId)") -and
 	$source.projection.Contains("_broadcastContinuity.InvalidateActiveRoles()") -and
-	$source.runtime.Contains("ObserveContinuityAtCompletedBoundaryUnsafe") -and
-	$source.runtime.Contains("ObserveContinuityOnFailedBoundary") -and
+	$source.projection.Contains("runtime.continuity.observer_unverified") -and
+	$source.runtime.Contains("TryObserveContinuityAtCompletedBoundaryUnsafe") -and
+	$source.runtime.Contains("TryObserveContinuityOnFailedBoundary") -and
 	$source.runtime.Contains('ContinuityHealthyUnsafe("program")') -and
 	$source.runtime.Contains('ContinuityHealthyUnsafe("aux")')) "Runtime must observe actual committed and completed output, never staged or in-flight-only plans."
 Assert-Condition ($source.runtime.Contains("ResetInputPipelinesAfterFailedBoundary") -and
