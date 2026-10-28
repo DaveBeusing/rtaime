@@ -730,6 +730,10 @@
 							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
 						<TextBlock Text="{Binding TimedTextReview.FontEvidence, ElementName=TimelineRoot}"
 							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.LayoutEvidence, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.Language, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
 					</StackPanel>
 				</controls:RtaimeScrollViewer>
 			</Border>
