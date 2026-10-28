@@ -59,6 +59,7 @@ public sealed class TimedTextCueStore
 	private string? _selectedLanguage;
 	private bool _enabled = true;
 	private ulong _revision;
+	private IReadOnlyList<TimedTextIssue> _layoutIssues = Array.Empty<TimedTextIssue>();
 
 	public ulong Revision => _revision;
 	public bool Enabled { get => _enabled; set { _enabled = value; _revision++; } }
@@ -71,6 +72,7 @@ public sealed class TimedTextCueStore
 		_document = null;
 		_sourceIdentity = null;
 		_selectedLanguage = null;
+		_layoutIssues = Array.Empty<TimedTextIssue>();
 		_revision++;
 	}
 
@@ -80,9 +82,11 @@ public sealed class TimedTextCueStore
 		ArgumentNullException.ThrowIfNull(document);
 		if (mediaSourceIdentity.Length > 256)
 			throw new ArgumentOutOfRangeException(nameof(mediaSourceIdentity));
+		var layoutIssues = document.InspectLayout(); // Precompute once, not every timeline frame.
 		_document = document;
 		_sourceIdentity = mediaSourceIdentity;
 		_selectedLanguage = document.Language;
+		_layoutIssues = layoutIssues;
 		_revision++;
 	}
 
@@ -118,7 +122,7 @@ public sealed class TimedTextCueStore
 			TimedTextFrameClock.IsActive(cue, confirmedFrame, confirmedFrameRate.Value)).ToArray();
 		var state = active.Length == 0 ? TimedTextPreviewState.Ready : TimedTextPreviewState.Active;
 		return new(state, confirmedFrame, _selectedLanguage ?? _document.Language,
-			Array.AsReadOnly(active), _document.InspectLayout(),
+			Array.AsReadOnly(active), _layoutIssues,
 			active.Length == 0
 				? "PREVIEW ONLY · no caption at confirmed frame; no Program overlay or ANC transport."
 				: "PREVIEW ONLY · local text evidence at confirmed media frame; not Runtime composited or Program-approved.");
