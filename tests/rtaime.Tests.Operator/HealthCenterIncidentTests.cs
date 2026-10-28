@@ -397,10 +397,11 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal("STALE / UNVERIFIED", incident.AlarmLifecycle);
 		Assert.Equal(SubsystemProgramImpact.Unknown, incident.ProgramImpactValue);
 		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.Contains("evidence unavailable", Assert.Single(notifications.Current).Title, StringComparison.OrdinalIgnoreCase);
 		Assert.False(readiness.Current.IsProductionReady);
 	}
 
-		[Fact]
+	[Fact]
 	public void Structured_log_failure_does_not_suppress_persistent_alarm_notification()
 	{
 		var provider = new TestProvider(Snapshot("audio", SubsystemHealthState.Failed, SubsystemProgramImpact.Degraded));
@@ -416,7 +417,7 @@ public sealed class HealthCenterIncidentTests
 		Assert.True(model.AcknowledgeAlarmCommand.CanExecute(null));
 	}
 
-		[Fact]
+	[Fact]
 	public void Telemetry_delivery_failure_is_fail_open_for_health_presentation()
 	{
 		var provider = new TestProvider(Snapshot("output", SubsystemHealthState.Degraded, SubsystemProgramImpact.MonitoringOnly));
@@ -430,7 +431,7 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal(RuntimeReadinessState.Initializing, readiness.Current.State);
 	}
 
-		private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>
+	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>
 		new(id, id, "Diagnostics", state, "Published evidence.", Start, null, [],
 			"Review the owning workspace.", "metadata only", ProgramImpact: impact,
 			EvidenceSource: "simulated confirmed snapshot", LastObservedAt: Start);
