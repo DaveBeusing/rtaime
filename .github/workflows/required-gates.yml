@@ -50,6 +50,14 @@ jobs:
       - name: Restore
         run: dotnet restore rtaime.slnx
 
+      - name: Broadcast continuity contract and software fault injection qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-restore --filter "FullyQualifiedName~BroadcastContinuityContractTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Broadcast continuity contract admission tests failed." }
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~BroadcastContinuityIntegrationTests|FullyQualifiedName~OutputRoleRuntimeFailureTests|FullyQualifiedName~RuntimeOutputBindingHealthTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Broadcast continuity/role failure isolation qualification failed." }
+
       - name: EBU Timed Text XML, clock and cue contract qualification
         shell: pwsh
         run: |
@@ -337,6 +345,12 @@ jobs:
           path: artifacts/qualification/operator-visual
           if-no-files-found: warn
 
+      - name: Broadcast continuity Operator read-only recovery qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~BroadcastContinuityOperatorTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Broadcast continuity Operator incident projection failed." }
+
       - name: Timed Text Operator source-fenced local preview qualification
         shell: pwsh
         run: |
@@ -495,6 +509,10 @@ jobs:
       - name: Verify recording profile catalog policy
         shell: pwsh
         run: ./build/quality/Test-RecordingProfilePolicy.ps1
+
+      - name: Verify broadcast continuity policy and no unqualified failover
+        shell: pwsh
+        run: ./build/quality/Test-BroadcastContinuityPolicy.ps1
 
       - name: Verify EBU Timed Text interchange and Program isolation policy
         shell: pwsh
