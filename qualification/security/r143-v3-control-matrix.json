@@ -38,7 +38,8 @@
         "tests/rtaime.Tests.Integration/ExternalControlIntegrationTests.cs"
       ],
       "testMethods": [
-        "Observer_can_read_but_server_denies_production_mutation"
+        "Observer_can_read_but_server_denies_production_mutation",
+        "Mutual_tls_certificate_cannot_be_relabelled_as_another_client_identity"
       ]
     },
     {
