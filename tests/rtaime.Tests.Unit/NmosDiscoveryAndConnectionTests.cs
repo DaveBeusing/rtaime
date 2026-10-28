@@ -244,6 +244,37 @@ public sealed class NmosDiscoveryAndConnectionTests
 	}
 
 	[Fact]
+	public async Task Registry_conflict_cleanup_does_not_delete_unaccepted_foreign_resource_ids()
+	{
+		var resources = new NmosVirtualResources(Virtual());
+		var order = resources.RegistrationOrder().ToArray();
+		var posts = 0;
+		var deletes = new List<string>();
+		using var http = new HttpClient(new FakeHttpHandler(request =>
+		{
+			if (request.Method == HttpMethod.Delete)
+			{
+				deletes.Add(request.RequestUri!.AbsolutePath);
+				return new HttpResponseMessage(HttpStatusCode.NoContent);
+			}
+			if (++posts == 2) return new HttpResponseMessage(HttpStatusCode.Conflict);
+			var (kind, id, data) = order[0];
+			var registered = Json(data);
+			registered.StatusCode = HttpStatusCode.Created;
+			registered.Headers.Location = new Uri($"/x-nmos/registration/v1.3/resource/{kind}s/{id}", UriKind.Relative);
+			return registered;
+		}));
+		var session = new NmosRegistrationClient(http,
+			"http://127.0.0.1:3211/x-nmos/registration/v1.3/", resources);
+		await Assert.ThrowsAsync<InvalidDataException>(() => session.RegisterAsync(CancellationToken.None));
+		Assert.False(session.IsRegistered);
+		await session.UnregisterAsync(CancellationToken.None);
+		Assert.Single(deletes);
+		Assert.Contains("/resource/nodes/" + NodeId, deletes[0], StringComparison.Ordinal);
+		Assert.DoesNotContain(deletes, path => path.Contains("/devices/", StringComparison.Ordinal));
+	}
+
+	[Fact]
 	public void Is05_staging_rejects_sdp_stream_activation_scheduled_time_and_unknown_id()
 	{
 		var connections = new NmosVirtualConnections(SenderId, ReceiverId);
