@@ -33,7 +33,7 @@ internal sealed class NmosRegistrationClient
 		_registered = false;
 		foreach (var (type, id, data) in _resources.RegistrationOrder())
 		{
-			using var response = await _http.PostAsJsonAsync(new Uri(_root, "resource/"),
+			using var response = await _http.PostAsJsonAsync(new Uri(_root, "resource"),
 				new { type, data }, cancellationToken).ConfigureAwait(false);
 			if (response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Created))
 				throw new InvalidDataException($"IS-04 {type} registration was rejected; a partially registered node is not operational.");
