@@ -118,7 +118,7 @@ internal static class MxfIndependentMediaProbe
             throw new InvalidDataException("MXF audio must be stereo 48 kHz signed PCM16.");
 
         var layout = Get(a, "channel_layout");
-        if (layout is not ("" or "unknown" or "stereo" or "2 channels"))
+        if (layout is not ("" or "unknown" or "stereo" or "2 channels" or "2.0" or "FL+FR"))
             throw new InvalidDataException("MXF declared audio channel layout is not stereo.");
         // Audio packetization differs across demuxers. The decoded duration
         // expressed in the stream timebase must exactly match sample frames.
