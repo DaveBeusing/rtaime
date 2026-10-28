@@ -39,7 +39,7 @@ function Get-Trx([string]$Path) {
             outcome = [string]$row.GetAttribute("outcome") }
     }
     return [pscustomobject]@{ date = $end.ToUniversalTime().ToString("O");
-        overallPassed = ([string]$summary.GetAttribute("outcome") -eq "Passed");
+        overallPassed = ([string]$summary.GetAttribute("outcome") -in @("Completed","Passed"));
         tests = @($results) }
 }
 Require ($ExpectedSourceCommit -cmatch '^[0-9a-f]{40}$') "ExpectedSourceCommit must be an exact lowercase Git SHA."
@@ -65,6 +65,7 @@ foreach ($group in @($matrix.suites | Group-Object testProject | Sort-Object Nam
     Require (@($allClasses).Count -gt 0) "Suite group has no tests."
     Require (Test-Path -LiteralPath (Join-Path $root $project) -PathType Leaf) "Suite test project missing."
     Write-Host "Broadcast software qualification $projectName against $ExpectedSourceCommit"
+    Require (-not (Test-Path -LiteralPath $trxFile)) "A retained TRX file already exists; no stale evidence reuse."
     $testArgs = @("test", (Join-Path $root $project), "--configuration", "Release", "--no-build",
         "--filter", $filter, "--logger", "trx;LogFileName=$projectName.trx",
         "--results-directory", $outDir)
