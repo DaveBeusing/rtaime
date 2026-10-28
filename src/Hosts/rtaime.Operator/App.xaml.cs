@@ -90,6 +90,7 @@ public partial class App : Application
 					["severity"] = observation.Severity.ToString(),
 					["evidenceAvailability"] = observation.EvidenceAvailability,
 					["source"] = observation.EvidenceSource,
+					["owningProviderId"] = observation.OwningProviderId ?? "UNVERIFIED",
 					["programImpact"] = observation.ProgramImpact.ToString(),
 					["projectedAtUtc"] = observation.ProjectedAtUtc.ToString("O"),
 					["lastGoodProjectedUtc"] = observation.LastGoodProjectedUtc?.ToString("O") ?? "UNVERIFIED"
