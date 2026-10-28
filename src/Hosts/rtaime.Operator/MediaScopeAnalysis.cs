@@ -36,6 +36,11 @@ public static class GpuMonitoringAnalysisPolicy
 	public const int VectorscopeOffset = BlueWaveformOffset + MediaScopeSnapshot.WaveformBinCount;
 	public const int ScopeResultCount = VectorscopeOffset + MediaScopeSnapshot.VectorscopeBinCount;
 	public const int ScopeResultBytes = ScopeResultCount * sizeof(uint);
+	// Extra 15 atomic raw-code counters. Existing histogram/waveform offsets remain stable.
+	public const int SignalResultOffset = ScopeResultCount;
+	public const int SignalResultCount = VideoSignalRangeAccumulator.CounterCount;
+	public const int CombinedResultCount = ScopeResultCount + SignalResultCount;
+	public const int CombinedResultBytes = CombinedResultCount * sizeof(uint);
 
 	public static int ResolveScopeSampleStride(uint width, uint height)
 	{
@@ -82,6 +87,7 @@ public sealed record MediaScopeSnapshot(
 	public int ResultTransferBytes { get; init; }
 	public long ManagedAllocationBytes { get; private set; }
 	public string Detail { get; init; } = "CPU fallback analysis";
+	public VideoSignalRangeSnapshot? SignalRange { get; init; }
 
 	public static MediaScopeSnapshot Analyze(MonitoringFrame frame, int sampleStride = 2)
 	{
@@ -102,6 +108,8 @@ public sealed record MediaScopeSnapshot(
 		var blueWaveform = new int[WaveformBinCount];
 		var vectorscope = new int[VectorscopeBinCount];
 		var vectorscopeAvailable = descriptor.Color.IsComplete;
+		var videoProfile = VideoRangeProfile.ForRgba8(descriptor.Color, descriptor.Width, descriptor.Height);
+		var signalCounts = new VideoSignalRangeAccumulator(videoProfile);
 		var samples = 0;
 
 		for (uint y = 0; y < descriptor.Height; y += (uint)sampleStride)
@@ -109,6 +117,8 @@ public sealed record MediaScopeSnapshot(
 			for (uint x = 0; x < descriptor.Width; x += (uint)sampleStride)
 			{
 				var offset = checked((int)(((ulong)y * descriptor.Width + x) * 4UL));
+				// R 103 observes raw code values, never the display-corrected RGB8 scope values.
+				signalCounts.Add(checked((int)x), checked((int)y), pixels[offset], pixels[offset + 1], pixels[offset + 2]);
 				var r = MonitoringDisplayTransform.TransformCodeValue(pixels[offset], descriptor.Color);
 				var g = MonitoringDisplayTransform.TransformCodeValue(pixels[offset + 1], descriptor.Color);
 				var b = MonitoringDisplayTransform.TransformCodeValue(pixels[offset + 2], descriptor.Color);
@@ -148,6 +158,7 @@ public sealed record MediaScopeSnapshot(
 			vectorscope)
 		{
 			ProcessingPath = MediaScopeProcessingPath.CpuFallback,
+			SignalRange = signalCounts.Finish(descriptor.Timing.SequenceNumber, sampleStride),
 			VectorscopeAvailable = vectorscopeAvailable,
 			AnalysisDuration = Stopwatch.GetElapsedTime(started),
 			ResultTransferBytes = 0,
@@ -170,8 +181,9 @@ public sealed record MediaScopeSnapshot(
 		TimeSpan analysisDuration)
 	{
 		var allocationStart = GC.GetAllocatedBytesForCurrentThread();
-		if (results.Length != GpuMonitoringAnalysisPolicy.ScopeResultCount)
-			throw new ArgumentException($"GPU scope result requires exactly {GpuMonitoringAnalysisPolicy.ScopeResultCount} uint values.", nameof(results));
+		if (results.Length != GpuMonitoringAnalysisPolicy.ScopeResultCount &&
+			results.Length != GpuMonitoringAnalysisPolicy.CombinedResultCount)
+			throw new ArgumentException($"GPU scope result requires {GpuMonitoringAnalysisPolicy.ScopeResultCount} or {GpuMonitoringAnalysisPolicy.CombinedResultCount} uint values.", nameof(results));
 		if (sampleStride <= 0) throw new ArgumentOutOfRangeException(nameof(sampleStride));
 		if (sampleCount < 0) throw new ArgumentOutOfRangeException(nameof(sampleCount));
 
@@ -202,9 +214,17 @@ public sealed record MediaScopeSnapshot(
 			Copy(results, GpuMonitoringAnalysisPolicy.VectorscopeOffset, VectorscopeBinCount))
 		{
 			ProcessingPath = MediaScopeProcessingPath.GpuSharedResource,
+			SignalRange = results.Length == GpuMonitoringAnalysisPolicy.CombinedResultCount
+				? VideoSignalRangeSnapshot.Evaluate(
+					VideoRangeProfile.ForRgba8(color, sourceWidth, sourceHeight),
+					sequenceNumber, sampleStride, sampleCount,
+					results.Slice(GpuMonitoringAnalysisPolicy.SignalResultOffset, GpuMonitoringAnalysisPolicy.SignalResultCount))
+				: VideoSignalRangeSnapshot.Unavailable(
+					VideoRangeProfile.ForRgba8(color, sourceWidth, sourceHeight),
+					sequenceNumber, sampleStride, "UNAVAILABLE: GPU scope buffer has no raw-code range counters."),
 			VectorscopeAvailable = vectorscopeAvailable,
 			AnalysisDuration = analysisDuration,
-			ResultTransferBytes = GpuMonitoringAnalysisPolicy.ScopeResultBytes,
+			ResultTransferBytes = results.Length * sizeof(uint),
 			Detail = vectorscopeAvailable
 				? $"GPU shared resource · {GpuMonitoringAnalysisPolicy.ScopeResultBytes} B result transfer"
 				: "GPU shared resource · vectorscope unavailable because color semantics are incomplete"
