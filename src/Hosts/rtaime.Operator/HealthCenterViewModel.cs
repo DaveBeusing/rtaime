@@ -464,11 +464,8 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	{
 		foreach (var observation in transitions)
 		{
-			// Initial unknown evidence is not an observed incident and must not
-			// generate a wall of startup notifications.
-			if (observation.Condition == OperationalObservationCondition.Stale &&
-				observation.LastGoodProjectedUtc is null)
-				continue;
+			// The projector omits initial unknown observations. A transition
+			// from an active failure to lost evidence must still be published.
 			// A broken log sink must not suppress Operator acknowledgement.
 			try
 			{
