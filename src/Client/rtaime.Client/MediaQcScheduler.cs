@@ -30,6 +30,7 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 		public ulong Revision { get; } = revision;
 		public CancellationTokenSource Cancellation { get; } = new();
 		public MediaQcJobSnapshot Snapshot { get; set; } = snapshot;
+		public bool InProgress { get; set; }
 	}
 
 	public MediaQcScheduler(string? reportDirectory = null,
@@ -160,6 +161,7 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 			{
 				try
 				{
+					lock (_gate) job.InProgress = true;
 					if (job.Cancellation.IsCancellationRequested)
 						continue;
 					Set(job, MediaQcJobState.Running, "Hashing and inspecting local source outside Program.", null);
@@ -194,13 +196,24 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 				}
 				finally
 				{
-					lock (_gate) _inFlight--;
+					lock (_gate)
+					{
+						job.InProgress = false;
+						_inFlight--;
+					}
 				}
 			}
 		}
 		catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
 		{
 			// The Operator closed; no Program/Runtime action is linked to this worker.
+		}
+		finally
+		{
+			lock (_gate)
+				foreach (var job in _jobs.Values)
+					job.Cancellation.Dispose();
+			_shutdown.Dispose();
 		}
 	}
 
@@ -228,8 +241,8 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 	private void TrimCompletedUnsafe()
 	{
 		if (_jobs.Count <= MaximumRetainedJobs) return;
-		foreach (var old in _jobs.Values.Where(x => x.Snapshot.State is not
-			(MediaQcJobState.Running or MediaQcJobState.Queued))
+		foreach (var old in _jobs.Values.Where(x => !x.InProgress &&
+			x.Snapshot.State is not (MediaQcJobState.Running or MediaQcJobState.Queued))
 			.OrderBy(x => x.Snapshot.UpdatedUtc).Take(_jobs.Count - MaximumRetainedJobs).ToArray())
 		{
 			_jobs.Remove(old.Snapshot.JobId);
@@ -270,13 +283,7 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 	public async ValueTask DisposeAsync()
 	{
 		Dispose();
-		try { await _worker.ConfigureAwait(false); }
-		finally
-		{
-			lock (_gate)
-				foreach (var job in _jobs.Values) job.Cancellation.Dispose();
-			_shutdown.Dispose();
-		}
+		await _worker.ConfigureAwait(false);
 	}
 }
 
