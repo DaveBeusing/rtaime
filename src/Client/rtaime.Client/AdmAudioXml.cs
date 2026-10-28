@@ -217,13 +217,17 @@ public static class AdmAudioXml
 			var channelNode = channel is null ? null : groups["audioChannelFormat"][channel];
 			var channelName = (string?)channelNode?.Attribute("audioChannelFormatName");
 			var role = ResolveRole(channelName);
-			var sourceKind = (string?)channelNode?.Attribute("typeDefinition") ??
-				(pack is null ? null : (string?)groups["audioPackFormat"][pack].Attribute("typeDefinition")) ??
-				"UNVERIFIED";
+			var declaredKind = (string?)channelNode?.Attribute("typeDefinition") ??
+				(pack is null ? null : (string?)groups["audioPackFormat"][pack].Attribute("typeDefinition"));
+			var sourceKind = declaredKind is "DirectSpeakers" or "Objects" or "HOA" or "Binaural"
+				? declaredKind : "UNVERIFIED";
+			var objectIds = owners.Select(x => x.Key).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+			var objectLabel = string.Join(",", objectIds.Take(4)) +
+				(objectIds.Length > 4 ? "+" + (objectIds.Length - 4) + " more" : "");
 			tracks.Add(new AdmTrackMetadataRow(
 				uid, explicitTrack?.PhysicalTrackNumber, role,
 				explicitTrack?.Language ?? languageLabel,
-				owners.Length == 1 ? owners[0].Key : string.Join(",", owners.Select(x => x.Key).OrderBy(x => x)),
+				objectLabel,
 				pack, start, end, duration, sourceKind));
 		}
 		tracks.Sort((a, b) => a.PhysicalTrackNumber.HasValue && b.PhysicalTrackNumber.HasValue
