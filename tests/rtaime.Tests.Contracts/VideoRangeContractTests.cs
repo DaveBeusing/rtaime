@@ -25,7 +25,7 @@ public sealed class VideoRangeContractTests
 			NominalRange.Limited, 8, AlphaMode.Opaque, ColorMetadataAuthority.Authoritative);
 		var profile = VideoRangeProfile.ForRgba8(correct, 8, 4);
 		Assert.Null(profile.UnverifiedReason);
-		Assert.Equal(32, profile.ActiveImage.PixelCount);
+		Assert.Equal(32L, profile.ActiveImage.PixelCount);
 		Assert.Contains("UNVERIFIED", (profile with
 		{
 			Color = new ColorDescription(ColorPrimaries.Rec709, ColorTransfer.Rec709, ColorMatrix.IdentityRgb,
