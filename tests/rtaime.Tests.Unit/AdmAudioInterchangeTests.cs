@@ -60,6 +60,22 @@ public sealed class AdmAudioInterchangeTests
 	}
 
 		[Fact]
+	public void Unknown_vendor_elements_using_ADM_names_are_preserved_but_not_interpreted()
+	{
+		var original = Encoding.UTF8.GetString(Fixture("stereo.xml"));
+		var modified = original.Replace("</audioFormatExtended>",
+			"<vendor:audioObject audioObjectID=\"AO_0001\">" +
+			"<vendor:audioTrackUIDRef>ATU_99999999</vendor:audioTrackUIDRef>" +
+			"</vendor:audioObject>" +
+			"<vendor:audioFormatExtended version=\"bogus\"/>" +
+			"</audioFormatExtended>", StringComparison.Ordinal);
+		var bytes = Encoding.UTF8.GetBytes(modified);
+		var result = AdmAudioXml.ImportXml(bytes, Asset());
+		Assert.Equal(2, result.Tracks.Count);
+		Assert.Equal(bytes, AdmAudioXml.ExportXml(result));
+	}
+
+		[Fact]
 	public void Stereo_bom_and_original_whitespace_survive_an_independent_json_exchange()
 	{
 		var source = Fixture("stereo.xml");
