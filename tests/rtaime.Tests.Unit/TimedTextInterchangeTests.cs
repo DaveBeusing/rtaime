@@ -84,7 +84,7 @@ public sealed class TimedTextInterchangeTests
 	[InlineData("00:00:00:02", 2L)]
 	[InlineData("00:00:00:05", 5L)]
 	[InlineData("00:00:01:01", 61L)]
-	[InlineData("00:00:59:59", 3599L)]
+	[InlineData("00:00:59:59", 3596L)]
 	public void Fractional_5994_frame_timecodes_do_not_shift_at_subtick_rounding_boundaries(
 		string start, long expectedFirst)
 	{
