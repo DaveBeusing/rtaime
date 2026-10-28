@@ -183,7 +183,67 @@ public sealed class MediaQcFileInspectorTests
 		}
 	}
 
-	private static MediaAssetDescriptor CloneIdentity(MediaAssetDescriptor original) =>
+	[Fact]
+	public async Task Registered_offline_adapter_can_report_only_its_exact_versioned_check()
+	{
+		var root = TempRoot();
+		try
+		{
+			var asset = CreateAsset(root, Movie(), MediaAudioCodec.None);
+			var original = await MediaQcFileInspector.InspectAsync(asset, 10);
+			Assert.Equal(MediaQcCheckState.NotExecuted, original.Results[5].State);
+			var adapter = new SimulatedOfflineAdapter(MediaQcProfile.OfflineFileV1.Checks[5]);
+			var report = await MediaQcFileInspector.InspectAsync(asset, 10,
+				adapters: [adapter]);
+			Assert.Equal(MediaQcCheckState.Pass, report.Results[5].State);
+			Assert.Equal(MediaQcCheckState.NotExecuted, report.Results[6].State);
+			Assert.All(report.Results, result => result.Validate());
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
+	[Fact]
+	public async Task Mismatched_or_forged_adapters_are_rejected_without_fabricating_evidence()
+	{
+		var definition = MediaQcProfile.OfflineFileV1.Checks[5];
+		var fake = new SimulatedOfflineAdapter(definition with { Version = "1.1" });
+		Assert.Throws<ArgumentException>(() => MediaQcAdapterRegistry.Admit([fake]));
+		Assert.Throws<ArgumentException>(() =>
+			MediaQcAdapterRegistry.Admit([
+				new SimulatedOfflineAdapter(definition),
+				new SimulatedOfflineAdapter(definition)
+			]));
+		var root = TempRoot();
+		try
+		{
+			var asset = CreateAsset(root, Movie(), MediaAudioCodec.None);
+			var corrupt = new SimulatedOfflineAdapter(definition, forgeSource: true);
+			await Assert.ThrowsAsync<InvalidDataException>(async () =>
+				await MediaQcFileInspector.InspectAsync(asset, 3, adapters: [corrupt]));
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
+	private sealed class SimulatedOfflineAdapter(MediaQcCheckDefinition definition, bool forgeSource = false)
+		: IMediaQcCheckAdapter
+	{
+		public MediaQcCheckDefinition Definition { get; } = definition;
+		public ValueTask<MediaQcCheckResult> InspectAsync(
+			MediaQcCheckContext context, CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var source = forgeSource ? "offline-file:sha256:" + new string('b', 64) :
+				"offline-file:sha256:" + context.FingerprintSha256.ToLowerInvariant();
+			// Synthetic results are confined to the unit test. Production has no
+			// registered loudness or R 103 adapter until independently qualified.
+			return ValueTask.FromResult(new MediaQcCheckResult(
+				Definition, MediaQcCheckState.Pass,
+				"Simulated offline adapter evidence for contract qualification.",
+				0, 1, source, "test-only-1.0"));
+		}
+	}
+
+		private static MediaAssetDescriptor CloneIdentity(MediaAssetDescriptor original) =>
 		new(MediaAssetId.New(), original.Origin, original.SourceLocation, original.DisplayName,
 			original.Container, original.VideoCodec, original.AudioCodec, original.VideoFormat,
 			original.AudioFormat, original.Duration, original.LengthBytes, original.FingerprintSha256,
