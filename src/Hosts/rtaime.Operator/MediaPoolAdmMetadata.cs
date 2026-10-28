@@ -201,7 +201,8 @@ public sealed partial class MediaPoolInspectorViewModel
 		{
 			var prefix = "clip.adm.uid." + row.AudioTrackUid;
 			Add(prefix, row.DisplayTrack, row.AudioTrackUid + " · " +
-				(row.ChannelRole ?? "ROLE UNKNOWN") + " · " +
+				(row.ChannelRole ?? "ADM ROLE UNKNOWN") + " · " +
+				(row.R123AssignedRole ?? "R 123 UNASSIGNED") + " · " +
 				(row.Language ?? "LANGUAGE UNVERIFIED") + " · " + row.SourceKind,
 				"METADATA");
 			if (row.Start is not null)
