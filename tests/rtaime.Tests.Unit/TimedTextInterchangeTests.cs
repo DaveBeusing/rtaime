@@ -79,6 +79,27 @@ public sealed class TimedTextInterchangeTests
 		Assert.False(TimedTextFrameClock.IsActive(document.Cues[0], 120, fps));
 	}
 
+	[Theory]
+	[InlineData("00:00:00:01", 1L)]
+	[InlineData("00:00:00:02", 2L)]
+	[InlineData("00:00:00:05", 5L)]
+	[InlineData("00:00:01:01", 61L)]
+	[InlineData("00:00:59:59", 3599L)]
+	public void Fractional_5994_frame_timecodes_do_not_shift_at_subtick_rounding_boundaries(
+		string start, long expectedFirst)
+	{
+		var xml = Distribution(
+			"<p xml:id=\"p1\" region=\"bottom\" style=\"base\" begin=\"" + start +
+			"\" dur=\"1f\">Frame code</p>", rate: "60", multiplier: "1000 1001");
+		var document = TimedTextInterchangeCodec.Parse(Encoding.UTF8.GetBytes(xml),
+			TimedTextProfile.EbuTtDistribution101);
+		var cue = Assert.Single(document.Cues);
+		var rate = document.DocumentFrameRate!.Value;
+		Assert.Equal(expectedFirst, TimedTextFrameClock.FirstFrameAtOrAfter(cue.BeginTicks, rate));
+		Assert.True(TimedTextFrameClock.IsActive(cue, expectedFirst, rate));
+		Assert.False(TimedTextFrameClock.IsActive(cue, expectedFirst + 1, rate));
+	}
+
 	[Fact]
 	public void Source_bound_preview_reacts_to_pause_seek_transport_unknown_and_source_replacement()
 	{
