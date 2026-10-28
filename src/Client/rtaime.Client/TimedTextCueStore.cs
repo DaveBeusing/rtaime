@@ -15,7 +15,12 @@ public static class TimedTextFrameClock
 			throw new ArgumentOutOfRangeException(nameof(ticks));
 		var frames = (decimal)ticks * rate.Numerator /
 			(TimeSpan.TicksPerSecond * (decimal)rate.Denominator);
-		return checked((long)decimal.Ceiling(frames));
+		// TTML rational frame codes are serialized as 100 ns ticks. A genuine frame
+		// boundary can round upward by half a tick at 60000/1001; do not shift that
+		// boundary one whole frame while still rejecting a full tick beyond it.
+		var halfTickInFrames = (decimal)rate.Numerator /
+			(2m * TimeSpan.TicksPerSecond * rate.Denominator);
+		return checked((long)decimal.Ceiling(frames - halfTickInFrames));
 	}
 
 	public static bool IsActive(TimedTextCue cue, long confirmedFrame, FrameRate rate) =>
