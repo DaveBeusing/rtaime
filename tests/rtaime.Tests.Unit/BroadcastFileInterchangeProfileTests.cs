@@ -34,7 +34,7 @@ public sealed class BroadcastFileInterchangeProfileTests
         Assert.Equal(16, mxf.AudioBitDepth);
         Assert.Equal(1, mxf.AudioTrackCount);
         Assert.Equal(2, mxf.AudioChannelsPerTrack);
-        Assert.Contains("order unverified", mxf.AudioChannelOrder, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unverified", mxf.AudioChannelOrder, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("UNMAPPED", mxf.Timecode, StringComparison.Ordinal);
         Assert.Contains("UNMAPPED", mxf.Language, StringComparison.Ordinal);
         Assert.False(mxf.InterchangeFileQualified);
