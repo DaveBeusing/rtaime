@@ -102,7 +102,7 @@ public sealed partial class RuntimeProgramExecutionService
 			BroadcastContinuityPhase.ObservedComplete =>
 				$"CONTINUITY SOFTWARE OBSERVED · Control revision {snapshot.AuthorityRevision}, Runtime execution {snapshot.RuntimeExecutionRevision}, last complete video frame {snapshot.LastCompleteFrameSequence}, audio sample position {snapshot.LastCompleteAudioSamplePosition?.ToString() ?? "UNVERIFIED"}; physical scan-out UNVERIFIED.",
 			BroadcastContinuityPhase.Failed =>
-				$"CONTINUITY FAILED · incident {snapshot.IncidentGeneration} / {snapshot.IncidentCode}, Control revision {snapshot.AuthorityRevision}; no qualified HoldLast/Mute/Slate output; re-arm required.",
+				$"CONTINUITY FAILED · incident {snapshot.IncidentGeneration} / {snapshot.IncidentCode}, UTC {snapshot.IncidentStartedAtUtc:O}, Control revision {snapshot.AuthorityRevision}, Runtime execution {snapshot.RuntimeExecutionRevision}, last complete video {snapshot.LastCompleteFrameSequence?.ToString() ?? "UNVERIFIED"} / audio {snapshot.LastCompleteAudioSamplePosition?.ToString() ?? "UNVERIFIED"}; no qualified HoldLast/Mute/Slate output; re-arm required.",
 			BroadcastContinuityPhase.RecoveredAwaitingRearm =>
 				$"CONTINUITY RECOVERED AWAITING RE-ARM · incident {snapshot.IncidentGeneration}, Control revision {snapshot.AuthorityRevision}; software frames resumed but operator acknowledgement/Control approval NOT CONFIRMED.",
 			_ => "CONTINUITY UNVERIFIED · no complete Program/Aux frame+audio observation yet."
