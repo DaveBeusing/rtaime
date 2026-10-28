@@ -65,6 +65,37 @@ public sealed class MediaQcFileInspectorTests
 	}
 
 	[Fact]
+	public async Task Audio_sample_tables_cannot_qualify_missing_video_timing_or_video_metadata()
+	{
+		var root = TempRoot();
+		try
+		{
+			var handlerVideo = new byte[12];
+			Encoding.ASCII.GetBytes("vide", handlerVideo.AsSpan(8));
+			var videoTrack = Box("trak", Box("mdia", Box("hdlr", handlerVideo)
+				.Concat(Box("minf", Box("stbl", [])).ToArray())));
+			var handlerAudio = new byte[12];
+			Encoding.ASCII.GetBytes("soun", handlerAudio.AsSpan(8));
+			var header = new byte[8];
+			BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4), 1);
+			var sample = new byte[8];
+			BinaryPrimitives.WriteUInt32BigEndian(sample.AsSpan(0, 4), 10);
+			BinaryPrimitives.WriteUInt32BigEndian(sample.AsSpan(4, 4), 960);
+			var audioTrack = Box("trak", Box("mdia", Box("hdlr", handlerAudio)
+				.Concat(Box("minf", Box("stbl", Box("stts", header.Concat(sample).ToArray())))).ToArray()));
+			var file = Box("ftyp", Encoding.ASCII.GetBytes("isom0000"))
+				.Concat(Box("moov", Box("mvhd", new byte[8])
+					.Concat(videoTrack).Concat(audioTrack).ToArray()))
+				.Concat(Box("mdat", new byte[16])).ToArray();
+			var asset = CreateAsset(root, file, MediaAudioCodec.Aac);
+			var report = await MediaQcFileInspector.InspectAsync(asset, 8);
+			Assert.Equal(MediaQcCheckState.Unsupported, report.Results[3].State);
+			Assert.Equal(MediaQcCheckState.Pass, report.Results[4].State);
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
+		[Fact]
 	public async Task Source_mutation_invalidates_the_hash_and_prevents_a_published_report()
 	{
 		var root = TempRoot();
