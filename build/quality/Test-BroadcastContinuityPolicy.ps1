@@ -46,7 +46,9 @@ Assert-Condition ($source.tracker.Contains("ConfirmCommittedExecution") -and
 	$source.tracker.Contains("RecoveredAwaitingRearm")) "Runtime must retain bounded source/revision-fenced incident evidence with a re-arm barrier."
 Assert-Condition ($source.tracker.Contains("old.Source == source && old.Sink == sink") -and
 	$source.tracker.Contains("old.IncidentGeneration")) "Unrelated Control revisions may not clear a latched active incident."
-Assert-Condition ($source.runtime.Contains("_broadcastContinuity.ConfirmCommittedExecution(preparedExecution, commit.ExecutionRevision.Value, programSinkId)") -and
+Assert-Condition ($source.runtime.Contains("ConfirmContinuityAfterRuntimeCommitUnsafe(preparedExecution, commit.ExecutionRevision.Value, programSinkId)") -and
+	$source.projection.Contains("_broadcastContinuity.ConfirmCommittedExecution(prepared, executionRevision, programSinkId)") -and
+	$source.projection.Contains("_broadcastContinuity.InvalidateActiveRoles()") -and
 	$source.runtime.Contains("ObserveContinuityAtCompletedBoundaryUnsafe") -and
 	$source.runtime.Contains("ObserveContinuityOnFailedBoundary") -and
 	$source.runtime.Contains('ContinuityHealthyUnsafe("program")') -and
@@ -67,7 +69,9 @@ foreach ($test in @(
 	"Program_input_loss_latches_an_incident_and_recovery_does_not_silently_rearm",
 	"Lost_preview_or_aux_input_is_isolated_from_committed_program_authority",
 	"Failed_boundaries_are_idempotent_and_incident_history_is_bounded_by_role_and_revision",
-	"New_control_committed_source_or_sink_revokes_old_last_complete_evidence"
+	"New_control_committed_source_or_sink_revokes_old_last_complete_evidence",
+	"Video_or_pcm_position_regression_is_an_incident_not_a_runtime_observer_exception",
+	"Bounded_software_fault_injection_soak_preserves_committed_program_and_monotonic_AV_evidence"
 )) {
 	Assert-Condition ($source.integrationTests.Contains($test)) "Broadcast continuity negative regression is missing: $test"
 }
