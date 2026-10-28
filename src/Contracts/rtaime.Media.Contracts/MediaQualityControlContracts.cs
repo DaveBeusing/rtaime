@@ -43,6 +43,20 @@ public sealed record MediaQcCheckResult(
 	MediaQcFrameRange? Range = null,
 	string? TrackId = null)
 {
+	public string DisplayState => State switch
+	{
+		MediaQcCheckState.NotExecuted => "NOT_EXECUTED",
+		MediaQcCheckState.Unsupported => "UNSUPPORTED",
+		MediaQcCheckState.Failed => "FAILED",
+		MediaQcCheckState.Pass => "PASS",
+		_ => "UNKNOWN"
+	};
+	public string EvidenceLabel =>
+		$"Tool {ToolVersion} · Severity {Severity} · Confidence " +
+		(Confidence is { } value
+			? value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+			: "UNVERIFIED");
+
 	public void Validate()
 	{
 		Definition.Validate();
