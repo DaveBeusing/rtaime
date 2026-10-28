@@ -129,6 +129,31 @@ if (-not [string]::IsNullOrWhiteSpace($BroadcastInteroperabilityReportPath)) {
         $broadcastPath = Retain-Input $BroadcastInteroperabilityReportPath "broadcast-interoperability-report"
         & (Join-Path $root "build/qualification/Test-BroadcastInteroperabilityReport.ps1") -ReportPath $broadcastPath -ExpectedSourceCommit $ExpectedSourceCommit
         $broadcastReport = Get-Content -LiteralPath $broadcastPath -Raw | ConvertFrom-Json -Depth 64
+        if ([string]::IsNullOrWhiteSpace($RequiredGatesPath)) {
+            throw "Broadcast software report requires a matching Required Gates run snapshot."
+        }
+        $gatesFull = Resolve-Input $RequiredGatesPath
+        if (-not (Test-Path -LiteralPath $gatesFull -PathType Leaf)) {
+            throw "Required Gates run snapshot is missing for broadcast evidence."
+        }
+        $gateSnapshot = Get-Content -LiteralPath $gatesFull -Raw | ConvertFrom-Json -Depth 64
+        if ([string]$gateSnapshot.run.head_sha -cne $ExpectedSourceCommit -or
+            [string]$gateSnapshot.run.repository.full_name -cne "DaveBeusing/rtaime" -or
+            [long]$gateSnapshot.run.id -lt 1 -or [int]$gateSnapshot.run.run_attempt -lt 1) {
+            throw "Broadcast report source/run is not corroborated by Required Gates."
+        }
+        $ciJobs = @($gateSnapshot.jobs | Where-Object {
+            $_.name -eq "CI" -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and
+            [long]$_.run_id -eq [long]$gateSnapshot.run.id -and
+            [int]$_.run_attempt -eq [int]$gateSnapshot.run.run_attempt
+        })
+        if ($ciJobs.Count -ne 1) { throw "Broadcast software report requires exactly one successful same-run CI job." }
+        foreach ($suite in @($broadcastReport.suites | Where-Object { $null -ne $_.evidence })) {
+            if ([string]$suite.evidence.runId -cne [string]$gateSnapshot.run.id -or
+                [int]$suite.evidence.runAttempt -ne [int]$gateSnapshot.run.run_attempt) {
+                throw "Broadcast TRX report run/attempt differs from the verified Required Gates snapshot."
+            }
+        }
         foreach ($suite in @($broadcastReport.suites | Where-Object { $null -ne $_.evidence })) {
             if (@($inputs | Where-Object { $_.kind -eq "broadcast-interoperability-trx" -and $_.path -eq (Resolve-Input ([string]$suite.evidence.path)) }).Count -eq 0) {
                 $null = Retain-Input ([string]$suite.evidence.path) "broadcast-interoperability-trx"
