@@ -205,9 +205,10 @@
                                             <StackPanel Margin="0,4,0,2">
                                                 <DockPanel>
                                                     <TextBlock Text="{Binding Definition.Name}" Style="{StaticResource OperatorValue}" />
-                                                    <TextBlock Text="{Binding State}" DockPanel.Dock="Right" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding DisplayState}" DockPanel.Dock="Right" FontWeight="SemiBold" />
                                                 </DockPanel>
                                                 <TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding EvidenceLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
