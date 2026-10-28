@@ -387,6 +387,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			now,
 			[
 				new("Lock", lockValue),
+				new("Time quality", _operator.ClockTimeQuality),
 				new("Evidence", current ? evidence : "UNVERIFIED"),
 				new("Source", current ? clock!.Source.ToString() : "UNVERIFIED"),
 				new("Provider", current ? clock!.ProviderId : "UNVERIFIED"),
