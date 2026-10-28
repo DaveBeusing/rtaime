@@ -33,6 +33,23 @@ public sealed partial class RuntimeProgramExecutionService
 		}
 	}
 
+	private void ConfirmContinuityAfterRuntimeCommitUnsafe(
+		PreparedExecutionContract prepared, ulong executionRevision, MediaSinkId programSinkId)
+	{
+		try
+		{
+			_broadcastContinuity.ConfirmCommittedExecution(prepared, executionRevision, programSinkId);
+		}
+		catch (Exception error) when (error is InvalidDataException or ArgumentException
+			or NotSupportedException or OverflowException)
+		{
+			// A diagnostic tracker cannot make an already committed Runtime plan
+			// appear rejected or roll it back. Revoke all old continuity evidence.
+			_broadcastContinuity.InvalidateActiveRoles();
+			Observe("runtime.continuity.admission_unverified");
+		}
+	}
+
 	private void ObserveContinuityAtCompletedBoundaryUnsafe(
 		MediaSourceId committedSource, ulong sequence, ulong audioSamplePosition,
 		ulong? auxAudioSamplePosition, Failure? auxFailure)
