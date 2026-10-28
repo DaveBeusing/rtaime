@@ -225,7 +225,7 @@ public sealed class HdrContributionAdmissionTests
             {
                 Budget = candidate.Budget with { NativeBudgetBytes = 100_000 }
             }).Code);
-        Assert.Equal("hdr.admission.arithmetic_overflow",
+        Assert.Equal("hdr.admission.resource_evidence_invalid",
             HdrContributionAdmission.Evaluate(candidate with
             {
                 Budget = candidate.Budget with { NativeFrameSlots = int.MaxValue,
