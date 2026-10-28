@@ -2318,6 +2318,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				current.Ducking,
 				current.ClipStrategy);
 			_audioProduction.ApplyConfiguration(updated);
+			// Gain/mute changes advance audio configuration and start a new
+			// independent integrated-loudness measurement session.
+			foreach (var analyser in _programmeLoudnessAnalysers.Values)
+				analyser.Interrupt();
 			_audio.SetInputState(stream.StreamId, gain, muted);
 			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}:mix-revision={updated.Revision}");
 			return AudioInputSnapshotUnsafe(sourceId);
@@ -3406,7 +3410,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			Required("RTAIME_PROGRAMME_TRUE_PEAK_CEILING_DBTP"));
 	}
 
-		private void EnsureAudioBusBuffersUnsafe(AudioProductionConfiguration configuration)
+	private void EnsureAudioBusBuffersUnsafe(AudioProductionConfiguration configuration)
 	{
 		var configured = configuration.Buses.Select(bus => bus.BusId).ToHashSet();
 		foreach (var stale in _audioBusMixSamples.Keys.Where(busId => !configured.Contains(busId)).ToArray())
