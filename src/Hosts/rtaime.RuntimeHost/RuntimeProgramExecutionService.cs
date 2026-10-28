@@ -878,20 +878,30 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		}
 	}
 
-	public void ObserveReferenceClock(MediaReferenceClockObservation observation)
+	public void ObserveReferenceClock(IMediaReferenceClockProvider provider,
+		TimeSpan runtimeMonotonicTime, DateTimeOffset observedAtUtc)
 	{
-		ArgumentNullException.ThrowIfNull(observation);
+		ArgumentNullException.ThrowIfNull(provider);
+		provider.Capabilities.Validate();
+		var observation = provider.Observe(runtimeMonotonicTime, observedAtUtc);
 		observation.Validate();
+		if (observation.ProviderId != provider.Capabilities.ProviderId ||
+			observation.Source != provider.Capabilities.Source ||
+			observation.ObservedAtUtc > observedAtUtc ||
+			observation.Evidence == MediaReferenceEvidence.HardwareQualified &&
+				!provider.Capabilities.HardwareTimestamping ||
+			observation.LockState == MediaReferenceLockState.Holdover &&
+				!provider.Capabilities.SupportsHoldover)
+			throw new InvalidOperationException("Provider clock facts do not match declared capabilities.");
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (observation.ProviderId == "virtual-reference-clock" &&
-				observation.Evidence == MediaReferenceEvidence.HardwareQualified)
-				throw new InvalidOperationException("Virtual reference cannot publish physical qualification.");
 			if (observation.ProviderId == _clockReference.ProviderId &&
 				observation.EpochId == _clockReference.EpochId &&
-				observation.ObservedAtUtc < _clockReference.ObservedAtUtc)
-				throw new InvalidOperationException("Clock observation moved backwards within its epoch.");
+				(observation.ObservedAtUtc < _clockReference.ObservedAtUtc ||
+				 observation.GrandmasterId != _clockReference.GrandmasterId ||
+				 observation.ClockDomainId != _clockReference.ClockDomainId))
+				throw new InvalidOperationException("Clock reference regressed or changed grandmaster/domain without a new epoch.");
 			_clockReference = observation;
 		}
 	}
