@@ -69,3 +69,8 @@ Build with `./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 - [EBU R 154, UHD/HDR Exchange](https://tech.ebu.ch/publications/r154)
 - [Media Library](MediaLibraryAssetBrowser.md)
 - [Durable Persistence](DurablePersistenceAndJournal.md)
+
+
+## Timed Text cue ownership
+
+The optional descriptive Media Library fields for caption language, format and kind remain plain EBUCore-oriented **metadata**. They are not subtitle cue streams, rendered overlays or proof of caption accessibility. The separate [Timed Text Interchange](TimedTextInterchange.md) implementation owns timecoded cue identities, source-bound local XML import/export and read-only preview. It does not write or migrate the durable asset catalogue. Production caption overlays and file/ANC carriage remain UNAVAILABLE pending independent provider and ControlHost admission.
