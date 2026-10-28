@@ -120,6 +120,49 @@ Assert-Condition ($qualificationTests -match 'Gpu_and_wpf_paths_share_the_same_p
 Assert-Condition ($monitoringIntegrationTests -match 'Dedicated_named_pipe_monitoring_transport_reconnects_after_server_restart' -and $monitoringIntegrationTests -match 'Sustained_shared_monitoring_replacement_remains_bounded_and_returns_to_baseline' -and $monitoringIntegrationTests -match 'RTAIME_MONITORING_QUALIFICATION_SOAK_LONG') "Monitoring integration qualification must cover reconnect and bounded shared-resource soak behavior."
 Assert-Condition ($qualificationDocumentation -match 'Software performance envelope' -and $qualificationDocumentation -match 'Physical.*UNVERIFIED' -and $qualificationDocumentation -match 'RTAIME_MONITORING_QUALIFICATION_SOAK_LONG') "Monitoring qualification documentation must separate software evidence from physical qualification and document sustained qualification."
 
+# R 103 extends this existing monitoring quality gate, not a second security framework.
+$rangePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VideoSignalRangeAnalysis.cs"
+$rangeTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/VideoSignalRangeAnalysisTests.cs"
+$reviewViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ColorReviewViewModel.cs"
+$reviewXamlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ColorReviewWorkspaceControl.xaml"
+$rangeDocumentationPath = Join-Path $repositoryRoot "docs/VideoSignalRangeCompatibility.md"
+$colorDocumentationPath = Join-Path $repositoryRoot "docs/ColorAccurateMediaMonitoring.md"
+foreach ($path in @($rangePath, $rangeTestsPath, $reviewViewModelPath, $reviewXamlPath, $rangeDocumentationPath, $colorDocumentationPath)) {
+	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "R 103 code-range evidence artifact is missing: $path"
+}
+$range = Get-Content -LiteralPath $rangePath -Raw
+$rangeTests = Get-Content -LiteralPath $rangeTestsPath -Raw
+$reviewModel = Get-Content -LiteralPath $reviewViewModelPath -Raw
+$reviewXaml = Get-Content -LiteralPath $reviewXamlPath -Raw
+$rangeDocumentation = Get-Content -LiteralPath $rangeDocumentationPath -Raw
+$colorDocumentation = Get-Content -LiteralPath $colorDocumentationPath -Raw
+
+Assert-Condition ($range.Contains("8 => new(16, 235, 5, 246, 1, 254)") -and $range.Contains("10 => new(64, 940, 20, 984, 4, 1019)")) "R 103 v3 numeric nominal/preferred/total thresholds must retain the normative 8/10-bit code bands."
+Assert-Condition ($range.Contains("(long)union.OutsidePreferred * 100 > samples") -and $range.Contains("(long)AnyComponent.OutsidePreferred * 100 > SampleCount")) "Out-of-gamut threshold must be strictly greater than 1% of sampled active picture area."
+Assert-Condition ($range.Contains("ColorMetadataAuthority.Authoritative") -and $range.Contains("NominalRange.Full") -and $range.Contains("ObservedCodeBitDepth") -and $range.Contains("ActiveImage")) "R 103 must reject unsupported or untrusted range/precision metadata and exclude non-active image."
+Assert-Condition ($range.Contains("SampledOutsideTotal") -and $range.Contains("ChromaStatus") -and $range.Contains("UNAVAILABLE")) "R 103 must distinguish total excursion and unavailable native chroma evidence."
+Assert-Condition ($scopeAnalysis.Contains("signalCounts.Add") -and $scopeAnalysis.Contains("pixels[offset]") -and $scopeAnalysis.Contains("SignalRange = signalCounts.Finish")) "CPU scope should count source codes on the existing sampled frame before presentation conversion."
+Assert-Condition ($scopeAnalysis.Contains("CombinedResultBytes") -and $scopeAnalysis.Contains("SignalResultCount") -and $scopeAnalysis.Contains("ScopeResultCount")) "New raw-code counters must be additive to the bounded existing scope shape."
+Assert-Condition ($gpuScopes.Contains("CountRawExcursion") -and $gpuScopes.Contains("uint rawR") -and $gpuScopes.Contains("SignalEnabled") -and $gpuScopes.Contains("CombinedResultBytes")) "GPU scope must count raw code values only on eligible source semantics in its existing fixed compute pass."
+Assert-Condition ($gpuScopes.IndexOf("uint rawR") -lt $gpuScopes.IndexOf("sampleColor.r = TransformComponent")) "GPU raw-code range analysis must precede display transform."
+Assert-Condition ($gpuScopes -notmatch 'BitmapSource|CopyPixels|CopySubresourceRegion' -and $cleanProgram -notmatch 'VideoSignalRange|SignalRange') "Signal measurement must never introduce a CPU frame readback or Program output overlay."
+Assert-Condition ($reviewModel.Contains("SignalRangeStatusLabel") -and $reviewModel.Contains("SelectedScopes?.SignalRange") -and $reviewXaml.Contains("Binding SignalRangeStatusLabel")) "Color Review must show source-fenced range results instead of creating another scope owner."
+foreach ($test in @(
+	"Ebu_r103_eight_bit_threshold_edges_use_original_limited_codes",
+	"Ebu_r103_ten_bit_threshold_edges_do_not_quantize_to_eight_bits",
+	"Out_of_gamut_threshold_exceeds_one_percent_of_sampled_active_image_not_one_bad_pixel",
+	"Active_image_region_excludes_code_excursions_in_surrounding_border",
+	"Unknown_inferred_full_range_and_hdr_like_color_are_not_a_legal_level_pass",
+	"Eight_bit_monitoring_of_ten_bit_source_reports_unavailable_not_fake_ten_bit_legal_check",
+	"Signal_counters_round_trip_through_fixed_additive_gpu_scope_buffer"
+)) {
+	Assert-Condition ($rangeTests.Contains($test)) "R 103 negative test is missing: $test"
+}
+Assert-Condition ($rangeDocumentation.Contains("UNVERIFIED") -and $rangeDocumentation.Contains("UNAVAILABLE") -and $rangeDocumentation.Contains("86,076") -and $colorDocumentation.Contains("unfiltered sparse samples")) "R 103 evidence must document native precision, scope sample bounds and lack of full-frame compliance."
+
+Write-Host "EBU R 103 v3 sampled signal-range structural qualification PASS"
+Write-Host "Original Program pixels remain read-only; R 103 full-frame/hardware conformity UNVERIFIED"
+
 Write-Host "Operator monitoring plane policy verification PASS"
 Write-Host "Authority: none; output-only monitoring transport"
 Write-Host "Backpressure: bounded and loss-tolerant"
