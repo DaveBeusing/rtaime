@@ -190,6 +190,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
 		LoadGraphicsCommand = new AsyncRelayCommand(LoadGraphicsAsync, () => CanControl() && _graphicsAssetPicker is not null);
+		InitializeOGrafInspection();
 		ApplyGraphicsCommand = new AsyncRelayCommand(ApplyGraphicsAsync, CanApplyGraphicsPlacement);
 		ApplyTextGraphicsCommand = new AsyncRelayCommand(ApplyTextGraphicsAsync, CanApplyTextGraphics);
 		ToggleGraphicsCommand = new AsyncRelayCommand(ToggleGraphicsAsync, CanApplyGraphics);
