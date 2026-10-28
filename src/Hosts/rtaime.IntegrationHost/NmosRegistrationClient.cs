@@ -72,6 +72,7 @@ internal sealed class NmosRegistrationClient
 		if (response.StatusCode == HttpStatusCode.NotFound)
 		{
 			_registered = false;
+			_acceptedResources.Clear(); // Registry no longer owns this Node; do not delete old ids on shutdown.
 			return false;
 		}
 		if (response.StatusCode != HttpStatusCode.OK)
@@ -79,7 +80,27 @@ internal sealed class NmosRegistrationClient
 			_registered = false;
 			throw new InvalidDataException("IS-04 node heartbeat was rejected by the registry.");
 		}
-		return true;
+		try
+		{
+			if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+				throw new InvalidDataException("IS-04 heartbeat response must be application/json.");
+			await response.Content.LoadIntoBufferAsync(4096, cancellationToken).ConfigureAwait(false);
+			using var payload = await JsonDocument.ParseAsync(
+				await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+				new JsonDocumentOptions { MaxDepth = 4 }, cancellationToken).ConfigureAwait(false);
+			if (payload.RootElement.ValueKind != JsonValueKind.Object ||
+				!payload.RootElement.TryGetProperty("health", out var health) ||
+				health.ValueKind != JsonValueKind.String ||
+				!ulong.TryParse(health.GetString(), System.Globalization.NumberStyles.None,
+					System.Globalization.CultureInfo.InvariantCulture, out _))
+				throw new InvalidDataException("IS-04 heartbeat response requires an unsigned seconds string.");
+			return true;
+		}
+		catch
+		{
+			_registered = false;
+			throw;
+		}
 	}
 
 	public async Task UnregisterAsync(CancellationToken cancellationToken)
