@@ -246,25 +246,41 @@ public static class AdmAudioXml
 
 	private static XDocument ParseXml(byte[] xml)
 	{
-		// Parse bytes rather than decoded/re-encoded strings so XML declaration,
-		// BOM, whitespace and vendor extensions survive byte-for-byte export.
-		using var stream = new MemoryStream(xml, writable: false);
-		using var reader = XmlReader.Create(stream, new XmlReaderSettings
+		// Apply structural limits DURING streaming traversal, not only after
+		// the XML tree has been allocated. This rejects adversarial deep
+		// nesting before a recursive object graph can exhaust the stack.
+		static XmlReaderSettings Settings() => new()
 		{
 			DtdProcessing = DtdProcessing.Prohibit,
-			XmlResolver = null, MaxCharactersFromEntities = 0,
+			XmlResolver = null,
+			MaxCharactersFromEntities = 0,
 			MaxCharactersInDocument = AdmAudioInterchange.MaximumXmlBytes,
-			CheckCharacters = true, IgnoreComments = false
-		});
+			CheckCharacters = true,
+			IgnoreComments = false
+		};
+		using (var prescan = new MemoryStream(xml, writable: false))
+		using (var input = XmlReader.Create(prescan, Settings()))
+		{
+			var elements = 0;
+			var attributes = 0;
+			while (input.Read())
+			{
+				if (input.NodeType != XmlNodeType.Element) continue;
+				elements++;
+				attributes += input.AttributeCount;
+				if (elements > MaximumElements || attributes > MaximumAttributes ||
+					input.Depth > MaximumDepth)
+					throw new InvalidDataException("ADM XML node, attribute or depth budget exceeded.");
+			}
+		}
+		// Parse the same original bytes, never decoded/re-encoded text.
+		using var stream = new MemoryStream(xml, writable: false);
+		using var reader = XmlReader.Create(stream, Settings());
 		var doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
 		var root = doc.Root ?? throw new InvalidDataException("ADM XML root is absent.");
 		if (root.Name.LocalName is not ("audioFormatExtended" or "ebuCoreMain") ||
 			root.Name.NamespaceName is not ("" or EbuCoreNamespace))
 			throw new InvalidDataException("Only standalone ADM or EBUCore-wrapped ADM XML is accepted.");
-		var nodes = root.DescendantsAndSelf().Take(MaximumElements + 1).ToArray();
-		if (nodes.Length > MaximumElements || nodes.Sum(e => e.Attributes().Count()) > MaximumAttributes ||
-			nodes.Any(e => e.Ancestors().Count() > MaximumDepth))
-			throw new InvalidDataException("ADM XML node, attribute or depth budget exceeded.");
 		return doc;
 	}
 
