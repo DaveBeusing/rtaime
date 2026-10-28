@@ -211,6 +211,7 @@
 									<StackPanel>
 										<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
 										<TextBlock Text="{Binding ProgramImpact}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+										<TextBlock Text="{Binding AlarmLifecycle}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 									</StackPanel>
 									<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" VerticalAlignment="Center">
 										<TextBlock Text="{Binding State}" FontSize="{StaticResource OperatorFontSizeFinePrint}" FontWeight="Bold" />
@@ -298,6 +299,18 @@
 							<TextBlock Text="{Binding SelectedSubsystem.ProgramImpact}" FontWeight="SemiBold" TextWrapping="Wrap" />
 							<TextBlock Text="EVIDENCE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.EvidenceSource}" TextWrapping="Wrap" />
+							<TextBlock Text="OPERATIONAL ALARM" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.AlarmLifecycle}" FontWeight="SemiBold" TextWrapping="Wrap"
+								AutomationProperties.Name="Operational alarm state and acknowledgement" />
+							<TextBlock Text="ACTIVE STATE DURATION (MONOTONIC)" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.AlarmDuration}" TextWrapping="Wrap" />
+							<TextBlock Text="LAST HEALTHY PROJECTION" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.LastGoodProjection}" TextWrapping="Wrap" />
+							<TextBlock Text="{Binding SelectedSubsystem.Acknowledgement}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
+							<controls:RtaimeButton Content="ACKNOWLEDGE · NOT A REPAIR"
+								Command="{Binding AcknowledgeAlarmCommand}"
+								AutomationProperties.Name="Acknowledge active alarm without changing production health"
+								HorizontalAlignment="Left" MinHeight="28" Padding="10,3" Margin="0,8,0,0" />
 							<TextBlock Text="EVIDENCE AVAILABILITY / FRESHNESS" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.EvidenceStatus}" TextWrapping="Wrap" />
 							<TextBlock Text="CURRENT EVIDENCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
