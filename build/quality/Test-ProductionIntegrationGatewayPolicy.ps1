@@ -97,6 +97,9 @@ Assert-Condition ($config.Contains("NmosOperatingMode.Observer") -and $config.Co
 Assert-Condition ($config.Contains('/x-nmos/query/v1.3/') -and $config.Contains('/x-nmos/registration/v1.3/')) "NMOS must pin IS-04 v1.3 Query and Registration URLs."
 Assert-Condition ($gateway.Contains("IntegrationAdapterKind.Nmos => new NmosIntegrationAdapter(adapter, gateway)")) "The existing gateway must own NMOS adapter composition."
 Assert-Condition ($nmosDiscovery.Contains('SpecificationRelease = "v1.3.3"') -and $nmosDiscovery.Contains("ValidateParents") -and $nmosDiscovery.Contains("duplicate resource identities")) "IS-04 Query must keep version, bounded complete snapshots and duplicate/parent rejection."
+Assert-Condition ($nmosDiscovery.Contains('X-Paging-Limit') -and $nmosDiscovery.Contains('X-Paging-Since') -and $nmosDiscovery.Contains('TryTaiCursor') -and $nmosDiscovery.Contains('for (var page = 0; page < 64; page++)')) "IS-04 Query must traverse bounded pages without accepting truncated or cyclic cursor results."
+Assert-Condition ($nmosRegistration.Contains('new Uri(_root, "resource")') -and $nmosRegistration.Contains('response.Headers.Location') -and $nmosRegistration.Contains('TryGetProperty("health"')) "IS-04 mutating requests and heartbeat acknowledgements must honor canonical versioned resource paths and validate responses."
+Assert-Condition ($nmosAdapter.Contains('app.MapMethods("/x-nmos/connection/v1.2/single/{kind}/{id}/staged"') -and $nmosAdapter.Contains('app.MapPost("/x-nmos/connection/v1.2/bulk/{kind}"')) "IS-05 write endpoints must use canonical no-trailing-slash paths."
 Assert-Condition ($nmosRegistration.Contains('health/nodes/') -and $nmosRegistration.Contains('UnregistrationOrder()') -and $nmosRegistration.Contains('HttpStatusCode.NotFound')) "Registration must heartbeat, re-register after expiry and delete child-first."
 Assert-Condition ($nmosResources.Contains('VIRTUAL_NO_MEDIA') -and $nmosResources.Contains('flow_id = (string?)null') -and $nmosResources.Contains('urn:x-nmos:transport:virtual')) "Virtual resources must never advertise actual RTP Flow/SDP media."
 Assert-Condition ($nmosConnections.Contains('master_enable') -and $nmosConnections.Contains('activate_immediate') -and $nmosConnections.Contains('Validate(sender, patch)') -and $nmosConnections.Contains('StageBulk')) "IS-05 must validate disabled-only staging and all-or-none bulk requests."
@@ -107,8 +110,13 @@ Assert-Condition ($schema.properties.adapters.items.properties.kind.enum -contai
 Assert-Condition ($nmosDocumentation.Contains('UNVERIFIED') -and $nmosDocumentation.Contains('ST 2110') -and $nmosDocumentation.Contains('dryRun=true')) "NMOS interoperability documentation must retain explicit hardware/security/production boundaries."
 foreach ($name in @(
 	"Registry_discovery_validates_full_parent_chain_without_claiming_local_rtp",
+	"Paged_query_follows_bounded_older_cursor_until_complete_without_partial_publication",
+	"Repeated_paging_cursor_and_ambiguous_paging_links_fail_closed",
+	"Unpaged_registry_uses_one_bounded_fallback_after_501",
 	"Registry_outage_invalidates_previous_topology_and_recovery_uses_new_generation",
 	"Registration_orders_resources_recovers_404_heartbeat_and_deletes_children_first",
+	"Malformed_200_heartbeat_cannot_be_interpreted_as_healthy_registration",
+	"Registry_conflict_cleanup_does_not_delete_unaccepted_foreign_resource_ids",
 	"Is05_staging_rejects_sdp_stream_activation_scheduled_time_and_unknown_id",
 	"Is05_disabled_immediate_staging_and_bulk_are_atomic_without_program_route",
 	"Virtual_node_rest_serves_stable_identity_and_rejects_activation_without_triggers"
