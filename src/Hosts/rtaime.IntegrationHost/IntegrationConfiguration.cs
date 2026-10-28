@@ -250,9 +250,11 @@ public sealed record NmosAdapterOptions
 		if (Port is < 1 or > 65535)
 			throw new ArgumentOutOfRangeException(nameof(Port));
 		var identifiers = new[] { NodeId, DeviceId, SenderId, ReceiverId };
-		if (identifiers.Any(value => !Guid.TryParse(value, out var parsed) || parsed == Guid.Empty) ||
+		if (identifiers.Any(value => !Guid.TryParse(value, out var parsed) || parsed == Guid.Empty ||
+			!System.Text.RegularExpressions.Regex.IsMatch(parsed.ToString("D"),
+				"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) ||
 			identifiers.Select(value => Guid.Parse(value!)).Distinct().Count() != identifiers.Length)
-			throw new ArgumentException("Virtual Node, Device, Sender and Receiver require distinct, stable nonempty UUIDs.");
+			throw new ArgumentException("Virtual Node, Device, Sender and Receiver require distinct, stable v1-v5 UUIDs.");
 		ValidateApiUrl(QueryApiUrl, "/x-nmos/query/v1.3/", localOnly: false, required: false);
 		ValidateApiUrl(RegistrationApiUrl, "/x-nmos/registration/v1.3/", localOnly: true, required: false);
 	}
