@@ -61,6 +61,8 @@ public sealed record RuntimeHostProcessOptions(
 	bool RequireExternalReference = false)
 {
 	public int MaximumLocalMediaDecoders { get; init; } = 2;
+	public MediaReferenceClockRequirement ClockRequirement { get; init; } =
+		MediaReferenceClockRequirement.Asynchronous;
     public LocalMediaCapacityProfile LocalMediaProfile { get; init; } = LocalMediaCapacityProfile.Conservative;
 	public string AIEndpoint { get; init; } = "rtaime.v1.ai.default";
 	public IReadOnlyList<RuntimeNetworkOutputTarget> NetworkOutputs { get; init; } = Array.Empty<RuntimeNetworkOutputTarget>();
@@ -98,6 +100,8 @@ public sealed record RuntimeHostProcessOptions(
             },
 			MaximumLocalMediaDecoders = ParsePositiveInt(Get(args, environment, "local-media-decoders", "RTAIME_LOCAL_MEDIA_DECODERS", "2"), "local-media-decoders"),
 			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint),
+			ClockRequirement = ParseClockRequirement(Get(args, environment,
+				"clock-requirement", "RTAIME_RUNTIME_CLOCK_REQUIREMENT", "asynchronous")),
 			NetworkOutputs = RuntimeNetworkOutputConfigurationLoader.Load(args, environment, format)
 		};
 	}
@@ -121,6 +125,8 @@ public sealed record RuntimeHostProcessOptions(
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 		if (!Enum.IsDefined(typeof(RuntimeMediaIoMode), MediaIoMode))
 			throw new ArgumentOutOfRangeException(nameof(MediaIoMode));
+		if (!Enum.IsDefined(ClockRequirement))
+			throw new ArgumentOutOfRangeException(nameof(ClockRequirement));
 		if (RequireExternalReference && MediaIoMode != RuntimeMediaIoMode.Native)
 			throw new ArgumentException("External reference may be required only when native Media I/O is selected.", nameof(RequireExternalReference));
 		if (NetworkOutputs is null)
@@ -163,6 +169,15 @@ public sealed record RuntimeHostProcessOptions(
 		"1080p59.94" or "1080p59_94" or "hd1080p59.94" => VideoFormat.Hd1080p59_94Rgba8,
 		_ => throw new ArgumentException("Configuration 'format' must be '1080p50' or '1080p59.94'.", "format")
 	};
+
+	private static MediaReferenceClockRequirement ParseClockRequirement(string value) =>
+		value.Trim().ToLowerInvariant() switch
+		{
+			"asynchronous" => MediaReferenceClockRequirement.Asynchronous,
+			"hardware-locked" => MediaReferenceClockRequirement.HardwareLocked,
+			"qualified-holdover" => MediaReferenceClockRequirement.QualifiedHoldover,
+			_ => throw new ArgumentException("Clock requirement must be asynchronous, hardware-locked or qualified-holdover.")
+		};
 
 	private static RuntimeMediaIoMode ParseMediaIoMode(string value) => value.Trim().ToLowerInvariant() switch
 	{
@@ -335,6 +350,7 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
+			_runtime.ConfigureReferenceClockRequirement(_options.ClockRequirement);
 			_runtime.EnablePipelineTiming(_timingProbe);
 			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format, _options.MaximumLocalMediaDecoders,
                 _options.LocalMediaProfile == LocalMediaCapacityProfile.Conservative ? [_options.SourceAId, _options.SourceBId] : null,
