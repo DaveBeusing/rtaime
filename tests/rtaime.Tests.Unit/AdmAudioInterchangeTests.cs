@@ -153,7 +153,25 @@ public sealed class AdmAudioInterchangeTests
 		Assert.ThrowsAny<Exception>(() => AdmAudioXml.ImportXml(Encoding.UTF8.GetBytes(xml), Asset()));
 	}
 
-	[Fact]
+	[Theory]
+	[InlineData("4b", 4)]
+	[InlineData("8a", 8)]
+	[InlineData("8b", 8)]
+	public void R123_legacy_exchange_layouts_have_explicit_unambiguous_physical_role_order(
+		string code, int count)
+	{
+		var roles = R123TrackAllocation.ExpectedRoles(code);
+		Assert.Equal(count, roles.Count);
+		var tracks = roles.Select((role, index) =>
+			new AdmTrackAssignment(index + 1, "ATU_" + (index + 1).ToString("X8"), role)).ToArray();
+		R123TrackAllocation.Validate(code, tracks);
+		Assert.Throws<InvalidDataException>(() => R123TrackAllocation.Validate(
+			code, tracks.Select((track, index) =>
+				index == 0 ? track with { R123Role = "UNKNOWN" } : track).ToArray()));
+		Assert.Throws<InvalidDataException>(() => R123TrackAllocation.Validate(null, tracks));
+	}
+
+		[Fact]
 	public void Unknown_R123_arrangement_and_misordered_channels_are_rejected()
 	{
 		var result = AdmAudioXml.ImportXml(Fixture("r123-8a.xml"), Asset());
