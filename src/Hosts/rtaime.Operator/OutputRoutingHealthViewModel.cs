@@ -1038,6 +1038,20 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		"preview" => "CONTROL PREVIEW · MONITOR ONLY, NOT A DEVICE SEND",
 		_ => "LOCAL CLEAN FEED · NOT A PHYSICAL PROGRAM OUTPUT"
 	};
+	public string ContinuityStatus
+	{
+		get
+		{
+			if (Id is not ("program" or "aux")) return "CONTINUITY · NOT A GOVERNED PHYSICAL ROLE";
+			if (Detail.Contains("CONTINUITY FAILED", StringComparison.Ordinal))
+				return "CONTINUITY INCIDENT ACTIVE · no qualified automatic fallback; inspect Health Center";
+			if (Detail.Contains("CONTINUITY RECOVERED AWAITING RE-ARM", StringComparison.Ordinal))
+				return "CONTINUITY RECOVERED · incident acknowledgement and ControlHost re-arm NOT CONFIRMED";
+			if (Detail.Contains("CONTINUITY SOFTWARE OBSERVED", StringComparison.Ordinal))
+				return "CONTINUITY SOFTWARE OBSERVED · physical playout UNVERIFIED";
+			return "CONTINUITY UNVERIFIED · wait for committed Runtime output evidence";
+		}
+	}
 	public string DeliveryEvidence => Id switch
 	{
 		"preview" => "CONTROL PREVIEW · NO PHYSICAL SEND",
@@ -1086,6 +1100,7 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		StreamingDrops = streamingDrops;
 		StreamingReconnects = streamingReconnects;
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DeliveryEvidence)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ContinuityStatus)));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
