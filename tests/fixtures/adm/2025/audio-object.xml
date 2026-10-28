@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<audioFormatExtended version="ITU-R_BS.2076-3" xmlns:vendor="urn:rtaime:example-vendor">
+  <audioProgramme audioProgrammeID="APR_1001" audioProgrammeName="object audio metadata">
+    <audioContentIDRef>ACO_1001</audioContentIDRef>
+  </audioProgramme>
+  <audioContent audioContentID="ACO_1001" audioContentName="Main" audioContentLanguage="en">
+    <audioObjectIDRef>AO_0001</audioObjectIDRef>
+  </audioContent>
+  <audioObject audioObjectID="AO_0001" audioObjectName="Group 1" start="00:00:00.00000" duration="00:00:10.00000">
+    <audioPackFormatIDRef>AP_00031001</audioPackFormatIDRef>
+    <audioTrackUIDRef>ATU_00000001</audioTrackUIDRef>
+  </audioObject>
+  <audioPackFormat audioPackFormatID="AP_00031001" audioPackFormatName="AP_00031001" typeDefinition="Objects">
+    <audioChannelFormatIDRef>AC_00000001</audioChannelFormatIDRef>
+  </audioPackFormat>
+  <audioChannelFormat audioChannelFormatID="AC_00000001" audioChannelFormatName="Car_Object" typeDefinition="Objects">
+    <audioBlockFormat audioBlockFormatID="AB_00000001_00000001" rtime="00:00:00.00000" duration="00:00:10.00000">
+      <position coordinate="azimuth">30.0</position>
+      <vendor:proprietary attribute="still-preserved">custom extension</vendor:proprietary>
+    </audioBlockFormat>
+  </audioChannelFormat>
+  <audioStreamFormat audioStreamFormatID="AS_00000001" audioStreamFormatName="Stream 1">
+    <audioChannelFormatIDRef>AC_00000001</audioChannelFormatIDRef>
+    <audioTrackFormatIDRef>AT_00000001_01</audioTrackFormatIDRef>
+  </audioStreamFormat>
+  <audioTrackFormat audioTrackFormatID="AT_00000001_01" audioTrackFormatName="Track 1">
+    <audioStreamFormatIDRef>AS_00000001</audioStreamFormatIDRef>
+  </audioTrackFormat>
+  <audioTrackUID UID="ATU_00000001">
+    <audioTrackFormatIDRef>AT_00000001_01</audioTrackFormatIDRef>
+    <audioPackFormatIDRef>AP_00031001</audioPackFormatIDRef>
+  </audioTrackUID>
+  <vendor:privateMetadata vendor:note="must-survive-roundtrip">Vendor-preserved</vendor:privateMetadata>
+</audioFormatExtended>
