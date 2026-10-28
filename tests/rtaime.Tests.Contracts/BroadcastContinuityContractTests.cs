@@ -65,6 +65,10 @@ public sealed class BroadcastContinuityContractTests
 		Assert.Throws<InvalidDataException>(() =>
 			(before with { Phase = BroadcastContinuityPhase.Failed }).Validate());
 		Assert.Throws<InvalidDataException>(() =>
+			(before with { IncidentGeneration = 12, IncidentCode = "stale.failed", IncidentStartedAtUtc = DateTimeOffset.UtcNow }).Validate());
+		Assert.Throws<InvalidDataException>(() =>
+			(before with { IncidentCode = "dangling", IncidentStartedAtUtc = DateTimeOffset.UtcNow }).Validate());
+		Assert.Throws<InvalidDataException>(() =>
 			(before with { SourceId = "invalid" }).Validate());
 		var fault = before with
 		{
