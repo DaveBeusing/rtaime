@@ -98,7 +98,7 @@ public sealed class HdrContributionContractTests
         Assert.Throws<ArgumentException>(() => new HdrNativeFrameLayout(4, 2,
             HdrNativePixelLayout.P010Ycbcr420Le,
             [new(4, 2, 2, 4, 0), new(2, 1, 4, 8, 8)]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new HdrNativeFrameLayout(4, 2,
+        Assert.Throws<ArgumentException>(() => new HdrNativeFrameLayout(4, 2,
             HdrNativePixelLayout.LinearRgbaHalfLe,
             [new(4, 2, 8, long.MaxValue - 1, 0)]));
 
