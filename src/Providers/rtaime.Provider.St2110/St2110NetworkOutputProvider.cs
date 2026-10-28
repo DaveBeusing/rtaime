@@ -66,7 +66,7 @@ public sealed class St2110LoopbackUdpSender : ISt2110DatagramSender
 /// changes ControlHost routing, production clocks or prepared execution.</summary>
 public sealed class St2110NetworkOutputProvider
 {
-    private static readonly ProviderId Identity = new(
+    private static readonly ProviderId ProviderIdentity = new(
         new Identity(new Guid("8c4a0935-bbf8-46da-88ab-12836bcc2f6e")));
     private static readonly CapabilityId Capability = new(
         new Identity(new Guid("e1b26cdf-59c1-4d83-a856-039370cf18d2")));
@@ -77,12 +77,12 @@ public sealed class St2110NetworkOutputProvider
         Array.AsReadOnly(new[] { VideoFormat.Hd1080p50Rgba8, VideoFormat.Hd1080p59_94Rgba8 });
 
     public ProviderDescriptor Descriptor { get; } = new(
-        ProviderContractVersion.Current, Identity, "ST 2110 Software Loopback Reference",
+        ProviderContractVersion.Current, ProviderIdentity, "ST 2110 Software Loopback Reference",
         new ProviderAvailability(ProviderAvailabilityState.Available),
         new[] { new ProviderCapabilityDescriptor(
             Capability, NetworkOutputCapabilityKinds.Output, SupportedFormats) },
         new[] { new ProviderResourceDescriptor(
-            Resource, Identity, NetworkOutputCapabilityKinds.Output, 2, true) });
+            Resource, ProviderIdentity, NetworkOutputCapabilityKinds.Output, 2, true) });
 
     public St2110NetworkOutputSession CreateSession(NetworkOutputConfiguration configuration,
         Func<St2110SoftwareEndpoint, ISt2110DatagramSender>? senderFactory = null) =>
