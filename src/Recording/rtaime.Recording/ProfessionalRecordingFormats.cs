@@ -167,6 +167,11 @@ public sealed class RecordingProfileCatalog
 	public RecordingProfileId DefaultProfileId { get; }
 	public IReadOnlyList<RecordingProfileDescriptor> Profiles => _profiles;
 
+    // Exact, non-authoritative file-exchange tuples derived from this actual
+    // provider catalog. An unavailable/unknown encoder never becomes supported.
+    public IReadOnlyList<BroadcastFileInterchangeProfile> DescribeFileInterchange() =>
+        BroadcastFileInterchangeProfiles.Snapshot(this);
+
 	public bool TryGet(RecordingProfileId profileId, out RecordingProfileDescriptor profile) =>
 		_byId.TryGetValue(profileId, out profile!);
 
