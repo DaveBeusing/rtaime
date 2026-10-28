@@ -104,6 +104,23 @@ public sealed class TimedTextInterchangeTests
 	}
 
 	[Fact]
+	public void Multilingual_cues_use_explicit_supported_language_selection_not_fabricated_document_defaults()
+	{
+		var xml = Distribution(
+			"<p xml:id=\"p1\" xml:lang=\"de-DE\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Deutsch</p>" +
+			"<p xml:id=\"p2\" xml:lang=\"fr-FR\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Français</p>");
+		var doc = TimedTextInterchangeCodec.Parse(Encoding.UTF8.GetBytes(xml), TimedTextProfile.EbuTtDistribution101);
+		var store = new TimedTextCueStore();
+		store.Import("source-current", doc);
+		Assert.Equal("de-DE", store.SelectedLanguage);
+		var rate = new FrameRate(25, 1);
+		Assert.Equal("Deutsch", store.Preview("source-current", 30, rate, true, false).Text);
+		store.SelectLanguage("fr-FR");
+		Assert.Equal("Français", store.Preview("source-current", 30, rate, true, false).Text);
+		Assert.Throws<InvalidOperationException>(() => store.SelectLanguage("ru-RU"));
+	}
+
+	[Fact]
 	public void Live_v10_sequence_identity_roundtrips_and_clock_origin_is_explicitly_unverified()
 	{
 		var xml = Live("<p xml:id=\"p1\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Live text</p>",
