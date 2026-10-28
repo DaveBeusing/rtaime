@@ -57,6 +57,7 @@ public sealed class MediaReferenceClockTests
 		var initial = source.Observe(TimeSpan.Zero, Start);
 		Assert.Equal(MediaReferenceLockState.Unverified, initial.LockState);
 		Assert.Equal(MediaReferenceEvidence.Simulated, initial.Evidence);
+		Assert.Equal(MediaReferenceTimeQuality.Simulated, initial.TimeQuality);
 		Assert.False(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.HardwareLocked, initial, Start));
 		source.ObserveSync(TimeSpan.Zero, Start, "0011223344556677", 100, 4.5);
 		var locked = source.Observe(TimeSpan.FromSeconds(1), Start.AddSeconds(1));
@@ -110,13 +111,17 @@ public sealed class MediaReferenceClockTests
 			MediaReferenceClockSource.HardwarePtp, MediaReferenceLockState.Locked,
 			MediaReferenceEvidence.HardwareQualified, 0, "0102030405060708",
 			Start, Start, 120, 0.8, TimeSpan.Zero, TimeSpan.FromMinutes(5),
-			"Source-bound device reference measurement.");
+			"Source-bound device reference measurement.",
+			MediaReferenceTimeQuality.Traceable);
 		obs.Validate();
 		Assert.True(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.HardwareLocked, obs, Start));
+		Assert.False(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.HardwareLocked,
+			obs with { TimeQuality = MediaReferenceTimeQuality.Unverified }, Start));
 		Assert.True(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.QualifiedHoldover, obs, Start));
 		Assert.False(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.HardwareLocked, obs, Start.AddSeconds(4)));
 		var holdover = obs with {
 			LockState = MediaReferenceLockState.Holdover,
+			TimeQuality = MediaReferenceTimeQuality.Holdover,
 			ObservedAtUtc = Start.AddMinutes(4),
 			HoldoverElapsed = TimeSpan.FromMinutes(4)
 		};
@@ -141,6 +146,8 @@ public sealed class MediaReferenceClockTests
 				Evidence = MediaReferenceEvidence.HardwareQualified }).Validate());
 		Assert.Throws<ArgumentException>(() =>
 			(unknown with { DriftPartsPerBillion = double.NaN }).Validate());
+		Assert.Throws<ArgumentException>(() =>
+			(unknown with { TimeQuality = MediaReferenceTimeQuality.Traceable }).Validate());
 		Assert.Throws<ArgumentException>(() =>
 			(unknown with { ProviderId = "credential://secret" }).Validate());
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
