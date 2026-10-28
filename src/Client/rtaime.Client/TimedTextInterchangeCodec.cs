@@ -62,6 +62,7 @@ public static class TimedTextInterchangeCodec
 		if (document.Nodes().Any(node => node is XDocumentType or XProcessingInstruction))
 			throw new InvalidDataException("DTD, processing instructions and external declarations are forbidden.");
 		var root = document.Root ?? throw new InvalidDataException("Missing TTML document root.");
+		EnsureBoundedDocumentTree(root);
 		ExpectName(root, "tt");
 		AllowAttributes(root, XNamespace.Xml + "lang", Ttp + "timeBase",
 			Ttp + "frameRate", Ttp + "frameRateMultiplier", Ttp + "clockMode",
@@ -425,6 +426,22 @@ public static class TimedTextInterchangeCodec
 
 	private static decimal Decimal(string value) =>
 		decimal.Parse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+
+	private static void EnsureBoundedDocumentTree(XElement root)
+	{
+		const int maxElements = 2048;
+		const int maxDepth = 12;
+		var pending = new Stack<(XElement Element, int Depth)>();
+		pending.Push((root, 1));
+		var count = 0;
+		while (pending.TryPop(out var item))
+		{
+			if (++count > maxElements || item.Depth > maxDepth)
+				throw new InvalidDataException("Timed Text XML element count or nesting depth exceeds the supported bound.");
+			foreach (var child in item.Element.Elements())
+				pending.Push((child, item.Depth + 1));
+		}
+	}
 
 	private static void ExpectName(XElement element, string local)
 	{
