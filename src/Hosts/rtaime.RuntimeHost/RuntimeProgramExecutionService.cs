@@ -1621,7 +1621,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 						}
 
 						_nextSequenceNumber++;
-						ObserveContinuityAtCompletedBoundaryUnsafe(committedSource, sequence,
+						TryObserveContinuityAtCompletedBoundaryUnsafe(committedSource, sequence,
 							programAudioBuffer.Timing.SamplePosition, auxAudioBuffer?.Timing.SamplePosition, auxFailure);
 						Observe($"program.frame:{sequence}:{committedSource}");
 					}
@@ -1649,7 +1649,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			}
 			catch (Exception exception)
 			{
-				ObserveContinuityOnFailedBoundary(exception);
+				TryObserveContinuityOnFailedBoundary(exception);
 				// An unsuccessful Program boundary must not leave the source
 				// pipelines expecting a slot that the single Program clock never
 				// committed. Recovery runs only on the exceptional management
