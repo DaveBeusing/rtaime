@@ -382,3 +382,25 @@ A non-executed QC check does not make a media asset unplayable or block
 ongoing Program. For the exact EBU 2026-04 namespaces, XML licence,
 file quotas, check scope, statuses, recovery and unsupported limits, see
 [Offline Media Quality Control](OfflineMediaQualityControl.md).
+
+## ADM audio-track metadata (selected asset only)
+
+The Media Library now exposes explicit `IMPORT ADM…`, `EXPORT ADM XML…`
+and `EXPORT ADM JSON…` actions for a catalogued clip. The UI shows a
+bounded read-only track listing with `ATU_*` identity, assigned physical
+track number only if explicitly declared, language, channel role, audio
+object links, start/end times and one clear
+`IMMERSIVE RENDER/PUBLISH UNSUPPORTED` status. The existing Inspector's
+Metadata tab projects the same information alongside unchanged EBUCore
+metadata.
+
+Supported source XML is a limited BS.2076-3 `audioFormatExtended`
+subset under active EBU Tech 3393 guidance; R 123 track assignments
+`4b/8a/8b` are optional, strictly authored metadata, not detected
+signal routes. User-supplied XML bytes (including unknown vendor fields)
+survive export exactly. The content-bound local sidecar is stored
+outside the authoritative catalogue and is rejected if the selected
+asset ID/fingerprint changes. No decoder, new audio bus, output route,
+recording mutation or automatic stereo downmix is triggered.
+
+See [ADM Audio Track Metadata](AdmAudioTrackMetadata.md).
