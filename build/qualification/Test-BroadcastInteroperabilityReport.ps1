@@ -30,6 +30,14 @@ function Resolve-Evidence([string]$Relative) {
     Require ($Relative.Replace('\','/').StartsWith("artifacts/qualification/broadcast/", [StringComparison]::Ordinal)) "Evidence path must remain in the broadcast qualification artifact directory."
     return $full
 }
+function Exact-Fields($Object, [string[]]$Allowed, [string]$Context) {
+    foreach ($field in @($Object.PSObject.Properties.Name)) {
+        Require ($Allowed -contains [string]$field) "Unexpected $Context field '$field' (unapproved claim/signature metadata)."
+    }
+    foreach ($required in $Allowed) {
+        Require ($null -ne $Object.PSObject.Properties[$required]) "Missing required $Context field '$required'."
+    }
+}
 function Parse-Trx([string]$Path, [string[]]$Classes) {
     [xml]$trx = Get-Content -LiteralPath $Path -Raw
     $defs = @{}
@@ -98,6 +106,13 @@ $report = Read-Json ([IO.Path]::GetFullPath($ReportPath))
 Require ($matrix.schemaVersion -eq "1.0" -and $config.schemaVersion -eq "1.0" -and $report.schemaVersion -eq "1.0") "Unsupported matrix/report schema."
 Require ($matrix.repository -ceq "DaveBeusing/rtaime" -and $config.repository -ceq $matrix.repository -and $report.repository -ceq $matrix.repository) "Repository identity mismatch."
 Require ($report.sourceCommit -ceq $ExpectedSourceCommit) "Report source SHA mismatch."
+Exact-Fields $report @("copyright","schemaVersion","repository","sourceCommit","generatedAtUtc",
+    "matrixSha256","configurationsSha256","assessmentScope","certificationClaim",
+    "releasePromotionPerformed","overallStatus","decision","configurations","suites",
+    "requirements") "report"
+$reportDate = [DateTimeOffset]::MinValue
+Require ([DateTimeOffset]::TryParse([string]$report.generatedAtUtc, [ref]$reportDate) -and
+    $reportDate -le [DateTimeOffset]::UtcNow.AddMinutes(5)) "Report generatedAtUtc is absent or in the future."
 Require ($report.matrixSha256 -ceq (Hash $matrixPath) -and $report.configurationsSha256 -ceq (Hash $configPath)) "Qualification matrix/configuration hash mismatch."
 Require ($matrix.assessmentPolicy -ceq "SCOPED_EVIDENCE_NO_CERTIFICATION") "Matrix policy cannot grant certification."
 Require ($report.certificationClaim -ceq $false -and $report.releasePromotionPerformed -ceq $false -and $report.decision -ceq "NO-GO") "Report must not authorize certification or release promotion."
@@ -112,6 +127,8 @@ foreach ($s in @($matrix.standards)) {
 $profiles = @{}
 $recordedProfiles = @{}
 foreach ($profile in @($report.configurations)) {
+    Exact-Fields $profile @("profileId","class","hardwareStatus","operatingSystem","gpu","driver",
+        "nic","switch","codec","display","recorder","receiver","ptp") "reference configuration"
     Require (-not $recordedProfiles.ContainsKey([string]$profile.profileId)) "Duplicate device matrix configuration."
     $recordedProfiles[[string]$profile.profileId] = $profile
 }
@@ -138,6 +155,11 @@ Require ($recordedProfiles.Count -eq $profiles.Count) "Unknown device profile in
 $expectedSuiteIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $actualSuites = @{}
 foreach ($actual in @($report.suites)) {
+    Exact-Fields $actual @("id","status","testCount","testDateUtc","evidence") "suite"
+    if ($null -ne $actual.evidence) {
+        Exact-Fields $actual.evidence @("testProject","path","sha256","runId",
+            "runAttempt","exitCode") "test evidence"
+    }
     Require (-not $actualSuites.ContainsKey([string]$actual.id)) "Duplicate suite result."
     $actualSuites[[string]$actual.id] = $actual
 }
@@ -173,6 +195,9 @@ foreach ($suite in @($matrix.suites)) {
 Require ($actualSuites.Count -eq $expectedSuiteIds.Count) "Unexpected suite result in report."
 $actualReqs = @{}
 foreach ($entry in @($report.requirements)) {
+    Exact-Fields $entry @("id","standardId","organization","edition","profileId",
+        "scope","implementer","assessor","fixture","signalExpectation","status",
+        "testDateUtc","evidenceSha256") "requirement"
     Require (-not $actualReqs.ContainsKey([string]$entry.id)) "Duplicate requirement result."
     $actualReqs[[string]$entry.id] = $entry
 }
