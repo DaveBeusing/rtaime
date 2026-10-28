@@ -103,6 +103,9 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     public string SignalRangeStatusLabel => SelectedSignalRange is { } observation
         ? observation.DiagnosticLabel
         : "EBU R 103 · UNAVAILABLE — no current source-bound, native-code scope observation.";
+    public string SignalRangeChannelsLabel => SelectedSignalRange is { } observation
+        ? observation.ChannelDiagnosticLabel
+        : "Channel deviation evidence UNAVAILABLE.";
     public string SignalRangeFormatLabel => SelectedSignalRange is { } observation
         ? observation.TechnicalLabel
         : "Source, frame sequence, range and native code precision have not been observed.";
@@ -183,7 +186,7 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
         nameof(AnalysisEnabled), nameof(SelectedScopeGpuFrame), nameof(SelectedScopes),
         nameof(ScopeSourceLabel), nameof(ScopeFrameLabel), nameof(ColorBasisLabel),
         nameof(SelectedSignalRange), nameof(SignalRangeStatusLabel),
-        nameof(SignalRangeFormatLabel), nameof(SignalRangeChromaLabel),
+        nameof(SignalRangeChannelsLabel), nameof(SignalRangeFormatLabel), nameof(SignalRangeChromaLabel),
         nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility),
         nameof(SingleFrameInspectionEnabled),
         nameof(BothComparisonSourcesLive), nameof(ConfirmedProgramImage),
