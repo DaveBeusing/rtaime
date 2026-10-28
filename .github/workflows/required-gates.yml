@@ -58,6 +58,14 @@ jobs:
           dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~BroadcastContinuityIntegrationTests|FullyQualifiedName~OutputRoleRuntimeFailureTests|FullyQualifiedName~RuntimeOutputBindingHealthTests" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Broadcast continuity/role failure isolation qualification failed." }
 
+      - name: UHD SDR exact profile and fail-closed capacity preflight
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-restore --filter "FullyQualifiedName~UhdSdrVideoProfilesTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Exact UHD SDR contract preflight failed." }
+          dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~UhdSdrPipelineCapacityAdmissionTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "UHD SDR finite resource and consumer admission preflight failed." }
+
       - name: EBU Timed Text XML, clock and cue contract qualification
         shell: pwsh
         run: |

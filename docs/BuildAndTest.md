@@ -603,3 +603,24 @@ shortcut filter includes the 96-case authority/text/repeat/scope matrix;
 mapping. See [Operator visual qualification](OperatorVisualQualification.md#qol-interaction-qualification)
 for exact automated boundaries and the still-UNVERIFIED physical/manual matrix.
 The canonical build, existing deadlines and all five Required Gates remain mandatory.
+
+
+## UHD SDR exact-format candidate and fail-closed capacity preflight
+
+Use the repository-pinned Windows x64 .NET SDK 10.0.401. These tests
+validate **non-authoritative** candidate arithmetic and provider-envelope
+rejection, not UHD Program activation or hardware qualification.
+
+```powershell
+dotnet restore rtaime.slnx
+dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-restore --filter "FullyQualifiedName~UhdSdrVideoProfilesTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore --filter "FullyQualifiedName~UhdSdrPipelineCapacityAdmissionTests|FullyQualifiedName~HighResolutionOutputAdmissionTests|FullyQualifiedName~RuntimeResourceCapacityAdmissionTests"
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+dotnet test rtaime.slnx --configuration Release --no-build -m:1
+```
+
+See [UHD SDR pipeline preflight](UhdSdrPipelineAdmission.md) for the
+exact 2160p25/50/60000/1001 RGB tuples, required consumers and
+memory/readback sizing. All three physical UHD profiles stay
+**UNVERIFIED / NO-GO** pending source-bound native and 30–120-minute
+hardware/receiver/recording soak evidence.

@@ -75,3 +75,21 @@ reference files and physical end-to-end acceptance. Generated UHD media and
 hardware runs are future qualification work, not evidence supplied by this
 design. Required Gates validate this change's exact revision; their software
 results cannot clear these production blockers.
+
+
+## 2026-10-28 incremental UHD SDR admission status
+
+The additive [UHD SDR capacity preflight](UhdSdrPipelineAdmission.md) now defines **exact**
+3840×2160 BT.709 SDR full-range RGBA8 candidate identities at 25/1, 50/1 and
+60000/1001 and checks complete named-consumer capability sets, all declared
+unique retained frame slots and finite managed/GPU/native byte envelopes. It
+also exposes rational 48-kHz audio sample boundaries and frame deadlines.
+
+This is **IMPLEMENTED PLANNING ONLY**, not newly admitted Program output.
+`RuntimeHostProcessOptions` and all production providers continue to reject
+UHD; no CLI, saved state, physical sink or recording profile is widened.
+YCbCr formats without exact range/plane/conversion proof are not promoted to
+RGB, and legacy UnknownRgba8 is unchanged. Independent live provider reports,
+measured allocation/throughput, 30–120-minute profile-specific soak and
+physical acceptance remain **UNVERIFIED / NO-GO**. The product scope is
+approved; its evidence gates have not been waived.

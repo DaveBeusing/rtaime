@@ -1,6 +1,6 @@
 # High-resolution qualification and evidence plan
 
-Status: **BLOCKED** for UHD output implementation; physical qualification
+Status: **BLOCKED** for UHD output activation; exact-format capacity planning implemented; physical qualification
 **UNVERIFIED**. See [approval record](HighResolutionMediaDecision.md) and
 [source inventory](HighResolutionMediaCompatibility.md). This plan adds no
 supported UHD profile or test result.
@@ -78,3 +78,27 @@ No identified physical machine/device/media set was provided for this design
 change. Consequently no physical run or measured UHD memory/latency improvement
 is claimed. An approved profile, physical HD stability and accepted transfer
 budget are the next dependencies; defaults remain HD.
+
+
+## 2026-10-28 added deterministic software preflight
+
+`UhdSdrVideoProfilesTests` checks the exact three authoritative SDR RGB
+candidate tuples, pixel/throughput arithmetic, rational single-frame deadlines,
+48-kHz boundary sequences and untrusted Unknown/limited/YCbCr/precision/alpha
+negative cases without allocating UHD pixels.
+
+`UhdSdrPipelineCapacityAdmissionTests` checks mandatory Decode/GPU/Preview/
+Program/Monitoring providers plus optional Recording/Replay/NDI/SRT/MXO,
+including ten exact consumer format mismatches, missing/disabled capabilities,
+inadequate GPU transfer demand, the 67-slot readback boundary, decoder/sink
+retention and managed/native/GPU budget/overflow rejection. Synthetic
+capabilities and budgets remain **software-only**, not hardware evidence.
+`HighResolutionOutputAdmissionTests` separately preserves the existing
+HD50/59.94 behavior and proves that even a software-fitting UHD candidate
+cannot select production Program or recording profiles.
+
+The Required Gates exercises the two new suites early, before broader
+regressions. No 30–120-minute UHD soak, native 2160p source file, measured
+GPU deadline, driver-qualified DMA, media encoder/reopen, calibrated display,
+physical receiver or exact-source qualification evidence is supplied.
+**All three physical profile statuses remain UNVERIFIED / NO-GO.**
