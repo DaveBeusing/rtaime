@@ -77,7 +77,7 @@ public static class MediaQcEbuXml
 						result.TrackId is null ? null : new XElement(Q + "Track", result.TrackId),
 						new XElement(Q + "Value", result.Detail),
 						result.Confidence is null ? null : new XElement(Q + "Confidence",
-							result.Confidence.Value.ToString("R", CultureInfo.InvariantCulture)),
+							result.Confidence.Value.ToString("0.################", CultureInfo.InvariantCulture)),
 						new XElement(Q + "Severity", result.Severity)))));
 		var profile = new XElement(Q + "Profile",
 			new XElement(Q + "ID", "urn:uuid:" + Guid.Parse(report.Profile.ProfileId).ToString("D")),
@@ -96,6 +96,7 @@ public static class MediaQcEbuXml
 				new XAttribute("sha256", report.FingerprintSha256),
 				new XAttribute("sourceBytes", report.SourceLengthBytes),
 				new XAttribute("sourceModifiedUtc", report.SourceModifiedUtc.ToString("O", CultureInfo.InvariantCulture)),
+				new XAttribute("createdUtc", report.CreatedUtc.ToString("O", CultureInfo.InvariantCulture)),
 				new XAttribute("toolVersion", report.ToolVersion),
 				report.Results.Select(result => new XElement(R + "Outcome",
 					new XAttribute("checkId", result.Definition.Id),
@@ -230,13 +231,9 @@ public static class MediaQcEbuXml
 			long.Parse((string?)binding.Attribute("sourceBytes") ?? "", CultureInfo.InvariantCulture),
 			DateTimeOffset.Parse((string?)binding.Attribute("sourceModifiedUtc") ?? "",
 				CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal).ToUniversalTime(),
-			DateTimeOffset.Parse((string?)root.Element(Q + "LastModifiedDateTime") ?? "",
+			DateTimeOffset.Parse((string?)binding.Attribute("createdUtc") ?? "",
 				CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal).ToUniversalTime(),
 			(string?)binding.Attribute("toolVersion") ?? "", results);
-		// CreatedUtc in rtaime records describes actual QC issue time, which is
-		// not the file LastModifiedDateTime; use measured ItemResult time only if
-		// present, otherwise require an extension time in a future contract.
-		report = report with { CreatedUtc = report.SourceModifiedUtc };
 		report.Validate();
 		if ((string?)root.Element(Q + "LastModifiedDateTime") !=
 			report.SourceModifiedUtc.ToString("O", CultureInfo.InvariantCulture) ||
