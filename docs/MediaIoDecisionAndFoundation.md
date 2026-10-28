@@ -13,6 +13,8 @@ Physical hardware qualification state: **UNVERIFIED**
 
 **Product scope supersession (2026-10-20):** [Product Scope](ProductScope.md) approves the complete professional I/O feature space. The AJA reference-adapter choice and historical stage names below document the earlier technical integration decision, not a permanent limit on eligible adapters or SDI capabilities. Provider licenses, real device compatibility and physical qualification remain separate.
 
+**MXL / DMF interop review (2026-10-28):** The optional Media eXchange Layer v1.0 bridge is currently **NO-GO for the native Windows execution platform**, with SDK/platform, lease and latency qualification **UNVERIFIED**. This does not change the AJA reference path or the product scope; see [DMF v2 / MXL v1.0 Interoperability Decision and Qualification](MxlInteropDecisionAndQualification.md). No executable MXL provider or feature flag is advertised.
+
 ## Decision
 
 rtaime V1 will use the **AJA NTV2 SDK as the reference professional SDI media-I/O integration path**. The stable rtaime contracts remain vendor-neutral. AJA-specific types, headers and lifecycle rules are not permitted in `rtaime.Media.Contracts`, `rtaime.Provider.Contracts`, Control, Runtime or management IPC.
