@@ -53,7 +53,7 @@ public sealed record MediaQcCheckResult(
 			string.IsNullOrWhiteSpace(ToolVersion) || ToolVersion.Length > 64 ||
 			TrackId is { Length: > 128 })
 			throw new ArgumentException("Invalid QC result fields.");
-		if (State is MediaQcCheckState.NotExecuted or MediaQcCheckState.Unsupported &&
+		if ((State is MediaQcCheckState.NotExecuted or MediaQcCheckState.Unsupported) &&
 			(Confidence.HasValue || Severity != 0))
 			throw new ArgumentException("Unexecuted/unsupported checks cannot claim a severity or confidence.");
 		Range?.Validate();
