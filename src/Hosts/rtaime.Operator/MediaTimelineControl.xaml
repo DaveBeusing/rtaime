@@ -717,7 +717,11 @@
 							<controls:RtaimeButton Content="IMPORT EBU-TT LIVE" IsCompact="True"
 								Click="ImportTimedTextLive_Click" Margin="0,0,8,0"
 								ToolTip="Load a bounded Live v1.0 document; clock mode without authority remains unverified."/>
-							<controls:RtaimeToggleButton Content="PREVIEW ON" IsCompact="True"
+							<controls:RtaimeComboBox Width="112" Margin="0,0,8,0"
+								ItemsSource="{Binding TimedTextReview.AvailableLanguages, ElementName=TimelineRoot}"
+								SelectedItem="{Binding TimedTextReview.SelectedLanguage, ElementName=TimelineRoot, Mode=TwoWay}"
+								ToolTip="Select the imported subtitle language for local preview only."/>
+						<controls:RtaimeToggleButton Content="PREVIEW ON" IsCompact="True"
 								IsChecked="{Binding TimedTextReview.IsLocalPreviewEnabled, ElementName=TimelineRoot, Mode=TwoWay}"
 								ToolTip="Toggle local caption inspection only, never Program output."/>
 						</StackPanel>
