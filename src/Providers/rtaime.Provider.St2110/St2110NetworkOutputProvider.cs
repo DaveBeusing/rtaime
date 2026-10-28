@@ -239,27 +239,19 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
                         _profile, sample.Video.Memory);
                     var timestamp = St2110TransportAdmission.VideoTimestamp(
                         _profile, sample.SequenceNumber);
-                    foreach (var packet in St2110VideoRtp.Packetize(_profile, packed,
-                        timestamp, _configuration.St2110Settings!.Endpoint.VideoSsrc,
-                        _videoSequence))
-                    {
-                        var length = await sender.SendVideoAsync(packet, cancellationToken)
-                            .ConfigureAwait(false);
-                        if (length != packet.Length)
-                            throw new IOException("Video RTP datagram was not fully submitted.");
-                        _videoSequence = unchecked(_videoSequence + 1);
-                        ObservePacket(length, video: true);
-                    }
                     var pcmPackets = _pcm.Packetize(sample.Audio,
                         checked((long)sample.AudioTiming.SamplePosition));
-                    foreach (var packet in pcmPackets)
-                    {
-                        var length = await sender.SendAudioAsync(packet, cancellationToken)
-                            .ConfigureAwait(false);
-                        if (length != packet.Length)
-                            throw new IOException("Audio RTP datagram was not fully submitted.");
-                        ObservePacket(length, video: false);
-                    }
+                    // Both RTP legs use the committed frame epoch. They are
+                    // paced independently on the provider worker so that
+                    // audio is not serialized behind a full raw-video frame.
+                    var interval = TimeSpan.FromTicks(checked((long)
+                        ((Int128)TimeSpan.TicksPerSecond *
+                            _profile.FrameRate.Denominator / _profile.FrameRate.Numerator)));
+                    var epoch = Stopwatch.GetTimestamp();
+                    await Task.WhenAll(
+                        SendVideoFrameAsync(sender, packed, timestamp, epoch, interval, cancellationToken),
+                        SendAudioWindowAsync(sender, pcmPackets, epoch, cancellationToken))
+                        .ConfigureAwait(false);
                     lock (_gate)
                     {
                         _sent++;
@@ -328,6 +320,57 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
                     _lifecycle = NetworkOutputLifecycleState.Disabled;
             }
         }
+    }
+
+    private async Task SendVideoFrameAsync(ISt2110DatagramSender sender,
+        ReadOnlyMemory<byte> packed, uint timestamp, long epoch,
+        TimeSpan frameInterval, CancellationToken cancellationToken)
+    {
+        var total = St2110VideoRtp.PacketsPerFrame(_profile);
+        var ordinal = 0;
+        foreach (var packet in St2110VideoRtp.Packetize(_profile, packed, timestamp,
+            _configuration.St2110Settings!.Endpoint.VideoSsrc, _videoSequence))
+        {
+            // Approximate bounded software burst spacing only, NOT -21 shaping.
+            // At most ~20 pacing points/frame, without a per-RTP-packet timer.
+            if (ordinal != 0 && ordinal % 256 == 0)
+                await DelayUntilAsync(epoch,
+                    TimeSpan.FromTicks(frameInterval.Ticks * ordinal / total),
+                    cancellationToken).ConfigureAwait(false);
+            var size = await sender.SendVideoAsync(packet, cancellationToken)
+                .ConfigureAwait(false);
+            if (size != packet.Length)
+                throw new IOException("Video RTP datagram was not fully submitted.");
+            _videoSequence = unchecked(_videoSequence + 1);
+            ObservePacket(size, video: true);
+            ordinal++;
+        }
+    }
+
+    private async Task SendAudioWindowAsync(ISt2110DatagramSender sender,
+        IReadOnlyList<byte[]> packets, long epoch,
+        CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < packets.Count; i++)
+        {
+            await DelayUntilAsync(epoch, TimeSpan.FromMilliseconds(i),
+                cancellationToken).ConfigureAwait(false);
+            var packet = packets[i];
+            var size = await sender.SendAudioAsync(packet, cancellationToken)
+                .ConfigureAwait(false);
+            if (size != packet.Length)
+                throw new IOException("Audio RTP datagram was not fully submitted.");
+            ObservePacket(size, video: false);
+        }
+    }
+
+    private static async Task DelayUntilAsync(long epoch, TimeSpan intended,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var remaining = intended - Stopwatch.GetElapsedTime(epoch);
+        if (remaining > TimeSpan.FromMilliseconds(1))
+            await Task.Delay(remaining, cancellationToken).ConfigureAwait(false);
     }
 
     private void ObservePacket(int bytes, bool video)
