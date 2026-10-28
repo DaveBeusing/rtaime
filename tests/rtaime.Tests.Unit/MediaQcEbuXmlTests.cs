@@ -31,6 +31,8 @@ public sealed class MediaQcEbuXmlTests
 		Assert.Equal(expected.ReportId, restored.ReportId);
 		Assert.Equal(expected.CreatedUtc, restored.CreatedUtc);
 		Assert.Equal(expected.SourceModifiedUtc, restored.SourceModifiedUtc);
+		Assert.Equal(expected.CreatedUtc.ToString("O", CultureInfo.InvariantCulture),
+			(string?)XDocument.Parse(xml).Root?.Element(XName.Get("LastModifiedDateTime", MediaQcEbuXml.NamespaceUri)));
 		Assert.Equal(expected.AssetId, restored.AssetId);
 		Assert.Equal(expected.FingerprintSha256, restored.FingerprintSha256);
 		Assert.Equal(expected.CatalogueRevision, restored.CatalogueRevision);
@@ -73,6 +75,8 @@ public sealed class MediaQcEbuXmlTests
 	[InlineData("release")]
 	[InlineData("result")]
 	[InlineData("definition")]
+	[InlineData("content")]
+	[InlineData("tool")]
 	[InlineData("doctype")]
 	public void Invalid_or_foreign_QC_payloads_are_rejected(string mutation)
 	{
@@ -82,6 +86,9 @@ public sealed class MediaQcEbuXmlTests
 			"release" => xml.Replace("modelRelease=\"2026-04\"", "modelRelease=\"2026-01\"", StringComparison.Ordinal),
 			"result" => xml.Replace("state=\"PASS\"", "state=\"FAILED\"", StringComparison.Ordinal),
 			"definition" => xml.Replace("CheckResultDefinition", "LegacyCheckResult", StringComparison.Ordinal),
+			"content" => xml.Replace("urn:sha256:" + new string('a', 64),
+				"urn:sha256:" + new string('b', 64), StringComparison.Ordinal),
+			"tool" => xml.Replace("<Version>1.0.0</Version>", "<Version>9.9.9</Version>", StringComparison.Ordinal),
 			"doctype" => "<!DOCTYPE Report [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>" + xml,
 			_ => throw new ArgumentOutOfRangeException(nameof(mutation))
 		};
