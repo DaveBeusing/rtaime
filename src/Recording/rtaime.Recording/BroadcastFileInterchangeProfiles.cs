@@ -169,15 +169,21 @@ public static class BroadcastFileInterchangeProfiles
     {
         if (recorder == ProfessionalRecordingFormats.Mp4H264AacProfileId)
             return profile.FileExtension == ".mp4" &&
+                   profile.Container == "ISO Base Media File Format (MP4)" &&
                    profile.VideoCodec == "H.264/AVC" &&
+                   profile.VideoProfile == "Main" &&
                    profile.AudioCodec == "AAC-LC";
         if (recorder == ProfessionalRecordingFormats.Mov2VuyPcmProfileId)
             return profile.FileExtension == ".mov" &&
+                   profile.Container == "QuickTime Movie (MOV)" &&
                    profile.VideoCodec == "Uncompressed YUV 4:2:2" &&
+                   profile.VideoProfile == "2vuy 8-bit" &&
                    profile.AudioCodec == "PCM S16LE";
         if (recorder == ProfessionalRecordingFormats.MxfOp1aUncompressedPcmProfileId)
             return profile.FileExtension == ".mxf" &&
+                   profile.Container == "Material eXchange Format OP1a" &&
                    profile.VideoCodec == "Uncompressed YUV 4:2:2" &&
+                   profile.VideoProfile == "8-bit UYVY 4:2:2 progressive" &&
                    profile.AudioCodec == "PCM S16LE 48 kHz Stereo";
         return false;
     }
