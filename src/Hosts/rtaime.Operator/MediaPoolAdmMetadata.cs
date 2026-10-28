@@ -128,7 +128,17 @@ public sealed partial class MediaPoolInspectorViewModel
 		NotifyAdm();
 		try
 		{
-			var bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+			// Read exactly the admitted bytes. Do not trust an initial FileInfo
+			// size check followed by an unbounded ReadAllBytes on a mutable file.
+			await using var file = new FileStream(path, FileMode.Open, FileAccess.Read,
+				FileShare.Read, bufferSize: 16 * 1024,
+				FileOptions.Asynchronous | FileOptions.SequentialScan);
+			if (file.Length is < 16 || file.Length > maximum)
+				throw new InvalidDataException("ADM import size changed or exceeds the byte quota.");
+			var bytes = new byte[checked((int)file.Length)];
+			await file.ReadExactlyAsync(bytes, cancellationToken);
+			if (file.ReadByte() != -1)
+				throw new InvalidDataException("ADM import grew during its bounded read.");
 			cancellationToken.ThrowIfCancellationRequested();
 			var inspection = await Task.Run(() => json
 				? AdmAudioXml.ImportSidecarJson(new UTF8Encoding(false, true).GetString(bytes), selected)
