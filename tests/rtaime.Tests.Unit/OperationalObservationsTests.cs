@@ -46,7 +46,25 @@ public sealed class OperationalObservationsTests
 		Assert.Empty(projection.Update([], Start.AddSeconds(6)));
 	}
 
-	[Theory]
+	[Fact]
+	public void Provider_identity_is_recorded_only_from_source_published_metadata()
+	{
+		var projector = new OperationalObservationProjector(() => 20, 1000);
+		var withProvider = Snapshot("recording", SubsystemHealthState.Failed) with
+		{
+			Metrics = [new HealthMetricSnapshot("Provider", "native-recorder")]
+		};
+		projector.Update([withProvider], Start);
+		Assert.Equal("native-recorder", Assert.Single(projector.Current).OwningProviderId);
+
+		var unmeasured = Snapshot("ptp", SubsystemHealthState.Unknown);
+		projector.Update([withProvider, unmeasured], Start.AddSeconds(1));
+		Assert.Null(projector.Current.Single(item => item.ComponentId == "ptp").OwningProviderId);
+		Assert.Equal(OperationalObservationCondition.Stale,
+			projector.Current.Single(item => item.ComponentId == "ptp").Condition);
+	}
+
+		[Theory]
 	[InlineData("STALE")]
 	[InlineData("UNAVAILABLE")]
 	[InlineData("UNVERIFIED")]
