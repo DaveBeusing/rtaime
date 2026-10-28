@@ -196,6 +196,8 @@ public sealed class NmosDiscoveryAndConnectionTests
 	{
 		var resources = new NmosVirtualResources(Virtual());
 		var requests = new List<string>();
+		var ordered = resources.RegistrationOrder().ToArray();
+		var registered = 0;
 		var heartbeats = 0;
 		using var http = new HttpClient(new FakeHttpHandler(request =>
 		{
@@ -207,7 +209,15 @@ public sealed class NmosDiscoveryAndConnectionTests
 				heartbeats++;
 				return new HttpResponseMessage(heartbeats == 1 ? HttpStatusCode.NotFound : HttpStatusCode.OK);
 			}
-			return new HttpResponseMessage(method == "POST" ? HttpStatusCode.Created : HttpStatusCode.NoContent);
+			if (method == "POST")
+			{
+				var (kind, id, data) = ordered[registered++ % ordered.Length];
+				var result = Json(data);
+				result.StatusCode = HttpStatusCode.Created;
+				result.Headers.Location = new Uri($"/x-nmos/registration/v1.3/resource/{kind}s/{id}", UriKind.Relative);
+				return result;
+			}
+			return new HttpResponseMessage(HttpStatusCode.NoContent);
 		}));
 		var session = new NmosRegistrationClient(http, "http://127.0.0.1:3211/x-nmos/registration/v1.3/", resources);
 		await session.RegisterAsync(CancellationToken.None);
