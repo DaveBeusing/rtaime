@@ -520,3 +520,20 @@ must still be qualified before any `software-qualified` or
 
 Standards referenced for future validation: ITU-R BS.1770-5 (2023),
 EBU R 128 v5 (2023), EBU Tech 3341, EBU Tech 3342 and EBU Tech 3343.
+
+## ADM audio-definition metadata is not an immersive mix engine
+
+An independent Media Library metadata-only interchange path accepts a
+bounded ITU-R BS.2076-3 / EBU Tech 3393-derived ADM subset with
+Audio Programme/Content/Object/Track UID references and explicit
+R 123 `4b/8a/8b` legacy file-exchange track descriptions. The XML
+is byte-preserved as an optional local source-bound sidecar.
+
+**The Runtime AudioProductionEngine is unchanged:** only the
+currently admitted 48 kHz Float32 stereo PCM processing and existing
+Program/Aux routing are implemented. Reading metadata for 5.1,
+object audio, HOA or any other immersive layout cannot allocate an
+immersive renderer, auto-downmix content, enable an unqualified
+decoder or create a new broadcast output profile. See
+[ADM Audio Track Metadata](AdmAudioTrackMetadata.md) for supported
+metadata validation, R 123 assignment, evidence and limitations.

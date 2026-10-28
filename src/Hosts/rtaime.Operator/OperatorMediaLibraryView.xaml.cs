@@ -65,7 +65,56 @@ public partial class OperatorMediaLibraryView : UserControl
         e.Handled = true;
     }
 
-	private async void OnMediaQcExportClick(object sender, RoutedEventArgs e)
+	private async void OnMediaAdmImportClick(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		var dialog = new OpenFileDialog {
+			Title = "Import ADM audio track metadata (read-only)",
+			Filter = "ADM XML or source-bound JSON (*.xml;*.json)|*.xml;*.json|ADM XML (*.xml)|*.xml|ADM sidecar (*.json)|*.json",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		if (dialog.ShowDialog() != true) return;
+		try { await MediaPool.ImportSelectedAdmAsync(dialog.FileName); }
+		catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+			ArgumentException or InvalidOperationException or System.Xml.XmlException or
+			System.Text.Json.JsonException or FormatException or NotSupportedException)
+		{
+			MediaPool.ReportAdmOperationFailure("import", error.GetType().Name);
+		}
+	}
+
+	private async void OnMediaAdmExportXmlClick(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		await ExportAdmAsync(false);
+	}
+
+	private async void OnMediaAdmExportJsonClick(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		await ExportAdmAsync(true);
+	}
+
+	private async Task ExportAdmAsync(bool json)
+	{
+		var dialog = new SaveFileDialog {
+			Title = json ? "Export source-bound ADM sidecar" : "Export original ADM XML bytes",
+			Filter = json ? "ADM sidecar (*.json)|*.json" : "ADM XML (*.xml)|*.xml",
+			DefaultExt = json ? ".json" : ".xml", AddExtension = true,
+			FileName = json ? "audio-adm.json" : "audio-adm.xml"
+		};
+		if (dialog.ShowDialog() != true) return;
+		try { await MediaPool.ExportSelectedAdmAsync(dialog.FileName); }
+		catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+			ArgumentException or InvalidOperationException or System.Xml.XmlException or
+			System.Text.Json.JsonException or FormatException)
+		{
+			MediaPool.ReportAdmOperationFailure("export", error.GetType().Name);
+		}
+	}
+
+		private async void OnMediaQcExportClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
 		var dialog = new SaveFileDialog {

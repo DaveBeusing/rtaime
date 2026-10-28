@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<audioFormatExtended version="ITU-R_BS.2076-3" xmlns:vendor="urn:rtaime:example-vendor">
+  <audioProgramme audioProgrammeID="APR_1001" audioProgrammeName="stereo audio metadata">
+    <audioContentIDRef>ACO_1001</audioContentIDRef>
+  </audioProgramme>
+  <audioContent audioContentID="ACO_1001" audioContentName="Main" audioContentLanguage="en">
+    <audioObjectIDRef>AO_0001</audioObjectIDRef>
+  </audioContent>
+  <audioObject audioObjectID="AO_0001" audioObjectName="Group 1" start="00:00:00.00000" duration="00:00:10.00000">
+    <audioPackFormatIDRef>AP_00010002</audioPackFormatIDRef>
+    <audioTrackUIDRef>ATU_00000001</audioTrackUIDRef>
+    <audioTrackUIDRef>ATU_00000002</audioTrackUIDRef>
+  </audioObject>
+  <audioPackFormat audioPackFormatID="AP_00010002" audioPackFormatName="AP_00010002" typeDefinition="DirectSpeakers">
+    <audioChannelFormatIDRef>AC_00000001</audioChannelFormatIDRef>
+    <audioChannelFormatIDRef>AC_00000002</audioChannelFormatIDRef>
+  </audioPackFormat>
+  <audioChannelFormat audioChannelFormatID="AC_00000001" audioChannelFormatName="PCM_FrontLeft" typeDefinition="DirectSpeakers">
+    <audioBlockFormat audioBlockFormatID="AB_00000001_00000001" rtime="00:00:00.00000" duration="00:00:10.00000">
+    </audioBlockFormat>
+  </audioChannelFormat>
+  <audioStreamFormat audioStreamFormatID="AS_00000001" audioStreamFormatName="Stream 1">
+    <audioChannelFormatIDRef>AC_00000001</audioChannelFormatIDRef>
+    <audioTrackFormatIDRef>AT_00000001_01</audioTrackFormatIDRef>
+  </audioStreamFormat>
+  <audioTrackFormat audioTrackFormatID="AT_00000001_01" audioTrackFormatName="Track 1">
+    <audioStreamFormatIDRef>AS_00000001</audioStreamFormatIDRef>
+  </audioTrackFormat>
+  <audioTrackUID UID="ATU_00000001">
+    <audioTrackFormatIDRef>AT_00000001_01</audioTrackFormatIDRef>
+    <audioPackFormatIDRef>AP_00010002</audioPackFormatIDRef>
+  </audioTrackUID>
+  <audioChannelFormat audioChannelFormatID="AC_00000002" audioChannelFormatName="PCM_FrontRight" typeDefinition="DirectSpeakers">
+    <audioBlockFormat audioBlockFormatID="AB_00000002_00000001" rtime="00:00:00.00000" duration="00:00:10.00000">
+    </audioBlockFormat>
+  </audioChannelFormat>
+  <audioStreamFormat audioStreamFormatID="AS_00000002" audioStreamFormatName="Stream 2">
+    <audioChannelFormatIDRef>AC_00000002</audioChannelFormatIDRef>
+    <audioTrackFormatIDRef>AT_00000002_01</audioTrackFormatIDRef>
+  </audioStreamFormat>
+  <audioTrackFormat audioTrackFormatID="AT_00000002_01" audioTrackFormatName="Track 2">
+    <audioStreamFormatIDRef>AS_00000002</audioStreamFormatIDRef>
+  </audioTrackFormat>
+  <audioTrackUID UID="ATU_00000002">
+    <audioTrackFormatIDRef>AT_00000002_01</audioTrackFormatIDRef>
+    <audioPackFormatIDRef>AP_00010002</audioPackFormatIDRef>
+  </audioTrackUID>
+  <vendor:privateMetadata vendor:note="must-survive-roundtrip">Vendor-preserved</vendor:privateMetadata>
+</audioFormatExtended>

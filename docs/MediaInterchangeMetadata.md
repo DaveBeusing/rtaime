@@ -74,3 +74,27 @@ Build with `./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 ## Timed Text cue ownership
 
 The optional descriptive Media Library fields for caption language, format and kind remain plain EBUCore-oriented **metadata**. They are not subtitle cue streams, rendered overlays or proof of caption accessibility. The separate [Timed Text Interchange](TimedTextInterchange.md) implementation owns timecoded cue identities, source-bound local XML import/export and read-only preview. It does not write or migrate the durable asset catalogue. Production caption overlays and file/ANC carriage remain UNAVAILABLE pending independent provider and ControlHost admission.
+
+## Optional ADM track and object interchange (separate sidecar)
+
+The version-one EBUCore 1.10 metadata projection remains unchanged, including
+its 2-KiB JSON budget, provenance precedence and bounded audio field paths.
+A selected catalogue clip can now carry a **separate optional ADM source
+XML sidecar** with the original bytes intact; it is not flattened into
+`audio.0.*` fields. The Inspector presents EBUCore scalar values and
+the imported ADM Track UIDs, roles, languages, object relationships and
+start/end times **side by side**. Neither projection infers media-channel
+decoding or grants multichannel/immersive playback.
+
+The admitted profile uses ITU-R BS.2076-3 XML guided by **EBU Tech
+3393 (7 October 2025)**. Physical track allocation is optional and must
+be expressly declared under the subset of legacy **EBU R 123 (2009)**
+profiles `4b`, `8a` or `8b`. Unassigned stereo and six-channel
+5.1 metadata are not silently relabeled as R 123 8a/8b, and no
+downmix is created. The imported XML's unknown data is preserved
+byte-exactly rather than dropped in the limited EBUCore mapping.
+No new SQLite/catalogue schema or IPC payload is created.
+
+See [ADM Audio Track Metadata](AdmAudioTrackMetadata.md) for exact
+subset, validation, source binding, limits, test fixtures, export and
+the explicit `UNSUPPORTED` immersive output state.

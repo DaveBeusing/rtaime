@@ -395,6 +395,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 			BuildInspector();
 			RaiseSelectionState();
 			OnQcSelectionChanged();
+			OnAdmSelectionChanged();
 		}
 	}
 
@@ -712,6 +713,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(CatalogEvidence));
 		OnPropertyChanged(nameof(CatalogObservedAtUtc));
 		ReconcileQc(snapshot);
+		ReconcileAdm(snapshot);
         ReconcileMediaReviewContext();
 	}
 
@@ -973,6 +975,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
         DisposePreparation();
 		DisposeBrowsing();
 		DisposeQc();
+		DisposeAdm();
 		_operator.PropertyChanged -= OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged -= OnMediaDeckPropertyChanged;
 		_operator.Sources.CollectionChanged -= OnSourcesChanged;
@@ -1205,6 +1208,7 @@ public sealed partial class MediaPoolInspectorViewModel : INotifyPropertyChanged
 						foreach (var (key, value) in interchange.Unmapped.OrderBy(pair => pair.Key, StringComparer.Ordinal))
 							Add("clip.interchange.unmapped." + key, "UNMAPPED " + key, value, "METADATA");
 				}
+				AddAdmInspectorRows();
 				if (string.Equals(item.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal))
 				{
 					Add("clip.source", "Source", _mediaDeck.SourceId, "COMMITTED");
