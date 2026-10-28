@@ -40,6 +40,23 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 	public string FontEvidence => _fontEvidence;
 	public string LayoutEvidence => _layoutEvidence;
 	public string Language => _language;
+	public IReadOnlyList<string> AvailableLanguages => _store.Current?.Cues
+		.Select(cue => cue.Language).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+		?? Array.Empty<string>();
+	public string? SelectedLanguage
+	{
+		get => _store.SelectedLanguage;
+		set
+		{
+			if (_store.Current is null || string.IsNullOrWhiteSpace(value) ||
+				string.Equals(_store.SelectedLanguage, value, StringComparison.OrdinalIgnoreCase))
+				return;
+			try { _store.SelectLanguage(value); }
+			catch (InvalidOperationException) { return; }
+			Changed(nameof(SelectedLanguage));
+			Refresh();
+		}
+	}
 	public bool IsLocalPreviewEnabled
 	{
 		get => _store.Enabled;
@@ -105,6 +122,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 			Changed(nameof(FontEvidence));
 			Changed(nameof(LayoutEvidence));
 			Changed(nameof(Language));
+			Changed(nameof(AvailableLanguages));
+			Changed(nameof(SelectedLanguage));
 			Refresh();
 			return true;
 		}
@@ -248,6 +267,8 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 		Changed(nameof(FontEvidence));
 		Changed(nameof(LayoutEvidence));
 		Changed(nameof(Language));
+		Changed(nameof(AvailableLanguages));
+		Changed(nameof(SelectedLanguage));
 		Changed(nameof(ImportedDocument));
 	}
 
