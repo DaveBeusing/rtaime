@@ -41,8 +41,11 @@ public sealed record GrpcOperatorControlOptions
 
 	public void Validate()
 	{
-		if (!string.Equals(Endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-			throw new ArgumentException("External control endpoint must use HTTPS.", nameof(Endpoint));
+		if (!Endpoint.IsAbsoluteUri ||
+			!string.Equals(Endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+			!string.IsNullOrEmpty(Endpoint.UserInfo) || !string.IsNullOrEmpty(Endpoint.Query) ||
+			!string.IsNullOrEmpty(Endpoint.Fragment) || Endpoint.AbsolutePath != "/")
+			throw new ArgumentException("External control endpoint must be an HTTPS origin without embedded credentials, path, query or fragment.", nameof(Endpoint));
 		if (string.IsNullOrWhiteSpace(ClientId) || ClientId.Length > 128)
 			throw new ArgumentException("External control ClientId is required and bounded to 128 characters.", nameof(ClientId));
 		if (string.IsNullOrWhiteSpace(ClientName) || ClientName.Length > 128)
@@ -53,8 +56,13 @@ public sealed record GrpcOperatorControlOptions
 			throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
 		if (MaxRequestBytes <= 0 || MaxResponseBytes <= 0)
 			throw new ArgumentOutOfRangeException(nameof(MaxRequestBytes));
+		if (!Enum.IsDefined(TrustMode))
+			throw new ArgumentOutOfRangeException(nameof(TrustMode));
 		if (TrustMode == ExternalControlTrustMode.PinnedServerCertificate && string.IsNullOrWhiteSpace(TrustedServerCertificateThumbprint))
 			throw new ArgumentException("Pinned server-certificate trust requires a thumbprint.", nameof(TrustedServerCertificateThumbprint));
+		if (TrustMode == ExternalControlTrustMode.TestOnlyInsecure &&
+			(!System.Net.IPAddress.TryParse(Endpoint.Host, out var testAddress) || !System.Net.IPAddress.IsLoopback(testAddress)))
+			throw new ArgumentException("Test-only insecure certificate verification is restricted to loopback endpoints.", nameof(TrustMode));
 		if (!string.IsNullOrWhiteSpace(ClientCertificateKeyPath) && string.IsNullOrWhiteSpace(ClientCertificatePath))
 			throw new ArgumentException("Client certificate key path requires a client certificate path.", nameof(ClientCertificateKeyPath));
 	}
