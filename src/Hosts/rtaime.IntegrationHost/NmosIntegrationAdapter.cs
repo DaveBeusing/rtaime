@@ -253,7 +253,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 					_ => NmosError(404, "Unknown connection resource.")
 				};
 			});
-		app.MapMethods("/x-nmos/connection/v1.2/single/{kind}/{id}/staged/",
+		app.MapMethods("/x-nmos/connection/v1.2/single/{kind}/{id}/staged",
 			new[] { "PATCH" }, async (HttpContext context, string kind, string id) =>
 			{
 				if (!TryDirection(kind, out var sender) || !_connections!.Exists(sender, id))
@@ -262,7 +262,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 				return body is null ? NmosError(400, "Invalid or oversized JSON patch.") :
 					Outcome(_connections.Stage(sender, id, body.Value));
 			});
-		app.MapPost("/x-nmos/connection/v1.2/bulk/{kind}/", async (HttpContext context, string kind) =>
+		app.MapPost("/x-nmos/connection/v1.2/bulk/{kind}", async (HttpContext context, string kind) =>
 		{
 			if (!TryDirection(kind, out var sender)) return NmosError(404, "Unknown NMOS bulk direction.");
 			var body = await ReadPatchAsync(context).ConfigureAwait(false);
