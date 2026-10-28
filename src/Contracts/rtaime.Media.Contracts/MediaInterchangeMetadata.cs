@@ -212,14 +212,13 @@ public sealed record MediaInterchangeMetadata(
         {
             Item("content.sha256", asset.FingerprintSha256)
         };
-        if (asset.VideoCodec != MediaVideoCodec.None)
-            fields.AddRange(
-            [
-                Item("video.0.codec", asset.VideoCodec.ToString()),
-                Item("video.0.width", asset.VideoFormat.Width.ToString(CultureInfo.InvariantCulture)),
-                Item("video.0.height", asset.VideoFormat.Height.ToString(CultureInfo.InvariantCulture)),
-                Item("video.0.frameRate", asset.VideoFormat.FrameRate.ToString())
-            ]);
+        fields.AddRange(
+        [
+            Item("video.0.codec", asset.VideoCodec.ToString()),
+            Item("video.0.width", asset.VideoFormat.Width.ToString(CultureInfo.InvariantCulture)),
+            Item("video.0.height", asset.VideoFormat.Height.ToString(CultureInfo.InvariantCulture)),
+            Item("video.0.frameRate", asset.VideoFormat.FrameRate.ToString())
+        ]);
         if (asset.AudioCodec != MediaAudioCodec.None)
             fields.AddRange(
             [
