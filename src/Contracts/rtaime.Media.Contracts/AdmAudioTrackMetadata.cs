@@ -145,6 +145,7 @@ public sealed record AdmTrackMetadataRow(
 	string? AudioObjectId,
 	string? AudioPackFormatId,
 	string? Start,
+	string? End,
 	string? Duration,
 	string SourceKind)
 {
