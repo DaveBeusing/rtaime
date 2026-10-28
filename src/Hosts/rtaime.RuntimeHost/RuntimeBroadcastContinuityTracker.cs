@@ -40,6 +40,8 @@ internal sealed class RuntimeBroadcastContinuityTracker
 	public IReadOnlyList<BroadcastContinuitySnapshot> RecentIncidents =>
 		Array.AsReadOnly(_incidents.ToArray());
 
+	public void InvalidateActiveRoles() => _roles.Clear();
+
 	public BroadcastContinuitySnapshot? ForRole(string roleId) =>
 		_roles.TryGetValue(roleId, out var role) ? Read(role) : null;
 
