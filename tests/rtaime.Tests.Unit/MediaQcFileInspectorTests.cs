@@ -73,7 +73,7 @@ public sealed class MediaQcFileInspectorTests
 			var handlerVideo = new byte[12];
 			Encoding.ASCII.GetBytes("vide", handlerVideo.AsSpan(8));
 			var videoTrack = Box("trak", Box("mdia", Box("hdlr", handlerVideo)
-				.Concat(Box("minf", Box("stbl", [])).ToArray())));
+				.Concat(Box("minf", Box("stbl", Array.Empty<byte>()))).ToArray()));
 			var handlerAudio = new byte[12];
 			Encoding.ASCII.GetBytes("soun", handlerAudio.AsSpan(8));
 			var header = new byte[8];
