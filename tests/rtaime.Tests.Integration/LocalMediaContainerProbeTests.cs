@@ -327,6 +327,8 @@ public sealed class LocalMediaContainerProbeTests
             Assert.False(result.Succeeded);
             Assert.Null(result.Source);
             Assert.Equal("media.file.container_unsupported", result.Failure?.Code);
+            Assert.Contains("NOT_SUPPORTED", result.Failure?.Message, StringComparison.Ordinal);
+            Assert.Contains("recording writer", result.Failure?.Message, StringComparison.OrdinalIgnoreCase);
         }, extension: ".mxf");
     }
 
