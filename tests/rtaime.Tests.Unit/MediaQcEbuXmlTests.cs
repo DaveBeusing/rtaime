@@ -88,7 +88,7 @@ public sealed class MediaQcEbuXmlTests
 			"definition" => xml.Replace("CheckResultDefinition", "LegacyCheckResult", StringComparison.Ordinal),
 			"content" => xml.Replace("urn:sha256:" + new string('a', 64),
 				"urn:sha256:" + new string('b', 64), StringComparison.Ordinal),
-			"tool" => xml.Replace("<Version>1.0.0</Version>", "<Version>9.9.9</Version>", StringComparison.Ordinal),
+			"tool" => xml.Replace(">1.0.0<", ">9.9.9<", StringComparison.Ordinal),
 			"doctype" => "<!DOCTYPE Report [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>" + xml,
 			_ => throw new ArgumentOutOfRangeException(nameof(mutation))
 		};
