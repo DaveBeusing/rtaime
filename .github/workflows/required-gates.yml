@@ -50,6 +50,14 @@ jobs:
       - name: Restore
         run: dotnet restore rtaime.slnx
 
+      - name: EBU Timed Text XML, clock and cue contract qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-restore --filter "FullyQualifiedName~TimedTextContractTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Timed Text contract validation failed." }
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-restore --filter "FullyQualifiedName~TimedTextInterchangeTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "EBU Timed Text XML/security/timing qualification failed." }
+
       - name: NMOS discovery and fail-closed connection qualification
         shell: pwsh
         run: |
@@ -329,6 +337,12 @@ jobs:
           path: artifacts/qualification/operator-visual
           if-no-files-found: warn
 
+      - name: Timed Text Operator source-fenced local preview qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~TimedTextReviewTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Timed Text Operator preview regression failed." }
+
       - name: Operator UI regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build
 
@@ -481,6 +495,10 @@ jobs:
       - name: Verify recording profile catalog policy
         shell: pwsh
         run: ./build/quality/Test-RecordingProfilePolicy.ps1
+
+      - name: Verify EBU Timed Text interchange and Program isolation policy
+        shell: pwsh
+        run: ./build/quality/Test-TimedTextInterchangePolicy.ps1
 
       - name: Verify operator UI policy
         shell: pwsh
