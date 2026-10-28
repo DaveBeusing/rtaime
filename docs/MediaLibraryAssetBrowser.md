@@ -61,6 +61,17 @@ For each candidate ControlHost canonicalizes the path, verifies readability, com
 
 Unsupported, corrupt, unreadable or missing candidates are returned as explicit failures and are not inserted as partial catalogue records. No recursive drive indexing, directory crawler, remote transfer, proxy generation or transcoding is performed.
 
+## MXF input compatibility boundary
+
+The existing local Media Library import is still bound to actual decoder
+admission. A file with extension `.mxf` receives the established
+`media.file.container_unsupported` failure code and an explicit
+`MXF input NOT_SUPPORTED` explanation: an opt-in MXF recording writer and
+independent file probe are **not** a local MXF playback decoder. Rejected
+files are not added as catalogue assets and no `MediaAssetId` or EBUCore
+metadata is invented. Existing MP4/restricted MOV import semantics remain.
+See [Broadcast File Interchange Profiles](BroadcastFileInterchangeProfiles.md).
+
 ## Duplicate policy
 
 - Same canonical source path and same fingerprint returns the existing asset as `Duplicate`.
