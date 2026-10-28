@@ -42,7 +42,7 @@ public sealed class ProgrammeLoudnessAnalyzer
 	private int _firPosition;
 	private int _firCount;
 	private ulong _nextSample;
-	private string? _sourceIdentity;
+	private MediaSourceId? _sourceIdentity;
 	private bool _discontinuity;
 	private ulong _generation;
 
@@ -79,24 +79,23 @@ public sealed class ProgrammeLoudnessAnalyzer
 
 	public void Interrupt()
 	{
+		if (_discontinuity)
+			return;
 		Reset();
 		_discontinuity = true;
 	}
 
 	/// <summary>Consume immutable interleaved stereo output samples for exactly this audio frame range.</summary>
-	public void Process(ReadOnlySpan<float> samples, ulong samplePosition, string sourceIdentity)
+	public void Process(ReadOnlySpan<float> samples, ulong samplePosition, MediaSourceId sourceIdentity)
 	{
 		if (samples.Length == 0 || (samples.Length & 1) != 0)
 			throw new ArgumentException("A nonempty interleaved stereo block is required.", nameof(samples));
-		if (string.IsNullOrWhiteSpace(sourceIdentity))
-			throw new ArgumentException("Observed source identity is required.", nameof(sourceIdentity));
 		var sampleFrames = checked((uint)(samples.Length / 2));
 		if (samplePosition > ulong.MaxValue - sampleFrames)
 			throw new ArgumentOutOfRangeException(nameof(samplePosition));
 
 		if (_sourceIdentity is not null &&
-			(_nextSample != samplePosition ||
-				!string.Equals(_sourceIdentity, sourceIdentity, StringComparison.Ordinal)))
+			(_nextSample != samplePosition || _sourceIdentity.Value != sourceIdentity))
 			Reset();
 
 		_sourceIdentity = sourceIdentity;
