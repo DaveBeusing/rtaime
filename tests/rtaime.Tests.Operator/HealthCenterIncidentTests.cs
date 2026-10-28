@@ -377,6 +377,30 @@ public sealed class HealthCenterIncidentTests
 	}
 
 	[Fact]
+	public void Missing_source_retains_stale_incident_in_health_and_does_not_resolve_notification()
+	{
+		var now = Start;
+		var notifications = new NotificationService(() => now);
+		var provider = new TestProvider(Snapshot("transport-program", SubsystemHealthState.Failed, SubsystemProgramImpact.OutputTransportOnly));
+		var context = new QueuedContext();
+		using var readiness = new RuntimeReadinessService(() => now);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), context,
+			notifications: notifications, clock: () => now);
+
+		now = now.AddSeconds(1);
+		provider.Publish();
+		context.Drain();
+		var incident = Assert.Single(model.Attention);
+		Assert.Equal("transport-program", incident.Id);
+		Assert.Equal("UNKNOWN", incident.State);
+		Assert.Equal("UNAVAILABLE", incident.EvidenceStatus);
+		Assert.Equal("STALE / UNVERIFIED", incident.AlarmLifecycle);
+		Assert.Equal(SubsystemProgramImpact.Unknown, incident.ProgramImpactValue);
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.False(readiness.Current.IsProductionReady);
+	}
+
+		[Fact]
 	public void Telemetry_delivery_failure_is_fail_open_for_health_presentation()
 	{
 		var provider = new TestProvider(Snapshot("output", SubsystemHealthState.Degraded, SubsystemProgramImpact.MonitoringOnly));
