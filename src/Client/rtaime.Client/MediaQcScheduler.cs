@@ -321,6 +321,9 @@ public sealed class MediaQcReportStore
 		if (parsed.ReportId != report.ReportId || parsed.AssetId != report.AssetId ||
 			parsed.CatalogueRevision != report.CatalogueRevision ||
 			parsed.FingerprintSha256 != report.FingerprintSha256 ||
+			parsed.SourceLengthBytes != report.SourceLengthBytes ||
+			parsed.SourceModifiedUtc != report.SourceModifiedUtc ||
+			parsed.ToolVersion != report.ToolVersion ||
 			parsed.CreatedUtc != report.CreatedUtc ||
 			parsed.Results.Count != report.Results.Count ||
 			parsed.Results.Where((item, index) =>
