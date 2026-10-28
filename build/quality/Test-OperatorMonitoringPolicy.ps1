@@ -121,15 +121,17 @@ Assert-Condition ($monitoringIntegrationTests -match 'Dedicated_named_pipe_monit
 Assert-Condition ($qualificationDocumentation -match 'Software performance envelope' -and $qualificationDocumentation -match 'Physical.*UNVERIFIED' -and $qualificationDocumentation -match 'RTAIME_MONITORING_QUALIFICATION_SOAK_LONG') "Monitoring qualification documentation must separate software evidence from physical qualification and document sustained qualification."
 
 # R 103 extends this existing monitoring quality gate, not a second security framework.
+$rangeContractsPath = Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/VideoRangeContracts.cs"
 $rangePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VideoSignalRangeAnalysis.cs"
 $rangeTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/VideoSignalRangeAnalysisTests.cs"
 $reviewViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ColorReviewViewModel.cs"
 $reviewXamlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ColorReviewWorkspaceControl.xaml"
 $rangeDocumentationPath = Join-Path $repositoryRoot "docs/VideoSignalRangeCompatibility.md"
 $colorDocumentationPath = Join-Path $repositoryRoot "docs/ColorAccurateMediaMonitoring.md"
-foreach ($path in @($rangePath, $rangeTestsPath, $reviewViewModelPath, $reviewXamlPath, $rangeDocumentationPath, $colorDocumentationPath)) {
+foreach ($path in @($rangeContractsPath, $rangePath, $rangeTestsPath, $reviewViewModelPath, $reviewXamlPath, $rangeDocumentationPath, $colorDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "R 103 code-range evidence artifact is missing: $path"
 }
+$rangeContracts = Get-Content -LiteralPath $rangeContractsPath -Raw
 $range = Get-Content -LiteralPath $rangePath -Raw
 $rangeTests = Get-Content -LiteralPath $rangeTestsPath -Raw
 $reviewModel = Get-Content -LiteralPath $reviewViewModelPath -Raw
@@ -137,9 +139,9 @@ $reviewXaml = Get-Content -LiteralPath $reviewXamlPath -Raw
 $rangeDocumentation = Get-Content -LiteralPath $rangeDocumentationPath -Raw
 $colorDocumentation = Get-Content -LiteralPath $colorDocumentationPath -Raw
 
-Assert-Condition ($range.Contains("8 => new(16, 235, 5, 246, 1, 254)") -and $range.Contains("10 => new(64, 940, 20, 984, 4, 1019)")) "R 103 v3 numeric nominal/preferred/total thresholds must retain the normative 8/10-bit code bands."
+Assert-Condition ($rangeContracts.Contains("8 => new(16, 235, 5, 246, 1, 254)") -and $rangeContracts.Contains("10 => new(64, 940, 20, 984, 4, 1019)")) "R 103 v3 numeric nominal/preferred/total thresholds must retain the normative 8/10-bit code bands."
 Assert-Condition ($range.Contains("(long)union.OutsidePreferred * 100 > samples") -and $range.Contains("(long)AnyComponent.OutsidePreferred * 100 > SampleCount")) "Out-of-gamut threshold must be strictly greater than 1% of sampled active picture area."
-Assert-Condition ($range.Contains("ColorMetadataAuthority.Authoritative") -and $range.Contains("NominalRange.Full") -and $range.Contains("ObservedCodeBitDepth") -and $range.Contains("ActiveImage")) "R 103 must reject unsupported or untrusted range/precision metadata and exclude non-active image."
+Assert-Condition ($rangeContracts.Contains("ColorMetadataAuthority.Authoritative") -and $rangeContracts.Contains("NominalRange.Full") -and $rangeContracts.Contains("ObservedCodeBitDepth") -and $rangeContracts.Contains("ActiveImage")) "R 103 must reject unsupported or untrusted range/precision metadata and exclude non-active image."
 Assert-Condition ($range.Contains("SampledOutsideTotal") -and $range.Contains("ChromaStatus") -and $range.Contains("UNAVAILABLE")) "R 103 must distinguish total excursion and unavailable native chroma evidence."
 Assert-Condition ($scopeAnalysis.Contains("signalCounts.Add") -and $scopeAnalysis.Contains("pixels[offset]") -and $scopeAnalysis.Contains("SignalRange = signalCounts.Finish")) "CPU scope should count source codes on the existing sampled frame before presentation conversion."
 Assert-Condition ($scopeAnalysis.Contains("CombinedResultBytes") -and $scopeAnalysis.Contains("SignalResultCount") -and $scopeAnalysis.Contains("ScopeResultCount")) "New raw-code counters must be additive to the bounded existing scope shape."
