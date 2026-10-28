@@ -1125,7 +1125,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			if (_activeOutputMapping is not null || _pendingOutputMapping is not null || _preparedOutputMapping is not null)
 				InvalidateOutputMappingUnsafe("mapping.execution_recommitted");
 			ndiBindings = CommitNdiBindingsUnsafe(preparedExecution.Bindings, commit.ExecutionRevision.Value);
-			_broadcastContinuity.ConfirmCommittedExecution(preparedExecution, commit.ExecutionRevision.Value, programSinkId);
+			ConfirmContinuityAfterRuntimeCommitUnsafe(preparedExecution, commit.ExecutionRevision.Value, programSinkId);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
