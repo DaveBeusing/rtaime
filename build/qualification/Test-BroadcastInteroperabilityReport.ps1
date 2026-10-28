@@ -39,7 +39,18 @@ function Exact-Fields($Object, [string[]]$Allowed, [string]$Context) {
     }
 }
 function Parse-Trx([string]$Path, [string[]]$Classes) {
-    [xml]$trx = Get-Content -LiteralPath $Path -Raw
+    $file = Get-Item -LiteralPath $Path -ErrorAction Stop
+    Require ($file.Length -gt 0 -and $file.Length -le 32MB) "TRX must be a bounded nonempty file."
+    $readerSettings = [System.Xml.XmlReaderSettings]::new()
+    $readerSettings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+    $readerSettings.XmlResolver = $null
+    $readerSettings.MaxCharactersInDocument = 32MB
+    $reader = [System.Xml.XmlReader]::Create($Path, $readerSettings)
+    try {
+        $trx = [System.Xml.XmlDocument]::new()
+        $trx.XmlResolver = $null
+        $trx.Load($reader)
+    } finally { $reader.Dispose() }
     $defs = @{}
     foreach ($node in @($trx.SelectNodes("//*[local-name()='TestDefinitions']/*[local-name()='UnitTest']"))) {
         $id = [string]$node.GetAttribute("id")
@@ -60,15 +71,15 @@ function Parse-Trx([string]$Path, [string[]]$Classes) {
     Require (($ended - $started).TotalMinutes -le 20) "TRX exceeds the 20-minute controlled suite budget."
     $results = @($trx.SelectNodes("//*[local-name()='Results']/*[local-name()='UnitTestResult']"))
     Require ($results.Count -gt 0) "TRX contains no executed unit test results."
-    Require ([int]$counters.GetAttribute("total") -eq $results.Count) "TRX total counter differs from test results."
-    Require ([int]$counters.GetAttribute("passed") + [int]$counters.GetAttribute("failed") +
-        [int]$counters.GetAttribute("error") + [int]$counters.GetAttribute("notExecuted") +
-        [int]$counters.GetAttribute("timeout") + [int]$counters.GetAttribute("aborted") +
-        [int]$counters.GetAttribute("inconclusive") -ge $results.Count) "TRX outcome counters understate recorded test outcomes."
+    Require ([int]$counters.GetAttribute("total") -eq $results.Count -and
+        [int]$counters.GetAttribute("executed") -eq $results.Count) "TRX total/executed counters differ from results."
+    Require ([int]$counters.GetAttribute("passed") -le $results.Count) "TRX passed counter exceeds executed tests."
     $seen = @{}
     $counts = @{}
     $classesSeen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    $allPassed = ([string]$summary.GetAttribute("outcome") -eq "Passed")
+    # VSTest TRX uses ResultSummary outcome=Completed for a fully successful run;
+    # individual UnitTestResult rows and exact counters must still all be Passed.
+    $allPassed = ([string]$summary.GetAttribute("outcome") -in @("Completed","Passed"))
     foreach ($result in $results) {
         $testId = [string]$result.GetAttribute("testId")
         $executionId = [string]$result.GetAttribute("executionId")
@@ -84,7 +95,8 @@ function Parse-Trx([string]$Path, [string[]]$Classes) {
     foreach ($expected in $Classes) {
         Require ($classesSeen.Contains($expected)) "Expected test class '$expected' was not executed."
     }
-    if ([int]$counters.GetAttribute("failed") -gt 0 -or
+    if ([int]$counters.GetAttribute("passed") -ne $results.Count -or
+        [int]$counters.GetAttribute("failed") -gt 0 -or
         [int]$counters.GetAttribute("error") -gt 0 -or
         [int]$counters.GetAttribute("notExecuted") -gt 0 -or
         [int]$counters.GetAttribute("timeout") -gt 0 -or
@@ -189,6 +201,10 @@ foreach ($suite in @($matrix.suites)) {
     }
     Require ([int]$entry.testCount -eq $expectedSuiteCount -and $expectedSuiteCount -ge [int]$suite.minimumTests) "Suite count does not match executed TRX cases."
     Require ([string]$entry.testDateUtc -eq $parsed.date) "Suite date differs from the recorded TRX."
+    $testDate = [DateTimeOffset]::MinValue
+    Require ([DateTimeOffset]::TryParse([string]$parsed.date, [ref]$testDate) -and
+        $testDate -le $reportDate.AddMinutes(2) -and
+        $testDate -ge $reportDate.AddMinutes(-25)) "TRX timestamp is stale or not correlated to the report generation window."
     $calculatedStatus = if ($parsed.passed -and [int]$e.exitCode -eq 0) { "QUALIFIED" } else { "FAILED" }
     Require ([string]$entry.status -eq $calculatedStatus) "Suite state contradicts the executed tests."
 }
