@@ -160,6 +160,37 @@ public sealed class TimedTextInterchangeTests
 		Assert.Empty(segments.Segments);
 	}
 
+	[Fact]
+	public void Excessive_xml_nesting_and_unqualified_transforms_fail_before_recursive_caption_walk()
+	{
+		var depth = string.Concat(Enumerable.Repeat("<div>", 30));
+		var end = string.Concat(Enumerable.Repeat("</div>", 30));
+		var xml = Distribution(depth +
+			"<p xml:id=\"p1\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Too deep</p>" + end);
+		var result = Assert.Throws<InvalidDataException>(() =>
+			TimedTextInterchangeCodec.Parse(Encoding.UTF8.GetBytes(xml), TimedTextProfile.EbuTtDistribution101));
+		Assert.Contains("nesting depth", result.Message, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Live_missing_sequence_number_resets_previous_cues_until_explicit_resynchronization()
+	{
+		var first = TimedTextInterchangeCodec.Parse(Encoding.UTF8.GetBytes(
+			Live("<p xml:id=\"p1\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Text</p>")),
+			TimedTextProfile.EbuTtLive10);
+		var skipped = TimedTextInterchangeCodec.Parse(Encoding.UTF8.GetBytes(
+			Live("<p xml:id=\"p1\" region=\"bottom\" style=\"base\" begin=\"1s\" end=\"2s\">Text</p>")
+				.Replace("sequenceNumber=\"3\"", "sequenceNumber=\"5\"", StringComparison.Ordinal)),
+			TimedTextProfile.EbuTtLive10);
+		var store = new TimedTextLiveSegmentStore();
+		store.BeginNewSequence("feed-1");
+		Assert.True(store.Accept(first));
+		Assert.False(store.Accept(skipped));
+		Assert.True(store.RequiresResynchronization);
+		Assert.Empty(store.Segments);
+		Assert.False(store.Accept(first));
+	}
+
 	[Theory]
 	[InlineData("<!DOCTYPE tt [ <!ENTITY xxe SYSTEM 'file:///etc/passwd'> ]>")]
 	[InlineData("<!DOCTYPE tt SYSTEM 'https://example.test/foreign.dtd'>")]
