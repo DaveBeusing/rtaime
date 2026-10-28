@@ -27,7 +27,7 @@ compact source card includes an explicit SELECT/SELECTED control. Selection
 itself makes no ControlHost mutation and cannot change Program audio.
 The consolidated signal label distinguishes current sample-peak evidence
 from CLIPPING, PARTIAL SIGNAL and stale/offline/unavailable readings. It
-does not report physical output, LUFS, RMS or true peak. All source and
+does not report physical output or RMS. Optional LUFS and reconstructed true-peak values are separately presented only when RuntimeHost has an opt-in analyser and current evidence. All source and
 bus cards are projections of the same maximum eight/four retained owners:
 there is no new meter producer, DSP session or poller.
 
@@ -54,7 +54,7 @@ an unavailable marker and never enters the meter bar. Stale/offline values remai
 with the live meter disabled. Clipping, invalid/missing observations and silence are distinct.
 The meters use Runtime evidence through the existing management delivery. There is no new timer,
 render loop, peak hold, display decay, audio analysis or DSP processing in WPF.
-RMS, LUFS, true peak and physical device qualification remain unavailable.
+RMS and physical device qualification remain unavailable. Optional LUFS / reconstructed 4× peak are explicitly UNVERIFIED until independent R 128/Tech 3341/3342 reference and platform qualification.
 
 ## Strip drafts and precision
 
@@ -149,3 +149,28 @@ fixed vertical Advanced and horizontal Compact fader geometry, and both mode cap
 retained in the existing Operator visual artifact. Snapshot fixtures are software visual
 evidence; physical multi-monitor, touch and audio-device performance require separate hardware
 qualification. The five existing Required gates remain mandatory.
+
+## Optional loudness review in BUS STRIPS
+
+Each Program/Aux bus strip consumes the same already-confirmed production
+snapshot and shows read-only Momentary (400 ms), Short-term (3 s),
+Integrated, Loudness Range, reconstructed 4× dBTP maximum, profile state,
+elapsed analysis time, reset generation and policy advice. No WPF DSP,
+new timer, Control mutation, gain change, or separate monitoring feed is
+created. The display remains bounded by the existing four confirmed buses.
+
+`LOUDNESS OFF / UNAVAILABLE` means no Runtime measurement was published.
+`WARMING` means required windows have not completed. `SILENCE` has no
+numeric integrated LUFS. `UNVERIFIED` means interrupted or absent evidence.
+A disconnected or stale Control state suppresses values even when the last
+payload contained numbers. The qualification field remains `UNVERIFIED`
+until formal source-bound comparison has passed. The optional
+`ebu-r128-linear` policy displays warning text when measurements depart
+from the configured advisory -23 LUFS / -1 dBTP limits; it never
+normalizes live sound. OTT monitoring requires its own explicit custom
+profile and target. The existing sample-peak bars and compressor/limiter
+draft controls are unaffected.
+
+See [Advanced Audio Production](AdvancedAudioProduction.md) for filter
+parameters, gating and true-peak interpolation, environment opt-in,
+reset semantics and unverified reference-platform requirements.
