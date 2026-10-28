@@ -1,6 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-using System.Globalization;
 using System.Text.Json;
 using rtaime.Media.Contracts;
 
@@ -60,7 +59,7 @@ public sealed record MxfValidatedInterchangeEvidence(
         string fileSha256, DateTimeOffset observedAtUtc)
     {
         var fields = new List<MediaInterchangeField>();
-        void Add(string path, string value, string source = "Independent MXF FFprobe")
+        void Add(string path, string value, string source = "FFprobe")
             => fields.Add(new MediaInterchangeField(
                 path, value, MediaInterchangeSource.ProviderProbe, source, observedAtUtc));
         Add("content.sha256", fileSha256);
@@ -83,20 +82,18 @@ public sealed record MxfValidatedInterchangeEvidence(
             Add("audio.0.language", lang);
         if (ReportedTimecode is { } timecode)
         {
-            Add("timecode.start", timecode, "MXF reported timecode; source preservation UNVERIFIED");
+            Add("timecode.start", timecode, "MXF timecode tag");
             Add("timecode.dropFrame", timecode.Contains(';') ? "true" : "false",
                 "MXF reported timecode; source preservation UNVERIFIED");
         }
 
+        // Preserve exact timebases as opaque source data. Frame/sample totals
+        // and the fixed 1x2 PCM16 topology remain on this typed observation;
+        // the 2 KiB interchange projection cannot carry an exhaustive report.
         var unmapped = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["mxf.video.timebase"] = VideoTimebase,
-            ["mxf.audio.timebase"] = AudioTimebase,
-            ["mxf.audio.samples"] = AudioSampleFrames.ToString(CultureInfo.InvariantCulture),
-            ["mxf.video.frames"] = VideoFrames.ToString(CultureInfo.InvariantCulture),
-            ["mxf.audio.trackTopology"] = "1 track, 2 channels; order UNVERIFIED",
-            ["mxf.video.bitDepth"] = "8",
-            ["mxf.audio.bitDepth"] = "16"
+            ["mxf.audio.timebase"] = AudioTimebase
         };
         if (ReportedAudioLanguage is { } raw && !fields.Any(f => f.Path == "audio.0.language"))
             unmapped["mxf.audio.language.raw"] = raw;
