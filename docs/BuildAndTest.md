@@ -76,6 +76,22 @@ tests. A successful manifest test is **not** OGraf Server API, HTML renderer or
 live broadcast qualification. Run the canonical Release build before
 `--no-build` testing.
 
+## Broadcast file interchange profile regressions
+
+Use the canonical Release build before `--no-build` tests. The existing
+provider-bound MXF/MOV/MP4 and EBU R 154 negative tuple inventory, bounded
+MXF FFprobe handling, and hash-bound JSON interoperability evidence have
+focused tests:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~BroadcastFileInterchangeProfileTests|FullyQualifiedName~MxfValidatedInterchangeEvidenceTests|FullyQualifiedName~MxfOp1aRecordingCatalogTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~LocalMediaContainerProbeTests|FullyQualifiedName~BmxOp1aRecordingIntegrationTests"
+```
+
+The native BMX/FFprobe integration test is opt-in and **cannot** be counted as
+real-file qualification unless the declared external tools are provisioned.
+See [Broadcast File Interchange Profiles](BroadcastFileInterchangeProfiles.md).
+
 ## Standard builds
 
 The canonical local developer build entry point is:
