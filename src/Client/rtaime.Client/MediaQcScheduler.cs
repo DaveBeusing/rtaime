@@ -20,6 +20,7 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 	private readonly Task _worker;
 	private readonly MediaQcReportStore _store;
 	private readonly long _maximumFileBytes;
+	private readonly IReadOnlyList<IMediaQcCheckAdapter> _adapters;
 	private int _inFlight;
 	private bool _disposed;
 
@@ -32,11 +33,13 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 	}
 
 	public MediaQcScheduler(string? reportDirectory = null,
-		long maximumFileBytes = MediaQcFileInspector.DefaultMaximumFileBytes)
+		long maximumFileBytes = MediaQcFileInspector.DefaultMaximumFileBytes,
+		IReadOnlyList<IMediaQcCheckAdapter>? adapters = null)
 	{
 		if (maximumFileBytes is < 1 or > 32L * 1024 * 1024 * 1024)
 			throw new ArgumentOutOfRangeException(nameof(maximumFileBytes));
 		_maximumFileBytes = maximumFileBytes;
+		_adapters = MediaQcAdapterRegistry.Admit(adapters);
 		_store = new MediaQcReportStore(reportDirectory);
 		_channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(MaximumQueued) {
 			SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait
@@ -162,7 +165,7 @@ public sealed class MediaQcScheduler : IDisposable, IAsyncDisposable
 					Set(job, MediaQcJobState.Running, "Hashing and inspecting local source outside Program.", null);
 					using var linked = CancellationTokenSource.CreateLinkedTokenSource(job.Cancellation.Token, _shutdown.Token);
 					var report = await MediaQcFileInspector.InspectAsync(
-						job.Asset, job.Revision, _maximumFileBytes, linked.Token).ConfigureAwait(false);
+						job.Asset, job.Revision, _maximumFileBytes, linked.Token, _adapters).ConfigureAwait(false);
 					linked.Token.ThrowIfCancellationRequested();
 					var xml = MediaQcEbuXml.Export(report);
 					await _store.SaveAsync(report, xml, linked.Token).ConfigureAwait(false);
