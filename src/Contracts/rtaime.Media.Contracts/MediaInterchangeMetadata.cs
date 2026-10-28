@@ -208,18 +208,26 @@ public sealed record MediaInterchangeMetadata(
         var observed = DateTimeOffset.UtcNow;
         MediaInterchangeField Item(string path, string value) =>
             new(path, value, MediaInterchangeSource.ProviderProbe, "Runtime media probe", observed);
-        var fields = new[]
+        var fields = new List<MediaInterchangeField>
         {
-            Item("content.sha256", asset.FingerprintSha256),
-            Item("video.0.codec", asset.VideoCodec.ToString()),
-            Item("video.0.width", asset.VideoFormat.Width.ToString(CultureInfo.InvariantCulture)),
-            Item("video.0.height", asset.VideoFormat.Height.ToString(CultureInfo.InvariantCulture)),
-            Item("video.0.frameRate", asset.VideoFormat.FrameRate.ToString()),
-            Item("audio.0.codec", asset.AudioCodec.ToString()),
-            Item("audio.0.sampleRate", asset.AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture)),
-            Item("audio.0.channelCount", asset.AudioFormat.ChannelCount.ToString(CultureInfo.InvariantCulture))
+            Item("content.sha256", asset.FingerprintSha256)
         };
-        var result = new MediaInterchangeMetadata(CurrentFormat, asset.FingerprintSha256, fields);
+        if (asset.VideoCodec != MediaVideoCodec.None)
+            fields.AddRange(
+            [
+                Item("video.0.codec", asset.VideoCodec.ToString()),
+                Item("video.0.width", asset.VideoFormat.Width.ToString(CultureInfo.InvariantCulture)),
+                Item("video.0.height", asset.VideoFormat.Height.ToString(CultureInfo.InvariantCulture)),
+                Item("video.0.frameRate", asset.VideoFormat.FrameRate.ToString())
+            ]);
+        if (asset.AudioCodec != MediaAudioCodec.None)
+            fields.AddRange(
+            [
+                Item("audio.0.codec", asset.AudioCodec.ToString()),
+                Item("audio.0.sampleRate", asset.AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture)),
+                Item("audio.0.channelCount", asset.AudioFormat.ChannelCount.ToString(CultureInfo.InvariantCulture))
+            ]);
+        var result = new MediaInterchangeMetadata(CurrentFormat, asset.FingerprintSha256, fields.ToArray());
         result.Validate();
         return result;
     }
