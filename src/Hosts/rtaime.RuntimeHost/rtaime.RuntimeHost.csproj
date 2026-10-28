@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Srt\rtaime.Provider.Srt.csproj" />
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Ndi\rtaime.Provider.Ndi.csproj" />
+    <ProjectReference Include="..\..\Providers\rtaime.Provider.St2110\rtaime.Provider.St2110.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
   </ItemGroup>
