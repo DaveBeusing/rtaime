@@ -101,6 +101,51 @@ public sealed class BroadcastContinuityIntegrationTests
 	}
 
 	[Fact]
+	public async Task Bounded_software_fault_injection_soak_preserves_committed_program_and_monotonic_AV_evidence()
+	{
+		await using var test = CreateFixture(includeAux: true);
+		var (plan, program) = test.Plan();
+		Assert.Equal(RuntimeCommitStatus.Committed,
+			test.Runtime.ApplyExecution(plan, program).Commit!.Status);
+		var programSource = Assert.Single(plan.Bindings, item => item.OutputRoleId == "program").MediaSourceId!.Value;
+		var auxSource = Assert.Single(plan.Bindings, item => item.OutputRoleId == "aux").MediaSourceId!.Value;
+		ulong? lastCompleteVideo = null;
+		ulong? lastAudioPosition = null;
+		for (var attempt = 0; attempt < 12; attempt++)
+		{
+			test.Runtime.SetInputSignalState(programSource,
+				attempt == 6 ? RuntimeInputSignalState.Lost : RuntimeInputSignalState.Valid);
+			test.Runtime.SetInputSignalState(auxSource,
+				attempt is 2 or 5 or 8 ? RuntimeInputSignalState.Lost : RuntimeInputSignalState.Valid);
+			using (test.Runtime.ProcessNextBoundary()) { }
+			var current = test.Runtime.GetContinuityObservation("program")!;
+			if (current.LastCompleteFrameSequence is { } frame)
+			{
+				if (lastCompleteVideo is { } previous) Assert.True(frame >= previous);
+				lastCompleteVideo = frame;
+			}
+			if (current.LastCompleteAudioSamplePosition is { } sample)
+			{
+				if (lastAudioPosition is { } previous) Assert.True(sample >= previous);
+				lastAudioPosition = sample;
+			}
+			Assert.Equal(programSource.ToString(), current.SourceId);
+			Assert.Equal(plan.AuthoritySnapshot.StateId.ToString(), current.AuthorityStateId);
+			Assert.False(current.HasQualifiedFallbackDelivery);
+			var role = Assert.Single(test.Runtime.Snapshot.OutputRoles!, item => item.RoleId == "program");
+			Assert.Equal(programSource, role.SourceId);
+			Assert.True(role.AuthoritativeActive);
+		}
+		var end = test.Runtime.GetContinuityObservation("program")!;
+		Assert.Equal(BroadcastContinuityPhase.RecoveredAwaitingRearm, end.Phase);
+		Assert.True(end.RequiresManualRearm);
+		Assert.InRange(test.Runtime.RecentContinuityIncidents.Count, 1,
+			RuntimeBroadcastContinuityTracker.HistoryLimit);
+		Assert.Equal(12, test.Runtime.ProgramFrames.Count);
+		Assert.Equal(0UL, plan.AuthoritySnapshot.Revision.Value);
+	}
+
+	[Fact]
 	public void Failed_boundaries_are_idempotent_and_incident_history_is_bounded_by_role_and_revision()
 	{
 		using var test = CreateFixture();
