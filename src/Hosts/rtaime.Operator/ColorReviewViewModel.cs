@@ -99,6 +99,16 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
             ? $"SOURCE METADATA COMPLETE · {ScopeSourceLabel} · DISPLAY-CODE SCOPES; PHYSICAL COLOR UNVERIFIED"
             : "COLOR METADATA INCOMPLETE · DISPLAY-CODE PASSTHROUGH; VECTORSCOPE UNAVAILABLE"
         : "COLOR EVIDENCE PENDING · NO CALIBRATION OR HDR CLAIM";
+    public VideoSignalRangeSnapshot? SelectedSignalRange => SelectedScopes?.SignalRange;
+    public string SignalRangeStatusLabel => SelectedSignalRange is { } observation
+        ? observation.DiagnosticLabel
+        : "EBU R 103 · UNAVAILABLE — no current source-bound, native-code scope observation.";
+    public string SignalRangeFormatLabel => SelectedSignalRange is { } observation
+        ? observation.TechnicalLabel
+        : "Source, frame sequence, range and native code precision have not been observed.";
+    public string SignalRangeChromaLabel => SelectedSignalRange is { } observation
+        ? observation.ChromaStatus
+        : "UNAVAILABLE: no native Cb/Cr sample.";
     public string SourceFormatLabel => IsPreviewScope ? _monitoring.PreviewFormat : _monitoring.ProgramFormat;
     public string GradeStatus => Inspector.IsSelectedColorGradeProcessingNode
         ? "COLOR GRADE SELECTED · EDIT & APPLY IN THE SHARED INSPECTOR"
@@ -172,6 +182,8 @@ public sealed class ColorReviewViewModel : INotifyPropertyChanged, IDisposable
     private void NotifyReview() => Notify(nameof(ScopeSource), nameof(IsPreviewScope),
         nameof(AnalysisEnabled), nameof(SelectedScopeGpuFrame), nameof(SelectedScopes),
         nameof(ScopeSourceLabel), nameof(ScopeFrameLabel), nameof(ColorBasisLabel),
+        nameof(SelectedSignalRange), nameof(SignalRangeStatusLabel),
+        nameof(SignalRangeFormatLabel), nameof(SignalRangeChromaLabel),
         nameof(SourceFormatLabel), nameof(CompareVisibility), nameof(CpuCompareVisibility),
         nameof(SingleFrameInspectionEnabled),
         nameof(BothComparisonSourcesLive), nameof(ConfirmedProgramImage),
