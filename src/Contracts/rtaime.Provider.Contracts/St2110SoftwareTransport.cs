@@ -96,9 +96,9 @@ public static class St2110TransportAdmission
         if (reference is not null)
         {
             reference.Validate();
-            if (reference.Source is MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock &&
-                reference.Evidence != MediaReferenceEvidence.HardwareQualified)
-                throw new NotSupportedException("Hardware reference evidence is not verified.");
+            if (reference.Source is MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock ||
+                reference.Evidence == MediaReferenceEvidence.HardwareQualified)
+                throw new NotSupportedException("The software-only ST 2110 loopback provider cannot admit physical PTP or Genlock routes.");
         }
     }
 
