@@ -228,7 +228,7 @@ public static class AdmAudioXml
 				uid, explicitTrack?.PhysicalTrackNumber, role,
 				explicitTrack?.Language ?? languageLabel,
 				objectLabel,
-				pack, start, end, duration, sourceKind));
+				pack, start, end, duration, sourceKind, explicitTrack?.R123Role));
 		}
 		tracks.Sort((a, b) => a.PhysicalTrackNumber.HasValue && b.PhysicalTrackNumber.HasValue
 			? a.PhysicalTrackNumber.Value.CompareTo(b.PhysicalTrackNumber.Value)
