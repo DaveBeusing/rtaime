@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Threading.Channels;
+using System.Xml;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Client;
