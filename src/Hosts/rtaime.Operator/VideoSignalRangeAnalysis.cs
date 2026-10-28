@@ -54,7 +54,7 @@ public readonly record struct VideoRangeProfile(
 {
 	public static VideoRangeProfile ForRgba8(
 		ColorDescription color, uint width, uint height, VideoActiveImageRegion? active = null) =>
-		new(color, 8, active ?? VideoActiveImageRegion.Full(width, height), "RGBA8 source-code monitoring sample");
+		new(color, 8, active ?? VideoActiveImageRegion.Full(width, height), "RGBA8 monitoring codes before display conversion");
 
 	public static VideoRangeProfile ForNativeRgba10(
 		ColorDescription color, uint width, uint height, VideoActiveImageRegion? active = null) =>
@@ -109,6 +109,18 @@ public sealed record VideoSignalRangeSnapshot(
 	public bool PreferredAreaThresholdExceeded =>
 		SampleCount > 0 && (long)AnyComponent.OutsidePreferred * 100 > SampleCount;
 	public string ChromaStatus => "UNAVAILABLE: native Cb/Cr code values are not present in RGB monitoring; no chroma legal-level claim.";
+	public string ChannelDiagnosticLabel
+	{
+		get
+		{
+			if (SampleCount <= 0) return "RGB/Y′ code counts UNAVAILABLE.";
+			string Channel(string name, VideoRangeChannelCounts counts) =>
+				$"{name} N/P/T {counts.OutsideNominal}/{counts.OutsidePreferred}/{counts.OutsideTotal} " +
+				$"({counts.NominalPercent(SampleCount):0.##}/{counts.PreferredPercent(SampleCount):0.##}/{counts.TotalPercent(SampleCount):0.##}%)";
+			return string.Join(" · ", Channel("R′", Red), Channel("G′", Green),
+				Channel("B′", Blue), Channel("Y′", Luma), Channel("ANY", AnyComponent));
+		}
+	}
 	public string TechnicalLabel =>
 		$"EBU R 103 v3 · {Profile.Color.TechnicalLabel} · {Profile.PixelEvidence} · " +
 		$"active {Profile.ActiveImage.Width}x{Profile.ActiveImage.Height} @ {Profile.ActiveImage.X},{Profile.ActiveImage.Y} · frame {FrameSequence}";
@@ -117,9 +129,19 @@ public sealed record VideoSignalRangeSnapshot(
 	{
 		get
 		{
+			var status = Status switch
+			{
+				VideoRangeSampleStatus.Unavailable => "UNAVAILABLE",
+				VideoRangeSampleStatus.Unverified => "UNVERIFIED",
+				VideoRangeSampleStatus.SampledWithinNominal => "SAMPLED_WITHIN_NOMINAL",
+				VideoRangeSampleStatus.SampledOutsideNominal => "SAMPLED_OUTSIDE_NOMINAL",
+				VideoRangeSampleStatus.SampledOutOfGamut => "SAMPLED_OUT_OF_GAMUT",
+				VideoRangeSampleStatus.SampledOutsideTotal => "SAMPLED_OUTSIDE_TOTAL",
+				_ => "UNVERIFIED"
+			};
 			if (Status is VideoRangeSampleStatus.Unverified or VideoRangeSampleStatus.Unavailable)
-				return $"{Status.ToString().ToUpperInvariant()} · {Detail}";
-			return $"{Status.ToString().ToUpperInvariant()} · {SampleCount:N0} samples ({CoveragePercent:0.###}% active image) · " +
+				return $"{status} · {Detail}";
+			return $"{status} · stride {SampleStride} · {SampleCount:N0} samples ({CoveragePercent:0.###}% active image) · " +
 				$"outside preferred R {Red.PreferredPercent(SampleCount):0.##}% / G {Green.PreferredPercent(SampleCount):0.##}% / " +
 				$"B {Blue.PreferredPercent(SampleCount):0.##}% / Y′ {Luma.PreferredPercent(SampleCount):0.##}% / " +
 				$"ANY {AnyComponent.PreferredPercent(SampleCount):0.##}% · " +
@@ -277,6 +299,9 @@ public static class VideoSignalRangeAnalysis
 		for (var x = active.X; x < (long)active.X + active.Width; x += sampleStride)
 		{
 			var offset = checked((int)(((ulong)y * width + (ulong)x) * 4));
+			if (rgbaCodes[offset] > 1023 || rgbaCodes[offset + 1] > 1023 || rgbaCodes[offset + 2] > 1023)
+				return VideoSignalRangeSnapshot.Unavailable(profile, frameSequence, sampleStride,
+					"UNAVAILABLE: native 10-bit code vectors contain values wider than ten bits.");
 			accumulator.Add(x, y, rgbaCodes[offset], rgbaCodes[offset + 1], rgbaCodes[offset + 2]);
 		}
 		return accumulator.Finish(frameSequence, sampleStride);
