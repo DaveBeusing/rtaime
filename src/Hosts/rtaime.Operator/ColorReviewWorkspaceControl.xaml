@@ -138,11 +138,21 @@
                     </Grid>
                 </Border>
             </Grid>
-            <StackPanel Grid.Row="2" Margin="0,4,0,3">
+            <controls:RtaimeScrollViewer Grid.Row="2" Margin="0,4,0,3" MaxHeight="96"
+                VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                AutomationProperties.Name="Color Review scope and video signal range evidence">
+                <StackPanel>
                 <TextBlock Text="{Binding ScopeFrameLabel}" Style="{StaticResource OperatorLabel}" />
                 <TextBlock Text="{Binding ColorBasisLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="R 103 · SOURCE-CODE SIGNAL RANGE (READ-ONLY, NEVER A LEGALIZER)"
+                    Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
+                <TextBlock Text="{Binding SignalRangeStatusLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SignalRangeChannelsLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SignalRangeFormatLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SignalRangeChromaLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding SourceFormatLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-            </StackPanel>
+                </StackPanel>
+            </controls:RtaimeScrollViewer>
         </Grid>
 
         <Border Grid.Row="4" Background="{DynamicResource OperatorSurfaceBrush}"

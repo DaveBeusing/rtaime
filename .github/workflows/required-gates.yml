@@ -62,6 +62,14 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: EBU R 103 source-code and Color Review negative qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-build --filter "FullyQualifiedName~VideoRangeContractTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Video range contract qualification failed." }
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~VideoSignalRangeAnalysisTests|FullyQualifiedName~MediaScopeAnalysisTests|FullyQualifiedName~GpuScopesAndFrameComparisonTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "Video range/colorimetry qualification failed." }
+
       - name: Broadcast boundary security negative regressions
         shell: pwsh
         run: |

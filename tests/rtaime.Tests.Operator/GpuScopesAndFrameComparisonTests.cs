@@ -15,7 +15,8 @@ public sealed class GpuScopesAndFrameComparisonTests
 
 		Assert.Contains("MaxScopeSamples = 262_144", ReadOperatorSource("MediaScopeAnalysis.cs"), StringComparison.Ordinal);
 		Assert.Contains("TimeSpan.FromMilliseconds(200)", ReadOperatorSource("MediaScopeAnalysis.cs"), StringComparison.Ordinal);
-		Assert.Contains("ScopeResultBytes", source, StringComparison.Ordinal);
+		Assert.Contains("CombinedResultBytes", source, StringComparison.Ordinal);
+		Assert.Contains("SignalResultOffset = 21504", source, StringComparison.Ordinal);
 		Assert.Contains("RWStructuredBuffer<uint> Results", source, StringComparison.Ordinal);
 		Assert.Contains("CopyResource(_readback!, _results!)", source, StringComparison.Ordinal);
 		Assert.DoesNotContain("BitmapSource", source, StringComparison.Ordinal);

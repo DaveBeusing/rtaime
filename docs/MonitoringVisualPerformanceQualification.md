@@ -60,7 +60,7 @@ The software qualification envelope is intentionally deterministic and hardware-
 
 - Scope analysis cadence is at most 5 Hz: one update window every 200 ms.
 - Scope analysis samples no more than 262,144 source pixels per update.
-- GPU scope result transfer is fixed at 21,504 `uint` values / 86,016 bytes.
+- The original GPU display scope shape remains 21,504 `uint` values / 86,016 bytes, preserving legacy offsets. The optional R 103 source-code counters append 15 `uint` values, bringing the current fixed transfer to **21,519 `uint` values / 86,076 bytes**. Any native 10-bit, full-image filtered and hardware-conformance evidence remains **UNVERIFIED**.
 - ROI analysis cadence is at most 5 Hz and samples no more than 262,144 source pixels.
 - ROI analysis transfers only 16 `uint` values / 64 bytes of reduced numeric evidence.
 - Monitoring diagnostics HUD refresh is bounded to a 200 ms cadence.

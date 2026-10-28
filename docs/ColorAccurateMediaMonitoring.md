@@ -35,3 +35,23 @@ Each of the four color scopes displays the selected source's evidence-bound snap
 Software tests and real UI qualification for the new mode are **PENDING** on its exact final PR head. Monitor calibration, physical output color accuracy, creative LUT authoring, and HDR-grade/output support remain **UNVERIFIED**; the UI makes no such claim.
 
 Comparison overlays use an independent FIT projection, so they capture pointer hit-testing and disable standalone Program monitor ROI/zoom commands until comparison is switched off. This prevents an ROI selected against an underlying differently zoomed frame from being mislabeled as a compared image coordinate.
+
+
+## EBU R 103 source-code signal levels (sampled diagnostic)
+
+Color Review now exposes observational, source-bound video level diagnostics from the existing confirmed Program/Preview GPU and CPU scopes. It reads **pre-display-transform** R′G′B′ code samples and derives Y′ using the BT.709 luma coefficients. It never alters Program textures, applies a LUT, legalizes, clips or tonemaps images.
+
+| Limited-range source | Nominal | Preferred | Total |
+| --- | --- | --- | --- |
+| 8-bit | 16–235 | 5–246 | 1–254 |
+| 10-bit | 64–940 | 20–984 | 4–1019 |
+
+These are the inclusive ranges in [EBU R 103 v3.0 (May 2020)](https://tech.ebu.ch/publications/r103), Annex 1 Table 1. The analyzer records absolute counts and percentages of active-image samples outside each band, separately for R′/G′/B′, derived Y′ and an any-component union that counts each pixel only once. Sampled out-of-gamut is indicated only when more than **1%** of sampled active pixels exceed the preferred band. Any pixel outside the total band is a separate warning regardless of that threshold. Source role, frame sequence, dimensions, bit depth, primaries, transfer, matrix, range, metadata authority, sample count, stride and coverage appear in the read-only Color Review diagnostics.
+
+**No false PASS:** The current live GPU and fallback monitoring payloads use RGBA8. A 10-bit source cannot be verified at native precision by this 8-bit payload: the result is **UNAVAILABLE**. Deterministic 10-bit code vectors validate the arithmetic independently but do not constitute a 10-bit Runtime readback implementation. Only complete authoritative Rec.709/Rec.709/IdentityRgb, limited-range and matching code depth are analyzed. Unknown, inferred, full-range, unsupported HDR color or missing native precision produce **UNVERIFIED/UNAVAILABLE** instead of assuming Rec.709 or video range.
+
+The active region is defined in source pixels. Live resources currently treat the complete published active raster as the region; reliable encoded blanking/letterbox masks remain **UNVERIFIED**. The raw RGB payload does not include original Cb/Cr values. Native chroma legal-level counters are explicitly **UNAVAILABLE**; the display-code vectorscope does not replace native chroma samples.
+
+The existing 5 Hz and 262,144-sample scope budget is preserved, as is latest-only resource ownership. The EBU also recommends horizontal quarter-band (1,2,3,4,3,2,1)/16 and vertical half-band (1,2,1)/4 filtering before gamut classification. The new measurements are deliberately **unfiltered sparse samples** and cannot establish whole-image legal-level conformity. Full-native-precision, filtered, hardware-calibrated EBU Tech 3320 or SDI Program-output evidence remains **UNVERIFIED**.
+
+See [VideoSignalRangeCompatibility.md](VideoSignalRangeCompatibility.md) for the qualification matrix and [GpuScopesAndFrameComparison.md](GpuScopesAndFrameComparison.md) for fixed GPU result sizes.

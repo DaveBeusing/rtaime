@@ -142,14 +142,14 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 				ResourceUsage.Dynamic,
 				CpuAccessFlags.Write);
 			_results = e.Device.CreateBuffer(
-				GpuMonitoringAnalysisPolicy.ScopeResultBytes,
+				GpuMonitoringAnalysisPolicy.CombinedResultBytes,
 				BindFlags.UnorderedAccess,
 				ResourceUsage.Default,
 				CpuAccessFlags.None,
 				ResourceOptionFlags.BufferStructured,
 				sizeof(uint));
 			_readback = e.Device.CreateBuffer(
-				GpuMonitoringAnalysisPolicy.ScopeResultBytes,
+				GpuMonitoringAnalysisPolicy.CombinedResultBytes,
 				BindFlags.None,
 				ResourceUsage.Staging,
 				CpuAccessFlags.Read);
@@ -246,7 +246,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		var mapped = context.Map(_readback!, 0, MapMode.Read);
 		try
 		{
-			var results = mapped.AsSpan<uint>(GpuMonitoringAnalysisPolicy.ScopeResultCount);
+			var results = mapped.AsSpan<uint>(GpuMonitoringAnalysisPolicy.CombinedResultCount);
 			var snapshot = MediaScopeSnapshot.FromGpuResultBuffer(
 				frame.SequenceNumber,
 				format.Width,
@@ -282,7 +282,9 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 		context.Unmap(_colorBuffer!, 0);
 
 		var scopeMapped = context.Map(_scopeConstants!, 0, MapMode.WriteDiscard);
-		scopeMapped.AsSpan<ScopeConstants>(1)[0] = new ScopeConstants(sourceWidth, sourceHeight, stride, 0);
+		var signalEnabled = VideoRangeProfile.ForRgba8(color, checked((uint)sourceWidth), checked((uint)sourceHeight))
+			.UnverifiedReason is null ? 1 : 0;
+		scopeMapped.AsSpan<ScopeConstants>(1)[0] = new ScopeConstants(sourceWidth, sourceHeight, stride, signalEnabled);
 		context.Unmap(_scopeConstants!, 0);
 	}
 
@@ -353,7 +355,7 @@ public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 	private readonly record struct ColorConstants(int TransferMode, int LimitedRange, int CompleteColor, int VectorscopeEnabled);
 
 	[StructLayout(LayoutKind.Sequential)]
-	private readonly record struct ScopeConstants(int SourceWidth, int SourceHeight, int SampleStride, int Padding);
+	private readonly record struct ScopeConstants(int SourceWidth, int SourceHeight, int SampleStride, int SignalEnabled);
 
 	private const string ShaderSource = """
 Texture2D SourceTexture : register(t0);
@@ -371,7 +373,7 @@ cbuffer ScopeAnalysis : register(b1)
     int SourceWidth;
     int SourceHeight;
     int SampleStride;
-    int ScopePadding;
+    int SignalEnabled;
 };
 
 RWStructuredBuffer<uint> Results : register(u0);
@@ -389,6 +391,29 @@ static const uint RedWaveformOffset = 5120;
 static const uint GreenWaveformOffset = 9216;
 static const uint BlueWaveformOffset = 13312;
 static const uint VectorscopeOffset = 17408;
+static const uint SignalResultOffset = 21504; // 4 raw components plus union, each with three range counters
+
+// R 103 code analysis runs BEFORE any range expansion, clipping or display transfer.
+uint CountRawExcursion(uint code, uint componentOffset)
+{
+    uint outside = 0;
+    if (code < 16 || code > 235)
+    {
+        InterlockedAdd(Results[SignalResultOffset + componentOffset], 1);
+        outside |= 1;
+    }
+    if (code < 5 || code > 246)
+    {
+        InterlockedAdd(Results[SignalResultOffset + componentOffset + 1], 1);
+        outside |= 2;
+    }
+    if (code < 1 || code > 254)
+    {
+        InterlockedAdd(Results[SignalResultOffset + componentOffset + 2], 1);
+        outside |= 4;
+    }
+    return outside;
+}
 
 float SrgbToLinear(float value)
 {
@@ -428,6 +453,20 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
         return;
 
     float4 sampleColor = SourceTexture.Load(int3(x, y, 0));
+    if (SignalEnabled != 0)
+    {
+        uint rawR = (uint)round(saturate(sampleColor.r) * 255.0);
+        uint rawG = (uint)round(saturate(sampleColor.g) * 255.0);
+        uint rawB = (uint)round(saturate(sampleColor.b) * 255.0);
+        uint rawY = (2126 * rawR + 7152 * rawG + 722 * rawB + 5000) / 10000;
+        uint outside = CountRawExcursion(rawR, 0) |
+            CountRawExcursion(rawG, 3) |
+            CountRawExcursion(rawB, 6) |
+            CountRawExcursion(rawY, 9);
+        if ((outside & 1) != 0) InterlockedAdd(Results[SignalResultOffset + 12], 1);
+        if ((outside & 2) != 0) InterlockedAdd(Results[SignalResultOffset + 13], 1);
+        if ((outside & 4) != 0) InterlockedAdd(Results[SignalResultOffset + 14], 1);
+    }
     if (CompleteColor != 0)
     {
         sampleColor.r = TransformComponent(sampleColor.r);

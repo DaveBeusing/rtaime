@@ -18,7 +18,7 @@ The public Operator result remains MediaScopeSnapshot. The fixed result layout i
 - RGB parade: 3 × 64 × 64 bins;
 - vectorscope: 64 × 64 bins.
 
-The complete GPU result is 21,504 unsigned 32-bit values, or 86,016 bytes. Only this fixed derived result buffer is copied to CPU-visible staging memory for the existing WPF/custom-control drawings. No source pixels, ROI pixels or full frame are copied by scope analysis.
+The original four display-code scopes still occupy **21,504 unsigned 32-bit values (86,016 bytes)** at their unchanged offsets. A further **15 raw-code uint counters (60 bytes)** are appended for EBU R 103: R′, G′, B′, derived Y′ and unique-pixel union, each tested against nominal/preferred/total bands. The combined staging transfer remains fixed at **21,519 uint values (86,076 bytes)**. Existing legacy 21,504-entry result decoding is supported with R 103 explicitly UNAVAILABLE. No source pixels, ROI pixels or full frame are copied.
 
 ## Sampling and scheduling
 
@@ -34,7 +34,7 @@ The measured GPU duration is Operator-side wall-clock evidence around dispatch, 
 
 ## Color semantics
 
-GPU scopes and the CPU fallback both use MonitoringDisplayTransform display-code semantics.
+Histogram, waveform, RGB parade and vectorscope retain MonitoringDisplayTransform display-code semantics. The additional EBU R 103 counters explicitly **do not**: they analyze raw RGBA8 source codes before range expansion/transfer conversion, with authoritative Rec.709 limited-range color and native 8-bit precision required. A declared 10-bit source through RGBA8, unknown/inferred/full-range metadata or unsupported HDR transfer is UNVERIFIED/UNAVAILABLE. Native Cb/Cr samples and the EBU-recommended filtered full-active-image measurement are not claimed.
 
 Histogram, waveform and RGB parade can preserve passthrough values when color metadata is incomplete, matching monitor presentation behavior. Vectorscope requires complete color semantics. If color metadata is incomplete, vectorscope bins remain empty and the snapshot explicitly reports vectorscope unavailable rather than guessing chroma semantics.
 
@@ -84,6 +84,6 @@ Physical GPU duration, driver-specific execution timing and final visual equival
 
 The COMPOSITING workspace offers a focused Color Review submode without adding a new workspace ID or an additional monitoring transport. Its scope selector admits only the current **Program A** or **confirmed Preview B** monitoring source. The shared `OperatorMonitoringViewModel` owns active source selection and separate bounded derived snapshots; switching sources clears previous scope data before any new sample can appear. The GPU surface routes a result only when source role, current frame sequence, dimensions and color description still match. Unmatched observations are discarded rather than repainted as current.
 
-The selected GPU path reuses the original 200 ms / 5 Hz latest-only compute budget and fixed-result transfer. The existing sampled CPU fallback uses that same cadence only for the selected currently confirmed stream when the GPU resource is absent or explicitly unavailable. No new decoder, per-frame analysis queue, full-frame Program readback or source/Program authority is introduced. The Color Review panel labels the **sampled frame sequence**, not the latest Program execution frame. A stale/missing source or incomplete color description never grants a vectorscope or HDR accuracy claim. Closing Color Review restores Program scope selection and the prior scope-enable state; compare modes remain display-only.
+The selected GPU path reuses the original 200 ms / 5 Hz latest-only compute budget and fixed **86,076-byte combined derived-result transfer**. The existing sampled CPU fallback uses that same cadence only for the selected currently confirmed stream when the GPU resource is absent or explicitly unavailable. No new decoder, per-frame analysis queue, full-frame Program readback or source/Program authority is introduced. The Color Review panel labels the **sampled frame sequence**, not the latest Program execution frame. A stale/missing source or incomplete color description never grants a vectorscope or HDR accuracy claim. Closing Color Review restores Program scope selection and the prior scope-enable state; compare modes remain display-only.
 
 The implementation is subject to exact-PR-head CI/Quality and real Windows UI validation. GPU adapter/DPI/display-specific visual equivalence and physical color calibration remain **UNVERIFIED** until qualified on reference hardware.

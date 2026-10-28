@@ -47,6 +47,13 @@ internal static class CompositingWorkspaceQualification
         Assert.Equal(4, scopes.Length);
         Assert.All(scopes, scope => Assert.Null(scope.Snapshot));
         Assert.Contains("COLOR EVIDENCE PENDING", color.ColorBasisLabel);
+        Assert.Null(color.SelectedSignalRange);
+        Assert.Contains("UNAVAILABLE", color.SignalRangeStatusLabel);
+        Assert.Contains("UNAVAILABLE", color.SignalRangeChannelsLabel);
+        Assert.Contains("Cb/Cr", color.SignalRangeChromaLabel);
+        Assert.Contains(Descendants(review).OfType<TextBlock>(), label =>
+            System.Windows.Data.BindingOperations.GetBinding(label, TextBlock.TextProperty)?.Path.Path ==
+                nameof(ColorReviewViewModel.SignalRangeStatusLabel));
         var gpuScopes = Assert.Single(Descendants(review).OfType<GpuScopeAnalysisSurface>());
         Assert.False(gpuScopes.AnalysisEnabled);
         var viewer = Assert.IsType<MonitorView>(review.FindName("ColorProgramMonitor"));
