@@ -100,7 +100,7 @@ public static class MediaQcEbuXml
 				new XAttribute("toolVersion", report.ToolVersion),
 				report.Results.Select(result => new XElement(R + "Outcome",
 					new XAttribute("checkId", result.Definition.Id),
-					new XAttribute("state", result.State.ToString().ToUpperInvariant()),
+					new XAttribute("state", FormatState(result.State)),
 					new XAttribute("severity", result.Severity),
 					new XAttribute("detail", result.Detail),
 					new XAttribute("source", result.EvidenceSource),
@@ -189,7 +189,7 @@ public static class MediaQcEbuXml
 			var outcome = outcomes[index];
 			var definition = profile.Checks[index];
 			if ((string?)outcome.Attribute("checkId") != definition.Id ||
-				!Enum.TryParse<MediaQcCheckState>((string?)outcome.Attribute("state"), true, out var state))
+				!TryParseState((string?)outcome.Attribute("state"), out var state))
 				throw new InvalidDataException("Invalid QC result identity/state.");
 			var confidence = (string?)outcome.Attribute("confidence");
 			var track = (string?)outcome.Attribute("track");
@@ -311,6 +311,28 @@ public static class MediaQcEbuXml
 		}
 		schemas.Compile();
 		return schemas;
+	}
+
+	private static string FormatState(MediaQcCheckState state) => state switch
+	{
+		MediaQcCheckState.NotExecuted => "NOT_EXECUTED",
+		MediaQcCheckState.Unsupported => "UNSUPPORTED",
+		MediaQcCheckState.Failed => "FAILED",
+		MediaQcCheckState.Pass => "PASS",
+		_ => throw new InvalidDataException("Invalid QC check state.")
+	};
+
+	private static bool TryParseState(string? value, out MediaQcCheckState state)
+	{
+		state = value switch
+		{
+			"NOT_EXECUTED" => MediaQcCheckState.NotExecuted,
+			"UNSUPPORTED" => MediaQcCheckState.Unsupported,
+			"FAILED" => MediaQcCheckState.Failed,
+			"PASS" => MediaQcCheckState.Pass,
+			_ => (MediaQcCheckState)(-1)
+		};
+		return Enum.IsDefined(state);
 	}
 
 	private static XElement ToolInformation(string version) => new(Q + "ToolInformation",
