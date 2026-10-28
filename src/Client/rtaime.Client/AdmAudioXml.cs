@@ -164,8 +164,10 @@ public static class AdmAudioXml
 			foreach (var contentId in contentIds)
 			{
 				connectedContent.Add(contentId);
-				foreach (var objectId in DirectRefs(groups["audioContent"][contentId], "audioObjectIDRef"))
-					ReachObject(objectId);
+				var objectIds = DirectRefs(groups["audioContent"][contentId], "audioObjectIDRef");
+				if (objectIds.Length == 0)
+					throw new InvalidDataException("ADM content has no linked audioObject.");
+				foreach (var objectId in objectIds) ReachObject(objectId);
 			}
 		}
 		if (connectedContent.Count != groups["audioContent"].Count ||
