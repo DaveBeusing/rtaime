@@ -320,7 +320,7 @@ public static class TimedTextInterchangeCodec
 		var end = endText is not null ? checked(parentBegin + ParseTime(endText, rate))
 			: durText is not null ? checked(start + ParseTime(durText, rate))
 			: parentEnd;
-		if (start < parentBegin || end > parentEnd || start >= end || end > TimeSpan.TicksPerDay)
+		if (start < parentBegin || end > parentEnd || start >= end || end >= TimeSpan.TicksPerDay)
 			throw new InvalidDataException("Nested Timed Text interval is outside the parent timing window.");
 		var language = Attribute(element, XNamespace.Xml + "lang") ?? parentLanguage;
 		var region = Attribute(element, "region") ?? parentRegion;
