@@ -7,7 +7,7 @@
 The production integration gateway is a post-V1 optional capability implemented by the standalone `rtaime.IntegrationHost` process. It is a client of Production Authority, never Production Authority itself.
 
 ```text
-OSC / MIDI / GPI / Companion-style clients
+OSC / MIDI / GPI / Companion / NMOS observer and virtual test clients
                  |
                  v
         rtaime.IntegrationHost
@@ -33,9 +33,10 @@ OSC / MIDI / GPI / Companion-style clients
 | MIDI on Windows | Implemented | WinMM short messages for Note On/Off, Control Change and Program Change; deterministic virtual backend for CI; reconnect loop |
 | GPIO/GPI-style discrete control | Implemented reference boundary | deterministic virtual provider, edge/state input, output/tally, polarity; physical device drivers are not qualified |
 | Companion / Stream Deck-friendly HTTP | Implemented, **loopback only** | bearer-authenticated HTTP action surface plus WebSocket feedback; plaintext remote binding is rejected; use only through a separately qualified secure local bridge |
-| NMOS IS-04 / IS-05 | **UNVERIFIED / future** | no NMOS discovery, registry or connection-management implementation is claimed |
+| NMOS IS-04 v1.3.3 | **Read-only registry Query implemented**; virtual Node/Registration test | Six bounded, validated Query collections and stale registry recovery. Real producer/receiver adoption and external conformance UNVERIFIED |
+| NMOS IS-05 v1.2.0 | **Virtual disabled-only single/bulk REST** | Real RTP/SDP/scheduled activation UNAVAILABLE until provider admission and ControlHost prepare/commit |
 
-Physical GPIO device matrices, device-specific MIDI quirks and NMOS conformance are outside this capability until separately implemented and qualified.
+Physical GPIO device matrices, device-specific MIDI quirks and complete AMWA NMOS conformance remain UNVERIFIED. Only the precise software behaviours listed above are implemented.
 
 ## Command model
 
@@ -111,11 +112,11 @@ Bearer tokens and certificate passwords are referenced by environment-variable n
 
 OSC UDP and Companion HTTP/WebSocket are unauthenticated-at-network-layer or bearer-over-HTTP protocols. Configuring either to listen on non-loopback IPv4, IPv6 or wildcard addresses fails at validation, including direct adapter construction. An empty OSC sender allowlist defaults to **loopback sources only**. Companion HTTP enforces bounded request size and bounded Kestrel connections. Do not bind unencrypted adapters through a publicly exposed proxy without independent TLS, client authorization, anti-replay policy, firewall and monitoring qualification. The security review and remaining EBU R 143 v3.0 P1/P2 controls are tracked in [BroadcastSecurityR143Assessment.md](BroadcastSecurityR143Assessment.md).
 
-The schema remains version `1.0`; existing remote listener configurations must migrate to local binding and a separately qualified secure bridge/tunnel. NMOS IS-04/IS-05, ST 2110 control, and web-graphics adapters are not present and must remain fail-closed/disabled until explicitly implemented and qualified.
+The schema remains version `1.0`; existing remote listener configurations must migrate to local binding and a separately qualified secure bridge/tunnel. The NMOS adapter adds read-only IS-04 registry discovery and loopback-only virtual IS-05 disabled-state testing, but ST 2110 media, external activation and web-graphics adapters remain unavailable and fail-closed.
 
 ## NMOS path
 
-Future NMOS work belongs in the same outer adapter boundary. IS-04 discovery/registry and IS-05 connection management may translate qualified external state into bounded gateway triggers or observational feedback, but they must not introduce a second Production Authority. Until a dedicated adapter and conformance evidence exist, NMOS remains **UNVERIFIED**.
+An optional NMOS adapter exists within the same outer IntegrationHost boundary and is configured only when explicitly enabled. Its default `observer` profile polls an authorized, version-pinned IS-04 Query endpoint and exposes bounded read-only topology snapshots; it does not synthesize local ST 2110 capabilities or mutate ControlHost state. The `virtualInterop` mode is available only with testMode + dryRun and loopback APIs; it serves disabled Sender/Receiver synthetic fixtures, bounded Node registration/heartbeat, and IS-05 single/bulk disabled-only staging. Real SDP, RTP, scheduled activation, PTP clock and complete NMOS conformance remain **UNVERIFIED/UNAVAILABLE**. See [NmosDiscoveryAndConnectionManagement.md](NmosDiscoveryAndConnectionManagement.md) for exact versions, tests, security and deployment constraints.
 
 
 ## Production Macro trigger mapping
