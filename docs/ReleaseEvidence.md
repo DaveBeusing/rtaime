@@ -374,3 +374,22 @@ repository administration, bind known-issues/security assessments and obtain all
 five exact-source Required Gates and mandated self-hosted physical evidence.
 Only the established Stable readiness/release pipeline can evaluate release
 eligibility and trusted publication. No software evidence collector promotes DEV.
+
+
+## Broadcast interoperability report — supplemental software scope
+
+The [Broadcast Interoperability Qualification](BroadcastInteroperabilityQualification.md)
+adds a source-bound EBU/SMPTE/AMWA requirement matrix, controlled device
+profiles, allowlisted managed signal tests and TRX verification. It does
+not add a new physical qualification type, change the twelve existing
+hardware requirements, rewrite qualification-evidence-manifest.json or
+create a COMPLIANCE=PASS claim. Signed ReleaseEvidence remains the
+authoritative product/artifact evidence contract.
+
+The independent release-readiness index can consume a verified exact-source
+broadcast report and its TRX files; only named **software** requirements can
+be mapped from QUALIFIED to software PASS. Real NIC/switch/PTP,
+UHD/HDR/SDI, NMOS and external receiver requirements remain UNVERIFIED.
+An invalid report or tampered/missing evidence becomes a FAIL domain.
+No report creates a Stable signing entitlement, support designation,
+new release stage, EBU certification or automatic publication.
