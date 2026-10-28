@@ -580,6 +580,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		if (output is null) return Unavailable;
 		if (string.Equals(output.Protocol, "NDI", StringComparison.OrdinalIgnoreCase))
 			return "NDI High Bandwidth · 48 kHz Float32; encoded bitrate UNAVAILABLE";
+        if (string.Equals(output.Protocol, "St2110", StringComparison.OrdinalIgnoreCase))
+            return "ST 2110 software loopback · RFC 4175 4:2:2 10-bit / L24 48 kHz; NIC and sender shaping UNVERIFIED";
 		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + " +
 			$"{output.AudioBitRate / 1_000d:0} kb/s AAC (configured)";
 	}
@@ -614,10 +616,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			var state = TransmissionStateForRoleTarget(role, target, connected, stale, now);
 			var age = target.LastSuccessfulSendUtc is { } sent && now >= sent
 				? $"{(now - sent).TotalSeconds:0.#} s" : "UNKNOWN";
-			var codec = target.Protocol == "NDI"
-				? "NDI High Bandwidth / Float32 · bitrate, peer latency UNAVAILABLE"
-				: $"{target.VideoCodec}/{target.AudioCodec} · configured " +
-					$"{target.VideoBitRate / 1_000_000d:0.##} Mb/s video · {target.LatencyMilliseconds} ms SRT latency";
+			var codec = string.Equals(target.Protocol, "St2110", StringComparison.OrdinalIgnoreCase)
+                ? "ST 2110 software loopback · YCbCr422 10-bit / PCM24 · ST 2110-21 and hardware PTP UNVERIFIED"
+                : target.Protocol == "NDI"
+                    ? "NDI High Bandwidth / Float32 · bitrate, peer latency UNAVAILABLE"
+                    : $"{target.VideoCodec}/{target.AudioCodec} · configured " +
+                        $"{target.VideoBitRate / 1_000_000d:0.##} Mb/s video · {target.LatencyMilliseconds} ms SRT latency";
 			var failure = target.Failure is { } reason ? $" · {reason.Code}: {reason.Message}" : string.Empty;
 			var rateKey = role.RoleId + ":" + target.TargetId;
 			var rate = state == "LIVE" && measuredSenderRates is not null &&
