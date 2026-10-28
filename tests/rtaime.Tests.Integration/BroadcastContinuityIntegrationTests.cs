@@ -134,6 +134,31 @@ public sealed class BroadcastContinuityIntegrationTests
 	}
 
 	[Fact]
+	public void Video_or_pcm_position_regression_is_an_incident_not_a_runtime_observer_exception()
+	{
+		using var test = CreateFixture();
+		var (plan, sink) = test.Plan();
+		var tracker = new RuntimeBroadcastContinuityTracker();
+		tracker.ConfirmCommittedExecution(plan, 1, sink);
+		tracker.ObserveComplete("program", 12, 12_000);
+		tracker.ObserveComplete("program", 11, 13_000);
+		var video = tracker.ForRole("program")!;
+		Assert.Equal(BroadcastContinuityPhase.Failed, video.Phase);
+		Assert.Equal("runtime.continuity.video_regression", video.IncidentCode);
+		Assert.Equal(12UL, video.LastCompleteFrameSequence);
+		tracker.ObserveComplete("program", 13, 13_000);
+		Assert.Equal(BroadcastContinuityPhase.RecoveredAwaitingRearm,
+			tracker.ForRole("program")!.Phase);
+		tracker.ObserveComplete("program", 14, 12_999);
+		var audio = tracker.ForRole("program")!;
+		Assert.Equal(BroadcastContinuityPhase.Failed, audio.Phase);
+		Assert.Equal("runtime.continuity.audio_regression", audio.IncidentCode);
+		Assert.Equal(13UL, audio.LastCompleteFrameSequence);
+		Assert.Equal(13_000UL, audio.LastCompleteAudioSamplePosition);
+		Assert.Equal(2, tracker.RecentIncidents.Count);
+	}
+
+	[Fact]
 	public void New_control_committed_source_or_sink_revokes_old_last_complete_evidence()
 	{
 		using var test = CreateFixture();
