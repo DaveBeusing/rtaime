@@ -77,7 +77,8 @@ public sealed partial class MediaPoolInspectorViewModel
 		try
 		{
 			var snapshot = await _admStore.LoadAsync(selected);
-			if (snapshot is null || _admDisposed || generation != _admSelectionGeneration)
+			if (snapshot is null || _admDisposed || _admBusy ||
+				generation != _admSelectionGeneration)
 				return;
 			if (!TryGetAdmAsset(out var current) ||
 				current.AssetId != selected.AssetId ||
@@ -87,7 +88,8 @@ public sealed partial class MediaPoolInspectorViewModel
 		}
 		catch (Exception error) when (error is IOException or
 			UnauthorizedAccessException or ArgumentException or
-			InvalidOperationException or System.Xml.XmlException or FormatException)
+			InvalidOperationException or System.Xml.XmlException or
+			System.Text.Json.JsonException or NotSupportedException or FormatException)
 		{
 			if (!_admDisposed && generation == _admSelectionGeneration)
 				AdmStatus = "ADM sidecar cannot be validated for this file: " +
