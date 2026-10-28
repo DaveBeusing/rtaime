@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
@@ -46,15 +47,15 @@ internal sealed class RuntimeBroadcastContinuityTracker
 	/// or abandoned commit leaves all previously confirmed source and incident data intact.
 	/// A same-identity resync or unrelated Control revision does not clear a latched recovery incident.
 	/// </summary>
-	public void ConfirmCommittedExecution(PreparedExecutionContract prepared, ulong executionRevision)
+	public void ConfirmCommittedExecution(PreparedExecutionContract prepared, ulong executionRevision, MediaSinkId programSinkId)
 	{
 		ArgumentNullException.ThrowIfNull(prepared);
 		if (executionRevision == 0)
 			throw new InvalidDataException("Continuity admission requires a committed execution revision.");
 		var candidates = new Dictionary<string, Role>(StringComparer.Ordinal);
-		foreach (var binding in prepared.Bindings.Where(x => x.OutputRoleId is "program" or "aux"))
+		foreach (var binding in prepared.Bindings.Where(x => x.OutputRoleId is "program" or "aux" || x.MediaSinkId == programSinkId))
 		{
-			var roleId = binding.OutputRoleId!;
+			var roleId = binding.MediaSinkId == programSinkId ? "program" : binding.OutputRoleId!;
 			if (binding.MediaSourceId is null || binding.MediaSinkId is null || candidates.ContainsKey(roleId))
 				throw new InvalidDataException("Committed continuity role requires one unique real source and sink binding.");
 			var policy = BroadcastFailurePolicy.Conservative(roleId);
