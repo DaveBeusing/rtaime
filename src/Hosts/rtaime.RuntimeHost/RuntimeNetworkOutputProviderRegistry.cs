@@ -3,6 +3,7 @@
 using rtaime.Provider.Contracts;
 using rtaime.Provider.Ndi;
 using rtaime.Provider.Srt;
+using rtaime.Provider.St2110;
 
 namespace rtaime.RuntimeHost;
 
@@ -16,13 +17,16 @@ internal sealed class RuntimeNetworkOutputProviderRegistry : IRuntimeNetworkOutp
 {
 	private readonly SrtNetworkOutputProvider _srt;
 	private readonly NdiNetworkOutputProvider _ndi;
+	private readonly St2110NetworkOutputProvider _st2110;
 
 	public RuntimeNetworkOutputProviderRegistry(
 		SrtNetworkOutputProvider? srt = null,
-		NdiNetworkOutputProvider? ndi = null)
+		NdiNetworkOutputProvider? ndi = null,
+        St2110NetworkOutputProvider? st2110 = null)
 	{
 		_srt = srt ?? new SrtNetworkOutputProvider();
 		_ndi = ndi ?? new NdiNetworkOutputProvider();
+        _st2110 = st2110 ?? new St2110NetworkOutputProvider();
 	}
 
 	public INetworkOutputSession CreateSession(RuntimeNetworkOutputTarget target)
@@ -34,6 +38,7 @@ internal sealed class RuntimeNetworkOutputProviderRegistry : IRuntimeNetworkOutp
 				target.Configuration,
 				Environment.GetEnvironmentVariable("RTAIME_SRT_LIBRARY_PATH")),
 			NetworkOutputProtocolFamily.Ndi => _ndi.CreateSession(target.Configuration),
+            NetworkOutputProtocolFamily.St2110 => _st2110.CreateSession(target.Configuration),
 			_ => throw new NotSupportedException($"Unsupported network-output protocol '{target.Configuration.Protocol}'.")
 		};
 	}
@@ -53,6 +58,7 @@ internal sealed class RuntimeNetworkOutputProviderRegistry : IRuntimeNetworkOutp
 			{
 				NetworkOutputProtocolFamily.Srt => _srt.Descriptor,
 				NetworkOutputProtocolFamily.Ndi => _ndi.Descriptor,
+                NetworkOutputProtocolFamily.St2110 => _st2110.Descriptor,
 				_ => throw new NotSupportedException($"Unsupported network-output protocol '{protocol}'.")
 			});
 		}
