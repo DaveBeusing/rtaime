@@ -90,15 +90,15 @@ public static class MediaQcFileInspector
 				scanned.HasMoov && (scanned.VideoTracks < 1 ||
 					(asset.AudioCodec != MediaAudioCodec.None && scanned.AudioTracks < 1)) ? 7 : 0,
 				scanned.HasMoov && !scanned.LimitExceeded ? 1 : null),
-			Result(3, scanned.LimitExceeded || scanned.TimeToSampleTables == 0 ||
-				scanned.TimeToSampleTables < scanned.VideoTracks
+			Result(3, scanned.LimitExceeded || scanned.VideoTimeToSampleTables == 0 ||
+				scanned.VideoTimeToSampleTables < scanned.VideoTracks
 				? MediaQcCheckState.Unsupported :
 				scanned.InvalidTimeToSample ? MediaQcCheckState.Failed : MediaQcCheckState.Pass,
-				scanned.TimeToSampleTables == 0
-					? "No time-to-sample table; decode timestamp monotonicity not established." :
-					$"Validated {scanned.TimeToSampleTables} stts tables (positive decode deltas); presentation timestamps, CTTS and edit lists remain unverified.",
+				scanned.VideoTimeToSampleTables == 0
+					? "No video time-to-sample table; decode timestamp monotonicity not established." :
+					$"Validated {scanned.VideoTimeToSampleTables} video stts tables (positive decode deltas); presentation timestamps, CTTS and edit lists remain unverified.",
 				scanned.InvalidTimeToSample ? 5 : 0,
-				scanned.LimitExceeded || scanned.TimeToSampleTables == 0 ? null : 1),
+				scanned.LimitExceeded || scanned.VideoTimeToSampleTables == 0 ? null : 1),
 			Result(4, !scanned.HasMoov || scanned.LimitExceeded
 				? MediaQcCheckState.Unsupported :
 				scanned.HasMovieHeader && scanned.SampleTables >= scanned.VideoTracks && scanned.VideoTracks > 0
@@ -195,7 +195,12 @@ public static class MediaQcFileInspector
 		public int AudioTracks { get; private set; }
 		public int SampleTables { get; private set; }
 		public int TimeToSampleTables { get; private set; }
-		private sealed class Track { public string Handler = ""; }
+		public int VideoTimeToSampleTables { get; private set; }
+		private sealed class Track
+		{
+			public string Handler = "";
+			public int TimeToSampleTables;
+		}
 
 		public static BmffStructure Inspect(Stream stream, CancellationToken cancellationToken)
 		{
@@ -252,12 +257,19 @@ public static class MediaQcFileInspector
 					track.Handler = System.Text.Encoding.ASCII.GetString(handler[8..12]);
 				}
 				if (type == "stts" && track is not null)
+				{
 					ReadTimeToSample(file, contentStart, boxEnd, cancellationToken);
+					if (!Truncated && !LimitExceeded) track.TimeToSampleTables++;
+				}
 				if (type == "trak")
 				{
 					var nextTrack = new Track();
 					Scan(file, contentStart, boxEnd, depth + 1, nextTrack, cancellationToken);
-					if (nextTrack.Handler == "vide") VideoTracks++;
+					if (nextTrack.Handler == "vide")
+					{
+						VideoTracks++;
+						VideoTimeToSampleTables += nextTrack.TimeToSampleTables;
+					}
 					else if (nextTrack.Handler == "soun") AudioTracks++;
 				}
 				else if (type is "moov" or "mdia" or "minf" or "stbl")
