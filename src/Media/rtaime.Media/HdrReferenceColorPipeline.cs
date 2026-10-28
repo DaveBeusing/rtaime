@@ -29,8 +29,8 @@ public static class HdrReferenceColorPipeline
             throw new ArgumentException("Native HDR payload must have the exact bounded plane extent.", nameof(source));
 
         var pixels = new float[checked((int)((long)layout.Width * layout.Height * 4L))];
-        for (var y = 0; y < layout.Height; y++)
-        for (var x = 0; x < layout.Width; x++)
+        for (uint y = 0; y < layout.Height; y++)
+        for (uint x = 0; x < layout.Width; x++)
         {
             var yCode = ReadSample(source, layout.Planes[0], x, y);
             var cbCode = ReadSample(source, layout.Planes[1], x / 2, y);
@@ -121,7 +121,7 @@ public static class HdrReferenceColorPipeline
         ArgumentNullException.ThrowIfNull(policy);
         if (!frame.SourceMetadata.IsAuthoritativeHlg422)
             throw new NotSupportedException("An authoritative HLG source is required for an explicit SDR preview.");
-        var output = new byte[checked(frame.Width * frame.Height * 4)];
+        var output = new byte[checked((int)((long)frame.Width * frame.Height * 4))];
         var input = frame.LinearRgba.Span;
         var exposure = Math.Pow(2.0, policy.ExposureStops);
         for (var i = 0; i < input.Length; i += 4)
