@@ -56,6 +56,28 @@ public sealed class MediaReferenceClockAdmissionTests
 	}
 
 	[Fact]
+	public async Task Runtime_only_accepts_source_matched_provider_clock_facts_not_virtual_hardware_claims()
+	{
+		var (runtime, _, _) = MakeFixture();
+		await using (runtime)
+		{
+			var provider = new rtaime.Runtime.VirtualMediaReferenceClock();
+			var now = DateTimeOffset.UtcNow;
+			provider.ObserveSync(TimeSpan.Zero, now, "0011223344556677", 1, 0);
+			runtime.ObserveReferenceClock(provider, TimeSpan.FromSeconds(1), now.AddSeconds(1));
+			var observation = runtime.Snapshot.ClockReference;
+			Assert.NotNull(observation);
+			Assert.Equal(MediaReferenceClockSource.Virtual, observation.Source);
+			Assert.Equal(MediaReferenceLockState.Locked, observation.LockState);
+			Assert.Equal(MediaReferenceEvidence.Simulated, observation.Evidence);
+			Assert.Equal(observation.EpochId, runtime.ReferenceClock.EpochId);
+			runtime.ConfigureReferenceClockRequirement(MediaReferenceClockRequirement.HardwareLocked);
+			Assert.False(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.HardwareLocked,
+				observation, now.AddSeconds(1)));
+		}
+	}
+
+		[Fact]
 	public void Runtime_options_reject_invalid_external_clock_requirement_without_changing_defaults()
 	{
 		var baseline = RuntimeHostProcessOptions.Load([], _ => null);
