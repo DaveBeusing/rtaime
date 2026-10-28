@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Operator;
