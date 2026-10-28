@@ -1,5 +1,6 @@
-// Copyright (c) Dave Beusing System.IO;
-using <david.beusing@gmail.com>.
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+using System.IO;
 
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
