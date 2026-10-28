@@ -84,7 +84,7 @@ public sealed record BroadcastContinuitySnapshot(
 	{
 		if (RoleId is not ("program" or "aux") || !Enum.IsDefined(ConfiguredAction) ||
 			!Enum.IsDefined(Phase) || !Guid.TryParse(AuthorityStateId, out var id) || id == Guid.Empty ||
-			AuthorityRevision == 0 || RuntimeExecutionRevision == 0)
+			RuntimeExecutionRevision == 0)
 			throw new InvalidDataException("Continuity observation has invalid role, authority identity or execution revision.");
 		if (HasQualifiedFallbackDelivery)
 			throw new InvalidDataException("No qualified hold/mute/slate fallback provider exists in this release.");
@@ -92,7 +92,7 @@ public sealed record BroadcastContinuitySnapshot(
 			(IncidentGeneration != 0 && !string.IsNullOrWhiteSpace(IncidentCode) && IncidentStartedAtUtc.HasValue))
 			throw new InvalidDataException("Latched incidents must carry generation, failure code and UTC origin.");
 		if (IncidentCode is { Length: > 96 } || IncidentDetail is { Length: > 256 } ||
-			IncidentStartedAtUtc is { Offset: not TimeSpan.Zero })
+			IncidentStartedAtUtc.HasValue && IncidentStartedAtUtc.Value.Offset != TimeSpan.Zero)
 			throw new InvalidDataException("Continuity incident provenance exceeds its bounded record.");
 	}
 }
