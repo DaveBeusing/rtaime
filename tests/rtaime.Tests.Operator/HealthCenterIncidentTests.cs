@@ -401,6 +401,22 @@ public sealed class HealthCenterIncidentTests
 	}
 
 		[Fact]
+	public void Structured_log_failure_does_not_suppress_persistent_alarm_notification()
+	{
+		var provider = new TestProvider(Snapshot("audio", SubsystemHealthState.Failed, SubsystemProgramImpact.Degraded));
+		var notifications = new NotificationService(() => Start);
+		using var readiness = new RuntimeReadinessService(() => Start);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), new QueuedContext(),
+			notifications: notifications,
+			logAlarmTransition: _ => throw new InvalidOperationException("log endpoint unavailable"),
+			clock: () => Start);
+
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.Equal("FAILED", model.SelectedSubsystem!.State);
+		Assert.True(model.AcknowledgeAlarmCommand.CanExecute(null));
+	}
+
+		[Fact]
 	public void Telemetry_delivery_failure_is_fail_open_for_health_presentation()
 	{
 		var provider = new TestProvider(Snapshot("output", SubsystemHealthState.Degraded, SubsystemProgramImpact.MonitoringOnly));
