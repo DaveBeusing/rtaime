@@ -1,4 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using rtaime.Core;
@@ -114,6 +115,8 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
     private int _maximumQueue;
     private uint _videoSequence;
     private readonly St2110PcmRtpPacketizer _pcm;
+    private readonly St2110SoftwareTrafficMonitor _traffic = new();
+    private readonly long _trafficStart = Stopwatch.GetTimestamp();
     private ulong? _lastQueuedFrame;
 
     public St2110NetworkOutputSession(NetworkOutputConfiguration configuration,
@@ -133,6 +136,7 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
     }
 
     public NetworkOutputConfiguration Configuration => _configuration;
+    public St2110SoftwareTrafficSnapshot TrafficShape => _traffic.Snapshot;
 
     public NetworkOutputHealthSnapshot Snapshot
     {
@@ -244,7 +248,7 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
                         if (length != packet.Length)
                             throw new IOException("Video RTP datagram was not fully submitted.");
                         _videoSequence = unchecked(_videoSequence + 1);
-                        ObservePacket(length);
+                        ObservePacket(length, video: true);
                     }
                     var pcmPackets = _pcm.Packetize(sample.Audio,
                         sample.AudioTiming.SamplePosition);
@@ -254,7 +258,7 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
                             .ConfigureAwait(false);
                         if (length != packet.Length)
                             throw new IOException("Audio RTP datagram was not fully submitted.");
-                        ObservePacket(length);
+                        ObservePacket(length, video: false);
                     }
                     lock (_gate)
                     {
@@ -326,8 +330,9 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
         }
     }
 
-    private void ObservePacket(int bytes)
+    private void ObservePacket(int bytes, bool video)
     {
+        _traffic.Observe(video, bytes, Stopwatch.GetElapsedTime(_trafficStart));
         lock (_gate)
         {
             _packets++;
