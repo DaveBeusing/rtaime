@@ -20,7 +20,7 @@ We introduce a **versioned provider-observation contract** in
 `Media.Contracts` and `Provider.Contracts`. A provider publishes
 `MediaReferenceClockObservation` with source, identity, domain, clock
 epoch, lock state, evidence class, optionally GM/domain, monotonic
-holdover elapsed, source-measured offset/drift and last sync time.
+holdover elapsed, source-measured offset/drift, last sync time and an independent `TimeQuality` state; hardware LOCKED requires `Traceable` and hardware HOLDOVER requires `Holdover`.
 
 - `ControlHost` **alone** authorizes production changes. RuntimeHost
   evaluates its opt-in synchronized reference requirement before
