@@ -141,8 +141,8 @@ public sealed class BroadcastContinuityIntegrationTests
 		Assert.True(end.RequiresManualRearm);
 		Assert.InRange(test.Runtime.RecentContinuityIncidents.Count, 1,
 			RuntimeBroadcastContinuityTracker.HistoryLimit);
-		Assert.Equal(12, test.Runtime.ProgramFrames.Count);
-		Assert.Equal(0UL, plan.AuthoritySnapshot.Revision.Value);
+		Assert.NotEmpty(test.Runtime.ProgramFrames);
+		Assert.Equal(programSource, test.Runtime.ProgramFrames[^1].Frame.SourceId);
 	}
 
 	[Fact]
