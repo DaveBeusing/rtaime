@@ -130,7 +130,7 @@ public sealed class ProgrammeLoudnessAnalyzer
 		var integrated = Integrated(out var relativeGate);
 		var range = _completedSlices >= 300 && integrated.HasValue
 			? LoudnessRange(integrated.Value - 20.0) : null;
-		var truePeak = _truePeak > 0 ? 20 * Math.Log10(_truePeak) : (double?)null;
+		var truePeak = _firCount == FirTaps && _truePeak > 0 ? 20 * Math.Log10(_truePeak) : (double?)null;
 		var state = _discontinuity ? "UNVERIFIED" :
 			_completedSlices < 4 ? "WARMING" :
 			!integrated.HasValue ? "SILENCE" : "CURRENT";
@@ -325,6 +325,8 @@ public sealed class ProgrammeLoudnessAnalyzer
 			var output = b0 * input + _z1;
 			_z1 = b1 * input - a1 * output + _z2;
 			_z2 = b2 * input - a2 * output;
+			if (Math.Abs(_z1) < 1e-25) _z1 = 0;
+			if (Math.Abs(_z2) < 1e-25) _z2 = 0;
 			return output;
 		}
 	}
