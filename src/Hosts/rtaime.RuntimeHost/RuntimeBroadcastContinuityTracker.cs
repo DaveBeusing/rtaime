@@ -127,7 +127,8 @@ internal sealed class RuntimeBroadcastContinuityTracker
 			role.IncidentCode = code;
 			role.IncidentDetail = detail.Length <= 256 ? detail : detail[..256];
 			role.IncidentAt = DateTimeOffset.UtcNow;
-			_incidents.Enqueue(Read(role) with { Phase = BroadcastContinuityPhase.Failed });
+			role.Phase = BroadcastContinuityPhase.Failed;
+			_incidents.Enqueue(Read(role));
 			while (_incidents.Count > HistoryLimit) _incidents.Dequeue();
 		}
 		role.Phase = BroadcastContinuityPhase.Failed;
