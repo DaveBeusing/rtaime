@@ -19,6 +19,9 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 	private readonly bool _testMode;
 	private readonly bool _dryRun;
 	private readonly HttpClient _http;
+	private readonly bool _ownsHttp;
+	private readonly NmosRegistryDiscoveryClient? _discovery;
+	private long _observationGeneration;
 	private CancellationTokenSource? _lifetime;
 	private Task? _worker;
 	private WebApplication? _application;
@@ -26,7 +29,6 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 	private readonly NmosVirtualResources? _resources;
 	private readonly NmosVirtualConnections? _connections;
 	private NmosTopologySnapshot _topology;
-	private ulong _failureGeneration;
 
 	public NmosIntegrationAdapter(IntegrationAdapterOptions adapter, IntegrationGatewayOptions gateway, HttpClient? http = null)
 		: base(adapter.Id, IntegrationAdapterKind.Nmos, adapter.Required)
@@ -35,10 +37,13 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 		_testMode = gateway.TestMode;
 		_dryRun = gateway.DryRun;
 		_options.Validate(_testMode, _dryRun);
+		_ownsHttp = http is null;
 		_http = http ?? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
 		{
 			Timeout = TimeSpan.FromMilliseconds(_options.RequestTimeoutMs)
 		};
+		if (_options.Mode == NmosOperatingMode.Observer)
+			_discovery = new NmosRegistryDiscoveryClient(_http, _options);
 		_topology = NmosTopologySnapshot.Unavailable(_options.QueryApiUrl ?? "", 0,
 			"UNAVAILABLE", "NMOS discovery has not started.");
 		if (_options.Mode == NmosOperatingMode.VirtualInterop)
@@ -139,7 +144,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 				failures = Math.Min(5, failures + 1);
 				if (_options.Mode == NmosOperatingMode.Observer)
 				{
-					var generation = ++_failureGeneration;
+					var generation = NextObservationGeneration();
 					Volatile.Write(ref _topology, NmosTopologySnapshot.Unavailable(
 						_options.QueryApiUrl!, generation, "STALE",
 						"Registry query failed; prior resources cannot be used as live capability evidence."));
@@ -154,9 +159,8 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 	{
 		try
 		{
-			var snapshot = await new NmosRegistryDiscoveryClient(_http, _options)
-				.ReadAsync(cancellationToken).ConfigureAwait(false);
-			Volatile.Write(ref _topology, snapshot);
+			var snapshot = await _discovery!.ReadAsync(cancellationToken).ConfigureAwait(false);
+			Volatile.Write(ref _topology, snapshot with { ObservationGeneration = NextObservationGeneration() });
 			SetHealth(IntegrationAdapterState.Healthy,
 				$"IS-04 v1.3 read-only discovery: {snapshot.Resources.Count} validated remote entries; no local RTP provider admitted.");
 		}
@@ -164,7 +168,7 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 		catch (Exception)
 		{
 			Volatile.Write(ref _topology, NmosTopologySnapshot.Unavailable(
-				_options.QueryApiUrl!, ++_failureGeneration, "STALE",
+				_options.QueryApiUrl!, NextObservationGeneration(), "STALE",
 				"Discovery failed; previously observed resources have been invalidated."));
 			SetHealth(IntegrationAdapterState.Degraded,
 				"NMOS Query API is unavailable or returned invalid resources; no topology admission.");
@@ -327,14 +331,21 @@ public sealed class NmosIntegrationAdapter : IntegrationAdapterBase
 		}
 		_registration = null;
 		Volatile.Write(ref _topology, NmosTopologySnapshot.Unavailable(
-			_options.QueryApiUrl ?? "", ++_failureGeneration, "STOPPED", "NMOS observation stopped."));
+			_options.QueryApiUrl ?? "", NextObservationGeneration(), "STOPPED", "NMOS observation stopped."));
 		lifetime.Dispose();
 		SetHealth(IntegrationAdapterState.Stopped, "NMOS adapter stopped; no active media connection.");
 	}
 
+	private ulong NextObservationGeneration() => checked((ulong)Interlocked.Increment(ref _observationGeneration));
+
+	internal Task RefreshNowForQualificationAsync(CancellationToken cancellationToken) =>
+		_options.Mode == NmosOperatingMode.Observer
+			? RefreshDiscoveryAsync(cancellationToken)
+			: Task.CompletedTask;
+
 	public override async ValueTask DisposeAsync()
 	{
 		await StopAsync(CancellationToken.None).ConfigureAwait(false);
-		_http.Dispose();
+		if (_ownsHttp) _http.Dispose();
 	}
 }
