@@ -26,7 +26,7 @@ wall-clock PTP lock.
   `Unverified/Simulated/HardwareQualified`;
 - optional PTP `domainNumber` (0..127) and exact 16-hex GM identity;
 - provider observation time and last physical/simulated synchronization
-  time in UTC, measured offset in nanoseconds, drift in ppb;
+  time in UTC, measured offset in nanoseconds, drift in ppb and explicit `TimeQuality` (`Unverified`, `Simulated`, `Traceable`, `Holdover`);
 - bounded holdover duration and maximum, provenance/diagnostic detail.
 
 All untrusted values are bounded and validated. Invalid or absent
@@ -89,7 +89,7 @@ physical clock. It exercises:
 A virtual `LOCKED` never passes `HardwareLocked` admission because
 its evidence is `Simulated`, not `HardwareQualified`.
 `MediaReferenceAdmission` also requires a current provider observation
-(maximum three seconds old), source evidence, actual last sync and a
+(maximum three seconds old), source evidence, matching time quality (`Traceable` for `Locked`, `Holdover` for qualified finite holdover), actual last sync and a
 valid matching lock or allowed bounded holdover. A real hardware
 adapter must independently qualify these facts.
 
