@@ -115,7 +115,8 @@ public sealed class VirtualMediaReferenceClock : IMediaReferenceClockProvider
 				MediaReferenceLockState.Holdover => "Synthetic GM lost; testing finite holdover.",
 				MediaReferenceLockState.Lost => "Synthetic holdover expired; reference lost.",
 				_ => "No virtual reference lock has been observed in this epoch."
-			});
+			},
+			MediaReferenceTimeQuality.Simulated);
 		result.Validate();
 		return result;
 	}
