@@ -85,7 +85,7 @@ public sealed record TimedTextCue(
 			string.IsNullOrWhiteSpace(Text) || Text.Length > 1024 ||
 			Text.Count(character => character == '\n') >= 8 ||
 			Text.Any(character => char.IsControl(character) && character != '\n') ||
-			BeginTicks < 0 || EndTicks <= BeginTicks || EndTicks > TimeSpan.TicksPerDay)
+			BeginTicks < 0 || EndTicks <= BeginTicks || EndTicks >= TimeSpan.TicksPerDay)
 			throw new InvalidDataException("Timed Text cue identity, language, text or timing is invalid.");
 	}
 }
