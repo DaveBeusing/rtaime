@@ -117,7 +117,7 @@ public sealed class HdrReferenceColorPipelineTests
         Assert.Equal(Timing, mixed.Timing);
         Assert.InRange(mixed.LinearRgba.Span[0], 0.2999f, 0.3001f);
         Assert.Equal(1f, mixed.LinearRgba.Span[3]);
-        Assert.InRange(mixed.LinearRgba.Span[9], 0.2499f, 0.2501f);
+        Assert.InRange(mixed.LinearRgba.Span[5], 0.2499f, 0.2501f);
 
         var stale = new HdrReferenceLinearFrame(2, 1,
             new FrameTiming(18, 18, new Timebase(1, 50)), Hlg(), upper.LinearRgba.Span);
