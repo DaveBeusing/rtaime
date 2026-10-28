@@ -900,8 +900,13 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				observation.EpochId == _clockReference.EpochId &&
 				(observation.ObservedAtUtc < _clockReference.ObservedAtUtc ||
 				 observation.GrandmasterId != _clockReference.GrandmasterId ||
-				 observation.ClockDomainId != _clockReference.ClockDomainId))
-				throw new InvalidOperationException("Clock reference regressed or changed grandmaster/domain without a new epoch.");
+				 observation.ClockDomainId != _clockReference.ClockDomainId ||
+				 observation.PtpDomain != _clockReference.PtpDomain ||
+				 (_clockReference.LastSyncAtUtc is { } previousSync &&
+				 observation.LastSyncAtUtc is { } newSync && newSync < previousSync) ||
+				 (_clockReference.LockState == MediaReferenceLockState.Lost &&
+				  observation.LockState is MediaReferenceLockState.Locked or MediaReferenceLockState.Holdover)))
+				throw new InvalidOperationException("Clock reference regressed or recovered/rebound without a new epoch.");
 			_clockReference = observation;
 		}
 	}
