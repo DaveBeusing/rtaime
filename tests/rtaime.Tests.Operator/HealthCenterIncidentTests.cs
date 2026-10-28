@@ -258,6 +258,10 @@ public sealed class HealthCenterIncidentTests
 			null, healthy, "program", [healthy, failed], 25, 9);
 
 		Assert.Equal("FAILED", OutputRoutingHealthViewModel.TransmissionStateForRole(role, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Failed,
+			OperatorHealthSnapshotProvider.TransportState(role, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Unknown,
+			OperatorHealthSnapshotProvider.TransportState(role, false, true, Start));
 		var targets = OutputRoutingHealthViewModel.ProjectNetworkTargets(role, true, false, Start);
 		Assert.Equal(2, targets.Count);
 		Assert.Equal("LIVE", targets[0].TransmissionState);
@@ -284,6 +288,8 @@ public sealed class HealthCenterIncidentTests
 			"ACTIVE", true, "PASS", "Confirmed.", null, healthy, "program",
 			[healthy, stale], 25, 9);
 		Assert.Equal("STALE", OutputRoutingHealthViewModel.TransmissionStateForRole(mixed, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Unknown,
+			OperatorHealthSnapshotProvider.TransportState(mixed, true, false, Start));
 		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionStateForRole(role, false, true, Start));
 		Assert.Equal("ROUTE UNVERIFIED",
 			OutputRoutingHealthViewModel.ProjectNetworkTargets(role, false, true, Start)[0].RouteEvidence);
