@@ -38,6 +38,17 @@ Management documents use:
 
 The persistent media catalogue uses the same management-document lane rather than a new schema or persistence stack. ControlHost stores the catalogue under area `media.asset.catalog`, key `catalog`, with document format `rtaime.media-asset-catalog.v1`. The checksummed document contains stable `MediaAssetId` values, local source locations, technical media metadata, SHA-256 source fingerprints, timestamps and availability state. Optimistic document versions prevent stale catalogue writers from silently replacing newer state. Because the existing `management_documents` table is reused, no persistence schema-version increment is required for this capability.
 
+The catalogue may carry an optional `interchangeJson` property per asset,
+storing the bounded `rtaime.media-interchange.ebucore-1.10.v1` projection
+within the same checksummed, optimistically versioned
+`rtaime.media-asset-catalog.v1` management document. No new table or schema
+migration is required. An older document without `interchangeJson` loads as
+a valid catalogue with no projected metadata; a compatible writer must preserve
+previously supplied fields during later availability refresh and SHA-256-matched
+relink. A downgrade to an earlier writer that does not understand the optional
+property is not bidirectionally lossless; take a verified backup before
+downgrading. See [Media Interchange Metadata](MediaInterchangeMetadata.md).
+
 Media catalogue persistence is management-plane state only. Import hashing, availability checks and catalogue writes are not part of the Runtime media/render hot path. Existing management-database backup, integrity verification and recovery tooling naturally includes the catalogue document.
 
 Checkpoint records use:
