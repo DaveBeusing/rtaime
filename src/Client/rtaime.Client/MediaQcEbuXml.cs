@@ -130,7 +130,7 @@ public static class MediaQcEbuXml
 			report.FullyEvaluated ? new XElement(Q + "CheckResult", report.Passed) : null,
 			identity,
 			new XElement(Q + "LastModifiedDateTime",
-				report.SourceModifiedUtc.ToString("O", CultureInfo.InvariantCulture)),
+				report.CreatedUtc.ToString("O", CultureInfo.InvariantCulture)),
 			ToolInformation(report.ToolVersion),
 			profile,
 			new XElement(Q + "ItemResults", resultItems),
@@ -256,10 +256,21 @@ public static class MediaQcEbuXml
 			(string?)binding.Attribute("toolVersion") ?? "", results);
 		report.Validate();
 		if ((string?)root.Element(Q + "LastModifiedDateTime") !=
-			report.SourceModifiedUtc.ToString("O", CultureInfo.InvariantCulture) ||
-			!root.Descendants(Q + "ContentIdentifier").Any(x =>
-				(string?)x.Element(Q + "ID") == "urn:sha256:" + report.FingerprintSha256.ToLowerInvariant()))
-			throw new InvalidDataException("QC content identifiers and source time disagree.");
+			report.CreatedUtc.ToString("O", CultureInfo.InvariantCulture))
+			throw new InvalidDataException("QC report last-modified time differs from its creation evidence.");
+		var expectedIds = new[] {
+			"urn:uuid:" + Guid.Parse(report.AssetId).ToString("D"),
+			"urn:sha256:" + report.FingerprintSha256.ToLowerInvariant()
+		};
+		var reportContentIds = root.Element(Q + "ContentId")?
+			.Elements(Q + "ContentIdentifier")
+			.Select(element => (string?)element.Element(Q + "ID")).ToArray() ?? [];
+		var profileContentIds = profileElement.Element(Q + "ContentId")?
+			.Elements(Q + "ContentIdentifier")
+			.Select(element => (string?)element.Element(Q + "ID")).ToArray() ?? [];
+		if (!reportContentIds.SequenceEqual(expectedIds) ||
+			!profileContentIds.SequenceEqual(expectedIds))
+			throw new InvalidDataException("QC report and profile content identifiers do not match the source fingerprint.");
 		var reportCheck = (bool?)root.Element(Q + "CheckResult");
 		if (reportCheck.HasValue != report.FullyEvaluated ||
 			reportCheck.HasValue && reportCheck.Value != report.Passed)
