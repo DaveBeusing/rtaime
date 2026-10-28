@@ -1,0 +1,42 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+name: ST 2110 software loopback reference
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "src/Providers/rtaime.Provider.St2110/**"
+      - "src/Contracts/rtaime.Provider.Contracts/NetworkOutput.cs"
+      - "src/Contracts/rtaime.Provider.Contracts/St2110SoftwareTransport.cs"
+      - "src/Hosts/rtaime.RuntimeHost/RuntimeNetworkOutput*"
+      - "tests/rtaime.Tests.Unit/St2110*"
+      - "tests/rtaime.Tests.Integration/St2110*"
+      - "docs/St2110SoftwareInteropQualification.md"
+      - ".github/workflows/st2110-software-reference.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: st2110-software-reference-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  software-reference:
+    name: RTP / SDP / PCM software loopback only
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Qualify deterministic RTP, SDP and PCM contracts
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --filter "FullyQualifiedName~St2110SoftwareTransportTests" --logger "console;verbosity=normal"
+      - name: Qualify fail-closed Runtime admission and actual loopback UDP I/O
+        shell: pwsh
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --filter "FullyQualifiedName~St2110NetworkOutputConfigurationIntegrationTests|FullyQualifiedName~St2110SoftwareLoopbackIntegrationTests" --logger "console;verbosity=normal"
