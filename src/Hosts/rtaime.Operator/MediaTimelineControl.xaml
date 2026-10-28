@@ -103,6 +103,7 @@
 				<RowDefinition Height="44" />
 				<RowDefinition Height="30" />
 				<RowDefinition Height="*" />
+				<RowDefinition Height="Auto" MaxHeight="126" />
 			</Grid.RowDefinitions>
 
 		<controls:RtaimeStatePlaceholder
@@ -699,6 +700,47 @@
 					</controls:RtaimeStatusBadge>
 				</StackPanel>
 			</Grid>
+			<Border Grid.Row="3" Margin="5,3,5,5" Padding="7,4"
+				Background="{DynamicResource OperatorSurfaceBrush}"
+				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
+				CornerRadius="{StaticResource OperatorRadiusPanel}" MaxHeight="120">
+				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto"
+					HorizontalScrollBarVisibility="Disabled"
+					automation:AutomationProperties.Name="Timed text local subtitle review">
+					<StackPanel>
+						<StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+							<TextBlock Text="TIMED TEXT · LOCAL REVIEW" Style="{StaticResource OperatorLabel}"
+								VerticalAlignment="Center" Margin="0,0,8,0"/>
+							<controls:RtaimeButton Content="IMPORT EBU-TT-D" IsCompact="True"
+								Click="ImportTimedTextD_Click" Margin="0,0,4,0"
+								ToolTip="Load a bounded EBU-TT-D v1.0.1 XML document for the current media source."/>
+							<controls:RtaimeButton Content="IMPORT EBU-TT LIVE" IsCompact="True"
+								Click="ImportTimedTextLive_Click" Margin="0,0,8,0"
+								ToolTip="Load a bounded Live v1.0 document; clock mode without authority remains unverified."/>
+							<controls:RtaimeComboBox Width="112" Margin="0,0,8,0"
+								ItemsSource="{Binding TimedTextReview.AvailableLanguages, ElementName=TimelineRoot}"
+								SelectedItem="{Binding TimedTextReview.SelectedLanguage, ElementName=TimelineRoot, Mode=TwoWay}"
+								ToolTip="Select the imported subtitle language for local preview only."/>
+						<controls:RtaimeToggleButton Content="PREVIEW ON" IsCompact="True"
+								IsChecked="{Binding TimedTextReview.IsLocalPreviewEnabled, ElementName=TimelineRoot, Mode=TwoWay}"
+								ToolTip="Toggle local caption inspection only, never Program output."/>
+						</StackPanel>
+						<TextBlock Text="{Binding TimedTextReview.Status, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.PreviewText, ElementName=TimelineRoot}"
+							Foreground="{DynamicResource OperatorTextBrush}" FontWeight="SemiBold"
+							TextWrapping="Wrap" Margin="0,2,0,2" MaxHeight="40"/>
+						<TextBlock Text="{Binding TimedTextReview.Detail, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.FontEvidence, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.LayoutEvidence, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+						<TextBlock Text="{Binding TimedTextReview.Language, ElementName=TimelineRoot}"
+							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"/>
+					</StackPanel>
+				</controls:RtaimeScrollViewer>
+			</Border>
 		</Grid>
 	</Border>
 </UserControl>

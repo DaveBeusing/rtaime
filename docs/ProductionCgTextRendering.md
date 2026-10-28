@@ -172,3 +172,8 @@ This capability does not provide:
 - multiple independent CG layers;
 - durable CG rundown persistence across ControlHost restart;
 - automatic migration of existing bitmap overlays.
+
+
+## Caption/Timed Text boundary
+
+[Timed Text Interchange](TimedTextInterchange.md) introduces separate EBU-TT-D / EBU-TT Live caption cue semantics and a local timeline text preview. Captions are **not** implemented by rewriting the editor-owned Production CG definition, and no caption import can mutate the current single Production CG layer. An independently authorized Runtime timed-caption compositing layer with separate visibility, revision fencing and provider qualification is required before a caption is placed on Program. Existing CG renderer, layer order and Program recovery behaviour remain unchanged.

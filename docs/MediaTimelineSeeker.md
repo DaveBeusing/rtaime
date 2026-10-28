@@ -74,3 +74,10 @@ Repository acceptance still requires the normal Release solution build, architec
 
 Media Markers may build persisted IN/OUT and cue-point markers on the stable frame-based timeline coordinate system. It must not change the authority rule: marker presentation may originate in Operator, but persisted media metadata and effective runtime ranges remain model/control concerns.
 
+
+
+## Local Timed Text review (EBU-TT-D / EBU-TT Live)
+
+The existing EDIT Timeline now offers a compact, read-only **Timed Text** review panel with separate EBU-TT-D 1.0.1 and EBU-TT Live 1.0 XML import actions. The panel is a **source-bound local preview**, not a new media cue-point editor or Program subtitle layer. It uses the confirmed Media Deck source identity and exact rational frame rate; XML reads are asynchronous, bounded to 256 KiB and guarded by a source-context generation. Source replacement, pending/uncertain transport, missing media, workspace disposal or Live clock without an authorized origin cannot be promoted to a valid current subtitle.
+
+A separately toggled **PREVIEW ON/OFF** state affects only local text review. No Program route, recording, graphics, durable catalogue or ControlHost state changes. Font/glyph gaps, same-region overlaps and conservative safe-area warnings remain visible. XML syntax and permitted profile subsets are defined in [TimedTextInterchange.md](TimedTextInterchange.md); complete EBU XSD conformance, native caption composition and SDI/ANC carriage are UNVERIFIED/UNAVAILABLE until the dedicated Runtime layer is governed through ControlHost prepare/commit.

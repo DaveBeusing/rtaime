@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Globalization;
+using System.IO;
+using rtaime.Media.Contracts;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -103,6 +105,9 @@ public partial class MediaTimelineControl : UserControl
 	private string? _trimKind;
 	private long _gestureContext;
 	private double _dragOriginX;
+	private CancellationTokenSource? _timedTextImport;
+	private long _timedTextImportGeneration;
+	public TimedTextReviewViewModel TimedTextReview { get; } = new();
 	public bool OwnsEscape => _trimKind is not null || (_pointerSeeking && ViewModel?.EditCursorMode == true);
 	public static readonly DependencyProperty PreviewSourceIdProperty = DependencyProperty.Register(nameof(PreviewSourceId), typeof(string), typeof(MediaTimelineControl), new PropertyMetadata(null, RoutingChanged));
 	public static readonly DependencyProperty ProgramSourceIdProperty = DependencyProperty.Register(nameof(ProgramSourceId), typeof(string), typeof(MediaTimelineControl), new PropertyMetadata(null, RoutingChanged));
@@ -119,12 +124,85 @@ public partial class MediaTimelineControl : UserControl
 	public MediaTimelineControl()
 	{
 		InitializeComponent();
-		DataContextChanged += (_, _) => UpdateRouting();
+		DataContextChanged += (_, _) =>
+		{
+			UpdateRouting();
+			TimedTextReview.Attach(ViewModel);
+		};
+		Loaded += (_, _) => TimedTextReview.Attach(ViewModel);
+		Unloaded += (_, _) =>
+		{
+			_timedTextImportGeneration++;
+			_timedTextImport?.Cancel();
+			TimedTextReview.Detach();
+		};
 		foreach (var (property, path) in new[] { (PreviewSourceIdProperty, "PreviewSourceId"), (ProgramSourceIdProperty, "ProgramSourceId"), (RoutingConnectedProperty, "IsConnected"), (RoutingStaleProperty, "IsStale") })
 			SetBinding(property, new Binding("DataContext." + path) { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(Window), 1) });
 	}
 
 	private MediaTimelineViewModel? ViewModel => DataContext as MediaTimelineViewModel;
+
+	private async void ImportTimedTextD_Click(object sender, RoutedEventArgs e) =>
+		await ImportTimedTextAsync(TimedTextProfile.EbuTtDistribution101);
+
+	private async void ImportTimedTextLive_Click(object sender, RoutedEventArgs e) =>
+		await ImportTimedTextAsync(TimedTextProfile.EbuTtLive10);
+
+	private async Task ImportTimedTextAsync(TimedTextProfile profile)
+	{
+		if (ViewModel is not { IsLoaded: true, RequiresSynchronization: false } ||
+			ViewModel.TimedTextSourceContext is null)
+		{
+			TimedTextReview.ImportFailure("Load and confirm the current media source first.", TimedTextReview.ContextEpoch);
+			return;
+		}
+		var selected = new Microsoft.Win32.OpenFileDialog
+		{
+			Title = "Import Timed Text for local review only",
+			Filter = "Timed Text XML (*.xml;*.ttml)|*.xml;*.ttml",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		if (selected.ShowDialog(Window.GetWindow(this)) != true)
+			return;
+		var epoch = TimedTextReview.ContextEpoch;
+		var importGeneration = ++_timedTextImportGeneration;
+		_timedTextImport?.Cancel();
+		_timedTextImport?.Dispose();
+		using var lifetime = new CancellationTokenSource();
+		_timedTextImport = lifetime;
+		try
+		{
+			var options = new FileStreamOptions
+			{
+				Mode = FileMode.Open,
+				Access = FileAccess.Read,
+				Share = FileShare.Read,
+				Options = FileOptions.Asynchronous | FileOptions.SequentialScan
+			};
+			await using var file = new FileStream(selected.FileName, options);
+			if (file.Length is <= 0 or > TimedTextDocument.MaxXmlBytes)
+				throw new InvalidDataException("Timed Text input exceeds the 256 KiB source size bound.");
+			var bytes = new byte[checked((int)file.Length)];
+			await file.ReadExactlyAsync(bytes, lifetime.Token);
+			if (importGeneration == _timedTextImportGeneration &&
+				ReferenceEquals(_timedTextImport, lifetime))
+				TimedTextReview.Import(bytes, profile, epoch);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
+		{
+			if (importGeneration == _timedTextImportGeneration &&
+				ReferenceEquals(_timedTextImport, lifetime))
+				TimedTextReview.ImportFailure(
+					"Caption file could not be read within the local file/size/lifetime safety limits.", epoch);
+		}
+		finally
+		{
+			if (ReferenceEquals(_timedTextImport, lifetime))
+				_timedTextImport = null;
+		}
+	}
+
 
 	public TimelineTrackCategory? ResolveDropTarget(object? originalSource) =>
 		FindDataContext<TimelineTrackViewModel>(originalSource as DependencyObject)?.Category;
