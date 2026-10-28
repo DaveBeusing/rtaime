@@ -213,6 +213,17 @@ Program path. The UI's existing one-pending-snapshot coalescing is retained.
 | Media Deck and compositing | Session/codec details, compositing node health and failure evidence | End-to-end decode/encode latency when not measured by the owning media pipeline |
 | Monitoring | Independent Preview/Program plane state and freshness | Proof that the physical Program output is uninterrupted |
 
+For multi-sender Program/Aux roles, the Health Center reuses the Outputs
+workspace's **all-sender** role-state reducer, never just the first configured
+sender. A failed peer therefore prevents a false aggregate LIVE result; expired
+send evidence yields UNKNOWN/STALE rather than an assumed successful delivery.
+Already-published per-sender local queue, sent, dropped, rejected and reconnect
+counters remain distinct, with at most 16 expanded sender rows and a complete
+aggregate for larger configurations. Physical receivers and RTP per-leg quality
+remain UNVERIFIED. A concrete owning provider ID is carried only when the
+source publishes a bounded, simple non-URI identifier; no credential-bearing
+transport target is promoted into diagnostic provider identity.
+
 Metrics that are unavailable are not populated as zero and are not synthesized
 from virtual Program outputs. PTP, RTP/loss/jitter, measured decode/encode
 latency, SNMPv3 and OpenTelemetry remain separate provider/qualification or
