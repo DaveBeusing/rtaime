@@ -258,6 +258,7 @@ public sealed class St2110VideoFrameReceiver
         _sequences.Observe(sequence, packet.Timestamp, monotonicArrival, 90000);
         if (_groups != _coverage.Length || !_endMarker) return false;
 
+        if (_frame is null) return Reject();
         completed = new St2110PackedVideoFrame(packet.Timestamp, _frame);
         _completedTimestamp = packet.Timestamp;
         _frame = null;
