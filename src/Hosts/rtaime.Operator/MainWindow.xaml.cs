@@ -93,12 +93,16 @@ public partial class MainWindow : Window
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
+		var notificationService = new NotificationService();
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
 			viewModel.RuntimeReadiness,
 			viewModel.SynchronizeCommand,
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher),
+			null,
+			notificationService,
+			observation => (Application.Current as App)?.ReportOperationalObservation(observation));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
@@ -120,7 +124,7 @@ public partial class MainWindow : Window
 			HealthCenter,
 			Startup);
 		Notifications = new OperatorNotificationCenterViewModel(
-			new NotificationService(),
+			notificationService,
 			viewModel,
 			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
 		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
@@ -205,12 +209,16 @@ public partial class MainWindow : Window
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		ColorReview = new ColorReviewViewModel(Monitoring, MediaPool);
 		ColorReview.SetWorkspaceActive(Shell.IsCompositingWorkspace);
+		var notificationService = new NotificationService();
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
 			viewModel.RuntimeReadiness,
 			viewModel.SynchronizeCommand,
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher),
+			null,
+			notificationService,
+			observation => (Application.Current as App)?.ReportOperationalObservation(observation));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		ShowControl = new ShowControlViewModel(client, viewModel);
 		ProductionMacros = new ProductionMacroViewModel(client);
@@ -232,7 +240,7 @@ public partial class MainWindow : Window
 			HealthCenter,
 			Startup);
 		Notifications = new OperatorNotificationCenterViewModel(
-			new NotificationService(),
+			notificationService,
 			viewModel,
 			new DispatcherSynchronizationContext(Dispatcher), NavigateFromShowChecks, client.ActionHistory);
 		ShowReadiness = new ShowReadinessViewModel(client, viewModel, HealthProvider, Notifications,
