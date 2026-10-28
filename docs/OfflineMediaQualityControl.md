@@ -110,6 +110,14 @@ The extension also binds `MediaAssetId`, full SHA-256, captured catalogue
 revision, file size, source last-modified UTC, report creation UTC, check
 implementation version, observed source and optional 0..1 confidence,
 nonnegative severity, track identifier and edit-unit range.
+The EBU `Report.LastModifiedDateTime` is the QC report timestamp; the
+**source-file modification time** is separately preserved in
+`rqc:Binding/@sourceModifiedUtc`. XML import requires matching source UUID
+and SHA-256 in both Report and Profile identifiers and cross-checks
+outcome versions, tool/time provenance, confidence, severity and range
+against the actual measured EBU ItemResults. Stored reports are
+canonicalized before atomic publication rather than retaining arbitrary
+foreign extension elements.
 When a result has a frame range, the EBU `Locator.Start/End` values are
 paired with the published
 `TimingExtensionMediaPlaybackEditUnits/EditRate` rational; a single
