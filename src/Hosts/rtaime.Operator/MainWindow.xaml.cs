@@ -65,6 +65,7 @@ public partial class MainWindow : Window
 			client,
 			PickGraphicsAsset,
 			new DispatcherSynchronizationContext(Dispatcher));
+		viewModel.SetOGrafManifestPicker(PickOGrafManifest);
 		MediaDeck = CreateMediaDeck(viewModel, client);
         SequenceTimeline = new SequenceTimelineEditorViewModel(new SequenceAuthoringClient(controlTransport), client);
         ConfigureSequencePlayout(controlTransport, viewModel);
@@ -180,6 +181,7 @@ public partial class MainWindow : Window
 		_sessionRecoveryStore = sessionRecoveryStore;
 		ArgumentNullException.ThrowIfNull(viewModel);
 		viewModel.SetGraphicsAssetPicker(PickGraphicsAsset);
+		viewModel.SetOGrafManifestPicker(PickOGrafManifest);
 		viewModel.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
@@ -507,6 +509,18 @@ public partial class MainWindow : Window
 			PickLocalMediaFile,
 			() => viewModel.SelectedSource?.Id,
 			new DispatcherSynchronizationContext(Dispatcher));
+
+	private static string? PickOGrafManifest()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Title = "Inspect local OGraf v1 graphics manifest",
+			Filter = "OGraf v1 manifest (*.ograf.json)|*.ograf.json",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
+	}
 
 	private static OperatorGraphicsAsset? PickGraphicsAsset()
 	{

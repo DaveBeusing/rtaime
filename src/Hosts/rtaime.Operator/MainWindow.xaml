@@ -1310,7 +1310,19 @@
 								<TextBlock Text="GRAPHICS / OVERLAY" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding GraphicsState}" FontWeight="Bold" /></Border>
 							</DockPanel>
-							<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+							<StackPanel>
+								<DockPanel Margin="0,0,0,6">
+									<TextBlock Text="OPEN BROADCAST GRAPHICS · OGRAF V1" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
+									<controls:RtaimeButton Content="INSPECT MANIFEST" DockPanel.Dock="Right" Command="{Binding InspectOGrafManifestCommand}" ToolTip="Inspect a local OGraf v1 package. JavaScript is never executed and Program is unchanged." />
+								</DockPanel>
+								<TextBlock Text="{Binding OGrafInspectionStatus}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+								<TextBlock Text="{Binding OGrafInspectionDetails}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,6" />
+								<Image Source="{Binding OGrafPackageThumbnail}" Stretch="Uniform" MaxWidth="256" MaxHeight="128" HorizontalAlignment="Left" SnapsToDevicePixels="True" />
+								<TextBlock Text="STATIC PACKAGE THUMBNAIL ONLY · not OGraf playback or confirmed Preview. Program admission remains disabled until isolated rendering, frame evidence and explicit approval are implemented." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,5,0,0" />
+							</StackPanel>
+						</Border>
+						<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 							<DockPanel Margin="0,3,0,8">
 								<TextBlock Text="Runtime graphics source" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />

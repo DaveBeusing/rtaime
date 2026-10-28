@@ -9,6 +9,17 @@ david.beusing@gmail.com
 
 rtaime provides a bounded Production CG text-rendering path for dynamic text graphics such as lower thirds. The capability extends the existing RuntimeHost-owned Program graphics layer; it does not introduce a second compositor or a WPF-owned production renderer.
 
+## OGraf v1 inspection boundary
+
+The Graphics / Overlay workspace can inspect a local OGraf v1 manifest, its
+bounded scalar schema and declared action durations. The optional **static
+package thumbnail is not an executed OGraf frame**. The current
+[OGraf interoperability boundary](OGrafGraphicsInterop.md) explicitly leaves
+HTML/Web Component execution, external OGraf Server API and Program admission
+**UNAVAILABLE** pending a qualified isolated renderer and ControlHost-authorized
+Preview/Program integration. No untrusted script is executed and no second
+graphics/compositing engine is introduced.
+
 ## Authority and data flow
 
 The command path is:
