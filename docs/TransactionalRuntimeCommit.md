@@ -228,3 +228,11 @@ Transactional Runtime Commit intentionally does not implement:
 - AI execution.
 
 Virtual Media Runtime Slice consumes this transaction boundary for the first Virtual Media runtime vertical slice.
+
+
+
+## Broadcast continuity evidence and failure admission
+
+The RuntimeHost broadcast continuity tracker is admitted only after a successful TransactionalRuntime commit of the **existing** ControlHost-prepared execution. Failed preparation/rejected commit does not relabel the existing Program/Aux identity or last complete frame/audio evidence. Each role records the prepared AuthorityStateId/AuthorityRevision, successful RuntimeExecutionRevision, exact source/sink, and completed software frame/audio position. This is a software observation, not a physical scan-out acknowledgement; ControlHost's separate commit confirmation/reconciliation remains authoritative.
+
+A failed Program boundary retains the existing boundary input re-anchoring logic and latches a bounded Continuity incident. A lost Program input that produces a black fallback frame likewise becomes FAILED rather than falsely healthy. An independent Aux input/provider failure is scoped to Aux and does not alter the Program route. Recovered frames remain RECOVERED AWAITING RE-ARM for the same source/sink even if unrelated Control revisions advance; local Health Center acknowledgement is **not** production authorization. Actual HoldLast/Mute/Slate and authenticated manual ControlHost re-arm are not admitted until separately provider-qualified. Details: [Broadcast Fail-Safe Playout](BroadcastFailSafePlayout.md).
