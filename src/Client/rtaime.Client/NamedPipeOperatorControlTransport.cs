@@ -1520,7 +1520,11 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 			asset.FingerprintSha256,
 			UtcTimestamp.Parse(asset.ImportedAt),
 			UtcTimestamp.Parse(asset.UpdatedAt),
-			(MediaAssetAvailability)asset.Availability);
+			(MediaAssetAvailability)asset.Availability)
+		{
+			InterchangeMetadata = asset.InterchangeJson is null ? null
+				: MediaInterchangeJson.Import(asset.InterchangeJson, asset.FingerprintSha256)
+		};
 	}
 
 	private static MediaDeckSnapshot ReadMediaDeckSnapshot(WireEnvelope response)
@@ -2504,7 +2508,8 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 		string FingerprintSha256,
 		string ImportedAt,
 		string UpdatedAt,
-		int Availability);
+		int Availability,
+		string? InterchangeJson = null);
 	private sealed record WireMediaAssetCatalogPage(string Version, ulong Revision, int TotalCount, WireMediaAssetDescriptor[] Assets);
 	private sealed record WireMediaAssetMutationItem(string SourceLocation, string? AssetId, int Disposition, WireFailure? Failure);
 	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);
