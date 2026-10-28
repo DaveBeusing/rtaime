@@ -170,6 +170,11 @@ public sealed class St2022SoftwarePacketMergeTests
             merge.Snapshot(TimeSpan.FromMilliseconds(5)).ObservedPathState);
         Assert.Equal(St2022SoftwarePathState.Failed,
             merge.Snapshot(TimeSpan.FromMilliseconds(6)).ObservedPathState);
+        // A replay of the long-expired first packet cannot restore a failed leg.
+        Assert.Empty(merge.Observe(St2022RtpLeg.Primary, Video(50),
+            TimeSpan.FromTicks(65_000)));
+        Assert.Equal(St2022SoftwarePathState.Failed,
+            merge.Snapshot(TimeSpan.FromTicks(65_000)).ObservedPathState);
         Assert.Single(merge.Observe(St2022RtpLeg.Secondary, Video(51),
             TimeSpan.FromMilliseconds(7)));
         Assert.Equal(St2022SoftwarePathState.Degraded,
