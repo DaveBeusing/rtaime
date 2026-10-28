@@ -286,6 +286,18 @@ public sealed partial class ExternalControlIntegrationTests
 	}
 
 	[Fact]
+	public async Task Mutual_tls_certificate_cannot_be_relabelled_as_another_client_identity()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator, mutualTls: true);
+		await using var client = fixture.CreateClient(includeClientCertificate: true, clientId: "other-client");
+
+		var denied = await Assert.ThrowsAsync<RpcException>(() => client.GetSnapshotAsync().AsTask());
+
+		Assert.Equal(StatusCode.Unauthenticated, denied.StatusCode);
+		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
+	}
+
+	[Fact]
 	public async Task Mutual_tls_rejects_an_unmapped_client_certificate()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer, mutualTls: true);
@@ -669,13 +681,14 @@ public sealed partial class ExternalControlIntegrationTests
 		public GrpcOperatorControlTransport CreateClient(
 			bool includeClientCertificate = false,
 			int maxRequestBytes = 1024 * 1024,
-			string? trustedServerThumbprint = null) =>
+			string? trustedServerThumbprint = null,
+			string clientId = "test-client") =>
 			new(new GrpcOperatorControlOptions
 			{
 				Endpoint = new Uri($"https://127.0.0.1:{Port}"),
 				TrustMode = ExternalControlTrustMode.PinnedServerCertificate,
 				TrustedServerCertificateThumbprint = trustedServerThumbprint ?? _serverCertificate.Thumbprint,
-				ClientId = "test-client",
+				ClientId = clientId,
 				BearerToken = _tokenEnvironment is null ? null : _token,
 				ClientCertificatePath = includeClientCertificate ? _clientCertificate?.Path : null,
 				ClientCertificatePassword = includeClientCertificate ? _clientCertificate?.Password : null,
