@@ -17,6 +17,17 @@ internal static class MxfIndependentMediaProbe
         ulong expectedVideoFrames, ulong expectedAudioSampleFrames,
         CancellationToken cancellationToken)
     {
+        _ = await InspectValidatedAsync(
+            ffprobePath, mxfPath, expectedFrameRate,
+            expectedVideoFrames, expectedAudioSampleFrames, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal static async Task<MxfValidatedInterchangeEvidence> InspectValidatedAsync(
+        string ffprobePath, string mxfPath, string expectedFrameRate,
+        ulong expectedVideoFrames, ulong expectedAudioSampleFrames,
+        CancellationToken cancellationToken)
+    {
         if (!File.Exists(ffprobePath))
             throw new RecordingOutputUnavailableException("The configured independent FFprobe executable is unavailable.");
         if (expectedVideoFrames == 0 || expectedAudioSampleFrames == 0 ||
@@ -117,6 +128,9 @@ internal static class MxfIndependentMediaProbe
             !TryRatio(audioTimebase, out var timebaseNum, out var timebaseDen) ||
             ticks < 0 || (decimal)ticks * timebaseNum * 48000 / timebaseDen != expectedAudioSampleFrames)
             throw new InvalidDataException("Independent MXF audio sample duration does not match recorded samples.");
+
+        return MxfValidatedInterchangeEvidence.FromValidatedStreams(
+            v, a, expectedFrameRate, expectedVideoFrames, expectedAudioSampleFrames);
     }
 
     private static async Task<string> ReadBoundedOutputAsync(
