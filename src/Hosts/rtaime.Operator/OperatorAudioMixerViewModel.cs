@@ -891,7 +891,10 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 		double.IsFinite(candidate.MeasurementSeconds) &&
 		candidate.MeasurementSeconds >= 0 &&
 		candidate.MeasurementSeconds < TimeSpan.MaxValue.TotalSeconds &&
-		candidate.ProfileId.Length is > 0 and <= 64 &&
+		!string.IsNullOrWhiteSpace(candidate.ProfileId) &&
+		candidate.ProfileId.Length <= 64 &&
+		!string.IsNullOrWhiteSpace(candidate.Source) &&
+		candidate.Source.Length <= 128 &&
 		candidate.State is "CURRENT" or "WARMING" or "SILENCE" or "UNVERIFIED";
 	public string LoudnessStatus => !_owner.EvidenceIsCurrent ? "STALE · LOUDNESS UNVERIFIED" :
 		_loudness is null ? "LOUDNESS OFF / UNAVAILABLE" :
