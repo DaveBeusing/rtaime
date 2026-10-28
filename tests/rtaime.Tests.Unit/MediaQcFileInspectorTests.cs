@@ -107,6 +107,58 @@ public sealed class MediaQcFileInspectorTests
 	}
 
 	[Fact]
+	public async Task Worker_marks_catalogue_mutation_stale_without_committing_results()
+	{
+		var root = TempRoot();
+		var worker = new MediaQcScheduler(Path.Combine(root, "reports"));
+		try
+		{
+			var bytes = Movie();
+			Array.Resize(ref bytes, 4 * 1024 * 1024);
+			var asset = CreateAsset(root, bytes, MediaAudioCodec.None);
+			var job = worker.Begin(asset, 3);
+			worker.Reconcile(new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 4,
+				[asset]));
+			var status = worker.Get(job.JobId);
+			Assert.NotNull(status);
+			Assert.Equal(MediaQcJobState.Stale, status.State);
+			Assert.Null(status.Report);
+			Assert.False(worker.Cancel(job.JobId));
+		}
+		finally { await worker.DisposeAsync(); Directory.Delete(root, true); }
+	}
+
+	[Fact]
+	public async Task Unknown_container_never_reports_structural_truncation_as_PASS()
+	{
+		var root = TempRoot();
+		try
+		{
+			var bytes = new byte[16];
+			BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(0, 4), 16);
+			var report = await MediaQcFileInspector.InspectAsync(
+				CreateAsset(root, bytes, MediaAudioCodec.None), 5);
+			Assert.Equal(MediaQcCheckState.Unsupported, report.Results[0].State);
+			Assert.Equal(MediaQcCheckState.Unsupported, report.Results[1].State);
+			Assert.Null(report.Results[1].Confidence);
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
+	[Fact]
+	public async Task File_size_quota_rejects_before_any_unverified_QC_report_exists()
+	{
+		var root = TempRoot();
+		try
+		{
+			var asset = CreateAsset(root, Movie(), MediaAudioCodec.None);
+			await Assert.ThrowsAsync<NotSupportedException>(async () =>
+				await MediaQcFileInspector.InspectAsync(asset, 5, maximumFileBytes: 8));
+		}
+		finally { Directory.Delete(root, true); }
+	}
+
+		[Fact]
 	public async Task Worker_enforces_queue_quota_and_cancellation_without_production_actions()
 	{
 		var root = TempRoot();
