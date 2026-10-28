@@ -2221,6 +2221,11 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 		return true;
 	}
+
+    // Used by partial feature views for derived read-only properties that
+    // have no backing field to pass through Set<T>.
+    private void OnPropertyChanged(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 internal sealed class AsyncRelayCommand : ICommand
