@@ -180,6 +180,12 @@ public sealed class BroadcastContinuityIntegrationTests
 		tracker.ObserveComplete("program", 8, 9000);
 		Assert.Equal(BroadcastContinuityPhase.RecoveredAwaitingRearm, tracker.ForRole("program")!.Phase);
 		Assert.False(tracker.CanReportHealthy("program"));
+		tracker.ObserveFault("program", "test.decoder.unavailable", "Same decoder failed again after a recovered frame.");
+		Assert.Equal(2UL, tracker.ForRole("program")!.IncidentGeneration);
+		Assert.Equal(2, tracker.RecentIncidents.Count);
+		tracker.ObserveFault("program", "test.decoder.unavailable", "Duplicate alarm while still failed.");
+		Assert.Equal(2, tracker.RecentIncidents.Count);
+		tracker.ObserveComplete("program", 8, 9000);
 		// An unrelated revision with unchanged Program source/sink must not erase it.
 		var sameBinding = new PreparedExecutionContract(
 			RuntimeContractVersion.Current,
@@ -188,7 +194,7 @@ public sealed class BroadcastContinuityIntegrationTests
 			plan.PlanGeneration.Next(), plan.Bindings);
 		tracker.ConfirmCommittedExecution(sameBinding, 2, program);
 		Assert.True(tracker.ForRole("program")!.RequiresManualRearm);
-		Assert.Equal(1UL, tracker.ForRole("program")!.IncidentGeneration);
+		Assert.Equal(2UL, tracker.ForRole("program")!.IncidentGeneration);
 		for (var i = 0; i < 45; i++)
 		{
 			tracker.ObserveFault("program", "test.provider." + i, "Fault injection only.");
