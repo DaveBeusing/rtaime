@@ -141,7 +141,7 @@ public sealed class TimedTextReviewTests
 		    <layout><region xml:id="bottom" tts:origin="5% 75%" tts:extent="90% 20%"/></layout>
 		  </head>
 		  <body><div><p xml:id="cue1" region="bottom" style="base"
-		    begin="1s" end="2s">Live subtitle</p></div></body>
+		    begin="1s" end="1.5s">Live subtitle</p></div></body>
 		</tt>
 		""";
 }
