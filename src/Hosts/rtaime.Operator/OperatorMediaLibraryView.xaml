@@ -259,6 +259,7 @@
                                                 <TextBlock Text="{Binding DisplayTrack}" Style="{StaticResource OperatorValue}" />
                                                 <WrapPanel>
                                                     <TextBlock Text="{Binding ChannelRole, StringFormat={}Role: {0}}" Style="{StaticResource OperatorLabel}" Margin="0,0,6,0" />
+                                                    <TextBlock Text="{Binding R123AssignedRole, StringFormat={}R 123: {0}}" Style="{StaticResource OperatorLabel}" Margin="0,0,6,0" />
                                                     <TextBlock Text="{Binding Language, StringFormat={}Language: {0}}" Style="{StaticResource OperatorLabel}" Margin="0,0,6,0" />
                                                     <TextBlock Text="{Binding AudioObjectId, StringFormat={}Object: {0}}" Style="{StaticResource OperatorLabel}" />
                                                 </WrapPanel>
