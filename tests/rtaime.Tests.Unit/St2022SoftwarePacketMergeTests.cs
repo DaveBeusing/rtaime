@@ -64,7 +64,7 @@ public sealed class St2022SoftwarePacketMergeTests
     [Fact]
     public void Common_mode_loss_expires_by_holdback_and_late_repair_is_not_replayed()
     {
-        var merge = new St2022SoftwarePacketMerger(St2022RtpMediaKind.Video, 111, Options());
+        var merge = new St2022SoftwarePacketMerger(St2022RtpMediaKind.Video, 111, Options(windowMs: 20));
         Assert.Single(merge.Observe(St2022RtpLeg.Primary, Video(10), TimeSpan.Zero));
         Assert.Empty(merge.Observe(St2022RtpLeg.Primary, Video(12), TimeSpan.FromMilliseconds(1)));
         Assert.Empty(merge.Flush(TimeSpan.FromMilliseconds(4)));
@@ -121,9 +121,9 @@ public sealed class St2022SoftwarePacketMergeTests
         var badHeader = Video(11);
         badHeader[0] = 0x90;
         Assert.Empty(merge.Observe(St2022RtpLeg.Primary, badHeader, TimeSpan.FromMilliseconds(7)));
-        var emitted = Assert.Single(merge.Flush(TimeSpan.FromMilliseconds(8)));
+        var emitted = Assert.Single(merge.Flush(TimeSpan.FromMilliseconds(25)));
         Assert.Equal(Video(12), emitted.Datagram);
-        var health = merge.Snapshot(TimeSpan.FromMilliseconds(8));
+        var health = merge.Snapshot(TimeSpan.FromMilliseconds(25));
         Assert.Equal(1ul, health.Duplicates);
         Assert.Equal(1ul, health.Late);
         Assert.Equal(2ul, health.ConflictingCopies);
