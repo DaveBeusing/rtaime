@@ -38,7 +38,8 @@ public sealed record OperationalObservation(
 	SubsystemProgramImpact ProgramImpact,
 	string Detail,
 	string RecommendedAction,
-	string? CorrelationId = null)
+	string? CorrelationId = null,
+	DateTimeOffset? ResolvedAtUtc = null)
 {
 	public const int CurrentFormatVersion = 1;
 }
@@ -52,7 +53,7 @@ public sealed class OperationalObservationProjector
 	private readonly long _frequency;
 	private Dictionary<string, Entry> _current = new(StringComparer.Ordinal);
 
-	private sealed record Entry(OperationalObservation Observation, long SinceTick);
+	private sealed record Entry(OperationalObservation Observation, long SinceTick, bool HadActive);
 
 	public OperationalObservationProjector(Func<long>? monotonicClock = null, long? frequency = null)
 	{
@@ -93,6 +94,11 @@ public sealed class OperationalObservationProjector
 			var changedCondition = previous is null || previous.Observation.Condition != condition;
 			var sinceTick = changedCondition ? ticks : previous!.SinceTick;
 			var sinceUtc = changedCondition ? utc : previous!.Observation.SinceUtc;
+			var hadActive = condition == OperationalObservationCondition.Active || previous?.HadActive == true;
+			var resolvedAt = condition == OperationalObservationCondition.Clear
+				? (previous?.Observation.Condition != OperationalObservationCondition.Clear && hadActive
+					? utc : previous?.Observation.ResolvedAtUtc)
+				: null;
 			var lastGood = condition == OperationalObservationCondition.Clear
 				? source.LastSuccessfulCheck?.ToUniversalTime() ?? utc
 				: previous?.Observation.LastGoodProjectedUtc ?? source.LastSuccessfulCheck?.ToUniversalTime();
@@ -113,8 +119,9 @@ public sealed class OperationalObservationProjector
 				string.IsNullOrWhiteSpace(source.EvidenceSource) ? "UNSPECIFIED" : source.EvidenceSource,
 				source.ProgramImpact,
 				source.Detail,
-				source.RecoveryStatus);
-			next.Add(source.Id, new Entry(current, sinceTick));
+				source.RecoveryStatus,
+				ResolvedAtUtc: resolvedAt);
+			next.Add(source.Id, new Entry(current, sinceTick, hadActive));
 
 			if (previous is null
 				? condition == OperationalObservationCondition.Active
@@ -143,7 +150,7 @@ public sealed class OperationalObservationProjector
 				SinceUtc = changed ? utc : previous.Observation.SinceUtc,
 				Duration = Elapsed(sinceTick, ticks)
 			};
-			next.Add(pair.Key, new Entry(retained, sinceTick));
+			next.Add(pair.Key, new Entry(retained, sinceTick, previous.HadActive));
 			if (changed)
 				transitions.Add(retained);
 		}
