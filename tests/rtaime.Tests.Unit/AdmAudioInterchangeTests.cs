@@ -45,7 +45,7 @@ public sealed class AdmAudioInterchangeTests
 	public void Stereo_bom_and_original_whitespace_survive_an_independent_json_exchange()
 	{
 		var source = Fixture("stereo.xml");
-		var bytes = Encoding.UTF8.GetPreamble().Concat(source).ToArray();
+		var bytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(source).ToArray();
 		var result = AdmAudioXml.ImportXml(bytes, Asset());
 		Assert.Equal(bytes, AdmAudioXml.ExportXml(
 			AdmAudioXml.ImportSidecarJson(AdmAudioXml.ExportSidecarJson(result), Asset())));
