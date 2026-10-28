@@ -258,6 +258,10 @@ public sealed class HealthCenterIncidentTests
 			null, healthy, "program", [healthy, failed], 25, 9);
 
 		Assert.Equal("FAILED", OutputRoutingHealthViewModel.TransmissionStateForRole(role, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Failed,
+			OperatorHealthSnapshotProvider.TransportState(role, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Unknown,
+			OperatorHealthSnapshotProvider.TransportState(role, false, true, Start));
 		var targets = OutputRoutingHealthViewModel.ProjectNetworkTargets(role, true, false, Start);
 		Assert.Equal(2, targets.Count);
 		Assert.Equal("LIVE", targets[0].TransmissionState);
@@ -284,6 +288,8 @@ public sealed class HealthCenterIncidentTests
 			"ACTIVE", true, "PASS", "Confirmed.", null, healthy, "program",
 			[healthy, stale], 25, 9);
 		Assert.Equal("STALE", OutputRoutingHealthViewModel.TransmissionStateForRole(mixed, true, false, Start));
+		Assert.Equal(SubsystemHealthState.Unknown,
+			OperatorHealthSnapshotProvider.TransportState(mixed, true, false, Start));
 		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionStateForRole(role, false, true, Start));
 		Assert.Equal("ROUTE UNVERIFIED",
 			OutputRoutingHealthViewModel.ProjectNetworkTargets(role, false, true, Start)[0].RouteEvidence);
@@ -311,6 +317,124 @@ public sealed class HealthCenterIncidentTests
 			1024, 2048, TimeSpan.FromMilliseconds(100)));
 		Assert.Null(OutputRoutingHealthViewModel.CalculateSenderRate(
 			1024, 2048, TimeSpan.FromSeconds(20)));
+	}
+
+	[Fact]
+	public void Active_alarm_acknowledgement_is_shared_and_resolution_requires_healthy_evidence()
+	{
+		var now = Start;
+		var notifications = new NotificationService(() => now);
+		var provider = new TestProvider(Snapshot("audio", SubsystemHealthState.Failed, SubsystemProgramImpact.Degraded));
+		var context = new QueuedContext();
+		using var readiness = new RuntimeReadinessService(() => now);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), context,
+			notifications: notifications, clock: () => now);
+
+		var active = Assert.Single(notifications.Current);
+		Assert.Equal("health:audio", active.Key);
+		Assert.Equal(OperatorNotificationCondition.Active, active.Condition);
+		Assert.True(active.Persistent);
+		Assert.Equal("ACTIVE", model.SelectedSubsystem!.AlarmLifecycle);
+		Assert.True(model.AcknowledgeAlarmCommand.CanExecute(null));
+
+		model.AcknowledgeAlarmCommand.Execute(null);
+		context.Drain();
+		Assert.NotNull(Assert.Single(notifications.Current).AcknowledgedAtUtc);
+		Assert.Equal("ACKNOWLEDGED · STILL ACTIVE", model.SelectedSubsystem.AlarmLifecycle);
+		Assert.False(model.AcknowledgeAlarmCommand.CanExecute(null));
+		Assert.Equal("FAILED", model.SelectedSubsystem.State);
+
+		for (var index = 0; index < 5000; index++)
+			provider.Publish(Snapshot("audio", SubsystemHealthState.Failed, SubsystemProgramImpact.Degraded) with
+			{ Detail = $"raw measurement {index}" });
+		Assert.Single(context.Pending);
+		context.Drain();
+		Assert.Equal(1, Assert.Single(notifications.Current).OccurrenceCount);
+		Assert.Equal("FAILED", model.SelectedSubsystem.State);
+
+		now = now.AddSeconds(5);
+		provider.Publish(Snapshot("audio", SubsystemHealthState.Healthy, SubsystemProgramImpact.None));
+		context.Drain();
+		Assert.Equal("RESOLVED", model.SelectedSubsystem.AlarmLifecycle);
+		Assert.Equal(OperatorNotificationCondition.Resolved, Assert.Single(notifications.Current).Condition);
+		Assert.False(model.AcknowledgeAlarmCommand.CanExecute(null));
+	}
+
+	[Fact]
+	public void Lost_health_evidence_never_clears_an_active_alarm_or_certifies_program()
+	{
+		var now = Start;
+		var notifications = new NotificationService(() => now);
+		var provider = new TestProvider(Snapshot("runtime", SubsystemHealthState.Failed, SubsystemProgramImpact.Unknown));
+		var context = new QueuedContext();
+		using var readiness = new RuntimeReadinessService(() => now);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), context,
+			notifications: notifications, clock: () => now);
+
+		now = now.AddSeconds(1);
+		provider.Publish(Snapshot("runtime", SubsystemHealthState.Unknown, SubsystemProgramImpact.Unknown) with
+		{ Metrics = [new("Evidence status", "STALE")] });
+		context.Drain();
+		Assert.Equal("STALE / UNVERIFIED", model.SelectedSubsystem!.AlarmLifecycle);
+		Assert.Equal("UNKNOWN", model.SelectedSubsystem.State);
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.Contains("evidence unavailable", Assert.Single(notifications.Current).Title, StringComparison.OrdinalIgnoreCase);
+		Assert.False(readiness.Current.IsProductionReady);
+	}
+
+	[Fact]
+	public void Missing_source_retains_stale_incident_in_health_and_does_not_resolve_notification()
+	{
+		var now = Start;
+		var notifications = new NotificationService(() => now);
+		var provider = new TestProvider(Snapshot("transport-program", SubsystemHealthState.Failed, SubsystemProgramImpact.OutputTransportOnly));
+		var context = new QueuedContext();
+		using var readiness = new RuntimeReadinessService(() => now);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), context,
+			notifications: notifications, clock: () => now);
+
+		now = now.AddSeconds(1);
+		provider.Publish();
+		context.Drain();
+		var incident = Assert.Single(model.Attention);
+		Assert.Equal("transport-program", incident.Id);
+		Assert.Equal("UNKNOWN", incident.State);
+		Assert.Equal("UNAVAILABLE", incident.EvidenceStatus);
+		Assert.Equal("STALE / UNVERIFIED", incident.AlarmLifecycle);
+		Assert.Equal(SubsystemProgramImpact.Unknown, incident.ProgramImpactValue);
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.Contains("evidence unavailable", Assert.Single(notifications.Current).Title, StringComparison.OrdinalIgnoreCase);
+		Assert.False(readiness.Current.IsProductionReady);
+	}
+
+	[Fact]
+	public void Structured_log_failure_does_not_suppress_persistent_alarm_notification()
+	{
+		var provider = new TestProvider(Snapshot("audio", SubsystemHealthState.Failed, SubsystemProgramImpact.Degraded));
+		var notifications = new NotificationService(() => Start);
+		using var readiness = new RuntimeReadinessService(() => Start);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), new QueuedContext(),
+			notifications: notifications,
+			logAlarmTransition: _ => throw new InvalidOperationException("log endpoint unavailable"),
+			clock: () => Start);
+
+		Assert.Equal(OperatorNotificationCondition.Active, Assert.Single(notifications.Current).Condition);
+		Assert.Equal("FAILED", model.SelectedSubsystem!.State);
+		Assert.True(model.AcknowledgeAlarmCommand.CanExecute(null));
+	}
+
+	[Fact]
+	public void Telemetry_delivery_failure_is_fail_open_for_health_presentation()
+	{
+		var provider = new TestProvider(Snapshot("output", SubsystemHealthState.Degraded, SubsystemProgramImpact.MonitoringOnly));
+		var notifications = new NotificationService(() => Start);
+		notifications.Published += (_, _) => throw new InvalidOperationException("subscriber offline");
+		using var readiness = new RuntimeReadinessService(() => Start);
+		using var model = new HealthCenterViewModel(provider, readiness, new TestCommand(), new QueuedContext(),
+			notifications: notifications, clock: () => Start);
+		Assert.Equal("DEGRADED", model.SelectedSubsystem!.State);
+		Assert.Equal("ACTIVE", model.SelectedSubsystem.AlarmLifecycle);
+		Assert.Equal(RuntimeReadinessState.Initializing, readiness.Current.State);
 	}
 
 	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>

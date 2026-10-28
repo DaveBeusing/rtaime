@@ -445,45 +445,94 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		OperatorOutputRoleDescriptor role,
 		DateTimeOffset now)
 	{
-		var transport = role.NetworkOutput;
+		var senders = role.NetworkOutputs;
+		var transmission = OutputRoutingHealthViewModel.TransmissionStateForRole(
+			role, _operator.IsConnected, _operator.IsStale, now);
+		var state = TransportState(role, _operator.IsConnected, _operator.IsStale, now);
+		var metrics = new List<HealthMetricSnapshot>
+		{
+			new("Configured network senders", senders.Count.ToString(CultureInfo.InvariantCulture)),
+			new("Aggregate sender state", transmission),
+			new("Evidence status", !_operator.IsConnected ? "UNAVAILABLE"
+				: _operator.IsStale || transmission == "STALE" ? "STALE"
+				: state == SubsystemHealthState.Unknown ? "UNVERIFIED" : "OBSERVED")
+		};
+		if (senders.Count == 1)
+		{
+			metrics.Add(new("Provider", senders[0].Provider));
+			metrics.Add(new("Protocol", senders[0].Protocol));
+		}
+		if (senders.Count > 0)
+		{
+			metrics.Add(new("Queue depth (total)", senders.Sum(sender => (long)sender.QueueDepth)
+				.ToString(CultureInfo.InvariantCulture)));
+			metrics.Add(new("Dropped samples (cumulative)", senders.Sum(sender => (decimal)sender.DroppedSamples)
+				.ToString(CultureInfo.InvariantCulture)));
+			metrics.Add(new("Rejected samples (cumulative)", senders.Sum(sender => (decimal)sender.RejectedSamples)
+				.ToString(CultureInfo.InvariantCulture)));
+			metrics.Add(new("Reconnects (cumulative)", senders.Sum(sender => (decimal)sender.ReconnectCount)
+				.ToString(CultureInfo.InvariantCulture)));
+		}
+		// Retain source-reported per-target counters without interpreting local sends
+		// as receiver delivery or producing fabricated RTP packet loss/jitter.
+		for (var index = 0; index < Math.Min(senders.Count, 16); index++)
+		{
+			var sender = senders[index];
+			var senderState = OutputRoutingHealthViewModel.TransmissionState(
+				sender, _operator.IsConnected, _operator.IsStale, now);
+			var label = $"Sender {index + 1} ({sender.Protocol})";
+			metrics.Add(new($"{label} local quality",
+				$"State={senderState}; queued={sender.QueueDepth}; dropped={sender.DroppedSamples}; " +
+				$"rejected={sender.RejectedSamples}; sent={sender.SentSamples}; reconnects={sender.ReconnectCount}"));
+			metrics.Add(new($"{label} last successful send UTC",
+				sender.LastSuccessfulSendUtc?.ToString("O") ?? "UNAVAILABLE"));
+		}
+		if (senders.Count > 16)
+			metrics.Add(new("Additional sender metrics", $"{senders.Count - 16} not expanded; aggregate health covers every sender"));
 
-		var transmission = OutputRoutingHealthViewModel.TransmissionState(
-			transport, _operator.IsConnected, _operator.IsStale, now);
-		var state = !role.AuthoritativeActive || transport is null
-			? SubsystemHealthState.Unknown
-			: transmission switch
-			{
-				"LIVE" => SubsystemHealthState.Healthy,
-				"FAILED" => SubsystemHealthState.Failed,
-				"DEGRADED" => SubsystemHealthState.Degraded,
-				"CONNECTING" or "RECONNECTING" => SubsystemHealthState.Recovering,
-				_ => SubsystemHealthState.Warning
-			};
+		var faults = senders
+			.Where(sender => sender.Failure is not null)
+			.Take(8)
+			.Select(sender => $"{sender.Protocol}: {sender.Failure!.Value.Code}")
+			.ToArray();
 		return Create(
 			existing,
 			$"transport-{role.RoleId}",
 			$"{role.RoleId.ToUpperInvariant()} Transport",
 			"Output",
 			state,
-			transport is null
+			senders.Count == 0
 				? "No network transport evidence is published for this output role."
-				: $"Transmission={transmission}; Lifecycle={transport.Lifecycle}; Connected={transport.Connected}; {transport.Failure?.Message ?? "No current transport failure published."}",
+				: $"Network senders={senders.Count}; aggregate={transmission}; " +
+					$"faults={(faults.Length == 0 ? "none published" : string.Join("; ", faults))}. " +
+					"Local sender evidence does not qualify peer reception.",
 			now,
-			transport is null ? [] :
-			[
-				new("Provider", transport.Provider),
-				new("Protocol", transport.Protocol),
-				new("Sent samples", transport.SentSamples.ToString(CultureInfo.InvariantCulture)),
-				new("Dropped samples (cumulative)", transport.DroppedSamples.ToString(CultureInfo.InvariantCulture)),
-				new("Queue depth", transport.QueueDepth.ToString(CultureInfo.InvariantCulture)),
-				new("Reconnects", transport.ReconnectCount.ToString(CultureInfo.InvariantCulture)),
-				new("Last successful send UTC", transport.LastSuccessfulSendUtc?.ToString("O") ?? "UNAVAILABLE")
-			],
+			metrics,
 			"Review the existing Outputs workspace. Connection is transport evidence; it does not qualify physical delivery or permit a Program restart.",
-			$"Role={role.RoleId}; RoleHealth={role.HealthState}; Active={role.AuthoritativeActive}; Lifecycle={transport?.Lifecycle ?? "UNAVAILABLE"}",
+			$"Role={role.RoleId}; RoleHealth={role.HealthState}; Active={role.AuthoritativeActive}; " +
+				$"ControlRevision={role.ControlRevision}; RuntimeExecutionRevision={role.RuntimeExecutionRevision}; " +
+				$"SenderCount={senders.Count}; AggregateState={transmission}",
 			state == SubsystemHealthState.Healthy ? SubsystemProgramImpact.None :
 				state == SubsystemHealthState.Unknown ? SubsystemProgramImpact.Unknown : SubsystemProgramImpact.OutputTransportOnly,
 			"Control-confirmed output role / Runtime network transport snapshot");
+	}
+
+	internal static SubsystemHealthState TransportState(
+		OperatorOutputRoleDescriptor role, bool connected, bool stale, DateTimeOffset now)
+	{
+		ArgumentNullException.ThrowIfNull(role);
+		if (!connected || stale || !role.AuthoritativeActive || role.NetworkOutputs.Count == 0)
+			return SubsystemHealthState.Unknown;
+		return OutputRoutingHealthViewModel.TransmissionStateForRole(role, connected, stale, now) switch
+		{
+			"LIVE" => SubsystemHealthState.Healthy,
+			"FAILED" => SubsystemHealthState.Failed,
+			"DEGRADED" => SubsystemHealthState.Degraded,
+			"CONNECTING" or "RECONNECTING" => SubsystemHealthState.Recovering,
+			// Missing or expired send evidence is not proof of an active transport.
+			"STALE" or "UNKNOWN" or "OFFLINE" => SubsystemHealthState.Unknown,
+			_ => SubsystemHealthState.Warning
+		};
 	}
 
 	private SubsystemHealthSnapshot CreateDecoder(

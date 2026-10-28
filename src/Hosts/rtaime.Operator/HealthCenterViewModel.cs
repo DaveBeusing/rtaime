@@ -14,6 +14,8 @@ namespace rtaime.Operator;
 public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 {
 	private SubsystemHealthSnapshot _snapshot;
+	private OperationalObservation? _observation;
+	private DateTimeOffset? _acknowledgedAtUtc;
 
 	public HealthCenterSubsystemViewModel(SubsystemHealthSnapshot snapshot)
 	{
@@ -22,6 +24,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	internal SubsystemHealthSnapshot CurrentSnapshot => _snapshot;
 	public string Id => _snapshot.Id;
 	public string DisplayName => _snapshot.DisplayName;
 	public string Category => _snapshot.Category;
@@ -55,6 +58,38 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 	public string EvidenceSource => string.IsNullOrWhiteSpace(_snapshot.EvidenceSource)
 		? "UNSPECIFIED"
 		: _snapshot.EvidenceSource;
+	public string? ObservationKey => _observation?.Key;
+	public string AlarmCondition => _observation?.Condition.ToString().ToUpperInvariant() ?? "UNVERIFIED";
+	public string AlarmLifecycle => _observation switch
+	{
+		null => "UNVERIFIED",
+		{ Condition: OperationalObservationCondition.Stale } => "STALE / UNVERIFIED",
+		{ Condition: OperationalObservationCondition.Active } when _acknowledgedAtUtc.HasValue => "ACKNOWLEDGED · STILL ACTIVE",
+		{ Condition: OperationalObservationCondition.Active } => "ACTIVE",
+		{ ResolvedAtUtc: not null } => "RESOLVED",
+		_ => "CLEAR"
+	};
+	public string AlarmDuration => _observation?.Duration.ToString(@"dd\.hh\:mm\:ss") ?? "—";
+	public string LastGoodProjection => _observation?.LastGoodProjectedUtc?.ToLocalTime()
+		.ToString("yyyy-MM-dd HH:mm:ss") ?? "UNVERIFIED";
+	public string Acknowledgement => _acknowledgedAtUtc is { } acknowledged
+		? $"ACKNOWLEDGED {acknowledged.ToLocalTime():yyyy-MM-dd HH:mm:ss} · NOT A REPAIR"
+		: "NOT ACKNOWLEDGED";
+
+	public void ApplyObservation(OperationalObservation? observation, DateTimeOffset? acknowledgedAtUtc)
+	{
+		if (Equals(_observation, observation) && _acknowledgedAtUtc == acknowledgedAtUtc)
+			return;
+		_observation = observation;
+		_acknowledgedAtUtc = acknowledgedAtUtc;
+		foreach (var property in new[]
+		{
+			nameof(ObservationKey), nameof(AlarmCondition), nameof(AlarmLifecycle),
+			nameof(AlarmDuration), nameof(LastGoodProjection), nameof(Acknowledgement)
+		})
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+	}
+
 	public bool IsHealthy => _snapshot.State == SubsystemHealthState.Healthy;
 	public bool RequiresAttention => !IsHealthy;
 	public bool IsOverview => Id is "cpu" or "memory" or "gpu" or "media" or "audio" or "compositing" or "output" or "recording" or "frame-timing";
@@ -139,6 +174,10 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private readonly ICommand _synchronizeCommand;
 	private readonly SynchronizationContext _uiContext;
 	private readonly Action<string> _copyText;
+	private readonly OperationalObservationProjector _alarmProjection = new();
+	private readonly INotificationService? _notifications;
+	private readonly Action<OperationalObservation>? _logAlarmTransition;
+	private readonly Func<DateTimeOffset> _clock;
 	private HealthCenterSubsystemViewModel? _selectedSubsystem;
 	private bool _technicalDetailsVisible;
 	private bool _telemetryOverviewVisible;
@@ -153,19 +192,26 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		IRuntimeReadinessService readiness,
 		ICommand synchronizeCommand,
 		SynchronizationContext? uiContext = null,
-		Action<string>? copyText = null)
+		Action<string>? copyText = null,
+		INotificationService? notifications = null,
+		Action<OperationalObservation>? logAlarmTransition = null,
+		Func<DateTimeOffset>? clock = null)
 	{
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
 		_synchronizeCommand = synchronizeCommand ?? throw new ArgumentNullException(nameof(synchronizeCommand));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 		_copyText = copyText ?? Clipboard.SetText;
+		_notifications = notifications;
+		_logAlarmTransition = logAlarmTransition;
+		_clock = clock ?? (() => DateTimeOffset.UtcNow);
 
 		Subsystems = [];
 		Overview = [];
 		Attention = [];
 		RecoverCommand = new AsyncRelayCommand(RecoverSelectedAsync, CanRecoverSelected);
 		CopyIncidentSummaryCommand = new AsyncRelayCommand(CopySelectedIncidentAsync, () => !_disposed && SelectedSubsystem is not null);
+		AcknowledgeAlarmCommand = new AsyncRelayCommand(AcknowledgeSelectedAlarmAsync, CanAcknowledgeSelectedAlarm);
 		ToggleTechnicalDetailsCommand = new AsyncRelayCommand(
 			() =>
 			{
@@ -184,6 +230,11 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		_provider.Changed += ProviderChanged;
 		_readiness.Changed += ReadinessChanged;
 		_synchronizeCommand.CanExecuteChanged += SynchronizeCanExecuteChanged;
+		if (_notifications is not null)
+		{
+			_notifications.Published += NotificationChanged;
+			_notifications.Removed += NotificationChanged;
+		}
 		ApplySnapshots(_provider.GetCurrent());
 	}
 
@@ -194,6 +245,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	public ObservableCollection<HealthCenterSubsystemViewModel> Attention { get; }
 	public ICommand RecoverCommand { get; }
 	public ICommand CopyIncidentSummaryCommand { get; }
+	public ICommand AcknowledgeAlarmCommand { get; }
 	public ICommand ToggleTechnicalDetailsCommand { get; }
 	public ICommand ToggleTelemetryOverviewCommand { get; }
 
@@ -220,6 +272,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			OnPropertyChanged(nameof(HasSelection));
 			(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 			(CopyIncidentSummaryCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+			(AcknowledgeAlarmCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 			(ToggleTechnicalDetailsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		}
 	}
@@ -262,6 +315,11 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		_provider.Changed -= ProviderChanged;
 		_readiness.Changed -= ReadinessChanged;
 		_synchronizeCommand.CanExecuteChanged -= SynchronizeCanExecuteChanged;
+		if (_notifications is not null)
+		{
+			_notifications.Published -= NotificationChanged;
+			_notifications.Removed -= NotificationChanged;
+		}
 		(ToggleTelemetryOverviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleTechnicalDetailsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
@@ -274,6 +332,9 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		QueueUpdate(null);
 
 	private void SynchronizeCanExecuteChanged(object? sender, EventArgs e) =>
+		QueueUpdate(null);
+
+	private void NotificationChanged(object? sender, OperatorNotificationEventArgs e) =>
 		QueueUpdate(null);
 
 	private void QueueUpdate(IReadOnlyList<SubsystemHealthSnapshot>? snapshots)
@@ -304,6 +365,8 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		}
 		if (snapshots is not null)
 			ApplySnapshots(snapshots);
+		else
+			RefreshAlarmPresentation();
 		OnPropertyChanged(nameof(OverallState));
 		OnPropertyChanged(nameof(OverallSummary));
 		OnPropertyChanged(nameof(ProductionReadiness));
@@ -312,9 +375,36 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 	private void ApplySnapshots(IReadOnlyList<SubsystemHealthSnapshot> snapshots)
 	{
+		var now = _clock();
+		var transitions = _alarmProjection.Update(snapshots, now);
 		var byId = Subsystems.ToDictionary(item => item.Id, StringComparer.Ordinal);
-		var ordered = new List<HealthCenterSubsystemViewModel>(snapshots.Count);
-		foreach (var snapshot in snapshots)
+		var incoming = snapshots.Take(OperationalObservationProjector.Capacity).ToList();
+		var incomingIds = incoming.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+		// An absent provider entry retains its last values as unavailable.
+		// Do not make an incident disappear merely because its source stopped reporting.
+		foreach (var item in Subsystems)
+		{
+			if (incoming.Count == OperationalObservationProjector.Capacity)
+				break;
+			if (!incomingIds.Add(item.Id))
+				continue;
+			var retained = item.CurrentSnapshot;
+			var alreadyUnavailable = retained.State == SubsystemHealthState.Unknown &&
+				retained.Metrics.Any(metric => metric.Label == "Evidence status" && metric.Value == "UNAVAILABLE");
+			incoming.Add(retained with
+			{
+				State = SubsystemHealthState.Unknown,
+				ProgramImpact = SubsystemProgramImpact.Unknown,
+				StatusSince = alreadyUnavailable ? retained.StatusSince : now,
+				Metrics = retained.Metrics.Where(metric => metric.Label != "Evidence status")
+					.Append(new HealthMetricSnapshot("Evidence status", "UNAVAILABLE")).ToArray(),
+				Detail = alreadyUnavailable ? retained.Detail :
+					"Source stopped publishing this subsystem; retained values are not current evidence.",
+				RecoveryStatus = "Await source recovery and new authoritative evidence; no automatic Program action is taken."
+			});
+		}
+		var ordered = new List<HealthCenterSubsystemViewModel>(incoming.Count);
+		foreach (var snapshot in incoming)
 		{
 			if (!byId.TryGetValue(snapshot.Id, out var item))
 				item = new HealthCenterSubsystemViewModel(snapshot);
@@ -349,9 +439,84 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		OnPropertyChanged(nameof(HealthyCount));
 		OnPropertyChanged(nameof(AttentionCount));
 		OnPropertyChanged(nameof(FailedCount));
+		RefreshAlarmPresentation();
+		PublishAlarmTransitions(transitions);
 		(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleTelemetryOverviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
+
+	private void RefreshAlarmPresentation()
+	{
+		var observations = _alarmProjection.Current.ToDictionary(item => item.ComponentId, StringComparer.Ordinal);
+		var notices = _notifications?.Current.ToDictionary(item => item.Key, StringComparer.Ordinal);
+		foreach (var item in Subsystems)
+		{
+			observations.TryGetValue(item.Id, out var observation);
+			OperatorNotification? notice = null;
+			if (observation is not null)
+				notices?.TryGetValue(observation.Key, out notice);
+			item.ApplyObservation(observation, notice?.AcknowledgedAtUtc);
+		}
+		(AcknowledgeAlarmCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+	}
+
+	private void PublishAlarmTransitions(IReadOnlyList<OperationalObservation> transitions)
+	{
+		foreach (var observation in transitions)
+		{
+			// The projector omits initial unknown observations. A transition
+			// from an active failure to lost evidence must still be published.
+			// A broken log sink must not suppress Operator acknowledgement.
+			try
+			{
+				_logAlarmTransition?.Invoke(observation);
+			}
+			catch (Exception)
+			{
+				// Host logging is observational and best-effort.
+			}
+			if (_notifications is null)
+				continue;
+			try
+			{
+				var resolved = observation.Condition == OperationalObservationCondition.Clear;
+				var stale = observation.Condition == OperationalObservationCondition.Stale;
+				_notifications.Publish(new OperatorNotification(
+					observation.Key,
+					resolved ? OperatorNotificationCategory.Recovery :
+						observation.Severity == OperationalObservationSeverity.Error
+							? OperatorNotificationCategory.Error : OperatorNotificationCategory.Warning,
+					resolved ? OperatorNotificationCondition.Resolved : OperatorNotificationCondition.Active,
+					DiagnosticRedactor.RedactText($"{observation.DisplayName}: {(resolved ? "resolved" : stale ? "evidence unavailable" : observation.Severity.ToString())}"),
+					DiagnosticRedactor.RedactText(observation.Detail),
+					DiagnosticRedactor.RedactText(observation.DisplayName),
+					resolved ? "Review the recovered evidence before resuming operations." : DiagnosticRedactor.RedactText(observation.RecommendedAction),
+					observation.ProgramImpact.ToString(),
+					Persistent: !resolved,
+					TechnicalDetail: DiagnosticRedactor.RedactText($"Source={observation.EvidenceSource}; Evidence={observation.EvidenceAvailability}; ProjectedAtUtc={observation.ProjectedAtUtc:O}"),
+					Lifetime: resolved ? TimeSpan.FromSeconds(12) : null,
+					TargetWorkspace: "HEALTH"));
+			}
+			catch (Exception)
+			{
+				// A notification subscriber failure must not become a production failure.
+			}
+		}
+	}
+
+	private Task AcknowledgeSelectedAlarmAsync()
+	{
+		if (CanAcknowledgeSelectedAlarm())
+			_notifications?.Acknowledge(SelectedSubsystem!.ObservationKey!);
+		return Task.CompletedTask;
+	}
+
+	private bool CanAcknowledgeSelectedAlarm() =>
+		!_disposed &&
+		SelectedSubsystem is { ObservationKey: { } key, AlarmCondition: not "CLEAR" } &&
+		_notifications?.Current.Any(item => item.Key == key &&
+			item.Condition == OperatorNotificationCondition.Active &&
+			item.AcknowledgedAtUtc is null) == true;
 
 	private Task RecoverSelectedAsync()
 	{
@@ -393,6 +558,10 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			("Severity", incident.State),
 			("Evidence status", incident.EvidenceStatus),
 			("Program impact", incident.ProgramImpact),
+			("Alarm lifecycle", incident.AlarmLifecycle),
+			("Alarm duration", incident.AlarmDuration),
+			("Last good health projection", incident.LastGoodProjection),
+			("Acknowledgement", incident.Acknowledgement),
 			("State first projected", incident.FirstObserved),
 			("Last projected", incident.LastObserved),
 			("Evidence source", incident.EvidenceSource),
