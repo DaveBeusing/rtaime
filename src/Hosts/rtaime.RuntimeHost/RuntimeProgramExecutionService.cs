@@ -3446,15 +3446,22 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			_lastAudioProductionResults[bus.BusId] = result;
 			if (_programmeLoudnessAnalysers.TryGetValue(bus.BusId, out var analyser))
 			{
-				// Analysis consumes the final post-dynamics/post-safety-clamp mix.
-				// It never mutates, reallocates or replaces the Program audio buffer.
-				if (result.MissingSourceCount > 0)
+				// Analysis consumes only final output samples. Invalid diagnostic
+				// input may invalidate the meter, never the committed Program mix.
+				try
+				{
+					if (result.MissingSourceCount > 0)
+						analyser.Interrupt();
+					else
+						analyser.Process(
+							_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues),
+							timingReference.Timing.SamplePosition,
+							routedAudioSource);
+				}
+				catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+				{
 					analyser.Interrupt();
-				else
-					analyser.Process(
-						_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues),
-						timingReference.Timing.SamplePosition,
-						routedAudioSource);
+				}
 			}
 		}
 		_lastAudioProductionResult = _lastAudioProductionResults[AudioBusId.Program];
