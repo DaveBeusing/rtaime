@@ -152,14 +152,21 @@ public static class MediaQcEbuXml
 		if ((string?)binding.Attribute("modelRelease") != MediaQcReport.CurrentModelRelease)
 			throw new InvalidDataException("QC release drift: only 2026-04 is supported.");
 		var profile = MediaQcProfile.OfflineFileV1;
-		if ((string?)root.Element(Q + "Profile")?.Element(Q + "ID") != "urn:uuid:" + profile.ProfileId)
-			throw new InvalidDataException("Unknown QC profile identity.");
+		var profileElement = root.Element(Q + "Profile")
+			?? throw new InvalidDataException("QC profile is missing.");
+		if ((string?)profileElement.Element(Q + "ID") != "urn:uuid:" + profile.ProfileId ||
+			(string?)profileElement.Element(Q + "CheckResultRule") != "AND" ||
+			(string?)profileElement.Element(Q + "Name") != profile.Name)
+			throw new InvalidDataException("Unknown or modified QC profile.");
 		if ((string?)root.Element(Q + "ExecutionStatus") != "complete")
 			throw new InvalidDataException("Incomplete/error QC reports cannot become verified evidence.");
-		var itemIds = root.Element(Q + "Profile")?.Element(Q + "Items")?.Elements(Q + "Item")
-			.Select(x => (string?)x.Element(Q + "EBUQCID")).ToArray() ?? [];
-		if (!itemIds.SequenceEqual(profile.Checks.Select(x => x.Id)))
-			throw new InvalidDataException("QC item IDs/order differ from the admitted profile.");
+		var items = profileElement.Element(Q + "Items")?.Elements(Q + "Item").ToArray() ?? [];
+		if (items.Length != profile.Checks.Count ||
+			items.Where((item, index) =>
+				(string?)item.Element(Q + "EBUQCID") != profile.Checks[index].Id ||
+				(string?)item.Element(Q + "EBUQCVersion") != profile.Checks[index].Version ||
+				(string?)item.Element(Q + "UsedAs") != "check").Any())
+			throw new InvalidDataException("QC item IDs, versions or use differ from the admitted profile.");
 		var definitions = root.Element(Q + "Profile")?.Element(Q + "ItemDefinitions")?
 			.Elements(Q + "ItemDefinition").ToArray() ?? [];
 		if (definitions.Length != profile.Checks.Count)
@@ -213,8 +220,21 @@ public static class MediaQcEbuXml
 				if (!measured.Remove(definition.Id, out var e) ||
 					(string?)e.Element(Q + "EBUQCVersion") != definition.Version ||
 					(bool?)e.Element(Q + "CheckResult") != (state == MediaQcCheckState.Pass) ||
-					(string?)e.Element(Q + "ResultDescription") != result.Detail)
+					(string?)e.Element(Q + "ResultDescription") != result.Detail ||
+					(int?)e.Element(Q + "MaxSeverity") != result.Severity)
 					throw new InvalidDataException("QC CheckResult and evidence extension disagree.");
+				var output = e.Element(Q + "Outputs")?.Elements(Q + "Output").SingleOrDefault();
+				if (output is null ||
+					(string?)output.Element(Q + "Value") != result.Detail ||
+					(int?)output.Element(Q + "Severity") != result.Severity ||
+					(result.Confidence is double declared
+						? (double?)output.Element(Q + "Confidence") != declared
+						: output.Element(Q + "Confidence") is not null) ||
+					(result.Range is { } region
+						? (string?)output.Element(Q + "Locator")?.Element(Q + "Start") != region.Start.ToString(CultureInfo.InvariantCulture) ||
+						  (string?)output.Element(Q + "Locator")?.Element(Q + "End") != region.End.ToString(CultureInfo.InvariantCulture)
+						: output.Element(Q + "Locator") is not null))
+					throw new InvalidDataException("QC output confidence, severity or timing conflicts with the outcome.");
 			}
 			else if (measured.ContainsKey(definition.Id))
 				throw new InvalidDataException("Unexecuted checks cannot have measured CheckResult evidence.");
