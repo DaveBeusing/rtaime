@@ -71,6 +71,7 @@ foreach ($test in @(
 	"Lost_preview_or_aux_input_is_isolated_from_committed_program_authority",
 	"Failed_boundaries_are_idempotent_and_incident_history_is_bounded_by_role_and_revision",
 	"New_control_committed_source_or_sink_revokes_old_last_complete_evidence",
+	"Rejected_software_prepare_cannot_rewrite_last_confirmed_program_or_incident",
 	"Video_or_pcm_position_regression_is_an_incident_not_a_runtime_observer_exception",
 	"Bounded_software_fault_injection_soak_preserves_committed_program_and_monotonic_AV_evidence"
 )) {
