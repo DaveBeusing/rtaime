@@ -55,3 +55,24 @@ The active region is defined in source pixels. Live resources currently treat th
 The existing 5 Hz and 262,144-sample scope budget is preserved, as is latest-only resource ownership. The EBU also recommends horizontal quarter-band (1,2,3,4,3,2,1)/16 and vertical half-band (1,2,1)/4 filtering before gamut classification. The new measurements are deliberately **unfiltered sparse samples** and cannot establish whole-image legal-level conformity. Full-native-precision, filtered, hardware-calibrated EBU Tech 3320 or SDI Program-output evidence remains **UNVERIFIED**.
 
 See [VideoSignalRangeCompatibility.md](VideoSignalRangeCompatibility.md) for the qualification matrix and [GpuScopesAndFrameComparison.md](GpuScopesAndFrameComparison.md) for fixed GPU result sizes.
+
+
+## Native HDR/HLG monitoring boundary (2026-10-28)
+
+The [HDR contribution decision](HdrContributionColorPipelineDecision.md)
+introduces an **offline reference** for authoritative BT.2100 HLG
+10-bit YCbCr 4:2:2 source codes and an explicit, presentation-only
+Reinhard scene-referred BT.2020-to-sRGB mapping. The proxy preserves
+its input `FrameTiming` and does not mutate native source bytes.
+`HdrSdrPreviewPolicy` is mandatory; unknown/PQ/inferred HLG metadata
+cannot be auto-treated as Rec.709 or SDR.
+
+This **does not** add HLG to the current `MonitoringFrameWire` 1.3,
+GPU D3D11 shared `RGBA8` presentation shader or Operator UI.
+Neither the existing transfer LUT nor `Rgba8` monitoring frame
+qualifies as a native HDR display signal. The reference tone map is
+not EBU TR 070/ITU-R BT.2408 validated and is not a calibrated
+BT.2100 HDR monitor output. A live 10-bit/HDR monitoring pipeline
+needs a separately qualified device surface, explicit output EOTF/
+OOTF, range/gamut tolerances, measured luminance and EBU Tech 3320
+v4.1 reference-hardware assessment. Status: **HARDWARE UNVERIFIED**.
