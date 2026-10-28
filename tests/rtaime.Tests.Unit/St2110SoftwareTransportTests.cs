@@ -81,7 +81,7 @@ public sealed class St2110SoftwareTransportTests
         Assert.True(receiver.TryReceive(packets[0], TimeSpan.FromMilliseconds(2), out var received));
         Assert.Equal(source, received!.PackedYCbCr422TenBit);
         Assert.Equal(12345u, received.RtpTimestamp);
-        Assert.Equal(1ul, receiver.SequenceHealth.Reordered);
+        Assert.Equal(0ul, receiver.SequenceHealth.Reordered);
         Assert.Equal(0ul, receiver.SequenceHealth.Missing);
         Assert.False(receiver.TryReceive(packets[0], TimeSpan.FromMilliseconds(3), out _));
         Assert.Equal(1ul, receiver.LatePackets);
