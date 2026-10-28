@@ -85,7 +85,9 @@ public sealed class TimedTextCueStore
 		var layoutIssues = document.InspectLayout(); // Precompute once, not every timeline frame.
 		_document = document;
 		_sourceIdentity = mediaSourceIdentity;
-		_selectedLanguage = document.Language;
+		_selectedLanguage = document.Cues.Any(cue => string.Equals(cue.Language, document.Language, StringComparison.OrdinalIgnoreCase))
+			? document.Language
+			: document.Cues.FirstOrDefault()?.Language ?? document.Language;
 		_layoutIssues = layoutIssues;
 		_revision++;
 	}
