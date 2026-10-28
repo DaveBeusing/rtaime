@@ -995,7 +995,7 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		if (request.Json.IsEmpty) throw new RpcException(new Status(StatusCode.InvalidArgument, "Operation JSON payload is required."));
 		var payload = request.Json.ToStringUtf8();
 		try { using var _ = JsonDocument.Parse(payload); }
-		catch (JsonException exception) { throw new RpcException(new Status(StatusCode.InvalidArgument, Bounded(exception.Message, 256))); }
+		catch (JsonException) { throw new RpcException(new Status(StatusCode.InvalidArgument, "External control operation JSON payload is invalid.")); }
 		return (operation, payload);
 	}
 
@@ -1067,5 +1067,5 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			detail));
 
 	private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-	private static string Bounded(string value, int length) => value.Length <= length ? value : value[..length];
+
 }
