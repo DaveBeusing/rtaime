@@ -27,24 +27,29 @@ public sealed record ProgrammeLoudnessSnapshot(
 	public bool HasTruePeakReading => TruePeakDbtp is double value && double.IsFinite(value);
 }
 
-public sealed record ProgrammeLoudnessPolicy(
-	string ProfileId,
-	double TargetLufs,
-	double ToleranceLu,
-	double MaximumTruePeakDbtp)
+public sealed record ProgrammeLoudnessPolicy
 {
+	public ProgrammeLoudnessPolicy(string profileId, double targetLufs, double toleranceLu, double maximumTruePeakDbtp)
+	{
+		if (string.IsNullOrWhiteSpace(profileId) || profileId.Length > 64)
+			throw new ArgumentException("A bounded loudness profile ID is required.", nameof(profileId));
+		if (!double.IsFinite(targetLufs) || targetLufs < -70 || targetLufs > 0)
+			throw new ArgumentOutOfRangeException(nameof(targetLufs));
+		if (!double.IsFinite(toleranceLu) || toleranceLu <= 0 || toleranceLu > 10)
+			throw new ArgumentOutOfRangeException(nameof(toleranceLu));
+		if (!double.IsFinite(maximumTruePeakDbtp) || maximumTruePeakDbtp < -20 || maximumTruePeakDbtp > 0)
+			throw new ArgumentOutOfRangeException(nameof(maximumTruePeakDbtp));
+		ProfileId = profileId;
+		TargetLufs = targetLufs;
+		ToleranceLu = toleranceLu;
+		MaximumTruePeakDbtp = maximumTruePeakDbtp;
+	}
+
+	public string ProfileId { get; }
+	public double TargetLufs { get; }
+	public double ToleranceLu { get; }
+	public double MaximumTruePeakDbtp { get; }
+
 	public static ProgrammeLoudnessPolicy EbuR128Linear { get; } =
 		new("ebu-r128-linear", -23.0, 1.0, -1.0);
-
-	public ProgrammeLoudnessPolicy
-	{
-		if (string.IsNullOrWhiteSpace(ProfileId) || ProfileId.Length > 64)
-			throw new ArgumentException("A bounded loudness profile ID is required.", nameof(ProfileId));
-		if (!double.IsFinite(TargetLufs) || TargetLufs < -70 || TargetLufs > 0)
-			throw new ArgumentOutOfRangeException(nameof(TargetLufs));
-		if (!double.IsFinite(ToleranceLu) || ToleranceLu <= 0 || ToleranceLu > 10)
-			throw new ArgumentOutOfRangeException(nameof(ToleranceLu));
-		if (!double.IsFinite(MaximumTruePeakDbtp) || MaximumTruePeakDbtp < -20 || MaximumTruePeakDbtp > 0)
-			throw new ArgumentOutOfRangeException(nameof(MaximumTruePeakDbtp));
-	}
 }
