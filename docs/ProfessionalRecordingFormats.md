@@ -42,6 +42,17 @@ The profile is useful for:
 - downstream ingest/interchange checks;
 - provider/catalog integration without a proprietary codec dependency.
 
+## Interchange evidence and R 154 distinction
+
+The read-only [broadcast file interchange inventory](BroadcastFileInterchangeProfiles.md)
+adds exact source/record tuple distinctions and an EBU R 154 v2.0 rejection
+matrix. The managed QuickTime and opt-in BMX recorder capabilities remain
+unchanged. The existing 1080p 8-bit stereo MXF writer does not output UHD HLG
+10-bit XAVC with 24-bit multitrack audio. ProRes, DNxHD/DNxHR and IMF
+import/export remain `NOT_SUPPORTED`. An independently validated MXF file can
+produce a bounded, SHA-256-bound EBUCore-oriented JSON metadata **observation**,
+not embedded EBUCore XML or preserved source timecode.
+
 ## MXF boundary
 
 MXF is not advertised by this implementation **by default**. The new `mxf-op1a-uncompressed-pcm` profile becomes visible as an executable software implementation only when RuntimeHost is explicitly enabled and supplied with fixed paths to BMX `raw2bmx` and an independent FFprobe executable. This addition does not change the managed QuickTime/MOV decision above: **No new native library or external executable is introduced for MOV.**
