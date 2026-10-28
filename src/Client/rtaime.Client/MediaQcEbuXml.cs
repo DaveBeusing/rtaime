@@ -221,11 +221,15 @@ public static class MediaQcEbuXml
 					(string?)e.Element(Q + "EBUQCVersion") != definition.Version ||
 					(bool?)e.Element(Q + "CheckResult") != (state == MediaQcCheckState.Pass) ||
 					(string?)e.Element(Q + "ResultDescription") != result.Detail ||
-					(int?)e.Element(Q + "MaxSeverity") != result.Severity)
+					(int?)e.Element(Q + "MaxSeverity") != result.Severity ||
+					(string?)e.Element(Q + "CreationDateTime") !=
+						(string?)binding.Attribute("createdUtc") ||
+					(string?)e.Element(Q + "ToolInformation")?.Element(Q + "Version") != result.ToolVersion)
 					throw new InvalidDataException("QC CheckResult and evidence extension disagree.");
 				var output = e.Element(Q + "Outputs")?.Elements(Q + "Output").SingleOrDefault();
 				if (output is null ||
 					(string?)output.Element(Q + "Value") != result.Detail ||
+					(string?)output.Element(Q + "Track") != result.TrackId ||
 					(int?)output.Element(Q + "Severity") != result.Severity ||
 					(result.Confidence is double declared
 						? (double?)output.Element(Q + "Confidence") != declared
