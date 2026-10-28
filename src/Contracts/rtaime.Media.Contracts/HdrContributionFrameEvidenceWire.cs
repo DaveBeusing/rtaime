@@ -24,7 +24,7 @@ public sealed class HdrContributionFrameEvidence
         if (!profile.IsExactR153LiveHlg ||
             layout.Width != profile.Width || layout.Height != profile.Height ||
             layout.PixelLayout != profile.Layout ||
-            contentSha256.Length != SHA256.HashSizeInBytes)
+            contentSha256.Length != 32)
             throw new ArgumentException("Exact authoritative R153 native layout and SHA-256 are required.");
         Profile = profile;
         Layout = layout;
@@ -150,7 +150,7 @@ public static class HdrContributionFrameEvidenceWire
                 BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(44, 8)),
                 BinaryPrimitives.ReadInt64LittleEndian(bytes.Slice(52, 8)), timebase);
             return new HdrContributionFrameEvidence(profile, layout, timing,
-                bytes.Slice(HashOffset, SHA256.HashSizeInBytes));
+                bytes.Slice(HashOffset, 32));
         }
         catch (Exception e) when (e is ArgumentException or OverflowException or DivideByZeroException)
         {
