@@ -295,7 +295,9 @@ public sealed class NmosDiscoveryAndConnectionTests
 			if (path.Contains("/health/nodes/", StringComparison.Ordinal))
 			{
 				heartbeats++;
-				return new HttpResponseMessage(heartbeats == 1 ? HttpStatusCode.NotFound : HttpStatusCode.OK);
+				return heartbeats == 1
+					? new HttpResponseMessage(HttpStatusCode.NotFound)
+					: Json(new { health = "1760000000" });
 			}
 			if (method == "POST")
 			{
@@ -319,6 +321,32 @@ public sealed class NmosDiscoveryAndConnectionTests
 		Assert.Equal(4, requests.Count(x => x == "POST /x-nmos/registration/v1.3/resource") / 2);
 		Assert.EndsWith($"/resource/nodes/{NodeId}", requests.Last(), StringComparison.Ordinal);
 		Assert.Contains("DELETE /x-nmos/registration/v1.3/resource/receivers/" + ReceiverId, requests);
+	}
+
+	[Fact]
+	public async Task Malformed_200_heartbeat_cannot_be_interpreted_as_healthy_registration()
+	{
+		var resources = new NmosVirtualResources(Virtual());
+		var entries = resources.RegistrationOrder().ToArray();
+		var next = 0;
+		using var http = new HttpClient(new FakeHttpHandler(request =>
+		{
+			if (request.RequestUri!.AbsolutePath.Contains("/health/nodes/", StringComparison.Ordinal))
+				return Json(new { fakeHealth = true });
+			var (type, id, data) = entries[next++];
+			var response = Json(data);
+			response.StatusCode = HttpStatusCode.Created;
+			response.Headers.Location = new Uri(
+				$"/x-nmos/registration/v1.3/resource/{type}s/{id}", UriKind.Relative);
+			return response;
+		}));
+		var registration = new NmosRegistrationClient(http,
+			"http://127.0.0.1:3211/x-nmos/registration/v1.3/", resources);
+		await registration.RegisterAsync(CancellationToken.None);
+		Assert.True(registration.IsRegistered);
+		await Assert.ThrowsAsync<InvalidDataException>(() =>
+			registration.HeartbeatAsync(CancellationToken.None));
+		Assert.False(registration.IsRegistered);
 	}
 
 	[Fact]
