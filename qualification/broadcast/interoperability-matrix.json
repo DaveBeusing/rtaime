@@ -1,0 +1,598 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "repository": "DaveBeusing/rtaime",
+  "assessmentPolicy": "SCOPED_EVIDENCE_NO_CERTIFICATION",
+  "standards": [
+    {
+      "id": "EBU-R128",
+      "organization": "EBU",
+      "category": "Recommendation",
+      "document": "R 128",
+      "edition": "5.0 (2023-11)",
+      "referenceUrl": "https://tech.ebu.ch/publications/r128"
+    },
+    {
+      "id": "EBU-R103",
+      "organization": "EBU",
+      "category": "Recommendation",
+      "document": "R 103",
+      "edition": "3.0 (2020-05)",
+      "referenceUrl": "https://tech.ebu.ch/publications/r103"
+    },
+    {
+      "id": "EBU-R153",
+      "organization": "EBU",
+      "category": "Recommendation",
+      "document": "R 153",
+      "edition": "2.0 (2023-06)",
+      "referenceUrl": "https://tech.ebu.ch/publications/r153"
+    },
+    {
+      "id": "EBU-R154",
+      "organization": "EBU",
+      "category": "Recommendation",
+      "document": "R 154",
+      "edition": "2.0 (2023-06)",
+      "referenceUrl": "https://tech.ebu.ch/publications/r154"
+    },
+    {
+      "id": "EBU-R143",
+      "organization": "EBU",
+      "category": "Recommendation",
+      "document": "R 143",
+      "edition": "3.0 (2025-03)",
+      "referenceUrl": "https://tech.ebu.ch/publications/r143"
+    },
+    {
+      "id": "EBU-TECH3371",
+      "organization": "EBU",
+      "category": "Technical recommendation",
+      "document": "Tech 3371",
+      "edition": "3.0 (2023-04)",
+      "referenceUrl": "https://tech.ebu.ch/publications/tech3371"
+    },
+    {
+      "id": "EBU-QC",
+      "organization": "EBU",
+      "category": "Data model",
+      "document": "QC Report / Catalogue API",
+      "edition": "2026-04 (Catalogue API v3)",
+      "referenceUrl": "https://github.com/ebu/qc/releases/tag/2026-04"
+    },
+    {
+      "id": "SMPTE-2110-20",
+      "organization": "SMPTE",
+      "category": "Standard",
+      "document": "ST 2110-20",
+      "edition": "2022",
+      "referenceUrl": "https://www.smpte.org/standards/st2110"
+    },
+    {
+      "id": "SMPTE-2110-30",
+      "organization": "SMPTE",
+      "category": "Standard",
+      "document": "ST 2110-30",
+      "edition": "2025 (normative interoperability UNVERIFIED; software reference subset)",
+      "referenceUrl": "https://www.smpte.org/standards/recently-updated-documents"
+    },
+    {
+      "id": "SMPTE-2022-7",
+      "organization": "SMPTE",
+      "category": "Standard",
+      "document": "ST 2022-7",
+      "edition": "2019",
+      "referenceUrl": "https://pub.smpte.org/latest/st2022-7/st2022-7-2019.pdf"
+    },
+    {
+      "id": "SMPTE-2059-2",
+      "organization": "SMPTE",
+      "category": "Standard",
+      "document": "ST 2059-2",
+      "edition": "2021",
+      "referenceUrl": "https://pub.smpte.org/pub/st2059-2/st2059-2-2021.pdf"
+    },
+    {
+      "id": "AMWA-IS04",
+      "organization": "AMWA",
+      "category": "Interface specification",
+      "document": "IS-04",
+      "edition": "v1.3.3",
+      "referenceUrl": "https://specs.amwa.tv/is-04/releases/v1.3.3/"
+    },
+    {
+      "id": "AMWA-IS05",
+      "organization": "AMWA",
+      "category": "Interface specification",
+      "document": "IS-05",
+      "edition": "v1.2.0",
+      "referenceUrl": "https://specs.amwa.tv/is-05/releases/v1.2.0/"
+    },
+    {
+      "id": "RTAIME-AVSYNC",
+      "organization": "rtaime",
+      "category": "Internal contract",
+      "document": "A/V sync reference diagnostics",
+      "edition": "1.0 (not a standards certificate)",
+      "referenceUrl": "https://github.com/DaveBeusing/rtaime/blob/master/docs/AvSyncDiagnostics.md"
+    },
+    {
+      "id": "RTAIME-FAILSAFE",
+      "organization": "rtaime",
+      "category": "Internal contract",
+      "document": "Broadcast continuity state",
+      "edition": "1.0 (not guaranteed physical continuity)",
+      "referenceUrl": "https://github.com/DaveBeusing/rtaime/blob/master/docs/BroadcastFailSafePlayout.md"
+    }
+  ],
+  "suites": [
+    {
+      "id": "r128-signal",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.ProgrammeLoudnessAnalyzerTests"
+      ],
+      "signal": "997 Hz calibration; gated programme loudness and software true-peak",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "r103-range",
+      "testProject": "tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Contracts.VideoRangeContractTests"
+      ],
+      "signal": "8/10-bit numeric range and color authority negative cases",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "hdr-color",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.HdrReferenceColorPipelineTests"
+      ],
+      "signal": "HLG reference precision and bounded SDR previews",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "uhd-format",
+      "testProject": "tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Contracts.UhdSdrVideoProfilesTests"
+      ],
+      "signal": "Exact UHD/SDR format identity and negative profile admission",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "file-interchange",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.BroadcastFileInterchangeProfileTests"
+      ],
+      "signal": "MXF/MOV/MP4 metadata and fail-closed UHD/HDR interchange profiles",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "av-sync",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.AvSyncDiagnosticsTests"
+      ],
+      "signal": "Rational frame/sample timing and A/V diagnostics",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "st2110-rtp",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.St2110SoftwareTransportTests"
+      ],
+      "signal": "RTP video/PCM/SDP reference and sequence wrap",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "st2022-merge",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.St2022SoftwarePacketMergeTests"
+      ],
+      "signal": "Independent logical packet impairments; software merger only",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "nmos-virtual",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.NmosDiscoveryAndConnectionTests"
+      ],
+      "signal": "IS-04 observer / virtual IS-05 loopback and unsafe activation denial",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "ebu-qc-xml",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.MediaQcEbuXmlTests"
+      ],
+      "signal": "EBU QC 2026-04 schema round-trip and source-bound check results",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "security-negatives",
+      "testProject": "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Unit.BroadcastGatewaySecurityTests"
+      ],
+      "signal": "Broadcast gateway negative security subset, not full R 143",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "fallback",
+      "testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Integration.BroadcastContinuityIntegrationTests"
+      ],
+      "signal": "Committed Program/Aux software failure and recovery",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    },
+    {
+      "id": "udp-loopback",
+      "testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+      "expectedClasses": [
+        "rtaime.Tests.Integration.St2110SoftwareLoopbackIntegrationTests"
+      ],
+      "signal": "Actual local UDP ST 2110 packet path without physical NIC",
+      "allowedEvidence": "TRX_SOURCE_BOUND",
+      "minimumTests": 1
+    }
+  ],
+  "requirements": [
+    {
+      "id": "R128-SOFT-LEVEL",
+      "standardId": "EBU-R128",
+      "profileId": "software-hd",
+      "suiteId": "r128-signal",
+      "scope": "software",
+      "implementer": "RuntimeHost audio monitoring",
+      "assessor": "Automated managed tests",
+      "fixture": "997 Hz stereo / silence / peaks",
+      "signalExpectation": "R128 software analyser calibrated; no independent broadcast meter verification",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R128-EXT-LOUDNESS",
+      "standardId": "EBU-R128",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Audio monitoring provider",
+      "assessor": "Independent audio lab",
+      "fixture": "Loudness test media + calibrated external meter",
+      "signalExpectation": "Capture integrated LUFS and dBTP; physical/equipment acceptance",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R103-SOFT-RANGE",
+      "standardId": "EBU-R103",
+      "profileId": "software-hd",
+      "suiteId": "r103-range",
+      "scope": "software",
+      "implementer": "Color monitoring contracts",
+      "assessor": "Automated managed tests",
+      "fixture": "8/10-bit range vectors",
+      "signalExpectation": "Numeric code bands and metadata fail-closed",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R103-EXT-RANGE",
+      "standardId": "EBU-R103",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "SDI/video output provider",
+      "assessor": "External broadcast waveform assessor",
+      "fixture": "SDR gray ramp and chroma range capture",
+      "signalExpectation": "Independent output code-value and color-range comparison",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R153-HLG-REF",
+      "standardId": "EBU-R153",
+      "profileId": "software-hd",
+      "suiteId": "hdr-color",
+      "scope": "software",
+      "implementer": "HDR processing references",
+      "assessor": "Automated managed tests",
+      "fixture": "HLG native precision / guarded SDR preview",
+      "signalExpectation": "HLG reference correctness subset; no live HDR I/O",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R153-EXT-UHD",
+      "standardId": "EBU-R153",
+      "profileId": "reference-uhd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "GPU + Media I/O + monitor providers",
+      "assessor": "Independent HDR contribution assessor",
+      "fixture": "UHD 3840x2160 50/59.94 HLG 10-bit 4:2:2",
+      "signalExpectation": "Reference monitor, output capture, metadata and HLG color chain",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R154-FILE-POLICY",
+      "standardId": "EBU-R154",
+      "profileId": "software-hd",
+      "suiteId": "file-interchange",
+      "scope": "software",
+      "implementer": "Recording/file interchange catalog",
+      "assessor": "Automated managed tests",
+      "fixture": "Profile rejection and metadata vectors",
+      "signalExpectation": "HD interchange subset and unsupported UHD/HDR profiles",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R154-EXT-FILE",
+      "standardId": "EBU-R154",
+      "profileId": "reference-uhd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Recording/interchange providers",
+      "assessor": "Independent interchange assessor",
+      "fixture": "UHD/HDR MXF/codec/metadata decoded file",
+      "signalExpectation": "Actual UHD/HDR file exchange and external decoder",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R143-NEGATIVE",
+      "standardId": "EBU-R143",
+      "profileId": "virtual-ip",
+      "suiteId": "security-negatives",
+      "scope": "software",
+      "implementer": "ControlHost / IntegrationHost",
+      "assessor": "Automated managed tests",
+      "fixture": "Loopback-only bridge and unauthorized clients",
+      "signalExpectation": "Selected Annex B control negatives, not full R143 certification",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "R143-FULL-ASSESSMENT",
+      "standardId": "EBU-R143",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Product security and operations",
+      "assessor": "Independent security assessor",
+      "fixture": "Deployed PKI/network threat model and Annex A/B evidence",
+      "signalExpectation": "Comprehensive vendor/product controls assessment",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "TECH3371-IP-NODE",
+      "standardId": "EBU-TECH3371",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "ST 2110 + NMOS provider",
+      "assessor": "External JT-NM/EBU IP lab",
+      "fixture": "Managed network node and switch/PTP environment",
+      "signalExpectation": "Independent media-node functionality/maturity profile",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "QC-DATA-MODEL",
+      "standardId": "EBU-QC",
+      "profileId": "software-hd",
+      "suiteId": "ebu-qc-xml",
+      "scope": "software",
+      "implementer": "Offline QC / Media Library",
+      "assessor": "Automated managed tests",
+      "fixture": "EBU 2026-04 XML and QC check definitions",
+      "signalExpectation": "Schema/round-trip only, not exhaustive QC measurement",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2110-20-RTP",
+      "standardId": "SMPTE-2110-20",
+      "profileId": "software-hd",
+      "suiteId": "st2110-rtp",
+      "scope": "software",
+      "implementer": "ST2110 provider",
+      "assessor": "Automated managed tests",
+      "fixture": "YCbCr 4:2:2 10-bit RFC4175 RTP video",
+      "signalExpectation": "Software RTP packetization and receiver only",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2110-30-PCM",
+      "standardId": "SMPTE-2110-30",
+      "profileId": "software-hd",
+      "suiteId": "st2110-rtp",
+      "scope": "software",
+      "implementer": "ST2110 provider",
+      "assessor": "Automated managed tests",
+      "fixture": "L24 48 kHz stereo 1 ms RTP",
+      "signalExpectation": "Software PCM/SDP subset; updated 2025 edition not independently conformance-tested",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2110-20-EXT",
+      "standardId": "SMPTE-2110-20",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "ST2110 NIC provider",
+      "assessor": "External RTP receiver assessor",
+      "fixture": "Dedicated NIC / switch / independent packet capture",
+      "signalExpectation": "Physical ST2110 -21 shaping, jitter, PTP and interoperability",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2110-30-EXT",
+      "standardId": "SMPTE-2110-30",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "ST2110 NIC provider",
+      "assessor": "External audio RTP assessor",
+      "fixture": "PTP-locked AES67/PCM peer receive",
+      "signalExpectation": "External PCM interoperability and channel mapping",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2110-LOOPBACK",
+      "standardId": "SMPTE-2110-20",
+      "profileId": "software-hd",
+      "suiteId": "udp-loopback",
+      "scope": "software",
+      "implementer": "RuntimeHost ST2110 loopback",
+      "assessor": "Automated managed tests",
+      "fixture": "127.0.0.1 UDP packet sender/receiver",
+      "signalExpectation": "Local UDP only, no NIC/multicast/PTP claim",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2022-7-MERGE",
+      "standardId": "SMPTE-2022-7",
+      "profileId": "software-hd",
+      "suiteId": "st2022-merge",
+      "scope": "software",
+      "implementer": "ST2110 protection adapter",
+      "assessor": "Automated managed tests",
+      "fixture": "Dual logical loss/skew/reorder fixture",
+      "signalExpectation": "Bounded software packet merge only",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2022-7-PHYSICAL",
+      "standardId": "SMPTE-2022-7",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Independent dual-NIC transport provider",
+      "assessor": "External redundant IP lab",
+      "fixture": "Disjoint NIC/switch paths and packet captures",
+      "signalExpectation": "Failover/holdover and packet recovery with independent links",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "IS04-VIRTUAL",
+      "standardId": "AMWA-IS04",
+      "profileId": "virtual-ip",
+      "suiteId": "nmos-virtual",
+      "scope": "software",
+      "implementer": "IntegrationHost NMOS observer",
+      "assessor": "Automated managed tests",
+      "fixture": "IS-04 v1.3.3 API synthetic registry",
+      "signalExpectation": "Observer/discovery and fail-closed virtual schema only",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "IS05-VIRTUAL",
+      "standardId": "AMWA-IS05",
+      "profileId": "virtual-ip",
+      "suiteId": "nmos-virtual",
+      "scope": "software",
+      "implementer": "IntegrationHost NMOS virtual activation",
+      "assessor": "Automated managed tests",
+      "fixture": "IS-05 v1.2.0 staging dry-run",
+      "signalExpectation": "Virtual staging only, never production activation",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "IS04-IS05-EXT",
+      "standardId": "AMWA-IS05",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "IntegrationHost / ControlHost connection",
+      "assessor": "External NMOS peer assessor",
+      "fixture": "Real registry and physical IS-05 receiver",
+      "signalExpectation": "Physical activate/rollback and IP ST2110 RTP",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "ST2059-2-PTP",
+      "standardId": "SMPTE-2059-2",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Media reference clock provider",
+      "assessor": "External clock lab",
+      "fixture": "Grandmaster/follower/PTP packet capture and holdover",
+      "signalExpectation": "Locked/holdover/lost timestamps and 5+ minute independent clock test",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "AV-SYNC-SOFT",
+      "standardId": "RTAIME-AVSYNC",
+      "profileId": "software-hd",
+      "suiteId": "av-sync",
+      "scope": "software",
+      "implementer": "Runtime clock and diagnostics",
+      "assessor": "Automated managed tests",
+      "fixture": "Rational 50 and 60000/1001 timestamps",
+      "signalExpectation": "Software A/V calculation/correlation only",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "AV-SYNC-EXT",
+      "standardId": "RTAIME-AVSYNC",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Runtime + physical output",
+      "assessor": "External A/V sync assessor",
+      "fixture": "LED flash + audio pulse + external capture",
+      "signalExpectation": "Measured physical lip sync and drift under load",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "FAILSAFE-SOFT",
+      "standardId": "RTAIME-FAILSAFE",
+      "profileId": "software-hd",
+      "suiteId": "fallback",
+      "scope": "software",
+      "implementer": "RuntimeHost output continuity",
+      "assessor": "Automated integration tests",
+      "fixture": "Fault injection on committed Program/Aux",
+      "signalExpectation": "Software incidents/recovery; no physical no-black guarantee",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "FAILSAFE-EXT",
+      "standardId": "RTAIME-FAILSAFE",
+      "profileId": "reference-hd",
+      "suiteId": null,
+      "scope": "physical",
+      "implementer": "Media I/O / standby device",
+      "assessor": "External Program continuity assessor",
+      "fixture": "Dual sink faults + A/V output capture",
+      "signalExpectation": "No-black/no-audio-gap failover under real device faults",
+      "defaultStatus": "UNVERIFIED"
+    },
+    {
+      "id": "UHD-SDR-PROFILE",
+      "standardId": "EBU-R153",
+      "profileId": "software-hd",
+      "suiteId": "uhd-format",
+      "scope": "software",
+      "implementer": "Media format contracts",
+      "assessor": "Automated contract tests",
+      "fixture": "3840x2160 SDR candidate / finite budget negative",
+      "signalExpectation": "Candidate UHD SDR admission only; not HLG/physical delivery",
+      "defaultStatus": "UNVERIFIED"
+    }
+  ]
+}

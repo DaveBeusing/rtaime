@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rtaime source-bound broadcast interoperability qualification report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "copyright",
+    "schemaVersion",
+    "repository",
+    "sourceCommit",
+    "generatedAtUtc",
+    "matrixSha256",
+    "configurationsSha256",
+    "assessmentScope",
+    "certificationClaim",
+    "releasePromotionPerformed",
+    "overallStatus",
+    "decision",
+    "configurations",
+    "suites",
+    "requirements"
+  ],
+  "properties": {
+    "copyright": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "repository": {
+      "const": "DaveBeusing/rtaime"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "matrixSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "configurationsSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "assessmentScope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "certificationClaim": {
+      "const": false
+    },
+    "releasePromotionPerformed": {
+      "const": false
+    },
+    "overallStatus": {
+      "type": "string",
+      "enum": [
+        "FAILED",
+        "UNVERIFIED"
+      ]
+    },
+    "decision": {
+      "const": "NO-GO"
+    },
+    "configurations": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "profileId",
+          "class",
+          "hardwareStatus",
+          "operatingSystem",
+          "gpu",
+          "driver",
+          "nic",
+          "switch",
+          "codec",
+          "display",
+          "recorder",
+          "receiver",
+          "ptp"
+        ],
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "VIRTUAL",
+              "SOFTWARE",
+              "REFERENCE_HARDWARE"
+            ]
+          },
+          "hardwareStatus": {
+            "const": "UNVERIFIED"
+          },
+          "operatingSystem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "driver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nic": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "switch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "codec": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recorder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ptp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "testCount",
+          "testDateUtc",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUALIFIED",
+              "FAILED",
+              "UNVERIFIED"
+            ]
+          },
+          "testCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "testDateUtc": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidence": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "testProject",
+                  "path",
+                  "sha256",
+                  "runId",
+                  "runAttempt",
+                  "exitCode"
+                ],
+                "properties": {
+                  "testProject": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]*$"
+                  },
+                  "runAttempt": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "exitCode": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "standardId",
+          "organization",
+          "edition",
+          "profileId",
+          "scope",
+          "implementer",
+          "assessor",
+          "fixture",
+          "signalExpectation",
+          "status",
+          "testDateUtc",
+          "evidenceSha256"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "standardId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "organization": {
+            "type": "string",
+            "enum": [
+              "EBU",
+              "SMPTE",
+              "AMWA",
+              "rtaime"
+            ]
+          },
+          "edition": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profileId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "software",
+              "physical"
+            ]
+          },
+          "implementer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assessor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fixture": {
+            "type": "string",
+            "minLength": 1
+          },
+          "signalExpectation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUALIFIED",
+              "FAILED",
+              "UNVERIFIED"
+            ]
+          },
+          "testDateUtc": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidenceSha256": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

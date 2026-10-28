@@ -102,6 +102,20 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: Qualify source-bound broadcast interoperability software suites
+        shell: pwsh
+        timeout-minutes: 14
+        run: |
+          ./build/qualification/Invoke-BroadcastInteroperabilityQualification.ps1 -RunTests -ExpectedSourceCommit "${{ github.event.pull_request.head.sha || github.sha }}" -RunId "${{ github.run_id }}" -RunAttempt "${{ github.run_attempt }}"
+
+      - name: Preserve broadcast interoperability report and test evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-broadcast-interoperability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/broadcast
+          if-no-files-found: warn
+
       - name: EBU R 103 source-code and Color Review negative qualification
         shell: pwsh
         run: |
@@ -532,6 +546,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-BroadcastContinuityPolicy.ps1
 
+      - name: Reject forged broadcast interoperability and false hardware qualification
+        shell: pwsh
+        run: ./build/qualification/Test-BroadcastInteroperabilityVerifierRegression.ps1
+
       - name: Verify EBU Timed Text interchange and Program isolation policy
         shell: pwsh
         run: ./build/quality/Test-TimedTextInterchangePolicy.ps1
@@ -909,6 +927,13 @@ jobs:
         with:
           name: rtaime-packaged-e2e-${{ github.run_id }}
           path: artifacts/readiness/packaged
+      - name: Collect source-bound broadcast software report
+        if: ${{ needs.ci.result == 'success' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: rtaime-broadcast-interoperability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/broadcast
+
       - name: Select retained mixed-load artifact by run and source
         if: ${{ needs.ci.result == 'success' }}
         id: mixed-artifact
@@ -959,6 +984,9 @@ jobs:
             if ($summaries.Count -ne 1) { throw "Short staged evidence inventory is ambiguous or incomplete." }
             $indexParams.MixedLoadEvidencePaths = @($summaries[0].FullName)
           }
+          if (Test-Path -LiteralPath artifacts/qualification/broadcast/interoperability-report.json) {
+            $indexParams.BroadcastInteroperabilityReportPath = "artifacts/qualification/broadcast/interoperability-report.json"
+          }
           $result = ./build/release/New-ReleaseReadinessIndex.ps1 @indexParams
           if ($result.overallStatus -eq "FAIL") { throw "Release readiness evidence has a failed domain. See retained index." }
       - name: Preserve release readiness index and inputs
@@ -966,5 +994,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: rtaime-release-readiness-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/readiness
+          path: |
+            artifacts/readiness
+            artifacts/qualification/broadcast
           if-no-files-found: error

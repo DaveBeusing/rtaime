@@ -1,0 +1,61 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+name: Broadcast interoperability software reference
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "qualification/broadcast/**"
+      - "build/qualification/*Broadcast*"
+      - "build/release/New-ReleaseReadinessIndex.ps1"
+      - "schemas/qualification/v1/broadcast-*"
+      - "docs/BroadcastInteroperabilityQualification.md"
+      - ".github/workflows/broadcast-interoperability-software.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broadcast-interoperability-software-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  software-reference:
+    name: Broadcast software qualification and provenance only
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Verify fail-closed evidence and no physical promotion
+        shell: pwsh
+        run: ./build/qualification/Test-BroadcastInteroperabilityVerifierRegression.ps1
+
+      - name: Restore solution
+        run: dotnet restore rtaime.slnx
+
+      - name: Build canonical Release project graph
+        shell: pwsh
+        run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+
+      - name: Qualify actual source-bound broadcast software suites
+        shell: pwsh
+        run: |
+          ./build/qualification/Invoke-BroadcastInteroperabilityQualification.ps1 -RunTests -ExpectedSourceCommit "${{ github.event.pull_request.head.sha || github.sha }}" -RunId "${{ github.run_id }}" -RunAttempt "${{ github.run_attempt }}"
+
+      - name: Preserve source-bound software artifacts and negative evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-broadcast-software-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/broadcast
+          if-no-files-found: warn

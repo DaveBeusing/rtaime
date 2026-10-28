@@ -133,3 +133,22 @@ pre/post device/controller observations and capture interval. Contradiction is F
 valid inventory remains UNVERIFIED for physical support. It is not a new binding type
 and cannot satisfy any physical release requirement. See the
 [reference SSD acceptance procedures](ReferenceSsdHardwareAcceptance.md).
+
+
+## Broadcast interoperability assessment boundary
+
+The [Broadcast Interoperability Qualification](BroadcastInteroperabilityQualification.md)
+records pinned EBU, SMPTE and AMWA reference requirements, software test
+classes, profile/device inventory and source-bound TRX evidence. It uses
+a **separate supplemental report schema** instead of expanding
+qualification-evidence-policy.json with an unapproved hardware-binding type.
+Current CUDA_REFERENCE, MEDIA_IO_REFERENCE and TIMING_REFERENCE_SOAK
+authorization and all twelve release hardware dimensions are unchanged.
+
+Only an exact-source, hash-verified TRX record with actual executed test
+coverage can become a scoped software QUALIFIED outcome. The report
+cannot emit SUPPORTED or a formal EBU/SMPTE/AMWA certificate. Hardware
+requirements stay UNVERIFIED until a separately specified physical
+provider/profile, external devices and capture method have an approved
+qualification binding and the existing offline release-verification chain
+accepts its bytes. Green hosted CI cannot promote physical test scope.

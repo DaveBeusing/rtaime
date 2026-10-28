@@ -254,3 +254,23 @@ As of 27 October 2026, [#401](https://github.com/DaveBeusing/rtaime/issues/401)
 needs same-workload causal memory analysis and [#347](https://github.com/DaveBeusing/rtaime/issues/347)
 needs authorized live GitHub branch protection. Both must be reassessed against
 the exact intended release source; a prior passing run is never a substitute.
+
+
+## Broadcast standards and reference hardware support
+
+The [Broadcast Interoperability Qualification](BroadcastInteroperabilityQualification.md)
+provides a status inventory with separate virtual, software, HD
+reference-hardware and UHD reference-hardware profiles. It neither
+declares a product supported for a GPU/driver/NIC/switch/codec/display
+combination nor certifies an EBU, SMPTE or AMWA standard. Unmeasured
+reference-device fields remain null/UNVERIFIED, regardless of successful
+source-bound software tests or a published preview package.
+
+An external assessor must record actual OS, driver, GPU/NIC/switch,
+reference clock, decoder/recorder, receiver, reference signal and
+measured A/V, loudness, color, RTP, failover and soak outcomes before
+a physical support configuration can be reviewed for approval.
+The readiness index records these missing dimensions as NO-GO while
+preserving existing Stable lifecycle, known-issues, signing and
+production trust controls. See the pinned requirement and acceptance
+matrix before any support, sales or marketing claim.

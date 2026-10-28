@@ -11,6 +11,7 @@ param(
     [string[]]$SsdPlaybackEvidencePaths = @(),
     [string[]]$SsdPlaybackEnvironmentPaths = @(),
     [string]$RendererRunsPath = "",
+    [string]$BroadcastInteroperabilityReportPath = "",
     [Parameter(Mandatory)][string]$OutputPath
 )
 Set-StrictMode -Version Latest
@@ -118,6 +119,86 @@ foreach ($requirement in @($releasePolicy.hardwareQualification)) {
     }
     Add-Result "physicalRequirement.$name" $status "compatibility-manifest.json" $detail
 }
+# Broadcast software evidence is supplementary to ReleaseEvidence and the physical
+# QualificationEvidenceProvenance binding authority. It may validate managed tests,
+# but must never override an unverified physical/network/clock requirement.
+$broadcastMatrix = Get-Content -LiteralPath (Join-Path $root "qualification/broadcast/interoperability-matrix.json") -Raw | ConvertFrom-Json -Depth 64
+$broadcastReport = $null
+if (-not [string]::IsNullOrWhiteSpace($BroadcastInteroperabilityReportPath)) {
+    try {
+        $broadcastPath = Retain-Input $BroadcastInteroperabilityReportPath "broadcast-interoperability-report"
+        & (Join-Path $root "build/qualification/Test-BroadcastInteroperabilityReport.ps1") -ReportPath $broadcastPath -ExpectedSourceCommit $ExpectedSourceCommit
+        $broadcastReport = Get-Content -LiteralPath $broadcastPath -Raw | ConvertFrom-Json -Depth 64
+        if ([string]::IsNullOrWhiteSpace($RequiredGatesPath)) {
+            throw "Broadcast software report requires a matching Required Gates run snapshot."
+        }
+        $gatesFull = Resolve-Input $RequiredGatesPath
+        if (-not (Test-Path -LiteralPath $gatesFull -PathType Leaf)) {
+            throw "Required Gates run snapshot is missing for broadcast evidence."
+        }
+        $gateSnapshot = Get-Content -LiteralPath $gatesFull -Raw | ConvertFrom-Json -Depth 64
+        if ([string]$gateSnapshot.run.head_sha -cne $ExpectedSourceCommit -or
+            [string]$gateSnapshot.run.repository.full_name -cne "DaveBeusing/rtaime" -or
+            [long]$gateSnapshot.run.id -lt 1 -or [int]$gateSnapshot.run.run_attempt -lt 1) {
+            throw "Broadcast report source/run is not corroborated by Required Gates."
+        }
+        $ciJobs = @($gateSnapshot.jobs | Where-Object {
+            $_.name -eq "CI" -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and
+            [long]$_.run_id -eq [long]$gateSnapshot.run.id -and
+            [int]$_.run_attempt -eq [int]$gateSnapshot.run.run_attempt
+        })
+        if ($ciJobs.Count -ne 1) { throw "Broadcast software report requires exactly one successful same-run CI job." }
+        foreach ($suite in @($broadcastReport.suites | Where-Object { $null -ne $_.evidence })) {
+            if ([string]$suite.evidence.runId -cne [string]$gateSnapshot.run.id -or
+                [int]$suite.evidence.runAttempt -ne [int]$gateSnapshot.run.run_attempt) {
+                throw "Broadcast TRX report run/attempt differs from the verified Required Gates snapshot."
+            }
+        }
+        foreach ($suite in @($broadcastReport.suites | Where-Object { $null -ne $_.evidence })) {
+            if (@($inputs | Where-Object { $_.kind -eq "broadcast-interoperability-trx" -and $_.path -eq (Resolve-Input ([string]$suite.evidence.path)) }).Count -eq 0) {
+                $null = Retain-Input ([string]$suite.evidence.path) "broadcast-interoperability-trx"
+            }
+        }
+    } catch {
+        Add-Result "broadcastInteroperabilityVerification" "FAIL" $BroadcastInteroperabilityReportPath $_.Exception.Message
+        $broadcastReport = $null
+    }
+}
+$reportRequirements = @{}
+if ($null -ne $broadcastReport) {
+    foreach ($entry in @($broadcastReport.requirements)) {
+        $reportRequirements[[string]$entry.id] = $entry
+    }
+}
+foreach ($requirement in @($broadcastMatrix.requirements)) {
+    $id = [string]$requirement.id
+    $status = "UNVERIFIED"
+    $details = "No independently verified source-bound suite or physical reference-device report."
+    if ($reportRequirements.ContainsKey($id)) {
+        $record = $reportRequirements[$id]
+        if ([string]$record.scope -eq "software" -and [string]$record.status -eq "QUALIFIED") {
+            $status = "PASS"
+            $details = "Exact-source managed TRX evidence verified; strictly software scope, not normative compliance."
+        } elseif ([string]$record.status -eq "FAILED") {
+            $status = "FAIL"
+            $details = "Recorded broadcast software qualification failed."
+        } else {
+            $details = "No source-bound passing evidence for this scope; physical support remains UNVERIFIED."
+        }
+    }
+    Add-Result "broadcastRequirement.$id" $status "broadcast-interoperability-report.json" $details
+}
+# Keep the top-level software status explicit and do not use it to bypass individual
+# requirement or physical gates.
+if ($null -eq $broadcastReport) {
+    Add-Result "broadcastInteroperabilitySoftware" "UNVERIFIED" "broadcast-interoperability-report.json" "No verified software qualification report was supplied."
+} else {
+    $suiteFailures = @($broadcastReport.suites | Where-Object status -eq "FAILED").Count
+    $suiteMissing = @($broadcastReport.suites | Where-Object status -ne "QUALIFIED").Count
+    $softwareStatus = if ($suiteFailures -gt 0) { "FAIL" } elseif ($suiteMissing -gt 0) { "UNVERIFIED" } else { "PASS" }
+    Add-Result "broadcastInteroperabilitySoftware" $softwareStatus "broadcast-interoperability-report.json" "Only the verified software suite set is assessed; it cannot satisfy physical ReleaseEvidence bindings."
+}
+Add-Result "broadcastInteroperabilityPhysical" "UNVERIFIED" "qualification/reference-platform" "Dedicated NIC/switch/PTP, physical RTP/NMOS, GPU/UHD/HDR and external receiver evidence have not been supplied through verified independent qualification bindings."
 $packageStatus = "UNVERIFIED"; $packageDetail = "No exact-source verified packaged candidate was supplied."
 if (-not [string]::IsNullOrWhiteSpace($QualificationCandidatePath)) {
     try {
