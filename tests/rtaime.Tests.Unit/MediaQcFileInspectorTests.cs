@@ -110,7 +110,7 @@ public sealed class MediaQcFileInspectorTests
 	public async Task Worker_enforces_queue_quota_and_cancellation_without_production_actions()
 	{
 		var root = TempRoot();
-		await using var worker = new MediaQcScheduler(Path.Combine(root, "reports"));
+		var worker = new MediaQcScheduler(Path.Combine(root, "reports"));
 		try
 		{
 			var bytes = Movie();
