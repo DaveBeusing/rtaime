@@ -197,6 +197,17 @@ public sealed class VideoSignalRangeAnalysisTests
 	}
 
 	[Fact]
+	public void Invalid_gpu_excursion_counters_cannot_produce_a_clean_range_verdict()
+	{
+		var counts = new uint[GpuMonitoringAnalysisPolicy.CombinedResultCount];
+		counts[GpuMonitoringAnalysisPolicy.SignalResultOffset + 1] = 5;
+		var invalid = MediaScopeSnapshot.FromGpuResultBuffer(
+			42, 4, 4, Limited(8), 2, 4, counts, TimeSpan.Zero);
+		Assert.Equal(VideoRangeSampleStatus.Unavailable, invalid.SignalRange!.Status);
+		Assert.Contains("inconsistent", invalid.SignalRange.Detail, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Legacy_gpu_scope_result_remains_loadable_without_fake_range_evidence()
 	{
 		var scope = MediaScopeSnapshot.FromGpuResultBuffer(
