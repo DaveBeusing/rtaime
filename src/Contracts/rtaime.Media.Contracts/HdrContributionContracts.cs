@@ -111,7 +111,7 @@ public sealed record HdrContributionVideoProfile
 
     public bool IsExactR153LiveHlg =>
         Width == 3840 && Height == 2160 &&
-        (FrameRate == FrameRate.Fps50 || FrameRate == FrameRate.Fps59_94) &&
+        (FrameRate == rtaime.Core.FrameRate.Fps50 || FrameRate == rtaime.Core.FrameRate.Fps59_94) &&
         Layout == HdrNativePixelLayout.PlanarYcbcr422P10Le &&
         Metadata.IsAuthoritativeHlg422;
 }
