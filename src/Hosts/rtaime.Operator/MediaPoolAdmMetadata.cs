@@ -39,7 +39,8 @@ public sealed partial class MediaPoolInspectorViewModel
 		_admInspection is { } current &&
 		TryGetAdmAsset(out var asset) &&
 		current.Interchange.AssetId == asset.AssetId.ToString() &&
-		current.Interchange.FingerprintSha256 == asset.FingerprintSha256;
+		string.Equals(current.Interchange.FingerprintSha256,
+			asset.FingerprintSha256, StringComparison.OrdinalIgnoreCase);
 
 	private bool TryGetAdmAsset(out MediaAssetDescriptor asset)
 	{
