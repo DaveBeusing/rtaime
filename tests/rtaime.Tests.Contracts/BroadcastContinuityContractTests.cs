@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using rtaime.Runtime.Contracts;
 
 namespace rtaime.Tests.Contracts;
