@@ -71,8 +71,8 @@ public sealed class NmosDiscoveryAndConnectionTests
 		Assert.Equal(4, snapshot.Resources.Count);
 		Assert.True(snapshot.IsFresh);
 		Assert.False(snapshot.HasAdmittedLocalRtpProviders);
-		Assert.Equal(1, snapshot.OfKind(NmosResourceKind.Node).Count);
-		Assert.Equal(0, snapshot.OfKind(NmosResourceKind.Flow).Count);
+		Assert.Single(snapshot.OfKind(NmosResourceKind.Node));
+		Assert.Empty(snapshot.OfKind(NmosResourceKind.Flow));
 		var plan = NmosConnectionPlanner.Preview(snapshot, SenderId, ReceiverId);
 		Assert.Equal("UNVERIFIED", plan.Status);
 		Assert.False(plan.EligibleForProductionActivation);
@@ -228,7 +228,7 @@ public sealed class NmosDiscoveryAndConnectionTests
 		Assert.True(await session.HeartbeatAsync(CancellationToken.None));
 		await session.UnregisterAsync(CancellationToken.None);
 		Assert.False(session.IsRegistered);
-		Assert.Equal(4, requests.Count(x => x == "POST /x-nmos/registration/v1.3/resource/") / 2);
+		Assert.Equal(4, requests.Count(x => x == "POST /x-nmos/registration/v1.3/resource") / 2);
 		Assert.EndsWith($"/resource/nodes/{NodeId}", requests.Last(), StringComparison.Ordinal);
 		Assert.Contains("DELETE /x-nmos/registration/v1.3/resource/receivers/" + ReceiverId, requests);
 	}
@@ -344,14 +344,14 @@ public sealed class NmosDiscoveryAndConnectionTests
 			"{\"sender_id\":\"" + SenderId + "\",\"master_enable\":true,\"activation\":{\"mode\":\"activate_immediate\"}}",
 			Encoding.UTF8, "application/json");
 		using var rejected = await client.PatchAsync(
-			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/staged/", unsafeRequest);
+			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/staged", unsafeRequest);
 		Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
 		Assert.Equal(0UL, adapter.VirtualConnectionRevision);
 		using var disable = new StringContent(
 			"{\"master_enable\":false,\"activation\":{\"mode\":\"activate_immediate\"}}",
 			Encoding.UTF8, "application/json");
 		using var accepted = await client.PatchAsync(
-			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/staged/", disable);
+			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/staged", disable);
 		Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
 		var active = await client.GetFromJsonAsync<JsonElement>(
 			$"/x-nmos/connection/v1.2/single/receivers/{ReceiverId}/active/");
