@@ -355,6 +355,102 @@ public sealed class MediaAssetCatalogIntegrationTests
 			new ProbeRuntimeTransport(),
 			new MediaAssetCatalogPersistenceStore(management));
 
+    [Fact]
+    public async Task Interchange_metadata_is_revision_fenced_persistent_and_preserved_by_relink()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-interchange-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "original.mp4");
+            var moved = Path.Combine(root, "moved.mp4");
+            await File.WriteAllBytesAsync(source, [1, 2, 3, 4, 5, 6]);
+            File.Copy(source, moved);
+            await using var management = new SqliteManagementStore(Path.Combine(root, "catalog.db"));
+            var persistence = new MediaAssetCatalogPersistenceStore(management);
+            var service = new MediaAssetCatalogService(new ProbeRuntimeTransport(), persistence);
+            var imported = Assert.Single((await service.ImportAsync([source])).Snapshot.Assets);
+            Assert.NotNull(imported.InterchangeMetadata);
+            Assert.Contains(imported.InterchangeMetadata.Fields, value =>
+                value.Path == "video.0.frameRate" &&
+                value.Source == MediaInterchangeSource.ProviderProbe);
+
+            var originalRevision = (await service.GetSnapshotAsync(false)).Revision;
+            var authoring = new MediaInterchangeMetadata(
+                MediaInterchangeMetadata.CurrentFormat, imported.FingerprintSha256,
+                [new MediaInterchangeField("title", "Approved title",
+                    MediaInterchangeSource.User, "confirmed operator entry", DateTimeOffset.UtcNow)]);
+            var changed = await service.UpsertInterchangeAsync(
+                imported.AssetId, originalRevision, imported.FingerprintSha256, authoring);
+            Assert.True(changed.Revision > originalRevision);
+            Assert.Equal(imported.AssetId, Assert.Single(changed.Assets).AssetId);
+            Assert.Equal(imported.FingerprintSha256, Assert.Single(changed.Assets).FingerprintSha256);
+            Assert.Contains(Assert.Single(changed.Assets).InterchangeMetadata!.Fields,
+                value => value.Path == "title" && value.Value == "Approved title");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await service.UpsertInterchangeAsync(
+                    imported.AssetId, originalRevision, imported.FingerprintSha256, authoring));
+            var lesserSource = authoring with
+            {
+                Fields = [new MediaInterchangeField("title", "From embedded source",
+                    MediaInterchangeSource.Embedded, "file metadata", DateTimeOffset.UtcNow)]
+            };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await service.UpsertInterchangeAsync(
+                    imported.AssetId, changed.Revision, imported.FingerprintSha256, lesserSource));
+
+            var restarted = new MediaAssetCatalogService(new ProbeRuntimeTransport(), persistence);
+            var restored = Assert.Single((await restarted.GetSnapshotAsync(false)).Assets);
+            Assert.Equal(imported.AssetId, restored.AssetId);
+            Assert.Equal("Approved title",
+                restored.InterchangeMetadata!.Fields.Single(f => f.Path == "title").Value);
+            File.Delete(source);
+            var missing = Assert.Single((await restarted.RefreshAvailabilityAsync()).Assets);
+            Assert.Equal(MediaAssetAvailability.Missing, missing.Availability);
+            Assert.NotNull(missing.InterchangeMetadata);
+            var relinked = Assert.Single((await restarted.RelinkAsync(imported.AssetId, moved)).Snapshot.Assets);
+            Assert.Equal(imported.AssetId, relinked.AssetId);
+            Assert.Equal(imported.FingerprintSha256, relinked.FingerprintSha256);
+            Assert.Equal(MediaInterchangeSource.User,
+                relinked.InterchangeMetadata!.Fields.Single(f => f.Path == "title").Source);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task Existing_catalogue_document_without_interchange_keeps_identity_and_remains_editable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rtaime-interchange-legacy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await using var management = new SqliteManagementStore(Path.Combine(root, "catalog.db"));
+            var storage = new MediaAssetCatalogPersistenceStore(management);
+            var expected = Descriptor(new MediaAssetId(Id(19)), Path.Combine(root, "legacy.mp4"), new string('F', 64));
+            var snapshot = new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 9, [expected]);
+            var save = await storage.SaveAsync(snapshot);
+            Assert.True(save.Written);
+            var loaded = await storage.LoadAsync();
+            var legacy = Assert.Single(loaded.Snapshot.Assets);
+            Assert.Null(legacy.InterchangeMetadata);
+            Assert.Equal(expected.AssetId, legacy.AssetId);
+            Assert.Equal(expected.FingerprintSha256, legacy.FingerprintSha256);
+            Assert.Equal(9UL, loaded.Snapshot.Revision);
+            var runtime = new ProbeRuntimeTransport();
+            var catalog = new MediaAssetCatalogService(runtime, storage);
+            var metadata = new MediaInterchangeMetadata(
+                MediaInterchangeMetadata.CurrentFormat, legacy.FingerprintSha256,
+                [new MediaInterchangeField("language", "en",
+                    MediaInterchangeSource.User, "catalogue metadata update", DateTimeOffset.UtcNow)]);
+            var updated = await catalog.UpsertInterchangeAsync(
+                legacy.AssetId, loaded.Snapshot.Revision, legacy.FingerprintSha256, metadata);
+            Assert.Equal(10UL, updated.Revision);
+            Assert.Equal(legacy.AssetId, Assert.Single((await storage.LoadAsync()).Snapshot.Assets).AssetId);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
 	private static MediaAssetDescriptor Descriptor(
 		MediaAssetId assetId,
 		string sourceLocation,
