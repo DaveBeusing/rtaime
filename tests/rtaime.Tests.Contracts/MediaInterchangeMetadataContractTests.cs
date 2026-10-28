@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using rtaime.Core;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Tests.Contracts;
@@ -94,6 +95,23 @@ public sealed class MediaInterchangeMetadataContractTests
             Projection() with { Unmapped = new Dictionary<string, string> { ["vendor"] = "B" } }));
         Assert.Throws<InvalidDataException>(() =>
             MediaInterchangeJson.Import(MediaInterchangeJson.Export(original), new string('B', 64)));
+    }
+
+    [Fact]
+    public void Probe_does_not_invent_audio_tracks_when_source_has_no_audio()
+    {
+        var now = new UtcTimestamp(Observed);
+        var asset = new MediaAssetDescriptor(MediaAssetId.New(),
+            MediaAssetOriginKind.LocalFile, @"C:\media\silent.mp4", "Silent source",
+            MediaContainerFormat.Mp4, MediaVideoCodec.H264, MediaAudioCodec.None,
+            VideoFormat.Hd1080p50Rgba8, AudioFormat.Stereo48kFloat32,
+            TimeSpan.FromSeconds(5), 4096, Fingerprint, now, now, MediaAssetAvailability.Online);
+        var metadata = MediaInterchangeMetadata.FromProbe(asset);
+        Assert.DoesNotContain(metadata.Fields,
+            field => field.Path.StartsWith("audio.", StringComparison.Ordinal));
+        Assert.Contains(metadata.Fields,
+            field => field.Path == "video.0.frameRate" && field.Value == "50/1");
+        MediaInterchangeJson.Import(MediaInterchangeJson.Export(metadata), Fingerprint);
     }
 
     [Fact]
