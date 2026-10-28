@@ -108,37 +108,111 @@ public sealed class NmosRegistryDiscoveryClient
 		var identifiers = new HashSet<string>(StringComparer.Ordinal);
 		foreach (var (kind, path) in Collections)
 		{
-			using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(_queryRoot, path + "/"));
-			request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-			using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-			if (response.StatusCode != HttpStatusCode.OK)
-				throw new InvalidDataException($"IS-04 {kind} Query returned an unsupported status.");
-			if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
-				throw new InvalidDataException("IS-04 Query response must carry application/json.");
-			await response.Content.LoadIntoBufferAsync(512 * 1024, cancellationToken).ConfigureAwait(false);
-			using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-			using var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+			var count = 0;
+			var queryPath = path + "/";
+			// The API may cap the page size and return only the newest N resources.
+			// Follow the server's earlier-than cursor until the full bounded collection is observed.
+			var pageUrl = new Uri(_queryRoot, queryPath + "?paging.order=create&paging.limit=" + _maxPerType);
+			string? previousSince = null;
+			var triedUnpaged = false;
+			var complete = false;
+			for (var page = 0; page < 64; page++)
 			{
-				MaxDepth = 24,
-				AllowTrailingCommas = false,
-				CommentHandling = JsonCommentHandling.Disallow
-			}, cancellationToken).ConfigureAwait(false);
-			if (document.RootElement.ValueKind != JsonValueKind.Array ||
-				document.RootElement.GetArrayLength() > _maxPerType)
-				throw new InvalidDataException("IS-04 Query collection is malformed or exceeds configured bounds.");
-			foreach (var entry in document.RootElement.EnumerateArray())
-			{
-				var item = ParseResource(entry, kind);
-				if (!identifiers.Add(item.Id))
-					throw new InvalidDataException("IS-04 Query returned duplicate resource identities.");
-				resources.Add(item);
+				using var request = new HttpRequestMessage(HttpMethod.Get, pageUrl);
+				request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+				using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+				if (response.StatusCode == HttpStatusCode.NotImplemented && !triedUnpaged)
+				{
+					// Registries without pagination MUST reject it as 501; retry once unpaged.
+					// A subsequent paged response without cursor metadata cannot be accepted.
+					triedUnpaged = true;
+					pageUrl = new Uri(_queryRoot, queryPath);
+					continue;
+				}
+				if (response.StatusCode != HttpStatusCode.OK)
+					throw new InvalidDataException($"IS-04 {kind} Query returned an unsupported status.");
+				if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+					throw new InvalidDataException("IS-04 Query response must carry application/json.");
+				await response.Content.LoadIntoBufferAsync(512 * 1024, cancellationToken).ConfigureAwait(false);
+				using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+				using var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+				{
+					MaxDepth = 24,
+					AllowTrailingCommas = false,
+					CommentHandling = JsonCommentHandling.Disallow
+				}, cancellationToken).ConfigureAwait(false);
+				if (document.RootElement.ValueKind != JsonValueKind.Array)
+					throw new InvalidDataException("IS-04 Query collection must be a JSON array.");
+				var pageCount = document.RootElement.GetArrayLength();
+				if (pageCount > _maxPerType - count)
+					throw new InvalidDataException("IS-04 Query collection exceeds the configured resource limit.");
+				foreach (var entry in document.RootElement.EnumerateArray())
+				{
+					var item = ParseResource(entry, kind);
+					if (!identifiers.Add(item.Id))
+						throw new InvalidDataException("IS-04 Query returned duplicate resource identities.");
+					resources.Add(item);
+				}
+				count += pageCount;
+				if (!response.Headers.TryGetValues("X-Paging-Limit", out var limits))
+				{
+					if (response.Headers.Contains("Link"))
+						throw new InvalidDataException("IS-04 Query offers paging links without required X-Paging metadata.");
+					complete = true;
+					break;
+				}
+				var limitText = limits.SingleOrDefault();
+				if (!int.TryParse(limitText, out var pageLimit) || pageLimit is < 1 or > 100000 ||
+					pageCount > pageLimit ||
+					!response.Headers.TryGetValues("X-Paging-Since", out var sinceValues) ||
+					!response.Headers.TryGetValues("X-Paging-Until", out var untilValues))
+					throw new InvalidDataException("IS-04 Query paging limit/cursor metadata is missing or invalid.");
+				var since = sinceValues.SingleOrDefault();
+				var until = untilValues.SingleOrDefault();
+				if (!TryTaiCursor(since, out var seconds, out var nanos) ||
+					!TryTaiCursor(until, out _, out _) ||
+					(previousSince is not null && !IsEarlier(since!, previousSince)))
+					throw new InvalidDataException("IS-04 Query paging cursor is malformed, repeated or not decreasing.");
+				if (pageCount == 0 || pageCount < pageLimit || (seconds == 0 && nanos == 0))
+				{
+					complete = true;
+					break;
+				}
+				if (count == _maxPerType)
+					throw new InvalidDataException("IS-04 Query reached resource capacity while more pages may exist.");
+				previousSince = since;
+				pageUrl = new Uri(_queryRoot, queryPath + "?paging.order=create&paging.limit=" +
+					_maxPerType + "&paging.until=" + Uri.EscapeDataString(since!));
 			}
+			if (!complete)
+				throw new InvalidDataException("IS-04 Query page count exceeded bounded traversal without completing.");
 		}
 		ValidateParents(resources);
 		var generation = ++_generation;
 		return new("OBSERVED", _queryRoot.AbsoluteUri, DateTimeOffset.UtcNow, generation,
 			Array.AsReadOnly(resources.ToArray()),
 			$"Validated {resources.Count} NMOS resources across six v1.3 Query collections; no local RTP/SDP provider admitted.");
+	}
+
+	private static bool TryTaiCursor(string? value, out ulong seconds, out uint nanos)
+	{
+		seconds = 0;
+		nanos = 0;
+		if (value is null) return false;
+		var parts = value.Split(':');
+		return parts.Length == 2 &&
+			ulong.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out seconds) &&
+			uint.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out nanos) &&
+			nanos < 1_000_000_000;
+	}
+
+	private static bool IsEarlier(string candidate, string previous)
+	{
+		if (!TryTaiCursor(candidate, out var candidateSeconds, out var candidateNanos) ||
+			!TryTaiCursor(previous, out var previousSeconds, out var previousNanos))
+			return false;
+		return candidateSeconds < previousSeconds ||
+			(candidateSeconds == previousSeconds && candidateNanos < previousNanos);
 	}
 
 	private static NmosResourceSummary ParseResource(JsonElement json, NmosResourceKind kind)
