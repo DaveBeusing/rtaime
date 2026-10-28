@@ -71,6 +71,12 @@ public sealed class MediaReferenceClockTests
 		var lost = source.Observe(TimeSpan.FromSeconds(303), Start.AddSeconds(303));
 		Assert.Equal(MediaReferenceLockState.Lost, lost.LockState);
 		Assert.False(MediaReferenceAdmission.Allows(MediaReferenceClockRequirement.QualifiedHoldover, lost, Start.AddSeconds(303)));
+		source.ObserveSync(TimeSpan.FromSeconds(304), Start.AddSeconds(304),
+			"0011223344556677", 70, 0.4);
+		var recovered = source.Observe(TimeSpan.FromSeconds(305), Start.AddSeconds(305));
+		Assert.Equal(MediaReferenceLockState.Locked, recovered.LockState);
+		Assert.NotEqual(lost.EpochId, recovered.EpochId);
+		Assert.Equal("0011223344556677", recovered.GrandmasterId);
 	}
 
 	[Fact]
