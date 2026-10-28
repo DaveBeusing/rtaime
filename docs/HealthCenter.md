@@ -153,3 +153,73 @@ unconfirmed action. No live request is replayed.
 Unknown and failed incidents retain their safe next step, provenance and copy/
 support actions. Acknowledgement and reminder controls are presentation only;
 fatal notifications cannot be dismissed in the Operator.
+
+## Broadcast operational alarm projection (format 1)
+
+The Health Center now builds a bounded, versioned `OperationalObservation`
+projection from the **same** `SubsystemHealthSnapshot` evidence already supplied
+by `OperatorHealthSnapshotProvider`. It is not a second Runtime health
+authority. `OperationalObservationProjector` retains at most 64 component
+identities, updates only on existing Health events, and emits transitions for
+new ACTIVE episodes, severity changes, evidence loss and recovery.
+Repeated details, queue measurements and burst updates do not create another
+notification. A missing component becomes STALE rather than silently CLEAR.
+No retry, transport probe, hardware query or independently scheduled timer is
+added by this projection.
+
+The current format is `1`. Each record carries component/key, mapped
+severity and Program impact, evidence source and availability, projection UTC,
+monotonic timestamp and duration, time since the current condition started,
+last **healthy projection** and an optional genuine correlation identifier.
+There is no fabricated source/stream/frame correlation; that field is null
+when the existing source has not supplied one. UTC timestamps refer to the
+Operator's projection, not to a device capture, packet arrival or grandmaster
+event. Monotonic duration is based on `Stopwatch` and is not computed from
+wall-clock time.
+
+- **ACTIVE:** available evidence reports Warning, Degraded, Recovering or
+  Failed. Severity mapping is explicit and conservative; this does not
+  independently qualify a Program outage.
+- **STALE / UNVERIFIED:** evidence is unknown, stale or unavailable, including
+  lost sources. Retained values are diagnostic context only.
+- **CLEAR / RESOLVED:** a confirmed healthy projection clears the current
+  alarm. A component that previously had an active episode is shown as
+  RESOLVED, but this is not an automated production recovery.
+
+Existing `NotificationService` is also the alarm review and acknowledgement
+store. The same component key is used for active and resolved notifications;
+ACTIVE conditions are persistent and an observed resolution publishes a
+short-lived recovery event. Initial unknown evidence is **not** elevated into
+a new startup incident. Operators may acknowledge a published active condition
+from HEALTH or the existing notification review; acknowledgement only changes
+presentation. It does not clear Health, authorize Control, change readiness,
+or cause any Program/Runtime restart. Selecting an incident displays its
+lifecycle, monotonic duration, last healthy projection and acknowledgement
+alongside the existing owner, current evidence, impact and safe action.
+
+Transitions also appear in the existing redacted Operator `HostLog` JSONL
+session under `operator.operational-observation.changed`; the event contains
+only bounded source/state/projection metadata, no media or connection payload.
+A failed logging/notification subscriber cannot break Health display or the
+Program path. The UI's existing one-pending-snapshot coalescing is retained.
+
+### Available field and qualification limits
+
+| Evidence source | Available measurements | Explicitly unavailable here |
+| --- | --- | --- |
+| Runtime/Control health | CPU, memory, GPU/VRAM when provider-qualified; frame budget, output FPS, cumulative drops and A/V synchronization state | Physical output timing or qualified PTP grandmaster provenance |
+| Program audio | Authoritative health, peak meters, mute/clipping and meter freshness | Measured loudness/true peak when no owning provider supplies it |
+| Network output targets | Provider, protocol, lifecycle, queue depth, cumulative drops, reconnect count, last successful send | RTP per-leg loss/jitter, physical receiver quality and network timing unless a provider publishes them |
+| Media Deck and compositing | Session/codec details, compositing node health and failure evidence | End-to-end decode/encode latency when not measured by the owning media pipeline |
+| Monitoring | Independent Preview/Program plane state and freshness | Proof that the physical Program output is uninterrupted |
+
+Metrics that are unavailable are not populated as zero and are not synthesized
+from virtual Program outputs. PTP, RTP/loss/jitter, measured decode/encode
+latency, SNMPv3 and OpenTelemetry remain separate provider/qualification or
+security-gated work. The current change makes their absence explicit; it does
+not claim EBU/SMPTE/AMWA/IEEE certification.
+
+Focused tests cover condition transitions, duplicate-suppression under bursts,
+64-key bounds, missing evidence, monotonic durations, shared acknowledgement,
+resolved notifications and fail-open notification delivery. Windows/physical
+output qualification requires separately retained platform-specific evidence.
