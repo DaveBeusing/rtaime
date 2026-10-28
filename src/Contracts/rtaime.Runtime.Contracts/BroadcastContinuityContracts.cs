@@ -92,9 +92,11 @@ public sealed record BroadcastContinuitySnapshot(
 			throw new InvalidDataException("Continuity observation has invalid role, authority identity or execution revision.");
 		if (HasQualifiedFallbackDelivery)
 			throw new InvalidDataException("No qualified hold/mute/slate fallback provider exists in this release.");
-		if ((Phase is BroadcastContinuityPhase.Failed or BroadcastContinuityPhase.RecoveredAwaitingRearm) !=
-			(IncidentGeneration != 0 && !string.IsNullOrWhiteSpace(IncidentCode) && IncidentStartedAtUtc.HasValue))
-			throw new InvalidDataException("Latched incidents must carry generation, failure code and UTC origin.");
+		var latched = Phase is BroadcastContinuityPhase.Failed or BroadcastContinuityPhase.RecoveredAwaitingRearm;
+		if (latched
+			? IncidentGeneration == 0 || string.IsNullOrWhiteSpace(IncidentCode) || !IncidentStartedAtUtc.HasValue
+			: IncidentGeneration != 0 || IncidentCode is not null || IncidentDetail is not null || IncidentStartedAtUtc.HasValue)
+			throw new InvalidDataException("Only latched continuity incidents may carry fault generation, code and UTC origin.");
 		if (IncidentCode is { Length: > 96 } || IncidentDetail is { Length: > 256 } ||
 			IncidentStartedAtUtc.HasValue && IncidentStartedAtUtc.Value.Offset != TimeSpan.Zero)
 			throw new InvalidDataException("Continuity incident provenance exceeds its bounded record.");
