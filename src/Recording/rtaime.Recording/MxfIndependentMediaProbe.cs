@@ -35,15 +35,32 @@ internal static class MxfIndependentMediaProbe
         using var process = new Process { StartInfo = info };
         if (!process.Start())
             throw new IOException("Independent MXF probe could not start.");
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var json = await stdout.ConfigureAwait(false);
-        var error = await stderr.ConfigureAwait(false);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(TimeSpan.FromMinutes(2));
+        string json;
+        string error;
+        try
+        {
+            var outputRead = ReadBoundedOutputAsync(process.StandardOutput, 256 * 1024, budget.Token);
+            var errorRead = ReadBoundedOutputAsync(process.StandardError, 16 * 1024, budget.Token);
+            await process.WaitForExitAsync(budget.Token).ConfigureAwait(false);
+            json = await outputRead.ConfigureAwait(false);
+            error = await errorRead.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryStopProcess(process);
+            throw new TimeoutException("Independent MXF probe exceeded its two-minute wall-clock budget.");
+        }
+        catch
+        {
+            TryStopProcess(process);
+            throw;
+        }
         if (process.ExitCode != 0)
             throw new InvalidDataException($"Independent MXF media probe failed: {error[..Math.Min(error.Length, 1024)]}");
 
-        using var root = JsonDocument.Parse(json);
+        using var root = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 20 });
         var format = root.RootElement.GetProperty("format");
         var formatName = Get(format, "format_name");
         if (!formatName.Split(',').Contains("mxf", StringComparer.OrdinalIgnoreCase))
@@ -59,6 +76,14 @@ internal static class MxfIndependentMediaProbe
             v.GetProperty("height").GetInt32() != 1080 ||
             Get(v, "pix_fmt") is not ("uyvy422" or "yuv422p"))
             throw new InvalidDataException("MXF must contain uncompressed 1920x1080 8-bit YUV 422 video.");
+        // Contradictory depth and field-order metadata cannot be treated as
+        // independently verified progressive 8-bit essence.
+        var fieldOrder = Get(v, "field_order");
+        if (fieldOrder is not ("" or "unknown" or "progressive"))
+            throw new InvalidDataException("MXF video field order is not admitted progressive.");
+        var bitDepth = Get(v, "bits_per_raw_sample");
+        if (bitDepth is not ("" or "N/A" or "0" or "8"))
+            throw new InvalidDataException("MXF source bit depth contradicts 8-bit UYVY.");
         // MXF demuxers may report avg_frame_rate=0/0 for uncompressed
         // frame-wrapped essence while preserving the true stream timebase.
         var averageRate = Get(v, "avg_frame_rate");
@@ -81,6 +106,9 @@ internal static class MxfIndependentMediaProbe
             a.GetProperty("channels").GetInt32() != 2)
             throw new InvalidDataException("MXF audio must be stereo 48 kHz signed PCM16.");
 
+        var layout = Get(a, "channel_layout");
+        if (layout is not ("" or "unknown" or "stereo" or "2 channels"))
+            throw new InvalidDataException("MXF declared audio channel layout is not stereo.");
         // Audio packetization differs across demuxers. The decoded duration
         // expressed in the stream timebase must exactly match sample frames.
         var audioDurationTicks = Get(a, "duration_ts");
@@ -89,6 +117,33 @@ internal static class MxfIndependentMediaProbe
             !TryRatio(audioTimebase, out var timebaseNum, out var timebaseDen) ||
             ticks < 0 || (decimal)ticks * timebaseNum * 48000 / timebaseDen != expectedAudioSampleFrames)
             throw new InvalidDataException("Independent MXF audio sample duration does not match recorded samples.");
+    }
+
+    private static async Task<string> ReadBoundedOutputAsync(
+        StreamReader reader, int maximumCharacters, CancellationToken cancellationToken)
+    {
+        var text = new System.Text.StringBuilder(Math.Min(maximumCharacters, 4096));
+        var buffer = new char[4096];
+        while (true)
+        {
+            var read = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+                return text.ToString();
+            if (read > maximumCharacters - text.Length)
+                throw new InvalidDataException("Independent MXF probe output exceeded its bounded evidence limit.");
+            text.Append(buffer, 0, read);
+        }
+    }
+
+    private static void TryStopProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
     }
 
     private static string Get(JsonElement value, string name) =>
