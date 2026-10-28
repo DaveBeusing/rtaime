@@ -205,9 +205,19 @@ public sealed class TimedTextReviewViewModel : INotifyPropertyChanged, IDisposab
 					$"Font '{style.FontFamily}' glyph map UNVERIFIED."));
 				continue;
 			}
-			var usedText = document.Cues.Where(cue => cue.StyleId == style.Id)
-				.SelectMany(cue => cue.Text.EnumerateRunes()).ToArray();
-			if (usedText.Any(rune => !glyphFace.CharacterToGlyphMap.TryGetValue(rune.Value, out var glyph) || glyph == 0))
+			var missingGlyph = false;
+			foreach (var cue in document.Cues.Where(cue => cue.StyleId == style.Id))
+			{
+				foreach (var rune in cue.Text.EnumerateRunes())
+				{
+					if (glyphFace.CharacterToGlyphMap.TryGetValue(rune.Value, out var glyph) && glyph != 0)
+						continue;
+					missingGlyph = true;
+					break;
+				}
+				if (missingGlyph) break;
+			}
+			if (missingGlyph)
 				findings.Add(new("caption.glyph_missing", TimedTextIssueSeverity.Warning,
 					$"Missing glyph in font '{style.FontFamily}'; output cannot be qualified."));
 		}
