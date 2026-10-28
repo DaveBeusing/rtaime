@@ -251,7 +251,7 @@ public sealed class St2110NetworkOutputSession : INetworkOutputSession
                         ObservePacket(length, video: true);
                     }
                     var pcmPackets = _pcm.Packetize(sample.Audio,
-                        sample.AudioTiming.SamplePosition);
+                        checked((long)sample.AudioTiming.SamplePosition));
                     foreach (var packet in pcmPackets)
                     {
                         var length = await sender.SendAudioAsync(packet, cancellationToken)
