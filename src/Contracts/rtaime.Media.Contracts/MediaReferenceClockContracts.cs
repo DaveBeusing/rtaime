@@ -7,6 +7,7 @@ namespace rtaime.Media.Contracts;
 public enum MediaReferenceClockSource { Unknown = 0, Virtual = 1, HardwarePtp = 2, ExternalGenlock = 3 }
 public enum MediaReferenceLockState { Unverified = 0, Locked = 1, Holdover = 2, Lost = 3 }
 public enum MediaReferenceEvidence { Unverified = 0, Simulated = 1, HardwareQualified = 2 }
+public enum MediaReferenceTimeQuality { Unverified = 0, Simulated = 1, Traceable = 2, Holdover = 3 }
 public enum MediaReferenceClockRequirement { Asynchronous = 0, HardwareLocked = 1, QualifiedHoldover = 2 }
 
 public sealed record MediaReferenceClockObservation(
@@ -25,7 +26,8 @@ public sealed record MediaReferenceClockObservation(
 	double? DriftPartsPerBillion,
 	TimeSpan HoldoverElapsed,
 	TimeSpan MaximumHoldover,
-	string Detail)
+	string Detail,
+	MediaReferenceTimeQuality TimeQuality = MediaReferenceTimeQuality.Unverified)
 {
 	public const int CurrentFormatVersion = 1;
 	public static readonly TimeSpan MaximumQualifiedHoldover = TimeSpan.FromMinutes(5);
@@ -45,6 +47,7 @@ public sealed record MediaReferenceClockObservation(
 			!SafeIdentity(ProviderId, 80) || !SafeIdentity(ClockDomainId, 80) ||
 			EpochId == Guid.Empty || !Enum.IsDefined(Source) ||
 			!Enum.IsDefined(LockState) || !Enum.IsDefined(Evidence) ||
+			!Enum.IsDefined(TimeQuality) ||
 			PtpDomain is < 0 or > 127 ||
 			GrandmasterId is not null && (GrandmasterId.Length != 16 ||
 				GrandmasterId.Any(c => !Uri.IsHexDigit(c))) ||
@@ -67,8 +70,16 @@ public sealed record MediaReferenceClockObservation(
 			Evidence == MediaReferenceEvidence.HardwareQualified &&
 				(Source is not (MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock) ||
 				 LastSyncAtUtc is null || OffsetNanoseconds is null || DriftPartsPerBillion is null) ||
-			Evidence == MediaReferenceEvidence.Simulated && Source != MediaReferenceClockSource.Virtual ||
+			Evidence == MediaReferenceEvidence.Simulated &&
+				(Source != MediaReferenceClockSource.Virtual ||
+				 TimeQuality != MediaReferenceTimeQuality.Simulated) ||
+			Evidence == MediaReferenceEvidence.Unverified &&
+				TimeQuality != MediaReferenceTimeQuality.Unverified ||
 			Source == MediaReferenceClockSource.Virtual && Evidence == MediaReferenceEvidence.HardwareQualified ||
+			Evidence == MediaReferenceEvidence.HardwareQualified &&
+				(LockState == MediaReferenceLockState.Locked && TimeQuality != MediaReferenceTimeQuality.Traceable ||
+				 LockState == MediaReferenceLockState.Holdover && TimeQuality != MediaReferenceTimeQuality.Holdover ||
+				 LockState == MediaReferenceLockState.Unverified && TimeQuality != MediaReferenceTimeQuality.Unverified) ||
 			(LockState is MediaReferenceLockState.Locked or MediaReferenceLockState.Holdover) &&
 				(Evidence == MediaReferenceEvidence.Unverified || LastSyncAtUtc is null) ||
 			LockState == MediaReferenceLockState.Holdover && HoldoverElapsed == TimeSpan.Zero)
@@ -86,9 +97,9 @@ public sealed record MediaReferenceClockObservation(
 			Source is not (MediaReferenceClockSource.HardwarePtp or MediaReferenceClockSource.ExternalGenlock))
 			return false;
 		if (LockState == MediaReferenceLockState.Locked)
-			return LastSyncAtUtc.HasValue && now - LastSyncAtUtc.Value <= MaximumObservationAge;
+			return TimeQuality == MediaReferenceTimeQuality.Traceable && LastSyncAtUtc.HasValue && now - LastSyncAtUtc.Value <= MaximumObservationAge;
 		return allowHoldover && LockState == MediaReferenceLockState.Holdover &&
-			LastSyncAtUtc.HasValue && HoldoverElapsed <= MaximumQualifiedHoldover &&
+			TimeQuality == MediaReferenceTimeQuality.Holdover && LastSyncAtUtc.HasValue && HoldoverElapsed <= MaximumQualifiedHoldover &&
 			now - LastSyncAtUtc.Value <= MaximumQualifiedHoldover;
 	}
 
