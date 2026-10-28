@@ -154,7 +154,7 @@ public sealed class St2022SoftwarePacketMerger
                 var distance = unchecked((int)(sequence - expected));
                 if (distance < 0)
                 {
-                    ObserveLeg(leg, sequence, packet.Timestamp, monotonicArrival);
+                    ObserveLeg(leg, sequence, packet.Timestamp, monotonicArrival, accepted: false);
                     if (_recentCopies.TryGetValue(sequence, out var prior) &&
                         !datagram.Span.SequenceEqual(prior))
                         _conflicts++;
@@ -250,15 +250,20 @@ public sealed class St2022SoftwarePacketMerger
     }
 
     private void ObserveLeg(St2022RtpLeg leg, uint sequence,
-        uint timestamp, TimeSpan arrival)
+        uint timestamp, TimeSpan arrival, bool accepted = true)
     {
         var monitor = leg == St2022RtpLeg.Primary ? _primary : _secondary;
         monitor.Observe(sequence, timestamp, arrival,
             _kind == St2022RtpMediaKind.Video
                 ? St2110SoftwareProfile.VideoRtpClockRate
                 : St2110SoftwareProfile.AudioSampleRate);
-        if (leg == St2022RtpLeg.Primary) _primaryLastArrival = arrival;
-        else _secondaryLastArrival = arrival;
+        // Replayed or late traffic contributes sequence diagnostics but cannot
+        // refresh live path health after a leg has stopped making progress.
+        if (accepted)
+        {
+            if (leg == St2022RtpLeg.Primary) _primaryLastArrival = arrival;
+            else _secondaryLastArrival = arrival;
+        }
     }
 
     private TimeSpan FirstBufferedArrival()
