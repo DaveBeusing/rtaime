@@ -50,6 +50,25 @@ public sealed partial class RuntimeProgramExecutionService
 		}
 	}
 
+	private void TryObserveContinuityAtCompletedBoundaryUnsafe(
+		MediaSourceId source, ulong sequence, ulong audioSamplePosition,
+		ulong? auxAudioSamplePosition, Failure? auxFailure)
+	{
+		try
+		{
+			ObserveContinuityAtCompletedBoundaryUnsafe(
+				source, sequence, audioSamplePosition, auxAudioSamplePosition, auxFailure);
+		}
+		catch (Exception problem) when (problem is ArgumentException or InvalidDataException
+			or InvalidOperationException or OverflowException)
+		{
+			// A diagnostic observer is not an output provider: it cannot reverse
+			// a completed Program boundary or force a second output submission.
+			_broadcastContinuity.InvalidateActiveRoles();
+			Observe("runtime.continuity.observer_unverified");
+		}
+	}
+
 	private void ObserveContinuityAtCompletedBoundaryUnsafe(
 		MediaSourceId committedSource, ulong sequence, ulong audioSamplePosition,
 		ulong? auxAudioSamplePosition, Failure? auxFailure)
@@ -80,6 +99,20 @@ public sealed partial class RuntimeProgramExecutionService
 					"Committed Aux input signal was LOST; any fallback-black frame is not qualified continuity.");
 			else
 				_broadcastContinuity.ObserveComplete("aux", sequence, auxAudioSamplePosition);
+		}
+	}
+
+	private void TryObserveContinuityOnFailedBoundary(Exception failure)
+	{
+		try { ObserveContinuityOnFailedBoundary(failure); }
+		catch (Exception problem) when (problem is ArgumentException or InvalidDataException
+			or InvalidOperationException or OverflowException)
+		{
+			lock (_gate)
+			{
+				_broadcastContinuity.InvalidateActiveRoles();
+				Observe("runtime.continuity.observer_unverified");
+			}
 		}
 	}
 
