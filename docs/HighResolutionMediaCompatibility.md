@@ -1,7 +1,7 @@
 # High-resolution cross-layer compatibility
 
 Source inventory: `e86c7f46dfc61bb40871af393e8f19105290ef1e`.
-All future columns describe proposals, not available features.
+UHD columns are still unavailable production capabilities. A bounded, non-authoritative exact-format candidate preflight is now implemented; it does not grant output support.
 The [decision and approval gate](HighResolutionMediaDecision.md) applies.
 
 ## Format and consumer matrix
@@ -110,3 +110,27 @@ plane bounds/overflow, unsupported consumer rejection, SDR/HDR conversion
 goldens, alpha edges, stale generation/fence completion, device loss, cancellation,
 reopen and old-peer/checkpoint recovery. An enum addition alone satisfies none
 of these requirements.
+
+
+## 2026-10-28 exact candidate admission extension
+
+[UHD SDR capacity admission](UhdSdrPipelineAdmission.md) models three new
+**candidate** identities at 2160p25/50/60000/1001 using authoritative
+BT.709 primaries/transfer, full-range identity-RGB matrix and straight
+RGBA8 8-bit alpha. YCbCr 8-bit Rec.709 is a **different** matrix/range/layout
+and has no admitted 2160p conversion/provider contract. HD UnknownRgba8
+retains its historical identity.
+
+| Candidate | Exact-color software capacity model | Live decoder/GPU | Preview/Program | Monitoring | Record/replay | NDI/SRT/MXO | Physical and soak |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2160p25 | IMPLEMENTED preflight only | UNVERIFIED | UNSUPPORTED | UNVERIFIED | UNSUPPORTED | UNSUPPORTED | UNVERIFIED |
+| 2160p50 | IMPLEMENTED preflight only | UNVERIFIED | UNSUPPORTED | UNVERIFIED | UNSUPPORTED | UNSUPPORTED | UNVERIFIED |
+| 2160p60000/1001 | IMPLEMENTED preflight only | UNVERIFIED | UNSUPPORTED | UNVERIFIED | UNSUPPORTED | UNSUPPORTED | UNVERIFIED |
+
+Each candidate has a tight RGBA payload of 33,177,600 bytes. The Runtime
+readback-pool capacity requires a conservative accounting of at least 67
+unique slots (2,222,899,200 bytes if all were allocated at UHD), **plus**
+the actual independently retained decoder/live/cache/GPU/record/output owners.
+The new in-process gate fails closed for absent or incompatible active consumers,
+byte/transfer capacity and managed/GPU/native budgets. Its success is not
+a verified provider reservation, activation, scan-out or performance PASS.
