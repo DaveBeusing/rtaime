@@ -19,9 +19,11 @@ public static class MediaQcFileInspector
 	public static async Task<MediaQcReport> InspectAsync(
 		MediaAssetDescriptor asset, ulong catalogueRevision,
 		long maximumFileBytes = DefaultMaximumFileBytes,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		IReadOnlyList<IMediaQcCheckAdapter>? adapters = null)
 	{
 		ArgumentNullException.ThrowIfNull(asset);
+		var admittedAdapters = MediaQcAdapterRegistry.Admit(adapters);
 		if (maximumFileBytes is < 1 or > 32L * 1024 * 1024 * 1024)
 			throw new ArgumentOutOfRangeException(nameof(maximumFileBytes));
 		if (asset.Origin != MediaAssetOriginKind.LocalFile ||
@@ -109,6 +111,46 @@ public static class MediaQcFileInspector
 			Result(6, MediaQcCheckState.NotExecuted,
 				"Source-bound R 103 range analysis is not installed; no synthetic pass is permitted.")
 		};
+		if (admittedAdapters.Count != 0)
+		{
+			var context = new MediaQcCheckContext(asset, catalogueRevision,
+				hash, beforeLength, new DateTimeOffset(beforeStamp, TimeSpan.Zero));
+			foreach (var adapter in admittedAdapters)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+				var index = Array.FindIndex(checks.ToArray(), definition => definition.Id == adapter.Definition.Id);
+				if (index < 0)
+					throw new InvalidDataException("An unknown QC adapter was admitted.");
+				try
+				{
+					var result = await adapter.InspectAsync(context, cancellationToken).ConfigureAwait(false);
+					MediaQcAdapterRegistry.ValidateResult(adapter, result);
+					if (!string.Equals(result.EvidenceSource,
+						"offline-file:sha256:" + hash.ToLowerInvariant(), StringComparison.Ordinal))
+						throw new InvalidDataException("QC adapter used a different content fingerprint.");
+					results[index] = result;
+				}
+				catch (NotSupportedException)
+				{
+					results[index] = Result(index, MediaQcCheckState.Unsupported,
+						"Independent offline measurement is unavailable for this source.");
+				}
+			}
+			// An adapter can perform long sequential reads. Rehash the path
+			// after it completes so an in-place edit or replacement never
+			// inherits the original source's recorded QC result.
+			using var verifiedSource = new FileStream(path, FileMode.Open, FileAccess.Read,
+				FileShare.Read | FileShare.Delete, HashBufferBytes,
+				FileOptions.Asynchronous | FileOptions.SequentialScan);
+			if (verifiedSource.Length != beforeLength ||
+				!string.Equals(await ComputeThrottledHashAsync(verifiedSource, cancellationToken)
+					.ConfigureAwait(false), hash, StringComparison.Ordinal))
+				throw new MediaQcSourceChangedException("Media content changed during the optional QC checks.");
+			before.Refresh();
+			if (!before.Exists || before.Length != beforeLength || before.LastWriteTimeUtc != beforeStamp)
+				throw new MediaQcSourceChangedException("Media source changed during the optional QC checks.");
+		}
+		cancellationToken.ThrowIfCancellationRequested();
 		var report = new MediaQcReport(Guid.NewGuid(), MediaQcReport.CurrentModelRelease,
 			MediaQcProfile.OfflineFileV1, asset.AssetId.ToString(), catalogueRevision,
 			hash, beforeLength, new DateTimeOffset(beforeStamp, TimeSpan.Zero),
