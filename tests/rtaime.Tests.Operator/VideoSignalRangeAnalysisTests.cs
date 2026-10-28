@@ -113,6 +113,9 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(0, result.Green.OutsidePreferred);
 		Assert.Equal(0, result.Blue.OutsidePreferred);
 		Assert.Equal(1, result.AnyComponent.OutsidePreferred);
+		Assert.Contains("R′ N/P/T", result.ChannelDiagnosticLabel, StringComparison.Ordinal);
+		Assert.Contains("Y′ N/P/T", result.ChannelDiagnosticLabel, StringComparison.Ordinal);
+		Assert.Contains("ANY N/P/T", result.ChannelDiagnosticLabel, StringComparison.Ordinal);
 	}
 
 	[Fact]
@@ -154,6 +157,15 @@ public sealed class VideoSignalRangeAnalysisTests
 		var unsupportedTransfer = VideoSignalRangeAnalysis.AnalyzeRgba8(Frame(1, 1, [16, 16, 16, 255],
 			Limited(8, transfer: ColorTransfer.Unknown)));
 		Assert.Equal(VideoRangeSampleStatus.Unverified, unsupportedTransfer.Status);
+	}
+
+	[Fact]
+	public void Raw_ten_bit_vectors_reject_values_outside_native_code_precision()
+	{
+		var unavailable = VideoSignalRangeAnalysis.AnalyzeNativeRgba10(
+			new ushort[] { 1024, 64, 64, 1023 }, 1, 1, 33, Limited(10));
+		Assert.Equal(VideoRangeSampleStatus.Unavailable, unavailable.Status);
+		Assert.Contains("wider than ten bits", unavailable.Detail, StringComparison.Ordinal);
 	}
 
 	[Fact]
