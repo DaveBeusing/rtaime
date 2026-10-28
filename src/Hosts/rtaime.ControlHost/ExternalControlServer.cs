@@ -164,17 +164,38 @@ public sealed record ExternalControlServerOptions
 			throw new ArgumentException("External-control identity mapping is bounded to 128 entries.", nameof(Identities));
 		if (Identities.Select(identity => identity.ClientId).Distinct(StringComparer.Ordinal).Count() != Identities.Count)
 			throw new ArgumentException("External-control client identities must be unique.", nameof(Identities));
+		if (Identities.Where(identity => !string.IsNullOrWhiteSpace(identity.CertificateThumbprint))
+			.Select(identity => NormalizeThumbprint(identity.CertificateThumbprint))
+			.Distinct(StringComparer.OrdinalIgnoreCase).Count() != Identities.Count(identity => !string.IsNullOrWhiteSpace(identity.CertificateThumbprint)))
+			throw new ArgumentException("Certificate thumbprints must be mapped to exactly one external-control identity.", nameof(Identities));
+		if (Identities.Where(identity => !string.IsNullOrWhiteSpace(identity.TokenEnvironmentVariable))
+			.Select(identity => identity.TokenEnvironmentVariable)
+			.Distinct(StringComparer.Ordinal).Count() != Identities.Count(identity => !string.IsNullOrWhiteSpace(identity.TokenEnvironmentVariable)))
+			throw new ArgumentException("Token environment references must be unique per external-control identity.", nameof(Identities));
+		ValidateEnvironmentName(CertificatePasswordEnvironmentVariable);
 		foreach (var identity in Identities)
 		{
-			if (string.IsNullOrWhiteSpace(identity.ClientId) || identity.ClientId.Length > 128)
-				throw new ArgumentException("External-control ClientId is required and bounded to 128 characters.", nameof(Identities));
+			if (string.IsNullOrWhiteSpace(identity.ClientId) ||
+				!System.Text.RegularExpressions.Regex.IsMatch(identity.ClientId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"))
+				throw new ArgumentException("External-control ClientId must use bounded printable identity characters.", nameof(Identities));
 			if (!Enum.IsDefined(identity.Role))
 				throw new ArgumentException($"External-control role for '{identity.ClientId}' is invalid.", nameof(Identities));
 			if (string.IsNullOrWhiteSpace(identity.CertificateThumbprint) && string.IsNullOrWhiteSpace(identity.TokenEnvironmentVariable))
 				throw new ArgumentException($"External-control identity '{identity.ClientId}' requires a certificate thumbprint or token environment reference.", nameof(Identities));
+			if (!string.IsNullOrWhiteSpace(identity.CertificateThumbprint) &&
+				!System.Text.RegularExpressions.Regex.IsMatch(NormalizeThumbprint(identity.CertificateThumbprint), "^[A-F0-9]{40}$"))
+				throw new ArgumentException("External-control certificate thumbprints must be SHA-1 certificate identifiers (40 hex digits).", nameof(Identities));
+			ValidateEnvironmentName(identity.TokenEnvironmentVariable);
 		}
 		if (RequireMutualTls && Identities.All(identity => string.IsNullOrWhiteSpace(identity.CertificateThumbprint)))
 			throw new ArgumentException("Mutual TLS requires at least one certificate-bound external-control identity.", nameof(Identities));
+	}
+
+	private static void ValidateEnvironmentName(string? name)
+	{
+		if (name is not null &&
+			!System.Text.RegularExpressions.Regex.IsMatch(name, "^[A-Za-z_][A-Za-z0-9_]{0,127}$"))
+			throw new ArgumentException("Secret environment-variable names must be non-empty and use portable environment characters.");
 	}
 
 	internal X509Certificate2 LoadServerCertificate(Func<string, string?> environment)
@@ -358,12 +379,12 @@ public sealed class ExternalControlServer : IAsyncDisposable
 		}
 		catch (Exception exception) when (!_options.Required)
 		{
-			Set(ExternalControlServerState.Failed, $"Optional external control failed to start: {Redact(exception.Message)}");
+			Set(ExternalControlServerState.Failed, $"Optional external control failed to start: {Redact(exception)}");
 			await CleanupFailedStartAsync().ConfigureAwait(false);
 		}
 		catch (Exception exception)
 		{
-			Set(ExternalControlServerState.Failed, $"Required external control failed to start: {Redact(exception.Message)}");
+			Set(ExternalControlServerState.Failed, $"Required external control failed to start: {Redact(exception)}");
 			await CleanupFailedStartAsync().ConfigureAwait(false);
 			throw;
 		}
@@ -401,10 +422,10 @@ public sealed class ExternalControlServer : IAsyncDisposable
 		lock (_gate) _snapshot = new ExternalControlServerSnapshot(state, detail, DateTimeOffset.UtcNow, _options.Enabled ? _options.Endpoint : null);
 	}
 
-	private static string Redact(string value)
+	private static string Redact(Exception _)
 	{
-		if (string.IsNullOrWhiteSpace(value)) return "External control failure.";
-		return value.Length <= 512 ? value : value[..512];
+		// Startup exceptions can contain certificate paths and secret-bearing configuration.
+		return "External listener initialization failed; sensitive configuration details are withheld.";
 	}
 }
 
@@ -454,9 +475,11 @@ internal sealed class ExternalControlSecurityPolicy
 				(string.IsNullOrWhiteSpace(declaredClientId) || string.Equals(candidate.ClientId, declaredClientId, StringComparison.Ordinal)));
 			if (identity is not null)
 				return Accept(identity, clientName, clientVersion, "client-certificate");
+			// A valid but differently mapped certificate must not switch to a higher-privileged token identity.
+			Deny(declaredClientId);
 		}
 
-		if (!string.IsNullOrWhiteSpace(declaredClientId))
+		if (!_options.RequireMutualTls && !string.IsNullOrWhiteSpace(declaredClientId))
 		{
 			var identity = _options.Identities.FirstOrDefault(candidate =>
 				string.Equals(candidate.ClientId, declaredClientId, StringComparison.Ordinal) &&
@@ -470,6 +493,12 @@ internal sealed class ExternalControlSecurityPolicy
 			}
 		}
 
+		Deny(declaredClientId);
+		throw new InvalidOperationException("Authentication denial must not return.");
+	}
+
+	private void Deny(string? declaredClientId)
+	{
 		_audit.Add(new ExternalControlAuditRecord(DateTimeOffset.UtcNow, "authentication", declaredClientId ?? "unknown", "none", "connect", "denied", "Client authentication failed."));
 		throw new RpcException(new Status(StatusCode.Unauthenticated, "External control authentication failed."));
 	}
@@ -630,11 +659,22 @@ internal sealed class ExternalControlAuditBuffer
 	{
 		lock (_gate)
 		{
-			_records.Enqueue(record);
+			_records.Enqueue(record with
+			{
+				Event = Safe(record.Event, 48),
+				ClientId = Safe(record.ClientId, 128),
+				Role = Safe(record.Role, 32),
+				Operation = Safe(record.Operation, 128),
+				Outcome = Safe(record.Outcome, 32),
+				Detail = Safe(record.Detail, 256)
+			});
 			while (_records.Count > _capacity)
 				_records.Dequeue();
 		}
 	}
+
+	private static string Safe(string? value, int maximum) =>
+		new((value ?? string.Empty).Where(character => !char.IsControl(character)).Take(maximum).ToArray());
 
 	public IReadOnlyList<ExternalControlAuditRecord> Snapshot()
 	{
@@ -669,6 +709,8 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 	public override async Task<ExternalControlReply> Execute(ExternalControlRequest request, ServerCallContext context)
 	{
 		var principal = _security.Authenticate(context);
+		// Bound authenticated request admission before parsing caller-controlled JSON payloads.
+		using var lease = await AcquireWithAuditAsync(principal, "control.request", context.CancellationToken).ConfigureAwait(false);
 		ValidateContext(request.Context, principal);
 		var (operation, payload) = MapRequest(request);
 		_security.Authorize(principal, operation);
@@ -683,7 +725,6 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		var operationToken = operationTimeout.Token;
 		try
 		{
-			using var lease = await AcquireWithAuditAsync(principal, operation, operationToken).ConfigureAwait(false);
 			if (!string.IsNullOrEmpty(request.Context.ExpectedHostInstanceId) &&
 				!string.Equals(request.Context.ExpectedHostInstanceId, _dispatcher.HostInstanceId, StringComparison.Ordinal))
 			{
@@ -752,9 +793,9 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 				"External control server request deadline exceeded."));
 			throw new RpcException(new Status(StatusCode.DeadlineExceeded, "External control server request deadline exceeded."));
 		}
-		catch (InvalidDataException exception)
+		catch (InvalidDataException)
 		{
-			throw new RpcException(new Status(StatusCode.InvalidArgument, Bounded(exception.Message, 512)));
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control request payload is invalid."));
 		}
 	}
 
