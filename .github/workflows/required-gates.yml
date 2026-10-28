@@ -70,6 +70,12 @@ jobs:
           dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~VideoSignalRangeAnalysisTests|FullyQualifiedName~MediaScopeAnalysisTests|FullyQualifiedName~GpuScopesAndFrameComparisonTests" --logger "console;verbosity=detailed"
           if ($LASTEXITCODE -ne 0) { throw "Video range/colorimetry qualification failed." }
 
+      - name: NMOS discovery and fail-closed connection qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~NmosDiscoveryAndConnectionTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "NMOS registry/connection negative qualification failed." }
+
       - name: Broadcast boundary security negative regressions
         shell: pwsh
         run: |
