@@ -41,7 +41,7 @@
         "required": ["id", "kind", "enabled"],
         "properties": {
           "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
-          "kind": { "enum": ["osc", "midi", "discrete", "companion"] },
+          "kind": { "enum": ["osc", "midi", "discrete", "companion", "nmos"] },
           "enabled": { "type": "boolean" },
           "required": { "type": "boolean" },
           "osc": {
@@ -83,6 +83,26 @@
               "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
               "bearerTokenEnvironmentVariable": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" },
               "maxRequestBytes": { "type": "integer", "minimum": 1024, "maximum": 1048576 }
+            }
+          },
+          "nmos": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["mode"],
+            "properties": {
+              "mode": { "enum": ["observer", "virtualInterop"] },
+              "queryApiUrl": { "type": ["string", "null"], "maxLength": 1024 },
+              "registrationApiUrl": { "type": ["string", "null"], "maxLength": 1024 },
+              "bindAddress": { "type": "string", "default": "127.0.0.1" },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "nodeId": { "type": ["string", "null"], "format": "uuid" },
+              "deviceId": { "type": ["string", "null"], "format": "uuid" },
+              "senderId": { "type": ["string", "null"], "format": "uuid" },
+              "receiverId": { "type": ["string", "null"], "format": "uuid" },
+              "refreshIntervalMs": { "type": "integer", "minimum": 1000, "maximum": 60000 },
+              "heartbeatIntervalMs": { "type": "integer", "minimum": 1000, "maximum": 5000 },
+              "requestTimeoutMs": { "type": "integer", "minimum": 100, "maximum": 5000 },
+              "maxResourcesPerType": { "type": "integer", "minimum": 1, "maximum": 512 }
             }
           }
         }

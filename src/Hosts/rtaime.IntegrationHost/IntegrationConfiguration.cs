@@ -11,7 +11,8 @@ public enum IntegrationAdapterKind
 	Osc = 1,
 	Midi = 2,
 	Discrete = 3,
-	Companion = 4
+	Companion = 4,
+	Nmos = 5
 }
 
 public enum IntegrationActionKind
@@ -198,6 +199,88 @@ public sealed record CompanionAdapterOptions
 	}
 }
 
+/// <summary>NMOS is optional; observer mode can never originate Production mutations.</summary>
+public enum NmosOperatingMode
+{
+	Observer = 1,
+	VirtualInterop = 2
+}
+
+public sealed record NmosAdapterOptions
+{
+	public NmosOperatingMode Mode { get; init; } = NmosOperatingMode.Observer;
+	/// <summary>Exact AMWA IS-04 v1.3 Query API root; HTTPS for all nonlocal endpoints.</summary>
+	public string? QueryApiUrl { get; init; }
+	/// <summary>Virtual test-node registration only; local IS-04 v1.3 Registration API root.</summary>
+	public string? RegistrationApiUrl { get; init; }
+	public string BindAddress { get; init; } = "127.0.0.1";
+	public int Port { get; init; } = 55130;
+	public string? NodeId { get; init; }
+	public string? DeviceId { get; init; }
+	public string? SenderId { get; init; }
+	public string? ReceiverId { get; init; }
+	public int RefreshIntervalMs { get; init; } = 5000;
+	public int HeartbeatIntervalMs { get; init; } = 5000;
+	public int RequestTimeoutMs { get; init; } = 2000;
+	public int MaxResourcesPerType { get; init; } = 128;
+
+	public void Validate(bool testMode, bool dryRun)
+	{
+		if (!Enum.IsDefined(Mode))
+			throw new ArgumentOutOfRangeException(nameof(Mode));
+		if (RefreshIntervalMs is < 1000 or > 60000 || HeartbeatIntervalMs is < 1000 or > 5000)
+			throw new ArgumentOutOfRangeException(nameof(RefreshIntervalMs), "NMOS refresh/heartbeat must be bounded.");
+		if (RequestTimeoutMs is < 100 or > 5000 || RequestTimeoutMs >= HeartbeatIntervalMs)
+			throw new ArgumentOutOfRangeException(nameof(RequestTimeoutMs), "NMOS network timeout must be shorter than heartbeat.");
+		if (MaxResourcesPerType is < 1 or > 512)
+			throw new ArgumentOutOfRangeException(nameof(MaxResourcesPerType));
+		if (Mode == NmosOperatingMode.Observer)
+		{
+			ValidateApiUrl(QueryApiUrl, "/x-nmos/query/v1.3/", localOnly: false, required: true);
+			if (RegistrationApiUrl is not null || NodeId is not null || DeviceId is not null ||
+				SenderId is not null || ReceiverId is not null)
+				throw new ArgumentException("Observer discovery cannot publish NMOS resources or enable connection control.");
+			return;
+		}
+		if (!testMode || !dryRun)
+			throw new ArgumentException("Virtual NMOS interop requires both testMode=true and dryRun=true.");
+		if (!IPAddress.TryParse(BindAddress, out var address) ||
+			!IPAddress.IsLoopback(address) || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+			throw new ArgumentException("Virtual NMOS APIs are restricted to IPv4 loopback.", nameof(BindAddress));
+		if (Port is < 1 or > 65535)
+			throw new ArgumentOutOfRangeException(nameof(Port));
+		var identifiers = new[] { NodeId, DeviceId, SenderId, ReceiverId };
+		if (identifiers.Any(value => !Guid.TryParse(value, out var parsed) || parsed == Guid.Empty ||
+			!System.Text.RegularExpressions.Regex.IsMatch(parsed.ToString("D"),
+				"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) ||
+			identifiers.Select(value => Guid.Parse(value!)).Distinct().Count() != identifiers.Length)
+			throw new ArgumentException("Virtual Node, Device, Sender and Receiver require distinct, stable v1-v5 UUIDs.");
+		ValidateApiUrl(QueryApiUrl, "/x-nmos/query/v1.3/", localOnly: false, required: false);
+		ValidateApiUrl(RegistrationApiUrl, "/x-nmos/registration/v1.3/", localOnly: true, required: false);
+	}
+
+	private static void ValidateApiUrl(string? value, string suffix, bool localOnly, bool required)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			if (required || value is not null)
+				throw new ArgumentException("Required NMOS API URL is missing or empty.");
+			return;
+		}
+		if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+			uri.AbsolutePath != suffix ||
+			!string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
+			!string.IsNullOrEmpty(uri.Fragment))
+			throw new ArgumentException("NMOS API URL must target the explicitly pinned API version without credentials, query or fragment.");
+		var loopback = IPAddress.TryParse(uri.Host, out var parsed) && IPAddress.IsLoopback(parsed);
+		if (localOnly && !loopback)
+			throw new ArgumentException("Virtual NMOS registration must stay on loopback.");
+		if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+			!(loopback && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)))
+			throw new ArgumentException("NMOS API must use verified HTTPS outside the local test network.");
+	}
+}
+
 public sealed record IntegrationAdapterOptions
 {
 	public required string Id { get; init; }
@@ -208,6 +291,7 @@ public sealed record IntegrationAdapterOptions
 	public MidiAdapterOptions? Midi { get; init; }
 	public DiscreteAdapterOptions? Discrete { get; init; }
 	public CompanionAdapterOptions? Companion { get; init; }
+	public NmosAdapterOptions? Nmos { get; init; }
 
 	public void Validate()
 	{
@@ -230,6 +314,9 @@ public sealed record IntegrationAdapterOptions
 				break;
 			case IntegrationAdapterKind.Companion:
 				(Companion ?? throw new ArgumentException("Companion adapter options are required.", nameof(Companion))).Validate();
+				break;
+			case IntegrationAdapterKind.Nmos:
+				if (Nmos is null) throw new ArgumentException("NMOS adapter options are required.", nameof(Nmos));
 				break;
 		}
 	}
@@ -384,7 +471,12 @@ public sealed record IntegrationGatewayOptions
 			throw new ArgumentException("Enabled integration gateway requires between 1 and 32 adapters.", nameof(Adapters));
 		if (Adapters.Select(adapter => adapter.Id).Distinct(StringComparer.Ordinal).Count() != Adapters.Count)
 			throw new ArgumentException("Integration adapter identities must be unique.", nameof(Adapters));
-		foreach (var adapter in Adapters) adapter.Validate();
+		foreach (var adapter in Adapters)
+		{
+			adapter.Validate();
+			if (adapter.Kind == IntegrationAdapterKind.Nmos)
+				adapter.Nmos!.Validate(TestMode, DryRun);
+		}
 		if (Mappings.Count > 512)
 			throw new ArgumentException("Integration command mappings are bounded to 512 entries.", nameof(Mappings));
 		if (Mappings.Select(mapping => mapping.Id).Distinct(StringComparer.Ordinal).Count() != Mappings.Count)

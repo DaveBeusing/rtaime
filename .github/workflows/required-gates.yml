@@ -50,6 +50,12 @@ jobs:
       - name: Restore
         run: dotnet restore rtaime.slnx
 
+      - name: NMOS discovery and fail-closed connection qualification
+        shell: pwsh
+        run: |
+          dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-restore --filter "FullyQualifiedName~NmosDiscoveryAndConnectionTests" --logger "console;verbosity=detailed"
+          if ($LASTEXITCODE -ne 0) { throw "NMOS registry/connection negative qualification failed." }
+
       - name: Sequence authoring model persistence and transport regressions
         shell: pwsh
         run: |

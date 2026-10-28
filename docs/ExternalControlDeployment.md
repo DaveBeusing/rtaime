@@ -234,7 +234,7 @@ The following remain outside the claims of this implementation unless separately
 - enterprise PKI enrollment, rotation and revocation operations;
 - OAuth/OIDC or cloud identity-provider integration;
 - cluster discovery or distributed Production Authority;
-- NMOS;
+- real NMOS production activation (read-only Registry observation and loopback virtual API testing are separately scoped in `NmosDiscoveryAndConnectionManagement.md`);
 - OSC, MIDI, GPIO or Companion adapters;
 - WAN latency/performance qualification;
 - remote raw-media or GPU-frame transport.

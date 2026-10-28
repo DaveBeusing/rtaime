@@ -852,6 +852,7 @@ public static class IntegrationAdapterFactory
 				feedback,
 				new VirtualDiscreteIoBackend()),
 			IntegrationAdapterKind.Companion => new CompanionIntegrationAdapter(adapter, mappings, feedback),
+			IntegrationAdapterKind.Nmos => new NmosIntegrationAdapter(adapter, gateway),
 			_ => throw new ArgumentOutOfRangeException(nameof(adapter.Kind))
 		};
 	}
