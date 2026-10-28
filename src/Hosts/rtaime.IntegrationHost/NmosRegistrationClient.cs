@@ -30,12 +30,33 @@ internal sealed class NmosRegistrationClient
 	public async Task RegisterAsync(CancellationToken cancellationToken)
 	{
 		_registered = false;
-		foreach (var (type, _, data) in _resources.RegistrationOrder())
+		foreach (var (type, id, data) in _resources.RegistrationOrder())
 		{
 			using var response = await _http.PostAsJsonAsync(new Uri(_root, "resource/"),
 				new { type, data }, cancellationToken).ConfigureAwait(false);
 			if (response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Created))
 				throw new InvalidDataException($"IS-04 {type} registration was rejected; a partially registered node is not operational.");
+			var expectedLocation = new Uri(_root, $"resource/{type}s/{id}");
+			var location = response.Headers.Location;
+			if (location is null ||
+				(location.IsAbsoluteUri && (!string.Equals(location.Scheme, expectedLocation.Scheme, StringComparison.OrdinalIgnoreCase) ||
+					!string.Equals(location.Authority, expectedLocation.Authority, StringComparison.OrdinalIgnoreCase))) ||
+				!string.Equals(location.IsAbsoluteUri ? location.AbsolutePath : location.OriginalString,
+					expectedLocation.AbsolutePath, StringComparison.Ordinal))
+				throw new InvalidDataException("IS-04 registration response Location does not match the posted resource identity.");
+			if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+				throw new InvalidDataException("IS-04 registration response must return an application/json resource.");
+			await response.Content.LoadIntoBufferAsync(512 * 1024, cancellationToken).ConfigureAwait(false);
+			using var body = await JsonDocument.ParseAsync(
+				await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+				new JsonDocumentOptions { MaxDepth = 24 }, cancellationToken).ConfigureAwait(false);
+			if (body.RootElement.ValueKind != JsonValueKind.Object ||
+				!body.RootElement.TryGetProperty("id", out var identifier) ||
+				identifier.ValueKind != JsonValueKind.String ||
+				!string.Equals(identifier.GetString(), id, StringComparison.Ordinal) ||
+				!body.RootElement.TryGetProperty("version", out var version) ||
+				version.ValueKind != JsonValueKind.String)
+				throw new InvalidDataException("IS-04 registration response resource identity/version is invalid.");
 		}
 		_registered = true;
 	}
