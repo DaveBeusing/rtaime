@@ -71,6 +71,11 @@ public sealed partial class MediaPoolInspectorViewModel
 			_ = RestoreAdmAsync(asset, generation);
 		}
 		NotifyAdm();
+		// The Inspector was built before the selection callback. Clear
+		// previous-source ADM rows immediately, including when the next
+		// asset has no sidecar to load.
+		if (InspectorProperties is not null)
+			BuildInspector();
 	}
 
 	private async Task RestoreAdmAsync(MediaAssetDescriptor selected, int generation)
