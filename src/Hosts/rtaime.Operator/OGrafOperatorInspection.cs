@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO;
+using System.Text.Json;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -101,7 +102,7 @@ public sealed partial class OperatorViewModel
                         thumbnail = image;
                     }
                 }
-                catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or ArgumentException)
+                catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or ArgumentException or FormatException)
                 {
                     OGrafInspectionDetails = "Package valid; PNG thumbnail could not be safely decoded.";
                 }
