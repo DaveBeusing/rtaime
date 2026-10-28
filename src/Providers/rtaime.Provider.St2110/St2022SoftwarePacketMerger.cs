@@ -94,7 +94,7 @@ public sealed class St2022SoftwarePacketMerger
     private readonly uint _ssrc;
     private readonly St2022SoftwareMergeOptions _options;
     private readonly Dictionary<uint, Pending> _pending = new();
-    private readonly Dictionary<uint, byte[]> _recentCopies = new();
+    private readonly Dictionary<uint, Pending> _recentCopies = new();
     private readonly Queue<uint> _recentOrder = new();
     private readonly St2110RtpSequenceMonitor _primary = new();
     private readonly St2110RtpSequenceMonitor _secondary = new();
@@ -155,9 +155,20 @@ public sealed class St2022SoftwarePacketMerger
                 if (distance < 0)
                 {
                     ObserveLeg(leg, sequence, packet.Timestamp, monotonicArrival, accepted: false);
-                    if (_recentCopies.TryGetValue(sequence, out var prior) &&
-                        !datagram.Span.SequenceEqual(prior))
-                        _conflicts++;
+                    if (_recentCopies.TryGetValue(sequence, out var prior))
+                    {
+                        if (!datagram.Span.SequenceEqual(prior.Datagram))
+                            _conflicts++;
+                        else
+                        {
+                            // A slightly delayed copy is normal on an active B leg.
+                            // Only recent, identical RTP contributes to its liveness;
+                            // replaying old packets after timeout cannot revive a leg.
+                            if (monotonicArrival - prior.Arrival <= _options.LegTimeout)
+                                MarkLegActive(leg, monotonicArrival);
+                            _late++;
+                        }
+                    }
                     else
                         _late++;
                     return Drain(monotonicArrival);
@@ -259,11 +270,13 @@ public sealed class St2022SoftwarePacketMerger
                 : St2110SoftwareProfile.AudioSampleRate);
         // Replayed or late traffic contributes sequence diagnostics but cannot
         // refresh live path health after a leg has stopped making progress.
-        if (accepted)
-        {
-            if (leg == St2022RtpLeg.Primary) _primaryLastArrival = arrival;
-            else _secondaryLastArrival = arrival;
-        }
+        if (accepted) MarkLegActive(leg, arrival);
+    }
+
+    private void MarkLegActive(St2022RtpLeg leg, TimeSpan arrival)
+    {
+        if (leg == St2022RtpLeg.Primary) _primaryLastArrival = arrival;
+        else _secondaryLastArrival = arrival;
     }
 
     private TimeSpan FirstBufferedArrival()
@@ -295,7 +308,7 @@ public sealed class St2022SoftwarePacketMerger
                 _emitted++;
                 if (entry.Leg == St2022RtpLeg.Primary) _selectedPrimary++;
                 else _selectedSecondary++;
-                _recentCopies.Add(next, entry.Datagram);
+                _recentCopies.Add(next, entry);
                 _recentOrder.Enqueue(next);
                 if (_recentOrder.Count > _options.ReorderCapacity)
                     _recentCopies.Remove(_recentOrder.Dequeue());
