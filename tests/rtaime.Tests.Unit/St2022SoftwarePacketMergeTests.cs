@@ -153,6 +153,27 @@ public sealed class St2022SoftwarePacketMergeTests
     }
 
     [Fact]
+    public void Pressure_threshold_releases_bounded_gap_before_long_holdback_without_late_rewind()
+    {
+        var merge = new St2022SoftwarePacketMerger(St2022RtpMediaKind.Audio, 222,
+            Options(capacity: 4, threshold: 2, windowMs: 200));
+        Assert.Single(merge.Observe(St2022RtpLeg.Primary, Audio(100, 48000),
+            TimeSpan.Zero));
+        Assert.Empty(merge.Observe(St2022RtpLeg.Primary, Audio(102, 48096),
+            TimeSpan.FromMilliseconds(1)));
+        var released = merge.Observe(St2022RtpLeg.Secondary, Audio(103, 48144),
+            TimeSpan.FromMilliseconds(2));
+        Assert.Equal(new uint[] { 102, 103 },
+            released.Select(p => p.ExtendedSequence));
+        Assert.Equal(1ul, merge.Snapshot(TimeSpan.FromMilliseconds(2)).PostMergeObservedLoss);
+        Assert.Empty(merge.Observe(St2022RtpLeg.Secondary, Audio(101, 48048),
+            TimeSpan.FromMilliseconds(100)));
+        Assert.Equal(1ul, merge.Snapshot(TimeSpan.FromMilliseconds(100)).Late);
+        Assert.Equal(St2022SoftwarePathState.Failed,
+            merge.Snapshot(TimeSpan.FromMilliseconds(100)).ObservedPathState);
+    }
+
+    [Fact]
     public void Software_observed_states_distinguish_unknown_one_leg_both_legs_and_blackout()
     {
         var merge = new St2022SoftwarePacketMerger(St2022RtpMediaKind.Video, 111,
