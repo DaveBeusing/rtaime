@@ -837,6 +837,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 {
 	private readonly OperatorAudioMixerViewModel _owner;
 	private AudioProductionBusConfiguration _confirmed;
+	private ProgrammeLoudnessSnapshot? _loudness;
 	private double _leftPeak;
 	private double _rightPeak;
 	private bool _clipping;
@@ -885,6 +886,43 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 	public event PropertyChangedEventHandler? PropertyChanged;
 	public string BusId => _confirmed.BusId.Value;
 	public string BusLabel => BusId.ToUpperInvariant();
+	private bool LoudnessPayloadValid => _loudness is { FormatVersion: ProgrammeLoudnessSnapshot.CurrentFormatVersion,
+		SampleRate: 48000, ChannelCount: 2 } candidate &&
+		double.IsFinite(candidate.MeasurementSeconds) &&
+		candidate.MeasurementSeconds >= 0 &&
+		candidate.MeasurementSeconds < TimeSpan.MaxValue.TotalSeconds &&
+		!string.IsNullOrWhiteSpace(candidate.ProfileId) &&
+		candidate.ProfileId.Length <= 64 &&
+		!string.IsNullOrWhiteSpace(candidate.Source) &&
+		candidate.Source.Length <= 128 &&
+		candidate.State is "CURRENT" or "WARMING" or "SILENCE" or "UNVERIFIED";
+	public string LoudnessStatus => !_owner.EvidenceIsCurrent ? "STALE · LOUDNESS UNVERIFIED" :
+		_loudness is null ? "LOUDNESS OFF / UNAVAILABLE" :
+		!LoudnessPayloadValid ? "LOUDNESS INVALID / UNVERIFIED" :
+		_loudness.ProfileId.ToUpperInvariant() + " · " + _loudness.State + " · " + _loudness.Qualification;
+	public string LoudnessMomentary => FormatLoudness(_loudness?.MomentaryLufs, "LUFS");
+	public string LoudnessShortTerm => FormatLoudness(_loudness?.ShortTermLufs, "LUFS");
+	public string LoudnessIntegrated => FormatLoudness(_loudness?.IntegratedLufs, "LUFS");
+	public string LoudnessRange => FormatLoudness(_loudness?.LoudnessRangeLu, "LU");
+	public string LoudnessTruePeak => FormatLoudness(_loudness?.TruePeakDbtp, "dBTP");
+	public string LoudnessDuration => !LoudnessPayloadValid ? "—" :
+		TimeSpan.FromSeconds(_loudness.MeasurementSeconds).ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture);
+	public string LoudnessReset => !LoudnessPayloadValid ? "—" : _loudness.ResetGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+	public string LoudnessPolicyStatus => !_owner.EvidenceIsCurrent ? "UNVERIFIED" :
+		!LoudnessPayloadValid ? "NOT MONITORED" : _loudness!.PolicyStatus;
+	public string LoudnessSource => LoudnessPayloadValid ? _loudness!.Source : "UNVERIFIED";
+	private string FormatLoudness(double? value, string unit) =>
+		!_owner.EvidenceIsCurrent || !LoudnessPayloadValid ||
+		_loudness.State is "UNVERIFIED" or "WARMING" || value is not double measured || !double.IsFinite(measured)
+			? "—" : measured.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " " + unit;
+	private void NotifyLoudness()
+	{
+		foreach (var property in new[] { nameof(LoudnessStatus), nameof(LoudnessMomentary),
+			nameof(LoudnessShortTerm), nameof(LoudnessIntegrated), nameof(LoudnessRange),
+			nameof(LoudnessTruePeak), nameof(LoudnessDuration), nameof(LoudnessReset),
+			nameof(LoudnessPolicyStatus), nameof(LoudnessSource) })
+			OnPropertyChanged(property);
+	}
 	public string LeftPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_leftPeak) : "—";
 	public string RightPeakLabel => HasMeterEvidence ? AudioMixerPresentation.PeakLabel(_rightPeak) : "—";
 	public double DisplayLeftPeak => HasMeterEvidence ? Math.Min(1, LeftPeak) : 0;
@@ -913,6 +951,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 	{
 		foreach (var property in new[] { nameof(LiveSummary), nameof(DisplayLeftPeak), nameof(DisplayRightPeak), nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
 			OnPropertyChanged(property);
+		NotifyLoudness();
 	}
 	public string LimiterActivity => !HasMeterEvidence ? "UNAVAILABLE" : LimiterHitCount > 0 ? $"{LimiterHitCount} HIT" : LimiterReductionDb > 0 ? $"{LimiterReductionDb:0.0} dB" : "IDLE";
 	public string CompressorActivity => !HasMeterEvidence ? "UNAVAILABLE" : CompressorReductionDb > 0 ? $"{CompressorReductionDb:0.0} dB GR" : "IDLE";
@@ -950,6 +989,7 @@ public sealed partial class OperatorAudioBusStripViewModel : INotifyPropertyChan
 		OnPropertyChanged(nameof(BusId));
 		OnPropertyChanged(nameof(BusLabel));
 		_hasMeterEvidence = evidence is not null;
+		_loudness = evidence?.Loudness;
 		LeftPeak = evidence?.LeftPeak ?? 0;
 		RightPeak = evidence?.RightPeak ?? 0;
 		Clipping = evidence?.Clipping == true;

@@ -3390,7 +3390,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 				evidence?.CompressorGainReductionDb ?? 0,
 				evidence?.LimiterGainReductionDb ?? 0,
 				evidence?.LimiterHitCount ?? 0,
-				ToWire(bus.Dynamics));
+				ToWire(bus.Dynamics),
+				evidence?.Loudness);
 		}).ToArray(),
 		configuration.Sources.Select(source => new WireAudioProductionSource(
 			source.SourceId.ToString(),
@@ -4099,7 +4100,8 @@ public sealed partial class ControlHostIpcServer : IAsyncDisposable
 		double CompressorGainReductionDb = 0,
 		double LimiterGainReductionDb = 0,
 		ulong LimiterHitCount = 0,
-		WireAudioBusDynamics? Dynamics = null);
+		WireAudioBusDynamics? Dynamics = null,
+		ProgrammeLoudnessSnapshot? Loudness = null);
 	private sealed record WireAudioBusCompressor(bool Enabled, double ThresholdDbFs, double Ratio, double AttackMilliseconds, double ReleaseMilliseconds, double MakeupGainDb);
 	private sealed record WireAudioSamplePeakLimiter(bool Enabled, double CeilingDbFs, double ReleaseMilliseconds);
 	private sealed record WireAudioBusDynamics(WireAudioBusCompressor Compressor, WireAudioSamplePeakLimiter Limiter);

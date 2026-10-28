@@ -618,7 +618,8 @@ public sealed record OperatorAudioProductionBusDescriptor(
     double CompressorGainReductionDb = 0,
     double LimiterGainReductionDb = 0,
     ulong LimiterHitCount = 0,
-    AudioBusDynamicsConfiguration? Dynamics = null);
+    AudioBusDynamicsConfiguration? Dynamics = null,
+    ProgrammeLoudnessSnapshot? Loudness = null);
 
 public sealed record OperatorAudioProductionDescriptor(
     AudioProductionConfiguration Configuration,

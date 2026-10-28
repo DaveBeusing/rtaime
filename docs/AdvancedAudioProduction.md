@@ -39,7 +39,7 @@ The initial advanced-audio baseline remains:
 - hard clipping at [-1, +1];
 - no steady-state per-block allocation in the mix engine.
 
-Surround, immersive audio, arbitrary DSP graphs, plugin hosting, dynamic/linear-phase EQ, multiband dynamics, gates/expanders, reverb suites, true-peak oversampling, loudness normalization, network-audio transport and sample-rate conversion are outside this capability. The bounded three-band per-source parametric EQ and bounded per-bus compressor/sample-peak limiter described below are part of the qualified baseline.
+Surround, immersive audio, arbitrary DSP graphs, plugin hosting, dynamic/linear-phase EQ, multiband dynamics, gates/expanders, reverb suites, true-peak limiting, automatic loudness normalization, network-audio transport and sample-rate conversion are outside this capability. The bounded three-band per-source parametric EQ and bounded per-bus compressor/sample-peak limiter described below are part of the qualified baseline.
 
 ## Source and bus model
 
@@ -316,7 +316,7 @@ exposed because the current audio contract has no such operation.
 
 Absent bus observations show UNAVAILABLE rather than healthy zero meters or idle processors. Retained observations are marked STALE/OFFLINE/UNVERIFIED when the Control connection or Runtime readiness cannot support current evidence. Source meter data remains unavailable when its input descriptor is missing. Source routing labels describe confirmed mute, zero gain, bus inclusion and routed-source eligibility; they do not claim a sample was executed merely from configuration. Bus role labels describe confirmed Program/Aux bus mapping; current execution is separate Runtime meter evidence. Ducking identifies its confirmed bus/sidechain and reports unavailable sidechain explicitly. Peak text is dBFS; limiter hits are retained counters rather than new transient events.
 
-The mixer reuses the existing bounded 200 ms management snapshot cadence. WPF performs no sample analysis and runs no additional audio polling or animation loop. Management presentation delivery retains at most one pending latest update and one posted callback, replacing obsolete telemetry while a UI consumer is slow. Starting a governed command invalidates prior poll work, so a delayed pre-command projection cannot overwrite the confirmation. Disposal discards retained work. This delivery is a current-state projection, not an event journal. Source, bus, routing-cell and audio-input collections reconcile stable identities instead of clearing/recreating rows on every meter refresh; bounded 8×4 topology avoids unbounded visual work. Runtime currently exposes peak/reduction/clipping evidence but no bounded per-bus RMS field, so RMS is deliberately shown as not exposed rather than synthesized locally. No LUFS, true-peak, loudness-standard or other certification claim is made.
+The mixer reuses the existing bounded 200 ms management snapshot cadence. WPF performs no sample analysis and runs no additional audio polling or animation loop. Management presentation delivery retains at most one pending latest update and one posted callback, replacing obsolete telemetry while a UI consumer is slow. Starting a governed command invalidates prior poll work, so a delayed pre-command projection cannot overwrite the confirmation. Disposal discards retained work. This delivery is a current-state projection, not an event journal. Source, bus, routing-cell and audio-input collections reconcile stable identities instead of clearing/recreating rows on every meter refresh; bounded 8×4 topology avoids unbounded visual work. Runtime currently exposes peak/reduction/clipping evidence but no bounded per-bus RMS field, so RMS is deliberately shown as not exposed rather than synthesized locally. The separately opt-in programme loudness monitor projects advisory LUFS and 4× interpolated True Peak without altering these sample-peak paths; it is not yet qualified as standards-conformant.
 
 Existing FOLLOW VIDEO/BREAKAWAY, equal-power crossfade, bounded ducking and generated diagnostic-signal controls remain available from the same surface. UI changes are requests only; ControlHost remains configuration authority and RuntimeHost remains signal-processing and metering authority.
 
@@ -393,7 +393,7 @@ The production audio model executes between one and four configured buses throug
 
 Governed Program/Aux output roles carry an authoritative audio-bus identity. Legacy roles without an explicit mapping resolve to `program`. Aux may select another confirmed bus; an invalid or missing bus reference fails closed before committed Runtime state changes. Providers consume the selected final bus payload and never remix it.
 
-Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, generic DSP/plugin host, arbitrary dynamics ordering, multiband compression or true-peak processing.
+Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, generic DSP/plugin host, arbitrary dynamics ordering, multiband compression or true-peak limiting.
 
 ## Integrated qualification
 
@@ -410,3 +410,113 @@ Hosted software qualification does not convert physical embedded-audio continuit
 
 These deterministic software checks do not qualify physical mixed-monitor interaction, hardware audio latency or sustained hardware continuity; those remain UNVERIFIED.
 
+
+## Optional programme loudness and reconstructed true peak (analysis only)
+
+This additional observation capability is **OFF by default**. It is opt-in at
+RuntimeHost launch, not a Control mutation, Gain change, limiter setting or
+automatic loudness normalization. The existing 48 kHz, Float32, interleaved
+stereo, maximum eight sources/four buses, and single `AudioProductionEngine`
+remain unchanged. The analyser reads each final bus buffer **after** its
+compressor, sample-peak limiter and final safety clamp, and therefore measures
+the bytes actually offered to that bus's Program/Aux consumers. Recording is
+still bound to `program`; a separately routed Program output bus is identified
+by its confirmed output-role binding.
+
+### Explicit local monitoring profiles
+
+| RuntimeHost environment setting | Meaning |
+| --- | --- |
+| absent or `RTAIME_PROGRAMME_LOUDNESS_PROFILE=off` | No analyser created and no per-boundary work |
+| `RTAIME_PROGRAMME_LOUDNESS_PROFILE=ebu-r128-linear` | -23 LUFS ±1 LU advisory integrated target; -1 dBTP advisory reconstructed peak maximum |
+| `RTAIME_PROGRAMME_LOUDNESS_PROFILE=custom-monitor` | Requires `RTAIME_PROGRAMME_LOUDNESS_TARGET_LUFS`, `RTAIME_PROGRAMME_LOUDNESS_TOLERANCE_LU`, `RTAIME_PROGRAMME_TRUE_PEAK_CEILING_DBTP` as invariant-culture numbers |
+
+For custom profiles, admitted ranges are -70..0 LUFS, 0..10 LU
+(nonzero), and -20..0 dBTP. An absent, malformed or unknown non-off
+configuration is rejected at startup rather than silently assigning an OTT
+platform its own target. Both profiles are observation only. A warning never
+changes the Program audio mix or its Production revision. The policy is
+evaluated only after ten seconds of current material; it must not interpret
+a partial programme reading as final programme compliance.
+
+### Measurement parameters and provenance
+
+The `ProgrammeLoudnessAnalyzer` works on sequential samples without WPF
+sampling, asynchronous media callbacks, independent transport polling, file
+I/O or dynamic memory allocation in the hot path. Its version-one snapshot is
+an **additive, nullable** field on each existing Audio Production Bus evidence
+record, forwarded via the current RuntimeHost → ControlHost → Client → Operator
+200-ms management cadence. Older wire payloads lacking it remain readable;
+new readers treat a missing field as OFF / UNAVAILABLE, never zero.
+
+The source is `runtime:post-bus-dynamics-and-safety-clamp:<bus-id>`.
+The snapshot includes profile, state, measurement duration in seconds,
+monotonically advancing reset generation, M/S/I/LRA, reconstructed maximum
+dBTP, integrated relative gate, advisory policy result and explicit
+qualification state. The available states are WARMING, CURRENT, SILENCE and
+UNVERIFIED; neither a stale UI nor interrupted audio is a valid measurement.
+
+The implemented stereo K-weighting filter stages use 48 kHz
+BS.1770 coefficients (a0=1):
+
+- Stage 1 shelf: b=(1.53512485958697, -2.69169618940638,
+  1.19839281085285), a1=-1.69065929318241, a2=0.73248077421585.
+- Stage 2 RLB high-pass: b=(1, -2, 1), a1=-1.99004745483398,
+  a2=0.99007225036621.
+- Left and right both carry channel energy weight 1.0. The loudness
+  mapping is -0.691 + 10 log10(weighted mean square). Surround and
+  arbitrary sample-rate conversion are **not** supported.
+
+Internal energy windows are 100 ms. M uses four windows (400 ms), S uses
+30 (3 s), integrated gating uses complete 400-ms windows with 75%
+overlap, first excluding below -70 LUFS, then applying a -10 LU gate
+relative to absolute-gated loudness. LRA uses 3-s windows at 1-s hops
+with the -70 LUFS and -20 LU relative-to-integrated gates and the
+10th/95th percentiles. LRA does not become available until at least
+30 seconds of usable material. Histograms use fixed 0.1-LU bins over
+a bounded loudness domain and energy-weighted aggregates; they do not
+retain unbounded programme frames. The quantization introduces
+approximately 0.1 LU bin granularity; only independent reference-vector
+tests can establish end-to-end measurement tolerance.
+
+True peak reconstructs inter-sample extrema using an allocation-free
+4× 33-tap Blackman-windowed, DC-normalized polyphase sinc interpolator.
+It also includes direct sample extrema, and the published peak is the
+maximum since the last reset. **This is an implementation-specific 4×
+reconstructed peak**, not evidence of passing the official BS.1770
+Annex 2 / EBU Tech 3341 conformance vectors. Both numerical
+interpolation error and potentially higher physical/codec downstream
+peaks remain **UNVERIFIED**. A sample-peak limiter ceiling must not be
+relabeled as a measured or guaranteed true-peak ceiling.
+
+### Boundaries and reset semantics
+
+A change of routed source, noncontiguous audio sample position,
+explicit Audio Production configuration change or any missing/underrun
+source invalidates the integrated history. On recovery the analyzer starts
+new M/S/I/LRA/TP windows. The prior values are not retained as fresh.
+Silence has a defined SILENCE state and nullable LUFS, not a fabricated
+zero LUFS reading. Invalid/nonfinite PCM invalidates observation without
+modifying the Runtime buffer.
+
+The analyzer never constructs an audio buffer or crosses the Prepare/Commit
+authority boundary. The off profile creates no analyzer, consumes no
+additional per-boundary processing, and leaves existing PCM bit identity
+unchanged. The custom mixer displays evidence, qualification status,
+current duration and reset generation; its pre-existing Apply/Discard
+commands remain the only configuration mutations.
+
+### Qualification scope and gaps
+
+Source-anchored generated sine, silence, relative gating, channel swap,
+intersample-peak and interruption tests are included. These are
+**implementation regressions**, not independent certification vectors.
+The required third-party EBU Tech 3341 measurement test set, Tech 3342
+LRA comparisons, CPU and allocation profiling on the Windows-x64
+reference platform, several-hour capture and physical output evidence
+must still be qualified before any `software-qualified` or
+`hardware-qualified` claim. For now the wire qualification field remains
+**UNVERIFIED**. No normative compliance or release gate is bypassed.
+
+Standards referenced for future validation: ITU-R BS.1770-5 (2023),
+EBU R 128 v5 (2023), EBU Tech 3341, EBU Tech 3342 and EBU Tech 3343.

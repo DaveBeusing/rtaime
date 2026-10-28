@@ -273,7 +273,8 @@ public sealed record RuntimeHostAudioProductionBusSnapshot(
 	double CompressorGainReductionDb = 0,
 	double LimiterGainReductionDb = 0,
 	ulong LimiterHitCount = 0,
-	AudioBusDynamicsConfiguration? Dynamics = null);
+	AudioBusDynamicsConfiguration? Dynamics = null,
+	ProgrammeLoudnessSnapshot? Loudness = null);
 
 public sealed record RuntimeHostAudioProductionSourceSnapshot(
 	MediaSourceId SourceId,
@@ -435,6 +436,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 	private AudioProductionSourceBuffer[] _audioProductionSourceBuffers;
 	private readonly Dictionary<AudioBusId, float[]> _audioBusMixSamples = [];
 	private readonly Dictionary<AudioBusId, AudioProductionBlockResult> _lastAudioProductionResults = [];
+	private readonly ProgrammeLoudnessPolicy? _programmeLoudnessPolicy;
+	private readonly Dictionary<AudioBusId, ProgrammeLoudnessAnalyzer> _programmeLoudnessAnalysers = [];
 	private readonly int _maximumAudioValuesPerBoundary;
 	private readonly AudioStreamId _programAudioStreamId;
 	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalGenerator> _audioTestSignals = [];
@@ -600,6 +603,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 			.ToArray();
 		_audioProduction = new AudioProductionEngine(
 			AudioProductionConfiguration.CreateLegacyCompatible(_audioProductionSourceOrder));
+		_programmeLoudnessPolicy = ResolveProgrammeLoudnessPolicy();
 		_lastAudioProductionResult = new AudioProductionBlockResult(
 			AudioBusId.Program, 0, 0, 0, 0, 0, 1, 0, true, null, 0, 0);
 		var productionAudioFormat = _audioStreams.Values.Select(stream => stream.Format).Distinct().Single();
@@ -2314,6 +2318,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				current.Ducking,
 				current.ClipStrategy);
 			_audioProduction.ApplyConfiguration(updated);
+			// Gain/mute changes advance audio configuration and start a new
+			// independent integrated-loudness measurement session.
+			foreach (var analyser in _programmeLoudnessAnalysers.Values)
+				analyser.Interrupt();
 			_audio.SetInputState(stream.StreamId, gain, muted);
 			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}:mix-revision={updated.Revision}");
 			return AudioInputSnapshotUnsafe(sourceId);
@@ -2344,6 +2352,10 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				.ToArray();
 			_audioProductionSourceBuffers = new AudioProductionSourceBuffer[_audioProductionSourceOrder.Length];
 			_audioProduction.ApplyConfiguration(configuration);
+			// Explicit mix changes invalidate gated integrated measurements. Readiness
+			// and Program audio remain controlled by the existing authority.
+			foreach (var analyser in _programmeLoudnessAnalysers.Values)
+				analyser.Interrupt();
 			foreach (var source in configuration.Sources)
 			{
 				var stream = _audioStreams[source.SourceId];
@@ -3372,6 +3384,32 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
 		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
 
+	private static ProgrammeLoudnessPolicy? ResolveProgrammeLoudnessPolicy()
+	{
+		// An explicit RuntimeHost launch profile opt-in never changes the
+		// authoritative audio configuration or Program execution contract.
+		var value = Environment.GetEnvironmentVariable("RTAIME_PROGRAMME_LOUDNESS_PROFILE");
+		if (string.IsNullOrWhiteSpace(value) || value.Equals("off", StringComparison.OrdinalIgnoreCase))
+			return null;
+		if (value.Equals("ebu-r128-linear", StringComparison.OrdinalIgnoreCase))
+			return ProgrammeLoudnessPolicy.EbuR128Linear;
+		if (!value.Equals("custom-monitor", StringComparison.OrdinalIgnoreCase))
+			throw new InvalidOperationException("Unsupported programme loudness analysis profile.");
+		static double Required(string name)
+		{
+			var raw = Environment.GetEnvironmentVariable(name);
+			if (!double.TryParse(raw, System.Globalization.NumberStyles.Float,
+				System.Globalization.CultureInfo.InvariantCulture, out var result))
+				throw new InvalidOperationException("Invalid or missing loudness monitor configuration: " + name);
+			return result;
+		}
+		return new ProgrammeLoudnessPolicy(
+			"custom-monitor",
+			Required("RTAIME_PROGRAMME_LOUDNESS_TARGET_LUFS"),
+			Required("RTAIME_PROGRAMME_LOUDNESS_TOLERANCE_LU"),
+			Required("RTAIME_PROGRAMME_TRUE_PEAK_CEILING_DBTP"));
+	}
+
 	private void EnsureAudioBusBuffersUnsafe(AudioProductionConfiguration configuration)
 	{
 		var configured = configuration.Buses.Select(bus => bus.BusId).ToHashSet();
@@ -3379,6 +3417,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 		{
 			_audioBusMixSamples.Remove(stale);
 			_lastAudioProductionResults.Remove(stale);
+			_programmeLoudnessAnalysers.Remove(stale);
 		}
 		foreach (var bus in configuration.Buses)
 		{
@@ -3388,6 +3427,8 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				_lastAudioProductionResults.Add(
 					bus.BusId,
 					new AudioProductionBlockResult(bus.BusId, configuration.Revision, 0, 0, 0, 0, 1, 0, true, null, 0, 0));
+			if (_programmeLoudnessPolicy is not null && !_programmeLoudnessAnalysers.ContainsKey(bus.BusId))
+				_programmeLoudnessAnalysers.Add(bus.BusId, new ProgrammeLoudnessAnalyzer(_programmeLoudnessPolicy));
 		}
 	}
 
@@ -3407,6 +3448,25 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 				_audioProductionSourceBuffers,
 				_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues));
 			_lastAudioProductionResults[bus.BusId] = result;
+			if (_programmeLoudnessAnalysers.TryGetValue(bus.BusId, out var analyser))
+			{
+				// Analysis consumes only final output samples. Invalid diagnostic
+				// input may invalidate the meter, never the committed Program mix.
+				try
+				{
+					if (result.MissingSourceCount > 0)
+						analyser.Interrupt();
+					else
+						analyser.Process(
+							_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues),
+							timingReference.Timing.SamplePosition,
+							routedAudioSource);
+				}
+				catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+				{
+					analyser.Interrupt();
+				}
+			}
 		}
 		_lastAudioProductionResult = _lastAudioProductionResults[AudioBusId.Program];
 	}
@@ -3446,7 +3506,9 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					result.CompressorGainReductionDb,
 					result.LimiterGainReductionDb,
 					result.LimiterHitCount,
-					bus.Dynamics);
+					bus.Dynamics,
+					_programmeLoudnessAnalysers.TryGetValue(bus.BusId, out var analyser)
+						? analyser.Read(bus.BusId.Value) : null);
 			})
 			.ToArray();
 		var sources = configuration.Sources

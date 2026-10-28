@@ -1789,7 +1789,8 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 				bus.CompressorGainReductionDb,
 				bus.LimiterGainReductionDb,
 				bus.LimiterHitCount,
-				FromWire(bus.Dynamics)))
+				FromWire(bus.Dynamics),
+				bus.Loudness))
 			.ToArray()),
 		snapshot.PreDynamicsPeak,
 		snapshot.CompressorGainReductionDb,
@@ -2352,7 +2353,8 @@ public sealed partial class NamedPipeOperatorControlTransport : IOperatorControl
 		double CompressorGainReductionDb = 0,
 		double LimiterGainReductionDb = 0,
 		ulong LimiterHitCount = 0,
-		WireAudioBusDynamics? Dynamics = null);
+		WireAudioBusDynamics? Dynamics = null,
+		ProgrammeLoudnessSnapshot? Loudness = null);
 	private sealed record WireAudioBusCompressor(bool Enabled, double ThresholdDbFs, double Ratio, double AttackMilliseconds, double ReleaseMilliseconds, double MakeupGainDb);
 	private sealed record WireAudioSamplePeakLimiter(bool Enabled, double CeilingDbFs, double ReleaseMilliseconds);
 	private sealed record WireAudioBusDynamics(WireAudioBusCompressor Compressor, WireAudioSamplePeakLimiter Limiter);

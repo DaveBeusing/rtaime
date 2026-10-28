@@ -450,6 +450,23 @@
 										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" HasValue="{Binding HasMeterEvidence}" AutomationProperties.Name="Right Runtime peak" Value="{Binding DisplayRightPeak, Mode=OneWay}" Height="8" Foreground="{DynamicResource OperatorAudioBrush}" />
 										<TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
 									</Grid>
+									<Border BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}"
+										Padding="7" Margin="0,0,0,8" AutomationProperties.Name="Program and bus loudness and true-peak evidence">
+										<StackPanel>
+											<TextBlock Text="{Binding LoudnessStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
+											<UniformGrid Columns="2" Margin="0,5,0,4">
+												<StackPanel><TextBlock Text="M (400 ms)" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessMomentary}" Style="{StaticResource OperatorValue}" /></StackPanel>
+												<StackPanel><TextBlock Text="S (3 s)" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessShortTerm}" Style="{StaticResource OperatorValue}" /></StackPanel>
+												<StackPanel><TextBlock Text="INTEGRATED" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessIntegrated}" Style="{StaticResource OperatorValue}" /></StackPanel>
+												<StackPanel><TextBlock Text="LRA" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessRange}" Style="{StaticResource OperatorValue}" /></StackPanel>
+												<StackPanel><TextBlock Text="4× TRUE PEAK" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessTruePeak}" Style="{StaticResource OperatorValue}" /></StackPanel>
+												<StackPanel><TextBlock Text="ANALYSIS TIME" Style="{StaticResource MixerLabel}" /><TextBlock Text="{Binding LoudnessDuration}" Style="{StaticResource OperatorValue}" /></StackPanel>
+											</UniformGrid>
+											<TextBlock Text="{Binding LoudnessPolicyStatus, StringFormat={}POLICY: {0}}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
+											<TextBlock Text="{Binding LoudnessReset, StringFormat={}RESET GENERATION: {0}}" Style="{StaticResource MixerLabel}" />
+											<TextBlock Text="{Binding LoudnessSource}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
+										</StackPanel>
+									</Border>
 									<Grid Margin="0,0,0,6">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 										<DockPanel LastChildFill="False" Grid.Column="0">
