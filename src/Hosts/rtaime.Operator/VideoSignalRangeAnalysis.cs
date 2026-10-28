@@ -168,18 +168,20 @@ internal sealed class VideoSignalRangeAccumulator
 	public const int CounterCount = 15; // R,G,B,Y,ANY x nominal,preferred,total
 	private readonly VideoRangeProfile _profile;
 	private readonly VideoRangeLimits _limits;
+	private readonly bool _enabled;
 	private readonly uint[] _counts = new uint[CounterCount];
 	private int _samples;
 
 	public VideoSignalRangeAccumulator(VideoRangeProfile profile)
 	{
 		_profile = profile;
+		_enabled = profile.UnverifiedReason is null;
 		VideoRangeLimits.TryGet(profile.ObservedCodeBitDepth, out _limits);
 	}
 
 	public void Add(int x, int y, int r, int g, int b)
 	{
-		if (_profile.UnverifiedReason is not null ||
+		if (!_enabled ||
 			x < _profile.ActiveImage.X || y < _profile.ActiveImage.Y ||
 			x >= (long)_profile.ActiveImage.X + _profile.ActiveImage.Width ||
 			y >= (long)_profile.ActiveImage.Y + _profile.ActiveImage.Height)
@@ -224,6 +226,34 @@ internal sealed class VideoSignalRangeAccumulator
 
 public static class VideoSignalRangeAnalysis
 {
+	/// <summary>Analyzes already-materialized RGBA8 monitoring codes, not display-transformed BGRA.</summary>
+	public static VideoSignalRangeSnapshot AnalyzeRgba8(
+		MonitoringFrame frame,
+		VideoActiveImageRegion? activeImage = null,
+		int sampleStride = 1)
+	{
+		ArgumentNullException.ThrowIfNull(frame);
+		if (sampleStride <= 0) throw new ArgumentOutOfRangeException(nameof(sampleStride));
+		if (!frame.HasFallbackPayload)
+			return VideoSignalRangeSnapshot.Unavailable(
+				VideoRangeProfile.ForRgba8(frame.Descriptor.Color, frame.Descriptor.Width, frame.Descriptor.Height),
+				frame.Descriptor.Timing.SequenceNumber, sampleStride,
+				"UNAVAILABLE: a source-code monitoring payload is not materialized.");
+		var descriptor = frame.Descriptor;
+		var region = activeImage ?? VideoActiveImageRegion.Full(descriptor.Width, descriptor.Height);
+		region.Validate(descriptor.Width, descriptor.Height);
+		var profile = VideoRangeProfile.ForRgba8(descriptor.Color, descriptor.Width, descriptor.Height, region);
+		var accumulator = new VideoSignalRangeAccumulator(profile);
+		var pixels = frame.Pixels.Span;
+		for (var y = region.Y; y < (long)region.Y + region.Height; y += sampleStride)
+		for (var x = region.X; x < (long)region.X + region.Width; x += sampleStride)
+		{
+			var offset = checked((int)(((ulong)y * descriptor.Width + (ulong)x) * 4));
+			accumulator.Add(x, y, pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+		}
+		return accumulator.Finish(descriptor.Timing.SequenceNumber, sampleStride);
+	}
+
 	/// <summary>Standalone deterministic native-code reference path, not a Runtime/SDI qualified provider.</summary>
 	public static VideoSignalRangeSnapshot AnalyzeNativeRgba10(
 		ReadOnlySpan<ushort> rgbaCodes,
