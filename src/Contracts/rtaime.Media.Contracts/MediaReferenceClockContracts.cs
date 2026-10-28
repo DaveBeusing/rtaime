@@ -49,13 +49,13 @@ public sealed record MediaReferenceClockObservation(
 			GrandmasterId is not null && (GrandmasterId.Length != 16 ||
 				GrandmasterId.Any(c => !Uri.IsHexDigit(c))) ||
 			ObservedAtUtc.Offset != TimeSpan.Zero ||
-			LastSyncAtUtc is { Offset: not TimeSpan.Zero } ||
+			(LastSyncAtUtc.HasValue && LastSyncAtUtc.Value.Offset != TimeSpan.Zero) ||
 			LastSyncAtUtc > ObservedAtUtc ||
 			DriftPartsPerBillion is double drift && (!double.IsFinite(drift) || Math.Abs(drift) > 1000000) ||
 			OffsetNanoseconds is long offset && (offset < -1000000000L || offset > 1000000000L) ||
 			HoldoverElapsed < TimeSpan.Zero || MaximumHoldover < TimeSpan.Zero ||
-			MaximumHoldover > MaximumQualifiedHoldover || HoldoverElapsed > MaximumHoldover &&
-				LockState == MediaReferenceLockState.Holdover ||
+			MaximumHoldover > MaximumQualifiedHoldover || (HoldoverElapsed > MaximumHoldover &&
+				LockState == MediaReferenceLockState.Holdover) ||
 			string.IsNullOrWhiteSpace(Detail) || Detail.Length > 256)
 			throw new ArgumentException("Invalid or unbounded media reference clock observation.");
 
@@ -66,7 +66,7 @@ public sealed record MediaReferenceClockObservation(
 				 LastSyncAtUtc is null || OffsetNanoseconds is null || DriftPartsPerBillion is null) ||
 			Evidence == MediaReferenceEvidence.Simulated && Source != MediaReferenceClockSource.Virtual ||
 			Source == MediaReferenceClockSource.Virtual && Evidence == MediaReferenceEvidence.HardwareQualified ||
-			LockState is MediaReferenceLockState.Locked or MediaReferenceLockState.Holdover &&
+			(LockState is MediaReferenceLockState.Locked or MediaReferenceLockState.Holdover) &&
 				(Evidence == MediaReferenceEvidence.Unverified || LastSyncAtUtc is null) ||
 			LockState == MediaReferenceLockState.Holdover && HoldoverElapsed == TimeSpan.Zero)
 			throw new ArgumentException("Clock state lacks its claimed provider/sync provenance.");
