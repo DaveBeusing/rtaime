@@ -148,11 +148,15 @@ public static class TimedTextInterchangeCodec
 			root.Add(new XAttribute(Ttp + "clockMode", "local"));
 		if (value.DocumentFrameRate is { } rate)
 		{
-			// Emit the exact rational as a normative integer frameRate + multiplier.
-			if (rate.Numerator > 240_000 || rate.Denominator > 100_000)
-				throw new InvalidDataException("Document frame rate exceeds the supported serialized clock domain.");
-			root.Add(new XAttribute(Ttp + "frameRate", rate.Numerator));
-			root.Add(new XAttribute(Ttp + "frameRateMultiplier", $"1 {rate.Denominator}"));
+			if (rate == FrameRate.Fps59_94)
+			{
+				root.Add(new XAttribute(Ttp + "frameRate", 60));
+				root.Add(new XAttribute(Ttp + "frameRateMultiplier", "1000 1001"));
+			}
+			else if (rate.Denominator == 1 && rate.Numerator is 25 or 50)
+				root.Add(new XAttribute(Ttp + "frameRate", rate.Numerator));
+			else
+				throw new InvalidDataException("Only 25, 50 and exact 60000/1001 document frame rates are supported.");
 		}
 		if (value.Profile == TimedTextProfile.EbuTtLive10)
 		{
@@ -248,7 +252,11 @@ public static class TimedTextInterchangeCodec
 			numerator = checked(numerator * x);
 			denominator = y;
 		}
-		return new FrameRate(numerator, denominator);
+		var effective = new FrameRate(numerator, denominator);
+		if (!(effective.Denominator == 1 && effective.Numerator is 25 or 50) &&
+			effective != FrameRate.Fps59_94)
+			throw new InvalidDataException("This Timed Text subset only admits exact 25, 50 and 60000/1001 document timebases.");
+		return effective;
 	}
 
 	private static TimedTextStyle ParseStyle(XElement element)
