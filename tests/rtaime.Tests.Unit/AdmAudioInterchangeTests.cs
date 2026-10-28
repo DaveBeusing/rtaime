@@ -96,6 +96,7 @@ public sealed class AdmAudioInterchangeTests
 		Assert.StartsWith("R 123 8a DECLARED", projected.LayoutLabel);
 		Assert.Equal(8, projected.Tracks.Count);
 		Assert.Equal(Enumerable.Range(1, 8), projected.Tracks.Select(x => x.PhysicalTrackNumber!.Value));
+		Assert.Equal(roles, projected.Tracks.Select(row => row.R123AssignedRole));
 		Assert.Equal(roles, projected.Tracks.Select(row =>
 			mapped.Assignments.Single(x => x.AudioTrackUid == row.AudioTrackUid).R123Role));
 		var serialized = AdmAudioXml.ExportSidecarJson(projected);
