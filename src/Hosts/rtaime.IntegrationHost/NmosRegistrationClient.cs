@@ -17,6 +17,7 @@ internal sealed class NmosRegistrationClient
 	private readonly Uri _root;
 	private readonly NmosVirtualResources _resources;
 	private bool _registered;
+	private readonly HashSet<string> _acceptedResources = new(StringComparer.Ordinal);
 
 	public NmosRegistrationClient(HttpClient http, string registryUrl, NmosVirtualResources resources)
 	{
@@ -57,6 +58,7 @@ internal sealed class NmosRegistrationClient
 				!body.RootElement.TryGetProperty("version", out var version) ||
 				version.ValueKind != JsonValueKind.String)
 				throw new InvalidDataException("IS-04 registration response resource identity/version is invalid.");
+			_acceptedResources.Add(type + ":" + id);
 		}
 		_registered = true;
 	}
@@ -86,6 +88,9 @@ internal sealed class NmosRegistrationClient
 		List<Exception>? failures = null;
 		foreach (var (type, id, _) in _resources.UnregistrationOrder())
 		{
+			// Only delete resources this instance demonstrably registered.
+			// A registry conflict must never trigger a DELETE of another node's resource.
+			if (!_acceptedResources.Contains(type + ":" + id)) continue;
 			using var request = new HttpRequestMessage(HttpMethod.Delete,
 				new Uri(_root, $"resource/{type}s/{id}"));
 			try
@@ -93,6 +98,7 @@ internal sealed class NmosRegistrationClient
 				using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
 				if (response.StatusCode is not (HttpStatusCode.NoContent or HttpStatusCode.OK or HttpStatusCode.NotFound))
 					throw new InvalidDataException($"IS-04 {type} deregistration failed.");
+				_acceptedResources.Remove(type + ":" + id);
 			}
 			catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
 			{
