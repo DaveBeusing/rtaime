@@ -44,7 +44,7 @@ internal sealed class RuntimeBroadcastContinuityTracker
 	/// <summary>
 	/// Admission only after TransactionalRuntime.Commit succeeded; a rejected prepare
 	/// or abandoned commit leaves all previously confirmed source and incident data intact.
-	/// A same-authority resync does not clear a latched recovery incident.
+	/// A same-identity resync or unrelated Control revision does not clear a latched recovery incident.
 	/// </summary>
 	public void ConfirmCommittedExecution(PreparedExecutionContract prepared, ulong executionRevision)
 	{
@@ -63,15 +63,15 @@ internal sealed class RuntimeBroadcastContinuityTracker
 			var source = binding.MediaSourceId.Value.ToString();
 			var sink = binding.MediaSinkId.Value.ToString();
 			if (_roles.TryGetValue(roleId, out var old) &&
-				old.AuthorityId == authorityId && old.AuthorityRevision == prepared.AuthoritySnapshot.Revision.Value &&
+				old.AuthorityId == authorityId &&
 				old.Source == source && old.Sink == sink)
 			{
-				// Same exact authority cannot acknowledge or erase the incident after a
+				// An unrelated revision cannot acknowledge or erase the incident after a
 				// RuntimeHost restart/resync. Keep fault and last completed evidence.
 				candidates.Add(roleId, new Role
 				{
 					Name = roleId, Source = source, Sink = sink,
-					AuthorityId = authorityId, AuthorityRevision = old.AuthorityRevision,
+					AuthorityId = authorityId, AuthorityRevision = prepared.AuthoritySnapshot.Revision.Value,
 					ExecutionRevision = executionRevision, Policy = policy,
 					Phase = old.Phase, LastCompleteVideo = old.LastCompleteVideo,
 					LastCompleteAudio = old.LastCompleteAudio,
