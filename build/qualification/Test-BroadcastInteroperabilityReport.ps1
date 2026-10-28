@@ -58,6 +58,7 @@ function Parse-Trx([string]$Path, [string[]]$Classes) {
         [int]$counters.GetAttribute("timeout") + [int]$counters.GetAttribute("aborted") +
         [int]$counters.GetAttribute("inconclusive") -ge $results.Count) "TRX outcome counters understate recorded test outcomes."
     $seen = @{}
+    $counts = @{}
     $classesSeen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $allPassed = ([string]$summary.GetAttribute("outcome") -eq "Passed")
     foreach ($result in $results) {
@@ -69,6 +70,7 @@ function Parse-Trx([string]$Path, [string[]]$Classes) {
         $className = $defs[$testId]
         Require ($Classes -contains $className) "TRX result class '$className' was not selected in the qualification suite."
         $null = $classesSeen.Add($className)
+        $counts[$className] = 1 + $(if ($counts.ContainsKey($className)) { [int]$counts[$className] } else { 0 })
         if ([string]$result.GetAttribute("outcome") -ne "Passed") { $allPassed = $false }
     }
     foreach ($expected in $Classes) {
@@ -85,6 +87,7 @@ function Parse-Trx([string]$Path, [string[]]$Classes) {
         count = $results.Count
         date = $ended.ToUniversalTime().ToString("O")
         classes = @($classesSeen | Sort-Object)
+        counts = $counts
     }
 }
 
@@ -107,6 +110,11 @@ foreach ($s in @($matrix.standards)) {
     Require ([string]$s.referenceUrl -match '^https://') "Standard source must have a pinned HTTPS reference."
 }
 $profiles = @{}
+$recordedProfiles = @{}
+foreach ($profile in @($report.configurations)) {
+    Require (-not $recordedProfiles.ContainsKey([string]$profile.profileId)) "Duplicate device matrix configuration."
+    $recordedProfiles[[string]$profile.profileId] = $profile
+}
 foreach ($p in @($config.configurations)) {
     Require (-not $profiles.ContainsKey([string]$p.id)) "Duplicate reference configuration."
     Require ([string]$p.status -eq "UNVERIFIED") "Static configuration cannot assert qualification."
@@ -117,7 +125,16 @@ foreach ($p in @($config.configurations)) {
         }
     }
     $profiles[[string]$p.id] = $p
+    Require ($recordedProfiles.ContainsKey([string]$p.id)) "Device matrix profile missing."
+    $recorded = $recordedProfiles[[string]$p.id]
+    Require ([string]$recorded.class -ceq [string]$p.class -and
+        [string]$recorded.operatingSystem -ceq [string]$p.host -and
+        [string]$recorded.hardwareStatus -ceq "UNVERIFIED") "Device inventory contradicts pinned profile."
+    foreach ($field in @("gpu","driver","nic","switch","codec","display","recorder","receiver","ptp")) {
+        Require ([string]$recorded.$field -ceq [string]$p.$field) "Device inventory field '$field' differs from the controlled configuration."
+    }
 }
+Require ($recordedProfiles.Count -eq $profiles.Count) "Unknown device profile in report."
 $expectedSuiteIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $actualSuites = @{}
 foreach ($actual in @($report.suites)) {
@@ -143,8 +160,12 @@ foreach ($suite in @($matrix.suites)) {
     Require ([string]$e.sha256 -cmatch '^[0-9a-f]{64}$' -and [string]$e.sha256 -ceq (Hash $trxFull)) "TRX digest mismatch."
     $classes = @($matrix.suites | Where-Object { $_.testProject -eq $suite.testProject } | ForEach-Object { $_.expectedClasses } | Sort-Object -Unique)
     $parsed = Parse-Trx $trxFull $classes
-    Require ([int]$entry.testCount -ge 1 -and [int]$entry.testCount -le $parsed.count) "Suite test count outside observed TRX."
-    $suiteTests = @($trxFull) # force a concrete file identity for every suite
+    $expectedSuiteCount = 0
+    foreach ($testClass in @($suite.expectedClasses)) {
+        Require ($parsed.counts.ContainsKey([string]$testClass)) "Suite missing executed class '$testClass'."
+        $expectedSuiteCount += [int]$parsed.counts[[string]$testClass]
+    }
+    Require ([int]$entry.testCount -eq $expectedSuiteCount -and $expectedSuiteCount -ge [int]$suite.minimumTests) "Suite count does not match executed TRX cases."
     Require ([string]$entry.testDateUtc -eq $parsed.date) "Suite date differs from the recorded TRX."
     $calculatedStatus = if ($parsed.passed -and [int]$e.exitCode -eq 0) { "QUALIFIED" } else { "FAILED" }
     Require ([string]$entry.status -eq $calculatedStatus) "Suite state contradicts the executed tests."
@@ -167,12 +188,19 @@ foreach ($requirement in @($matrix.requirements)) {
         [string]$actual.implementer -ceq [string]$requirement.implementer -and
         [string]$actual.assessor -ceq [string]$requirement.assessor -and
         [string]$actual.fixture -ceq [string]$requirement.fixture -and
-        [string]$actual.signalExpectation -ceq [string]$requirement.signalExpectation) "Requirement metadata was replaced."
+        [string]$actual.signalExpectation -ceq [string]$requirement.signalExpectation -and
+        [string]$actual.edition -ceq [string](@($matrix.standards | Where-Object id -eq $requirement.standardId)[0].edition) -and
+        [string]$actual.organization -ceq [string](@($matrix.standards | Where-Object id -eq $requirement.standardId)[0].organization)) "Requirement metadata was replaced."
     Require ([string]$requirement.defaultStatus -ceq "UNVERIFIED") "Static requirement cannot pre-authorize PASS."
     $expectedStatus = "UNVERIFIED"
     if ([string]$requirement.scope -eq "software") {
         Require ($expectedSuiteIds.Contains([string]$requirement.suiteId)) "Software requirement has no known suite."
-        $expectedStatus = [string]$actualSuites[[string]$requirement.suiteId].status
+        $associatedSuite = $actualSuites[[string]$requirement.suiteId]
+        $expectedStatus = [string]$associatedSuite.status
+        $expectedHash = if ($expectedStatus -eq "UNVERIFIED") { "" } else { [string]$associatedSuite.evidence.sha256 }
+        $expectedDate = if ($expectedStatus -eq "UNVERIFIED") { "" } else { [string]$associatedSuite.testDateUtc }
+        Require ([string]$actual.evidenceSha256 -ceq $expectedHash -and
+            [string]$actual.testDateUtc -ceq $expectedDate) "Software requirement evidence does not match the verified test suite."
     } else {
         Require ([string]$requirement.scope -eq "physical" -and $null -eq $requirement.suiteId) "Physical requirements cannot inherit software test suites."
         Require ([string]$actual.evidenceSha256 -eq "" -and $null -eq $actual.testDateUtc) "Physical test evidence must be independently qualified; none is admitted by this report."
