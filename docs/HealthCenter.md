@@ -241,7 +241,7 @@ output qualification requires separately retained platform-specific evidence.
 The Health Center includes one versioned `reference-clock` subsystem
 from the existing RuntimeHost → ControlHost → Operator snapshot.
 Its metrics display source/provider, LOCKED/HOLDOVER/LOST/UNVERIFIED,
-Grandmaster, clock domain and epoch, offset, drift, last sync and
+Grandmaster, clock domain and epoch, offset, drift, time quality, last sync and
 remaining holdover. No new reference polling or WPF time source is used.
 
 A simulated virtual LOCKED result is **not** healthy hardware PTP
