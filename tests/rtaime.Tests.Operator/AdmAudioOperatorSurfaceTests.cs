@@ -24,6 +24,8 @@ public sealed class AdmAudioOperatorSurfaceTests
 				"ADM parsing and immersive output capability state");
 		Assert.Contains(doc.Descendants(), x =>
 			x.Attribute("ItemsSource")?.Value.Contains("MediaPool.AdmTrackRows", StringComparison.Ordinal) == true);
+		Assert.Contains(doc.Descendants(), x =>
+			x.Attribute("Text")?.Value.Contains("Binding R123AssignedRole", StringComparison.Ordinal) == true);
 	}
 
 	[Fact]
