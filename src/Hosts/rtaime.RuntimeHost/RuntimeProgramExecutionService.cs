@@ -3454,7 +3454,7 @@ public sealed partial class RuntimeProgramExecutionService : IAsyncDisposable
 					analyser.Process(
 						_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues),
 						timingReference.Timing.SamplePosition,
-						routedAudioSource.ToString());
+						routedAudioSource);
 			}
 		}
 		_lastAudioProductionResult = _lastAudioProductionResults[AudioBusId.Program];
