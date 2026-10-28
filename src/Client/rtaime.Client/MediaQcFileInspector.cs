@@ -55,13 +55,15 @@ public static class MediaQcFileInspector
 		var checks = MediaQcProfile.OfflineFileV1.Checks;
 		MediaQcCheckResult Result(int index, MediaQcCheckState state, string detail,
 			int severity = 0, double? confidence = null) =>
-			new(checks[index], state, detail, severity, confidence,
+			new(checks[index], state, detail,
+				state is MediaQcCheckState.NotExecuted or MediaQcCheckState.Unsupported ? 0 : severity,
+				state is MediaQcCheckState.NotExecuted or MediaQcCheckState.Unsupported ? null : confidence,
 				"offline-file:sha256:" + hash.ToLowerInvariant(),
 				CheckImplementationVersion);
 		var structurallyKnown = scanned.HasMoov || scanned.HasFtyp;
 		var valid = !scanned.Truncated && !scanned.LimitExceeded;
 		var results = new MediaQcCheckResult[] {
-			Result(0, !structurallyKnown ? MediaQcCheckState.Unsupported :
+			Result(0, !structurallyKnown || scanned.LimitExceeded ? MediaQcCheckState.Unsupported :
 				valid && scanned.HasMoov && scanned.HasMdat
 					? MediaQcCheckState.Pass : MediaQcCheckState.Failed,
 				!structurallyKnown ? "Not a recognised, supported ISO BMFF/QuickTime box structure." :
@@ -70,9 +72,9 @@ public static class MediaQcFileInspector
 					"Container headers, boundaries or required boxes are invalid.",
 				structurallyKnown && (!valid || !scanned.HasMoov || !scanned.HasMdat) ? 7 : 0,
 				structurallyKnown ? 1 : null),
-			Result(1, scanned.LimitExceeded ? MediaQcCheckState.Unsupported :
+			Result(1, scanned.LimitExceeded || !structurallyKnown ? MediaQcCheckState.Unsupported :
 				scanned.Truncated ? MediaQcCheckState.Failed : MediaQcCheckState.Pass,
-				scanned.LimitExceeded ? "Structural scan budget exhausted; truncation not fully evaluated." :
+				scanned.LimitExceeded || !structurallyKnown ? "No supported container structure or structural scan budget exhausted; truncation not fully evaluated." :
 				scanned.Truncated ? "An ISO BMFF box length or nested boundary exceeds the hashed file." :
 					"All inspected box boundaries fit the complete SHA-256 verified file.",
 				scanned.Truncated ? 8 : 0,
@@ -231,6 +233,7 @@ public static class MediaQcFileInspector
 			catch (EndOfStreamException) { Truncated = true; return; }
 			var count = BinaryPrimitives.ReadUInt32BigEndian(header[4..8]);
 			if (count > 65536) { LimitExceeded = true; return; }
+			if (count == 0) InvalidTimeToSample = true;
 			if ((long)count * 8 > end - start - 8) { Truncated = true; return; }
 			for (uint i = 0; i < count; i++)
 			{
