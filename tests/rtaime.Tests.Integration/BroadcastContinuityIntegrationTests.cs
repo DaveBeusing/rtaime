@@ -146,6 +146,26 @@ public sealed class BroadcastContinuityIntegrationTests
 	}
 
 	[Fact]
+	public async Task Rejected_software_prepare_cannot_rewrite_last_confirmed_program_or_incident()
+	{
+		await using var test = CreateFixture();
+		var (plan, sink) = test.Plan();
+		Assert.Equal(RuntimeCommitStatus.Committed, test.Runtime.ApplyExecution(plan, sink).Commit!.Status);
+		using (test.Runtime.ProcessNextBoundary()) { }
+		var before = test.Runtime.GetContinuityObservation("program")!;
+		var outputBefore = test.Runtime.ProgramFrames[^1].Frame.SourceId;
+		test.Runtime.ConfigureReferenceClockRequirement(MediaReferenceClockRequirement.HardwareLocked);
+		var rejected = test.Runtime.ApplyExecution(plan, sink);
+		Assert.Equal(RuntimePrepareStatus.Rejected, rejected.Prepare.Status);
+		Assert.Null(rejected.Commit);
+		var after = test.Runtime.GetContinuityObservation("program")!;
+		Assert.Equal(before, after);
+		Assert.Equal(outputBefore, test.Runtime.ProgramFrames[^1].Frame.SourceId);
+		Assert.Equal(before.RuntimeExecutionRevision, after.RuntimeExecutionRevision);
+		Assert.Empty(test.Runtime.RecentContinuityIncidents);
+	}
+
+	[Fact]
 	public void Failed_boundaries_are_idempotent_and_incident_history_is_bounded_by_role_and_revision()
 	{
 		using var test = CreateFixture();
