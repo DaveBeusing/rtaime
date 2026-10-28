@@ -915,7 +915,8 @@ public sealed record OperatorStatusSnapshot
         OperatorShowProjectDescriptor? showProject = null,
         OperatorAudioProductionDescriptor? audioProduction = null,
         ReplayControlSnapshot? replay = null,
-        IReadOnlyList<MediaDeckSnapshot>? mediaDecks = null)
+        IReadOnlyList<MediaDeckSnapshot>? mediaDecks = null,
+        MediaReferenceClockObservation? clockReference = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -957,6 +958,8 @@ public sealed record OperatorStatusSnapshot
         ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
         AudioProduction = audioProduction;
         Replay = replay ?? ReplayControlSnapshot.Unavailable;
+        if (clockReference is not null) clockReference.Validate();
+        ClockReference = clockReference;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -984,6 +987,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorShowProjectDescriptor ShowProject { get; }
     public OperatorAudioProductionDescriptor? AudioProduction { get; }
     public ReplayControlSnapshot Replay { get; }
+    public MediaReferenceClockObservation? ClockReference { get; }
 }
 
 /// <summary>

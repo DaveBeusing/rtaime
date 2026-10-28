@@ -252,3 +252,24 @@ Reference Platform Qualification is reference-platform qualification evidence, n
 ## Completion criterion
 
 Reference Platform Qualification is complete when the profile, runner, verifier, policy regression, documentation and CI retention path are present and Required Gates pass. Full **physical reference-platform PASS** remains evidence-dependent: it is achieved only by supplying successful exact source-bound CUDA, professional Media I/O and timing/reference/latency/soak qualification bindings for the candidate commit.
+
+
+## PTP and external media reference truth (separate from software cadence)
+
+The optional provider-bound media-clock contract adds explicit reference
+source, lock/HOLDOVER/LOST, clock-domain/epoch, Grandmaster identity,
+offset/drift and evidence class. The virtual PTP harness exercises
+bounded five-minute holdover and deterministic 25/50/60000:1001
+rational RTP/PCM projections without hardware access. These tests
+belong to **software** qualification only.
+
+Hardware `TIMING_REFERENCE_LOCK` remains mandatory and **UNVERIFIED**
+until an exact-source accepted NIC/SDI provider and its physical
+Grandmaster/Genlock measurements exist. The same applies to
+`AUDIO_VIDEO_SYNCHRONIZATION`, `SUSTAINED_FRAME_CADENCE`,
+`PHYSICAL_END_TO_END_LATENCY` and `LONG_SOAK_STABILITY`.
+Neither virtual LOCKED, Windows monotonic scheduling, a Genlock
+configuration string nor a healthy timing-health counter promotes a
+physical dimension to PASS. The default asynchronous path is
+unchanged; hardware-required Prepare fails closed when no qualified
+reference is available. See [Media Reference Clock Qualification](../MediaReferenceClockQualification.md).

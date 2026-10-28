@@ -234,3 +234,22 @@ Focused tests cover condition transitions, duplicate-suppression under bursts,
 64-key bounds, missing evidence, monotonic durations, shared acknowledgement,
 resolved notifications and fail-open notification delivery. Windows/physical
 output qualification requires separately retained platform-specific evidence.
+
+
+## Media Reference Clock (provider evidence only)
+
+The Health Center includes one versioned `reference-clock` subsystem
+from the existing RuntimeHost → ControlHost → Operator snapshot.
+Its metrics display source/provider, LOCKED/HOLDOVER/LOST/UNVERIFIED,
+Grandmaster, clock domain and epoch, offset, drift, time quality, last sync and
+remaining holdover. No new reference polling or WPF time source is used.
+
+A simulated virtual LOCKED result is **not** healthy hardware PTP
+evidence. Only current source-backed `HardwareQualified` evidence
+may be considered physically LOCKED; bounded hardware holdover is
+DEGRADED, hardware LOST is FAILED, missing or stale data is
+UNVERIFIED/UNKNOWN. The observation alone cannot infer whether an
+existing asynchronous Program route requires lock. New explicitly
+clock-required routes are admitted by the Runtime Prepare policy,
+not by presentation state. See
+[Media Reference Clock Qualification](MediaReferenceClockQualification.md).

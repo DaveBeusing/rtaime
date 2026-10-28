@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using rtaime.Client;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
@@ -33,7 +34,8 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		nameof(OperatorViewModel.AudioMeterStatus),
 		nameof(OperatorViewModel.AudioClipping),
 		nameof(OperatorViewModel.AudioMuted),
-		nameof(OperatorViewModel.AudioProductionRevision)
+		nameof(OperatorViewModel.AudioProductionRevision),
+		nameof(OperatorViewModel.ClockReference)
 	};
 
 	private static readonly HashSet<string> RelevantDeckProperties = new(StringComparer.Ordinal)
@@ -252,6 +254,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				ExecutionImpact(HealthStateMapping.FromEvidence(_operator.MediaHealth)),
 				"Authoritative Control health snapshot"),
 			CreateAudio(existing, now),
+			CreateReferenceClock(existing, now),
 			CreateRecording(existing, now),
 			CreateDecoder(existing, now),
 			CreateCompositing(existing, now),
@@ -357,6 +360,52 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			.Select(role => CreateTransport(existing, role, now)));
 
 		return snapshots;
+	}
+
+	private SubsystemHealthSnapshot CreateReferenceClock(
+		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
+		DateTimeOffset now)
+	{
+		var clock = _operator.ClockReference;
+		var current = _operator.IsConnected && !_operator.IsStale &&
+			clock is not null && clock.IsCurrent(now);
+		var hardware = current && clock!.Evidence == MediaReferenceEvidence.HardwareQualified;
+		var state = !current ? SubsystemHealthState.Unknown :
+			clock!.LockState switch
+			{
+				MediaReferenceLockState.Locked when hardware => SubsystemHealthState.Healthy,
+				MediaReferenceLockState.Holdover when hardware => SubsystemHealthState.Degraded,
+				MediaReferenceLockState.Lost when hardware => SubsystemHealthState.Failed,
+				MediaReferenceLockState.Lost when clock.Evidence == MediaReferenceEvidence.Simulated => SubsystemHealthState.Warning,
+				_ => SubsystemHealthState.Unknown
+			};
+		var evidence = clock is null ? "UNVERIFIED" : clock.Evidence.ToString().ToUpperInvariant();
+		var lockValue = current ? clock!.LockState.ToString().ToUpperInvariant() : "UNVERIFIED";
+		return Create(existing, "reference-clock", "Media Reference Clock",
+			"Timing / Reference", state,
+			current ? clock!.Detail : "No current qualified hardware PTP or Genlock reference is observed.",
+			now,
+			[
+				new("Lock", lockValue),
+				new("Time quality", _operator.ClockTimeQuality),
+				new("Evidence", current ? evidence : "UNVERIFIED"),
+				new("Source", current ? clock!.Source.ToString() : "UNVERIFIED"),
+				new("Provider", current ? clock!.ProviderId : "UNVERIFIED"),
+				new("Domain", current ? clock!.ClockDomainId : "UNVERIFIED"),
+				new("Grandmaster", current ? clock!.GrandmasterId ?? "NONE" : "UNVERIFIED"),
+				new("Epoch", current ? clock!.EpochId.ToString("D") : "UNVERIFIED"),
+				new("Offset", _operator.ClockOffset),
+				new("Drift", _operator.ClockDrift),
+				new("Last sync", _operator.ClockLastSync),
+				new("Holdover", _operator.ClockHoldover)
+			],
+			hardware && state == SubsystemHealthState.Healthy
+				? "Continue provider reference observation; hardware proof remains source-bound."
+				: "Check the actual PTP/Genlock device and its qualified provider. Unknown or simulated clocks cannot admit synchronized output; restore the reference before retrying.",
+			$"Lock={lockValue}; Evidence={evidence}; Domain={clock?.ClockDomainId ?? "UNVERIFIED"}; Epoch={clock?.EpochId.ToString("D") ?? "UNVERIFIED"}",
+			state == SubsystemHealthState.Healthy ? SubsystemProgramImpact.None : SubsystemProgramImpact.Unknown,
+			current ? "Runtime provider media reference observation" :
+				"Missing/stale Runtime reference observation; no hardware source verified");
 	}
 
 	private SubsystemHealthSnapshot CreateAudio(

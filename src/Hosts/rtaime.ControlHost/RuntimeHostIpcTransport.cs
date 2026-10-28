@@ -361,7 +361,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
 	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null,
-	RuntimeAudioProductionSnapshot? AudioProduction = null);
+	RuntimeAudioProductionSnapshot? AudioProduction = null,
+	MediaReferenceClockObservation? ClockReference = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -501,7 +502,19 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText),
 			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()),
 			Array.AsReadOnly((snapshot.CompositingLayers ?? Array.Empty<WireCompositingLayer>()).Select(FromWire).ToArray()),
-			snapshot.AudioProduction is null ? null : FromWire(snapshot.AudioProduction));
+			snapshot.AudioProduction is null ? null : FromWire(snapshot.AudioProduction),
+			ValidateClockObservation(snapshot.ClockReference));
+	}
+
+	private static MediaReferenceClockObservation? ValidateClockObservation(MediaReferenceClockObservation? value)
+	{
+		if (value is null) return null; // Legacy peer: no reference information.
+		try { value.Validate(); }
+		catch (ArgumentException exception)
+		{
+			throw new InvalidDataException("Runtime reference-clock observation is invalid.", exception);
+		}
+		return value;
 	}
 
 	public async ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default)
@@ -2234,7 +2247,8 @@ public sealed partial class NamedPipeRuntimeHostTransport : IControlRuntimeTrans
 		WireProductionCgTextSnapshot? ProductionCgText = null,
 		WireOutputRole[]? OutputRoles = null,
 		WireCompositingLayer[]? CompositingLayers = null,
-		WireAudioProductionSnapshot? AudioProduction = null);
+		WireAudioProductionSnapshot? AudioProduction = null,
+		MediaReferenceClockObservation? ClockReference = null);
 
 	private static class Wire
 	{

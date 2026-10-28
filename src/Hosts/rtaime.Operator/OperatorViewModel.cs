@@ -689,6 +689,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 						AudioMixer.Apply(snapshot, refreshDrafts: false);
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 						ApplyHealth(snapshot.Health);
+						ApplyReferenceClock(snapshot);
 						ApplyOutputRoles(snapshot.OutputRoles);
 						CompositingLayers = snapshot.CompositingLayers;
 						ApplyAI(snapshot.AIShowcase);
@@ -1603,6 +1604,7 @@ public sealed partial class OperatorViewModel : INotifyPropertyChanged, IAsyncDi
 		ApplyAI(snapshot.AIShowcase);
 		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
 		ApplyHealth(snapshot.Health);
+		ApplyReferenceClock(snapshot);
 		ApplyOutputRoles(snapshot.OutputRoles);
 		CompositingLayers = snapshot.CompositingLayers;
 		var graphics = snapshot.GraphicsOverlay;

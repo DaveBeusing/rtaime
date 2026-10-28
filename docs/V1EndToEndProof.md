@@ -369,3 +369,31 @@ The deterministic reference payload remains the exact software-evidence lane. A 
 After final latest-head V1 Functional Gap Closure Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, physical recording throughput/encoder behavior, soak and release acceptance.
 
 The detailed V1 Functional Gap Closure audit and retained evidence boundary are documented in `V1FunctionalGapClosure.md`.
+
+
+## Provider reference clock and rational RTP projection (additive)
+
+The V1 software reference path retains one existing
+`RationalFrameSchedule` and Runtime-owned 48-kHz audio schedule.
+`MediaReferenceClockObservation` now accompanies Runtime management
+snapshots with provider ID, lock/holdover/LOST state, GM/domain, epoch,
+source-measured offset/drift and explicit simulation/physical evidence.
+The virtual qualification provider can simulate at least five minutes
+of holdover but **cannot** produce hardware PTP or Genlock qualification.
+Legacy peer snapshots lacking this field remain readable and are
+presented as UNVERIFIED.
+
+RTP video 90-kHz timestamps and audio 48-kHz sample positions are
+computed by exact rational projection of the **same** Runtime frame
+index, including 60000/1001 fractional rates. No new independent
+audio/video scheduler or unconditional ST 2110 network transmitter
+is introduced. The default asynchronous Program proof remains
+unchanged. Explicit hardware-locked or qualified-holdover execution
+profiles reject a new Runtime Prepare when provider-backed physical
+reference evidence is absent or stale; previously committed Program
+output remains under its existing authority and lifecycle.
+
+All physical PTP/ST 2059/Genlock, NIC timing, phase alignment and
+five-minute **hardware** holdover results remain UNVERIFIED.
+See [reference clock qualification](MediaReferenceClockQualification.md)
+and the [clock authority ADR](MediaReferenceClockDecision.md).
