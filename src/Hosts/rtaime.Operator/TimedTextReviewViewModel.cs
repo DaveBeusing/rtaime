@@ -1,4 +1,5 @@
-// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+// Copyright (c) Dave Beusing System.IO;
+using <david.beusing@gmail.com>.
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
