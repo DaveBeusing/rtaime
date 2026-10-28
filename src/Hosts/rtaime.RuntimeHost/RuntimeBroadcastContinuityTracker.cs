@@ -131,7 +131,7 @@ internal sealed class RuntimeBroadcastContinuityTracker
 		if (string.IsNullOrWhiteSpace(code) || code.Length > 96 || string.IsNullOrWhiteSpace(detail))
 			throw new ArgumentException("Continuity fault codes and details must be bounded nonempty values.");
 		if (role.IncidentGeneration == 0 ||
-			(role.Phase == BroadcastContinuityPhase.RecoveredAwaitingRearm && role.IncidentCode != code))
+			role.Phase == BroadcastContinuityPhase.RecoveredAwaitingRearm)
 		{
 			if (_nextIncident == ulong.MaxValue)
 				throw new InvalidOperationException("Broadcast continuity incident generations exhausted.");
