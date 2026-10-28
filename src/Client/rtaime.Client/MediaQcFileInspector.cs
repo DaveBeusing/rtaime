@@ -101,10 +101,10 @@ public static class MediaQcFileInspector
 				scanned.LimitExceeded || scanned.VideoTimeToSampleTables == 0 ? null : 1),
 			Result(4, !scanned.HasMoov || scanned.LimitExceeded
 				? MediaQcCheckState.Unsupported :
-				scanned.HasMovieHeader && scanned.SampleTables >= scanned.VideoTracks && scanned.VideoTracks > 0
+				scanned.HasMovieHeader && scanned.VideoSampleTables >= scanned.VideoTracks && scanned.VideoTracks > 0
 					? MediaQcCheckState.Pass : MediaQcCheckState.Failed,
-				$"Movie header={(scanned.HasMovieHeader ? "FOUND" : "MISSING")}; sample tables={scanned.SampleTables}; video tracks={scanned.VideoTracks}.",
-				scanned.HasMoov && (!scanned.HasMovieHeader || scanned.SampleTables < scanned.VideoTracks) ? 4 : 0,
+				$"Movie header={(scanned.HasMovieHeader ? "FOUND" : "MISSING")}; video sample tables={scanned.VideoSampleTables}; video tracks={scanned.VideoTracks}.",
+				scanned.HasMoov && (!scanned.HasMovieHeader || scanned.VideoSampleTables < scanned.VideoTracks) ? 4 : 0,
 				scanned.HasMoov && !scanned.LimitExceeded ? 1 : null),
 			Result(5, MediaQcCheckState.NotExecuted,
 				"Independent file R 128 analysis is not installed; live Program LUFS cannot qualify a media asset."),
@@ -194,12 +194,14 @@ public static class MediaQcFileInspector
 		public int VideoTracks { get; private set; }
 		public int AudioTracks { get; private set; }
 		public int SampleTables { get; private set; }
+		public int VideoSampleTables { get; private set; }
 		public int TimeToSampleTables { get; private set; }
 		public int VideoTimeToSampleTables { get; private set; }
 		private sealed class Track
 		{
 			public string Handler = "";
 			public int TimeToSampleTables;
+			public int SampleTables;
 		}
 
 		public static BmffStructure Inspect(Stream stream, CancellationToken cancellationToken)
@@ -246,7 +248,11 @@ public static class MediaQcFileInspector
 					if (type == "mdat") HasMdat = true;
 				}
 				if (type == "mvhd" && depth > 0) HasMovieHeader = true;
-				if (type == "stbl" && track is not null) SampleTables++;
+				if (type == "stbl" && track is not null)
+				{
+					SampleTables++;
+					track.SampleTables++;
+				}
 				if (type == "hdlr" && track is not null)
 				{
 					if (boxEnd - contentStart < 12) { Truncated = true; return; }
@@ -269,6 +275,7 @@ public static class MediaQcFileInspector
 					{
 						VideoTracks++;
 						VideoTimeToSampleTables += nextTrack.TimeToSampleTables;
+						VideoSampleTables += nextTrack.SampleTables;
 					}
 					else if (nextTrack.Handler == "soun") AudioTracks++;
 				}
