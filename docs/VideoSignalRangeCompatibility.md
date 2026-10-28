@@ -20,6 +20,8 @@ For limited range only, EBU R 103 v3 values are 8-bit nominal 16–235, preferre
 
 ## Evidence and ownership
 
+The single reusable `VideoRangeProfile` / `VideoRangeLimits` code-space specification lives in `src/Contracts/rtaime.Media.Contracts/VideoRangeContracts.cs`, next to the existing authoritative `ColorDescription`. Future HDR or native provider work must extend this rulebook rather than defining competing R 103 thresholds. This additive managed model introduces no new on-wire monitoring fields or release-compatibility migration.
+
 Color Review consumes the single, already-confirmed Program A or Preview B monitoring source through OperatorMonitoringViewModel, with no extra decoder, Program GPU texture write, raw frame CPU readback or authority mutation. The existing opt-in GPU shader is extended by 15 uint counters (60 bytes), appended after 21,504 legacy scope values. The resulting fixed buffer is 86,076 bytes. The RGBA8 CPU fallback uses the exact same raw-code counting rules within its existing coalesced sample pass. Every observation preserves frame sequence, source color metadata, active raster, sample stride/count and sampling coverage. Selected source switching, disconnect and resource replacement revoke old scope evidence.
 
 The four measured channels are **R′, G′, B′, and derived Y′**; a fifth union statistic counts each violating pixel once. Native chroma Cb/Cr sample values are not available in the monitoring RGB payload. Chroma legal-level counts are therefore explicitly **UNAVAILABLE**, not zero, and a display-code vectorscope cannot qualify original chroma codes.
@@ -28,6 +30,6 @@ EBU R 103 recommends a horizontal (1,2,3,4,3,2,1)/16 and vertical (1,2,1)/4 filt
 
 ## Targeted qualification
 
-The VideoSignalRangeAnalysisTests suite covers exact inclusive 8-/10-bit boundaries and neighbors; >1% versus exactly 1%; separate RGB/Y′/union counters; excluded border/active raster; unknown/inferred/full-range/HDR-like metadata; 10-bit source through 8-bit monitoring; legacy/current fixed GPU result shapes and raw-before-display shader order. CompositingWorkspaceQualification confirms the source-bound display and fail-closed unavailable state. Existing MediaScopeAnalysisTests and GpuScopesAndFrameComparisonTests protect histogram/Waveform/Parade/Vectorscope semantics, resource budgets and GPU/CPU fallback continuity.
+The `VideoRangeContractTests` and `VideoSignalRangeAnalysisTests` suites cover exact inclusive 8-/10-bit boundaries and neighbors; >1% versus exactly 1%; separate RGB/Y′/union counters; excluded border/active raster; unknown/inferred/full-range/HDR-like metadata; 10-bit source through 8-bit monitoring; legacy/current fixed GPU result shapes and raw-before-display shader order. CompositingWorkspaceQualification confirms the source-bound display and fail-closed unavailable state. Existing MediaScopeAnalysisTests and GpuScopesAndFrameComparisonTests protect histogram/Waveform/Parade/Vectorscope semantics, resource budgets and GPU/CPU fallback continuity.
 
 Required Gates CI/Quality validate the software checks. Physical CUDA/D3D11, monitor calibration, native codec/storage-to-output and SDI legal-level measurements remain UNVERIFIED until explicit qualified hardware evidence exists. No monitoring wire contract change or persisted state migration is introduced.
