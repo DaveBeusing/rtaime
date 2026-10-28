@@ -248,6 +248,9 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 	public bool HasPendingSeek => _state.HasPendingSeek;
 	public string TransportState => _state.TransportState;
 	public long ConfirmedFrame => _state.ConfirmedFrame;
+	/// <summary>Confirmed local media identity for read-only timed-text inspection; never Program authority.</summary>
+	public string? TimedTextSourceContext => _activeTimelineContextReference;
+	public FrameRate? TimedTextConfirmedFrameRate => _projectionFrameRate;
 	public long DisplayFrame => _state.DisplayFrame;
 	public long TotalFrames => _state.TotalFrames;
 	public double SliderMaximum => Math.Max(0, _state.TotalFrames - 1);
@@ -343,6 +346,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		{
 			_resourceProjections.Clear();
 			_activeTimelineContextReference = timelineContextReference;
+			OnPropertyChanged(nameof(TimedTextSourceContext));
 		}
 		foreach (var track in Tracks)
 			track.Items.Clear();
@@ -356,6 +360,7 @@ public sealed partial class MediaTimelineViewModel : INotifyPropertyChanged, IAs
 		_inPointFrame = snapshot.Markers?.InPointFrame;
 		_outPointFrame = snapshot.Markers?.OutPointFrame;
 		_projectionFrameRate = snapshot.Transport?.Position.FrameRate;
+		OnPropertyChanged(nameof(TimedTextConfirmedFrameRate));
 
 		if (snapshot.IsLoaded && snapshot.Transport is { } transport && snapshot.Markers is { } markers)
 		{
