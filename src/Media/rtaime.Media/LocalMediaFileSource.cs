@@ -286,7 +286,11 @@ public sealed class LocalMediaFileProvider
         ILocalMediaProbe? probe = extension.ToLowerInvariant() switch {
             ".mp4" => new Mp4LocalMediaProbe(), ".mov" => new QuickTimeLocalMediaProbe(), _ => null };
         if (probe is null)
-            return LocalMediaOpenResult.Rejected("media.file.container_unsupported", "Local input requires a qualified MP4 or QuickTime MOV container.");
+            return LocalMediaOpenResult.Rejected(
+                "media.file.container_unsupported",
+                extension.Equals(".mxf", StringComparison.OrdinalIgnoreCase)
+                    ? "MXF input is NOT_SUPPORTED: the opt-in OP1a recording writer and its independent FFprobe validation do not provide a Media Deck decoder. No MXF asset was admitted."
+                    : "Local input requires a qualified MP4 or QuickTime MOV container.");
 		if (!OperatingSystem.IsWindows())
 			return LocalMediaOpenResult.Rejected("media.file.platform_unsupported", "The local media provider requires Windows Media Foundation.");
 
