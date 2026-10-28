@@ -126,6 +126,16 @@ public sealed class OGrafPackageInspectorTests
     }
 
     [Fact]
+    public async Task Duplicate_json_property_keys_are_rejected_not_resolved_by_parser_order()
+    {
+        await using var fixture = await Package.CreateAsync();
+        await fixture.ReplaceAsync("\"name\": \"Test lower third\"",
+            "\"name\": \"Test lower third\", \"name\": \"Unreviewed value\"");
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await OGrafPackageInspector.InspectAsync(fixture.Manifest));
+    }
+
+    [Fact]
     public async Task Missing_resource_and_excessive_bytes_fail_closed()
     {
         await using var fixture = await Package.CreateAsync();
