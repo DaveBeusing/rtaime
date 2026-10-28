@@ -167,7 +167,11 @@ public sealed class OperationalObservationProjector
 	{
 		var value = snapshot.Metrics.FirstOrDefault(metric =>
 			string.Equals(metric.Label, "Provider", StringComparison.Ordinal))?.Value;
-		return string.IsNullOrWhiteSpace(value) ||
+		// Provider IDs must be safe identifiers, never URLs or credentials.
+		// Untrusted free-form data stays in the original owner projection.
+		return string.IsNullOrWhiteSpace(value) || value.Length > 64 ||
+			!value.All(character => char.IsLetterOrDigit(character) ||
+				character is '.' or '-' or '_') ||
 			value is "UNKNOWN" or "UNAVAILABLE" or "UNVERIFIED" or "—"
 			? null : value;
 	}
