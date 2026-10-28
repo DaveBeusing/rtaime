@@ -70,6 +70,15 @@ When the provider changes grandmaster or resets, its epoch changes;
 an interop sender must treat that as a discontinuity and requalify
 timestamp origin. It may not silently reuse an old RTP-to-PTP mapping.
 
+## ST 2110 loopback reference use of media timestamps
+
+The ST 2110 software loopback provider derives 90-kHz video RTP and 48-kHz
+PCM packet timestamps from the existing committed rational frame index and
+actual Runtime audio sample positions. It does not create a new timing authority
+or claim PTP lock. It remains unqualified for physical SMPTE ST 2059, ST 2110-21
+transmission shaping or external endpoints. See
+[ST 2110 software profile and independent hardware gaps](St2110SoftwareInteropQualification.md).
+
 ## Test-only virtual provider
 
 `VirtualMediaReferenceClock` is a deterministic `IMediaReferenceClockProvider`:
