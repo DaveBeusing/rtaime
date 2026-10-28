@@ -77,7 +77,39 @@ public sealed class MediaReferenceClockAdmissionTests
 		}
 	}
 
-		[Fact]
+	[Fact]
+	public async Task Lost_to_locked_cannot_reuse_clock_epoch_even_if_provider_claims_fresh_sync()
+	{
+		var (runtime, _, _) = MakeFixture();
+		await using (runtime)
+		{
+			var start = DateTimeOffset.UtcNow;
+			var virtualProvider = new rtaime.Runtime.VirtualMediaReferenceClock();
+			virtualProvider.ObserveSync(TimeSpan.Zero, start, "0011223344556677", 0, 0);
+			var lost = virtualProvider.Observe(TimeSpan.FromSeconds(303), start.AddSeconds(303));
+			Assert.Equal(MediaReferenceLockState.Lost, lost.LockState);
+			runtime.ObserveReferenceClock(new FixedObservationProvider(lost),
+				TimeSpan.FromSeconds(303), start.AddSeconds(303));
+			var forgedRecovery = lost with {
+				LockState = MediaReferenceLockState.Locked,
+				ObservedAtUtc = start.AddSeconds(304),
+				LastSyncAtUtc = start.AddSeconds(304)
+			};
+			forgedRecovery.Validate();
+			Assert.Throws<InvalidOperationException>(() =>
+				runtime.ObserveReferenceClock(new FixedObservationProvider(forgedRecovery),
+					TimeSpan.FromSeconds(304), start.AddSeconds(304)));
+			virtualProvider.ObserveSync(TimeSpan.FromSeconds(304), start.AddSeconds(304),
+				"0011223344556677", 0, 0);
+			var recovered = virtualProvider.Observe(TimeSpan.FromSeconds(305), start.AddSeconds(305));
+			runtime.ObserveReferenceClock(new FixedObservationProvider(recovered),
+				TimeSpan.FromSeconds(305), start.AddSeconds(305));
+			Assert.NotEqual(lost.EpochId, runtime.Snapshot.ClockReference!.EpochId);
+			Assert.Equal(MediaReferenceLockState.Locked, runtime.ReferenceClock.LockState);
+		}
+	}
+
+	[Fact]
 	public void Runtime_options_reject_invalid_external_clock_requirement_without_changing_defaults()
 	{
 		var baseline = RuntimeHostProcessOptions.Load([], _ => null);
@@ -122,7 +154,17 @@ public sealed class MediaReferenceClockAdmissionTests
 		return (runtime, prepared, sink);
 	}
 
-	private sealed class ProviderRegistry(IReadOnlyList<ProviderDescriptor> providers) : IProviderCapabilityRegistry
+	private sealed class FixedObservationProvider(MediaReferenceClockObservation observation)
+		: IMediaReferenceClockProvider
+	{
+		public MediaReferenceClockCapabilities Capabilities { get; } = new(
+			"virtual-reference-clock", MediaReferenceClockSource.Virtual,
+			true, false, "SIMULATED");
+		public MediaReferenceClockObservation Observe(
+			TimeSpan runtimeMonotonicTime, DateTimeOffset observedAtUtc) => observation;
+	}
+
+		private sealed class ProviderRegistry(IReadOnlyList<ProviderDescriptor> providers) : IProviderCapabilityRegistry
 	{
 		public IReadOnlyList<ProviderDescriptor> GetProviders() => providers;
 	}
