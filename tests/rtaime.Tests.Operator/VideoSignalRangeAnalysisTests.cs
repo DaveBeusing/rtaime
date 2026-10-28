@@ -42,7 +42,8 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(sampled.AnyComponent, native.AnyComponent);
 		Assert.Equal(total == 1 ? VideoRangeSampleStatus.SampledOutsideTotal :
 			preferred == 1 ? VideoRangeSampleStatus.SampledOutOfGamut :
-			VideoRangeSampleStatus.SampledWithinTolerance, sampled.Status);
+			nominal == 1 ? VideoRangeSampleStatus.SampledOutsideNominal :
+			VideoRangeSampleStatus.SampledWithinNominal, sampled.Status);
 		Assert.Equal(100.0, sampled.CoveragePercent);
 	}
 
@@ -92,7 +93,7 @@ public sealed class VideoSignalRangeAnalysisTests
 		Assert.Equal(1, one.AnyComponent.OutsidePreferred);
 		Assert.Equal(1.0, one.AnyComponent.PreferredPercent(one.SampleCount));
 		Assert.False(one.PreferredAreaThresholdExceeded);
-		Assert.Equal(VideoRangeSampleStatus.SampledWithinTolerance, one.Status);
+		Assert.Equal(VideoRangeSampleStatus.SampledOutsideNominal, one.Status);
 
 		pixels[4] = pixels[5] = pixels[6] = 247;
 		var two = VideoSignalRangeAnalysis.AnalyzeRgba8(Frame(100, 1, pixels, Limited(8)));
