@@ -109,6 +109,16 @@
 								ToolTip="{Binding PreviewTakeDetail}" ToolTipService.ShowOnDisabled="True" />
 						</Grid>
 
+						<TextBlock Text="{Binding LiveTakeEvidence}" Style="{StaticResource OperatorLabel}" Margin="0,6,0,2"
+							TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Authoritative LIVE Take evidence" />
+						<TextBlock Text="{Binding CommitStatus, StringFormat={}CONTROL {0}}" Style="{StaticResource OperatorLabel}"
+							TextWrapping="Wrap" ToolTip="Control confirmation is distinct from executed, presented and externally delivered Program." />
+						<TextBlock Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"
+							Margin="0,2,0,0" ToolTip="Previous production request detail; do not retry an uncertain request without synchronization." />
+						<controls:RtaimeButton Content="SHOW TAKE DETAILS" Click="ToggleSecondaryDetails_Click" Tag="TakeDetails"
+                            AutomationProperties.Name="Show take details" IsCompact="True" HorizontalAlignment="Left"
+                            Margin="0,5,0,0" ToolTip="View duration draft and observed Rundown context; opening does not TAKE." />
+                        <StackPanel x:Name="TakeDetails" Visibility="Collapsed" Margin="0,6,0,0">
 						<Grid>
 							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="76" /></Grid.ColumnDefinitions>
 							<TextBlock Text="{Binding PreviewTakeDetail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -117,12 +127,6 @@
 								Height="30" AutomationProperties.Name="AUTO transition duration in frames"
 								ToolTip="AUTO duration in frames; at least two frames required. CUT ignores this draft." />
 						</Grid>
-						<TextBlock Text="{Binding LiveTakeEvidence}" Style="{StaticResource OperatorLabel}" Margin="0,6,0,2"
-							TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Authoritative LIVE Take evidence" />
-						<TextBlock Text="{Binding CommitStatus, StringFormat={}CONTROL {0}}" Style="{StaticResource OperatorLabel}"
-							TextWrapping="Wrap" ToolTip="Control confirmation is distinct from executed, presented and externally delivered Program." />
-						<TextBlock Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap"
-							Margin="0,2,0,0" ToolTip="Previous production request detail; do not retry an uncertain request without synchronization." />
 						<Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}"
 							BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusControl}" Padding="6" Margin="0,8,0,0">
 							<StackPanel>
@@ -134,6 +138,7 @@
 									Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 							</StackPanel>
 						</Border>
+                        </StackPanel>
 					</StackPanel>
 				</Border>
 
