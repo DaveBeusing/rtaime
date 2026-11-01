@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using rtaime.Operator.Controls;
 namespace rtaime.Operator;
 
@@ -52,6 +53,35 @@ public partial class MainWindow
             Command = OpenCommandPaletteCommand
         });
         return menu;
+    }
+
+    private void OnLiveViewClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement anchor)
+            OpenLiveViewMenu(anchor);
+    }
+
+    private void OnLiveActionsPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Handled || e.IsRepeat ||
+            e.OriginalSource is System.Windows.Controls.Primitives.TextBoxBase)
+            return;
+        if (e.Key is Key.Apps || (e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            OpenLiveViewMenu(LiveViewButton);
+            e.Handled = true;
+        }
+    }
+
+    private static void OpenLiveViewMenu(FrameworkElement anchor)
+    {
+        if (anchor.ContextMenu is not RtaimeContextMenu menu || !anchor.IsVisible)
+            return;
+
+        // Presentation-only access: commands remain owned by the existing shell.
+        menu.PlacementTarget = anchor;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
     private void OnShellLiveStripLoaded(object sender, RoutedEventArgs e)
