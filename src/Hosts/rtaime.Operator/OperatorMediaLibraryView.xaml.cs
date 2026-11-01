@@ -28,6 +28,8 @@ public partial class OperatorMediaLibraryView : UserControl
     private MediaPoolInspectorViewModel? _observedMediaPool;
     private Controls.RtaimeContextMenu? _openSelectionMenu;
     private string? _openMenuSelectionSignature;
+    private bool _lastBatchVisible;
+    private bool _lastPreparationVisible;
 
     public OperatorMediaLibraryView()
     {
@@ -58,6 +60,8 @@ public partial class OperatorMediaLibraryView : UserControl
         if (_observedMediaPool is not null)
             _observedMediaPool.PropertyChanged -= OnMediaPoolPresentationChanged;
         _observedMediaPool = null;
+        _lastBatchVisible = false;
+        _lastPreparationVisible = false;
         CloseSelectionMenu();
     }
 
@@ -87,8 +91,13 @@ public partial class OperatorMediaLibraryView : UserControl
     private void OpenVisibleMediaTasks()
     {
         if (Context?.MediaPool is not { } pool) return;
-        if (pool.BatchVisibility == Visibility.Visible || pool.PreparationVisibility == Visibility.Visible)
+        var batch = pool.BatchVisibility == Visibility.Visible;
+        var preparation = pool.PreparationVisibility == Visibility.Visible;
+        // Reveal a newly prepared review once; do not override an explicit later panel collapse.
+        if ((batch && !_lastBatchVisible) || (preparation && !_lastPreparationVisible))
             MediaAdvancedTools.Visibility = Visibility.Visible;
+        _lastBatchVisible = batch;
+        _lastPreparationVisible = preparation;
     }
 
     private string SelectedLibrarySignature()
