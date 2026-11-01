@@ -20,7 +20,9 @@ Escape or Ctrl+K closes the palette. Cancellation restores the previous visible 
 
 The MainWindow top bar offers **Project, Edit, View, Media, Tools, Window,
 Help** at desktop widths. Below **1480 logical DIPs**, one **MENU** button
-exposes the exact same seven sections as nested custom menu items. The
+shows seven selectable categories. Each category opens its actions in a
+separate themed custom menu, with **All menus** returning to the category
+chooser. No nested popup implementation or shared-theme change is required. The
 permanent readiness, Program source, recording state and transmission
 evidence remain separate from this navigation and cannot be hidden by a
 menu. The four primary destinations and the existing rail **More** remain
