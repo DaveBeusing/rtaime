@@ -17,12 +17,26 @@ public partial class MainWindow
         var menu = new RtaimeContextMenu();
         if (string.Equals(sectionName, "Overflow", StringComparison.Ordinal))
         {
+            // The project-owned menu-item template intentionally has no
+            // nested popup. Show seven choices, then open the chosen existing
+            // section as a separate themed context menu.
             foreach (var section in OperatorCommandCatalog.GlobalShellMenus)
             {
-                var parent = new RtaimeMenuItem { Header = section.Name };
-                foreach (var item in CreateGlobalShellMenuItems(section))
-                    parent.Items.Add(item);
-                menu.Items.Add(parent);
+                var selectedName = section.Name;
+                var item = new RtaimeMenuItem
+                {
+                    Header = selectedName,
+                    ToolTip = "Open " + selectedName + " actions"
+                };
+                System.Windows.Automation.AutomationProperties.SetName(item, "Open " + selectedName + " menu");
+                item.Click += (_, _) =>
+                {
+                    menu.IsOpen = false;
+                    GlobalMenuOverflowButton.Dispatcher.BeginInvoke(
+                        new Action(() => OpenGlobalShellMenu(GlobalMenuOverflowButton, selectedName)),
+                        System.Windows.Threading.DispatcherPriority.Background);
+                };
+                menu.Items.Add(item);
             }
         }
         else
@@ -156,6 +170,21 @@ public partial class MainWindow
     {
         if (!anchor.IsVisible) return;
         var menu = CreateGlobalShellMenu(sectionName);
+        if (ReferenceEquals(anchor, GlobalMenuOverflowButton) && sectionName != "Overflow")
+        {
+            var back = new RtaimeMenuItem { Header = "← All menus",
+                ToolTip = "Return to Project, Edit, View, Media, Tools, Window and Help." };
+            System.Windows.Automation.AutomationProperties.SetName(back, "Return to all menus");
+            back.Click += (_, _) =>
+            {
+                menu.IsOpen = false;
+                anchor.Dispatcher.BeginInvoke(
+                    new Action(() => OpenGlobalShellMenu(anchor, "Overflow")),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            };
+            menu.Items.Insert(0, new RtaimeMenuSeparator());
+            menu.Items.Insert(0, back);
+        }
         var closedByEscape = false;
         menu.PreviewKeyDown += (_, e) =>
         {
