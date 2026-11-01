@@ -15,16 +15,20 @@ Program bus is presented **first**, ahead of alphabetically sorted Aux/other
 buses, without changing the authoritative bus order or strip identities. Bus cards
 display the current bus role assignment, explicitly labeled L/R Runtime
 sample-peak bars, confirmed gain, local draft state, clipping/missing-signal
-warnings and gain/mute **draft → Apply / Discard** controls. Source cards
-present actual source identity, confirmed contribution/routing, input L/R
-peaks, gain/mute draft and the same explicit Apply/Discard boundary.
+warnings and gain/mute draft controls. Source cards present actual source
+identity, confirmed contribution/routing, input L/R peaks and local gain/mute
+controls. Each compact strip shows its confirmed and local state. Draft gain,
+**APPLY** and **DISCARD** appear when the strip has local edits; rejected
+mutations also retain their recovery controls. **DISCARD** restores confirmed
+values, while **APPLY** requests a governed mutation and remains disabled
+until authority, revision and input checks permit it.
 An **UNASSIGNED** bus or **NO BUS** source is not claimed to produce output.
 
-The top strip retains **FOLLOW VIDEO / BREAKAWAY SELECTED** using the
-existing governed routing commands. It distinguishes the **confirmed**
-routed source from the locally **selected Breakaway target**; each
-compact source card includes an explicit SELECT/SELECTED control. Selection
-itself makes no ControlHost mutation and cannot change Program audio.
+The compact routing summary distinguishes the **confirmed** routed source
+from the locally **selected breakaway target**; source cards retain the
+explicit SELECT/SELECTED control. Selection, hover and opening TOOLS do not
+send a ControlHost routing mutation. The separate explicit menu commands
+preserve their existing authorization and CanExecute boundaries.
 The consolidated signal label distinguishes current sample-peak evidence
 from CLIPPING, PARTIAL SIGNAL and stale/offline/unavailable readings. It
 does not report physical output or RMS. Optional LUFS and reconstructed true-peak values are separately presented only when RuntimeHost has an opt-in analyser and current evidence. All source and
@@ -40,6 +44,24 @@ remain intact. The original detailed faders, numeric gain editing and
 other advanced tools remain accessible; no UI mode silently commits
 audio. A mute button changes a **local draft**, not the actual bus
 until the operator selects **APPLY**.
+
+### Progressive control hierarchy
+
+The header exposes **ADVANCED** only in Compact and **COMPACT** only in
+Advanced, alongside a shared **TOOLS** button. The custom RtaimeContextMenu
+opens below the button, with the following command hierarchy:
+
+1. **Follow Video** — existing `Owner.SetAudioFollowVideoCommand`.
+2. **Breakaway to selected source** — existing `Owner.SetAudioBreakawayCommand`.
+3. **Detach Mixer** — existing `OperatorDockController.Float("AUDIO")`
+   entry point, with the same reparent/restore behavior.
+
+Detailed source-to-bus assignments, source contribution, EQ, gain unity,
+Inspector gain copy/paste, bus dynamics, loudness, crossfade, ducking and
+diagnostics remain in **ADVANCED**. Compact keeps the essential Program/Aux
+role and selected/confirmed routing summary but no duplicate routing
+action row. Mode changes are presentation-only; TOOLS never mutates live
+audio merely by opening.
 
 ## Signal flow and evidence
 
@@ -96,9 +118,10 @@ a competing revision, including one caused by another strip's successful Apply.
 Pending edits stay locked, invalid numeric fields cannot be rebased, and
 Inspector gain transfer does not copy/paste drafts requiring review.
 
-The compact bus cards additionally show the existing confirmed compressor
-bypass/active state, current Runtime compressor reduction, limiter reduction
-or cumulative hit counter, and missing-source evidence. No new measurements,
+Compact bus cards retain a single, restrained COMP/LIMIT activity row with
+observed Runtime compressor reduction and limiter reduction or cumulative
+hit counter, together with status text for missing-source and clipping
+evidence. The detailed bypass/processing status and counts live in Advanced. No new measurements,
 cue feed, device monitor, sample poller, DSP processing or automation lane is
 claimed. The compact strip cards are bounded by the measured scroll viewport
 so local gain/mute controls stay reachable when the panel narrows.
@@ -119,7 +142,7 @@ drafts, selection, commands or Runtime state. Strip widths, meter geometry,
 horizontal compact faders and vertical advanced faders use DIPs instead of
 scaling with the whole window. The banks and outer workspace scroll to preserve access at small viewports.
 
-DETACH MIXER reparents the same AudioMixerControl instance through OperatorDockController and
+TOOLS > Detach Mixer reparents the same AudioMixerControl instance through OperatorDockController and
 OperatorPanelWindow. The existing return/dock/window-close, keyboard routing and monitor
 placement recovery remain in use. The AUDIO panel is additive in dock layout version 2.
 Version-1 preferences migrate without enabling docking, moving existing panels or changing
@@ -127,8 +150,13 @@ floating placements: missing AUDIO is appended to RIGHT. Unknown future layouts 
 the existing bounded default policy. Older executables may reset this optional UI layout.
 
 Keyboard focus anywhere inside the Mixer suppresses ordinary global production/transport
-shortcuts; numeric Enter/Escape and routing Space remain local. Explicit allowed application
-shortcuts, including synchronization and docking, retain their existing policies.
+shortcuts; numeric Enter/Escape and routing Space remain local. The custom TOOLS button
+is keyboard focusable, opens the existing context-menu system on Click (including
+keyboard activation), and provides accessible command labels. Menu commands retain
+their original CanExecute and routing authority; the menu is anchored to the button
+after floating/restoring. Explicit allowed application shortcuts, including
+synchronization and docking, retain their existing policies. No new focus owner,
+keyboard routing store, layout schema, meter timer or processing resource is added.
 
 ## Qualification
 
@@ -145,7 +173,11 @@ dynamics, follow-video/breakaway, test signals, clipping and sample payload beha
 
 The real-WPF docking qualification exercises AUDIO alongside existing panels, verifies the
 same Mixer/Inspector references, numeric input gating, shortcut suppression, all eight sources,
-fixed vertical Advanced and horizontal Compact fader geometry, and both mode captures. Mixer PNGs and source-correlated JSON are
+fixed vertical Advanced and horizontal Compact fader geometry, and both mode captures.
+`AudioMixerMenuQualificationTests` additionally checks the custom TOOLS menu's
+actual WPF opening/command identity, the presence of Advanced-only processing
+fields, dirty/rejected action-group bindings, compact/advanced mode changes
+and discarded local edits without any Control client mutation. Mixer PNGs and source-correlated JSON are
 retained in the existing Operator visual artifact. Snapshot fixtures are software visual
 evidence; physical multi-monitor, touch and audio-device performance require separate hardware
 qualification. The five existing Required gates remain mandatory.
