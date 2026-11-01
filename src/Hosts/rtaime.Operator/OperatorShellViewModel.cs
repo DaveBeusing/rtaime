@@ -154,17 +154,66 @@ public sealed record OperatorLayoutSettings
 	}
 
 	public static Dictionary<string, OperatorWorkspaceLayoutSettings> CreateCanonicalLayouts() =>
-        OperatorWorkspaceRegistry.Destinations.ToDictionary(d => d.Id,
-            d => CreateReferenceLayout(d.ViewerMode), StringComparer.Ordinal);
+        OperatorWorkspaceRegistry.Destinations.ToDictionary(
+            destination => destination.Id,
+            CreateReferenceLayout,
+            StringComparer.Ordinal);
 
-	private static OperatorWorkspaceLayoutSettings CreateReferenceLayout(string viewerMode) => new(
-		DefaultLeftPanelWidth,
-		DefaultRightPanelWidth,
-		DefaultLowerPanelHeight,
-		false,
-		false,
-		false,
-		viewerMode);
+    // Only missing/new workspaces and explicit Reset use these defaults.
+    // Saved schema-7 layouts and portable templates remain authoritative.
+	private static OperatorWorkspaceLayoutSettings CreateReferenceLayout(OperatorWorkspaceDestination destination)
+    {
+        var reference = new OperatorWorkspaceLayoutSettings(
+            DefaultLeftPanelWidth, DefaultRightPanelWidth, DefaultLowerPanelHeight,
+            false, false, false, destination.ViewerMode);
+
+        return destination.Id switch
+        {
+            // Full Preview/Program view and meaningful Library/Rundown remain visible.
+            OperatorWorkspaceNames.Live => reference with
+            {
+                LowerPanelHeight = 280, IsRightCollapsed = true
+            },
+            // Live Controls remain visible on the separate MULTIVIEW surface.
+            OperatorWorkspaceNames.Multiview => reference with
+            {
+                LeftPanelWidth = 340
+            },
+            // Media browsing uses the Library and Preview; Inspector opens on demand.
+            OperatorWorkspaceNames.Media => reference with
+            {
+                RightPanelWidth = 300, LowerPanelHeight = 280,
+                IsRightCollapsed = true
+            },
+            // Retain resizable side panels and extend the authored timeline.
+            OperatorWorkspaceNames.Edit => reference with
+            {
+                LowerPanelHeight = 400
+            },
+            OperatorWorkspaceNames.Scenes => reference with
+            {
+                RightPanelWidth = 300, LowerPanelHeight = 300,
+                IsRightCollapsed = true
+            },
+            // Keep the graph/Preview region broad until inspection is requested.
+            OperatorWorkspaceNames.Compositing => reference with
+            {
+                IsRightCollapsed = true
+            },
+            // OUTPUTS stage and detailed routing occupy the full useful center.
+            OperatorWorkspaceNames.Outputs => reference with
+            {
+                RightPanelWidth = 300, IsLeftCollapsed = true,
+                IsRightCollapsed = true
+            },
+            OperatorWorkspaceNames.Health or OperatorWorkspaceNames.Ai or
+                OperatorWorkspaceNames.Settings => reference with
+            {
+                IsLeftCollapsed = true, IsRightCollapsed = true
+            },
+            _ => reference
+        };
+    }
 
 }
 
@@ -529,7 +578,7 @@ public sealed partial class OperatorShellViewModel : INotifyPropertyChanged
 	public GridLength LowerRowHeight
 	{
 		get => new(
-			IsCenterMaximized || IsMultiviewWorkspace || IsHealthWorkspace
+			IsCenterMaximized || !HasTimelineRegion
 				? 0
 				: IsCompactViewport
 					? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
