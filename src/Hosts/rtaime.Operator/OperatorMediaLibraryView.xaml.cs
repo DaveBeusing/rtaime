@@ -194,6 +194,53 @@ public partial class OperatorMediaLibraryView : UserControl
         MediaSearchBox.SelectAll();
     }
 
+    private void OnMediaLibraryShowToolsClick(object sender, RoutedEventArgs e)
+    {
+        MediaAdvancedTools.Visibility = Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryBatchRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (Context?.MediaPool is { } pool && pool.PrepareBatchRemoveCommand.CanExecute(null))
+        {
+            MediaAdvancedTools.Visibility = Visibility.Visible;
+            pool.PrepareBatchRemoveCommand.Execute(null);
+        }
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryShowQcDetailsClick(object sender, RoutedEventArgs e)
+    {
+        MediaQcDetails.Visibility = MediaQcDetails.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryShowAdmDetailsClick(object sender, RoutedEventArgs e)
+    {
+        MediaAdmDetails.Visibility = MediaAdmDetails.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryStartQcClick(object sender, RoutedEventArgs e)
+    {
+        if (Context?.MediaPool is { } pool && pool.StartQcCommand.CanExecute(null))
+        {
+            MediaQcDetails.Visibility = Visibility.Visible;
+            pool.StartQcCommand.Execute(null);
+        }
+        e.Handled = true;
+    }
+
+    private void OnMediaLibraryCancelQcClick(object sender, RoutedEventArgs e)
+    {
+        if (Context?.MediaPool is { } pool && pool.CancelQcCommand.CanExecute(null))
+            pool.CancelQcCommand.Execute(null);
+        e.Handled = true;
+    }
+
     private void OnMediaLibraryToggleToolsClick(object sender, RoutedEventArgs e)
     {
         MediaAdvancedTools.Visibility = MediaAdvancedTools.Visibility == Visibility.Visible
@@ -231,6 +278,8 @@ public partial class OperatorMediaLibraryView : UserControl
 	private async void OnMediaAdmImportClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
+        if (Context?.MediaPool is not { CanImportAdm: true }) return;
+        MediaAdmDetails.Visibility = Visibility.Visible;
 		var dialog = new OpenFileDialog {
 			Title = "Import ADM audio track metadata (read-only)",
 			Filter = "ADM XML or source-bound JSON (*.xml;*.json)|*.xml;*.json|ADM XML (*.xml)|*.xml|ADM sidecar (*.json)|*.json",
@@ -250,12 +299,16 @@ public partial class OperatorMediaLibraryView : UserControl
 	private async void OnMediaAdmExportXmlClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
+        if (Context?.MediaPool is not { CanExportAdm: true }) return;
+        MediaAdmDetails.Visibility = Visibility.Visible;
 		await ExportAdmAsync(false);
 	}
 
 	private async void OnMediaAdmExportJsonClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
+        if (Context?.MediaPool is not { CanExportAdm: true }) return;
+        MediaAdmDetails.Visibility = Visibility.Visible;
 		await ExportAdmAsync(true);
 	}
 
@@ -280,6 +333,8 @@ public partial class OperatorMediaLibraryView : UserControl
 		private async void OnMediaQcExportClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
+        if (Context?.MediaPool is not { HasQcResults: true }) return;
+        MediaQcDetails.Visibility = Visibility.Visible;
 		var dialog = new SaveFileDialog {
 			Title = "Export validated EBU QC 2026-04 report",
 			Filter = "EBU QC 2026-04 XML (*.xml)|*.xml",
@@ -298,6 +353,8 @@ public partial class OperatorMediaLibraryView : UserControl
 	private async void OnMediaQcImportClick(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
+        if (Context?.MediaPool is not { CanStartQc: true }) return;
+        MediaQcDetails.Visibility = Visibility.Visible;
 		var dialog = new OpenFileDialog {
 			Title = "Import EBU QC 2026-04 report",
 			Filter = "EBU QC 2026-04 XML (*.xml)|*.xml",
