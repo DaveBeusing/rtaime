@@ -32,7 +32,12 @@ public sealed class OperatorUiNavigationRegressionTests
         var menuSections = OperatorCommandCatalog.GlobalShellMenus;
         Assert.Equal(["Project", "Edit", "View", "Media", "Tools", "Window", "Help"],
             menuSections.Select(section => section.Name));
-        Assert.Equal(Destinations, OperatorWorkspaceRegistry.Destinations.Select(destination => destination.Id));
+        // Registry order is persisted/navigation metadata; these assertions
+        // check reachability without imposing the primary-rail presentation order
+        // on the complete registry.
+        Assert.Equal(Destinations.Order(StringComparer.Ordinal),
+            OperatorWorkspaceRegistry.Destinations.Select(destination => destination.Id)
+                .Order(StringComparer.Ordinal));
         Assert.Equal(["LIVE", "MEDIA", "EDIT", "OUTPUTS"],
             OperatorWorkspaceRegistry.PrimaryDestinations.Select(destination => destination.Id));
         Assert.Equal(["SCENES", "MULTIVIEW", "COMPOSITING", "HEALTH", "AI", "SETTINGS"],
