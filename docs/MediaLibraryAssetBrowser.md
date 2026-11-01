@@ -124,8 +124,8 @@ remain visible without opening a specialist tool.
 | **Add** (header +) | **Import Media**, **Test Signal** | Existing `ImportCommand` (catalogue file picker + reviewed import batch) and `AddTestSignalCommand`; each entry reflects its existing `CanExecute`. The disabled GENERATOR label is a section heading, not a feature. |
 | **Tools** (header overflow) | Refresh availability; Clear selection; Smart Bins and filters; Prepare selected assets; Batch removal; Offline QC results; ADM track metadata | The existing catalogue refresh, selection clearing, tools panel, bounded preparation/batch commands and on-demand evidence views. Unavailable actions stay disabled. |
 | **Selection** (selected-asset overflow) | Inspect selection; Prepare selected assets; Relink selected media; Batch remove | Inspect opens the local source-bound detail panel; Prepare opens the existing representative options; Relink uses the existing fingerprint-safe catalogue path. Multi-selection supports bounded preparation/batch review but cannot silently edit a single target. |
-| **Selection > Offline QC** | Start offline QC; Cancel QC; Import QC XML; Export QC XML; View QC results | Existing local file QC worker, source-bound report import/export and read-only evidence panel. No production mutation. |
-| **Selection > ADM metadata** | Import ADM; Export ADM XML; Export ADM JSON; View ADM tracks | Existing source-bound ADM import/export handlers and read-only physical track metadata. No audio bus, decoder or output route is created. |
+| **Selection: offline QC actions** | Start offline QC; Cancel QC; QC reports and checks | Starts/cancels the existing local QC worker. The report/checks entry opens the on-demand QC panel containing source-bound XML import/export and read-only per-check results. No production mutation. |
+| **Selection: ADM actions** | Import ADM; ADM track tools | Imports source-bound ADM and opens the on-demand panel for XML/JSON export and read-only physical track metadata. No audio bus, decoder or output route is created. |
 | **MORE TOOLS** | Expand/collapse the existing Smart Bin, sort, metadata filter, optional representative-preparation and bounded batch results panel | Existing model flags and commands; the panel remains closed by default and retains preferences, selection and search state. |
 | **OPEN PREVIEW** | Open eligible selected catalogue Clip in resident Media Deck and request the existing authoritative Preview route | Explicit action with `CanOpenLibraryPreview` and post-await selection/source/fingerprint checks. Not a Program Take. |
 
@@ -148,6 +148,10 @@ current item and opens the same read-only inspection panel. Relink/review use
 the existing authoritative catalogue and client boundaries; removal deletes
 the catalogue record, never the source file. Scene assignment remains
 unsupported because there is no governed scene/media assignment mutation path.
+
+The custom menu template does not render nested submenus; all Selection and
+Tools entries are flat with separators, while QC/ADM reports open a full
+detail panel for less frequent operations.
 
 Header menus open on button activation, including Enter/Space, or via the
 standard Shift+F10 context-menu gesture on a focused button. Grid/List row
@@ -404,7 +408,7 @@ existing route/preroll workflow for actually retaining a prepared deck.
 
 ## Independent offline Quality Control (EBU QC 2026-04)
 
-For an online, persistent catalogue **Clip**, **Selection > Offline QC > Start offline QC** starts a
+For an online, persistent catalogue **Clip**, **Selection > Start offline QC** starts a
 separate, bounded, cancellable file-only quality-control worker. The Media
 Library shows one outcome per implemented check, explicitly distinguishing
 PASS, FAILED, UNSUPPORTED and NOT_EXECUTED; missing R 128/R 103 adapters
