@@ -12,6 +12,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
+using rtaime.Client;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
