@@ -130,17 +130,17 @@
 
             <WrapPanel Margin="0,0,0,8" KeyboardNavigation.TabNavigation="Continue">
                 <controls:RtaimeButton x:Name="CanvasMenuButton" Content="CANVAS" IsCompact="True" Margin="0,0,5,4"
-                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasActionsMenu}"
+                    Click="OpenEditorMenu_Click" PreviewKeyDown="OnEditorMenuKeyDown" ContextMenu="{StaticResource OutputCanvasActionsMenu}"
                     AutomationProperties.Name="Open canvas configuration and history menu"
                     ToolTip="Open canvas actions. Shift+F10 or the Menu key opens the focused button's context menu." />
                 <controls:RtaimeButton x:Name="SurfaceMenuButton" Content="SURFACE" IsCompact="True" Margin="0,0,5,4"
-                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputSurfaceActionsMenu}"
+                    Click="OpenEditorMenu_Click" PreviewKeyDown="OnEditorMenuKeyDown" ContextMenu="{StaticResource OutputSurfaceActionsMenu}"
                     AutomationProperties.Name="Open selected surface tools" ToolTip="Selected-surface draft operations." />
                 <controls:RtaimeButton x:Name="ViewMenuButton" Content="VIEW" IsCompact="True" Margin="0,0,5,4"
-                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasViewMenu}"
+                    Click="OpenEditorMenu_Click" PreviewKeyDown="OnEditorMenuKeyDown" ContextMenu="{StaticResource OutputCanvasViewMenu}"
                     AutomationProperties.Name="Open canvas viewport and guide tools" ToolTip="Zoom, fit, snapping and design guides only." />
                 <controls:RtaimeButton x:Name="ToolsMenuButton" Content="TOOLS" IsCompact="True" Margin="0,0,5,4"
-                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasToolsMenu}"
+                    Click="OpenEditorMenu_Click" PreviewKeyDown="OnEditorMenuKeyDown" ContextMenu="{StaticResource OutputCanvasToolsMenu}"
                     AutomationProperties.Name="Open advanced output canvas tools" ToolTip="Advanced numeric geometry and blend editors." />
             </WrapPanel>
             <Grid Margin="0,0,0,6">
