@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using rtaime.Control.Contracts;
 using rtaime.Operator.Controls;
 
@@ -156,12 +157,22 @@ public partial class SequenceTimelineControl : UserControl
             OpenSequenceMenu(anchor);
     }
 
-    private static void OpenSequenceMenu(FrameworkElement anchor)
+    private static void OpenSequenceMenu(FrameworkElement anchor,
+        PlacementMode placement = PlacementMode.Bottom)
     {
         if (anchor.ContextMenu is not RtaimeContextMenu menu || !anchor.IsVisible)
             return;
         menu.PlacementTarget = anchor;
+        menu.Placement = placement;
         menu.IsOpen = true;
+    }
+
+    private void OpenAfterSelection(FrameworkElement stableAnchor)
+    {
+        // Selection can reproject a virtualized clip row and detach the original
+        // right-click target. Open the same owned menu from stable chrome at the pointer.
+        Dispatcher.BeginInvoke(new Action(() =>
+            OpenSequenceMenu(stableAnchor, PlacementMode.MousePoint)), DispatcherPriority.Input);
     }
 
     private void OnClipActionsOpening(object sender, ContextMenuEventArgs e)
@@ -176,7 +187,11 @@ public partial class SequenceTimelineControl : UserControl
         // Keep an existing multi-clip selection; otherwise select the right-clicked
         // clip through the established local editor selection before CanExecute runs.
         if (!model.SelectedIds.Contains(clip.Id))
+        {
             model.SelectClip(clip.Id);
+            e.Handled = true;
+            OpenAfterSelection(SequenceEditActionsButton);
+        }
     }
 
     private void OnTrackActionsOpening(object sender, ContextMenuEventArgs e)
@@ -199,6 +214,8 @@ public partial class SequenceTimelineControl : UserControl
             return;
         }
         model.SelectClip(clip.ClipId);
+        e.Handled = true;
+        OpenAfterSelection(SequenceTrackActionsButton);
     }
 
     private FrameworkElement? FocusedActionTarget(SequenceTimelineEditorViewModel editor)
