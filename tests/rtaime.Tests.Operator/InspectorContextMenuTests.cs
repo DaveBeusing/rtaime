@@ -25,7 +25,7 @@ public sealed class InspectorContextMenuTests
             element.Attribute("Click")?.Value == "OnInspectorActionsClick"));
         Assert.Equal("Inspector actions", button.Attribute("AutomationProperties.Name")?.Value);
         Assert.Contains(button.Descendants(), element => ReferenceEquals(element, menu));
-        Assert.Equal("{Binding HasSelection}", button.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding CanEditSelection}", button.Attribute("IsEnabled")?.Value);
 
         var commands = menu.Descendants().Where(element => element.Name.LocalName == "RtaimeMenuItem")
             .Select(element => element.Attribute("Command")?.Value).Where(value => value is not null).ToArray();
