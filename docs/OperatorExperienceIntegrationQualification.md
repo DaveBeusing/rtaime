@@ -2,6 +2,89 @@
 
 # Integrated Operator experience qualification
 
+## Menu-first UI integration baseline (2026-11-01)
+
+The current combined presentation baseline is the actual integrated
+`master` at `87f4474e3c6009872652d4a139c4a144493d2216`.
+Pull requests **#464–#473** are closed and merged against `master`,
+including mixer, Inspector, compositing, LIVE, Media Library,
+Output Canvas, Timeline, workspace defaults and global shell menu
+integration. No other open pull request was found at this
+baseline read. The menu integration is **not** a replacement for
+the individual authorization or Runtime qualification of those
+features.
+
+- SDK `10.0.401` from `global.json`; Windows x64 / .NET 10 WPF.
+- `Directory.Build.props` release target `0.5.46` (planned SemVer,
+  not one PATCH increment per commit).
+- Current Operator workspace/layout schema **7** and existing
+  production/Show/output contracts are untouched.
+- Qualification delivery is a **new unmerged branch + PR** based on
+  this current master. Do not carry results from the historical
+  `c250f27b...` baseline or from an earlier successful
+  feature PR to the new exact head.
+
+### Combined test ownership and expected evidence
+
+| Journey | Existing execution owner | Added combined qualification and boundary |
+| --- | --- | --- |
+| Navigation across ten workspaces | `OperatorWorkspaceRegistry`, `OperatorCommandCatalog`, shell/rail/palette | `OperatorUiNavigationRegressionTests` checks all ten destinations, seven menu sections, same command instances, More and Ctrl+K mapping; no new TAKE or show authority |
+| Media import/selection/preparation → Preview → explicit CUT/AUTO | Media Library, Media Deck and `OperatorViewModel` plus existing connected tests | Real WPF navigation retains those owners and disabled disconnected actions; successful connected playout remains a **separate** production-path requirement |
+| Timeline cue, Inspector selection draft and audio mixer | Existing sequence/cue, Inspector and mixer editors | Owned `Controls` and domain tests retain draft/apply, revision and shortcut safety; opening global menus does not replace those editors or their command guards |
+| Output Canvas Validate → Save → Validate Saved → Request Apply | `OutputCanvasEditorViewModel` and Control/Runtime revision gates | Menu-first WPF checks preserve access and disabled no-target state; actual saved/active revision tests and physical output remain independent |
+| Recording, health incidents, UNKNOWN/recovery | Existing recording, notifications, Show Checks and reconciliation commands | Top bar and Help/Project menus retain recording/readiness/incident access; uncertain responses are not retried by navigation |
+| Dock/float/focus/cinema and reload/compact state | Existing Shell/Docking, templates and preference store | Isolated Window/Visual/Navigation groups preserve retained view models and navigation IDs without a new state store |
+
+The six logical sizes are **1920×1080**, **1600×900**,
+**1536×864**, **1280×720**, **960×540** and **960×500**.
+`OperatorVisualQualificationTests` and
+`OperatorCombinedVisualQualification` cover their software
+layout and injected 100/125/150/200% metadata across ten
+destinations (expected 60 layout cases). A dedicated isolated
+**Navigation** group checks the actual loaded WPF window at
+1920×1080, 1280×720 and 960×500 across the same ten
+destinations (30 navigation cases), plus disabled command reasons,
+menu keyboard opening, unchanged Program/Preview identity,
+top-bar persistence and no menu-triggered render-target creation.
+
+The existing five isolated startup processes become **six**:
+Composition, Visual, Navigation, Controls, Docking and GPU.
+The same-session aggregate remains fail-closed; missing/stale
+groups cannot produce PASS. When enabled, the existing screenshot
+harness produces source-bound LIVE and owned-window captures
+plus `combined-ui.json` and `navigation-ui.json`. Popup
+windows and GPU-backed media may not appear in the WPF bitmaps.
+Screenshot presence is not human acceptance.
+
+**Validation status at authoring:** all added/changed tests are
+**NOT YET RUN on the final PR head**. The source files and
+qualified owners exist, but Windows Release compilation,
+targeted/unfiltered Operator tests, full solution tests and
+all five Required Gates must be observed on the exact pushed
+commit. Prior `master` Quality and Timed Text failures are
+not silently reclassified as resolved. The Inspector static
+policy has been updated to require the current contextual
+Color Grade/Chroma Key commands and evidence, replacing an
+obsolete button-label assertion without dropping authority
+or selection guards.
+
+Physical multi-monitor DPI, screen-reader, high-contrast and
+reduced-motion human review, actual GPU/SSD/output timing,
+native file-dialog focus, connected simultaneous production
+mutations and scan-out remain **UNVERIFIED** until independently
+recorded with Windows build, runner, display/driver topology,
+media profile, exact SHA and observations.
+
+---
+
+## Historical integration record
+
+The following baseline was recorded for earlier capability
+integration. Its older SHA, product version, layout schema
+and test outcomes are historical and **must not** be used as
+the current menu-first acceptance baseline.
+
+
 ## Scope and source baseline
 
 This register records **combined** Operator acceptance after the
