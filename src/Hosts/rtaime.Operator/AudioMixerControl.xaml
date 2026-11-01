@@ -31,6 +31,26 @@
 				</DataTrigger>
 			</Style.Triggers>
 		</Style>
+        <Style x:Key="MixerDraftDetail" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource MixerLabel}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasDraftChanges}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="MixerDirtyActions" TargetType="{x:Type StackPanel}">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasDraftChanges}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding MutationState}" Value="REJECTED">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 	</UserControl.Resources>
 	<Border Style="{StaticResource OperatorPanel}">
 		<Grid>
@@ -61,10 +81,24 @@
 				<TextBlock Text="{Binding Owner.CommandStatus}" Style="{StaticResource MixerLabel}" AutomationProperties.LiveSetting="Polite" />
 				<TextBlock Text="{Binding Owner.LastError}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 				<WrapPanel Margin="0,5,0,0">
-					<controls:RtaimeButton AutomationProperties.Name="Show compact live audio controls" Content="COMPACT" Command="{Binding CompactPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
-					<controls:RtaimeButton AutomationProperties.Name="Expand advanced audio mixer controls" Content="ADVANCED" Command="{Binding DetailedPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
-					<controls:RtaimeButton Content="DETACH MIXER" Click="DetachMixer_Click" IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Detach audio mixer through workspace docking" />
-					<TextBlock Text="{Binding PresentationLabel}" Style="{StaticResource MixerLabel}" VerticalAlignment="Center" />
+                    <controls:RtaimeButton Content="COMPACT" Command="{Binding CompactPresentationCommand}" Visibility="{Binding AdvancedVisibility}"
+                        IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Return to compact live audio controls" />
+                    <controls:RtaimeButton Content="ADVANCED" Command="{Binding DetailedPresentationCommand}" Visibility="{Binding CompactVisibility}"
+                        IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Open advanced audio mixer processing" />
+                    <controls:RtaimeButton x:Name="MixerToolsButton" Content="TOOLS" Click="OpenMixerTools_Click"
+                        IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Open audio mixer tools"
+                        AutomationProperties.HelpText="Audio routing and docking commands. Opening the menu does not change Program audio.">
+                        <controls:RtaimeButton.ContextMenu>
+                            <controls:RtaimeContextMenu Placement="Bottom"
+                                DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <controls:RtaimeMenuItem Header="Follow Video" Command="{Binding Owner.SetAudioFollowVideoCommand}" />
+                                <controls:RtaimeMenuItem Header="Breakaway to selected source" Command="{Binding Owner.SetAudioBreakawayCommand}" />
+                                <controls:RtaimeMenuSeparator />
+                                <controls:RtaimeMenuItem Header="Detach Mixer" Click="DetachMixer_Click" />
+                            </controls:RtaimeContextMenu>
+                        </controls:RtaimeButton.ContextMenu>
+                    </controls:RtaimeButton>
+                    <TextBlock Text="{Binding PresentationLabel}" Style="{StaticResource MixerLabel}" VerticalAlignment="Center" />
 				</WrapPanel>
 			</StackPanel>
 
@@ -86,12 +120,6 @@
                             <TextBlock Text="{Binding SelectedSource.SourceName, StringFormat=Breakaway selection: {0}}"
                                 Style="{StaticResource MixerLabel}" TextTrimming="CharacterEllipsis"
                                 AutomationProperties.Name="Locally selected audio breakaway source" />
-                            <WrapPanel Margin="0,5,0,0">
-                                <controls:RtaimeButton Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}"
-                                    AutomationProperties.Name="Request governed Audio Follow Video" IsCompact="True" Margin="0,0,6,0" />
-                                <controls:RtaimeButton Content="BREAKAWAY SELECTED" Command="{Binding Owner.SetAudioBreakawayCommand}"
-                                    AutomationProperties.Name="Request governed audio source breakaway" IsCompact="True" />
-                            </WrapPanel>
                             <TextBlock Text="{Binding CompactSignalState}" Style="{StaticResource MixerLabel}"
                                 Margin="0,6,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
                                 AutomationProperties.Name="Program audio signal confidence" />
@@ -135,18 +163,18 @@
                                                 Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live bus right sample peak" />
                                             <TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
                                         </Grid>
-                                        <TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
                                         <WrapPanel Margin="0,1,0,3">
-                                            <TextBlock Text="{Binding CompressorActivity, StringFormat=COMP {0}}" Style="{StaticResource MixerLabel}" Margin="0,0,10,0" ToolTip="Runtime compressor gain reduction in dB; unavailable observations remain unavailable." />
-                                            <TextBlock Text="{Binding LimiterActivity, StringFormat=LIMIT {0}}" Style="{StaticResource MixerLabel}" ToolTip="Runtime limiter reduction or accumulated hit counter, not an instantaneous event." />
+                                            <TextBlock Text="{Binding CompressorActivity, StringFormat=COMP {0}}" Style="{StaticResource MixerLabel}" Margin="0,0,10,0"
+                                                ToolTip="Observed Runtime compressor gain reduction; unavailable observations remain unavailable." />
+                                            <TextBlock Text="{Binding LimiterActivity, StringFormat=LIMIT {0}}" Style="{StaticResource MixerLabel}"
+                                                ToolTip="Observed limiter reduction or accumulated hit counter; not an instantaneous event." />
                                         </WrapPanel>
-                                        <TextBlock Text="{Binding CountsEvidence}" Style="{StaticResource MixerLabel}" />
                                         <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat=CONFIRMED {0}}"
                                             Style="{StaticResource MixerLabel}" />
                                         <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
                                             Style="{StaticResource OperatorValue}" AutomationProperties.LiveSetting="Polite" />
                                         <TextBlock Text="{Binding DraftGainLabel, StringFormat=Draft gain: {0}}"
-                                            Style="{StaticResource MixerLabel}" />
+                                            Style="{StaticResource MixerDraftDetail}" />
                                         <Border Background="{DynamicResource OperatorSurfaceBrush}"
                                             BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
                                             CornerRadius="4" Height="32" Padding="7,1">
@@ -164,10 +192,12 @@
                                         <WrapPanel Margin="0,5,0,0">
                                             <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
                                                 IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local bus mute draft" />
-                                            <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
-                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Apply bus draft to Control" />
+                                            <StackPanel Style="{StaticResource MixerDirtyActions}">
+                                                <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" AutomationProperties.Name="Apply bus draft to Control" />
                                             <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardDraftCommand}"
                                                 IsCompact="True" AutomationProperties.Name="Discard local bus draft" />
+                                            </StackPanel>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
@@ -218,7 +248,7 @@
                                         <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
                                             Style="{StaticResource OperatorValue}" AutomationProperties.LiveSetting="Polite" />
                                         <TextBlock Text="{Binding DraftGainLabel, StringFormat=Draft gain: {0}}"
-                                            Style="{StaticResource MixerLabel}" />
+                                            Style="{StaticResource MixerDraftDetail}" />
                                         <Border Background="{DynamicResource OperatorSurfaceBrush}"
                                             BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
                                             CornerRadius="4" Height="32" Padding="7,1">
@@ -236,10 +266,12 @@
                                         <WrapPanel Margin="0,5,0,0">
                                             <controls:RtaimeButton Content="{Binding DraftMuteLabel}" Command="{Binding ToggleMuteCommand}"
                                                 IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Toggle local source mute draft" />
-                                            <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
-                                                IsCompact="True" Margin="0,0,4,0" AutomationProperties.Name="Apply source draft to Control" />
+                                            <StackPanel Style="{StaticResource MixerDirtyActions}">
+                                                <controls:RtaimeButton Content="APPLY" Command="{Binding ApplyCommand}"
+                                                IsCompact="True" Margin="0,0,4,0" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" AutomationProperties.Name="Apply source draft to Control" />
                                             <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardDraftCommand}"
                                                 IsCompact="True" AutomationProperties.Name="Discard local source draft" />
+                                            </StackPanel>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
@@ -261,16 +293,7 @@
 								<TextBlock Text="Confirmed source" Style="{StaticResource MixerLabel}" />
 								<TextBlock Text="{Binding Owner.AudioRoutingSourceName}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="190" />
 							</DockPanel>
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="6" />
-									<ColumnDefinition Width="*" />
-								</Grid.ColumnDefinitions>
-								<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}" IsCompact="True" />
-								<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="BREAKAWAY SELECTED" Command="{Binding Owner.SetAudioBreakawayCommand}" IsCompact="True"
-									Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
-							</Grid>
+							<TextBlock Text="Use TOOLS for governed routing changes." Style="{StaticResource MixerLabel}" />
 						</StackPanel>
 					</Border>
 
@@ -451,7 +474,7 @@
 										<TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Border BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}"
-										Padding="7" Margin="0,0,0,8" AutomationProperties.Name="Program and bus loudness and true-peak evidence">
+										Padding="7" Margin="0,0,0,8" AutomationProperties.Name="Program and bus loudness and true peak evidence">
 										<StackPanel>
 											<TextBlock Text="{Binding LoudnessStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 											<UniformGrid Columns="2" Margin="0,5,0,4">
