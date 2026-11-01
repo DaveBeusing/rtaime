@@ -67,7 +67,7 @@
 				</StackPanel>
 				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
 
-                <Border Grid.Column="2" Padding="7,3" Background="Transparent"
+                <Border x:Name="TopBarProjectIdentity" Grid.Column="2" Padding="7,3" Background="Transparent"
                     ToolTip="{Binding ShowProjectDetail}"
                     AutomationProperties.Name="Current show project identity (read only)">
                     <Grid VerticalAlignment="Center">
