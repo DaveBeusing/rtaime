@@ -158,21 +158,23 @@ public partial class SequenceTimelineControl : UserControl
     }
 
     private static void OpenSequenceMenu(FrameworkElement anchor,
-        PlacementMode placement = PlacementMode.Bottom)
+        PlacementMode placement = PlacementMode.Bottom,
+        FrameworkElement? target = null)
     {
-        if (anchor.ContextMenu is not RtaimeContextMenu menu || !anchor.IsVisible)
+        target ??= anchor;
+        if (anchor.ContextMenu is not RtaimeContextMenu menu || !target.IsVisible)
             return;
-        menu.PlacementTarget = anchor;
+        menu.PlacementTarget = target;
         menu.Placement = placement;
         menu.IsOpen = true;
     }
 
-    private void OpenAfterSelection(FrameworkElement stableAnchor)
+    private void OpenAfterSelection(FrameworkElement menuOwner)
     {
-        // Selection can reproject a virtualized clip row and detach the original
-        // right-click target. Open the same owned menu from stable chrome at the pointer.
+        // Reprojection may replace a selected clip's visual. The control remains
+        // in the visual tree even when its edit toolbar is hidden by playout.
         Dispatcher.BeginInvoke(new Action(() =>
-            OpenSequenceMenu(stableAnchor, PlacementMode.MousePoint)), DispatcherPriority.Input);
+            OpenSequenceMenu(menuOwner, PlacementMode.MousePoint, this)), DispatcherPriority.Input);
     }
 
     private void OnClipActionsOpening(object sender, ContextMenuEventArgs e)
