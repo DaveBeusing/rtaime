@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using rtaime.Operator.Controls;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 
 namespace rtaime.Operator;
@@ -85,6 +86,8 @@ public partial class OperatorInspectorControl : UserControl
 	internal int InspectorSubscriptionCount => _subscribedInspector is null ? 0 : 1;
 	private MediaPoolInspectorViewModel? _subscribedInspector;
 	private string? _selectionIdentity;
+	private RtaimeContextMenu? _openActionsMenu;
+	private string? _openActionsSelectionIdentity;
 	private static readonly DependencyPropertyKey NumericInputsValidKey = DependencyProperty.RegisterReadOnly(
 		nameof(NumericInputsValid), typeof(bool), typeof(OperatorInspectorControl), new PropertyMetadata(true));
 	public static readonly DependencyProperty NumericInputsValidProperty = NumericInputsValidKey.DependencyProperty;
@@ -105,6 +108,7 @@ public partial class OperatorInspectorControl : UserControl
 	}
 	private void UnsubscribeInspector()
 	{
+        CloseInspectorActionsMenu();
         _subscribedInspector?.EndDraftTransaction();
 		if (_subscribedInspector is not null) _subscribedInspector.PropertyChanged -= InspectorChanged;
 		_subscribedInspector = null;
@@ -114,6 +118,7 @@ public partial class OperatorInspectorControl : UserControl
 		if (e.PropertyName != nameof(MediaPoolInspectorViewModel.EditingSelectionIdentity) ||
 			_selectionIdentity == Inspector?.EditingSelectionIdentity) return;
 		_selectionIdentity = Inspector?.EditingSelectionIdentity;
+        if (_openActionsSelectionIdentity != _selectionIdentity) CloseInspectorActionsMenu();
 		foreach (var field in NumericFields(this)) field.CancelInput();
 		UpdateNumericValidity();
 	}
@@ -123,6 +128,51 @@ public partial class OperatorInspectorControl : UserControl
 		SetValue(NumericInputsValidKey, valid);
 		if (Inspector is not null) Inspector.InspectorInputsValid = valid;
 	}
+    private void OnInspectorActionsClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RtaimeIconButton button || button.ContextMenu is not RtaimeContextMenu menu ||
+            Inspector is not { HasSelection: true, InspectorPinAllowsActions: true })
+            return;
+
+        Inspector.EndDraftTransaction();
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private void OnInspectorActionsMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RtaimeContextMenu menu) return;
+        if (menu.PlacementTarget is not RtaimeIconButton button ||
+            !ReferenceEquals(button.DataContext, Inspector) ||
+            Inspector is not { HasSelection: true, InspectorPinAllowsActions: true } model)
+        {
+            menu.IsOpen = false;
+            return;
+        }
+
+        if (_openActionsMenu is not null && !ReferenceEquals(_openActionsMenu, menu))
+            _openActionsMenu.IsOpen = false;
+        _openActionsMenu = menu;
+        _openActionsSelectionIdentity = model.EditingSelectionIdentity;
+    }
+
+    private void OnInspectorActionsMenuClosed(object sender, RoutedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _openActionsMenu)) return;
+        _openActionsMenu = null;
+        _openActionsSelectionIdentity = null;
+    }
+
+    private void CloseInspectorActionsMenu()
+    {
+        var open = _openActionsMenu;
+        _openActionsMenu = null;
+        _openActionsSelectionIdentity = null;
+        if (open is not null) open.IsOpen = false;
+    }
+
     private DependencyObject? FindEditor(DependencyObject? element)
     {
         for (var current = element; current is not null && !ReferenceEquals(current, this);)
