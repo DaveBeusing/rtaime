@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Windows;
@@ -75,9 +76,47 @@ public sealed class AudioMixerMenuQualificationTests
             node.Attribute("Value")?.Value == "REJECTED");
     }
 
+    private const string QualificationChildVariable = "RTAIME_MIXER_MENU_QUALIFICATION_CHILD";
+
     [Fact]
-    public void Real_Wpf_mixer_opens_tools_and_preserves_drafts_across_modes_without_a_control_command()
+    public async Task Real_Wpf_mixer_opens_tools_and_preserves_drafts_across_modes_without_a_control_command()
     {
+        // A WPF Application must be created in a dedicated process.
+        // Running the test again with the child marker owns one fresh STA resource lifetime.
+        if (Environment.GetEnvironmentVariable(QualificationChildVariable) != "1")
+        {
+            var start = new ProcessStartInfo("dotnet")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            start.ArgumentList.Add("vstest");
+            start.ArgumentList.Add(typeof(AudioMixerMenuQualificationTests).Assembly.Location);
+            start.ArgumentList.Add("--TestCaseFilter:FullyQualifiedName=rtaime.Tests.Operator.AudioMixerMenuQualificationTests." +
+                nameof(Real_Wpf_mixer_opens_tools_and_preserves_drafts_across_modes_without_a_control_command));
+            start.Environment[QualificationChildVariable] = "1";
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
+                Assert.True(process.ExitCode == 0,
+                    $"Mixer WPF qualification failed. Exit={process.ExitCode}{Environment.NewLine}{await output}{Environment.NewLine}{await errors}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+            return;
+        }
+
         OnSta(() =>
         {
             OperatorResourceApplication? application = null;
