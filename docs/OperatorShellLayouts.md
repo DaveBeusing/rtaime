@@ -22,8 +22,10 @@ The single existing 60-DIP top bar now contains an understated global
 its existing flexible status column. `GlobalDesktopMenuBar` uses the
 existing `Shell.SecondaryMetricVisibility` presentation boundary: at
 logical client widths **below 1480 DIPs** the seven buttons collapse and a
-single **MENU** overflow button becomes visible. The overflow contains
-the identical seven groups as keyboard-addressable submenus. The top-bar
+single **MENU** overflow button becomes visible. The overflow first shows the same seven keyboard-addressable categories;
+choosing one opens that section in a separate custom context menu, with
+**All menus** returning to the categories. The shared menu-item template
+has no nested-popup support, so this preserves the existing styled controls. The top-bar
 row count and media-viewer row allocation do not change. No new persisted
 workspace width, layout schema or navigation registry is introduced.
 
