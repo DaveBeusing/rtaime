@@ -52,6 +52,84 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Every menu resolves the existing editor instance from its placement target. -->
+        <controls:RtaimeContextMenu x:Key="SequenceEditActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Split selected clip at edit cursor · B"
+                Command="{Binding SplitCommand}" AutomationProperties.Name="Split selected sequence clip"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Delete selected clip · Delete"
+                Command="{Binding DeleteCommand}" AutomationProperties.Name="Delete selected sequence clip"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Ripple delete selected clip"
+                Command="{Binding RippleDeleteCommand}" AutomationProperties.Name="Ripple delete selected sequence clip"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Copy selected clip · Ctrl+C"
+                Command="{Binding CopyCommand}" AutomationProperties.Name="Copy selected sequence clip"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Paste at local cursor · Ctrl+V"
+                Command="{Binding PasteCommand}" AutomationProperties.Name="Paste sequence clip at edit cursor"
+                ToolTip="{Binding Feedback}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Link selected clips"
+                Command="{Binding LinkCommand}" AutomationProperties.Name="Link selected sequence clips"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Unlink selected clip group"
+                Command="{Binding UnlinkCommand}" AutomationProperties.Name="Unlink selected sequence clip group"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Cut / dissolve / crossfade transition"
+                Command="{Binding TransitionCommand}" AutomationProperties.Name="Insert validated sequence transition"
+                ToolTip="{Binding SelectedStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Undo saved sequence edit · Ctrl+Z"
+                Command="{Binding UndoCommand}" AutomationProperties.Name="Undo persisted ControlHost sequence edit"
+                ToolTip="ControlHost authoring history, not a local cursor undo and never a Program TAKE." />
+            <controls:RtaimeMenuItem Header="Redo saved sequence edit · Ctrl+Y"
+                Command="{Binding RedoCommand}" AutomationProperties.Name="Redo persisted ControlHost sequence edit"
+                ToolTip="ControlHost authoring history; does not replay Program." />
+            <controls:RtaimeMenuItem Header="Discard retained local drag draft"
+                Command="{Binding DiscardDraftCommand}" AutomationProperties.Name="Discard retained sequence drag draft"
+                ToolTip="{Binding GestureLabel}" ToolTipService.ShowOnDisabled="True" />
+        </controls:RtaimeContextMenu>
+        <controls:RtaimeContextMenu x:Key="SequenceTrackActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Toggle selected track enabled state"
+                Command="{Binding ToggleTrackEnabledCommand}" AutomationProperties.Name="Toggle saved sequence track enabled state"
+                ToolTip="Select a clip belonging to the track first; persists through ControlHost." ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Toggle selected track mute"
+                Command="{Binding ToggleTrackMuteCommand}" AutomationProperties.Name="Toggle saved sequence track mute"
+                ToolTip="Select a clip belonging to the track first; persists through ControlHost." ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Previous visible tracks"
+                Command="{Binding PreviousTracksCommand}" AutomationProperties.Name="Page preceding sequence tracks" />
+            <controls:RtaimeMenuItem Header="Next visible tracks"
+                Command="{Binding NextTracksCommand}" AutomationProperties.Name="Page next sequence tracks" />
+        </controls:RtaimeContextMenu>
+        <controls:RtaimeContextMenu x:Key="SequenceToolsActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Generate observed audio waveform"
+                Command="{Binding WaveformCommand}" AutomationProperties.Name="Request real PCM waveform for selected audio"
+                ToolTip="{Binding WaveformStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Zoom in · Ctrl++"
+                Command="{Binding ZoomInCommand}" AutomationProperties.Name="Zoom sequence timeline in" />
+            <controls:RtaimeMenuItem Header="Zoom out · Ctrl+-"
+                Command="{Binding ZoomOutCommand}" AutomationProperties.Name="Zoom sequence timeline out" />
+            <controls:RtaimeMenuItem Header="Scroll timeline earlier"
+                Command="{Binding ScrollBackwardCommand}" AutomationProperties.Name="Scroll sequence timeline earlier" />
+            <controls:RtaimeMenuItem Header="Scroll timeline later"
+                Command="{Binding ScrollForwardCommand}" AutomationProperties.Name="Scroll sequence timeline later" />
+        </controls:RtaimeContextMenu>
+        <controls:RtaimeContextMenu x:Key="SequencePlayoutActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Cue prepared native shuttle to local edit cursor"
+                Command="{Binding Playout.CueCommand}" AutomationProperties.Name="Explicitly cue native sequence shuttle"
+                ToolTip="Only the explicit CUE command seeks; local editing never seeks Program."
+                ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Observe native Preview readiness"
+                Command="{Binding Playout.ObserveCommand}" AutomationProperties.Name="Observe native Preview readiness"
+                ToolTip="{Binding Playout.OutputEvidence}" ToolTipService.ShowOnDisabled="True" />
+        </controls:RtaimeContextMenu>
     </UserControl.Resources>
     <Border Background="{DynamicResource OperatorSurfaceBrush}"
         BorderBrush="{DynamicResource OperatorBorderBrush}"
@@ -110,68 +188,48 @@
                     ToolTip="Switch between saved-sequence editing and explicit native Preview/Program playout. No automatic Take."
                     AutomationProperties.Name="Show native sequence playout commands" />
                 <Grid>
-                    <controls:RtaimeScrollViewer
-                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                        Background="{DynamicResource OperatorTimelineTrackOverlayBrush}">
-                        <controls:RtaimeScrollViewer.Style>
-                            <Style TargetType="{x:Type controls:RtaimeScrollViewer}"
-                                BasedOn="{StaticResource {x:Type controls:RtaimeScrollViewer}}">
+                    <!-- A bounded non-scrolling edit header preserves tool, cursor and viewport space. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="7,2">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding PlayoutToolbarVisible}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </controls:RtaimeScrollViewer.Style>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="7,2">
-                    <controls:RtaimeButton Content="SELECT" Command="{Binding SelectToolCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="V · Select without changing clips." />
-                    <controls:RtaimeButton Content="MOVE" Command="{Binding MoveToolCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="M · Drag clip body to move linked clips." />
-                    <controls:RtaimeButton Content="TRIM" Command="{Binding TrimToolCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="T · Drag start or end handles (9 px)." />
-                    <TextBlock Text="{Binding ToolLabel}" Style="{StaticResource OperatorLabel}"
-                        VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <controls:RtaimeButton Content="CLEAR DRAFT" Command="{Binding DiscardDraftCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Discard a rejected draft without resubmitting." />
-                    <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Undo persisted sequence transaction (ControlHost)." />
-                    <controls:RtaimeButton Content="REDO" Command="{Binding RedoCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Redo persisted sequence transaction (ControlHost)." />
-                    <controls:RtaimeButton Content="BLADE" Command="{Binding SplitCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Split selected clip at local edit cursor." />
-                    <controls:RtaimeButton Content="DELETE" Command="{Binding DeleteCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Delete selected clip through a saved edit." />
-                    <controls:RtaimeButton Content="RIPPLE" Command="{Binding RippleDeleteCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Ripple-delete only when the saved sequence validates the gap." />
-                    <controls:RtaimeButton Content="COPY" Command="{Binding CopyCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Copy selected clip's authoring description locally." />
-                    <controls:RtaimeButton Content="PASTE" Command="{Binding PasteCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Insert a new clip at the edit cursor via ControlHost." />
-                    <controls:RtaimeButton Content="LINK" Command="{Binding LinkCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Link selected clips after authoring validation." />
-                    <controls:RtaimeButton Content="UNLINK" Command="{Binding UnlinkCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Unlink selected clip group." />
-                    <controls:RtaimeButton Content="CUT/FADE" Command="{Binding TransitionCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Create a real clip transition: cut/dissolve/crossfade by media type." />
-                    <controls:RtaimeButton Content="TRACK ON/OFF" Command="{Binding ToggleTrackEnabledCommand}"
-                        IsCompact="True" Margin="0,0,4,0" ToolTip="Persist enabled state of selected track." />
-                    <controls:RtaimeButton Content="MUTE" Command="{Binding ToggleTrackMuteCommand}"
-                        IsCompact="True" Margin="0,0,8,0" ToolTip="Persist mute state of selected track." />
-                    <controls:RtaimeButton Content="PCM" Command="{Binding WaveformCommand}"
-                        IsCompact="True" Margin="0,0,9,0" ToolTip="Decode actual selected audio through independent bounded Media Analysis. No synthetic waveform." />
-                    <controls:RtaimeButton Content="◀ TIME" Command="{Binding ScrollBackwardCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="Scroll visible sequence left." />
-                    <controls:RtaimeButton Content="−" Command="{Binding ZoomOutCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom out around edit cursor." />
-                    <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="Fit all authored clips." />
-                    <controls:RtaimeButton Content="+" Command="{Binding ZoomInCommand}"
-                        IsCompact="True" Margin="0,0,3,0" ToolTip="Zoom in around edit cursor." />
-                    <controls:RtaimeButton Content="TIME ▶" Command="{Binding ScrollForwardCommand}"
-                        IsCompact="True" ToolTip="Scroll visible sequence right." />
-                </StackPanel>
-                    </controls:RtaimeScrollViewer>
+                        </StackPanel.Style>
+                        <controls:RtaimeButton Content="SELECT" Command="{Binding SelectToolCommand}"
+                            IsCompact="True" Margin="0,0,3,0" ToolTip="V · Select without changing clips."
+                            AutomationProperties.Name="Select sequence editor tool" />
+                        <controls:RtaimeButton Content="MOVE" Command="{Binding MoveToolCommand}"
+                            IsCompact="True" Margin="0,0,3,0" ToolTip="M · Drag clip body to move linked clips."
+                            AutomationProperties.Name="Move sequence editor tool" />
+                        <controls:RtaimeButton Content="TRIM" Command="{Binding TrimToolCommand}"
+                            IsCompact="True" Margin="0,0,5,0" ToolTip="T · Drag start or end handles."
+                            AutomationProperties.Name="Trim sequence editor tool" />
+                        <TextBlock Text="{Binding ToolLabel}" Style="{StaticResource OperatorLabel}"
+                            VerticalAlignment="Center" Margin="0,0,7,0" TextTrimming="CharacterEllipsis"
+                            ToolTip="{Binding ToolLabel}" />
+                        <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
+                            IsCompact="True" Margin="0,0,7,0" ToolTip="Fit the saved sequence to the edit viewport."
+                            AutomationProperties.Name="Fit sequence editor view" />
+                        <controls:RtaimeButton x:Name="SequenceEditActionsButton" Content="EDIT" Tag="{Binding}"
+                            IsCompact="True" Margin="0,0,3,0" Click="OnSequenceActionsClick"
+                            ContextMenu="{StaticResource SequenceEditActionsMenu}"
+                            AutomationProperties.Name="Sequence clip editing and saved history actions"
+                            ToolTip="Split, delete, copy, paste, link, transitions and saved Undo/Redo. Shift+F10 opens selected actions." />
+                        <controls:RtaimeButton x:Name="SequenceTrackActionsButton" Content="TRACK" Tag="{Binding}"
+                            IsCompact="True" Margin="0,0,3,0" Click="OnSequenceActionsClick"
+                            ContextMenu="{StaticResource SequenceTrackActionsMenu}"
+                            AutomationProperties.Name="Sequence track enable, mute and paging actions"
+                            ToolTip="Track enable and mute are persisted authoring edits." />
+                        <controls:RtaimeButton x:Name="SequenceToolsActionsButton" Content="TOOLS" Tag="{Binding}"
+                            IsCompact="True" Click="OnSequenceActionsClick"
+                            ContextMenu="{StaticResource SequenceToolsActionsMenu}"
+                            AutomationProperties.Name="Sequence waveform, zoom and scroll actions"
+                            ToolTip="{Binding WaveformStatus}" />
+                    </StackPanel>
                     <DockPanel LastChildFill="True">
                         <DockPanel.Style>
                             <Style TargetType="DockPanel">
@@ -193,27 +251,34 @@
                             MinWidth="48" Margin="3,3"
                             ToolTip="Arm one Take transaction only after real Preview output was observed."
                             AutomationProperties.Name="Arm native sequence Take" />
+                        <controls:RtaimeButton DockPanel.Dock="Right" Content="RELEASE"
+                            Command="{Binding Playout.CancelCommand}" IsCompact="True"
+                            Margin="3,3" ToolTip="Explicit cancellation of native preparation; Program remains unchanged."
+                            AutomationProperties.Name="Cancel native sequence preparation" />
+                        <controls:RtaimeButton DockPanel.Dock="Right" Content="RECOVER TAKE"
+                            Command="{Binding Playout.RecoverCommand}" IsCompact="True"
+                            Margin="3,3" ToolTip="Resolve only the original ambiguous Program successor; never automatically retry."
+                            AutomationProperties.Name="Recover ambiguous native sequence Take" />
                         <controls:RtaimeScrollViewer HorizontalScrollBarVisibility="Auto"
                             VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,1">
                                 <controls:RtaimeButton Content="PREPARE" Command="{Binding Playout.PrepareCommand}"
                                     IsCompact="True" Margin="0,2,4,2" ToolTip="Admit the exact saved revision and current RuntimeHost epoch." />
-                                <controls:RtaimeButton Content="RELEASE" Command="{Binding Playout.CancelCommand}"
-                                    IsCompact="True" Margin="0,2,6,2" ToolTip="Explicitly cancel the resident preparation without changing Program." />
                                 <controls:RtaimeButton Content="PREVIEW" Command="{Binding Playout.ActivatePreviewCommand}"
                                     IsCompact="True" Margin="0,2,4,2" ToolTip="Bind the prepared native source to the existing confirmed Preview route." />
                                 <controls:RtaimeButton Content="OBSERVE" Command="{Binding Playout.ObserveCommand}"
                                     IsCompact="True" Margin="0,2,6,2" ToolTip="Read genuine output evidence. Native PLAYING alone is not Preview-ready." />
-                                <controls:RtaimeButton Content="CUE" Command="{Binding Playout.CueCommand}"
-                                    IsCompact="True" Margin="0,2,3,2" ToolTip="Explicitly cue the native shuttle to the LOCAL edit cursor; editing alone never seeks." />
                                 <controls:RtaimeButton Content="PLAY" Command="{Binding Playout.PlayCommand}"
                                     IsCompact="True" Margin="0,2,3,2" ToolTip="Play admitted native shuttle. Use OBSERVE to verify actual Preview frames." />
                                 <controls:RtaimeButton Content="PAUSE" Command="{Binding Playout.PauseCommand}"
                                     IsCompact="True" Margin="0,2,3,2" />
                                 <controls:RtaimeButton Content="STOP" Command="{Binding Playout.StopCommand}"
                                     IsCompact="True" Margin="0,2,6,2" />
-                                <controls:RtaimeButton Content="RECOVER TAKE" Command="{Binding Playout.RecoverCommand}"
-                                    IsCompact="True" Margin="0,2,5,2" ToolTip="Only confirm the original ambiguous Take if the exact Program successor is already committed." />
+                                <controls:RtaimeButton Content="PLAYOUT TOOLS" Tag="{Binding}"
+                                    ContextMenu="{StaticResource SequencePlayoutActionsMenu}"
+                                    Click="OnSequenceActionsClick" IsCompact="True" Margin="0,2,5,2"
+                                    AutomationProperties.Name="Explicit cue and observation commands"
+                                    ToolTip="{Binding Playout.Detail}" />
                             </StackPanel>
                         </controls:RtaimeScrollViewer>
                     </DockPanel>
@@ -310,7 +375,10 @@
                                     </Grid.ColumnDefinitions>
                                     <Border Grid.Column="0" BorderBrush="{DynamicResource OperatorBorderBrush}"
                                         BorderThickness="0,0,1,1"
-                                        Background="{DynamicResource OperatorSurfaceBrush}" Padding="8,2">
+                                        Background="{DynamicResource OperatorSurfaceBrush}" Padding="8,2"
+                                        Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:SequenceTimelineControl}}}"
+                                        ContextMenu="{StaticResource SequenceTrackActionsMenu}"
+                                        ContextMenuOpening="OnTrackActionsOpening">
                                         <DockPanel VerticalAlignment="Center" LastChildFill="True">
                                             <TextBlock Text="{Binding Kind}" DockPanel.Dock="Right"
                                                 Style="{StaticResource OperatorLabel}" Margin="5,0,0,0"/>
@@ -347,6 +415,9 @@
                                                     <Border Width="{Binding Width}" Height="38"
                                                         Style="{StaticResource SequenceClipSurface}" Margin="0,2,0,0"
                                                         ToolTip="{Binding Id}"
+                                                        Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:SequenceTimelineControl}}}"
+                                                        ContextMenu="{StaticResource SequenceEditActionsMenu}"
+                                                        ContextMenuOpening="OnClipActionsOpening"
                                                         MouseLeftButtonDown="OnClipMouseDown" MouseMove="OnClipPointerMoved">
                                                         <Grid ClipToBounds="True">
                                                             <TextBlock Text="{Binding AssetId}" Margin="7,1,7,0"
