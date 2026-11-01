@@ -275,14 +275,19 @@ public partial class OperatorMediaLibraryView : UserControl
 
     private async Task RelinkSelectedLibraryAssetAsync(MediaPoolItemViewModel selected)
     {
-        if (selected.Kind != MediaPoolItemKind.Clip || !Guid.TryParse(selected.ReferenceId, out _) ||
+        if (Context?.MediaPool is not { } pool ||
+            selected.Kind != MediaPoolItemKind.Clip || !Guid.TryParse(selected.ReferenceId, out _) ||
             CurrentLibraryItem(selected) is null)
             return;
+        var selection = SelectedLibrarySignature();
         var path = PickRelinkMediaFile();
-        if (string.IsNullOrWhiteSpace(path) || Context is null) return;
-        if (CurrentLibraryItem(selected) is { } current &&
-            MediaPool.SelectedItems.Count <= 1 && !MediaPool.IsLoading)
-            await MediaPool.RelinkAssetAsync(current, path);
+        // The file picker yields focus: never repurpose this action for a new selection or snapshot.
+        if (string.IsNullOrWhiteSpace(path) || !ReferenceEquals(Context?.MediaPool, pool) ||
+            selection != SelectedLibrarySignature() || pool.HasMultipleSelection || pool.IsLoading ||
+            pool.SelectedItem?.Key == selected.Key && !pool.CanRelinkLibrarySelection)
+            return;
+        if (CurrentLibraryItem(selected) is { } current)
+            await pool.RelinkAssetAsync(current, path);
     }
 
 	private async void OnMediaAdmImportClick(object sender, RoutedEventArgs e)
