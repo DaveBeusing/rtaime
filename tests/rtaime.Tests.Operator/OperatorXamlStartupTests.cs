@@ -29,7 +29,7 @@ public sealed class OperatorApplicationCollection
 [Collection("Operator application")]
 public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
 {
-    private static readonly string[] QualificationGroups = ["Composition", "Visual", "Controls", "Docking", "Gpu"];
+    private static readonly string[] QualificationGroups = ["Composition", "Visual", "Navigation", "Controls", "Docking", "Gpu"];
     private const string QualificationGroupVariable = "RTAIME_OPERATOR_STARTUP_QUALIFICATION_GROUP";
     private const string QualificationSessionVariable = "RTAIME_OPERATOR_STARTUP_QUALIFICATION_SESSION";
     private static readonly string QualificationSessionId =
@@ -243,6 +243,11 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                             });
                             await Qualify("Integrated sequence, Outputs, AI and Health ownership",
                                 () => OperatorExperienceIntegrationQualification.VerifyWindowAsync(window, dispatcher));
+                            break;
+
+                        case "Navigation":
+                            await Qualify("Global menus, all destinations and compact focus safety",
+                                () => OperatorUiNavigationRegressionTests.VerifyWindowAsync(window, dispatcher));
                             break;
 
                         case "Controls":
@@ -740,7 +745,7 @@ public sealed partial class OperatorXamlStartupTests(ITestOutputHelper output)
                 sourceCommit = Environment.GetEnvironmentVariable("RTAIME_SOURCE_COMMIT"),
                 sdk = Environment.GetEnvironmentVariable("RTAIME_BASELINE_SDK"),
                 status = anyFailure ? "FAILED" : missingGroups.Length == 0 ? "PASS" : "INCOMPLETE",
-                scope = "Five real isolated STA XAML, visual, interactions, docking and GPU journeys; physical hardware and connected production latency UNVERIFIED",
+                scope = "Six isolated STA groups: XAML composition, visual layouts, global navigation, controls, docking and GPU; physical hardware and connected production latency UNVERIFIED",
                 missingGroups,
                 groups,
                 phases = groups.SelectMany(item => item.GetProperty("phases").EnumerateArray().Select(phase => phase.Clone())).ToArray(),
