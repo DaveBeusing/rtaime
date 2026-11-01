@@ -27,7 +27,20 @@
             <controls:RtaimeMenuItem Header="Remove selected surface" Command="{Binding RemoveSurfaceCommand}" />
             <controls:RtaimeMenuSeparator />
             <controls:RtaimeMenuItem Header="Enable selected surface (local draft)" IsCheckable="True"
-                IsChecked="{Binding IsSurfaceEnabled, Mode=TwoWay}" IsEnabled="{Binding CanEdit}" />
+                IsChecked="{Binding IsSurfaceEnabled, Mode=TwoWay}">
+                <controls:RtaimeMenuItem.Style>
+                    <Style TargetType="{x:Type controls:RtaimeMenuItem}" BasedOn="{StaticResource {x:Type controls:RtaimeMenuItem}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedSurface}" Value="{x:Null}">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CanEdit}" Value="False">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </controls:RtaimeMenuItem.Style>
+            </controls:RtaimeMenuItem>
             <controls:RtaimeMenuItem Header="Show / hide alignment tools" Click="ToggleAlignmentTools_Click"
                 ToolTip="Align the selected draft quad; the output is not changed." />
         </controls:RtaimeContextMenu>
