@@ -203,6 +203,13 @@ public sealed class LiveControlsActionMenuTests
                     Assert.Same(owner.DissolveCommand, auto.Command);
                     Assert.Same(owner.SetPreviewCommand, setPreview.Command);
                     Assert.Same(cut, LiveConsoleInput.FindButton(cut));
+                    Assert.True(cut.Focus());
+                    var unauthorizedAuto = 0;
+                    var keyboard = new OperatorKeyboardCommandRegistry(
+                        [new("auto", "AUTO", Key.Enter, ModifierKeys.None, new OperatorShellCommand(() => unauthorizedAuto++))]);
+                    var enter = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(cut)!, 0, Key.Enter);
+                    Assert.False(keyboard.TryHandle(enter));
+                    Assert.Equal(0, unauthorizedAuto); // Enter on an explicit CUT button must not route to AUTO.
                     Assert.False(cut.Command.CanExecute(null)); // no authoritative Control connection
 
                     var recordingStart = Assert.Single(Descendants<RtaimeButton>(panel).Where(button => Equals(button.Content, "START REC")));
@@ -225,6 +232,19 @@ public sealed class LiveControlsActionMenuTests
                         Assert.Equal(Visibility.Collapsed, section.Visibility);
                     }
                     Assert.Equal(before, (owner.LiveTakeEvidence, owner.RecordingStatus, owner.CommitStatus, owner.ProgramSourceId));
+                    var monitoringToggle = Assert.Single(Descendants<RtaimeButton>(panel).Where(button =>
+                        Equals(button.Tag, "MonitoringDetails")));
+                    monitoringToggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, monitoringToggle));
+                    await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
+                    var monitoringDetails = Assert.IsAssignableFrom<StackPanel>(panel.FindName("MonitoringDetails"));
+                    var openClean = Assert.Single(Descendants<RtaimeButton>(monitoringDetails).Where(button =>
+                        Equals(button.Content, "OPEN CLEAN")));
+                    var stopClean = Assert.Single(Descendants<RtaimeButton>(monitoringDetails).Where(button =>
+                        Equals(button.Content, "STOP CLEAN")));
+                    Assert.Same(window.ProgramOutput.StartCommand, openClean.Command);
+                    Assert.Same(window.ProgramOutput.StopCommand, stopClean.Command);
+                    monitoringToggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, monitoringToggle));
+                    Assert.Equal(Visibility.Collapsed, monitoringDetails.Visibility);
 
                     // Synthetic presentation changes only; no recording request is made.
                     var setter = typeof(OperatorViewModel).GetProperty(nameof(OperatorViewModel.RecordingStatus),
