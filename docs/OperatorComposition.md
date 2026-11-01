@@ -65,6 +65,103 @@ reapplies the primary binding or a panel is moved. Hover cancellation, typed
 drag payloads, batch limits and all existing mutation guards remain in their
 feature owner.
 
+## LIVE action hierarchy and operator safety
+
+The LIVE workspace keeps the existing left **Preview** (green) and right
+**Program** (red) viewer identities, shared monitoring resources and lower
+Rundown/Timeline surface. No new render target, Control/Runtime command,
+monitor reader, polling cadence, panel layout schema or execution authority
+is introduced. The 1920×1080 reference and responsive 1600×900 and
+960×540/960×500 presentations remain governed by the existing
+`OperatorShellViewModel` geometry and `OperatorDockController`.
+
+### Primary actions
+
+The `LiveActionStrip` remains a named `RtaimeScrollViewer` for compatibility
+with current Operator startup and accessibility qualification, but **horizontal
+and vertical scrolling are disabled**. Its measured, single-row grid keeps
+the essential controls and role information within the available center
+workspace instead of placing TAKE commands at the start of a very long row.
+
+Its hierarchy from left to right is:
+
+1. **SET PVW**, **CUT**, **AUTO** (the original `SetPreviewCommand`,
+   `CutCommand` and `DissolveCommand`). All three retain their
+   existing `CanExecute` enforcement and disabled-state details.
+2. **NEXT / PVW** shows the confirmed `PreviewSourceName` target,
+   separate from local library/selected-source intent; immediately beside
+   it `LiveTakeEvidence` shows explicit **UNVERIFIED**, **PENDING**,
+   **REJECTED**, **UNCONFIRMED TAKE**, **BLOCKED** or eligible/confirmed
+   evidence as produced by the existing live projection. The full
+   `PreviewTakeDetail` remains available as the focused control tooltip.
+   The next observed Rundown cue remains in the concise second text line
+   of the same action row and is **not** represented as Program.
+3. **PVW** and **PGM** switch the local compact viewer presentation via
+   `SelectCompactBusCommand`, not the authoritative production route;
+   **VIEW** opens the local secondary menu. A compact direct **RESTORE**
+   retains independent layout recovery when the menu or a panel is closed.
+
+The existing top bar owns the continuously shown confirmed Program identity,
+global readiness, network send indication and active recording indication.
+Its Program source text now also carries the `LiveProgramIdentity`
+qualification name, avoiding a second permanently displayed Program name
+inside LIVE. Preview and Program viewer receipt evidence stays within
+their existing monitors; the action strip's eligibility text cannot
+reclassify retained pixels as current monitoring or successful physical
+output. Transition duration editing remains in existing Live Controls;
+there is no extra duration editor in the LIVE row.
+
+### VIEW menu
+
+The **VIEW** control opens a themed `RtaimeContextMenu` backed directly
+by the **same MainWindow/Shell command instances**. From top to bottom:
+
+- **Show / hide Media Library:** `Shell.ToggleLeftPanelCommand`
+- **Show / hide Inspector:** `Shell.ToggleRightPanelCommand`
+- **Restore saved workspace layout:** `Shell.ResetLayoutCommand`
+- **Restore dual Preview and Program viewers:** `Shell.RestoreViewersCommand`
+- **Show checks and activity:** existing `OpenShowChecksCommand`
+- **Open Outputs details:** `Shell.SelectWorkspaceCommand("OUTPUTS")`
+- **OBSERVED · DETAILS:** read-only local selection, distinct Preview and
+  Program monitoring states, network send state, recording state and
+  Program audio L/R levels. These details are available by opening VIEW,
+  not repeated as permanent text in the main action row.
+
+The menu binds to its button's captured MainWindow instance via
+`PlacementTarget.Tag` and uses project-owned menu and separator controls.
+Opening or closing the menu does not call production commands, does not
+change selected Preview/Program identities, and does not register another
+command router or selection store. Command enablement and pane/docking
+restore semantics come directly from existing owners.
+
+The **VIEW** button is focusable and opens through normal Enter/Space
+activation. While the LIVE actions have focus, the **Menu** key or
+**Shift+F10** also opens VIEW; repeated keys and text editors are ignored.
+The existing `LiveConsoleInput` suppression of repeated Enter/Space and
+central Operator shortcut registry remain authoritative. The navigation
+rail's **Show checks** and the top-level readiness action provide
+independent incident access even if the LIVE menu is closed. The compact
+bus buttons and RESTORE action remain keyboard reachable without
+horizontal scrolling at 960×540.
+
+### Validation boundaries
+
+`LiveActionHierarchyTests` checks the command hierarchy, custom menu
+bindings, persistent TAKE evidence and optional-status placement, source
+of authority, keyboard entry and a Windows WPF presentation journey at
+1600×900 and 960×540. The nearby
+`LiveConsoleWindowQualification`,
+`LiveConsoleUncertainTakeTests`, `OperatorShellWorkspaceTests` and
+`OperatorCombinedVisualQualification` retain their existing safety,
+focus, compact, selection, dual-view and shutdown responsibilities.
+
+Software WPF measurements do not prove physical mixed-monitor DPI,
+GPU scanout, completed recording-file finalization, physical transmission
+or externally presented Program. Qualification requires exact compiled
+source, pinned SDK, observed CI/Windows execution, focus and viewport
+evidence and separate physical test reports; missing or blocked results
+remain **UNVERIFIED** rather than being called PASS.
+
 ## Registration and compatibility
 
 The current OperatorCommandCatalog already groups commands and workspace
