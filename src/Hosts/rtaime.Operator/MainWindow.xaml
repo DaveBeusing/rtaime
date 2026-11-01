@@ -67,20 +67,31 @@
 				</StackPanel>
 				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
 
-				<controls:RtaimeButton Grid.Column="2"
-					Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-					Background="Transparent"
-					BorderBrush="Transparent"
-					HorizontalContentAlignment="Stretch"
-					Padding="12,6"
-					ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control."
-					AutomationProperties.Name="Open Demo Production">
-					<StackPanel>
-						<TextBlock Text="{Binding ShowProjectName}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
-						<TextBlock Text="{Binding Shell.WorkspaceTitle, ElementName=RootWindow}" ToolTip="{Binding ShowProjectDetail}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
-                        <TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
-					</StackPanel>
-				</controls:RtaimeButton>
+                <Border Grid.Column="2" Padding="7,3" Background="Transparent"
+                    ToolTip="{Binding ShowProjectDetail}"
+                    AutomationProperties.Name="Current show project identity (read only)">
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ShowProjectName}" TextTrimming="CharacterEllipsis"
+                                FontWeight="SemiBold" ToolTip="{Binding ShowProjectDetail}" />
+                            <TextBlock Text="{Binding Shell.WorkspaceTitle, ElementName=RootWindow}"
+                                Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}"
+                                TextTrimming="CharacterEllipsis" ToolTip="Demo package preparation state, not Program output evidence." />
+                        </StackPanel>
+                        <controls:RtaimeButton Grid.Column="1" Content="DEMO" IsCompact="True"
+                            Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                            Padding="3,1" Margin="4,0,0,0" Height="27" VerticalAlignment="Center"
+                            ToolTip="Explicitly prepare deterministic Demo Production. Preparation does not TAKE Program."
+                            ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Open Demo Production" />
+                    </Grid>
+                </Border>
 
 				<controls:RtaimeButton x:Name="SynchronizeButton"
 					Grid.Column="3"
@@ -101,20 +112,92 @@
 					</StackPanel>
 				</controls:RtaimeButton>
 
-				<controls:RtaimeGlobalStatusButton
-					Grid.Column="4"
-					State="{Binding GlobalReadinessState}"
-					StatusText="{Binding GlobalReadinessLabel}"
-					Detail="{Binding GlobalReadinessSummary}"
-					Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-					CommandParameter="HEALTH"
-					ToolTip="{Binding GlobalReadinessTooltip}"
-					HorizontalAlignment="Right"
-					VerticalAlignment="Center"
-					MinWidth="0"
-					MaxWidth="360"
-					Margin="6,0"
-					AutomationProperties.Name="Global runtime readiness and diagnostics" />
+                <DockPanel Grid.Column="4" LastChildFill="True" Margin="2,0">
+                    <StackPanel x:Name="GlobalDesktopMenuBar" DockPanel.Dock="Left"
+                        Orientation="Horizontal" VerticalAlignment="Center"
+                        Visibility="{Binding Shell.SecondaryMetricVisibility, ElementName=RootWindow}"
+                        AutomationProperties.Name="Global Operator menus">
+                        <controls:RtaimeButton x:Name="GlobalProjectMenuButton" Content="Project"
+                            Tag="Project" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Project menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Project menu" />
+                        <controls:RtaimeButton x:Name="GlobalEditMenuButton" Content="Edit"
+                            Tag="Edit" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Edit menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Edit menu" />
+                        <controls:RtaimeButton x:Name="GlobalViewMenuButton" Content="View"
+                            Tag="View" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open View menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open View menu" />
+                        <controls:RtaimeButton x:Name="GlobalMediaMenuButton" Content="Media"
+                            Tag="Media" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Media menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Media menu" />
+                        <controls:RtaimeButton x:Name="GlobalToolsMenuButton" Content="Tools"
+                            Tag="Tools" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Tools menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Tools menu" />
+                        <controls:RtaimeButton x:Name="GlobalWindowMenuButton" Content="Window"
+                            Tag="Window" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Window menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Window menu" />
+                        <controls:RtaimeButton x:Name="GlobalHelpMenuButton" Content="Help"
+                            Tag="Help" IsCompact="True" Padding="5,3" Height="30" Margin="0,0,2,0"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                            PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                            ToolTip="Open Help menu. Menu key or Shift+F10 also opens it."
+                            AutomationProperties.Name="Open Help menu" />
+                    </StackPanel>
+                    <controls:RtaimeButton x:Name="GlobalMenuOverflowButton" DockPanel.Dock="Left"
+                        Content="MENU" Tag="Overflow" IsCompact="True" Padding="8,3" Height="30" Margin="0,0,5,0"
+                        Loaded="OnShellMenuButtonLoaded" Click="OnShellMenuButtonClick"
+                        PreviewKeyDown="OnShellMenuButtonPreviewKeyDown"
+                        ToolTip="Project, Edit, View, Media, Tools, Window and Help. Ctrl+K opens Commands."
+                        AutomationProperties.Name="Open global menu overflow">
+                        <controls:RtaimeButton.Style>
+                            <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Shell.SecondaryMetricVisibility, ElementName=RootWindow}" Value="Collapsed">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </controls:RtaimeButton.Style>
+                    </controls:RtaimeButton>
+                    <controls:RtaimeGlobalStatusButton
+                        State="{Binding GlobalReadinessState}"
+                        StatusText="{Binding GlobalReadinessLabel}"
+                        Detail="{Binding GlobalReadinessSummary}"
+                        Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                        CommandParameter="HEALTH"
+                        ToolTip="{Binding GlobalReadinessTooltip}"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        MinWidth="0"
+                        MaxWidth="360"
+                        Margin="4,0"
+                        AutomationProperties.Name="Global runtime readiness and diagnostics" />
+                </DockPanel>
 
 				<Border Grid.Column="5" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
 				<StackPanel Grid.Column="6" VerticalAlignment="Center" HorizontalAlignment="Center">
