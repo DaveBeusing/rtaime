@@ -8,6 +8,57 @@ The Operator visual qualification protects responsive geometry, DPI behavior and
 
 The qualification intentionally does not require pixel-identical golden images. Windows text rendering, GPU drivers, font rasterization and monitor profiles can produce harmless pixel differences even when the layout contract is unchanged.
 
+## Integrated menu-first navigation and viewport contract
+
+The combined menu qualification uses the **integrated 2026-11-01 master**
+`87f4474e3c6009872652d4a139c4a144493d2216`, after the merged
+Inspector, mixer, LIVE actions, Media Library, compositing, output canvas,
+timeline, workspace defaults and global shell menus (#464–#473).
+The source is a test baseline, not a claimed release PASS.
+The pinned SDK is **10.0.401**, product release target **0.5.46**;
+persistent layout schema **7** is unchanged by the qualification branch.
+
+The `OperatorVisualQualificationTests.QualificationMatrix` now covers six
+logical client dimensions including the minimum **960×500** and the
+100/125/150/200% *injected* scale scenarios. At every size,
+`OperatorCombinedVisualQualification` traverses all ten destinations
+(LIVE, MEDIA, EDIT, OUTPUTS, SCENES, MULTIVIEW, COMPOSITING, HEALTH, AI,
+SETTINGS) and measures the top bar, center, navigation and footer.
+It checks actual WPF viewer bounds, equal Preview/Program allocation in
+dual mode, one CUT action in LIVE and persistent Program/Preview
+identity. The global menu stays inside the existing 60-DIP bar:
+the desktop Project/Edit/View/Media/Tools/Window/Help row or
+the keyboard-accessible **MENU** overflow, never both at once.
+Real `RtaimeGlobalStatusButton`, Program source, provider-send and
+recording state remain independent of opening a menu.
+
+An additional isolated **Navigation** startup group runs
+`OperatorUiNavigationRegressionTests.VerifyWindowAsync` on the actual
+MainWindow instance at 1920×1080, 1280×720 and 960×500 across ten
+destinations (**30 navigation cases**). Each menu item must resolve to
+an existing palette/command instance or the established Demo/Scopes
+owner; opening a category must not submit CUT, AUTO, recording or GO.
+It checks disabled reasons, the current show identity, cursor/key
+context opening and that renderer target counts do not change on
+menu construction. The existing Controls, Docking and connected-host
+suites remain responsible for actual draft, saved-state, pending,
+rejected, stale and UNKNOWN transitions. A disconnected WPF fixture
+cannot itself demonstrate a successful live takeover or recording.
+
+The separate groups remain **Composition, Visual, Navigation, Controls,
+Docking, GPU** with independent 45-second real-window budgets and one
+shared-session, fail-closed `interaction-ui.json` aggregate.
+When `RTAIME_OPERATOR_VISUAL_EVIDENCE` is configured, the visual
+group may emit up to six LIVE PNG captures, 24 owned-window images,
+`combined-ui.json`, and the Navigation group writes
+`navigation-ui.json` with the source/SDK identity available in the
+environment and the actual injected/runner DPI. A WPF bitmap does not
+capture independent menu-popup HWNDs or guarantee native D3DImage pixels.
+Human review of popup placement, contrast, font legibility, clipping,
+reduced motion, screen reader and high-contrast remains outstanding.
+Hardware mixed-DPI, actual scan-out, display removal and production
+latency remain **UNVERIFIED**.
+
 ## Output canvas mapping visual acceptance
 
 The OUTPUTS canvas stage shares one logical-pixel → WPF DIP transform for mouse gestures, projected rulers, grid and optional 5%/10% design-safe boundaries. `OutputCanvasViewportTests` covers finite viewport marks (at most 64 per axis), pan/zoom round-trip, 125%/150%/200% DPI-aligned edge projection, normalized off-canvas coordinates and rigid translation of nonrectangular quads without shape distortion. `OutputCanvasEditorWorkflowTests` additionally verifies local alignment/undo versus persisted saves, revision conflict, ambiguous activation fencing, explicit read-only reconciliation and saved-target/observed-target mismatch rejection.
@@ -25,8 +76,9 @@ The following logical viewports are the supported automated qualification surfac
 | Reference 125 | 1536 × 864 | 125% | 0.80 | No | Full labels |
 | Reference 150 | 1280 × 720 | 150% | 0.6667 | No | Compact rail |
 | Reference 200 | 960 × 540 | 200% | 0.60 floor | Yes | Compact rail |
+| Minimum client height | 960 × 500 | 200% metadata | 0.60 floor | Yes | Compact rail |
 
-The percentage is qualification metadata for the logical viewport expected from the Windows PerMonitorV2 environment. WPF device-independent layout remains the geometry authority inside the Operator.
+The percentage is injected layout-qualification metadata for the logical viewport expected from the Windows PerMonitorV2 environment; it is **not** an observed physical DPI change. WPF device-independent layout remains the geometry authority inside the Operator.
 
 ## Operator chrome and detached-panel regression coverage
 
@@ -55,12 +107,14 @@ acceptance. Results must be recorded from the precise final checked commit.
 tests/rtaime.Tests.Operator/OperatorVisualQualificationTests.cs executes the complete matrix against every Operator workspace:
 
 - LIVE;
-- EDIT;
 - MEDIA;
-- SCENES;
-- COMPOSITING;
+- EDIT;
 - OUTPUTS;
+- SCENES;
+- MULTIVIEW;
+- COMPOSITING;
 - HEALTH;
+- AI;
 - SETTINGS.
 
 For each matrix entry the test verifies:
@@ -112,7 +166,7 @@ The composition child shows the window, waits for `ContentRendered`, switches th
 The dedicated composition STA application lifetime also activates the compiled ProductionMacroControl with a real ProductionMacroViewModel and a snapshot-only test transport. It verifies confirmed CUT and DISSOLVE text updates through PropertyChanged, active OneWay Run bindings, read-only source state, neighboring display-property metadata and an empty WPF binding-error trace. No production command is executed to qualify a status display.
 
 
-The full real-window suite retains all previously qualified journeys: Composition owns the productive controls and eight startup workspaces; Visual executes the fifty combined layout/DPI/focus cases and integrated Sequence/Outputs/AI/Health ownership; Controls runs Library, Timeline, Live, Inspector, Compositing, Output Canvas, draft, palette, favorites and readiness interactions; Docking runs real float/dock/cinema/template cycles; GPU runs native surface lifetime and primary-render restoration. Each child checks unchanged source identities, Dispatcher Input and Loaded checkpoints, and zero rendering subscriptions after real window/session closure. This division does not reduce the combined acceptance matrix.
+The full real-window suite retains all previously qualified journeys: Composition owns the productive controls and eight startup workspaces; Visual executes the sixty combined layout/DPI/focus cases and integrated Sequence/Outputs/AI/Health ownership; Controls runs Library, Timeline, Live, Inspector, Compositing, Output Canvas, draft, palette, favorites and readiness interactions; Docking runs real float/dock/cinema/template cycles; GPU runs native surface lifetime and primary-render restoration. Each child checks unchanged source identities, Dispatcher Input and Loaded checkpoints, and zero rendering subscriptions after real window/session closure. This division does not reduce the combined acceptance matrix.
 
 A separate process test launches the built Windows Operator executable against unique unavailable endpoints, requires its `operator.window-shown` log event, rejects crash/XAML error evidence and requests normal window close. The process must log exit and return zero. No headless flag or substituted visual tree qualifies this launch.
 
@@ -257,7 +311,7 @@ native media scan-out remain **UNVERIFIED** without retained direct evidence.
 
 `OperatorCombinedVisualQualification.VerifyWindowAsync` runs inside the existing real
 MainWindow STA fixture, before the docking/Inspector/timeline/library/palette/show-check
-interaction fixtures and native GPU recovery fixture. It reuses all five viewport rows
+interaction fixtures and native GPU recovery fixture. It reuses all six viewport rows
 above across all ten registered workspaces (50 cases). Layout transforms inject the row's
 100/125/150/200% scale; they do not simulate Windows monitor messages. Both requested
 logical dimensions and actual Windows DPI are recorded separately.
@@ -270,8 +324,8 @@ semantic layout baseline, not a saved screenshot comparison or a duplicate shell
 size formula.
 
 CI and Quality retain `rtaime-operator-visual-<job>-<run>-<attempt>` artifacts:
-five LIVE PNG review images and `combined-ui.json` with the exact source, SDK,
-50 geometry observations, actual DPI, injected scale, overlay visibility and measurements.
+up to six LIVE PNG review images and `combined-ui.json` with the exact source, SDK,
+60 geometry observations, actual DPI, injected scale, overlay visibility and measurements.
 The environment variable `RTAIME_OPERATOR_VISUAL_EVIDENCE` opts into artifact writing.
 Images capture WPF composition; D3DImage hardware pixels may be absent. The startup
 overlay visibility is recorded rather than silently removed. Images require human
@@ -292,7 +346,7 @@ GPU target lifetime/retry tests remain the stronger failure/resource contract.
 
 | Scenario | Existing or combined executable evidence | Boundary |
 | --- | --- | --- |
-| Eight workspaces, compact/reference layout | Combined geometry golden and original viewport matrix | Real WPF, injected scale |
+| Ten workspaces, compact/reference/minimum layout | Combined geometry golden and original viewport matrix | Real WPF, injected scale |
 | Resize, float, restore, shared focus/shortcuts | `OperatorDockingWindowTests`, `OperatorDockLayoutTests` | Existing panel instances |
 | Numeric validation and focused local editing | `InspectorPrecisionTests`, `TimelineErgonomicsTests` | Draft/confirmed separation |
 | Text entry, repeats, no implicit TAKE | `OperatorShortcutProfileTests`, command registry and real palette fixture | No production bypass |
@@ -308,7 +362,7 @@ physical qualification. The combined window uses a disconnected, non-authoritati
 model and verifies unchanged Preview/Program identity and disabled CUT throughout.
 The backend TAKE/fault suites remain required separately.
 
-For release review, retain the five images and JSON with their workflow run and exact
+For release review, retain the six expected LIVE images and JSON with their workflow run and exact
 source; inspect text/contrast/clip behavior, then execute the physical procedure above
 with connected/stale state, an explicitly initiated TAKE, missing assets and approved
 monitoring failure. Record monitor topology, Windows build, GPU/driver, actual DPI,
@@ -318,10 +372,10 @@ focus/modal observations and outcomes. Cases without that evidence stay UNVERIFI
 ## QoL interaction qualification
 
 The existing combined STA fixture also exercises command palette, workspace template
-editor, Recent/Favorites/Help and show preflight in each of the five viewport rows.
+editor, Recent/Favorites/Help and show preflight in each of the six viewport rows.
 Owned windows use bounded logical sizes and the runner's actual Windows DPI; only
 the main shell receives injected layout scaling. Twenty review images supplement
-the five shell images. They are not physical high-DPI or visual-review PASS evidence.
+the six shell images. They are not physical high-DPI or visual-review PASS evidence.
 
 The sequence closes each surface and immediately opens the next before yielding to
 the Dispatcher. Pending focus-return callbacks must leave the newer editor focused;
@@ -347,13 +401,13 @@ Fractional pointer mapping covers all four presentation modes at 100/125/150/200
 it qualifies the common DIP-to-source arithmetic, not physical touch delivery.
 
 Each native surface records its actual CompositionTarget rendering attach/detach
-balance. All 50 layouts and all subsequent interaction phases require a balance of
+balance. All 60 layouts and all subsequent interaction phases require a balance of
 zero or one per retained surface; final MainWindow teardown requires zero. Existing
 floating-panel identity/no-unload and GPU resource create/release checks remain active.
 This is rendering-event subscription evidence, not an assertion that the disconnected
 fixture observed a live monitoring pipe or every production transport subscription.
 
-`interaction-ui-<group>.json` records each independent Composition, Visual, Controls, Docking and GPU process with exact source/SDK, named phase durations, Input and Loaded dispatcher checks, rendering subscriptions and final teardown/failures. Atomic publication of `interaction-ui.json` aggregates only the same parent qualification session; missing/stale groups report INCOMPLETE, any failure reports FAILED, and PASS requires every group. An interrupted process never implies an omitted test passed. Existing `combined-ui.json` retains the twenty focus/surface observations, fifty geometry cases and settled resource metrics. The unchanged 45-second bound **per real STA child** and 5-second dispatcher ceiling remain gross regression bounds, not latency targets.
+`interaction-ui-<group>.json` records each independent Composition, Visual, Navigation, Controls, Docking and GPU process with exact source/SDK, named phase durations, Input and Loaded dispatcher checks, rendering subscriptions and final teardown/failures. Atomic publication of `interaction-ui.json` aggregates only the same parent qualification session; missing/stale groups report INCOMPLETE, any failure reports FAILED, and PASS requires every group. An interrupted process never implies an omitted test passed. Existing `combined-ui.json` retains the 24 focus/surface observations, sixty geometry cases and settled resource metrics. The unchanged 45-second bound **per real STA child** and 5-second dispatcher ceiling remain gross regression bounds, not latency targets.
 
 ### Exact-source acceptance and remaining manual matrix
 
@@ -369,7 +423,7 @@ claim in generated source documentation.
 | Mixed-DPI monitors, negative desktop origins, unplug/reconnect | Float, move, focus/cinema restore and offscreen recovery remain reachable | Existing synthetic monitor-restore geometry; native monitor messages UNVERIFIED |
 | Connected/stale state during workspace, batch and undo actions | Only explicit authorized commands mutate; pending/rejected evidence retained | Existing connected command/transaction tests; combined live desktop scenario UNVERIFIED |
 | Sustained monitoring while resizing and selecting | No extra monitoring reader; bounded UI queue, target churn and input latency | Retained surfaces/event balance plus existing monitoring integration suites; physical loaded latency UNVERIFIED |
-| Five shell and twenty owned-window images | Typography, contrast, clipping, scroll access and keyboard focus visibly usable | Images require human review; D3DImage media pixels may be absent |
+| Six LIVE and 24 owned-window images | Typography, contrast, clipping, scroll access and keyboard focus visibly usable | Images require human review; D3DImage media pixels may be absent |
 
 Independent asset-position frame scrubbing is available for online catalogue
 media through the bounded, cancelable Media Analysis observation path. Its
