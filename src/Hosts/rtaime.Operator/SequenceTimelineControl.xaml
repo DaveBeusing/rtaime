@@ -274,7 +274,7 @@
                                     IsCompact="True" Margin="0,2,3,2" />
                                 <controls:RtaimeButton Content="STOP" Command="{Binding Playout.StopCommand}"
                                     IsCompact="True" Margin="0,2,6,2" />
-                                <controls:RtaimeButton Content="PLAYOUT TOOLS" Tag="{Binding}"
+                                <controls:RtaimeButton x:Name="SequencePlayoutActionsButton" Content="PLAYOUT TOOLS" Tag="{Binding}"
                                     ContextMenu="{StaticResource SequencePlayoutActionsMenu}"
                                     Click="OnSequenceActionsClick" IsCompact="True" Margin="0,2,5,2"
                                     AutomationProperties.Name="Explicit cue and observation commands"
