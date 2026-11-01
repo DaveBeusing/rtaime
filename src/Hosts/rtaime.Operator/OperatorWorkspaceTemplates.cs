@@ -116,8 +116,13 @@ public sealed partial class OperatorShellViewModel
         ApplyTemplateCommand = new OperatorShellCommand(() =>
         {
             if (SelectedTemplate is not { } selected || !WorkspaceTemplates.Contains(selected)) return;
-            RestorePresentation(); SelectWorkspace(selected.Workspace); ApplyWorkspaceLayout(selected.Layout);
-            Save(); TemplateStatus = "Applied " + selected.Name + " · production unchanged.";
+            RestorePresentation();
+            // Apply the selected template as one explicit preference change.
+            // Avoid writing the intermediate destination layout during navigation.
+            RestoreWorkspace(selected.Workspace);
+            ApplyWorkspaceLayout(selected.Layout);
+            Save();
+            TemplateStatus = "Applied " + selected.Name + " · production unchanged.";
         }, () => SelectedTemplate is not null && WorkspaceTemplates.Contains(SelectedTemplate));
         DeleteTemplateCommand = new AsyncRelayCommand(async () =>
         {
