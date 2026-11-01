@@ -217,7 +217,9 @@ independent dense authoring and navigation button rows.
   synchronized source context and retain the existing validated file
   size, source epoch and lifetime constraints. The language selector,
   local PREVIEW ON toggle, subtitle text and review/error evidence stay
-  visible in the dedicated lower panel.
+  visible in the dedicated lower panel. The direct EBU-TT-D import
+  button remains there as a contextual shortcut to the same bounded
+  import handler; neither entry introduces a second caption store.
 - **Item/cue context menu**: reuses CURSOR actions; right-click
   selects an item or cue through the existing local selection path.
   This does not seek automatically; jump-to-cue and cursor-to-Preview
