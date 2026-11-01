@@ -10,7 +10,7 @@
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True"
     controls:OperatorControlPresentation.Enabled="True" PreviewKeyDown="OnWorkspaceKeyDown"
-    SizeChanged="OnWorkspaceSizeChanged" Unloaded="OnWorkspaceUnloaded">
+    SizeChanged="OnWorkspaceSizeChanged" Loaded="OnWorkspaceLoaded" Unloaded="OnWorkspaceUnloaded">
 	<UserControl.Resources>
         <Style x:Key="GraphLabel" TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
             <Style.Triggers><DataTrigger Binding="{Binding Path=(controls:OperatorControlPresentation.HighContrast), RelativeSource={RelativeSource AncestorType={x:Type local:CompositingGraphControl}}}" Value="True">
@@ -101,12 +101,57 @@
 				</DrawingGroup>
 			</DrawingBrush.Drawing>
 		</DrawingBrush>
+        <!-- One command surface for graph chrome, selected layers and selected nodes. -->
+        <controls:RtaimeContextMenu x:Key="GraphActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Reset zoom to 100%" Command="{Binding ResetViewCommand}"
+                AutomationProperties.Name="Reset graph zoom to 100 percent" ToolTip="Presentation only; Program is unchanged." />
+            <controls:RtaimeMenuItem Header="Auto layout" Command="{Binding AutoLayoutCommand}"
+                AutomationProperties.Name="Auto layout graph nodes" ToolTip="Restore local node positions without changing production routing." />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Selected object" IsEnabled="False"
+                AutomationProperties.Name="Selected object actions" ToolTip="{Binding SelectionEvidence}" />
+            <controls:RtaimeMenuItem Header="Move selected layer up (draft)" Command="{Binding MoveSelectedLayerUpCommand}"
+                AutomationProperties.Name="Stage selected layer earlier" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Move selected layer down (draft)" Command="{Binding MoveSelectedLayerDownCommand}"
+                AutomationProperties.Name="Stage selected layer later" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Toggle layer visibility (draft)" Command="{Binding ToggleSelectedLayerCommand}"
+                AutomationProperties.Name="Stage selected layer visibility" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Decrease layer opacity (draft)" Command="{Binding DecreaseSelectedLayerOpacityCommand}"
+                AutomationProperties.Name="Decrease selected layer draft opacity" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Increase layer opacity (draft)" Command="{Binding IncreaseSelectedLayerOpacityCommand}"
+                AutomationProperties.Name="Increase selected layer draft opacity" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Stage selected FX earlier" Command="{Binding MoveProcessingEarlierDraftCommand}"
+                AutomationProperties.Name="Stage selected FX earlier" ToolTip="{Binding FxOrderEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Stage selected FX later" Command="{Binding MoveProcessingLaterDraftCommand}"
+                AutomationProperties.Name="Stage selected FX later" ToolTip="{Binding FxOrderEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Apply FX order draft" Command="{Binding ApplyProcessingOrderDraftCommand}"
+                AutomationProperties.Name="Apply FX order draft" ToolTip="{Binding FxOrderEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Discard FX order draft" Command="{Binding DiscardProcessingOrderDraftCommand}"
+                AutomationProperties.Name="Discard FX order draft" ToolTip="{Binding FxOrderEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Apply selected layer draft" Command="{Binding ApplyLayerDraftCommand}"
+                AutomationProperties.Name="Apply selected layer state draft" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Review selected layer draft" Command="{Binding ReviewLayerDraftCommand}"
+                IsEnabled="{Binding SelectedLayerRow.CanReviewStateDraft}"
+                AutomationProperties.Name="Review selected layer state draft" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Discard selected layer draft" Command="{Binding DiscardLayerDraftCommand}"
+                IsEnabled="{Binding SelectedLayerRow.HasStateDraft}"
+                AutomationProperties.Name="Discard selected layer state draft" ToolTip="{Binding SelectionEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Apply layer order draft" Command="{Binding ApplyOrderDraftCommand}"
+                AutomationProperties.Name="Apply layer order draft" ToolTip="{Binding OrderEvidence}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Discard layer order draft" Command="{Binding DiscardOrderDraftCommand}"
+                AutomationProperties.Name="Discard layer order draft" ToolTip="{Binding OrderEvidence}" />
+        </controls:RtaimeContextMenu>
+
 	</UserControl.Resources>
 
 	<Grid>
 		
 		<Grid.RowDefinitions>
-			<RowDefinition Height="42" />
+			<RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
@@ -118,111 +163,63 @@
 					Panel.ZIndex="60"
 					Margin="10" />
 
-		<Border Grid.Row="0"
-			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
-			BorderBrush="{DynamicResource OperatorBorderBrush}"
-			BorderThickness="0,0,0,1"
-			Padding="8,0">
-            <controls:RtaimeScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="Auto" />
-				</Grid.ColumnDefinitions>
-
-				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <controls:RtaimeButton Content="LAYERS" Command="{Binding ToggleLayerListCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Show or hide the confirmed layer list; advanced graph remains available." />
+        <Border Grid.Row="0"
+            Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+            BorderBrush="{DynamicResource OperatorBorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="8,4" MinHeight="38">
+            <DockPanel LastChildFill="True">
+                <controls:RtaimeStatusBadge DockPanel.Dock="Right" Content="{Binding ZoomLabel}"
+                    Status="{x:Static controls:RtaimeStatusKind.Selection}" ShowIndicator="False"
+                    VerticalAlignment="Center" Margin="6,0,0,0"
+                    AutomationProperties.Name="Graph zoom percentage" />
+                <WrapPanel VerticalAlignment="Center">
+                    <controls:RtaimeButton Content="LAYERS" Command="{Binding ToggleLayerListCommand}"
+                        Style="{StaticResource GraphToolbarButton}"
+                        AutomationProperties.Name="Toggle compositing layer list"
+                        ToolTip="Show or hide the confirmed layer list." />
                     <controls:RtaimeToggleButton Content="ADVANCED GRAPH"
                         IsChecked="{Binding ShowAdvancedGraph, Mode=TwoWay}" IsCompact="True"
-                        Margin="0,0,6,0" ToolTip="Show the bounded node graph and Inspector FX detail without changing Program."
-                        AutomationProperties.Name="Toggle advanced compositing graph" />
+                        Margin="0,0,6,0" AutomationProperties.Name="Toggle advanced compositing graph"
+                        ToolTip="Inspect the bounded graph without changing Program." />
                     <StackPanel Orientation="Horizontal">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ShowAdvancedGraph}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-					<controls:RtaimeButton Content="SELECT" Command="{Binding SelectModeCommand}">
-						<controls:RtaimeButton.Style>
-							<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
-								<Style.Triggers>
-									<DataTrigger Binding="{Binding IsSelectMode}" Value="True">
-										<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
-										<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</controls:RtaimeButton.Style>
-					</controls:RtaimeButton>
-					<controls:RtaimeButton Content="PAN" Command="{Binding PanModeCommand}">
-						<controls:RtaimeButton.Style>
-							<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
-								<Style.Triggers>
-									<DataTrigger Binding="{Binding IsPanMode}" Value="True">
-										<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
-										<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</controls:RtaimeButton.Style>
-					</controls:RtaimeButton>
-					<Border Width="1" Height="18" Background="{DynamicResource OperatorBorderBrush}" Margin="1,0,7,0" />
-					<controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Fit the complete graph into the current viewport." />
-					<controls:RtaimeButton Content="100%" Command="{Binding ResetViewCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Reset presentation zoom to 100 percent." />
-					<controls:RtaimeButton Content="AUTO LAYOUT" Command="{Binding AutoLayoutCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Restore the deterministic presentation layout without changing Runtime routing." />
-                    <controls:RtaimeButton x:Name="StageFxEarlierButton" Content="FX DRAFT ←"
-                        Command="{Binding MoveProcessingEarlierDraftCommand}" Style="{StaticResource GraphToolbarButton}"
-                        ToolTip="Stage the selected processing node earlier locally. Program unchanged until APPLY FX ORDER." />
-                    <controls:RtaimeButton x:Name="StageFxLaterButton" Content="FX DRAFT →"
-                        Command="{Binding MoveProcessingLaterDraftCommand}" Style="{StaticResource GraphToolbarButton}"
-                        ToolTip="Stage the selected processing node later locally. Program unchanged until APPLY FX ORDER." />
-                    <controls:RtaimeButton x:Name="ApplyFxOrderButton" Content="APPLY FX ORDER"
-                        Command="{Binding ApplyProcessingOrderDraftCommand}" Style="{StaticResource GraphToolbarButton}"
-                        ToolTip="Submit revision-bound FX ordering via ControlHost and require Runtime observation." />
-                    <controls:RtaimeButton x:Name="DiscardFxOrderButton" Content="DISCARD FX ORDER"
-                        Command="{Binding DiscardProcessingOrderDraftCommand}" Style="{StaticResource GraphToolbarButton}"
-                        ToolTip="Discard local FX order without altering Program." />
+                        <StackPanel.Style><Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers><DataTrigger Binding="{Binding ShowAdvancedGraph}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger></Style.Triggers>
+                        </Style></StackPanel.Style>
+                        <controls:RtaimeButton Content="SELECT" Command="{Binding SelectModeCommand}"
+                            AutomationProperties.Name="Select nodes in the compositing graph">
+                            <controls:RtaimeButton.Style><Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
+                                <Style.Triggers><DataTrigger Binding="{Binding IsSelectMode}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+                                </DataTrigger></Style.Triggers>
+                            </Style></controls:RtaimeButton.Style>
+                        </controls:RtaimeButton>
+                        <controls:RtaimeButton Content="PAN" Command="{Binding PanModeCommand}"
+                            AutomationProperties.Name="Pan compositing graph">
+                            <controls:RtaimeButton.Style><Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
+                                <Style.Triggers><DataTrigger Binding="{Binding IsPanMode}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+                                </DataTrigger></Style.Triggers>
+                            </Style></controls:RtaimeButton.Style>
+                        </controls:RtaimeButton>
+                        <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}"
+                            Style="{StaticResource GraphToolbarButton}"
+                            AutomationProperties.Name="Fit compositing graph to viewport"
+                            ToolTip="Fit the graph to the available viewport." />
                     </StackPanel>
-					<Border Width="1" Height="18" Background="{DynamicResource OperatorBorderBrush}" Margin="1,0,7,0" />
-					<controls:RtaimeButton Content="ORDER DRAFT ↓" Command="{Binding MoveSelectedLayerDownCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Stage a local layer order change; Program is unchanged until APPLY ORDER." />
-					<controls:RtaimeButton Content="ORDER DRAFT ↑" Command="{Binding MoveSelectedLayerUpCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Stage a local layer order change; Program is unchanged until APPLY ORDER." />
-					<controls:RtaimeButton Content="VISIBILITY DRAFT" Command="{Binding ToggleSelectedLayerCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Toggle the local visibility draft only; click APPLY to request Runtime confirmation." />
-					<controls:RtaimeButton Content="OPACITY −" Command="{Binding DecreaseSelectedLayerOpacityCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Decrease only the selected layer opacity draft; use APPLY to commit." />
-					<controls:RtaimeButton Content="OPACITY +" Command="{Binding IncreaseSelectedLayerOpacityCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Increase only the selected layer opacity draft; use APPLY to commit." />
-				</StackPanel>
-
-				<TextBlock Grid.Column="1"
-					Text="LIVE LAYER STACK"
-					Style="{StaticResource OperatorSectionTitle}"
-					HorizontalAlignment="Center"
-					VerticalAlignment="Center" />
-
-				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-					<controls:RtaimeStatusBadge
-						Status="{x:Static controls:RtaimeStatusKind.Neutral}"
-						Content="CONFIRMED LAYER STACK"
-						ShowIndicator="False"
-						Margin="0,0,6,0"
-						ToolTip="Source topology remains read-only; bounded layer state and order changes are committed through ControlHost and confirmed by RuntimeHost." />
-					<controls:RtaimeStatusBadge
-						Status="{x:Static controls:RtaimeStatusKind.Selection}"
-						Content="{Binding LayerCommandStatus}"
-						ShowIndicator="False"
-						Margin="0,0,6,0" />
-					<controls:RtaimeStatusBadge
-						Status="{x:Static controls:RtaimeStatusKind.Selection}"
-						Content="{Binding ZoomLabel}"
-						ShowIndicator="False" />
-				</StackPanel>
-			</Grid>
-            </controls:RtaimeScrollViewer>
-		</Border>
+                    <controls:RtaimeButton x:Name="GraphActionsButton" Content="MORE" Click="OnGraphActionsClick"
+                        Tag="{Binding}" ContextMenu="{StaticResource GraphActionsMenu}"
+                        Style="{StaticResource GraphToolbarButton}"
+                        AutomationProperties.Name="More graph and selected object actions"
+                        ToolTip="Open advanced graph commands and actions for the selected object. Shift+F10 or Menu key also opens this menu." />
+                </WrapPanel>
+            </DockPanel>
+        </Border>
 
         <Border Grid.Row="1" Padding="6" Style="{StaticResource GraphPanel}">
             <StackPanel>
@@ -236,7 +233,111 @@
                 <TextBlock Text="{Binding FxOrderEvidence}" Style="{StaticResource GraphLabel}" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
-        <Grid Grid.Row="2">
+        <!-- Draft decisions remain visible even when the layer list or graph is collapsed. -->
+        <Border x:Name="GraphDraftFooter" Grid.Row="2" Padding="6,3"
+            BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,1">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource GraphPanel}">
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasUnresolvedLayerDrafts, ElementName=Root}" Value="False" />
+                                <Condition Binding="{Binding HasFxOrderDraft}" Value="False" />
+                                <Condition Binding="{Binding OrderEvidence}" Value="RUNTIME ORDER · CONFIRMED" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel>
+                <Grid Margin="0,2">
+                    <Grid.Style><Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding HasUnresolvedLayerDrafts, ElementName=Root}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger></Style.Triggers>
+                    </Style></Grid.Style>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LayerCommandStatus}" Style="{StaticResource GraphLabel}"
+                            TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectionEvidence}"
+                            AutomationProperties.LiveSetting="Polite" />
+                        <controls:RtaimeScrollViewer MaxHeight="52" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Layers}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,8,0">
+                                        <StackPanel.Style><Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers><DataTrigger Binding="{Binding HasStateDraft}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger></Style.Triggers>
+                                        </Style></StackPanel.Style>
+                                        <controls:RtaimeButton Content="{Binding Title}"
+                                            Command="{Binding DataContext.SelectNodeCommand, ElementName=Root}" CommandParameter="{Binding}"
+                                            IsCompact="True" AutomationProperties.Name="{Binding Title}"
+                                            ToolTip="Select this unresolved layer draft for Apply, Review or Discard." />
+                                        <TextBlock Text="{Binding DraftEvidence}" Style="{StaticResource GraphLabel}"
+                                            VerticalAlignment="Center" Margin="5,0,0,0"
+                                            ToolTip="{Binding DraftEvidence}" TextTrimming="CharacterEllipsis" MaxWidth="215" />
+                                    </StackPanel>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </controls:RtaimeScrollViewer>
+                    </StackPanel>
+                    <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                        <controls:RtaimeButton Content="APPLY LAYER" Command="{Binding ApplyLayerDraftCommand}"
+                            Style="{StaticResource GraphToolbarButton}"
+                            AutomationProperties.Name="Apply selected layer state draft" ToolTip="{Binding SelectionEvidence}" />
+                        <controls:RtaimeButton Content="REVIEW" Command="{Binding ReviewLayerDraftCommand}"
+                            IsEnabled="{Binding SelectedLayerRow.CanReviewStateDraft}"
+                            Style="{StaticResource GraphToolbarButton}"
+                            AutomationProperties.Name="Review selected layer draft" ToolTip="{Binding SelectionEvidence}" />
+                        <controls:RtaimeButton Content="DISCARD" Command="{Binding DiscardLayerDraftCommand}"
+                            IsEnabled="{Binding SelectedLayerRow.HasStateDraft}"
+                            Style="{StaticResource GraphToolbarButton}"
+                            AutomationProperties.Name="Discard selected layer state draft" ToolTip="{Binding SelectionEvidence}" />
+                    </WrapPanel>
+                </Grid>
+                <Grid Margin="0,2">
+                    <Grid.Style><Style TargetType="Grid">
+                        <Style.Triggers><DataTrigger Binding="{Binding OrderEvidence}" Value="RUNTIME ORDER · CONFIRMED">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger></Style.Triggers>
+                    </Style></Grid.Style>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding OrderEvidence}" Style="{StaticResource GraphLabel}"
+                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                        ToolTip="{Binding OrderEvidence}" AutomationProperties.LiveSetting="Polite" />
+                    <WrapPanel Grid.Column="1">
+                        <controls:RtaimeButton Content="APPLY ORDER" Command="{Binding ApplyOrderDraftCommand}"
+                            Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Apply layer order draft" />
+                        <controls:RtaimeButton Content="DISCARD ORDER" Command="{Binding DiscardOrderDraftCommand}"
+                            Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Discard layer order draft" />
+                    </WrapPanel>
+                </Grid>
+                <Grid Margin="0,2">
+                    <Grid.Style><Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding HasFxOrderDraft}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger></Style.Triggers>
+                    </Style></Grid.Style>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding FxOrderEvidence}" Style="{StaticResource GraphLabel}"
+                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                        ToolTip="{Binding FxOrderEvidence}" AutomationProperties.LiveSetting="Polite" />
+                    <WrapPanel Grid.Column="1">
+                        <controls:RtaimeButton x:Name="ApplyFxOrderButton" Content="APPLY FX" Command="{Binding ApplyProcessingOrderDraftCommand}"
+                            Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Apply FX order draft" />
+                        <controls:RtaimeButton x:Name="DiscardFxOrderButton" Content="DISCARD FX" Command="{Binding DiscardProcessingOrderDraftCommand}"
+                            Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Discard FX order draft" />
+                    </WrapPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="{Binding AdvancedGraphColumnWidth}" /></Grid.ColumnDefinitions>
             <Border Width="{Binding LayerPanelWidth}" Padding="6">
@@ -262,6 +363,9 @@
                         <controls:RtaimeListBox.ItemContainerStyle>
                             <Style TargetType="{x:Type controls:RtaimeListBoxItem}" BasedOn="{StaticResource {x:Type controls:RtaimeListBoxItem}}">
                                 <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:CompositingGraphControl}}}" />
+                                <Setter Property="ContextMenu" Value="{StaticResource GraphActionsMenu}" />
+                                <EventSetter Event="ContextMenuOpening" Handler="OnSelectedObjectContextOpening" />
                                 <Style.Triggers><DataTrigger Binding="{Binding MatchesSearch}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
                             </Style>
                         </controls:RtaimeListBox.ItemContainerStyle>
@@ -315,6 +419,7 @@
 
 		<Grid x:Name="GraphViewport"
 			Grid.Column="1"
+            Tag="{Binding}" ContextMenu="{StaticResource GraphActionsMenu}"
 			ClipToBounds="True"
 			MouseWheel="OnGraphMouseWheel"
 			MouseDown="OnGraphMouseDown"
@@ -424,7 +529,9 @@
 								HorizontalContentAlignment="Stretch"
 								VerticalContentAlignment="Stretch"
 								ToolTip="{Binding CapabilityLabel}" AutomationProperties.Name="{Binding Id}" PreviewMouseLeftButtonDown="OnNodeSelectionModifiers"
-                                PreviewMouseMove="OnNodeDragMove" PreviewMouseLeftButtonUp="OnNodeDragEnd" LostMouseCapture="OnNodeDragLostCapture">
+                                PreviewMouseMove="OnNodeDragMove" PreviewMouseLeftButtonUp="OnNodeDragEnd" LostMouseCapture="OnNodeDragLostCapture"
+                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:CompositingGraphControl}}}"
+                                ContextMenu="{StaticResource GraphActionsMenu}" ContextMenuOpening="OnSelectedObjectContextOpening">
 								<Border Style="{StaticResource GraphNodeBorder}">
 									<Grid>
 										<Grid.ColumnDefinitions>

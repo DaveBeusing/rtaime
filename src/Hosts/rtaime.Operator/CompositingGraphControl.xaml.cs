@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,7 +10,7 @@ using rtaime.Operator.Controls;
 
 namespace rtaime.Operator;
 
-public partial class CompositingGraphControl : UserControl
+public partial class CompositingGraphControl : UserControl, INotifyPropertyChanged
 {
 	private bool _isPanning;
 	private Point _lastPointer;
@@ -18,6 +20,66 @@ public partial class CompositingGraphControl : UserControl
     private Point _dragStart;
     private CompositingGraphNodeViewModel? _dragLayer;
     private sealed record LayerDrag(CompositingGraphViewModel Owner, string Id);
+    private CompositingGraphViewModel? _observedDraftModel;
+    private readonly HashSet<CompositingGraphNodeViewModel> _observedDraftRows = [];
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    // Derived presentation state only. The existing graph/layer VMs retain all draft ownership.
+    public bool HasUnresolvedLayerDrafts => ViewModel?.Layers.Any(row => row.HasStateDraft) == true;
+
+    private void OnWorkspaceLoaded(object sender, RoutedEventArgs e) => ObserveLayerDrafts(ViewModel);
+
+    private void ObserveLayerDrafts(CompositingGraphViewModel? model)
+    {
+        if (ReferenceEquals(_observedDraftModel, model)) return;
+        StopObservingLayerDrafts();
+        _observedDraftModel = model;
+        if (model is not null)
+        {
+            model.Layers.CollectionChanged += OnDraftLayersChanged;
+            RefreshDraftRowSubscriptions();
+        }
+        ReportDraftVisibility();
+    }
+
+    private void StopObservingLayerDrafts()
+    {
+        if (_observedDraftModel is { } old)
+            old.Layers.CollectionChanged -= OnDraftLayersChanged;
+        foreach (var row in _observedDraftRows)
+            row.PropertyChanged -= OnDraftRowChanged;
+        _observedDraftRows.Clear();
+        _observedDraftModel = null;
+    }
+
+    private void OnDraftLayersChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        RefreshDraftRowSubscriptions();
+
+    private void RefreshDraftRowSubscriptions()
+    {
+        foreach (var row in _observedDraftRows)
+            row.PropertyChanged -= OnDraftRowChanged;
+        _observedDraftRows.Clear();
+        if (_observedDraftModel is { } model)
+        {
+            foreach (var row in model.Layers)
+            {
+                row.PropertyChanged += OnDraftRowChanged;
+                _observedDraftRows.Add(row);
+            }
+        }
+        ReportDraftVisibility();
+    }
+
+    private void OnDraftRowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(CompositingGraphNodeViewModel.HasStateDraft))
+            ReportDraftVisibility();
+    }
+
+    private void ReportDraftVisibility() =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasUnresolvedLayerDrafts)));
 
 	public CompositingGraphControl()
 	{
@@ -31,6 +93,7 @@ public partial class CompositingGraphControl : UserControl
     {
         EndPan();
         EndNodeDrag();
+        ObserveLayerDrafts(IsLoaded ? ViewModel : null);
         UpdateViewport();
     }
 
@@ -194,10 +257,60 @@ public partial class CompositingGraphControl : UserControl
     private void OnWorkspaceUnloaded(object sender, RoutedEventArgs e)
     {
         EndNodeDrag(); EndPan(); _dragLayer = null;
+        StopObservingLayerDrafts();
+    }
+
+    private void OnSelectedObjectContextOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement target) SelectActionTarget(target);
+    }
+
+    private void SelectActionTarget(FrameworkElement target)
+    {
+        if (ViewModel is not { } model ||
+            target.DataContext is not CompositingGraphNodeViewModel node ||
+            !model.Nodes.Contains(node)) return;
+        model.ExtendSelection = false;
+        model.SelectNodeCommand.Execute(node);
+    }
+
+    private void OnGraphActionsClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement target) OpenGraphActions(target);
+    }
+
+    private void OpenGraphActions(FrameworkElement target)
+    {
+        if (target.ContextMenu is not { } menu) return;
+        EndNodeDrag();
+        EndPan();
+        SelectActionTarget(target);
+        menu.PlacementTarget = target;
+        menu.IsOpen = true;
+    }
+
+    private FrameworkElement? FindActionTarget(DependencyObject start)
+    {
+        for (DependencyObject? current = start; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is FrameworkElement element && element.ContextMenu is not null &&
+                ReferenceEquals(element.Tag, ViewModel))
+                return element;
+            if (ReferenceEquals(current, this)) break;
+        }
+        return null;
     }
     private void OnWorkspaceKeyDown(object sender, KeyEventArgs e)
     {
         if (ViewModel is not { } model || e.OriginalSource is TextBox) return;
+        if (e.Key == Key.Apps || (e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            var target = e.OriginalSource is DependencyObject focus
+                ? FindActionTarget(focus) ?? GraphActionsButton : GraphActionsButton;
+            OpenGraphActions(target);
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.F3) { model.ShowLayers = true; LayerSearch.Focus(); e.Handled = true; }
         else if (e.Key == Key.Home) { model.Fit(); e.Handled = true; }
         else if (e.Key is Key.Add or Key.OemPlus) { model.ZoomAt(1.12, GraphViewport.ActualWidth / 2, GraphViewport.ActualHeight / 2); e.Handled = true; }

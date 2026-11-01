@@ -38,14 +38,14 @@ processing node is identified as **GRADE** or **CHROMA KEY**, including
 explicit **OFF** state. Source and layer selection are read-only operations;
 they do not automatically render, seek, activate, recall a Scene or modify Program.
 
-The quick **ORDER DRAFT**, **VISIBILITY DRAFT** and opacity +/- controls
-create local intent only. **APPLY** commits an explicitly reviewed state draft
-and **APPLY ORDER** submits a distinct staged order, both through the existing
-Operator → Client → ControlHost → RuntimeHost mutation. **DISCARD / UNDO ORDER**
-removes local changes. `APPLYING` is not a confirmation; only matching
-Runtime-observed layer state or layer order can be labeled **CONFIRMED**.
-Rejected or ambiguous results retain the local draft rather than projecting
-it into Program.
+The **MORE** menu exposes selected-layer order, visibility and opacity staging.
+These actions change local intent only. The persistent draft footer exposes
+**APPLY LAYER**, **REVIEW**, **DISCARD**, **APPLY ORDER** and **DISCARD ORDER**
+when the corresponding draft is unresolved. Apply submits through the existing
+Operator → Client → ControlHost → RuntimeHost mutation path. `APPLYING` is
+not a confirmation; only matching Runtime-observed layer state or layer
+order can be labeled **CONFIRMED**. Rejected or ambiguous results retain
+the local draft rather than projecting it into Program.
 
 Layer state drafts retain the production revision and content identity first
 observed when editing began. Concurrent Runtime mutation invalidates implicit
@@ -55,6 +55,78 @@ also retain the ordered layer IDs, kind, content identity and production
 revision. Any mismatch forbids APPLY ORDER until DISCARD and restaging.
 Unsupported kinds, invalid numeric input, stale/disconnected/busy Runtime
 and unavailable mutation capability remain fail-closed.
+
+## Compact chrome, targeted actions and draft recovery
+
+The graph chrome prioritizes the canvas rather than a long horizontal
+mutation toolbar. It exposes **LAYERS**, **ADVANCED GRAPH**, **SELECT**,
+**PAN**, **FIT** (when the advanced graph is open), **MORE** and observed
+zoom percentage. SELECT/PAN are visibly distinguished by active mode.
+The viewport allocation continues to use existing responsive widths and the
+actual measured graph region; no new graph layout, node renderer or
+pan/zoom coordinate owner is introduced.
+
+**MORE** opens the existing styled `RtaimeContextMenu` with
+`RtaimeMenuItem` actions. Its hierarchy is:
+
+1. **Presentation:** Reset zoom to 100%; Auto layout.
+2. **Selected object:** Move layer up/down (local order draft); Toggle
+   layer visibility (local draft); Decrease/increase opacity (local draft).
+3. **FX order:** Stage selected FX earlier/later; Apply FX order draft;
+   Discard FX order draft.
+4. **Draft decisions:** Apply, Review or Discard selected layer state;
+   Apply or Discard layer order.
+
+The same menu is available from **MORE**, the graph background, a graph
+node or a layer-list item. Opening it on a node/layer selects that existing
+object through `SelectNodeCommand` and the shared Inspector; it never
+creates a second selection or mutation model. Selection and menu dismissal
+do not execute a production change. Command `CanExecute` gates reflect
+selected object kind, single vs. multiple selection, supported processing
+kind, Runtime synchronization, revision and in-flight state. Disabled
+operations retain their state/evidence tooltips. For a blank/empty graph,
+presentation commands and the menu remain available while editing
+commands are ineligible.
+
+A **draft footer** is placed above the graph/list content and remains
+reachable independent of the LAYERS panel and ADVANCED GRAPH visibility.
+It only collapses when no unresolved layer state, layer order or FX order
+draft exists. It shows each dirty layer's identity and local conflict
+evidence (including drafts on layers that are no longer selected), with
+an action to reselect the owner. It provides the currently selected layer's
+**APPLY LAYER / REVIEW / DISCARD**, plus independent
+**APPLY ORDER / DISCARD ORDER** and **APPLY FX / DISCARD FX** decisions.
+Rejected, applying, unresolved and stale/revision-conflict evidence stays
+visible as text rather than relying on color. Where the selected layer is
+not the owner of an unresolved draft, its Apply/Review/Discard are disabled
+until the operator selects the affected row. The per-layer local controls
+and shared Inspector remain available for precise draft editing.
+
+Closing the context menu never submits or discards a draft. **Apply**
+remains a deliberate guarded action using the pre-existing
+`CompositingGraphViewModel` commands; stale FX/order drafts fail closed
+until explicit Discard and restaging, while compatible same-content layer
+state drafts may use the existing Review/Apply flow. A changed layer
+content identity cannot be re-reviewed into the replacement. No additional
+ControlHost, RuntimeHost or Program mutation path is introduced.
+
+**Keyboard and pointer:** Shift+F10 or the Menu key opens the focused
+object's menu, with **MORE** as a fallback. Context-menu invocation on a
+node/layer follows the existing selection path. F3 still focuses layer
+search; Home fits; +/- zoom; the mouse wheel zooms around the pointer;
+middle mouse or PAN drags the viewport; Alt+drag moves a graph node
+locally; Ctrl+Arrow nudges the focused graph selection. Keyboard handling
+does not intercept text editing. The menu does not modify pointer capture
+or synthesize another graph drag, and the footer occupies measured layout
+space rather than introducing a second scrollable toolbar.
+
+**Qualification limits:** Structural menu/binding tests and the
+existing CompositingGraphAuthoring/CompositingWorkspaceQualification
+regressions cover the command routes, draft state, viewport and selection
+contract. Windows WPF rendering, small viewport and DPI behavior,
+high-contrast focus accessibility and physical GPU/display acceptance
+require their actual Windows/physical qualifications; a static UI test
+alone cannot establish those results.
 
 ## Node graph visual contract
 
@@ -92,17 +164,26 @@ If the authoritative Preview or Program source identifier is absent from the cur
 
 The graph uses stable node identities. Ordinary status refreshes update the existing node view models in place and do not reset node positions. Only changes to the projected topology invoke deterministic Auto Layout. Source snapshot transactions and thumbnail updates do not rebuild the graph. The graph culls offscreen nodes and connections before creating Canvas visuals; the layer list uses recycling virtualization and supports every layer admitted by the current Runtime contract.
 
-SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
+SELECT projects the chosen node into the existing Inspector. **LAYERS**, **ADVANCED GRAPH**,
+**SELECT**, **PAN** and **FIT** remain the compact, non-scrolling graph chrome.
+Mouse-wheel zoom and middle-mouse panning remain available. The **MORE**
+menu holds **Reset zoom to 100%** and **Auto layout**, both presentation-only
+commands that leave Runtime routing and Program unchanged.
 
-Arbitrary source/routing topology rewiring is not exposed by the current contracts and the graph still provides no decorative REWIRE action. The toolbar identifies the **CONFIRMED LAYER STACK** as read-only Runtime evidence. Its fast bounded commands stage, but do not apply, these values:
+Arbitrary source/routing topology rewiring is not exposed by the current contracts
+and the graph still provides no decorative REWIRE action. The selected-object
+section of the menu stages, but does not apply:
 
-- propose moving the selected active layer one position lower or higher;
-- propose toggling visibility for bitmap graphics or Production CG;
-- adjust the locally staged 8-bit opacity for bitmap graphics or Production CG.
+- moving the selected active layer earlier/later in order;
+- toggling visibility for bitmap graphics or Production CG;
+- decreasing/increasing the local 8-bit opacity for bitmap graphics or Production CG.
+
+The shared command owners retain their existing capability and revision gates;
+disabled actions cannot be used to bypass authority.
 
 The LAYERS panel shares the same node identities and selection as the graph. It displays confirmed order, visibility, opacity, content and health. Search and per-layer collapse are local presentation state. Ctrl/Shift selection provides a read-only common/mixed review in the shared Inspector; single-layer editing resumes after selecting one layer. Dragging a layer stages a local insert-before order; APPLY ORDER submits it and UNDO ORDER discards it. Visibility and integral 0..255 opacity fields also remain local until APPLY LAYER; invalid numeric input disables submission. Rejection preserves the draft and its confirmed comparison. REVIEW LAYER selects its existing Inspector entry.
 
-Layer selection and quick-toolbar draft commands remain presentation-only. Only an explicit APPLY, APPLY ORDER or governed Inspector mutation sends the existing client command through ControlHost to RuntimeHost, displays the in-flight state and refreshes the graph from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
+Layer selection and selected-object staging commands remain presentation-only. Only an explicit APPLY, APPLY ORDER or governed Inspector mutation sends the existing client command through ControlHost to RuntimeHost, displays the in-flight state and refreshes the graph from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
 
 The authoritative model supports an ordered stack of 0..4 typed processing nodes per supported layer. Selecting a Processing graph node resolves its owning layer and stable node identity into the shared Inspector. The Inspector can add Color Grade or Chroma Key nodes while capacity remains, edit and enable/disable the selected typed node, move it earlier or later, and remove it. Color Grade exposes Brightness in -1..1 and Contrast/Saturation in 0..2; Chroma Key exposes 8-bit key RGB plus normalized Tolerance, Softness and Spill Suppression. Each operation derives a validated next stack from the last confirmed stack and submits that complete stack through the existing Client → ControlHost → RuntimeHost mutation path. Dedicated Program-pixel color picking, arbitrary shader/plugin configuration and free graph rewiring remain unsupported.
 
@@ -140,8 +221,8 @@ nonexecuting keyframes are not authored or advertised as live.
 
 The closed production processing stack already supports at most four
 Color Grade/Chroma Key nodes per authoritative layer. The advanced graph can
-locally stage a selected processing node one position earlier/later using
-**FX DRAFT ←/→**. The draft retains production revision, owning layer content
+locally stage a selected processing node one position earlier/later through
+**Stage selected FX earlier/later** in the **MORE** menu. The draft retains production revision, owning layer content
 identity, layer kind and the complete confirmed typed baseline. **APPLY FX
 ORDER** checks all those identities again, validates the same bounded node
 set, then submits the reordered stack through the **existing** Operator →
@@ -154,11 +235,13 @@ Program and active Scene unchanged. Other processing operations (add,
 enable/disable, remove, static parameter edits) remain owned by the shared
 Inspector; this graph does not create a competing edit context.
 
-The header exposes the observed production revision, topology verification
-and FX draft status separately from saved Scene intent and Program pixels.
-Neither a valid projection nor a confirmed Control revision proves physical
-monitor/output presentation; existing dedicated qualification is still
-required.
+The read-only overview exposes the observed production revision, topology
+verification and FX status separately from saved Scene intent and Program
+pixels. While an FX order draft exists, the draft footer keeps **APPLY FX**,
+**DISCARD FX** and the revision/conflict evidence visible even when the
+advanced graph is collapsed. Neither a valid projection nor a confirmed
+Control revision proves physical monitor/output presentation; existing
+dedicated qualification is still required.
 
 ## Preview
 
