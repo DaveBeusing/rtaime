@@ -156,22 +156,27 @@
                     Height="285" MinHeight="180"
                     AutomationProperties.Name="Editable four-corner canvas stage with keyboard nudging and zoom" />
             </Border>
-            <WrapPanel Margin="0,0,0,5">
-                <controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}" IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeButton Content="ZOOM +" Command="{Binding ZoomInCommand}" IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeButton Content="ZOOM −" Command="{Binding ZoomOutCommand}" IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeCheckBox IsChecked="{Binding SnapEnabled, Mode=TwoWay}"
-                    Margin="2,4,8,0"><TextBlock Text="Snap 10" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
-                <controls:RtaimeCheckBox IsChecked="{Binding ShowGuides, Mode=TwoWay}"
-                    Margin="2,4,8,0"><TextBlock Text="Grid / rulers" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
-                <controls:RtaimeCheckBox IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}"
-                    AutomationProperties.Name="Show optional logical design safe area guides"
-                    Margin="2,4,8,0"><TextBlock Text="Design safe 5% / 10%" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
-                <controls:RtaimeButton Content="CENTER X" Command="{Binding AlignHorizontalCommand}" IsCompact="True"
-                    Margin="0,0,5,4" ToolTip="Align selected quad's corner average to the logical canvas horizontal center; local draft only." />
-                <controls:RtaimeButton Content="CENTER Y" Command="{Binding AlignVerticalCommand}" IsCompact="True"
-                    ToolTip="Align selected quad's corner average to the logical canvas vertical center; local draft only." />
-            </WrapPanel>
+            <StackPanel x:Name="GuideDetails" Visibility="Collapsed" Margin="0,0,0,5">
+                <TextBlock Text="DESIGN GUIDES · VIEW ONLY" Style="{StaticResource OperatorLabel}" />
+                <WrapPanel>
+                    <controls:RtaimeCheckBox IsChecked="{Binding SnapEnabled, Mode=TwoWay}"
+                        Margin="2,4,8,0"><TextBlock Text="Snap 10" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                    <controls:RtaimeCheckBox IsChecked="{Binding ShowGuides, Mode=TwoWay}"
+                        Margin="2,4,8,0"><TextBlock Text="Grid / rulers" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                    <controls:RtaimeCheckBox IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}"
+                        AutomationProperties.Name="Show optional logical design safe area guides"
+                        Margin="2,4,8,0"><TextBlock Text="Design safe 5% / 10%" Style="{StaticResource OperatorLabel}" /></controls:RtaimeCheckBox>
+                </WrapPanel>
+            </StackPanel>
+            <StackPanel x:Name="AlignmentTools" Visibility="Collapsed" Margin="0,0,0,5">
+                <TextBlock Text="ALIGN SELECTED SURFACE · LOCAL DRAFT" Style="{StaticResource OperatorLabel}" />
+                <WrapPanel>
+                    <controls:RtaimeButton Content="CENTER X" Command="{Binding AlignHorizontalCommand}" IsCompact="True"
+                        Margin="0,0,5,4" ToolTip="Align selected quad to the logical canvas horizontal center; local draft only." />
+                    <controls:RtaimeButton Content="CENTER Y" Command="{Binding AlignVerticalCommand}" IsCompact="True"
+                        ToolTip="Align selected quad to the logical canvas vertical center; local draft only." />
+                </WrapPanel>
+            </StackPanel>
             <TextBlock Text="Drag surface to move rigidly; drag corner handles to warp/resize; Alt-drag rotates. Middle-drag pans, wheel zooms; arrows nudge 1 px (Shift: 10 px). Ctrl bypasses snapping. Guides/safe rectangles are logical design aids, never output calibration."
                 Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
             <TextBlock Text="{Binding PointerCoordinates}" Style="{StaticResource OperatorLabel}"
@@ -188,10 +193,6 @@
                 AutomationProperties.Name="Select actual governed bus or configured source for mapped surface"
                 Margin="0,0,0,8" />
 
-            <controls:RtaimeButton Content="ADVANCED GEOMETRY / BLEND"
-                Command="{Binding ToggleGeometryDetailsCommand}" IsCompact="True"
-                AutomationProperties.Name="Show or hide numeric corner crop and edge blend editors"
-                Margin="0,4,0,8" />
             <StackPanel>
                 <StackPanel.Style>
                     <Style TargetType="StackPanel">
