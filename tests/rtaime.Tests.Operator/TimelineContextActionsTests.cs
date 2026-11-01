@@ -1,6 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -10,6 +12,12 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
@@ -161,6 +169,150 @@ public sealed class TimelineContextActionsTests
         Assert.Contains("Key.Apps", source, StringComparison.Ordinal);
         Assert.Contains("Key.F10", source, StringComparison.Ordinal);
         Assert.Contains("FindAncestor<TextBox>", source, StringComparison.Ordinal);
+    }
+
+    private const string ChildEnvironment = "RTAIME_TIMELINE_MENUS_WPF_CHILD";
+
+    [Fact]
+    public async Task Real_Wpf_menus_fit_supported_viewports_and_do_not_issue_edits_or_seeks()
+    {
+        // WPF Application resources are process-owned; qualify in a fresh STA child.
+        if (Environment.GetEnvironmentVariable(ChildEnvironment) != "1")
+        {
+            var psi = new ProcessStartInfo("dotnet")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            psi.ArgumentList.Add("vstest");
+            psi.ArgumentList.Add(typeof(TimelineContextActionsTests).Assembly.Location);
+            psi.ArgumentList.Add("--TestCaseFilter:FullyQualifiedName=rtaime.Tests.Operator.TimelineContextActionsTests." +
+                nameof(Real_Wpf_menus_fit_supported_viewports_and_do_not_issue_edits_or_seeks));
+            psi.Environment[ChildEnvironment] = "1";
+            using var process = Process.Start(psi)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(75));
+                Assert.True(process.ExitCode == 0,
+                    $"Timeline WPF qualification failed: {process.ExitCode}{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+            return;
+        }
+
+        RunSta(() =>
+        {
+            OperatorResourceApplication? app = null;
+            Window? window = null;
+            RtaimeContextMenu? openMenu = null;
+            using var editor = new SequenceTimelineEditorViewModel(null);
+            var media = new MediaTimelineViewModel(new MediaTimelineController());
+            try
+            {
+                app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                app.InitializeComponent();
+                var sequence = new SequenceTimelineControl { DataContext = editor };
+                window = new Window
+                {
+                    Width = 960, Height = 540, MinWidth = 0, MinHeight = 0,
+                    ShowInTaskbar = false, Content = sequence
+                };
+                window.Show();
+                window.UpdateLayout();
+                Drain();
+                var edit = Assert.IsType<RtaimeButton>(sequence.FindName("SequenceEditActionsButton"));
+                var track = Assert.IsType<RtaimeButton>(sequence.FindName("SequenceTrackActionsButton"));
+                var tools = Assert.IsType<RtaimeButton>(sequence.FindName("SequenceToolsActionsButton"));
+                foreach (var (width, height) in new[] { (960d, 540d), (1280d, 720d), (1600d, 900d) })
+                {
+                    window.Width = width; window.Height = height;
+                    window.UpdateLayout(); Drain();
+                    var ruler = Assert.IsType<Border>(sequence.FindName("SequenceRuler"));
+                    var viewport = Assert.IsType<Grid>(sequence.FindName("SequenceTrackViewport"));
+                    Assert.True(ruler.ActualWidth > 0 && viewport.ActualWidth > 0);
+                    foreach (var anchor in new[] { edit, track, tools })
+                    {
+                        Assert.True(anchor.IsVisible);
+                        anchor.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, anchor));
+                        Drain();
+                        openMenu = Assert.IsType<RtaimeContextMenu>(anchor.ContextMenu);
+                        Assert.True(openMenu.IsOpen);
+                        Assert.Same(anchor, openMenu.PlacementTarget);
+                        openMenu.IsOpen = false;
+                    }
+                    Assert.Equal(0, editor.EditCursorTick);
+                    Assert.Null(editor.SelectedClip);
+                    Assert.False(editor.Playout.TakeCommand.CanExecute(null));
+                }
+                var first = Assert.IsType<RtaimeMenuItem>(edit.ContextMenu!.Items[0]);
+                Assert.Same(editor.SplitCommand, first.Command);
+                window.Close(); window = null;
+
+                var timeline = new MediaTimelineControl { DataContext = media };
+                window = new Window
+                {
+                    Width = 960, Height = 540, MinWidth = 0, MinHeight = 0,
+                    ShowInTaskbar = false, Content = timeline
+                };
+                window.Show(); window.UpdateLayout(); Drain();
+                var cursor = Assert.IsType<RtaimeButton>(timeline.FindName("MediaTimelineCursorMenuButton"));
+                var mediaTools = Assert.IsType<RtaimeButton>(timeline.FindName("MediaTimelineToolsActionsButton"));
+                foreach (var anchor in new[] { cursor, mediaTools })
+                {
+                    anchor.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, anchor));
+                    Drain();
+                    openMenu = Assert.IsType<RtaimeContextMenu>(anchor.ContextMenu);
+                    Assert.True(openMenu.IsOpen);
+                    Assert.Same(anchor, openMenu.PlacementTarget);
+                    openMenu.IsOpen = false;
+                }
+                Assert.Same(media.UndoDraftCommand,
+                    Assert.IsType<RtaimeMenuItem>(cursor.ContextMenu!.Items[0]).Command);
+                Assert.False(media.HasPendingSeek);
+                Assert.Equal(0, media.ConfirmedFrame);
+            }
+            finally
+            {
+                if (openMenu is not null) openMenu.IsOpen = false;
+                window?.Close();
+                media.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                app?.Shutdown();
+            }
+        });
+    }
+
+    private static void Drain()
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+    }
+
+    private static void RunSta(Action work)
+    {
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try { work(); }
+            catch (Exception exception) { error = exception; }
+            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
+        }) { IsBackground = true, Name = "Timeline menu and viewport qualification" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(60)), "Timeline WPF menu qualification timed out.");
+        if (error is not null) ExceptionDispatchInfo.Capture(error).Throw();
     }
 
     private static XElement Menu(XDocument document, string key) =>
