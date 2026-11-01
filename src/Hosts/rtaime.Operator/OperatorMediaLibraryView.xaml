@@ -5,6 +5,21 @@
     xmlns:controls="clr-namespace:rtaime.Operator.Controls"
     xmlns:local="clr-namespace:rtaime.Operator"
     Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <UserControl.Resources>
+        <!-- New instance per realized Grid/List item; never share placement or selection across recycled tiles. -->
+        <controls:RtaimeContextMenu x:Key="MediaAssetContextMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+            <controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+            <controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+            <controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+            <controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+            <controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
+            <controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+        </controls:RtaimeContextMenu>
+    </UserControl.Resources>
 	<Grid>
 		<Grid.RowDefinitions>
 			<RowDefinition Height="34" />
@@ -30,9 +45,6 @@
 					TextTrimming="CharacterEllipsis" />
 			</StackPanel>
 			<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <controls:RtaimeButton Content="IMPORT MEDIA" Command="{Binding Context.MediaPool.ImportCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                    IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Import media into catalogue"
-                    ToolTip="Import local media into the existing authoritative catalogue. Review source identity before Preview." />
 				<controls:RtaimeIconButton
 					IconData="{StaticResource RtaimeIconAddGeometry}"
 					Click="OnMediaPoolAddClick"
@@ -42,17 +54,35 @@
 					ToolTip="Add media or a generated test signal."
 					AutomationProperties.Name="Add media or generator">
 					<controls:RtaimeIconButton.ContextMenu>
-						<controls:RtaimeContextMenu>
-							<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
-							<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
-							<controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
-							<controls:RtaimeMenuSeparator />
-							<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
-							<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
-						</controls:RtaimeContextMenu>
+                        <controls:RtaimeContextMenu Opened="OnMediaLibraryAddMenuOpened">
+                            <controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
+                            <controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
+                        </controls:RtaimeContextMenu>
 					</controls:RtaimeIconButton.ContextMenu>
 				</controls:RtaimeIconButton>
+                <controls:RtaimeIconButton
+                    x:Name="MediaLibraryToolsMenuButton"
+                    IconData="{StaticResource RtaimeIconMoreGeometry}"
+                    Click="OnMediaPoolAddClick"
+                    Width="26" Height="26" Margin="0,0,4,0"
+                    ToolTip="Library tools: refresh, selection, Smart Bins, preparation and reports."
+                    AutomationProperties.Name="Media Library tools menu">
+                    <controls:RtaimeIconButton.ContextMenu>
+                        <controls:RtaimeContextMenu Opened="OnMediaLibraryToolsMenuOpened">
+                            <controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
+                            <controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="Smart Bins and filters…" Click="OnMediaLibraryShowToolsClick" />
+                            <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+                            <controls:RtaimeMenuItem Header="Batch removal…" Click="OnMediaLibraryBatchRemoveClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="Offline QC results…" Click="OnMediaLibraryShowQcDetailsClick" />
+                            <controls:RtaimeMenuItem Header="ADM track metadata…" Click="OnMediaLibraryShowAdmDetailsClick" />
+                        </controls:RtaimeContextMenu>
+                    </controls:RtaimeIconButton.ContextMenu>
+                </controls:RtaimeIconButton>
 				<controls:RtaimeIconButton
 					IconData="{StaticResource RtaimeIconGridGeometry}"
 					Command="{Binding Context.MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
@@ -143,34 +173,47 @@
                                 Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
                                 ToolTip="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
                         </StackPanel>
-                        <controls:RtaimeButton Grid.Column="1" Content="MORE TOOLS" Click="OnMediaLibraryToggleToolsClick"
-                            IsCompact="True" Margin="8,0,0,0" AutomationProperties.Name="Show advanced Media Library tools"
-                            ToolTip="Smart Bins, metadata filters, representative preflight options, and bounded batch management." />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <controls:RtaimeIconButton x:Name="MediaLibrarySelectionMenuButton"
+                                IconData="{StaticResource RtaimeIconMoreGeometry}"
+                                Click="OnMediaPoolAddClick"
+                                Width="26" Height="26" Margin="6,0,0,0"
+                                AutomationProperties.Name="Media Library selection actions"
+                                ToolTip="Selected asset actions, preparation, offline QC and ADM metadata. Enter, Space or Shift+F10.">
+                                <controls:RtaimeIconButton.ContextMenu>
+                                    <controls:RtaimeContextMenu Opened="OnMediaLibrarySelectionMenuOpened" Closed="OnMediaLibrarySelectionMenuClosed">
+                                        <controls:RtaimeMenuItem Header="Inspect selection…" Click="OnMediaLibraryInspectClick" />
+                                        <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+                                        <controls:RtaimeMenuItem Header="Relink selected media…" Click="OnMediaLibraryRelinkSelectedClick" />
+                                        <controls:RtaimeMenuItem Header="Batch · Remove selected…" Click="OnMediaLibraryBatchRemoveClick" />
+                                        <controls:RtaimeMenuSeparator />
+                                        <controls:RtaimeMenuItem Header="Start offline QC" Click="OnMediaLibraryStartQcClick" />
+                                        <controls:RtaimeMenuItem Header="Cancel QC" Click="OnMediaLibraryCancelQcClick" />
+                                        <controls:RtaimeMenuItem Header="QC reports and checks…" Click="OnMediaLibraryShowQcDetailsClick" />
+                                        <controls:RtaimeMenuSeparator />
+                                        <controls:RtaimeMenuItem Header="Import ADM…" Click="OnMediaAdmImportClick" />
+                                        <controls:RtaimeMenuItem Header="ADM track tools…" Click="OnMediaLibraryShowAdmDetailsClick" />
+                                    </controls:RtaimeContextMenu>
+                                </controls:RtaimeIconButton.ContextMenu>
+                            </controls:RtaimeIconButton>
+                            <controls:RtaimeButton Content="MORE TOOLS" Click="OnMediaLibraryToggleToolsClick"
+                                IsCompact="True" Margin="6,0,0,0"
+                                AutomationProperties.Name="Show advanced Media Library tools"
+                                ToolTip="On-demand Smart Bins, metadata filters, preparation options and bounded batch review." />
+                        </StackPanel>
                     </Grid>
                     <WrapPanel Margin="0,6,0,0">
-                        <controls:RtaimeButton Content="INSPECT" Click="OnMediaLibraryInspectClick" IsCompact="True"
-                            IsEnabled="{Binding Context.MediaPool.CanInspectLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                            Margin="0,0,5,0" AutomationProperties.Name="Inspect selected media evidence" />
-                        <controls:RtaimeButton Content="PREPARE OPTIONS" Click="OnMediaPoolPrepareClick" IsCompact="True"
-                            IsEnabled="{Binding Context.MediaPool.CanPrepareLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                            Margin="0,0,5,0" AutomationProperties.Name="Show representative media preparation options"
-                            ToolTip="Preflight does not retain a decoder or route Preview. Open in Preview separately." />
                         <controls:RtaimeButton Content="OPEN PREVIEW" Click="OnMediaLibraryOpenSelectedPreviewClick" IsCompact="True"
                             IsEnabled="{Binding Context.MediaPool.CanOpenLibraryPreview, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                             Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorPreviewBrush}"
                             Margin="0,0,5,0" AutomationProperties.Name="Open selected asset in confirmed Preview"
                             ToolTip="Open resident media, then request authoritative Preview route; no Program Take." />
-                        <controls:RtaimeButton Content="RELINK…" Click="OnMediaLibraryRelinkSelectedClick" IsCompact="True"
-                            IsEnabled="{Binding Context.MediaPool.CanRelinkLibrarySelection, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                            AutomationProperties.Name="Relink selected missing or moved media" />
                     </WrapPanel>
-                    <WrapPanel Margin="0,7,0,0">
+                    <StackPanel x:Name="MediaQcDetails" Visibility="Collapsed">
+                        <WrapPanel Margin="0,7,0,0">
                         <controls:RtaimeButton Content="START OFFLINE QC" IsCompact="True" Margin="0,0,5,0"
                             Command="{Binding Context.MediaPool.StartQcCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                             AutomationProperties.Name="Run non-production file quality checks on selected catalogued clip" />
-                        <controls:RtaimeButton Content="CANCEL QC" IsCompact="True" Margin="0,0,5,0"
-                            Command="{Binding Context.MediaPool.CancelQcCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                            AutomationProperties.Name="Cancel selected offline QC job" />
                         <controls:RtaimeButton Content="IMPORT QC XML" IsCompact="True" Margin="0,0,5,0"
                             Click="OnMediaQcImportClick"
                             IsEnabled="{Binding Context.MediaPool.CanStartQc, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
@@ -216,6 +259,8 @@
                             </controls:RtaimeScrollViewer>
                         </StackPanel>
                     </Border>
+                    </StackPanel>
+                    <StackPanel x:Name="MediaAdmDetails" Visibility="Collapsed">
                     <WrapPanel Margin="0,6,0,0">
                         <controls:RtaimeButton Content="IMPORT ADM…" IsCompact="True" Margin="0,0,5,0"
                             Click="OnMediaAdmImportClick"
@@ -271,6 +316,103 @@
                             </controls:RtaimeScrollViewer>
                         </StackPanel>
                     </Border>
+                    </StackPanel>
+                    <StackPanel x:Name="MediaLibraryActivityStrip" Margin="0,4,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Context.MediaPool.QcStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="220"
+                                AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media offline QC progress and recovery">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Context.MediaPool.CanCancelQc, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Context.MediaPool.HasQcResults, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Visibility, ElementName=MediaQcDetails}" Value="Visible">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <controls:RtaimeButton Content="CANCEL QC" IsCompact="True" Margin="5,0,0,0"
+                                Command="{Binding Context.MediaPool.CancelQcCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                AutomationProperties.Name="Cancel selected offline QC job">
+                                <controls:RtaimeButton.Style>
+                                    <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Context.MediaPool.CanCancelQc, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </controls:RtaimeButton.Style>
+                            </controls:RtaimeButton>
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Context.MediaPool.PreparationVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="Visible">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="{Binding Context.MediaPool.PreparationStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                AutomationProperties.Name="Preparation progress and recovery status" />
+                            <controls:RtaimeButton Content="CANCEL PREPARATION" IsCompact="True"
+                                Command="{Binding Context.MediaPool.CancelPreparationCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                AutomationProperties.Name="Cancel active representative preparation">
+                                <controls:RtaimeButton.Style>
+                                    <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Context.MediaPool.IsPreparing, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </controls:RtaimeButton.Style>
+                            </controls:RtaimeButton>
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Context.MediaPool.BatchVisibility, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="Visible">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="{Binding Context.MediaPool.BatchStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                AutomationProperties.Name="Catalogue batch status and unresolved results" />
+                            <controls:RtaimeButton Content="STOP BATCH" IsCompact="True"
+                                Command="{Binding Context.MediaPool.CancelBatchCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
+                                AutomationProperties.Name="Stop active catalogue batch">
+                                <controls:RtaimeButton.Style>
+                                    <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Context.MediaPool.BatchRunning, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </controls:RtaimeButton.Style>
+                            </controls:RtaimeButton>
+                        </StackPanel>
+                    </StackPanel>
                     <TextBlock Text="{Binding Context.MediaPool.LibraryJourneyFeedback, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
                         Style="{StaticResource OperatorLabel}" Margin="0,6,0,0" TextWrapping="Wrap"
                         AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media Library next action and confirmation" />
@@ -509,7 +651,7 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
+						<controls:RtaimeMediaTile ContextMenu="{StaticResource MediaAssetContextMenu}" MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
 							Thumbnail="{Binding DisplayThumbnail}"
 							ScrubLabel="{Binding ScrubPositionLabel}"
 							AssetName="{Binding Name}"
@@ -520,19 +662,6 @@
 							AutomationProperties.HelpText="Hover to inspect an independent asset frame; Ctrl plus Left or Right changes scrub position. Preview and Program are never seeked by scrubbing."
 							IsOnline="{Binding IsOnline}"
 							IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
-							<controls:RtaimeMediaTile.ContextMenu>
-								<controls:RtaimeContextMenu>
-									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
-									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
-									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
-									<controls:RtaimeMenuSeparator />
-									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
-									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
-									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
-									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
-								</controls:RtaimeContextMenu>
-							</controls:RtaimeMediaTile.ContextMenu>
 							<StackPanel Orientation="Horizontal">
 								<controls:RtaimeButton
 									Content="PVW"
@@ -588,20 +717,7 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<Grid MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
-							<Grid.ContextMenu>
-								<controls:RtaimeContextMenu>
-									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
-									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
-									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
-									<controls:RtaimeMenuSeparator />
-									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
-									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
-									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
-									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
-								</controls:RtaimeContextMenu>
-							</Grid.ContextMenu>
+						<Grid ContextMenu="{StaticResource MediaAssetContextMenu}" MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="56" />
 								<ColumnDefinition Width="*" />
