@@ -266,8 +266,6 @@
                                     IsCompact="True" Margin="0,2,4,2" ToolTip="Admit the exact saved revision and current RuntimeHost epoch." />
                                 <controls:RtaimeButton Content="PREVIEW" Command="{Binding Playout.ActivatePreviewCommand}"
                                     IsCompact="True" Margin="0,2,4,2" ToolTip="Bind the prepared native source to the existing confirmed Preview route." />
-                                <controls:RtaimeButton Content="OBSERVE" Command="{Binding Playout.ObserveCommand}"
-                                    IsCompact="True" Margin="0,2,6,2" ToolTip="Read genuine output evidence. Native PLAYING alone is not Preview-ready." />
                                 <controls:RtaimeButton Content="PLAY" Command="{Binding Playout.PlayCommand}"
                                     IsCompact="True" Margin="0,2,3,2" ToolTip="Play admitted native shuttle. Use OBSERVE to verify actual Preview frames." />
                                 <controls:RtaimeButton Content="PAUSE" Command="{Binding Playout.PauseCommand}"
