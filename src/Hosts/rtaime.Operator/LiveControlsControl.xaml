@@ -142,72 +142,7 @@
 					</StackPanel>
 				</Border>
 
-				<Border Style="{StaticResource LiveSection}">
-					<StackPanel>
-						<DockPanel Margin="0,0,0,8">
-							<TextBlock Text="LAYER STACK (PGM)" Style="{StaticResource OperatorSectionTitle}" />
-							<controls:RtaimeStatusBadge
-								Status="{x:Static controls:RtaimeStatusKind.Program}"
-								Content="{Binding GraphicsState}"
-								ShowIndicator="False"
-								DockPanel.Dock="Right" />
-						</DockPanel>
-
-						<Border Style="{StaticResource LiveLayerRow}">
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="26" />
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<TextBlock Text="01" Style="{StaticResource OperatorLabel}" FontFamily="{DynamicResource OperatorTimecodeFontFamily}" VerticalAlignment="Center" />
-								<StackPanel Grid.Column="1" VerticalAlignment="Center">
-									<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-									<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
-								</StackPanel>
-								<controls:RtaimeStatusBadge Grid.Column="2"
-									Status="{x:Static controls:RtaimeStatusKind.Program}"
-									Content="{Binding GraphicsVisible, StringFormat=VISIBLE {0}}"
-									ShowIndicator="False"
-									VerticalAlignment="Center" />
-							</Grid>
-						</Border>
-
-                        <TextBlock Text="{Binding CompositingLayers.Count, StringFormat=Confirmed compositing layers: {0}}"
-                            Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
-                        <controls:RtaimeButton Content="SHOW LAYER SETTINGS" Click="ToggleSecondaryDetails_Click" Tag="LayerDetails"
-                            AutomationProperties.Name="Show layer settings" IsCompact="True" HorizontalAlignment="Left"
-                            Margin="0,5,0,0" ToolTip="Inspect confirmed layer rows and request a governed graphics visibility change." />
-                        <StackPanel x:Name="LayerDetails" Visibility="Collapsed" Margin="0,6,0,0">
-                        <ItemsControl ItemsSource="{Binding CompositingLayers}" Margin="0,4,0,0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource LiveLayerRow}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding LayerId}" Margin="0,0,8,0" />
-                                            <TextBlock Text="{Binding Visible, StringFormat=VISIBLE {0}}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-						<controls:RtaimeButton
-							Content="SHOW / HIDE CURRENT LAYER"
-							Command="{Binding ToggleGraphicsCommand}"
-							IsCompact="True"
-							Margin="0,6,0,0"
-							ToolTip="Reuse the existing governed graphics visibility command." />
-						<TextBlock
-							Text="Confirmed layers below. Edit the layer stack in Compositing."
-							Style="{StaticResource OperatorLabel}"
-							FontSize="{StaticResource OperatorFontSizeMicro}"
-							TextWrapping="Wrap"
-							Margin="0,5,0,0" />
-                        </StackPanel>
-					</StackPanel>
-				</Border>
-
-                <Border Style="{StaticResource LiveSection}">
+<Border Style="{StaticResource LiveSection}">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,5" LastChildFill="False">
                             <TextBlock Text="STREAM &amp; RECORD" Style="{StaticResource OperatorSectionTitle}" />
@@ -318,7 +253,72 @@
                     </StackPanel>
                 </Border>
 
-				<Border Style="{StaticResource LiveSection}" Margin="0">
+				<Border Style="{StaticResource LiveSection}">
+					<StackPanel>
+						<DockPanel Margin="0,0,0,8">
+							<TextBlock Text="LAYER STACK (PGM)" Style="{StaticResource OperatorSectionTitle}" />
+							<controls:RtaimeStatusBadge
+								Status="{x:Static controls:RtaimeStatusKind.Program}"
+								Content="{Binding GraphicsState}"
+								ShowIndicator="False"
+								DockPanel.Dock="Right" />
+						</DockPanel>
+
+						<Border Style="{StaticResource LiveLayerRow}">
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="26" />
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBlock Text="01" Style="{StaticResource OperatorLabel}" FontFamily="{DynamicResource OperatorTimecodeFontFamily}" VerticalAlignment="Center" />
+								<StackPanel Grid.Column="1" VerticalAlignment="Center">
+									<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+									<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								</StackPanel>
+								<controls:RtaimeStatusBadge Grid.Column="2"
+									Status="{x:Static controls:RtaimeStatusKind.Program}"
+									Content="{Binding GraphicsVisible, StringFormat=VISIBLE {0}}"
+									ShowIndicator="False"
+									VerticalAlignment="Center" />
+							</Grid>
+						</Border>
+
+                        <TextBlock Text="{Binding CompositingLayers.Count, StringFormat=Confirmed compositing layers: {0}}"
+                            Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
+                        <controls:RtaimeButton Content="SHOW LAYER SETTINGS" Click="ToggleSecondaryDetails_Click" Tag="LayerDetails"
+                            AutomationProperties.Name="Show layer settings" IsCompact="True" HorizontalAlignment="Left"
+                            Margin="0,5,0,0" ToolTip="Inspect confirmed layer rows and request a governed graphics visibility change." />
+                        <StackPanel x:Name="LayerDetails" Visibility="Collapsed" Margin="0,6,0,0">
+                        <ItemsControl ItemsSource="{Binding CompositingLayers}" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource LiveLayerRow}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding LayerId}" Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding Visible, StringFormat=VISIBLE {0}}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+						<controls:RtaimeButton
+							Content="SHOW / HIDE CURRENT LAYER"
+							Command="{Binding ToggleGraphicsCommand}"
+							IsCompact="True"
+							Margin="0,6,0,0"
+							ToolTip="Reuse the existing governed graphics visibility command." />
+						<TextBlock
+							Text="Confirmed layers below. Edit the layer stack in Compositing."
+							Style="{StaticResource OperatorLabel}"
+							FontSize="{StaticResource OperatorFontSizeMicro}"
+							TextWrapping="Wrap"
+							Margin="0,5,0,0" />
+                        </StackPanel>
+					</StackPanel>
+				</Border>
+
+                				<Border Style="{StaticResource LiveSection}" Margin="0">
 					<StackPanel>
 						<TextBlock Text="ALERTS &amp; NOTIFICATIONS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
 
