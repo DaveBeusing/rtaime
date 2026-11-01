@@ -90,8 +90,8 @@ increase of the canonical 2,048-clip saved-library cap.
 
 ### Source-backed audio waveform observation
 
-For a selected visible audio clip, `PCM` requests an actual native
-waveform through the existing independently admitted
+For a selected visible audio clip, **TOOLS → Generate observed audio waveform**
+requests an actual native waveform through the existing independently admitted
 `IMediaAssetCatalogClient` → ControlHost → Runtime analysis API.
 It maps clip Source IN/OUT and the visible authoring range into exact
 TimeSpan ticks, bounded to one 120-second / 256-bucket request. The
@@ -119,20 +119,31 @@ the live sequence transport. Visual placement of returned stills alongside
 the existing audio PCM waveform remains a separate UI integration step.
 Unsupported/offline/truncated clips must remain visibly unverified.
 
-### Playback boundary
+### Playback boundary and governed sequence playout
 
-Durable `rtaime.sequence-authoring.v1` List/Get still reports
-`PlaybackState=UNAVAILABLE`, without an active execution revision.
-The existing independent MP4 frame-analysis request is not a
-transport, and the currently available J/K/L handling in legacy
-Media Deck is guarded ordinary-rate control rather than a
-versioned sequence Preview Shuttle. There is **no accepted Preview
-Shuttle contract in master**. Accordingly the saved sequence editor
-does not expose an inactive Play/Take button or claim a confirmed
-Program picture. A real Client→Control→Runtime authorization,
-prepared source and output correlation, decoupled Shuttle semantics,
-and native two-video/two-audio combined Program sink qualification
-are still required for the full editing-to-Program journey.
+Saved sequence authoring is distinct from native playout. The current
+Operator `SequenceOperatorPlayoutViewModel` exposes an explicit playout
+mode using the existing sequence authoring, preparation, shuttle and
+output clients. The user must deliberately PREPARE an exact saved
+revision and RuntimeHost epoch, activate its confirmed Preview route,
+observe real output, ARM one transaction and explicitly TAKE.
+A shuttle PLAYING state alone is not Preview readiness. Merely
+selecting a clip, moving the local edit cursor, changing editor tools,
+opening a menu, or undoing a saved sequence edit cannot take Program.
+The persisted authoring snapshot does not become an execution plan
+merely because it was loaded into the editor.
+
+The playout bar keeps ARM, TAKE, RELEASE and RECOVER TAKE directly
+available with their existing command guards. PLAY, PAUSE, STOP,
+PREPARE and PREVIEW remain visible in the separately identified
+playout mode. Its PLayout Tools menu contains explicit CUE at the
+local edit cursor and read-only OBSERVE via the existing playout
+commands. The menu does not authorize additional execution paths.
+Ambiguous TAKE recovery inspects the original immutable transaction;
+it never submits the TAKE again. All production confirmation remains
+owned by ControlHost and RuntimeHost rather than the editor.
+Connected hardware, Preview pixel presence and physical output
+remain distinct qualification claims.
 
 The older sections below describe **MEDIA DECK / CUES compatibility**
 only. Their reserved six presentation lanes, local cursor history,
@@ -140,6 +151,104 @@ cue trim semantics and Media Deck transport must not be interpreted
 as constraints or authorities of the new saved sequence editor.
 The sequence editor cannot convert legacy local media projections
 into committed sequence clips without an explicit saved edit.
+
+## Task-specific timeline menus and focus contract
+
+The saved sequence editor and the Media Deck timeline are **different**
+editing domains. They reuse the existing Operator ViewModels and command
+instances, not an additional editor backend or transport.
+
+### Saved sequence editor
+
+In **EDIT** mode the compact, non-scrolling primary row keeps **SELECT**,
+**MOVE**, **TRIM**, the active `ToolLabel`, **FIT**, and three named menus:
+**EDIT**, **TRACK** and **TOOLS**. The ruler keeps **SNAP** and the exact
+`EditCursorLabel`; the Feedback/GestureLabel and selected clip status
+remain outside menus. Opening any menu or choosing a tool never changes
+the Program route or advances the native shuttle.
+
+- **EDIT:** Split at the local cursor; Delete; Ripple delete; Copy;
+  Paste; Link; Unlink; validated Cut/Fade transition; **Undo/Redo saved
+  authoring transactions**; Discard retained local drag draft. These
+  commands are the existing revision/selection-gated ControlHost
+  operations. Undo/Redo here is *saved sequence authoring*, not the
+  separate Media Deck local cursor history.
+- **TRACK:** Toggle the selected saved track enabled state or mute via
+  the original bounded edit commands; page preceding/next visible tracks.
+  Context-opening a track header selects a clip on that track if one
+  exists. A clip-free track cannot be mutated through these existing
+  selection-derived commands and does not acquire fabricated authority.
+- **TOOLS:** Request the selected audio clip's independently observed
+  PCM waveform; zoom in/out and scroll time earlier/later. FIT remains
+  directly visible; horizontal wheel gestures still use the existing
+  viewport math.
+- **PLAYOUT TOOLS:** Explicit CUE of the native shuttle to the local
+  editor cursor, and OBSERVE output readiness. These commands remain
+  separately qualified from editing. The playout pane directly exposes
+  ARM, TAKE, RELEASE and RECOVER TAKE, with the existing PREPARE, PREVIEW,
+  PLAY, PAUSE, STOP controls and published status/evidence.
+
+Right-clicking a saved clip exposes EDIT actions. Right-clicking a
+track header exposes TRACK actions. A right-clicked clip is selected
+through `SelectClip` when it is not already part of the active
+multi-selection; a track header uses the existing selected-track
+derivation. Mouse context opening and Shift+F10/Menu-key activation are
+selection-only operations and never initiate edit, cue, transport or
+TAKE commands. `CanExecute` retains revision, dirty-gesture, kind,
+availability and connection gating. Disabled commands retain their
+existing selection/feedback reasons. A rejected authoring gesture
+keeps its local draft and cannot be replayed by closing a menu.
+
+### Media Deck / Cues
+
+The MEDIA DECK timeline keeps **EDIT** cursor mode, **SNAP**, current
+frame-rate and zoom readout, a single Preview Play/Pause and Stop pair
+when the embedding exposes Preview transport, previous/next cue, **FIT**,
+fullscreen and current timecode. Named cue creation stays in the
+existing Media Deck path. The toolbar no longer competes with
+independent dense authoring and navigation button rows.
+
+- **CURSOR** in the 30-pixel ruler: local Undo/Redo (maximum 32
+  reversible draft snapshots), cursor-to-selection, explicitly guarded
+  Preview seek, explicitly guarded jump to selected cue, Select all,
+  Clear selection. The read-only edit-cursor label remains beside it.
+- **TOOLS**: zoom in/out and bounded **EBU-TT-D / EBU-TT Live** import
+  for **local review only**. Import actions require loaded,
+  synchronized source context and retain the existing validated file
+  size, source epoch and lifetime constraints. The language selector,
+  local PREVIEW ON toggle, subtitle text and review/error evidence stay
+  visible in the dedicated lower panel.
+- **Item/cue context menu**: reuses CURSOR actions; right-click
+  selects an item or cue through the existing local selection path.
+  This does not seek automatically; jump-to-cue and cursor-to-Preview
+  are separately enabled explicit requests.
+
+The user control's existing PreviewKeyDown suppression for text and
+combo editors is retained. Shift+F10 and the Menu key open the focused
+context menu or the CURSOR/EDIT fallback. V/M/T and frame-navigation
+shortcuts retain their original owners. No application-wide shortcut
+registry, persisted dock identity, shared theme, Runtime contract or
+additional output renderer is changed.
+
+### Geometry and qualification
+
+Both controls retain their original ruler and track/canvas
+viewport geometry, recycling/viewport-bounded clip presentations and
+measured pointer-to-time conversion. The code does not introduce
+another track scrollbar, a clip drag proxy, a frame polling loop
+or a second transport strip. The intent is to preserve useful canvas
+space at 1600×900, 1280×720 and 960×540 logical workspaces.
+
+`TimelineContextActionsTests` checks menu ownership, command
+eligibility paths, keyboard/text focus, draft-state visibility,
+Play/Pause/Stop uniqueness, direct playout safeguards and a Windows
+WPF menu/viewport smoke test. Existing
+`TimelineErgonomicsTests`, `SequenceTimelineEditorTests` and
+`SequenceTimelineWaveformTests` remain relevant regression suites.
+Only observed Windows CI/build/test evidence can qualify the
+implementation; physical mixed-DPI monitor, GPU/media-device or
+Program output acceptance remains **UNVERIFIED** until separately
+measured.
 
 ## Time model
 
@@ -195,7 +304,7 @@ No timed Graphics, Audio, AI or Control mutation is invented by the timeline.
 
 ## Toolbar capability boundary
 
-The toolbar exposes the current timeline context, SELECT mode, snapping, observed frame rate, Preview Play/Pause and Stop, previous/next cue, zoom, Fit, Operator fullscreen, current timecode and named cue creation through existing commands.
+The Media Deck header keeps current timeline context, SELECT mode, snapping, observed frame rate, one context-gated Preview Play/Pause and Stop pair, previous/next cue, zoom readout, FIT, Operator fullscreen, current timecode and named cue creation. Zoom +/- and bounded timed-text imports are in the local TOOLS menu; current edit cursor and local Undo/Redo/explicit Preview seek are accessible through the ruler's CURSOR menu. The existing Media Deck owns cue naming, creation and actual Preview transport.
 
 The product currently exposes no governed sequence switching, clip-link command, Blade/Cut edit command or alternate timeline frame-rate mutation. Those unavailable capabilities are identified as context/status only and are not wired to decorative commands.
 
@@ -308,7 +417,7 @@ EDIT toggles a local draft cursor. In this mode pointer movement and Left/Right 
 
 The yellow edit line is separate from the confirmed transport line and pending seek display. PREVIEW and PROGRAM labels require current routing evidence and a matching loaded source. Program position is shown only when the confirmed media transport also reports Program participation. An independent Program position that the current contract does not expose is explicitly unavailable.
 
-The diamond action places the edit cursor on a selected cue or clip start without seeking. The adjacent seek action explicitly seeks Preview to the draft cursor through the existing controller; it is disabled for stale/unavailable routing, another Preview source or Program participation. Marker and seek commands remain confirmed operations, with no implicit undo.
+The CURSOR menu action places the edit cursor on a selected cue or clip start without seeking. Its separate, explicitly labeled seek action requests Preview to the draft cursor through the existing controller; that command is disabled for stale/unavailable routing, another Preview source or Program participation. Marker and seek commands remain confirmed operations, with no implicit undo.
 
 J requests one Preview frame backwards, K retains the existing Pause command, and L requests normal-rate Preview playback. J/L are guarded to the confirmed Preview source and excluded while that source participates in Program. Reverse/shuttle speed is not exposed by the current contract. Text entry retains its typing behavior and TAKE shortcuts retain their existing guards.
 
@@ -316,7 +425,7 @@ J requests one Preview frame backwards, K retains the existing Pause command, an
 
 Ctrl-click toggles item selection. Shift-click selects the contiguous range from the primary item in track/item order. Ctrl+A selects current timeline items; the clear action clears selection. These are presentation operations. Cue double-click and Page Up/Down retain the existing explicit transport paths.
 
-The ruler provides custom Undo/Redo, cursor-to-selection, explicit seek and clear buttons without changing the 44-pixel toolbar or 30-pixel ruler contract. Ctrl+Z/Ctrl+Y apply only when focus is inside the timeline and outside text entry.
+The 30-pixel ruler keeps the current local edit cursor visible beside the CURSOR menu. The menu holds local Undo/Redo, cursor-to-selection, explicit seek, jump-to-selected-cue and selection actions without adding a second toolbar. Ctrl+Z/Ctrl+Y apply only when focus is inside the timeline and outside text entry.
 
 Undo/Redo retains at most 32 local cursor/resource-projection snapshots. A drag is one history entry. Local resource projections are capped at 256. Confirmed seek/trim/marker changes are never replayed or rolled back. Asset/source or marker/cue changes invalidate history and active gestures; a completed explicit seek clears history. Pointer capture loss cancels queued unsent seek intent; an in-flight or confirmed transport command is not rolled back.
 
@@ -326,4 +435,4 @@ The Inspector now has independent bounded typed-property history; it shares the 
 
 ## Durable sequence authoring
 
-See [Sequence Authoring and Persistence](SequenceAuthoring.md) for the canonical multitrack backend, rational time and revisioned edit contract. Playback remains unavailable; the existing timeline projections retain their current authority.
+See [Sequence Authoring and Persistence](SequenceAuthoring.md) for the canonical multitrack backend, rational time and revisioned edit contract. Explicit native preparation, Preview shuttle and single-use TAKE are separate from saved edits; the sequence editor never derives Program state from a local selection or cursor.
