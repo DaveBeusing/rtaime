@@ -322,18 +322,60 @@ Schema 7 stores each workspace's left/right widths, lower height, collapsed stat
 
 SAVE LAYOUT persists the active presentation. Switching captures the outgoing workspace and restores the destination's own preferences. LAYOUT RESET affects only the selected workspace. Missing, corrupt, non-finite, out-of-range or incompatible data recovers to safe defaults. The store remains `rtaime/operator-layout.json` below local application data, with serialized temporary-sibling/atomic replacement writes.
 
-| Workspace | Left | Right | Lower | Collapsed by default | Viewer |
+The canonical defaults below apply **only** to fresh or missing workspace
+entries, and when an operator deliberately invokes **Reset Layout** for that
+workspace. The original 400 / 340 / 320 DIP constants remain the normalization
+fallback and historical reference; existing saved layouts, custom widths,
+collapsed flags, fullscreen/window placement, dock groups and named templates
+are not silently converted to the new presets.
+
+| Workspace | Left (DIP) | Right (DIP) | Lower (DIP) | Initially collapsed | Viewer |
 | --- | ---: | ---: | ---: | --- | --- |
-| LIVE | 400 | 340 | 320 | none | DUAL |
-| MULTIVIEW | 400 | 340 | 320 | none | DUAL |
-| AI | 400 | 340 | 320 | none | PROGRAM |
-| EDIT | 400 | 340 | 320 | none | DUAL |
-| MEDIA | 400 | 340 | 320 | none | PREVIEW |
-| SCENES | 400 | 340 | 320 | none | DUAL |
-| COMPOSITING | 400 | 340 | 320 | none | DUAL |
-| OUTPUTS | 400 | 340 | 320 | none | PROGRAM |
-| HEALTH | 400 | 340 | 320 | none | PROGRAM |
-| SETTINGS | 400 | 340 | 320 | none | PROGRAM |
+| LIVE | 400 | 340 | 280 | Inspector (right) | DUAL |
+| MULTIVIEW | 340 | 340 | 320 | none; Live Controls stay available | DUAL |
+| MEDIA | 400 | 300 | 280 | Inspector (right) | PREVIEW |
+| EDIT | 400 | 340 | 400 | none; authored timeline is taller | DUAL |
+| SCENES | 400 | 300 | 300 | Inspector (right) | DUAL |
+| COMPOSITING | 400 | 340 | 320 | Inspector (right) | DUAL |
+| OUTPUTS | 400 | 300 | 320 | left and right (stage-focused) | PROGRAM |
+| HEALTH | 400 | 340 | 320 | left and right (no side-pane owner) | PROGRAM |
+| AI | 400 | 340 | 320 | left and right (full-center processing) | PROGRAM |
+| SETTINGS | 400 | 340 | 320 | left and right (system focus) | PROGRAM |
+
+The actual lower-row allocation is **zero** for workspaces without a
+timeline region (MULTIVIEW, OUTPUTS, HEALTH, AI, SETTINGS), irrespective
+of the stored lower-height preference. This is a presentation projection,
+not a persisted reset. LIVE keeps the Media Library open by default and
+gives the confirmed Preview/Program viewers more vertical space while the
+Rundown remains reachable. MEDIA keeps the browsing pane and Preview
+available, with the Inspector reopened through its existing pane toggle or
+Commands entry when inspection is needed. EDIT deliberately retains
+resizable side panels for established edit/Inspector workflows while
+increasing the timeline share. MULTIVIEW retains its existing Live Controls.
+OUTPUTS starts without peripheral pane allocation, giving the stage and
+routing controls the useful central presentation area.
+
+**Show/hide remains reversible.** The existing shell commands toggle
+Library and Inspector without deleting preferred dimensions. Reset Layout
+restores the current workspace's canonical preset and built-in docking;
+it does not reset other destinations, templates, media state, Preview or
+Program. Collapse is a saved operator preference only when intentionally
+changed in a normal viewport. At 960×540 or 960×500, Library and Inspector
+use transient single-pane overlays and Preview/Program uses the existing
+compact bus selector. Those transient choices do not change the saved
+collapsed flags, widths, floating placements or DUAL viewer preference.
+
+Supported schema-7 preferences keep their authored values. A previously
+saved Inspector-open workspace **remains open** even if its fresh default
+is now collapsed. Missing destination entries are filled from the
+current registry without changing the source file on load. Legacy
+aliases, normalized boundaries, foreign but valid bounded destination
+IDs and imported layout templates retain their existing behavior.
+Corrupt/unsupported files open with safe in-memory defaults and are not
+modified on read. Future layout/docking versions and files over 1 MiB
+block saving so the original bytes remain intact. An explicit save may
+replace malformed supported content under the established store policy;
+there is no silent migration or schema bump.
 
 ## Docking, focus and visual polish
 
@@ -412,7 +454,7 @@ Open Show checks from navigation or search Show preflight in Commands. The [shar
 
 SETTINGS and Commands expose FOCUS, CINEMA and RESTORE. Ctrl+Shift+F focuses a panel; Ctrl+Shift+C toggles Cinema using existing Program monitoring. Escape restores the prior mode even from a windowed start; numeric-field Escape retains first chance to cancel an edit. F11 exits a transient mode and toggles displayed fullscreen; Ctrl+1/2/0 exits it before applying the requested viewer. Monitor FULL retains its established path.
 
-Entry captures workspace, built-in/docked/tabbed/floating arrangement, viewer, center and fullscreen/monitor-fullscreen context. Focus presents the existing panel centrally. Cinema temporarily uses the existing MEDIA/MONITORS Program presentation, including from specialized workspaces; the original workspace remains the saved/template destination. Restore returns its arrangement and reachable focus. Workspace switch/reset, explicit dock/float and template Apply leave transient mode first. Temporary projections never overwrite ordinary saved layout/fullscreen preferences, including Save and shutdown.
+Entry captures workspace, built-in/docked/tabbed/floating arrangement, viewer, center and fullscreen/monitor-fullscreen context. Focus presents the existing panel centrally. Cinema temporarily uses the existing MEDIA/MONITORS Program presentation, including from specialized workspaces; the original workspace remains the saved/template destination. Restore returns its arrangement and reachable focus. Workspace switch/reset, explicit dock/float and template Apply leave transient mode first. Temporary projections never overwrite ordinary saved layout/fullscreen preferences, including Save and shutdown. Template Apply switches to the destination without an intermediate preference write and persists the chosen layout only after it is applied. No additional window, Preview decoder or monitoring owner is allocated by changing a default.
 
 Shared panel chrome shows Program identity, connection, safety and Restore. Cinema cannot TAKE, route, seek or create another renderer.
 
@@ -430,7 +472,7 @@ Supported v2–v6 migration reuses the established policy: pre-v4 geometry reset
 
 Unrelated tab/dock changes retain each unchanged floating native window, content, ViewModel and monitoring subtree; they must not unload/reparent it. Closing resolves the current return group. Shutdown closes all owned windows and unregisters display events before monitoring teardown.
 
-Existing `WorkspacePresentationTemplateTests` and real-window qualification cover transient-save exclusion, independent layouts/reset, explicit template Apply, migration/roundtrip, bounds and malformed/future/oversized data, duplicate rejection, cancelled export/write failure, retained window/content identity, zero monitor unloads on unrelated changes, visible Program status, focus restore and unchanged Preview/Program identities. Synthetic 100/125/150/200% DPI/off-screen/topology tests remain required.
+The `OperatorWorkspaceDefaultTests` regression suite covers fresh per-destination presets, missing versus saved workspace preferences, compact panel/bus choices, explicit reset, preserved independent floating layouts and templates, Focus/Cinema restore, unsupported files and missing-monitor DPI clamping. Existing `WorkspacePresentationTemplateTests` and real-window qualification cover transient-save exclusion, independent layouts/reset, explicit template Apply, migration/roundtrip, bounds and malformed/future/oversized data, duplicate rejection, cancelled export/write failure, retained window/content identity, zero monitor unloads on unrelated changes, visible Program status, focus restore and unchanged Preview/Program identities. Synthetic 100/125/150/200% DPI/off-screen/topology tests remain required.
 
 Hosted geometry and window tests are not physical mixed-monitor hotplug, screen-reader/IME, touch or GPU scan-out qualification. Retain those as UNVERIFIED until actual reference evidence is recorded. The [experience roadmap](OperatorExperienceRoadmap.md#validation-contract) extends these existing checks with connected visual review, state honesty and combined operator journeys; it introduces no parallel qualification framework.
 
