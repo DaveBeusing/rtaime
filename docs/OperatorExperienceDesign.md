@@ -30,7 +30,7 @@ Precedence is explicit:
 3. This document for the accepted experience direction, presentation requirements and interpretation of concepts.
 4. Illustrative mockups, which are not capability, telemetry or pixel-parity evidence.
 
-A conflict must be resolved explicitly, not by silently replacing a capability contract. The [experience roadmap](OperatorExperienceRoadmap.md) separates existing foundations, remaining qualification and proposed refinements. This documentation change does not modify product SemVer, layout schema 6, production/checkpoint schemas, Runtime budgets or release readiness.
+A conflict must be resolved explicitly, not by silently replacing a capability contract. The [experience roadmap](OperatorExperienceRoadmap.md) separates existing foundations, remaining qualification and proposed refinements. The menu-first qualification changes no product SemVer, current layout schema 7, production/checkpoint schemas, Runtime budgets or release readiness.
 
 ## Interpreting the approved concept
 
@@ -218,6 +218,46 @@ before/after compact width allocation and owner contract.
 Source changes alone are not visual acceptance: physical mixed-DPI, keyboard
 focus review, screen-reader behavior and high-contrast review remain subject to
 real Windows evidence in `docs/OperatorVisualQualification.md`.
+
+### Menu-first integration acceptance
+
+After the merged Operator presentation changes (#464–#473), the
+global **Project / Edit / View / Media / Tools / Window / Help**
+menus are a discoverability layer, not an additional production
+command registry. The existing `RtaimeContextMenu` and
+`RtaimeMenuItem` surfaces resolve to the same Commands palette,
+feature control and Operator-owned `ICommand` instances.
+The project/show identity is read-only; preparing a bundled
+demo requires an explicit separate action. LIVE's guarded
+SET PVW / CUT / AUTO controls remain time-critical and
+the independent Preview/Program, recording, network-send and
+global readiness evidence remains visible on every destination.
+
+At widths below **1480 DIPs**, the menu bar reduces to a
+single **MENU** category chooser using the existing flat custom
+menu-item template. Category selection opens the corresponding
+actions. This does not consume another top-bar row, change
+viewing canvas geometry or replace the four primary destinations
+and **More** rail. **960×500** is the documented minimum
+and must retain both the MENU launcher and critical incident access.
+Ctrl+K remains an equal-or-faster searchable path with
+production actions still requiring its explicit Execute control.
+
+The integrated Window journey is qualified by a real isolated
+`OperatorUiNavigationRegressionTests` phase and the six-size
+`OperatorCombinedVisualQualification` matrix. Their evidence
+must include unchanged Program/Preview state on menu creation,
+one canonical command owner per action, no duplicated
+mutations, text-entry shortcut suppression and stable
+monitor/view model identities on workspace transitions.
+The screen/layout DPI percentages are injected software
+metadata, not actual Windows monitor transitions.
+High-contrast, reduced-motion, real popup clipping, screen
+reader, multiple-monitor review, physical scan-out and live
+fault recovery remain separately **UNVERIFIED** until
+recorded and reviewed. See
+[Operator Visual Qualification](OperatorVisualQualification.md) and
+[Integrated Operator Experience Qualification](OperatorExperienceIntegrationQualification.md).
 
 ### Controlled Compositing graph authoring
 
