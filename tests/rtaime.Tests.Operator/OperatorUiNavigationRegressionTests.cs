@@ -168,6 +168,28 @@ public sealed class OperatorUiNavigationRegressionTests
 
             // The menu may reference existing Commands but cannot become a
             // second CUT/AUTO/record/scene authority.
+            // The real custom-control preference fixture supports reduced
+            // motion and high-contrast presentation without touching the
+            // application's native Windows accessibility settings.
+            var launcher = Assert.IsType<RtaimeButton>(
+                window.FindName("GlobalProjectMenuButton"));
+            var previousReducedMotion = OperatorControlPresentation.GetReducedMotion(window);
+            try
+            {
+                OperatorControlPresentation.SetReducedMotion(window, true);
+                Assert.True(OperatorControlPresentation.GetReducedMotion(launcher));
+                OperatorControlPresentation.ApplyPreferenceSnapshot(launcher,
+                    clientAreaAnimation: false, highContrast: true);
+                Assert.True(OperatorControlPresentation.GetHighContrast(launcher));
+                Assert.Equal(beforeRouting,
+                    (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
+            }
+            finally
+            {
+                OperatorControlPresentation.ApplyPreferenceSnapshot(launcher,
+                    SystemParameters.ClientAreaAnimation, SystemParameters.HighContrast);
+                OperatorControlPresentation.SetReducedMotion(window, previousReducedMotion);
+            }
             var initialTargets = Descendants<OperatorDrawingSurface>(root)
                 .Sum(surface => surface.TargetCreateCount);
             foreach (var section in OperatorCommandCatalog.GlobalShellMenus)
