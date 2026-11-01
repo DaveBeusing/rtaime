@@ -225,9 +225,9 @@ public sealed partial class OperatorCombinedVisualQualification
         var catalogue = window.CommandPalette.Entries;
         foreach (var section in OperatorCommandCatalog.GlobalShellMenus)
         {
-            var menu = window.CreateGlobalShellMenu(section.Name);
-            Assert.NotEmpty(menu.Items);
-            foreach (var item in menu.Items.OfType<RtaimeMenuItem>())
+            var sectionMenu = window.CreateGlobalShellMenu(section.Name);
+            Assert.NotEmpty(sectionMenu.Items);
+            foreach (var item in sectionMenu.Items.OfType<RtaimeMenuItem>())
             {
                 if (item.Command is null) continue; // Only read-only headings and separators.
                 Assert.True(catalogue.Any(entry =>
