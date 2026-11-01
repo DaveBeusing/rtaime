@@ -110,51 +110,82 @@ For a persistent Clip, **Open in Preview** requires an online catalogue entry an
 
 The catalogue therefore does not create a second playback path or routing authority. Existing Timeline and Cue behavior remains on established command paths. Cue actions apply only when the selected catalogue `AssetId` is the currently loaded Media Deck asset.
 
-## Guided media-first Library actions
+## Media-first Library actions and contextual tools
 
-The Library keeps the search, virtualized grid/list and persistent catalogue
-unchanged. A compact, always-visible selection strip now presents the
-catalogue name, typed duration/format and current readiness with four explicit
-next actions: **Inspect**, **Prepare Options**, **Open Preview** and **Relink**.
-**Import Media** is prominent; the existing Add menu still contains generator
-and refresh actions. Advanced **More Tools** reveals Smart Bin editing,
-metadata filters, bounded batch operations and representative preflight
-options without making them prerequisites for ordinary playback.
+The default Library keeps **MEDIA LIBRARY**, a selection summary, a compact
+category/filter row, debounced search, virtualized Grid/List toggles, **Add**,
+**Tools**, and one clear **OPEN PREVIEW** action for the selected asset. Import
+is available from the **Add** menu instead of a duplicate permanent button.
+The selected asset name, duration/format/availability and next-action feedback
+remain visible without opening a specialist tool.
 
-**Inspect** opens local metadata/capability details for the selected asset;
-hover frames remain independently cancelable and never seek a production
-deck. **Prepare Options** exposes the existing optional representative
-sample checks, not a new resident preload owner. A recent
-`CONDITIONALLY_READY` result is not `READY` or a retained deck. For one
-eligible, online catalogue Clip, **Open Preview** reuses the existing Media
-Deck open and authoritative Set Preview request. It retains the selected
-source and asset fingerprint/revision across the asynchronous open; a
-changed selection, catalogue identity, source slot or Control connection
-prevents the subsequent route request. A Clip cannot be opened by this
-guided action into the active Program source; first choose an off-Program
-A/B slot. The displayed
-`PREVIEW REQUESTED` message is pending authority, not a claim that
-Preview pixels or Program output were already delivered. The resident
-Deck and confirmed route remain separate evidence.
+| Entry point | Current actions | Ownership and eligibility |
+| --- | --- | --- |
+| **Add** (header +) | **Import Media**, **Test Signal** | Existing `ImportCommand` (catalogue file picker + reviewed import batch) and `AddTestSignalCommand`; each entry reflects its existing `CanExecute`. The disabled GENERATOR label is a section heading, not a feature. |
+| **Tools** (header overflow) | Refresh availability; Clear selection; Smart Bins and filters; Prepare selected assets; Batch removal; Offline QC results; ADM track metadata | The existing catalogue refresh, selection clearing, tools panel, bounded preparation/batch commands and on-demand evidence views. Unavailable actions stay disabled. |
+| **Selection** (selected-asset overflow) | Inspect selection; Prepare selected assets; Relink selected media; Batch remove | Inspect opens the local source-bound detail panel; Prepare opens the existing representative options; Relink uses the existing fingerprint-safe catalogue path. Multi-selection supports bounded preparation/batch review but cannot silently edit a single target. |
+| **Selection > Offline QC** | Start offline QC; Cancel QC; Import QC XML; Export QC XML; View QC results | Existing local file QC worker, source-bound report import/export and read-only evidence panel. No production mutation. |
+| **Selection > ADM metadata** | Import ADM; Export ADM XML; Export ADM JSON; View ADM tracks | Existing source-bound ADM import/export handlers and read-only physical track metadata. No audio bus, decoder or output route is created. |
+| **MORE TOOLS** | Expand/collapse the existing Smart Bin, sort, metadata filter, optional representative-preparation and bounded batch results panel | Existing model flags and commands; the panel remains closed by default and retains preferences, selection and search state. |
+| **OPEN PREVIEW** | Open eligible selected catalogue Clip in resident Media Deck and request the existing authoritative Preview route | Explicit action with `CanOpenLibraryPreview` and post-await selection/source/fingerprint checks. Not a Program Take. |
 
-Missing, offline or stale items get a specific recovery message and a
-guarded **Relink** path, preserving stable catalogue identity and
-fingerprint validation in ControlHost. Multi-selection cannot open
-Preview or mutate a single asset; the existing bounded batch workflows
-remain accessible via **More Tools**. No single selection, hover,
-preflight, import or local navigation implicitly calls Take, CUT or
-DISSOLVE. The existing drag/drop route is still an independent legacy
-interaction surface and is not silently rewritten by the selection
-strip; later cross-workspace consolidation must retain the same
-post-await stale-source fences and explicit-authority rules.
+**Inspect** remains an opened local metadata/filmstrip/audio-waveform view,
+not a continuously expanded toolbar. The Preview action does not treat a
+successful representative preflight as a resident deck or proof of delivered
+monitoring pixels. A Clip cannot be opened into the active Program source;
+select an eligible off-Program A/B slot first. `PREVIEW REQUESTED` is
+pending authority until the confirmed route is observed.
 
-## Context actions
+Grid tiles and List rows instantiate the **same per-item** custom
+`RtaimeContextMenu` resource. Each realized item gets an independent menu
+instance, so recycled rows do not share a stale `PlacementTarget`. Both
+surfaces expose the same eight direct entries: **Prepare selected assets…**,
+**Open in Preview**, **Add to Timeline**, **Add Cue at Playhead**,
+**Reveal in Explorer**, **Relink Media…**, **Remove from Library** and
+**Properties**. The current target, capability and multi-selection guards are
+re-evaluated when opening each menu. **Properties** selects the verified
+current item and opens the same read-only inspection panel. Relink/review use
+the existing authoritative catalogue and client boundaries; removal deletes
+the catalogue record, never the source file. Scene assignment remains
+unsupported because there is no governed scene/media assignment mutation path.
 
-**Clear selection** in the Add menu clears the entire local selection. **Refresh availability** in the Add menu uses the existing catalogue-wide availability refresh. Single-target Preview, Timeline, Cue, Relink and Remove context actions stay disabled during multi-selection. Use **Batch · Remove selected…** for explicit multi-record removal with preflight and confirmation. Reveal and Properties remain read-only single-target inspection actions. No source file is deleted.
+Header menus open on button activation, including Enter/Space, or via the
+standard Shift+F10 context-menu gesture on a focused button. Grid/List row
+context menus retain mouse/keyboard access. `Ctrl+F` still focuses search;
+`Ctrl+Left/Right` scrubs a focused supported asset only outside text-entry
+controls. Hover and menu opening never seek a resident deck or change
+Preview/Program. A selection or catalogue identity change closes an already
+open Selection menu before an old target can receive a new action. File-picker
+relink rechecks the current catalogue identity before submitting.
 
-Catalogue Clip cards and list rows expose **Open in Preview**, **Add to Timeline**, **Add Cue at Playhead**, **Reveal in Explorer**, **Relink Media…**, **Remove from Library** and **Properties**.
+### Visible work and recovery
 
-The current Scene model has no governed media-assignment mutation path. Scene assignment remains out of scope until that authority path exists.
+The QC report/controls and ADM track listing open **on demand**; they are
+collapsed initially. Starting QC or importing/exporting a report opens the QC
+detail panel; ADM operations open their own detail panel. Current QC status
+remains in a compact, screen-reader-announced activity line while a job is
+running, results exist or the QC panel is shown. The **CANCEL QC** button is
+visible and command-gated while the selected QC job can be canceled even if
+the QC detail panel is closed. Completed reports stay explicitly
+source-bound or historical; missing standards adapters remain
+NOT EXECUTED/UNSUPPORTED, never PASS.
+
+The same activity strip displays representative preparation and bounded
+catalogue batch progress, failures and unresolved states when their existing
+review state is visible. **CANCEL PREPARATION** and **STOP BATCH** remain
+actionable while their corresponding operations run, even if the operator
+collapses **MORE TOOLS**. The advanced preparation/batch panels retain
+existing **Prepare / Retry**, **Confirm**, **Stop**, **Retry failed** and
+**Close** controls, source-bound item rows and non-atomic semantics. A new
+import/batch or preparation review automatically reveals those panels;
+closing the More Tools surface never cancels work. No automatic retries,
+background library scanning or additional polling loops are introduced.
+
+The menu and activity views only reuse already projected `MediaPoolInspectorViewModel`
+state. There is no second selection model, no changed command ID, and no
+new ControlHost/RuntimeHost authority path. Report status and source identity
+remain distinct from confirmed Preview, Program, recording finalization,
+network transport and physical-output evidence.
 
 ## Loading, empty and error states
 
@@ -317,7 +348,7 @@ Examples: `name:"Evening show" codec:h264 resolution:1920x1080 fps:50`, `type:cl
 
 ## Reviewed batch operations
 
-**Import Media** now prepares the chosen paths. **Batch · Remove selected…** freezes up to 128 selected entries; only persistent catalogue clips are eligible, including missing/offline records. Other selected kinds are explicitly skipped. Review each entry, then choose **Confirm**. Removal deletes catalogue records only; source files remain intact. A changed catalogue revision at the fresh preflight read blocks the entire batch before the first mutation and requires a new preparation.
+**Add > Import Media** prepares the chosen paths. **Batch · Remove selected…** freezes up to 128 selected entries; only persistent catalogue clips are eligible, including missing/offline records. Other selected kinds are explicitly skipped. Review each entry, then choose **Confirm**. Removal deletes catalogue records only; source files remain intact. A changed catalogue revision at the fresh preflight read blocks the entire batch before the first mutation and requires a new preparation.
 
 Requests run sequentially through `IMediaAssetCatalogClient`, with concurrency one and at most 128 retained outcomes. ControlHost still validates readability, probe support, fingerprints, duplicates and persistence for imports. No file scan, hashing or decoder work runs in Operator. Each response supplies the confirmed catalogue snapshot; no optimistic record is inserted or removed locally. Each item is visibly READY, SKIPPED, PENDING, DONE, FAILED, CANCELLED or UNCONFIRMED, with progress and its reason.
 
@@ -331,8 +362,8 @@ Search and selection can change while a batch is reviewed or running; frozen nam
 
 ## Explicit asset preparation
 
-File availability is independent of playback readiness. The Add menu and each
-asset context menu expose **Prepare selected assets…**. Select 1–16 online
+File availability is independent of playback readiness. The **Tools**, **Selection** and per-asset
+context menus expose **Prepare selected assets…**. Select 1–16 online
 catalogue clips, choose required audio (default off), 1–3 seek points and 1–4
 frames per point, then choose **Prepare / Retry**. Requests run sequentially
 through ControlHost; Operator never opens files or decoders. Close loaded file
@@ -373,11 +404,11 @@ existing route/preroll workflow for actually retaining a prepared deck.
 
 ## Independent offline Quality Control (EBU QC 2026-04)
 
-For an online, persistent catalogue **Clip**, **START OFFLINE QC** starts a
+For an online, persistent catalogue **Clip**, **Selection > Offline QC > Start offline QC** starts a
 separate, bounded, cancellable file-only quality-control worker. The Media
 Library shows one outcome per implemented check, explicitly distinguishing
 PASS, FAILED, UNSUPPORTED and NOT_EXECUTED; missing R 128/R 103 adapters
-must never be displayed as PASS. **CANCEL QC** stops background work.
+must never be displayed as PASS. **CANCEL QC** stops background work from the menu or the persistent activity strip.
 **EXPORT QC XML** emits a schema-validated 2026-04 report;
 **IMPORT QC XML** accepts only a compatible source-bound report for the
 currently selected immutable `MediaAssetId`, full SHA-256 and catalogue
@@ -396,8 +427,7 @@ file quotas, check scope, statuses, recovery and unsupported limits, see
 
 ## ADM audio-track metadata (selected asset only)
 
-The Media Library now exposes explicit `IMPORT ADM…`, `EXPORT ADM XML…`
-and `EXPORT ADM JSON…` actions for a catalogued clip. The UI shows a
+The Media Library exposes explicit **Selection > ADM metadata** actions to import ADM, export the original XML or export the source-bound JSON sidecar for a catalogued clip. The UI shows a
 bounded read-only track listing with `ATU_*` identity, assigned physical
 track number only if explicitly declared, language, channel role, audio
 object links, start/end times and one clear
