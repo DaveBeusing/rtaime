@@ -173,6 +173,12 @@
 							</Grid>
 						</Border>
 
+                        <TextBlock Text="{Binding CompositingLayers.Count, StringFormat=Confirmed compositing layers: {0}}"
+                            Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
+                        <controls:RtaimeButton Content="SHOW LAYER SETTINGS" Click="ToggleSecondaryDetails_Click" Tag="LayerDetails"
+                            AutomationProperties.Name="Show layer settings" IsCompact="True" HorizontalAlignment="Left"
+                            Margin="0,5,0,0" ToolTip="Inspect confirmed layer rows and request a governed graphics visibility change." />
+                        <StackPanel x:Name="LayerDetails" Visibility="Collapsed" Margin="0,6,0,0">
                         <ItemsControl ItemsSource="{Binding CompositingLayers}" Margin="0,4,0,0">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -197,6 +203,7 @@
 							FontSize="{StaticResource OperatorFontSizeMicro}"
 							TextWrapping="Wrap"
 							Margin="0,5,0,0" />
+                        </StackPanel>
 					</StackPanel>
 				</Border>
 
