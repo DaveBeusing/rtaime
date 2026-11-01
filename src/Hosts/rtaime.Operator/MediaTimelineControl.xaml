@@ -89,6 +89,58 @@
 				</DataTrigger>
 			</Style.Triggers>
 		</Style>
+        <controls:RtaimeContextMenu x:Key="MediaTimelineCursorActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Undo local cursor · Ctrl+Z" Command="{Binding UndoDraftCommand}"
+                automation:AutomationProperties.Name="Undo local cursor · Ctrl+Z" ToolTip="Local draft only. No transport or Program change." ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Redo local cursor · Ctrl+Y" Command="{Binding RedoDraftCommand}"
+                automation:AutomationProperties.Name="Redo local cursor · Ctrl+Y" ToolTip="Local draft only. No transport or Program change." ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Cursor to selected cue or clip" Command="{Binding CursorToSelectionCommand}"
+                automation:AutomationProperties.Name="Cursor to selected cue or clip" ToolTip="{Binding SelectionStatus}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Explicit seek Preview to local cursor" Command="{Binding SeekEditCursorCommand}"
+                automation:AutomationProperties.Name="Explicit seek Preview to local cursor" ToolTip="{Binding PreviewPositionLabel}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Explicit jump Preview to selected cue" Command="{Binding JumpSelectedCueCommand}"
+                automation:AutomationProperties.Name="Explicit jump Preview to selected cue" ToolTip="{Binding PreviewPositionLabel}" ToolTipService.ShowOnDisabled="True" />
+            <controls:RtaimeMenuItem Header="Select all media items" Command="{Binding SelectAllItemsCommand}"
+                automation:AutomationProperties.Name="Select all media items" />
+            <controls:RtaimeMenuItem Header="Clear selected media items" Command="{Binding ClearSelectionCommand}"
+                automation:AutomationProperties.Name="Clear selected media items" ToolTip="{Binding SelectionStatus}" ToolTipService.ShowOnDisabled="True" />
+        </controls:RtaimeContextMenu>
+        <controls:RtaimeContextMenu x:Key="MediaTimelineToolsActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Zoom out · Ctrl+-" Command="{Binding ZoomOutCommand}"
+                automation:AutomationProperties.Name="Zoom out · Ctrl+-" />
+            <controls:RtaimeMenuItem Header="Zoom in · Ctrl++" Command="{Binding ZoomInCommand}"
+                automation:AutomationProperties.Name="Zoom in · Ctrl++" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Import EBU-TT-D for local review" Click="ImportTimedTextD_Click"
+                ToolTip="Bounded local timed text import for confirmed media only, never Program."
+                automation:AutomationProperties.Name="Import EBU-TT-D for local review">
+                <controls:RtaimeMenuItem.Style>
+                    <Style TargetType="{x:Type controls:RtaimeMenuItem}" BasedOn="{StaticResource {x:Type controls:RtaimeMenuItem}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoaded}" Value="False"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                            <DataTrigger Binding="{Binding RequiresSynchronization}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                            <DataTrigger Binding="{Binding TimedTextSourceContext}" Value="{x:Null}"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </controls:RtaimeMenuItem.Style>
+            </controls:RtaimeMenuItem>
+            <controls:RtaimeMenuItem Header="Import EBU-TT Live for local review" Click="ImportTimedTextLive_Click"
+                ToolTip="Bounded local timed text import for confirmed media only, never Program."
+                automation:AutomationProperties.Name="Import EBU-TT Live for local review">
+                <controls:RtaimeMenuItem.Style>
+                    <Style TargetType="{x:Type controls:RtaimeMenuItem}" BasedOn="{StaticResource {x:Type controls:RtaimeMenuItem}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoaded}" Value="False"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                            <DataTrigger Binding="{Binding RequiresSynchronization}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                            <DataTrigger Binding="{Binding TimedTextSourceContext}" Value="{x:Null}"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </controls:RtaimeMenuItem.Style>
+            </controls:RtaimeMenuItem>
+        </controls:RtaimeContextMenu>
 	</UserControl.Resources>
 
 	<Border
@@ -203,23 +255,9 @@
 							Margin="0,0,5,0"
 							ToolTip="Next cue (Page Down)." />
 
-						<controls:RtaimeButton
-							Content="−"
-							Command="{Binding ZoomOutCommand}"
-							Width="26"
-							Height="26"
-							IsCompact="True"
-							Margin="0,0,2,0"
-							ToolTip="Zoom out." />
-						<TextBlock Text="{Binding ZoomLabel}" Style="{StaticResource OperatorValue}" Width="38" TextAlignment="Center" VerticalAlignment="Center" />
-						<controls:RtaimeButton
-							Content="+"
-							Command="{Binding ZoomInCommand}"
-							Width="26"
-							Height="26"
-							IsCompact="True"
-							Margin="2,0,4,0"
-							ToolTip="Zoom in." />
+                        <TextBlock Text="{Binding ZoomLabel}" Style="{StaticResource OperatorLabel}" Width="42"
+                            VerticalAlignment="Center" TextAlignment="Center" Margin="0,0,3,0"
+                            ToolTip="Use TOOLS or Ctrl+wheel to zoom." />
 						<controls:RtaimeButton
 							Content="FIT"
 							Command="{Binding FitCommand}"
@@ -227,6 +265,12 @@
 							IsCompact="True"
 							Margin="0,0,4,0"
 							ToolTip="Fit the governed media range." />
+                        <controls:RtaimeButton x:Name="MediaTimelineToolsActionsButton"
+                            Content="TOOLS" Tag="{Binding}" Height="26" IsCompact="True" Margin="0,0,4,0"
+                            ContextMenu="{StaticResource MediaTimelineToolsActionsMenu}"
+                            Click="OnMediaTimelineActionsClick"
+                            ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                            automation:AutomationProperties.Name="Timeline zoom and local caption import actions" />
 						<controls:RtaimeIconButton
 							IconData="{StaticResource RtaimeIconFullscreenGeometry}"
 							Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -236,19 +280,6 @@
 					</StackPanel>
 
 					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-						<TextBlock
-							Text="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Style="{StaticResource OperatorLabel}"
-							MaxWidth="150"
-							TextTrimming="CharacterEllipsis"
-							VerticalAlignment="Center"
-							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-						<controls:RtaimeStatusBadge
-							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
-							Content="{Binding DataContext.MediaDeck.ProgramDeckState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							ShowIndicator="False"
-							Margin="6,0,0,0"
-							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Warning}"
 							Content="ERROR"
@@ -297,12 +328,17 @@
 					BorderThickness="0,0,1,1"
 					Padding="9,0">
 					<StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding VisibleRangeLabel}">
-						<controls:RtaimeButton Content="↶" Command="{Binding UndoDraftCommand}" Width="26" Height="26" IsCompact="True" Margin="0,0,3,0" ToolTip="Undo local cursor/projection draft (Ctrl+Z)." automation:AutomationProperties.Name="Undo local timeline draft" />
-						<controls:RtaimeButton Content="↷" Command="{Binding RedoDraftCommand}" Width="26" Height="26" IsCompact="True" Margin="0,0,3,0" ToolTip="Redo local cursor/projection draft (Ctrl+Y)." automation:AutomationProperties.Name="Redo local timeline draft" />
-						<controls:RtaimeButton Content="◇" Command="{Binding CursorToSelectionCommand}" Width="26" Height="26" IsCompact="True" Margin="0,0,3,0" ToolTip="Place edit cursor on selected cue or clip start. No seek." automation:AutomationProperties.Name="Edit cursor to selection" />
-						<controls:RtaimeButton Content="▶" Command="{Binding SeekEditCursorCommand}" Width="26" Height="26" IsCompact="True" Margin="0,0,3,0" ToolTip="Explicitly seek Preview to the draft cursor. Disabled on Program or stale evidence." automation:AutomationProperties.Name="Seek Preview to edit cursor" />
-						<controls:RtaimeButton Content="×" Command="{Binding ClearSelectionCommand}" Width="26" Height="26" IsCompact="True" ToolTip="{Binding SelectionStatus}" automation:AutomationProperties.Name="Clear timeline selection" />
-					</StackPanel>
+                        <controls:RtaimeButton x:Name="MediaTimelineCursorMenuButton" Content="CURSOR" Height="26"
+                            IsCompact="True" Margin="0,0,6,0" Tag="{Binding}"
+                            ContextMenu="{StaticResource MediaTimelineCursorActionsMenu}"
+                            Click="OnMediaTimelineActionsClick"
+                            ToolTip="Local Undo/Redo, selection and explicit Preview seek. Shift+F10 opens actions."
+                            automation:AutomationProperties.Name="Local media cursor and cue actions" />
+                        <TextBlock Text="{Binding EditCursorLabel}" Style="{StaticResource OperatorLabel}"
+                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                            ToolTip="{Binding PreviewPositionLabel}"
+                            automation:AutomationProperties.Name="Local edit cursor, not confirmed transport" />
+                    </StackPanel>
 				</Border>
 
 				<Border Grid.Column="1"
@@ -370,7 +406,10 @@
 								<DataTemplate>
 									<Border
 										Style="{StaticResource TimelineCueMarker}"
-										PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
+										Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:MediaTimelineControl}}}"
+                                        ContextMenu="{StaticResource MediaTimelineCursorActionsMenu}"
+                                        ContextMenuOpening="OnMediaCueActionsOpening"
+                                        PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
 										ToolTip="{Binding Timecode}">
 										<StackPanel Orientation="Horizontal">
 											<Polygon Points="0,0 7,0 3.5,5" Fill="{StaticResource TimelineCueBrush}" Width="7" Height="5" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -542,7 +581,10 @@
 												<DataTemplate>
 													<Border
 														Style="{StaticResource TimelineClip}"
-														PreviewMouseLeftButtonDown="TimelineItem_PreviewMouseLeftButtonDown"
+														Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:MediaTimelineControl}}}"
+                                                ContextMenu="{StaticResource MediaTimelineCursorActionsMenu}"
+                                                ContextMenuOpening="OnMediaItemActionsOpening"
+                                                PreviewMouseLeftButtonDown="TimelineItem_PreviewMouseLeftButtonDown"
 														ToolTip="{Binding Status}">
 														<Grid>
 															<Grid.ColumnDefinitions>
@@ -711,12 +753,8 @@
 						<StackPanel Orientation="Horizontal" Margin="0,0,0,3">
 							<TextBlock Text="TIMED TEXT · LOCAL REVIEW" Style="{StaticResource OperatorLabel}"
 								VerticalAlignment="Center" Margin="0,0,8,0"/>
-							<controls:RtaimeButton Content="IMPORT EBU-TT-D" IsCompact="True"
-								Click="ImportTimedTextD_Click" Margin="0,0,4,0"
-								ToolTip="Load a bounded EBU-TT-D v1.0.1 XML document for the current media source."/>
-							<controls:RtaimeButton Content="IMPORT EBU-TT LIVE" IsCompact="True"
-								Click="ImportTimedTextLive_Click" Margin="0,0,8,0"
-								ToolTip="Load a bounded Live v1.0 document; clock mode without authority remains unverified."/>
+                            <TextBlock Text="Import local captions from TOOLS"
+                                Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
 							<controls:RtaimeComboBox Width="112" Margin="0,0,8,0"
 								ItemsSource="{Binding TimedTextReview.AvailableLanguages, ElementName=TimelineRoot}"
 								SelectedItem="{Binding TimedTextReview.SelectedLanguage, ElementName=TimelineRoot, Mode=TwoWay}"
