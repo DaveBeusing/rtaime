@@ -18,6 +18,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using rtaime.Client;
 using rtaime.Operator;
 using rtaime.Operator.Controls;
 using Xunit;
