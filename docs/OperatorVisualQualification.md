@@ -159,14 +159,14 @@ The test does not manipulate AppHost, RuntimeHost, ControlHost or production sta
 
 ## Real XAML tree startup qualification
 
-`OperatorXamlStartupTests` qualifies the productive `App.InitializeComponent()` dictionaries, both compiled Preview/Program views and the real `MainWindow` in five separate testhost processes. Each child creates exactly one WPF `Application` and runs a dedicated STA Dispatcher; its unchanged 45-second window/dispatcher deadline is independent from other groups. The process wrapper allows bounded additional vstest bootstrap time, not extra UI execution time. It records first-chance `XamlParseException` and `ArgumentException` with the active composition target. BAML's outer `MainWindow.xaml:line 1` is not a reliable source location; independent compiled child-view construction identifies the nested failing view.
+`OperatorXamlStartupTests` qualifies the productive `App.InitializeComponent()` dictionaries, both compiled Preview/Program views and the real `MainWindow` in six separate testhost processes. Each child creates exactly one WPF `Application` and runs a dedicated STA Dispatcher; its unchanged 45-second window/dispatcher deadline is independent from other groups. The process wrapper allows bounded additional vstest bootstrap time, not extra UI execution time. It records first-chance `XamlParseException` and `ArgumentException` with the active composition target. BAML's outer `MainWindow.xaml:line 1` is not a reliable source location; independent compiled child-view construction identifies the nested failing view.
 
-The composition child shows the window, waits for `ContentRendered`, switches through all eight workspaces and verifies that named shell panes remain loaded and visible panes allocated by the shell have positive geometry. Each real-window child requests a 1600 × 900 minimum windowed viewport; diagnostics record the actual runner viewport and compact-layout state. Intentional zero-width shell allocations remain governed by the existing responsive layout contract. Both monitor trees must remain present. Every child uses the existing view-model composition and productive controls; it only redirects UI layout/session persistence to temporary stores. Closing is cancelled synchronously before any asynchronous layout save; the fixture awaits the real window teardown, including its clean-session persistence marker, before shutting down the application and Dispatcher. Dispatcher shutdown uses Send priority after application teardown, matching application exit instead of continuing graphics callbacks after the window lifetime ends. The resource fixture overrides App's queued startup callback so it owns exactly one window; the separate process test exercises the unmodified application startup.
+The composition child shows the window, waits for `ContentRendered`, switches through all ten registered workspaces and verifies that named shell panes remain loaded and visible panes allocated by the shell have positive geometry. Each real-window child requests a 1600 × 900 minimum windowed viewport; diagnostics record the actual runner viewport and compact-layout state. Intentional zero-width shell allocations remain governed by the existing responsive layout contract. Both monitor trees must remain present. Every child uses the existing view-model composition and productive controls; it only redirects UI layout/session persistence to temporary stores. Closing is cancelled synchronously before any asynchronous layout save; the fixture awaits the real window teardown, including its clean-session persistence marker, before shutting down the application and Dispatcher. Dispatcher shutdown uses Send priority after application teardown, matching application exit instead of continuing graphics callbacks after the window lifetime ends. The resource fixture overrides App's queued startup callback so it owns exactly one window; the separate process test exercises the unmodified application startup.
 
 The dedicated composition STA application lifetime also activates the compiled ProductionMacroControl with a real ProductionMacroViewModel and a snapshot-only test transport. It verifies confirmed CUT and DISSOLVE text updates through PropertyChanged, active OneWay Run bindings, read-only source state, neighboring display-property metadata and an empty WPF binding-error trace. No production command is executed to qualify a status display.
 
 
-The full real-window suite retains all previously qualified journeys: Composition owns the productive controls and eight startup workspaces; Visual executes the sixty combined layout/DPI/focus cases and integrated Sequence/Outputs/AI/Health ownership; Controls runs Library, Timeline, Live, Inspector, Compositing, Output Canvas, draft, palette, favorites and readiness interactions; Docking runs real float/dock/cinema/template cycles; GPU runs native surface lifetime and primary-render restoration. Each child checks unchanged source identities, Dispatcher Input and Loaded checkpoints, and zero rendering subscriptions after real window/session closure. This division does not reduce the combined acceptance matrix.
+The full real-window suite retains all previously qualified journeys: Composition owns the productive controls and ten startup workspaces; Visual executes the 60 combined layout/DPI/focus cases and integrated Sequence/Outputs/AI/Health ownership; Navigation checks global menu ownership and 30 real workspace/size navigation cases; Controls runs Library, Timeline, Live, Inspector, Compositing, Output Canvas, draft, palette, favorites and readiness interactions; Docking runs real float/dock/cinema/template cycles; GPU runs native surface lifetime and primary-render restoration. Each child checks unchanged source identities, Dispatcher Input and Loaded checkpoints, and zero rendering subscriptions after real window/session closure. This division does not reduce the combined acceptance matrix.
 
 A separate process test launches the built Windows Operator executable against unique unavailable endpoints, requires its `operator.window-shown` log event, rejects crash/XAML error evidence and requests normal window close. The process must log exit and return zero. No headless flag or substituted visual tree qualifies this launch.
 
@@ -301,7 +301,7 @@ It uses actual compiled WPF controls, but is not a connected sequence
 Preview pixel capture or a human visual sign-off.
 
 Existing 1920×1080–960×540 logical and injected
-100/125/150/200% matrices, five LIVE and twenty owned-window review
+100/125/150/200% matrices, six LIVE and 24 owned-window review
 images, resource and focus tests are still required. No existing STA
 deadline, GPU allocation bound or action-authorization assertion is relaxed.
 Physical mixed-monitor DPI, IME/screen reader, contrast/text review and
@@ -312,7 +312,7 @@ native media scan-out remain **UNVERIFIED** without retained direct evidence.
 `OperatorCombinedVisualQualification.VerifyWindowAsync` runs inside the existing real
 MainWindow STA fixture, before the docking/Inspector/timeline/library/palette/show-check
 interaction fixtures and native GPU recovery fixture. It reuses all six viewport rows
-above across all ten registered workspaces (50 cases). Layout transforms inject the row's
+above across all ten registered workspaces (60 cases). Layout transforms inject the row's
 100/125/150/200% scale; they do not simulate Windows monitor messages. Both requested
 logical dimensions and actual Windows DPI are recorded separately.
 
@@ -374,7 +374,7 @@ focus/modal observations and outcomes. Cases without that evidence stay UNVERIFI
 The existing combined STA fixture also exercises command palette, workspace template
 editor, Recent/Favorites/Help and show preflight in each of the six viewport rows.
 Owned windows use bounded logical sizes and the runner's actual Windows DPI; only
-the main shell receives injected layout scaling. Twenty review images supplement
+the main shell receives injected layout scaling. Twenty-four review images supplement
 the six shell images. They are not physical high-DPI or visual-review PASS evidence.
 
 The sequence closes each surface and immediately opens the next before yielding to
