@@ -90,6 +90,9 @@ public sealed class TimelineContextActionsTests
         Assert.Contains("model.SelectClip(clip.Id)", code, StringComparison.Ordinal);
         Assert.Contains("model.SelectClip(clip.ClipId)", code, StringComparison.Ordinal);
         Assert.Contains("model.SelectedIds.Contains(clip.Id)", code, StringComparison.Ordinal);
+        Assert.Contains("OpenAfterSelection(SequenceEditActionsButton)", code, StringComparison.Ordinal);
+        Assert.Contains("OpenAfterSelection(SequenceTrackActionsButton)", code, StringComparison.Ordinal);
+        Assert.Contains("PlacementMode.MousePoint", code, StringComparison.Ordinal);
         Assert.Contains("e.Handled = true", code, StringComparison.Ordinal);
         Assert.DoesNotContain("Playout.TakeCommand.Execute", code, StringComparison.Ordinal);
     }
@@ -167,6 +170,8 @@ public sealed class TimelineContextActionsTests
         Assert.Contains("ViewModel.TimedTextSourceContext is null", source, StringComparison.Ordinal);
         Assert.Contains("model.SelectCue(cue)", source, StringComparison.Ordinal);
         Assert.Contains("model.SelectItem(item)", source, StringComparison.Ordinal);
+        Assert.Contains("OpenAfterMediaSelection()", source, StringComparison.Ordinal);
+        Assert.Contains("PlacementMode.MousePoint", source, StringComparison.Ordinal);
         Assert.Contains("Key.Apps", source, StringComparison.Ordinal);
         Assert.Contains("Key.F10", source, StringComparison.Ordinal);
         Assert.Contains("FindAncestor<TextBox>", source, StringComparison.Ordinal);
