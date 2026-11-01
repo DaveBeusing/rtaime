@@ -104,6 +104,12 @@
                             <TextBlock Text="{Binding DraftRevision}" Style="{StaticResource OperatorValue}" />
                         </StackPanel>
                     </Grid>
+                    <TextBlock Text="{Binding SavedTargetEvidence}" Style="{StaticResource OperatorLabel}"
+                        TextWrapping="Wrap" Margin="0,7,0,0"
+                        AutomationProperties.Name="Saved output target and declared profile evidence" />
+                    <TextBlock Text="{Binding ObservedTargetEvidence}" Style="{StaticResource OperatorValue}"
+                        TextWrapping="Wrap" Margin="0,4,0,0"
+                        AutomationProperties.Name="Observed Runtime target and saved revision comparison" />
                     <TextBlock Text="{Binding ActivationFailure}" Style="{StaticResource OperatorLabel}"
                         TextWrapping="Wrap" Margin="0,5,0,0" />
                 </StackPanel>
@@ -156,6 +162,39 @@
                     Height="285" MinHeight="180"
                     AutomationProperties.Name="Editable four-corner canvas stage with keyboard nudging and zoom" />
             </Border>
+            <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+                BorderBrush="{DynamicResource OperatorBorderBrush}"
+                BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="VALIDATE DRAFT → SAVE → VALIDATE SAVED → REQUEST APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+                    <TextBlock Text="Only Runtime-confirmed ACTIVE at the saved revision is live; no button alone changes Program."
+                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,7" />
+                    <WrapPanel Margin="0,0,0,7">
+                        <controls:RtaimeButton Content="{Binding ValidationActionLabel}"
+                            Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
+                            ToolTip="Server validates geometry, sources, providers and exact next saved revision." />
+                        <controls:RtaimeButton Content="SAVE"
+                            Command="{Binding SaveCommand}" IsCompact="True" Margin="0,0,5,4"
+                            ToolTip="Authoritative ControlHost transaction; does not change live Program." />
+                        <controls:RtaimeButton Content="REQUEST RUNTIME APPLY"
+                            Command="{Binding ApplyCommand}" IsCompact="True"
+                            Background="{DynamicResource OperatorAccentSurfaceBrush}"
+                            BorderBrush="{DynamicResource OperatorAccentBrush}"
+                            Margin="0,0,5,4"
+                            ToolTip="Explicit Runtime Prepare/Commit request for the saved and validated revision." />
+                        <controls:RtaimeButton Content="DISABLE MAPPING"
+                            Command="{Binding DisableCommand}" IsCompact="True" Margin="0,0,5,4"
+                            ToolTip="Explicitly request identity Program output and observe the next Runtime boundary." />
+                        <controls:RtaimeButton Content="RECONCILE UNKNOWN" Command="{Binding ReconcileCommand}"
+                            IsCompact="True" AutomationProperties.Name="Read-only reconciliation of uncertain output mapping"
+                            ToolTip="Explicitly read saved Control state and current Runtime evidence; never repeats an APPLY or DISABLE." />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ResultDetail}" Style="{StaticResource OperatorLabel}"
+                        TextWrapping="Wrap" Margin="0,5,0,0" />
+                </StackPanel>
+            </Border>
+
             <StackPanel x:Name="GuideDetails" Visibility="Collapsed" Margin="0,0,0,5">
                 <TextBlock Text="DESIGN GUIDES · VIEW ONLY" Style="{StaticResource OperatorLabel}" />
                 <WrapPanel>
@@ -231,39 +270,6 @@
                 ToolTip="Rejects invalid or nonconvex quads. Numeric and pointer editing modify local drafts only." />
             </StackPanel>
 
-            <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
-                BorderBrush="{DynamicResource OperatorBorderBrush}"
-                BorderThickness="1" Padding="8" Margin="0,0,0,8">
-                <StackPanel>
-                    <TextBlock Text="VALIDATE DRAFT → SAVE → VALIDATE SAVED → REQUEST APPLY" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
-                    <TextBlock Text="Only Runtime-confirmed ACTIVE at the saved revision is live; no button alone changes Program."
-                        Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,7" />
-                    <WrapPanel Margin="0,0,0,7">
-                        <controls:RtaimeButton Content="{Binding ValidationActionLabel}"
-                            Command="{Binding ValidateCommand}" IsCompact="True" Margin="0,0,5,4"
-                            ToolTip="Server validates geometry, sources, providers and exact next saved revision." />
-                        <controls:RtaimeButton Content="SAVE"
-                            Command="{Binding SaveCommand}" IsCompact="True" Margin="0,0,5,4"
-                            ToolTip="Authoritative ControlHost transaction; does not change live Program." />
-                        <controls:RtaimeButton Content="REQUEST RUNTIME APPLY"
-                            Command="{Binding ApplyCommand}" IsCompact="True"
-                            Background="{DynamicResource OperatorAccentSurfaceBrush}"
-                            BorderBrush="{DynamicResource OperatorAccentBrush}"
-                            Margin="0,0,5,4"
-                            ToolTip="Explicit Runtime Prepare/Commit request for the saved and validated revision." />
-                        <controls:RtaimeButton Content="DISABLE MAPPING"
-                            Command="{Binding DisableCommand}" IsCompact="True" Margin="0,0,5,4"
-                            ToolTip="Explicitly request identity Program output and observe the next Runtime boundary." />
-                        <controls:RtaimeButton Content="RECONCILE UNKNOWN" Command="{Binding ReconcileCommand}"
-                            IsCompact="True" AutomationProperties.Name="Read-only reconciliation of uncertain output mapping"
-                            ToolTip="Explicitly read saved Control state and current Runtime evidence; never repeats an APPLY or DISABLE." />
-                    </WrapPanel>
-                    <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding ResultDetail}" Style="{StaticResource OperatorLabel}"
-                        TextWrapping="Wrap" Margin="0,5,0,0" />
-                </StackPanel>
-            </Border>
-
             <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -282,12 +288,6 @@
                 BorderThickness="1" Padding="8">
                 <StackPanel>
                     <TextBlock Text="EXECUTION EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
-                    <TextBlock Text="{Binding SavedTargetEvidence}" Style="{StaticResource OperatorLabel}"
-                        TextWrapping="Wrap" Margin="0,0,0,5"
-                        AutomationProperties.Name="Saved output target and declared profile evidence" />
-                    <TextBlock Text="{Binding ObservedTargetEvidence}" Style="{StaticResource OperatorValue}"
-                        TextWrapping="Wrap" Margin="0,0,0,5"
-                        AutomationProperties.Name="Observed Runtime target and saved revision comparison" />
                     <TextBlock Text="{Binding RuntimeOutputTarget}" Style="{StaticResource OperatorValue}"
                         TextTrimming="CharacterEllipsis" ToolTip="{Binding RuntimeOutputTarget}" />
                     <TextBlock Text="{Binding RuntimeOutputSize}" Style="{StaticResource OperatorLabel}" />
