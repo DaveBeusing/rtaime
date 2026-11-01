@@ -16,6 +16,76 @@ additional source reader, production control or shortcut router.
 
 Escape or Ctrl+K closes the palette. Cancellation restores the previous visible control's focus. Successful navigation keeps the destination focus; Ctrl+F reveals the MEDIA tools when required and focuses the existing media search. Detached panels share the central registry. Normal text fields retain typing suppression, numeric-edit Escape handling and local timeline editing precedence.
 
+## Global menu discovery and focus safety
+
+The MainWindow top bar offers **Project, Edit, View, Media, Tools, Window,
+Help** at desktop widths. Below **1480 logical DIPs**, one **MENU** button
+shows seven selectable categories. Each category opens its actions in a
+separate themed custom menu, with **All menus** returning to the category
+chooser. No nested popup implementation or shared-theme change is required. The
+permanent readiness, Program source, recording state and transmission
+evidence remain separate from this navigation and cannot be hidden by a
+menu. The four primary destinations and the existing rail **More** remain
+available independently, using the unchanged canonical workspace IDs.
+
+The global menus resolve command IDs from
+`OperatorCommandCatalog.GlobalShellMenus` into the **existing**
+`OperatorCommandPaletteViewModel.Entries`. They use the same live command
+instances, parameters and actual active shortcut gestures as Ctrl+K.
+Available/nonavailable state is taken from the existing
+`OperatorPaletteEntry.Reason` (including command `CanExecute` and
+the existing stale/disconnected/pending policies). Unsupported commands
+are displayed disabled rather than redirected to an unguarded
+alternative. Menu opening, local selection, focus and Escape never
+execute a menu item's command. Only an explicit click or keyboard
+activation of a specific enabled item requests its existing action.
+
+| Menu | Actions and ownership |
+| --- | --- |
+| Project | Read-only current show identity; existing Show Checks, Recent/Favorites, explicit Demo Production preparation, Control synchronization |
+| Edit | Timeline local Undo/Redo; Inspector compatible attribute Copy/Paste |
+| View | Existing Library and Inspector pane toggles; sampled monitoring scopes; Preview, Program and Dual viewer modes; primary workspaces |
+| Media | MEDIA navigation, focus search, media import/availability refresh, grid/list/filter and Smart Bin commands |
+| Tools | SCENES, MULTIVIEW, COMPOSITING, OUTPUTS, AI, HEALTH and SETTINGS navigation |
+| Window | Dock/Float/Focus/Cinema/Next, workspace reset and named templates, fullscreen/windowed |
+| Help | Searchable help, Commands and shortcut profiles, Show Checks, Recent/Favorites |
+
+The Demo Production command is **explicit** both in the Project menu
+and in the small, separate top-bar **DEMO** button; the adjacent show
+name is a noninteractive information label. Preparing a demo does not
+constitute a Program TAKE. The scopes entry uses the existing
+`OperatorMonitoringViewModel.ToggleScopesCommand`, rather than
+starting a separate measurement or rendering loop. The Project show
+label uses the existing observed `ShowProjectName` and
+`ShowProjectDetail` without providing a show-switch or import command.
+
+Menus open only after the user acts: click or focused **Enter/Space**,
+or the **Menu key / Shift+F10** on the focused trigger. Repeated
+Enter/Space keys on a trigger do not repeatedly reopen it. **Escape**
+closes the menu, returning focus to its originating visible trigger
+when cancelled. Mouse dismissal leaves normal workspace focus alone.
+The existing global keyboard router still suppresses production
+shortcuts in text editors and while menus have keyboard focus.
+No new global shortcut profile, binding ID, execution pathway,
+persisted menu setting or producer of Control/Runtime authority exists.
+
+The palette also includes its own canonical **command-palette**
+navigation entry, so its Ctrl+K gesture is searchable alongside the
+global Help menu route. For production actions, the palette's
+explicit **Execute** requirement remains unchanged; adding a menu
+never changes that rule or grants a new TAKE/recording command path.
+The separate LIVE action strip remains the time-critical
+SET PVW / CUT / AUTO surface.
+
+`OperatorShellMenuTests` checks group discoverability, exact menu
+command identity/parameter, compact overflow visibility, focused
+context-menu opening, read-only show identity, retained permanent
+status and absence of implicit Preview/Program mutations.
+Combined MainWindow, Command Palette and workspace tests continue
+to own broader WPF focus, layout and shortcut-regression coverage.
+Physical mixed-DPI, full keyboard/IME accessibility and hardware
+output behavior remain unverified until separate qualification.
+
 ## Sequence editor local keyboard controls
 
 With focus inside the saved sequence editor and outside text input, **V**

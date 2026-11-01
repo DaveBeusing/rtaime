@@ -15,6 +15,71 @@ LIVE through PreviewPlaybackVisibility. Other Timeline embeddings retain their
 established playback controls. Show/project identity, synchronization, global
 readiness, Program identity and incident navigation remain in the top shell.
 
+## Global Operator menus and show identity
+
+The single existing 60-DIP top bar now contains an understated global
+**Project / Edit / View / Media / Tools / Window / Help** button group inside
+its existing flexible status column. `GlobalDesktopMenuBar` uses the
+existing `Shell.SecondaryMetricVisibility` presentation boundary: at
+logical client widths **below 1480 DIPs** the seven buttons collapse and a
+single **MENU** overflow button becomes visible. The overflow first shows the same seven keyboard-addressable categories;
+choosing one opens that section in a separate custom context menu, with
+**All menus** returning to the categories. The shared menu-item template
+has no nested-popup support, so this preserves the existing styled controls. The top-bar
+row count and media-viewer row allocation do not change. No new persisted
+workspace width, layout schema or navigation registry is introduced.
+
+Each group is a `RtaimeContextMenu` with `RtaimeMenuItem` entries sourced
+from `OperatorCommandCatalog.GlobalShellMenus`. Menu entries resolve to
+the **same** current palette `ICommand` and command parameter as the
+existing ribbon, rail, docking or feature control; they are not alternative
+producers of Runtime/Control mutations. The registered LIVE, MEDIA, EDIT,
+OUTPUTS, SCENES, MULTIVIEW, COMPOSITING, HEALTH, AI and SETTINGS IDs are
+preserved byte-for-byte. The original rail and its **More** grouping remain
+functional and provide independent direct navigation when menus are
+collapsed or the application is in live operation.
+
+| Global menu | Current accessible actions |
+| --- | --- |
+| Project | Non-actionable current show identity, Show Checks / activity, Recent / Favorites, explicit Demo Production preparation and authoritative synchronization |
+| Edit | Local timeline draft undo/redo and compatible Inspector attribute copy/paste |
+| View | Library and Inspector pane toggles, existing sampled monitoring scopes, Preview/Program/Dual presentation and four primary workspace destinations |
+| Media | MEDIA destination, focus search, import/refresh/clear catalogue selection, grid/list/filter and Smart Bin editing |
+| Tools | Scenes, Multiview, Compositing, Outputs, AI, Health and Settings destinations |
+| Window | Existing dock/floating/focus/Cinema/next-panel controls, restore layout, named templates and fullscreen/windowed presentation |
+| Help | Existing searchable contextual help, Commands/shortcut profiles (Ctrl+K), show activity and recent/favorite references |
+
+The show/project name and workspace title in the top bar are now a
+**read-only** `TopBarProjectIdentity` with a genuine show-detail tooltip.
+Reading the project name cannot load the demo. The adjacent, explicitly
+labelled **DEMO** control retains the current
+`DemoProduction.OpenCommand`; the Project menu offers the same deliberate
+preparation action. Demo package state remains labelled in the header and
+is **not** Program or physical-output confirmation.
+
+Permanent status controls retain their original owners and meaning:
+synchronization/engine, global readiness (including the Health action),
+timecode, observed Program network send, actual recording state (RECORDING,
+FINALIZING or FAILED) and authoritative Program identity. At **960 × 540**
+and **960 × 500** the MENU overflow uses space formerly assigned to the
+flexible readiness remainder; it does not shrink Program or relocate a
+production TAKE control. The readiness button remains present with its
+existing full tooltip for details. Workspaces and incident access remain
+reachable from both rail and menu.
+
+Menus are created from the existing active command catalogue on deliberate
+pointer or keyboard activation. Each top-level trigger is focusable;
+**Enter/Space** opens its menu, and **Menu key / Shift+F10** opens the same
+context. **Escape** closes it and restores focus to the originating trigger
+when cancelled. No hover opener, background timer, extra shortcut router,
+new monitoring reader or menu-activation production command exists.
+Menu items expose the current shortcut gesture, actual
+`CanExecute` state and a reason when unavailable. Opening or closing a
+menu never changes Preview, Program, recording or show execution; direct
+selection of a menu action still obeys its authoritative command guard.
+The Ctrl+K palette remains the complete searchable access path with its
+stricter explicit Execute behavior for production actions.
+
 ## Shared dock chrome and compact status geometry
 
 The dock layout reuses the existing `RtaimePanelHeader` header/action slots and
@@ -26,9 +91,9 @@ uses ellipsis rather than forcing the entire panel wider than its container.
 
 Top-bar columns are calculated from the **current logical client viewport**.
 They are not a scaling transform and are not written to the saved schema-7
-workspace layout. The remaining `*` column belongs to global readiness:
+workspace layout. The remaining `*` column is shared by the global menus and global readiness (the compact overflow replaces the full menu group):
 
-| Logical viewport | Brand | Project | Engine | Timecode | LIVE state | Program identity | Settings | Remaining readiness width |
+| Logical viewport | Brand | Project | Engine | Timecode | LIVE state | Program identity | Settings | Remaining menus + readiness width |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1920 × 1080 | 105 | 185 | 190 | 120 | 70 | 140 | 46 | 1062 |
 | 1280 × 720 | 105 | 185 | 190 | 120 | 70 | 140 | 46 | 422 |
@@ -37,13 +102,13 @@ workspace layout. The remaining `*` column belongs to global readiness:
 Before the compact-width adjustment, the 960-DIP window kept the full
 105/185/190/120/70/140/46-DIP status columns, leaving **102 DIPs** for
 readiness. After the adjustment, the 960-DIP compact window has **241 DIPs**
-for readiness, a gain of 139 DIPs without shrinking the native media viewer.
+for the compact MENU trigger and readiness together, a gain of 139 DIPs without shrinking the native media viewer.
 At 1280 and 1920 DIPs, the original reference widths remain unchanged.
 
 Widths are DIPs; the readiness remainder subtracts two 1-DIP separators.
 The compact header keeps recording/transmission status, Program source and
-timecode accessible; only the adjacent product wordmark is suppressed, while
-its emblem remains visible.
+timecode accessible; the compact MENU replaces the seven full labels and the
+adjacent product wordmark is suppressed while its emblem remains visible.
 
 Detached TIMELINE and MONITORS panels must bind to the original MainWindow
 `Timeline` and `SequenceTimeline` owners. The detached Window mirrors the
@@ -117,6 +182,13 @@ format version 1 and records layout schema 7. Unsupported future layout/template
 versions are rejected explicitly. Older executables cannot consume schema 7.
 
 ## Qualification boundaries
+
+The focused `OperatorShellMenuTests` verify all seven menu groups, the canonical
+command ownership and routing IDs, the read-only show header, the unchanged
+recording/readiness/Program evidence, real WPF menu opening and compact
+overflow at 960×540 and 960×500. These checks are Windows presentation
+evidence only; actual physical display and mixed-DPI interaction are not
+qualified by the menu composition.
 
 The registered navigation and WPF combined visual tests additionally cover
 primary/secondary partitioning, More menu command targets, active secondary
