@@ -163,6 +163,12 @@
                                                 Foreground="{DynamicResource OperatorAudioBrush}" AutomationProperties.Name="Live bus right sample peak" />
                                             <TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
                                         </Grid>
+                                        <WrapPanel Margin="0,1,0,3">
+                                            <TextBlock Text="{Binding CompressorActivity, StringFormat=COMP {0}}" Style="{StaticResource MixerLabel}" Margin="0,0,10,0"
+                                                ToolTip="Observed Runtime compressor gain reduction; unavailable observations remain unavailable." />
+                                            <TextBlock Text="{Binding LimiterActivity, StringFormat=LIMIT {0}}" Style="{StaticResource MixerLabel}"
+                                                ToolTip="Observed limiter reduction or accumulated hit counter; not an instantaneous event." />
+                                        </WrapPanel>
                                         <TextBlock Text="{Binding ConfirmedGainLabel, StringFormat=CONFIRMED {0}}"
                                             Style="{StaticResource MixerLabel}" />
                                         <TextBlock Text="{Binding DraftState, StringFormat=LOCAL {0}}"
