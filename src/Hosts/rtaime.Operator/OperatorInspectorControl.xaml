@@ -84,6 +84,29 @@
 			</Setter>
 		</Style>
 
+        <Style x:Key="InspectorProcessingMenuItem" TargetType="{x:Type controls:RtaimeMenuItem}"
+            BasedOn="{StaticResource {x:Type controls:RtaimeMenuItem}}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasAuthoritativeCompositingSelection}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="InspectorSelectedNodeMenuItem" TargetType="{x:Type controls:RtaimeMenuItem}"
+            BasedOn="{StaticResource {x:Type controls:RtaimeMenuItem}}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasAuthoritativeCompositingSelection}" Value="True" />
+                        <Condition Binding="{Binding HasSelectedProcessingNode}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
 		<Style x:Key="InspectorNumericTextBox" TargetType="{x:Type controls:RtaimeTextBox}" BasedOn="{StaticResource {x:Type controls:RtaimeTextBox}}">
 			<Setter Property="IsCompact" Value="True" />
 			<Setter Property="Validation.ErrorTemplate">
@@ -120,7 +143,7 @@
 						<ColumnDefinition Width="72" />
 						<ColumnDefinition Width="9" />
 						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="44" />
+						<ColumnDefinition Width="78" />
 					</Grid.ColumnDefinitions>
 					<Border
 						Width="72"
@@ -155,13 +178,60 @@
                             ToolTip="{Binding EditingSelectionIdentity}"
                             AutomationProperties.Name="Inspector selection breadcrumb" />
 					</StackPanel>
-                    <controls:RtaimeButton Grid.Column="3"
-                        Content="{Binding InspectorSelectionPinLabel}"
-                        Command="{Binding ToggleInspectorSelectionPinCommand}"
-                        IsCompact="True" Width="42" Height="26"
-                        Padding="2,0" VerticalAlignment="Top" HorizontalAlignment="Right"
-                        ToolTip="{Binding InspectorSelectionPinStatus}" ToolTipService.ShowOnDisabled="True"
-                        AutomationProperties.Name="Pin or unpin current Inspector selection" />
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                        <controls:RtaimeButton
+                            Content="{Binding InspectorSelectionPinLabel}"
+                            Command="{Binding ToggleInspectorSelectionPinCommand}"
+                            IsCompact="True" Width="42" Height="26" Padding="2,0"
+                            ToolTip="{Binding InspectorSelectionPinStatus}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Pin or unpin current Inspector selection" />
+                        <controls:RtaimeIconButton
+                            IconData="{StaticResource RtaimeIconMoreGeometry}"
+                            Width="28" Height="26" Margin="4,0,0,0"
+                            IsEnabled="{Binding CanEditSelection}"
+                            Click="OnInspectorActionsClick"
+                            ToolTip="Selected-object actions. Enter, Space or Shift+F10 opens the menu."
+                            AutomationProperties.Name="Inspector actions">
+                            <controls:RtaimeIconButton.ContextMenu>
+                                <controls:RtaimeContextMenu
+                                    DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                    Opened="OnInspectorActionsMenuOpened"
+                                    Closed="OnInspectorActionsMenuClosed"
+                                    AutomationProperties.Name="Inspector selected-object actions">
+                                    <controls:RtaimeMenuItem Header="Copy compatible attributes"
+                                        Command="{Binding CopyAttributesCommand}"
+                                        AutomationProperties.Name="Copy compatible selected attributes" />
+                                    <controls:RtaimeMenuItem Header="Paste into local draft"
+                                        Command="{Binding PasteAttributesCommand}"
+                                        AutomationProperties.Name="Paste compatible attributes into local draft" />
+                                    <controls:RtaimeMenuSeparator />
+                                    <controls:RtaimeMenuItem Header="Undo local draft (Ctrl+Z)"
+                                        Command="{Binding UndoInspectorDraftCommand}"
+                                        AutomationProperties.Name="Undo selected Inspector draft" />
+                                    <controls:RtaimeMenuItem Header="Redo local draft (Ctrl+Y)"
+                                        Command="{Binding RedoInspectorDraftCommand}"
+                                        AutomationProperties.Name="Redo selected Inspector draft" />
+                                    <controls:RtaimeMenuItem Header="Processing stack"
+                                        Style="{StaticResource InspectorProcessingMenuItem}">
+                                        <controls:RtaimeMenuItem Header="Add Color Grade node"
+                                            Command="{Binding AddColorGradeProcessingNodeCommand}" />
+                                        <controls:RtaimeMenuItem Header="Add Chroma Key node"
+                                            Command="{Binding AddChromaKeyProcessingNodeCommand}" />
+                                        <controls:RtaimeMenuSeparator />
+                                        <controls:RtaimeMenuItem Header="Move selected node earlier"
+                                            Command="{Binding MoveProcessingNodeEarlierCommand}"
+                                            Style="{StaticResource InspectorSelectedNodeMenuItem}" />
+                                        <controls:RtaimeMenuItem Header="Move selected node later"
+                                            Command="{Binding MoveProcessingNodeLaterCommand}"
+                                            Style="{StaticResource InspectorSelectedNodeMenuItem}" />
+                                        <controls:RtaimeMenuItem Header="Remove selected node"
+                                            Command="{Binding RemoveProcessingNodeCommand}"
+                                            Style="{StaticResource InspectorSelectedNodeMenuItem}" />
+                                    </controls:RtaimeMenuItem>
+                                </controls:RtaimeContextMenu>
+                            </controls:RtaimeIconButton.ContextMenu>
+                        </controls:RtaimeIconButton>
+                    </StackPanel>
 				</Grid>
 			</Border>
 		</DataTemplate>
@@ -244,7 +314,6 @@
 						<ColumnDefinition Width="24" />
 						<ColumnDefinition Width="*" />
 						<ColumnDefinition Width="64" />
-						<ColumnDefinition Width="28" />
 					</Grid.ColumnDefinitions>
 					<controls:RtaimeIcon
 						Data="{StaticResource RtaimeIconCompositingGeometry}"
@@ -264,41 +333,32 @@
 						FontSize="{StaticResource OperatorFontSizeMicro}"
 						HorizontalAlignment="Right"
 						VerticalAlignment="Center" />
-					<controls:RtaimeIconButton
-						Grid.Column="3"
-						IconData="{StaticResource RtaimeIconMoreGeometry}"
-						Width="24"
-						Height="24"
-						IsEnabled="False"
-						ToolTip="Effect ordering and per-effect context actions are not exposed by the current capability."
-						AutomationProperties.Name="Effect context unavailable" />
 				</Grid>
 			</Border>
 		</DataTemplate>
 
 		<DataTemplate x:Key="InspectorAttributeActionsTemplate">
-			<StackPanel Margin="0,4">
-				<TextBlock Text="{Binding InspectorEditState}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-				<WrapPanel>
-					<controls:RtaimeButton Content="COPY ATTRIBUTES" Command="{Binding CopyAttributesCommand}" IsCompact="True" Margin="0,4,4,4" AutomationProperties.Name="Copy compatible selected attributes" />
-					<controls:RtaimeButton Content="PASTE DRAFT" Command="{Binding PasteAttributesCommand}" IsCompact="True" Margin="0,4" AutomationProperties.Name="Paste compatible attributes into local draft" />
-                    <controls:RtaimeButton Content="UNDO DRAFT" Command="{Binding UndoInspectorDraftCommand}" IsCompact="True" Margin="0,4,4,4" AutomationProperties.Name="Undo selected Inspector draft" ToolTip="Undo local edits only. Ctrl+Z outside text editors." />
-                    <controls:RtaimeButton Content="REDO DRAFT" Command="{Binding RedoInspectorDraftCommand}" IsCompact="True" Margin="0,4" AutomationProperties.Name="Redo selected Inspector draft" ToolTip="Redo local edits only. Ctrl+Y outside text editors." />
-				</WrapPanel>
-				<TextBlock Text="{Binding AttributeCompatibilityLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding InspectorDraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+            <StackPanel Margin="0,4">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                            <DataTrigger Binding="{Binding HasDraftReviews}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                            <DataTrigger Binding="{Binding HasInspectorBatch}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="{Binding InspectorEditState}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <TextBlock Text="{Binding AttributeCompatibilityLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding InspectorDraftHistoryLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
                 <local:InspectorDraftReviewControl />
-			</StackPanel>
+            </StackPanel>
 		</DataTemplate>
 		<DataTemplate x:Key="CompositingProcessingEditorTemplate">
 			<StackPanel>
 				
 				<TextBlock Text="{Binding ProcessingStateLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,6" />
-				<Grid Margin="0,0,0,6">
-					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-					<controls:RtaimeButton Grid.Column="0" Content="+ COLOR GRADE" Command="{Binding AddColorGradeProcessingNodeCommand}" IsCompact="True" AutomationProperties.Name="Add Color Grade processing node" />
-					<controls:RtaimeButton Grid.Column="2" Content="+ CHROMA KEY" Command="{Binding AddChromaKeyProcessingNodeCommand}" IsCompact="True" AutomationProperties.Name="Add Chroma Key processing node" />
-				</Grid>
 				<StackPanel>
 					<StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsSelectedColorGradeProcessingNode}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
 					<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding SelectedColorGradeEnabled, Mode=TwoWay}" Margin="0,4,0,6" />
@@ -318,12 +378,6 @@
 					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Spill" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeNumericField Grid.Column="1" Value="{Binding SelectedChromaKeySpillSuppression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Definition="{x:Static local:InspectorProperties.Spill}" /></Grid>
 					<controls:RtaimeButton Content="APPLY CHROMA KEY" Command="{Binding ApplyChromaKeyCommand}" IsCompact="True" Margin="0,6,0,0" IsEnabled="{Binding NumericInputsValid, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}" />
 				</StackPanel>
-				<Grid Margin="0,6,0,0">
-					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-					<controls:RtaimeButton Grid.Column="0" Content="MOVE EARLIER" Command="{Binding MoveProcessingNodeEarlierCommand}" IsCompact="True" />
-					<controls:RtaimeButton Grid.Column="2" Content="MOVE LATER" Command="{Binding MoveProcessingNodeLaterCommand}" IsCompact="True" />
-				</Grid>
-				<controls:RtaimeButton Content="REMOVE SELECTED NODE" Command="{Binding RemoveProcessingNodeCommand}" IsCompact="True" Margin="0,6,0,0" />
 				<TextBlock Text="{Binding UnsupportedEffectOrderingText}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 			</StackPanel>
 		</DataTemplate>
@@ -891,8 +945,7 @@
 														<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
 														<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
 													</Grid>
-													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not implemented in this Inspector. Existing effects can be edited through supported processing controls." />
-												</StackPanel>
+														</StackPanel>
 											</StackPanel>
 										</Border>
 									</StackPanel>
@@ -910,7 +963,17 @@
                             IsEnabled="{Binding Inspector.InspectorPinAllowsActions, ElementName=Root}">
 							<StackPanel>
 								<controls:RtaimeToggleButton Content="EFFECTS" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}" />
-								<Border Style="{StaticResource InspectorPropertySectionContent}">
+								<Border>
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Inspector.IsEffectsExpanded, ElementName=Root}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
 									<StackPanel>
 										<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorEffectTemplate}" />
 										<StackPanel>

@@ -4,6 +4,25 @@
 
 The Inspector follows the existing media, timeline, layer and processing-node selection. Confirmed metadata, mixed-selection summaries, pinnable properties, playback policies, audio gain, graphics placement and typed compositing Apply commands already existed. These remain the source of selection and production evidence.
 
+## Selection-first controls and action menu
+
+The shared Inspector header keeps the selected-object thumbnail, title, context breadcrumb, confirmed identity and **PIN / UNPIN** control. Its adjacent **More / Inspector actions** button opens the same project-owned `RtaimeContextMenu` in the Inspector, Processing and Metadata tabs. The button is enabled only for a single, currently eligible editable context (`CanEditSelection`); the Inspector still shows a concise empty state without a selected object.
+
+| Action location | Exposed actions | Availability and authority |
+| --- | --- | --- |
+| Inspector actions | Copy compatible attributes; Paste into local draft | Existing typed attribute commands check context kind, clipboard revision, valid fields and confirmed connection. Paste never applies a production change. |
+| Inspector actions | Undo local draft; Redo local draft | Existing bounded selection-specific local draft history. No automatic live or Program undo. |
+| Inspector actions > Processing stack | Add Color Grade node; Add Chroma Key node | Only displayed for a supported authoritative compositing selection. Existing command validation decides which operation is enabled. |
+| Inspector actions > Processing stack | Move selected node earlier/later; Remove selected node | Displayed only when an authoritative processing node is selected. Ordering and deletion remain explicit, governed mutations on the same existing command owners. |
+| Primary typed editors | Apply transform, Color Grade, Chroma Key, audio gain, cue name or playback policy | Apply controls remain adjacent to the active typed editors, with their existing numeric validation, selection and confirmed-state checks. |
+| Persistent Inspector review footer | Apply Draft, Discard, Keep Draft, Rebase / Review, Restore Local; explicit sequential batch review | Remains outside the context menu when a selection, retained draft review or Inspector batch exists. Pending, rejected, stale, invalid and revision-conflict feedback stays visible. |
+
+The menu is activated with mouse click, **Enter**, **Space** or **Shift+F10** when the actions button has focus; its custom menu items support ordinary keyboard navigation. Ctrl+Z and Ctrl+Y continue to target the local Inspector history outside text-entry controls. Text editors, decimal entry and IME composition retain the existing keyboard suppression and numeric validation rules. Opening the menu does not change Preview/Program, begin a new production transaction or discard typed values. Switching the Inspector's stable selection identity closes an open menu before another selected object can receive its old action. Unloading or replacing the Inspector model also closes the menu.
+
+Supported typed effect editors stay visible when selected, while insertion, stack order and removal no longer occupy permanent rows. The nonfunctional per-effect overflow and unsupported Add Effect button have been removed; the existing explicitly governed AI showcase enable/disable commands remain in their separate FX section. The Processing tab now follows the same per-selection EFFECTS expansion toggle as the FX tab, without replacing or overwriting saved expansion preferences. A retained draft review remains accessible even after the active selection disappears.
+
+These changes only reorganize the existing Operator presentation. They do not add new processing capabilities, multi-selection atomicity, property persistence or automatic retries. Visual keyboard behavior on physical mixed-DPI and GPU/reference systems remains subject to separate qualification; source-only UI assertions are not hardware acceptance evidence.
+
 ## Current review and multiple-object workflow
 
 [Inspector draft review and sequential edits](InspectorDraftTransactions.md) defines the current dirty-selection, explicit rebase and bounded per-object submission workflow. The read-only multi-selection baseline below describes the common-property summary and the absence of an atomic multi-object command. Explicit sequential review does not claim that missing atomicity.
