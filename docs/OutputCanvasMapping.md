@@ -7,7 +7,7 @@ The single OUTPUTS workspace provides **ROUTING / SIGNAL** and **CANVAS / MAPPIN
 
 Canvas actions are explicitly ordered: **VALIDATE DRAFT** must succeed at the current local edit before **SAVE** becomes available; after a successful Control-host save, **VALIDATE SAVED** must succeed for the authoritative saved revision before **REQUEST RUNTIME APPLY** can be issued. SAVE remains non-executing. A successful Apply reply reporting `PENDING_BOUNDARY` remains unconfirmed until Runtime returns `ACTIVE` with the matching saved render revision; a target may still be UNMAPPED, FAILED or missing. Changed local geometry invalidates validation. Conflicted saved revisions or lost-save replies block retries until reconciliation. An ambiguous Apply or Disable reply blocks further local edits and activation commands until Runtime confirms the *intended* terminal state: ACTIVE at the exact requested saved revision for Apply, or UNMAPPED with no active revision for Disable. A retained older UNMAPPED/ACTIVE observation is not sufficient and must not unlock a retry. Even after passive monitoring observes a plausible terminal result, local mutation stays locked behind **RECONCILE UNKNOWN**, an explicit read-only Get of both Control's saved configuration/revision and Runtime's currently reported state. Reconciliation of APPLY additionally checks the authorized Program target identity, provider/profile binding, observed dimensions and exact saved revision; DISABLE requires currently UNMAPPED with no active revision. The UI reports a currently reconciled state, not causal proof that a lost request executed. Changed saved revisions preserve the UNKNOWN fence and require explicit recovery; no automatic request is replayed. If evidence is inadequate, the outcome remains UNKNOWN and is never guessed to be FAILED or COMPLETED. No optimistic Program update or implicit retry is made.
 
-The target selector lists only Control-authorized targets and exposes role, provider, target identity, profile and declared geometry. That authorization alone does **not** demonstrate device/driver compatibility, professional media-I/O or physical scan-out; absent evidence remains UNVERIFIED. Numerical warp, crop and edge-blend controls are behind **ADVANCED GEOMETRY / BLEND**, while the geometry stage and source/target binding remain accessible. Hiding numerical controls does not modify a draft or add another geometry render loop.
+The target selector lists only Control-authorized targets and exposes role, provider, target identity, profile and declared geometry. That authorization alone does **not** demonstrate device/driver compatibility, professional media-I/O or physical scan-out; absent evidence remains UNVERIFIED. Numerical warp, crop and edge-blend controls are behind **TOOLS > Advanced geometry / crop / edge blend**, while the geometry stage and source/target binding remain accessible. Hiding numerical controls does not modify a draft or add another geometry render loop.
 
 
 
@@ -208,6 +208,73 @@ anchor and carries every warped corner by one identical offset; this prevents
 independent corner rounding from accidentally changing perspective. The stage
 reports its real DIP/logical-pixel scale rather than calling FIT 100% source pixels.
 No stage pointer operation bypasses draft validation or changes Program.
+
+### Progressive editor layout and command menus
+
+In CANVAS / MAPPING mode, the editor puts its authoritative workflow stage,
+draft safety state, **saved edit revision**, **next draft revision**, requested/
+pending revision and distinct **Runtime ACTIVE revision** before the
+interactive `OutputCanvasStageSurface`. The saved Program provider/target/
+declared profile and the separately observed Runtime target/size/sequence are
+visible above the stage; they are never combined into a claim of physical
+scan-out. The selected logical canvas and selected surface share one bounded
+selection row, followed by the Control-authorized Program target. A selection
+only changes local editing context; it does not bind, route, save or apply.
+
+Four small, keyboard-focusable buttons replace the always-expanded authoring
+tool rows. Each opens an existing themed `RtaimeContextMenu`, with the menu
+receiving the button's current `OutputCanvasEditorViewModel` and existing
+`ICommand` instances:
+
+| Menu | Commands / options | Authority and side effect |
+| --- | --- | --- |
+| **CANVAS** | Reload authoritative state; explicit Discard and Reload; Undo/Redo; Add/Remove canvas | Existing `ReloadCommand`, `DiscardAndReloadCommand`, `UndoCommand`, `RedoCommand`, `AddCanvasCommand`, `RemoveCanvasCommand`; only local history or explicit Control read |
+| **SURFACE** | Add/Remove selected surface; checked Enable surface; Show/hide alignment tools | Existing `AddSurfaceCommand`, `RemoveSurfaceCommand`, `IsSurfaceEnabled` local draft and the existing `AlignHorizontalCommand` / `AlignVerticalCommand` exposed in a collapsed tool row |
+| **VIEW** | Fit, Zoom +/−; checked Snap 10 px, Grid/Rulers and Design Safe Areas; Show/hide guide controls | Existing `FitCommand`, `ZoomInCommand`, `ZoomOutCommand`, `SnapEnabled`, `ShowGuides`, `ShowSafeAreas` and an optional collapsed guide row; view options never write saved geometry |
+| **TOOLS** | Advanced geometry / crop / edge blend | Existing `ToggleGeometryDetailsCommand` reveals the numeric editors and their original local `ApplyNumericCommand` |
+
+The numeric panel and the on-demand alignment and guide rows use the
+same controls as before; their local visibility state does not create a
+second edit store. Stage mouse wheel, pan, corner/quad dragging, nudge and
+DPI geometry transforms remain in their original owners. Opening a menu,
+moving focus or changing a local selection does not invoke any production
+command. Each menu button also supports the focused context-menu keyboard
+path (Shift+F10 or the Menu key), while ordinary Enter/Space activation
+opens that menu; no new application shortcut or routed Program action is
+introduced. Disabled commands retain the existing `CanExecute` behavior.
+
+### Persistent mapping workflow and exceptional controls
+
+The stage is followed by the explicit Program-target binding step and a
+compact but always-visible **VALIDATE DRAFT → SAVE → VALIDATE SAVED →
+REQUEST RUNTIME APPLY** action sequence. The binding command edits the
+local authoring draft only; `ValidateCommand`, `SaveCommand` and
+`ApplyCommand` preserve the ViewModel's separate eligibility gates and
+their existing server/Runtime ownership. A save acknowledgment is not an
+ACTIVE rendering observation. The result, rejection detail and validation
+issues stay in the same workflow area instead of being dismissed by a menu.
+
+**DISABLE MAPPING** remains directly visible when Runtime reports ACTIVE,
+reports an unverified ACTIVE match, or an Apply is awaiting its Runtime
+boundary. Its existing `DisableCommand` is still disabled when authority
+or revision guards fail. **RECONCILE UNKNOWN** appears directly in the
+workflow when the existing `ApplyOutcomeUnconfirmed` fence is set.
+It invokes only the established read-only `ReconcileCommand`; it never
+replays a lost Apply/Disable request. A lost-save response is different:
+the CANVAS menu retains the explicit Reload path used to reconcile the
+saved transaction. Stale authority, a missing authorized target, a
+conflicting saved revision and an unresolved response never become
+optimistic ACTIVE evidence.
+
+The output canvas menus are qualified in
+`OutputCanvasMenuQualificationTests`, together with existing
+`OutputCanvasEditorWorkflowTests`, `OutputCanvasWorkspaceQualification`,
+`OutputCanvasViewportTests` and `OutputCanvasDraftSessionTests`.
+The menu tests check command binding, context ownership, no-target gating,
+visible safety/recovery triggers, a real isolated WPF window and stable
+logical/DPI transforms. The stage tests use model/test fixture evidence,
+not independently qualified physical display output, multi-monitor DPI,
+projector calibration or end-to-end provider scan-out.
 
 The Editor reads `GetOutputCanvasAsync` and optional Runtime mapping
 evidence. It maintains a finite local 48-step draft history; Undo and Redo
