@@ -75,7 +75,8 @@ public sealed class OperatorWorkspaceDefaultTests
             var loaded = file.Load();
             Assert.Equal(original, await File.ReadAllTextAsync(path));
             Assert.Equal(JsonSerializer.Serialize(media), JsonSerializer.Serialize(loaded.Workspaces["MEDIA"]));
-            Assert.Equal(OperatorLayoutSettings.CreateCanonicalLayouts()["LIVE"], loaded.Workspaces["LIVE"]);
+            Assert.Equal(JsonSerializer.Serialize(OperatorLayoutSettings.CreateCanonicalLayouts()["LIVE"]),
+                JsonSerializer.Serialize(loaded.Workspaces["LIVE"]));
             Assert.True(loaded.Workspaces["LIVE"].IsRightCollapsed);
             Assert.Equal("Saved custom layout", Assert.Single(loaded.Templates).Name);
 
