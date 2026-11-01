@@ -130,30 +130,30 @@
                     Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasToolsMenu}"
                     AutomationProperties.Name="Open advanced output canvas tools" ToolTip="Advanced numeric geometry and blend editors." />
             </WrapPanel>
-            <TextBlock Text="CANVAS" Style="{StaticResource OperatorLabel}" Margin="0,2,0,3" />
-            <controls:RtaimeComboBox ItemsSource="{Binding Canvases}"
-                SelectedItem="{Binding SelectedCanvas, Mode=TwoWay}"
-                DisplayMemberPath="Name"
-                AutomationProperties.Name="Select logical output canvas"
-                Margin="0,0,0,7" />
-
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="CANVAS" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+                    <controls:RtaimeComboBox ItemsSource="{Binding Canvases}"
+                        SelectedItem="{Binding SelectedCanvas, Mode=TwoWay}" DisplayMemberPath="Name"
+                        ToolTip="{Binding SelectedCanvas.Name}"
+                        AutomationProperties.Name="Select logical output canvas" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="SURFACE / Z-ORDER" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
+                    <controls:RtaimeComboBox ItemsSource="{Binding Surfaces}"
+                        SelectedItem="{Binding SelectedSurface, Mode=TwoWay}" DisplayMemberPath="Label"
+                        ToolTip="{Binding SelectedSurface.Label}"
+                        AutomationProperties.Name="Select a mapping surface" />
+                </StackPanel>
+            </Grid>
             <TextBlock Text="AVAILABLE PROGRAM TARGET" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
             <controls:RtaimeComboBox ItemsSource="{Binding Targets}"
                 SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"
                 DisplayMemberPath="Label"
                 AutomationProperties.Name="Control-authorized Runtime output target"
-                Margin="0,0,0,6" />
-            <TextBlock Text="{Binding TargetEligibility}" Style="{StaticResource OperatorLabel}"
-                TextWrapping="Wrap" Margin="0,1,0,6" />
-            <controls:RtaimeButton Content="BIND SELECTED CANVAS TO PROGRAM DRAFT"
-                Command="{Binding BindProgramCommand}" IsCompact="True" Margin="0,0,0,10"
-                ToolTip="Only the confirmed Program target is eligible. Existing other output bindings are retained disabled in this saved draft; no live routing changes." />
-
-            <TextBlock Text="SURFACES / Z-ORDER" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
-            <controls:RtaimeComboBox ItemsSource="{Binding Surfaces}"
-                SelectedItem="{Binding SelectedSurface, Mode=TwoWay}"
-                DisplayMemberPath="Label"
-                AutomationProperties.Name="Select a mapping surface"
                 Margin="0,0,0,6" />
 
             <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
@@ -162,6 +162,13 @@
                     Height="285" MinHeight="180"
                     AutomationProperties.Name="Editable four-corner canvas stage with keyboard nudging and zoom" />
             </Border>
+            <TextBlock Text="PROGRAM TARGET · LOCAL BINDING" Style="{StaticResource OperatorLabel}"
+                Margin="0,5,0,3" />
+            <TextBlock Text="{Binding TargetEligibility}" Style="{StaticResource OperatorLabel}"
+                TextWrapping="Wrap" Margin="0,1,0,6" />
+            <controls:RtaimeButton Content="BIND SELECTED CANVAS TO PROGRAM DRAFT"
+                Command="{Binding BindProgramCommand}" IsCompact="True" Margin="0,0,0,10"
+                ToolTip="Only the confirmed Program target is eligible. Existing other output bindings are retained disabled in this saved draft; no live routing changes." />
             <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
                 BorderBrush="{DynamicResource OperatorBorderBrush}"
                 BorderThickness="1" Padding="8" Margin="0,0,0,8">
