@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using rtaime.Operator.Controls;
 
 namespace rtaime.Operator;
 
@@ -386,6 +387,59 @@ public partial class MediaTimelineControl : UserControl
 		e.Handled = true;
 	}
 
+    private void OnMediaTimelineActionsClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement anchor) OpenMediaTimelineMenu(anchor);
+    }
+
+    private static void OpenMediaTimelineMenu(FrameworkElement anchor)
+    {
+        if (anchor.ContextMenu is not RtaimeContextMenu menu || !anchor.IsVisible)
+            return;
+        menu.PlacementTarget = anchor;
+        menu.IsOpen = true;
+    }
+
+    private void OnMediaItemActionsOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: TimelineTrackItemViewModel item } &&
+            ViewModel is { } model)
+        {
+            // Selection is local. It does not seek, start a playout or send Program.
+            if (!model.SelectedItems.Contains(item))
+                model.SelectItem(item);
+            return;
+        }
+        e.Handled = true;
+    }
+
+    private void OnMediaCueActionsOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: TimelineCueViewModel cue } &&
+            ViewModel is { } model)
+        {
+            // Right-click is inspection only; only the explicit jump action seeks.
+            if (!ReferenceEquals(model.SelectedCue, cue))
+                model.SelectCue(cue);
+            return;
+        }
+        e.Handled = true;
+    }
+
+    private FrameworkElement? FocusedMediaActionTarget(MediaTimelineViewModel model)
+    {
+        for (var node = Keyboard.FocusedElement as DependencyObject; node is not null;)
+        {
+            if (node is FrameworkElement element && element.ContextMenu is RtaimeContextMenu &&
+                ReferenceEquals(element.Tag, model))
+                return element;
+            if (ReferenceEquals(node, this)) break;
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
+        }
+        return null;
+    }
+
 	private void Timeline_PreviewKeyDown(object sender, KeyEventArgs e)
 	{
 		if (FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null ||
@@ -396,6 +450,14 @@ public partial class MediaTimelineControl : UserControl
 
 		if (ViewModel is not { } viewModel)
 			return;
+
+        if (e.Key is Key.Apps || (e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            if (!e.IsRepeat)
+                OpenMediaTimelineMenu(FocusedMediaActionTarget(viewModel) ?? MediaTimelineCursorMenuButton);
+            e.Handled = true;
+            return;
+        }
 
 		if (e.Key == Key.Escape && OwnsEscape)
 		{
