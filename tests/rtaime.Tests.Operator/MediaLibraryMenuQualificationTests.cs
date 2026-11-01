@@ -46,9 +46,11 @@ public sealed class MediaLibraryMenuQualificationTests
         var selectedMenu = Assert.Single(selection.Descendants().Where(node =>
             node.Name.LocalName == "RtaimeContextMenu"));
         Assert.Equal("OnMediaLibrarySelectionMenuOpened", selectedMenu.Attribute("Opened")?.Value);
-        Assert.Contains(selectedMenu.Elements(), node => node.Attribute("Header")?.Value == "Offline QC");
-        Assert.Contains(selectedMenu.Elements(), node => node.Attribute("Header")?.Value == "ADM metadata");
-        Assert.Contains(selectedMenu.Descendants(), node => node.Attribute("Header")?.Value == "Batch · Remove selected…");
+        foreach (var label in new[] { "Start offline QC", "Cancel QC", "QC reports and checks…",
+            "Import ADM…", "ADM track tools…", "Batch · Remove selected…" })
+            Assert.Contains(selectedMenu.Elements(), node => node.Attribute("Header")?.Value == label);
+        Assert.DoesNotContain(selectedMenu.Elements().Where(node => node.Name.LocalName == "RtaimeMenuItem"),
+            node => node.Elements().Any(child => child.Name.LocalName == "RtaimeMenuItem"));
 
         Assert.Equal("Collapsed", FindNamed(view, "MediaAdvancedTools").Attribute("Visibility")?.Value);
         Assert.Equal("Collapsed", FindNamed(view, "MediaSelectedDetails").Attribute("Visibility")?.Value);
