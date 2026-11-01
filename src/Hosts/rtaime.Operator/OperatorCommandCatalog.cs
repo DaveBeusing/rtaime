@@ -4,8 +4,99 @@ using rtaime.Client;
 
 namespace rtaime.Operator;
 
+// A menu link identifies an existing catalogue command, not a second command owner.
+// Null IDs are visual group separators. The special read-only show identity and
+// existing Demo/Scopes owners are resolved by the MainWindow composition.
+public sealed record OperatorShellMenuSlot(string? CommandId, string? Label = null);
+public sealed record OperatorShellMenuSection(string Name, IReadOnlyList<OperatorShellMenuSlot> Slots);
+
 public static class OperatorCommandCatalog
 {
+    public static IReadOnlyList<OperatorShellMenuSection> GlobalShellMenus { get; } =
+    [
+        new("Project",
+        [
+            new("show-identity"),
+            new("show-checks"),
+            new("recent-favorites"),
+            new(null),
+            new("demo-open"),
+            new(null),
+            new("sync")
+        ]),
+        new("Edit",
+        [
+            new("timeline-undo"),
+            new("timeline-redo"),
+            new(null),
+            new("inspector-copy"),
+            new("inspector-paste")
+        ]),
+        new("View",
+        [
+            new("pane-library"),
+            new("pane-inspector"),
+            new("view-scopes"),
+            new(null),
+            new("preview-view"),
+            new("program-view"),
+            new("dual-view"),
+            new(null),
+            new("workspace-live"),
+            new("workspace-media"),
+            new("workspace-edit"),
+            new("workspace-outputs")
+        ]),
+        new("Media",
+        [
+            new("workspace-media"),
+            new("media-search"),
+            new(null),
+            new("media-import"),
+            new("media-refresh"),
+            new("media-clear-selection"),
+            new(null),
+            new("media-grid"),
+            new("media-list"),
+            new("media-filters"),
+            new("media-save-bin"),
+            new("media-delete-bin")
+        ]),
+        new("Tools",
+        [
+            new("workspace-scenes"),
+            new("workspace-multiview"),
+            new("workspace-compositing"),
+            new("workspace-outputs"),
+            new(null),
+            new("workspace-ai"),
+            new("workspace-health"),
+            new("workspace-settings")
+        ]),
+        new("Window",
+        [
+            new("dock-toggle"),
+            new("dock-float"),
+            new("dock-focus"),
+            new("dock-cinema"),
+            new("dock-next"),
+            new(null),
+            new("workspace-restore"),
+            new("workspace-templates"),
+            new(null),
+            new("fullscreen"),
+            new("exit-fullscreen")
+        ]),
+        new("Help",
+        [
+            new("inline-help"),
+            new("command-palette"),
+            new(null),
+            new("show-checks"),
+            new("recent-favorites")
+        ])
+    ];
+
 	private static readonly HashSet<string> Presentation = new(StringComparer.Ordinal)
 	{ "command-palette", "media-search", "fullscreen", "exit-fullscreen", "preview-view", "program-view", "dual-view" };
 	private static readonly HashSet<string> Transport = new(StringComparer.Ordinal)
@@ -34,7 +125,7 @@ public static class OperatorCommandCatalog
 			return null;
 		}
 		var commands = new List<OperatorPaletteCommand>();
-		foreach (var definition in registry.CanonicalDefinitions.Where(item => item.Id != "command-palette"))
+		foreach (var definition in registry.CanonicalDefinitions)
 		{
 			var local = Presentation.Contains(definition.Id) || definition.Id.StartsWith("dock-", StringComparison.Ordinal);
 			commands.Add(new(definition.Id, definition.Label,
