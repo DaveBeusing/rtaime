@@ -130,18 +130,18 @@ public partial class OperatorMediaLibraryView : UserControl
     private void OnMediaLibraryAddMenuOpened(object sender, RoutedEventArgs e)
     {
         if (sender is not Controls.RtaimeContextMenu menu) return;
-        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && header switch
+        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && (header switch
         {
             "Import Media" => pool.ImportCommand.CanExecute(null),
             "Test Signal" => pool.AddTestSignalCommand.CanExecute(null),
             _ => false
-        });
+        }));
     }
 
     private void OnMediaLibraryToolsMenuOpened(object sender, RoutedEventArgs e)
     {
         if (sender is not Controls.RtaimeContextMenu menu) return;
-        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && header switch
+        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && (header switch
         {
             "Refresh availability" => pool.RefreshCatalogCommand.CanExecute(null),
             "Clear selection" => pool.SelectedItems.Count > 0,
@@ -151,7 +151,7 @@ public partial class OperatorMediaLibraryView : UserControl
             "Offline QC results…" => pool.HasQcResults || pool.CanCancelQc || pool.CanStartQc,
             "ADM track metadata…" => pool.HasAdmMetadata || pool.CanImportAdm,
             _ => false
-        });
+        }));
     }
 
     private void OnMediaLibrarySelectionMenuOpened(object sender, RoutedEventArgs e)
