@@ -141,8 +141,9 @@ public sealed class OperatorUiNavigationRegressionTests
     {
         var root = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
         var owner = Assert.IsType<OperatorViewModel>(window.DataContext);
-        var original = (root.Width, root.Height, root.LayoutTransform, window.Width,
-            window.Height, window.Shell.SelectedWorkspace);
+        var original = (RootWidth: root.Width, RootHeight: root.Height,
+            Transform: root.LayoutTransform, WindowWidth: window.Width,
+            WindowHeight: window.Height, Workspace: window.Shell.SelectedWorkspace);
         var beforeRouting = (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId);
         var beforeRecording = owner.RecordingStatus;
         var monitoring = window.Monitoring;
@@ -324,12 +325,12 @@ public sealed class OperatorUiNavigationRegressionTests
         }
         finally
         {
-            root.Width = original.Width;
-            root.Height = original.Height;
-            root.LayoutTransform = original.LayoutTransform;
-            window.Width = original.Item4;
-            window.Height = original.Item5;
-            window.Shell.SelectWorkspace(original.SelectedWorkspace);
+            root.Width = original.RootWidth;
+            root.Height = original.RootHeight;
+            root.LayoutTransform = original.Transform;
+            window.Width = original.WindowWidth;
+            window.Height = original.WindowHeight;
+            window.Shell.SelectWorkspace(original.Workspace);
             window.Shell.UpdateViewportSize(window.Width, window.Height);
             await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
         }
