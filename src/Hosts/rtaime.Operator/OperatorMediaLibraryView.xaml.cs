@@ -13,7 +13,8 @@ namespace rtaime.Operator;
 public partial class OperatorMediaLibraryView : UserControl
 {
     public static readonly DependencyProperty ContextProperty = DependencyProperty.Register(
-        nameof(Context), typeof(OperatorMediaLibraryContext), typeof(OperatorMediaLibraryView));
+        nameof(Context), typeof(OperatorMediaLibraryContext), typeof(OperatorMediaLibraryView),
+        new PropertyMetadata(null, OnContextChanged));
     public OperatorMediaLibraryContext? Context
     {
         get => (OperatorMediaLibraryContext?)GetValue(ContextProperty);
@@ -24,7 +25,169 @@ public partial class OperatorMediaLibraryView : UserControl
     private MediaTimelineViewModel Timeline => Context!.Timeline;
     private Point _mediaPoolDragStart;
     private bool _syncingMediaPoolSelection;
-    public OperatorMediaLibraryView() => InitializeComponent();
+    private MediaPoolInspectorViewModel? _observedMediaPool;
+    private Controls.RtaimeContextMenu? _openSelectionMenu;
+    private string? _openMenuSelectionSignature;
+
+    public OperatorMediaLibraryView()
+    {
+        InitializeComponent();
+        Loaded += (_, _) => SubscribeMediaPool();
+        Unloaded += (_, _) => UnsubscribeMediaPool();
+    }
+
+    private static void OnContextChanged(DependencyObject sender, DependencyPropertyChangedEventArgs e)
+    {
+        var view = (OperatorMediaLibraryView)sender;
+        view.UnsubscribeMediaPool();
+        if (view.IsLoaded) view.SubscribeMediaPool();
+    }
+
+    private void SubscribeMediaPool()
+    {
+        if (ReferenceEquals(_observedMediaPool, Context?.MediaPool)) return;
+        UnsubscribeMediaPool();
+        _observedMediaPool = Context?.MediaPool;
+        if (_observedMediaPool is not null)
+            _observedMediaPool.PropertyChanged += OnMediaPoolPresentationChanged;
+        OpenVisibleMediaTasks();
+    }
+
+    private void UnsubscribeMediaPool()
+    {
+        if (_observedMediaPool is not null)
+            _observedMediaPool.PropertyChanged -= OnMediaPoolPresentationChanged;
+        _observedMediaPool = null;
+        CloseSelectionMenu();
+    }
+
+    private void OnMediaPoolPresentationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _observedMediaPool)) return;
+        if (e.PropertyName is not (nameof(MediaPoolInspectorViewModel.BatchVisibility) or
+            nameof(MediaPoolInspectorViewModel.PreparationVisibility) or
+            nameof(MediaPoolInspectorViewModel.EditingSelectionIdentity) or
+            nameof(MediaPoolInspectorViewModel.CatalogEvidence) or
+            nameof(MediaPoolInspectorViewModel.SelectionCount) or
+            nameof(MediaPoolInspectorViewModel.HasMultipleSelection) or
+            nameof(MediaPoolInspectorViewModel.SelectedItem))) return;
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnMediaPoolPresentationChanged(sender, e)));
+            return;
+        }
+        if (e.PropertyName is nameof(MediaPoolInspectorViewModel.BatchVisibility) or
+            nameof(MediaPoolInspectorViewModel.PreparationVisibility))
+            OpenVisibleMediaTasks();
+        if (_openSelectionMenu is not null &&
+            _openMenuSelectionSignature != SelectedLibrarySignature())
+            CloseSelectionMenu();
+    }
+
+    private void OpenVisibleMediaTasks()
+    {
+        if (Context?.MediaPool is not { } pool) return;
+        if (pool.BatchVisibility == Visibility.Visible || pool.PreparationVisibility == Visibility.Visible)
+            MediaAdvancedTools.Visibility = Visibility.Visible;
+    }
+
+    private string SelectedLibrarySignature()
+    {
+        if (Context?.MediaPool is not { } pool) return "";
+        return string.Join("\n", pool.SelectedItems.Select(item =>
+            item.Key + "|" + item.ReferenceId + "|" + item.LocalPath));
+    }
+
+    private void CloseSelectionMenu()
+    {
+        var menu = _openSelectionMenu;
+        _openSelectionMenu = null;
+        _openMenuSelectionSignature = null;
+        if (menu is not null) menu.IsOpen = false;
+    }
+
+    private static IEnumerable<Controls.RtaimeMenuItem> MenuEntries(ItemsControl owner)
+    {
+        foreach (var item in owner.Items.OfType<Controls.RtaimeMenuItem>())
+        {
+            yield return item;
+            foreach (var child in MenuEntries(item)) yield return child;
+        }
+    }
+
+    private static void SetMenuAvailability(ItemsControl menu, Func<string, bool> enabledFor)
+    {
+        foreach (var item in MenuEntries(menu))
+        {
+            var header = item.Header?.ToString() ?? "";
+            if (header == "GENERATOR") continue;
+            var enabled = enabledFor(header);
+            item.IsEnabled = enabled;
+            item.ToolTip = enabled ? null : "Unavailable for the selected asset or current catalogue/production state.";
+        }
+    }
+
+    private void OnMediaLibraryAddMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Controls.RtaimeContextMenu menu) return;
+        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && header switch
+        {
+            "Import Media" => pool.ImportCommand.CanExecute(null),
+            "Test Signal" => pool.AddTestSignalCommand.CanExecute(null),
+            _ => false
+        });
+    }
+
+    private void OnMediaLibraryToolsMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Controls.RtaimeContextMenu menu) return;
+        SetMenuAvailability(menu, header => Context?.MediaPool is { } pool && header switch
+        {
+            "Refresh availability" => pool.RefreshCatalogCommand.CanExecute(null),
+            "Clear selection" => pool.SelectedItems.Count > 0,
+            "Smart Bins and filters…" => true,
+            "Prepare selected assets…" => pool.CanPrepareLibrarySelection,
+            "Batch removal…" => pool.PrepareBatchRemoveCommand.CanExecute(null),
+            "Offline QC results…" => pool.HasQcResults || pool.CanCancelQc || pool.CanStartQc,
+            "ADM track metadata…" => pool.HasAdmMetadata || pool.CanImportAdm,
+            _ => false
+        });
+    }
+
+    private void OnMediaLibrarySelectionMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Controls.RtaimeContextMenu menu || Context?.MediaPool is not { } pool)
+            return;
+        CloseSelectionMenu();
+        _openSelectionMenu = menu;
+        _openMenuSelectionSignature = SelectedLibrarySignature();
+        SetMenuAvailability(menu, header => header switch
+        {
+            "Inspect selection…" => pool.CanInspectLibrarySelection,
+            "Prepare selected assets…" => pool.CanPrepareLibrarySelection,
+            "Relink selected media…" => pool.CanRelinkLibrarySelection,
+            "Batch · Remove selected…" => pool.PrepareBatchRemoveCommand.CanExecute(null),
+            "Offline QC" => !pool.HasMultipleSelection && (pool.CanStartQc || pool.CanCancelQc || pool.HasQcResults),
+            "Start offline QC" => !pool.HasMultipleSelection && pool.StartQcCommand.CanExecute(null),
+            "Cancel QC" => pool.CancelQcCommand.CanExecute(null),
+            "Import QC XML…" => !pool.HasMultipleSelection && pool.CanStartQc,
+            "Export QC XML…" => !pool.HasMultipleSelection && pool.HasQcResults,
+            "View QC results…" => pool.HasQcResults || pool.CanCancelQc || pool.CanStartQc,
+            "ADM metadata" => !pool.HasMultipleSelection && (pool.CanImportAdm || pool.HasAdmMetadata),
+            "Import ADM…" => !pool.HasMultipleSelection && pool.CanImportAdm,
+            "Export ADM XML…" or "Export ADM JSON…" => !pool.HasMultipleSelection && pool.CanExportAdm,
+            "View ADM tracks…" => !pool.HasMultipleSelection && (pool.HasAdmMetadata || pool.CanImportAdm),
+            _ => false
+        });
+    }
+
+    private void OnMediaLibrarySelectionMenuClosed(object sender, RoutedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _openSelectionMenu)) return;
+        _openSelectionMenu = null;
+        _openMenuSelectionSignature = null;
+    }
+
     public void FocusSearch()
     {
         MediaSearchBox.Focus();
