@@ -111,7 +111,9 @@ public partial class MainWindow
                 CommandParameter = entry.Descriptor.Parameter,
                 InputGestureText = entry.Gesture,
                 IsEnabled = reason.Length == 0,
-                ToolTip = reason.Length == 0 ? entry.State : reason
+                ToolTip = reason.Length == 0
+                    ? "Explicit menu selection invokes the existing command; opening the menu is read-only."
+                    : reason
             };
             System.Windows.Automation.AutomationProperties.SetName(itemFromCatalogue, entry.Label);
             ToolTipService.SetShowOnDisabled(itemFromCatalogue, true);
