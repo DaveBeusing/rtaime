@@ -59,6 +59,15 @@ public partial class AudioMixerControl : UserControl
         if (DataContext is OperatorAudioMixerViewModel mixer)
             mixer.AttributeTransferStatus = ok ? "Gain pasted into local draft. Apply to request Runtime confirmation." : "Paste rejected: incompatible or stale Inspector attributes.";
     }
+    private void OpenMixerTools_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RtaimeButton { ContextMenu: { } menu } button)
+            return;
+
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+
     private void DetachMixer_Click(object sender, RoutedEventArgs e)
     {
         var window = Window.GetWindow(this);
