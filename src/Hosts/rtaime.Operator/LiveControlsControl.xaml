@@ -196,7 +196,7 @@
                                 </controls:RtaimeButton.Style>
                             </controls:RtaimeButton>
                         </StackPanel>
-                        <TextBlock Text="{Binding RecordingActiveProfile, StringFormat=Active recording profile: {0}}"
+                        <TextBlock Text="{Binding RecordingActiveProfile, StringFormat={}Active recording profile: {0}}"
                             Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
                             ToolTip="{Binding RecordingActiveProfile}" />
 
