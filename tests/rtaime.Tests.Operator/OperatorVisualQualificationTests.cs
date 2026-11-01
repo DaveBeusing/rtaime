@@ -32,6 +32,7 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 		yield return ["reference-125", 1536.0, 864.0, 125, 0.8, false, false, false];
 		yield return ["reference-150", 1280.0, 720.0, 150, 2.0 / 3.0, false, true, true];
 		yield return ["reference-200", 960.0, 540.0, 200, 0.6, true, true, true];
+		yield return ["minimum-200", 960.0, 500.0, 200, 0.6, true, true, true];
 	}
 
 	[Theory]
@@ -350,7 +351,47 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 		Assert.Contains(topBar.Descendants(), element => element.Attribute(x + "Name")?.Value == "TopBarRecordingState");
 		Assert.Contains(topBar.Descendants(), element =>
 			element.Name.LocalName == "RtaimeGlobalStatusButton");
+		var desktopMenu = topBar.Descendants().Single(element =>
+            element.Attribute(x + "Name")?.Value == "GlobalDesktopMenuBar");
+        var overflow = topBar.Descendants().Single(element =>
+            element.Attribute(x + "Name")?.Value == "GlobalMenuOverflowButton");
+        Assert.Contains("Shell.SecondaryMetricVisibility", desktopMenu.Attribute("Visibility")?.Value);
+        Assert.Contains(overflow.Descendants(), element =>
+            element.Name.LocalName == "DataTrigger" &&
+            element.Attribute("Value")?.Value == "Collapsed" &&
+            element.Attribute("Binding")?.Value?.Contains("Shell.SecondaryMetricVisibility", StringComparison.Ordinal) == true);
+        foreach (var category in new[] { "Project", "Edit", "View", "Media", "Tools", "Window", "Help" })
+            Assert.Contains(desktopMenu.Descendants(), element =>
+                element.Attribute(x + "Name")?.Value == $"Global{category}MenuButton");
+        Assert.Single(topBar.Descendants(), element => element.Attribute(x + "Name")?.Value == "LiveProgramIdentity");
+        Assert.Single(topBar.Descendants(), element => element.Attribute(x + "Name")?.Value == "TopBarProjectIdentity");
 	}
+
+    [Theory]
+    [MemberData(nameof(QualificationMatrix))]
+    public void Global_menu_layout_preserves_status_space_and_compact_overflow(
+        string caseName, double viewportWidth, double viewportHeight, int dpiPercent,
+        double expectedScale, bool expectedCompact, bool expectedCompactNavigation,
+        bool expectedSecondaryMetricsCollapsed)
+    {
+        var shell = CreateShell();
+        shell.UpdateViewportSize(viewportWidth, viewportHeight);
+        var fixedWidth = shell.TopBarBrandWidth.Value + shell.TopBarProjectWidth.Value +
+            shell.TopBarEngineWidth.Value + shell.TopBarTimecodeWidth.Value +
+            shell.TopBarTransmissionWidth.Value + shell.TopBarProgramWidth.Value +
+            shell.TopBarSettingsWidth.Value + 2; // Two permanent border separators.
+        var menuAndReadiness = viewportWidth - fixedWidth;
+        Assert.True(menuAndReadiness > 0,
+            $"{caseName}: global menu and readiness have no remaining top-bar allocation.");
+        Assert.True(menuAndReadiness >= (expectedSecondaryMetricsCollapsed ? 200 : 300),
+            $"{caseName}: menu must share the flex column without erasing readiness.");
+        Assert.Equal(expectedSecondaryMetricsCollapsed ? Visibility.Collapsed : Visibility.Visible,
+            shell.SecondaryMetricVisibility);
+        Assert.InRange(Math.Abs(shell.WorkspaceScale - expectedScale), 0, 0.002);
+        Assert.True(dpiPercent is >= 100 and <= 200);
+        Assert.Equal(expectedCompact, shell.IsCompactViewport);
+        Assert.Equal(expectedCompactNavigation ? 68 : 92, shell.NavigationRailWidth);
+    }
 
 	public void Dispose()
 	{
