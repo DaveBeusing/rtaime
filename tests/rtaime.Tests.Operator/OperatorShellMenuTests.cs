@@ -260,8 +260,13 @@ public sealed class OperatorShellMenuTests
                         Assert.True(overflowButton.Focus());
                         var overflow = window.CreateGlobalShellMenu("Overflow");
                         Assert.Equal(7, overflow.Items.OfType<RtaimeMenuItem>().Count());
+                        // The product-owned RtaimeMenuItem template is flat: compact
+                        // categories explicitly open another context menu, not a nested popup.
                         Assert.All(overflow.Items.OfType<RtaimeMenuItem>(), item =>
-                            Assert.NotEmpty(item.Items));
+                        {
+                            Assert.Empty(item.Items);
+                            Assert.Null(item.Command);
+                        });
                         Assert.True(overflowButton.IsVisible);
                         var status = Assert.Single(Descendants<RtaimeGlobalStatusButton>(window));
                         Assert.True(status.IsVisible);
@@ -285,6 +290,20 @@ public sealed class OperatorShellMenuTests
                     await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Loaded);
                     Assert.True(compactMenu.ContextMenu.IsOpen);
                     Assert.Same(compactMenu, compactMenu.ContextMenu.PlacementTarget);
+                    var category = Assert.Single(compactMenu.ContextMenu.Items.OfType<RtaimeMenuItem>(),
+                        item => Equals(item.Header, "Project"));
+                    category.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, category));
+                    await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    Assert.True(compactMenu.ContextMenu.IsOpen);
+                    Assert.Contains(compactMenu.ContextMenu.Items.OfType<RtaimeMenuItem>(), item =>
+                        Equals(item.Header, "Prepare Demo Production (explicit)"));
+                    var back = Assert.Single(compactMenu.ContextMenu.Items.OfType<RtaimeMenuItem>(),
+                        item => Equals(item.Header, "← All menus"));
+                    back.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, back));
+                    await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    Assert.True(compactMenu.ContextMenu.IsOpen);
+                    Assert.Contains(compactMenu.ContextMenu.Items.OfType<RtaimeMenuItem>(), item =>
+                        Equals(item.Header, "View"));
                     compactMenu.ContextMenu.IsOpen = false;
                     Assert.Equal(route, (owner.PreviewSourceId, owner.ProgramSourceId, owner.ActiveSceneId));
 
