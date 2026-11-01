@@ -242,6 +242,19 @@
                         TextWrapping="Wrap" Margin="0,5,0,0" />
                 </StackPanel>
             </Border>
+            <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2,0,3">
+                            <TextBlock Text="{Binding Code}" Style="{StaticResource OperatorLabel}"
+                                Foreground="{DynamicResource OperatorWarningBrush}" />
+                            <TextBlock Text="{Binding Path}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Message}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
 
             <StackPanel x:Name="GuideDetails" Visibility="Collapsed" Margin="0,0,0,5">
                 <TextBlock Text="DESIGN GUIDES · VIEW ONLY" Style="{StaticResource OperatorLabel}" />
@@ -310,19 +323,6 @@
                 IsCompact="True" Margin="0,0,0,9"
                 ToolTip="Rejects invalid or nonconvex quads. Numeric and pointer editing modify local drafts only." />
             </StackPanel>
-
-            <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Margin="0,2,0,3">
-                            <TextBlock Text="{Binding Code}" Style="{StaticResource OperatorLabel}"
-                                Foreground="{DynamicResource OperatorWarningBrush}" />
-                            <TextBlock Text="{Binding Path}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Message}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
 
             <Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
                 BorderBrush="{DynamicResource OperatorBorderBrush}"
