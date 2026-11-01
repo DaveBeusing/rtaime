@@ -188,7 +188,7 @@
                         <controls:RtaimeIconButton
                             IconData="{StaticResource RtaimeIconMoreGeometry}"
                             Width="28" Height="26" Margin="4,0,0,0"
-                            IsEnabled="{Binding HasSelection}"
+                            IsEnabled="{Binding CanEditSelection}"
                             Click="OnInspectorActionsClick"
                             ToolTip="Selected-object actions. Enter, Space or Shift+F10 opens the menu."
                             AutomationProperties.Name="Inspector actions">
