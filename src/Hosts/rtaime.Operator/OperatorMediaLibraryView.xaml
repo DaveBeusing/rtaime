@@ -5,6 +5,21 @@
     xmlns:controls="clr-namespace:rtaime.Operator.Controls"
     xmlns:local="clr-namespace:rtaime.Operator"
     Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <UserControl.Resources>
+        <!-- New instance per realized Grid/List item; never share placement or selection across recycled tiles. -->
+        <controls:RtaimeContextMenu x:Key="MediaAssetContextMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+            <controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+            <controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+            <controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+            <controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+            <controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
+            <controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+        </controls:RtaimeContextMenu>
+    </UserControl.Resources>
 	<Grid>
 		<Grid.RowDefinitions>
 			<RowDefinition Height="34" />
@@ -509,7 +524,7 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<controls:RtaimeMediaTile MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
+						<controls:RtaimeMediaTile ContextMenu="{StaticResource MediaAssetContextMenu}" MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening"
 							Thumbnail="{Binding DisplayThumbnail}"
 							ScrubLabel="{Binding ScrubPositionLabel}"
 							AssetName="{Binding Name}"
@@ -520,19 +535,6 @@
 							AutomationProperties.HelpText="Hover to inspect an independent asset frame; Ctrl plus Left or Right changes scrub position. Preview and Program are never seeked by scrubbing."
 							IsOnline="{Binding IsOnline}"
 							IsSelected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}}">
-							<controls:RtaimeMediaTile.ContextMenu>
-								<controls:RtaimeContextMenu>
-									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
-									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
-									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
-									<controls:RtaimeMenuSeparator />
-									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
-									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
-									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
-									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
-								</controls:RtaimeContextMenu>
-							</controls:RtaimeMediaTile.ContextMenu>
 							<StackPanel Orientation="Horizontal">
 								<controls:RtaimeButton
 									Content="PVW"
@@ -588,20 +590,7 @@
 				</controls:RtaimeListBox.ItemsPanel>
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<Grid MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
-							<Grid.ContextMenu>
-								<controls:RtaimeContextMenu>
-									<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
-									<controls:RtaimeMenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
-									<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
-									<controls:RtaimeMenuSeparator />
-									<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
-									<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
-									<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
-									<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
-								</controls:RtaimeContextMenu>
-							</Grid.ContextMenu>
+						<Grid ContextMenu="{StaticResource MediaAssetContextMenu}" MouseEnter="OnMediaLibraryHover" MouseMove="OnMediaLibraryScrubMove" MouseLeave="OnMediaLibraryItemLeave" GotKeyboardFocus="OnMediaLibraryFocus" ContextMenuOpening="OnMediaLibraryContextOpening">
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="56" />
 								<ColumnDefinition Width="*" />
