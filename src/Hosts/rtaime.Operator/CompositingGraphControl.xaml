@@ -329,9 +329,9 @@
                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                         ToolTip="{Binding FxOrderEvidence}" AutomationProperties.LiveSetting="Polite" />
                     <WrapPanel Grid.Column="1">
-                        <controls:RtaimeButton Content="APPLY FX" Command="{Binding ApplyProcessingOrderDraftCommand}"
+                        <controls:RtaimeButton x:Name="ApplyFxOrderButton" Content="APPLY FX" Command="{Binding ApplyProcessingOrderDraftCommand}"
                             Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Apply FX order draft" />
-                        <controls:RtaimeButton Content="DISCARD FX" Command="{Binding DiscardProcessingOrderDraftCommand}"
+                        <controls:RtaimeButton x:Name="DiscardFxOrderButton" Content="DISCARD FX" Command="{Binding DiscardProcessingOrderDraftCommand}"
                             Style="{StaticResource GraphToolbarButton}" AutomationProperties.Name="Discard FX order draft" />
                     </WrapPanel>
                 </Grid>
