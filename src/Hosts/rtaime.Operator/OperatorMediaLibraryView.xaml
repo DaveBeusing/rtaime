@@ -45,9 +45,6 @@
 					TextTrimming="CharacterEllipsis" />
 			</StackPanel>
 			<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <controls:RtaimeButton Content="IMPORT MEDIA" Command="{Binding Context.MediaPool.ImportCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                    IsCompact="True" Margin="0,0,6,0" AutomationProperties.Name="Import media into catalogue"
-                    ToolTip="Import local media into the existing authoritative catalogue. Review source identity before Preview." />
 				<controls:RtaimeIconButton
 					IconData="{StaticResource RtaimeIconAddGeometry}"
 					Click="OnMediaPoolAddClick"
@@ -57,17 +54,35 @@
 					ToolTip="Add media or a generated test signal."
 					AutomationProperties.Name="Add media or generator">
 					<controls:RtaimeIconButton.ContextMenu>
-						<controls:RtaimeContextMenu>
-							<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
-							<controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
-<controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
-							<controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
-							<controls:RtaimeMenuSeparator />
-							<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
-							<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
-						</controls:RtaimeContextMenu>
+                        <controls:RtaimeContextMenu Opened="OnMediaLibraryAddMenuOpened">
+                            <controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
+                            <controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
+                        </controls:RtaimeContextMenu>
 					</controls:RtaimeIconButton.ContextMenu>
 				</controls:RtaimeIconButton>
+                <controls:RtaimeIconButton
+                    x:Name="MediaLibraryToolsMenuButton"
+                    IconData="{StaticResource RtaimeIconMoreGeometry}"
+                    Click="OnMediaPoolAddClick"
+                    Width="26" Height="26" Margin="0,0,4,0"
+                    ToolTip="Library tools: refresh, selection, Smart Bins, preparation and reports."
+                    AutomationProperties.Name="Media Library tools menu">
+                    <controls:RtaimeIconButton.ContextMenu>
+                        <controls:RtaimeContextMenu Opened="OnMediaLibraryToolsMenuOpened">
+                            <controls:RtaimeMenuItem Header="Refresh availability" Click="OnMediaPoolRefreshClick" />
+                            <controls:RtaimeMenuItem Header="Clear selection" Click="OnMediaPoolClearSelectionClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="Smart Bins and filters…" Click="OnMediaLibraryShowToolsClick" />
+                            <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+                            <controls:RtaimeMenuItem Header="Batch removal…" Click="OnMediaLibraryBatchRemoveClick" />
+                            <controls:RtaimeMenuSeparator />
+                            <controls:RtaimeMenuItem Header="Offline QC results…" Click="OnMediaLibraryShowQcDetailsClick" />
+                            <controls:RtaimeMenuItem Header="ADM track metadata…" Click="OnMediaLibraryShowAdmDetailsClick" />
+                        </controls:RtaimeContextMenu>
+                    </controls:RtaimeIconButton.ContextMenu>
+                </controls:RtaimeIconButton>
 				<controls:RtaimeIconButton
 					IconData="{StaticResource RtaimeIconGridGeometry}"
 					Command="{Binding Context.MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
@@ -158,9 +173,41 @@
                                 Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis"
                                 ToolTip="{Binding Context.MediaPool.SelectedItem.PreviewCapabilityLabel, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}" />
                         </StackPanel>
-                        <controls:RtaimeButton Grid.Column="1" Content="MORE TOOLS" Click="OnMediaLibraryToggleToolsClick"
-                            IsCompact="True" Margin="8,0,0,0" AutomationProperties.Name="Show advanced Media Library tools"
-                            ToolTip="Smart Bins, metadata filters, representative preflight options, and bounded batch management." />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <controls:RtaimeIconButton x:Name="MediaLibrarySelectionMenuButton"
+                                IconData="{StaticResource RtaimeIconMoreGeometry}"
+                                Click="OnMediaPoolAddClick"
+                                Width="26" Height="26" Margin="6,0,0,0"
+                                AutomationProperties.Name="Media Library selection actions"
+                                ToolTip="Selected asset actions, preparation, offline QC and ADM metadata. Enter, Space or Shift+F10.">
+                                <controls:RtaimeIconButton.ContextMenu>
+                                    <controls:RtaimeContextMenu Opened="OnMediaLibrarySelectionMenuOpened" Closed="OnMediaLibrarySelectionMenuClosed">
+                                        <controls:RtaimeMenuItem Header="Inspect selection…" Click="OnMediaLibraryInspectClick" />
+                                        <controls:RtaimeMenuItem Header="Prepare selected assets…" Click="OnMediaPoolPrepareClick" />
+                                        <controls:RtaimeMenuItem Header="Relink selected media…" Click="OnMediaLibraryRelinkSelectedClick" />
+                                        <controls:RtaimeMenuItem Header="Batch · Remove selected…" Click="OnMediaLibraryBatchRemoveClick" />
+                                        <controls:RtaimeMenuSeparator />
+                                        <controls:RtaimeMenuItem Header="Offline QC">
+                                            <controls:RtaimeMenuItem Header="Start offline QC" Click="OnMediaLibraryStartQcClick" />
+                                            <controls:RtaimeMenuItem Header="Cancel QC" Click="OnMediaLibraryCancelQcClick" />
+                                            <controls:RtaimeMenuItem Header="Import QC XML…" Click="OnMediaQcImportClick" />
+                                            <controls:RtaimeMenuItem Header="Export QC XML…" Click="OnMediaQcExportClick" />
+                                            <controls:RtaimeMenuItem Header="View QC results…" Click="OnMediaLibraryShowQcDetailsClick" />
+                                        </controls:RtaimeMenuItem>
+                                        <controls:RtaimeMenuItem Header="ADM metadata">
+                                            <controls:RtaimeMenuItem Header="Import ADM…" Click="OnMediaAdmImportClick" />
+                                            <controls:RtaimeMenuItem Header="Export ADM XML…" Click="OnMediaAdmExportXmlClick" />
+                                            <controls:RtaimeMenuItem Header="Export ADM JSON…" Click="OnMediaAdmExportJsonClick" />
+                                            <controls:RtaimeMenuItem Header="View ADM tracks…" Click="OnMediaLibraryShowAdmDetailsClick" />
+                                        </controls:RtaimeMenuItem>
+                                    </controls:RtaimeContextMenu>
+                                </controls:RtaimeIconButton.ContextMenu>
+                            </controls:RtaimeIconButton>
+                            <controls:RtaimeButton Content="MORE TOOLS" Click="OnMediaLibraryToggleToolsClick"
+                                IsCompact="True" Margin="6,0,0,0"
+                                AutomationProperties.Name="Show advanced Media Library tools"
+                                ToolTip="On-demand Smart Bins, metadata filters, preparation options and bounded batch review." />
+                        </StackPanel>
                     </Grid>
                     <WrapPanel Margin="0,6,0,0">
                         <controls:RtaimeButton Content="INSPECT" Click="OnMediaLibraryInspectClick" IsCompact="True"
