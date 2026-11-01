@@ -77,16 +77,67 @@ governed command.
 
 ## Live Controls
 
-The right 420-pixel LIVE region is divided into four compact sections:
+The right-hand **Live Controls** panel is the dedicated **MULTIVIEW** control
+surface (`Shell.LiveControlsVisibility`). The primary **LIVE** workspace uses
+the separate, always-visible `LiveActionStrip` for SET PVW, CUT and AUTO and
+continues to show the contextual Inspector on the right. The same Operator
+commands own both deliberate control surfaces; they are not displayed together,
+and no new action owner, command registry or persisted navigation mode is added.
 
-- **Transitions** — selected source versus confirmed NEXT/Preview versus confirmed LIVE/Program, explicit SET NEXT, CUT and AUTO/DISSOLVE plus the existing transition duration.
-- **Layer Stack (PGM)** — compact approximately 38-pixel layer rows and the existing governed graphics Show/Hide path.
-- **Stream & Record** — Program recording and Clean Program monitoring retain their governed command paths. Program/Aux network transmission is presented from Runtime/provider lifecycle and recent successful send evidence (SRT or NDI); unconfigured or stale outputs are never labeled LIVE.
-- **Alerts & Notifications** — existing lifecycle, health, Operator error and recording-failure evidence using severity-dot presentation and concise two-line messages.
+### Always-visible operational surface
 
-CUT uses the cyan primary action treatment because it is an operator action, not a Program-state indicator. Red remains reserved for critical/live-state presentation such as confirmed PGM/LIVE or stop/critical conditions.
+The panel presents only bounded current-production controls and safety feedback:
 
-No independent routing, transition, layer, recording, stream or alert authority is introduced.
+| Region | Visible in the default panel | Existing authority |
+| --- | --- | --- |
+| **Transitions** | Local selected source; confirmed Preview/NEXT and Program/LIVE labels; guarded SET PVW, CUT and AUTO; LIVE Take evidence, Control revision/status and last command error | `OperatorViewModel.SetPreviewCommand`, `CutCommand`, `DissolveCommand` |
+| **Stream & Record** | Confirmed recording status, elapsed time, failure and active profile; START REC while idle/eligible or prominent red STOP REC while the observed state is `RECORDING` | `OperatorViewModel.StartRecordingCommand`, `StopRecordingCommand` |
+| **Clean monitoring** | Explicit **LOCAL CLEAN PROGRAM** state, separate from network send | `MainWindow.ProgramOutput.RunState` |
+| **Network transmission** | Separate Program send and Aux send state, using the existing evidence-aware output-role projection | `MainWindow.OutputHealth.ProgramTransmissionState` and `AuxTransmissionState` |
+| **Layer Stack (PGM)** | Confirmed graphics asset/state/visibility and bounded confirmed compositing-layer count | Existing `OperatorViewModel` graphics and layer projections |
+| **Alerts & Notifications** | Engine, Runtime and Media health, active problem count, persistent operator problems and their recovery text | Existing lifecycle/health and `MainWindow.Notifications.ActiveProblems` |
+
+While the authoritative recording state is `RECORDING`, **STOP REC** replaces
+**START REC** in the main visible recording row. STOP uses the existing recording
+command and its unchanged `CanExecute` boundary; a stale or disconnected Control
+still disables the request instead of inventing a local stop. During
+`FINALIZING`, neither start nor stop appears, while the actual state remains
+visible. Recording failure text is not hidden in a secondary section. A stopped
+request is not evidence that a recording file was finalized.
+
+The existing guarded SET PVW, CUT and AUTO controls remain directly accessible
+in MULTIVIEW, where no `LiveActionStrip` is visible. CUT uses the cyan action
+treatment, not the red confirmed-Program tally. The current target, eligibility,
+revision, rejected/pending state and any **unconfirmed TAKE** warning stay visible
+even when every optional section is closed. Opening a section never routes or
+takes a source.
+
+### Optional secondary details
+
+Every section is expanded by an ordinary keyboard-accessible `RtaimeButton`
+and starts collapsed. The button reports SHOW/HIDE state; it only toggles local
+WPF visibility. There is no additional state store, new navigation destination,
+session-persisted preference or separate production command.
+
+| Button | Revealed content | Behavior |
+| --- | --- | --- |
+| **SHOW TAKE DETAILS** | Existing `TransitionFrames` draft, full Take-target description and the read-only next Rundown item/status | No SET PVW, CUT, AUTO, Rundown GO or Scene TAKE on expand |
+| **SHOW LAYER SETTINGS** | Bounded 38-DIP confirmed layer rows, existing SHOW/HIDE CURRENT LAYER command and editing guidance | Actual visibility changes still require `ToggleGraphicsCommand` |
+| **SHOW CLEAN MONITORING** | OPEN CLEAN / STOP CLEAN using the existing `ProgramOutput.StartCommand` and `StopCommand` | Local Clean Program is monitoring, not a Program route or physical output |
+| **SHOW TRANSMISSION DETAILS** | Existing Program/Aux provider-send detail strings and explicit physical-output disclaimer | A recent send does not prove physical scan-out |
+
+The persistent incident list is deliberately **not** under any optional toggle.
+Its existing problem title, impact, operator action and technical-detail expansion
+remain available. The always-visible recording and Take fields precede layer
+configuration so the main control path stays usable in compact 960×540 and
+960×500 logical viewports; the scroll viewer owns overflow instead of shrinking
+the media or hiding critical actions in a menu.
+
+Network send, **LOCAL CLEAN PROGRAM** monitoring, an accepted Control Take,
+Runtime-executed Program, recording-file finalization and physical display output
+are distinct claims. The panel binds only to the existing sources of evidence,
+including unavailable/stale provider states; it does not convert absent data into
+a LIVE or healthy indicator.
 
 ## Alerts
 
@@ -110,7 +161,7 @@ Existing centralized shortcuts remain authoritative:
 - Enter: AUTO confirmed Preview to Program;
 - R: start/stop Program recording when the matching command is available.
 
-Selection itself never executes those commands. Production commands remain subject to their existing CanExecute safety gates.
+Selection itself never executes those commands. Production commands remain subject to their existing CanExecute safety gates. Secondary SHOW/HIDE buttons retain the shared focus and WPF keyboard activation behavior. The existing `LiveConsoleInput` suppression protects production buttons from repeated Enter/Space and double-click activation; text editing still suppresses centralized production shortcuts. Closed secondary sections do not change or retry a command.
 
 ## Performance Boundary
 
@@ -142,7 +193,18 @@ build/quality/Test-OperatorUiPolicy.ps1 verifies:
 - LIVE region isolation from duplicate panels;
 - reuse of existing monitoring and audio update paths.
 
-Required Windows gates remain authoritative for WPF compilation, architecture, integration and regression qualification.
+The `LiveControlsActionMenuTests` suite checks source-level context ownership,
+critical recording and active-incident visibility, custom-control policy,
+optional section bindings, clean-versus-transmission evidence and a real WPF
+MULTIVIEW/LIVE composition using the existing test-only isolated STA process.
+The recording states in that view test are simulated presentation values, not
+ControlHost/Runtime recording or file-finalization qualification.
+`LiveConsoleTests`, `LiveConsoleUncertainTakeTests`,
+`LiveConsoleWindowQualification` and Show Control tests continue to own
+live mutation, ambiguous Take recovery, focus and alternate-context behavior.
+Required Windows gates remain authoritative for WPF compilation, architecture,
+integration and regression qualification. Hardware output, physical mixed-DPI
+and live device/audio acceptance remain separate, unverified evidence.
 ## Show Control cue stack
 
 The SCENES & CUES region now keeps Media Cues and governed Show Control as separate operator surfaces in the same production workflow. Show Control selection is presentation-only; selecting a cue never executes it.
