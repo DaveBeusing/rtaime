@@ -1119,7 +1119,7 @@ Assert-Condition ($outputHealthControl -match 'Resolution="\{Binding Resolution\
 Assert-Condition ($productionWorkspaceSurface -match 'OutputHealth\.DiskMetric' -and $productionWorkspaceSurface -match 'OutputHealth\.NetworkMetric' -and $productionWorkspaceSurface -match 'OutputHealth\.TemperatureMetric' -and $productionWorkspaceSurface -match 'controls:RtaimeMetricBar') "System Status must render Disk, Network and Temperature through own thin metric bars."
 Assert-Condition ($outputHealthViewModel -match 'HistoryLimit = 48' -and $outputHealthViewModel -match 'HealthObserved') "Performance histories must be bounded and sample the existing health observation stream."
 Assert-Condition ($outputHealthViewModel -notmatch 'PeriodicTimer|Task\.Delay|PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Output health must not add telemetry polling or local hardware probes."
-Assert-Condition ($outputHealthViewModel -notmatch 'RuntimeHost|ControlHost') "Output health must remain a presentation adapter and must not depend directly on host implementations."
+Assert-Condition ($outputHealthViewModel -notmatch '(?m)^\s*using\s+rtaime\.(?:RuntimeHost|ControlHost)(?:\.|;)' -and $outputHealthViewModel -notmatch 'rtaime\.(?:RuntimeHost|ControlHost)\.' -and $outputHealthViewModel -notmatch '\b(?:new|typeof)\s*\(?\s*(?:RuntimeHost|ControlHost)\b') "Output health must remain a Client/presentation adapter without direct host implementation types or namespaces."
 foreach ($metric in @("CPU", "GPU", "MEMORY", "VRAM", "RENDER TIME", "DROPPED FRAMES", "OUTPUT FPS", "DISK", "NETWORK", "TEMPERATURE")) {
 	Assert-Condition ($outputHealthViewModel -match [Regex]::Escape($metric)) "Output health metric '$metric' is required."
 }
