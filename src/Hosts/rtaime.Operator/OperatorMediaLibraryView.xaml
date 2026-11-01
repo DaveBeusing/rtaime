@@ -327,7 +327,7 @@
                     <StackPanel x:Name="MediaLibraryActivityStrip" Margin="0,4,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding Context.MediaPool.QcStatus, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMediaLibraryView}}}"
-                                Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="220"
                                 AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Media offline QC progress and recovery">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
