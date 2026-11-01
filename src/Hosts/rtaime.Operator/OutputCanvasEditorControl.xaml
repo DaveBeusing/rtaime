@@ -162,6 +162,13 @@
                     Height="285" MinHeight="180"
                     AutomationProperties.Name="Editable four-corner canvas stage with keyboard nudging and zoom" />
             </Border>
+            <TextBlock Text="{Binding PointerCoordinates}" Style="{StaticResource OperatorLabel}"
+                AutomationProperties.Name="Logical and normalized canvas pointer coordinates"
+                TextWrapping="Wrap" Margin="0,0,0,3" />
+            <TextBlock Text="{Binding SelectedGeometryEvidence}" Style="{StaticResource OperatorLabel}"
+                AutomationProperties.Name="Selected surface logical canvas center and normalized coordinates"
+                TextWrapping="Wrap" Margin="0,0,0,10" />
+
             <TextBlock Text="PROGRAM TARGET · LOCAL BINDING" Style="{StaticResource OperatorLabel}"
                 Margin="0,5,0,3" />
             <TextBlock Text="{Binding TargetEligibility}" Style="{StaticResource OperatorLabel}"
@@ -191,10 +198,44 @@
                             ToolTip="Explicit Runtime Prepare/Commit request for the saved and validated revision." />
                         <controls:RtaimeButton Content="DISABLE MAPPING"
                             Command="{Binding DisableCommand}" IsCompact="True" Margin="0,0,5,4"
-                            ToolTip="Explicitly request identity Program output and observe the next Runtime boundary." />
+                            AutomationProperties.Name="Disable active or pending output mapping"
+                            ToolTip="Request identity Program output. This is not evidence of completion; Control and Runtime must confirm."
+                            ToolTipService.ShowOnDisabled="True">
+                            <controls:RtaimeButton.Style>
+                                <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ActivationState}" Value="ACTIVE">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ActivationState}" Value="ACTIVE REPORTED · UNVERIFIED MATCH">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ActivationState}" Value="PENDING_BOUNDARY">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding WorkflowStage}" Value="APPLY ACCEPTED · RUNTIME CONFIRMATION PENDING">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:RtaimeButton.Style>
+                        </controls:RtaimeButton>
                         <controls:RtaimeButton Content="RECONCILE UNKNOWN" Command="{Binding ReconcileCommand}"
                             IsCompact="True" AutomationProperties.Name="Read-only reconciliation of uncertain output mapping"
-                            ToolTip="Explicitly read saved Control state and current Runtime evidence; never repeats an APPLY or DISABLE." />
+                            ToolTip="Explicitly reread Control and Runtime after an uncertain APPLY or DISABLE; never replays a mutation."
+                            ToolTipService.ShowOnDisabled="True">
+                            <controls:RtaimeButton.Style>
+                                <Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ApplyOutcomeUnconfirmed}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:RtaimeButton.Style>
+                        </controls:RtaimeButton>
                     </WrapPanel>
                     <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding ResultDetail}" Style="{StaticResource OperatorLabel}"
@@ -225,13 +266,6 @@
             </StackPanel>
             <TextBlock Text="Drag surface to move rigidly; drag corner handles to warp/resize; Alt-drag rotates. Middle-drag pans, wheel zooms; arrows nudge 1 px (Shift: 10 px). Ctrl bypasses snapping. Guides/safe rectangles are logical design aids, never output calibration."
                 Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,3" />
-            <TextBlock Text="{Binding PointerCoordinates}" Style="{StaticResource OperatorLabel}"
-                AutomationProperties.Name="Logical and normalized canvas pointer coordinates"
-                TextWrapping="Wrap" Margin="0,0,0,3" />
-            <TextBlock Text="{Binding SelectedGeometryEvidence}" Style="{StaticResource OperatorLabel}"
-                AutomationProperties.Name="Selected surface logical canvas center and normalized coordinates"
-                TextWrapping="Wrap" Margin="0,0,0,10" />
-
             <TextBlock Text="SURFACE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
             <controls:RtaimeComboBox ItemsSource="{Binding Inputs}"
                 SelectedItem="{Binding SelectedInput, Mode=TwoWay}"
