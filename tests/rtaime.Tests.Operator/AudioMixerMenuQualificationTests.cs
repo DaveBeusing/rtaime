@@ -26,7 +26,7 @@ public sealed class AudioMixerMenuQualificationTests
         var document = MixerSurface();
         var tools = Assert.Single(document.Descendants().Where(node =>
             node.Name.LocalName == "RtaimeButton" &&
-            node.Attribute("Name")?.Value == "MixerToolsButton"));
+            node.Attributes().Any(attribute => attribute.Name.LocalName == "Name" && attribute.Value == "MixerToolsButton")));
         Assert.Equal("OpenMixerTools_Click", tools.Attribute("Click")?.Value);
 
         var menu = Assert.Single(tools.Descendants().Where(node => node.Name.LocalName == "RtaimeContextMenu"));
@@ -67,7 +67,7 @@ public sealed class AudioMixerMenuQualificationTests
             Assert.Contains(group.Descendants(), node => node.Attribute("Command")?.Value == "{Binding DiscardDraftCommand}");
         }
         var dirtyStyle = Assert.Single(document.Descendants().Where(node =>
-            node.Name.LocalName == "Style" && node.Attribute("Key")?.Value == "MixerDirtyActions"));
+            node.Name.LocalName == "Style" && node.Attributes().Any(attribute => attribute.Name.LocalName == "Key" && attribute.Value == "MixerDirtyActions")));
         Assert.Contains(dirtyStyle.Descendants(), node =>
             node.Name.LocalName == "DataTrigger" && node.Attribute("Binding")?.Value == "{Binding HasDraftChanges}");
         Assert.Contains(dirtyStyle.Descendants(), node =>
@@ -158,8 +158,6 @@ public sealed class AudioMixerMenuQualificationTests
                 Assert.Equal(0.75, bus.MasterGain, 8);
                 Assert.Contains(Descendants<RtaimeNumericField>(view),
                     field => field.DataContext is OperatorAudioSourceStripViewModel &&
-                        field.Definition.Id == "mixer.eq.low.gain.db" ||
-                        field.DataContext is OperatorAudioBusStripViewModel &&
                         field.Definition.Id == "audio.gain");
 
                 mixer.CompactPresentationCommand.Execute(null);
