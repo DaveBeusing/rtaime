@@ -187,19 +187,12 @@
                                         <controls:RtaimeMenuItem Header="Relink selected media…" Click="OnMediaLibraryRelinkSelectedClick" />
                                         <controls:RtaimeMenuItem Header="Batch · Remove selected…" Click="OnMediaLibraryBatchRemoveClick" />
                                         <controls:RtaimeMenuSeparator />
-                                        <controls:RtaimeMenuItem Header="Offline QC">
-                                            <controls:RtaimeMenuItem Header="Start offline QC" Click="OnMediaLibraryStartQcClick" />
-                                            <controls:RtaimeMenuItem Header="Cancel QC" Click="OnMediaLibraryCancelQcClick" />
-                                            <controls:RtaimeMenuItem Header="Import QC XML…" Click="OnMediaQcImportClick" />
-                                            <controls:RtaimeMenuItem Header="Export QC XML…" Click="OnMediaQcExportClick" />
-                                            <controls:RtaimeMenuItem Header="View QC results…" Click="OnMediaLibraryShowQcDetailsClick" />
-                                        </controls:RtaimeMenuItem>
-                                        <controls:RtaimeMenuItem Header="ADM metadata">
-                                            <controls:RtaimeMenuItem Header="Import ADM…" Click="OnMediaAdmImportClick" />
-                                            <controls:RtaimeMenuItem Header="Export ADM XML…" Click="OnMediaAdmExportXmlClick" />
-                                            <controls:RtaimeMenuItem Header="Export ADM JSON…" Click="OnMediaAdmExportJsonClick" />
-                                            <controls:RtaimeMenuItem Header="View ADM tracks…" Click="OnMediaLibraryShowAdmDetailsClick" />
-                                        </controls:RtaimeMenuItem>
+                                        <controls:RtaimeMenuItem Header="Start offline QC" Click="OnMediaLibraryStartQcClick" />
+                                        <controls:RtaimeMenuItem Header="Cancel QC" Click="OnMediaLibraryCancelQcClick" />
+                                        <controls:RtaimeMenuItem Header="QC reports and checks…" Click="OnMediaLibraryShowQcDetailsClick" />
+                                        <controls:RtaimeMenuSeparator />
+                                        <controls:RtaimeMenuItem Header="Import ADM…" Click="OnMediaAdmImportClick" />
+                                        <controls:RtaimeMenuItem Header="ADM track tools…" Click="OnMediaLibraryShowAdmDetailsClick" />
                                     </controls:RtaimeContextMenu>
                                 </controls:RtaimeIconButton.ContextMenu>
                             </controls:RtaimeIconButton>
