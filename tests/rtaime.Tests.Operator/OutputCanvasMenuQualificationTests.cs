@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
@@ -63,6 +64,7 @@ public sealed class OutputCanvasMenuQualificationTests
                 element.Name.LocalName == "RtaimeButton" &&
                 element.Attributes().Any(attribute => attribute.Name.LocalName == "Name" && attribute.Value == buttonName));
             Assert.Equal("OpenEditorMenu_Click", button.Attribute("Click")?.Value);
+            Assert.Equal("OnEditorMenuKeyDown", button.Attribute("PreviewKeyDown")?.Value);
             Assert.NotNull(button.Attribute("ContextMenu"));
             Assert.NotNull(button.Attribute("AutomationProperties.Name"));
         }
@@ -250,7 +252,20 @@ public sealed class OutputCanvasMenuQualificationTests
                     var button = Assert.IsType<RtaimeButton>(control.FindName(id));
                     Assert.True(button.Focusable && button.IsVisible);
                     Assert.NotNull(button.ContextMenu);
-                    button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+                    if (id == "CanvasMenuButton")
+                    {
+                        var key = new KeyEventArgs(Keyboard.PrimaryDevice,
+                            PresentationSource.FromVisual(button)!, 0, Key.Apps)
+                        {
+                            RoutedEvent = Keyboard.PreviewKeyDownEvent
+                        };
+                        button.RaiseEvent(key);
+                        Assert.True(key.Handled);
+                    }
+                    else
+                    {
+                        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+                    }
                     DrainDispatcher();
                     Assert.True(button.ContextMenu.IsOpen);
                     Assert.Same(button, button.ContextMenu.PlacementTarget);
