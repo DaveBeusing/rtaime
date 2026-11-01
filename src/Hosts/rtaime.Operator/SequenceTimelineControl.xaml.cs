@@ -4,7 +4,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using rtaime.Control.Contracts;
+using rtaime.Operator.Controls;
 
 namespace rtaime.Operator;
 
@@ -149,10 +151,102 @@ public partial class SequenceTimelineControl : UserControl
         Editor?.CancelGesture();
     }
 
+    private void OnSequenceActionsClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement anchor)
+            OpenSequenceMenu(anchor);
+    }
+
+    private static void OpenSequenceMenu(FrameworkElement anchor,
+        PlacementMode placement = PlacementMode.Bottom,
+        FrameworkElement? target = null)
+    {
+        target ??= anchor;
+        if (anchor.ContextMenu is not RtaimeContextMenu menu || !target.IsVisible)
+            return;
+        menu.PlacementTarget = target;
+        menu.Placement = placement;
+        menu.IsOpen = true;
+    }
+
+    private void OpenAfterSelection(FrameworkElement menuOwner)
+    {
+        // Reprojection may replace a selected clip's visual. The control remains
+        // in the visual tree even when its edit toolbar is hidden by playout.
+        Dispatcher.BeginInvoke(new Action(() =>
+            OpenSequenceMenu(menuOwner, PlacementMode.MousePoint, this)), DispatcherPriority.Input);
+    }
+
+    private void OnClipActionsOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_gestureActive || Editor is not { } model ||
+            sender is not FrameworkElement { DataContext: SequenceEditorClip clip })
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Keep an existing multi-clip selection; otherwise select the right-clicked
+        // clip through the established local editor selection before CanExecute runs.
+        if (!model.SelectedIds.Contains(clip.Id))
+        {
+            model.SelectClip(clip.Id);
+            e.Handled = true;
+            OpenAfterSelection(SequenceEditActionsButton);
+        }
+    }
+
+    private void OnTrackActionsOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_gestureActive || Editor is not { } model ||
+            sender is not FrameworkElement { DataContext: SequenceEditorRow row })
+        {
+            e.Handled = true;
+            return;
+        }
+        if (model.SelectedTrack?.TrackId == row.Id)
+            return;
+
+        // Track commands are owned by the currently selected saved clip's track.
+        // A clip-free track has no command target in the existing editor contract.
+        var clip = model.Sequence?.Clips.FirstOrDefault(candidate => candidate.TrackId == row.Id);
+        if (clip is null)
+        {
+            e.Handled = true;
+            return;
+        }
+        model.SelectClip(clip.ClipId);
+        e.Handled = true;
+        OpenAfterSelection(SequenceTrackActionsButton);
+    }
+
+    private FrameworkElement? FocusedActionTarget(SequenceTimelineEditorViewModel editor)
+    {
+        for (var current = Keyboard.FocusedElement as DependencyObject; current is not null;)
+        {
+            if (current is FrameworkElement element && element.ContextMenu is RtaimeContextMenu &&
+                ReferenceEquals(element.Tag, editor))
+                return element;
+            if (ReferenceEquals(current, this)) break;
+            current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (Editor is not { } model) return;
-        if (Keyboard.FocusedElement is TextBoxBase or ComboBox) return;
+        if (Keyboard.FocusedElement is TextBoxBase or ComboBox ||
+            e.OriginalSource is TextBoxBase or ComboBox) return;
+        if (e.Key is Key.Apps || (e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            if (!e.IsRepeat)
+                OpenSequenceMenu(FocusedActionTarget(model) ??
+                    (model.PlayoutToolbarVisible ? SequencePlayoutActionsButton : SequenceEditActionsButton));
+            e.Handled = true;
+            return;
+        }
         if ((Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Windows)) != 0) return;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
