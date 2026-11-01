@@ -87,7 +87,7 @@
                         <controls:RtaimeButton Grid.Column="1" Content="DEMO" IsCompact="True"
                             Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
                             Padding="3,1" Margin="4,0,0,0" Height="27" VerticalAlignment="Center"
-                            ToolTip="Explicitly prepare deterministic Demo Production. Preparation does not TAKE Program."
+                            ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control. This is an explicit demo action."
                             ToolTipService.ShowOnDisabled="True"
                             AutomationProperties.Name="Open Demo Production" />
                     </Grid>
