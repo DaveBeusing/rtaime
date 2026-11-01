@@ -118,9 +118,12 @@ public partial class MainWindow
             var reason = entry.Reason;
             var currentWorkspace = entry.Descriptor.Parameter is string id &&
                 string.Equals(Shell.SelectedWorkspace, id, StringComparison.Ordinal);
+            // The project-owned MenuItem template does not render InputGestureText.
+            // Keep the active shortcut hint in the actual visible header as well.
+            var gestureHint = string.IsNullOrWhiteSpace(entry.Gesture) ? "" : "   · " + entry.Gesture;
             var itemFromCatalogue = new RtaimeMenuItem
             {
-                Header = (currentWorkspace ? "✓ " : "") + (slot.Label ?? entry.Label),
+                Header = (currentWorkspace ? "✓ " : "") + (slot.Label ?? entry.Label) + gestureHint,
                 Command = entry.Descriptor.Command,
                 CommandParameter = entry.Descriptor.Parameter,
                 InputGestureText = entry.Gesture,
