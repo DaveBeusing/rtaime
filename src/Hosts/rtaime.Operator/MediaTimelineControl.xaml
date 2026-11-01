@@ -753,8 +753,10 @@
 						<StackPanel Orientation="Horizontal" Margin="0,0,0,3">
 							<TextBlock Text="TIMED TEXT · LOCAL REVIEW" Style="{StaticResource OperatorLabel}"
 								VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="Import local captions from TOOLS"
-                                Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <controls:RtaimeButton Content="IMPORT EBU-TT-D" IsCompact="True"
+                                Click="ImportTimedTextD_Click" Margin="0,0,8,0"
+                                ToolTip="Local XML review only. Both EBU-TT profiles are also available from TOOLS; no Program output."
+                                automation:AutomationProperties.Name="Import distribution captions for local review" />
 							<controls:RtaimeComboBox Width="112" Margin="0,0,8,0"
 								ItemsSource="{Binding TimedTextReview.AvailableLanguages, ElementName=TimelineRoot}"
 								SelectedItem="{Binding TimedTextReview.SelectedLanguage, ElementName=TimelineRoot, Mode=TwoWay}"
