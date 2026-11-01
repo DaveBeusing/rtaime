@@ -266,13 +266,28 @@ public partial class OperatorMediaLibraryView : UserControl
     private async void OnMediaLibraryRelinkSelectedClick(object sender, RoutedEventArgs e)
     {
         if (MediaPool.CanRelinkLibrarySelection && MediaPool.SelectedItem is { } selected)
-        {
-            var path = PickRelinkMediaFile();
-            if (MediaPool.CanRelinkLibrarySelection && MediaPool.SelectedItem?.Key == selected.Key &&
-                !string.IsNullOrWhiteSpace(path))
-                await MediaPool.RelinkAssetAsync(selected, path);
-        }
+            await RelinkSelectedLibraryAssetAsync(selected);
         e.Handled = true;
+    }
+
+    private MediaPoolItemViewModel? CurrentLibraryItem(MediaPoolItemViewModel? item)
+    {
+        if (item is null || MediaPool.HasMultipleSelection) return null;
+        return MediaPool.FilteredItems.FirstOrDefault(current =>
+            current.Key == item.Key && current.ReferenceId == item.ReferenceId &&
+            current.LocalPath == item.LocalPath);
+    }
+
+    private async Task RelinkSelectedLibraryAssetAsync(MediaPoolItemViewModel selected)
+    {
+        if (selected.Kind != MediaPoolItemKind.Clip || !Guid.TryParse(selected.ReferenceId, out _) ||
+            CurrentLibraryItem(selected) is null)
+            return;
+        var path = PickRelinkMediaFile();
+        if (string.IsNullOrWhiteSpace(path) || Context is null) return;
+        if (CurrentLibraryItem(selected) is { } current &&
+            MediaPool.SelectedItems.Count <= 1 && !MediaPool.IsLoading)
+            await MediaPool.RelinkAssetAsync(current, path);
     }
 
 	private async void OnMediaAdmImportClick(object sender, RoutedEventArgs e)
@@ -383,7 +398,8 @@ public partial class OperatorMediaLibraryView : UserControl
 
 	private void OnMediaPoolClearSelectionClick(object sender, RoutedEventArgs e)
 	{
-		MediaPool.ClearLibrarySelectionCommand.Execute(null);
+        if (MediaPool.ClearLibrarySelectionCommand.CanExecute(null))
+            MediaPool.ClearLibrarySelectionCommand.Execute(null);
 		e.Handled = true;
 	}
 	private void OnMediaPoolRefreshClick(object sender, RoutedEventArgs e)
@@ -657,23 +673,16 @@ public partial class OperatorMediaLibraryView : UserControl
 
 	private async void OnMediaPoolRelinkActionClick(object sender, RoutedEventArgs e)
 	{
-		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
-		var item = GetMediaPoolItemFromSender(sender);
-		if (item?.Kind == MediaPoolItemKind.Clip)
-		{
-			var path = PickRelinkMediaFile();
-			if (!string.IsNullOrWhiteSpace(path))
-				await MediaPool.RelinkAssetAsync(item, path);
-		}
+        if (CurrentLibraryItem(GetMediaPoolItemFromSender(sender)) is { } current)
+            await RelinkSelectedLibraryAssetAsync(current);
 		e.Handled = true;
 	}
 
 	private async void OnMediaPoolRemoveActionClick(object sender, RoutedEventArgs e)
 	{
-		if (MediaPool.HasMultipleSelection) { e.Handled = true; return; }
-		var item = GetMediaPoolItemFromSender(sender);
-		if (item?.Kind == MediaPoolItemKind.Clip)
-			await MediaPool.RemoveAssetAsync(item);
+        if (CurrentLibraryItem(GetMediaPoolItemFromSender(sender)) is
+            { Kind: MediaPoolItemKind.Clip } current && Guid.TryParse(current.ReferenceId, out _))
+            await MediaPool.RemoveAssetAsync(current);
 		e.Handled = true;
 	}
 
@@ -701,9 +710,12 @@ public partial class OperatorMediaLibraryView : UserControl
 
 	private void OnMediaPoolPropertiesActionClick(object sender, RoutedEventArgs e)
 	{
-		var item = GetMediaPoolItemFromSender(sender);
-		if (item is not null)
-			MediaPool.SelectedItem = item;
+        if (CurrentLibraryItem(GetMediaPoolItemFromSender(sender)) is { } current)
+        {
+            MediaPool.SelectedItem = current;
+            if (MediaPool.CanInspectLibrarySelection)
+                MediaSelectedDetails.Visibility = Visibility.Visible;
+        }
 		e.Handled = true;
 	}
 
