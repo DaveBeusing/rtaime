@@ -220,6 +220,29 @@ public sealed partial class OperatorCombinedVisualQualification
         Assert.Equal(program, owner.ProgramSourceId);
         Assert.Equal(preview, owner.PreviewSourceId);
 
+        // The integrated menu is a view over the already-owned commands.
+        // Merely building every category must never mutate Program or Preview.
+        var catalogue = window.CommandPalette.Entries;
+        foreach (var section in OperatorCommandCatalog.GlobalShellMenus)
+        {
+            var sectionMenu = window.CreateGlobalShellMenu(section.Name);
+            Assert.NotEmpty(sectionMenu.Items);
+            foreach (var item in sectionMenu.Items.OfType<RtaimeMenuItem>())
+            {
+                if (item.Command is null) continue; // Only read-only headings and separators.
+                Assert.True(catalogue.Any(entry =>
+                    ReferenceEquals(entry.Descriptor.Command, item.Command) ||
+                    ReferenceEquals(item.Command, window.DemoProduction.OpenCommand) ||
+                    ReferenceEquals(item.Command, window.Monitoring.ToggleScopesCommand)),
+                    section.Name + ": command owner not found in the existing Operator presentation.");
+            }
+        }
+        Assert.Equal(7, window.CreateGlobalShellMenu("Overflow").Items.OfType<RtaimeMenuItem>().Count());
+        Assert.DoesNotContain(OperatorCommandCatalog.GlobalShellMenus.SelectMany(section => section.Slots),
+            slot => slot.CommandId is "cut" or "auto" or "record" or "show-control-go");
+        Assert.Equal(program, owner.ProgramSourceId);
+        Assert.Equal(preview, owner.PreviewSourceId);
+
         var recording = Assert.IsType<TextBlock>(window.FindName("TopBarRecordingState"));
         Assert.Equal(owner.RecordingStatus, recording.Text);
         Assert.NotNull(Descendants(window).OfType<RtaimeGlobalStatusButton>().FirstOrDefault());
@@ -252,6 +275,23 @@ public sealed partial class OperatorCombinedVisualQualification
         var viewport = Assert.IsAssignableFrom<ScrollViewer>(window.FindName("CenterWorkspaceScroll"));
         Assert.InRange(viewport.ScrollableHeight, 0, 1);
         foreach (var viewer in viewers) Assert.True(viewer.ActualHeight <= viewport.ViewportHeight + 1);
+        // Desktop menu and compact overflow occupy only the existing top-bar flex
+        // allocation, never the Preview/Program viewer region or a second row.
+        var topBar = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("TopBar"));
+        var menuBar = Assert.IsType<StackPanel>(window.FindName("GlobalDesktopMenuBar"));
+        var overflow = Assert.IsType<RtaimeButton>(window.FindName("GlobalMenuOverflowButton"));
+        var compactMenu = shell.SecondaryMetricVisibility == Visibility.Collapsed;
+        Assert.Equal(compactMenu, overflow.IsVisible);
+        Assert.Equal(!compactMenu, menuBar.IsVisible);
+        var activeMenu = compactMenu ? (FrameworkElement)overflow : menuBar;
+        Assert.True(activeMenu.ActualWidth > 0 && activeMenu.ActualHeight > 0,
+            "The active global menu launcher must have a keyboard/pointer target.");
+        var menuBounds = activeMenu.TransformToAncestor(root).TransformBounds(new Rect(activeMenu.RenderSize));
+        var barBounds = topBar.TransformToAncestor(root).TransformBounds(new Rect(topBar.RenderSize));
+        Assert.True(menuBounds.Left >= barBounds.Left - .5 && menuBounds.Right <= barBounds.Right + .5 &&
+            menuBounds.Top >= barBounds.Top - .5 && menuBounds.Bottom <= barBounds.Bottom + .5,
+            "A global menu launcher must stay within the existing top bar.");
+        Assert.True(Fits(menuBounds, root.RenderSize));
         var actions = Assert.IsAssignableFrom<FrameworkElement>(window.FindName("LiveActionStrip"));
         Assert.True(actions.IsVisible && actions.ActualHeight >= 24);
         Assert.True(Fits(actions.TransformToAncestor(root).TransformBounds(new Rect(actions.RenderSize)), root.RenderSize));
