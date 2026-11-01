@@ -5,9 +5,11 @@ using System.IO;
 using rtaime.Media.Contracts;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using rtaime.Operator.Controls;
 
 namespace rtaime.Operator;
@@ -392,12 +394,23 @@ public partial class MediaTimelineControl : UserControl
         if (sender is FrameworkElement anchor) OpenMediaTimelineMenu(anchor);
     }
 
-    private static void OpenMediaTimelineMenu(FrameworkElement anchor)
+    private static void OpenMediaTimelineMenu(FrameworkElement anchor,
+        PlacementMode placement = PlacementMode.Bottom)
     {
         if (anchor.ContextMenu is not RtaimeContextMenu menu || !anchor.IsVisible)
             return;
         menu.PlacementTarget = anchor;
+        menu.Placement = placement;
         menu.IsOpen = true;
+    }
+
+    private void OpenAfterMediaSelection()
+    {
+        // Selected-item reprojection may detach the original pointer target.
+        // Keep the menu actionable near the pointer through stable local chrome.
+        Dispatcher.BeginInvoke(new Action(() =>
+            OpenMediaTimelineMenu(MediaTimelineCursorMenuButton, PlacementMode.MousePoint)),
+            DispatcherPriority.Input);
     }
 
     private void OnMediaItemActionsOpening(object sender, ContextMenuEventArgs e)
@@ -407,7 +420,11 @@ public partial class MediaTimelineControl : UserControl
         {
             // Selection is local. It does not seek, start a playout or send Program.
             if (!model.SelectedItems.Contains(item))
+            {
                 model.SelectItem(item);
+                e.Handled = true;
+                OpenAfterMediaSelection();
+            }
             return;
         }
         e.Handled = true;
@@ -420,7 +437,11 @@ public partial class MediaTimelineControl : UserControl
         {
             // Right-click is inspection only; only the explicit jump action seeks.
             if (!ReferenceEquals(model.SelectedCue, cue))
+            {
                 model.SelectCue(cue);
+                e.Handled = true;
+                OpenAfterMediaSelection();
+            }
             return;
         }
         e.Handled = true;
