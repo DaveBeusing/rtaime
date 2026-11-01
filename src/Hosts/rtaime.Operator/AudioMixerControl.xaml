@@ -474,7 +474,7 @@
 										<TextBlock Grid.Column="2" Text="{Binding RightPeakLabel}" Style="{StaticResource MixerLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Border BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}"
-										Padding="7" Margin="0,0,0,8" AutomationProperties.Name="Program and bus loudness and true-peak evidence">
+										Padding="7" Margin="0,0,0,8" AutomationProperties.Name="Program and bus loudness and true peak evidence">
 										<StackPanel>
 											<TextBlock Text="{Binding LoudnessStatus}" Style="{StaticResource MixerLabel}" TextWrapping="Wrap" />
 											<UniformGrid Columns="2" Margin="0,5,0,4">
