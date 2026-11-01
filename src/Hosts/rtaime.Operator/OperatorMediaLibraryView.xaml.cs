@@ -167,16 +167,11 @@ public partial class OperatorMediaLibraryView : UserControl
             "Prepare selected assets…" => pool.CanPrepareLibrarySelection,
             "Relink selected media…" => pool.CanRelinkLibrarySelection,
             "Batch · Remove selected…" => pool.PrepareBatchRemoveCommand.CanExecute(null),
-            "Offline QC" => !pool.HasMultipleSelection && (pool.CanStartQc || pool.CanCancelQc || pool.HasQcResults),
             "Start offline QC" => !pool.HasMultipleSelection && pool.StartQcCommand.CanExecute(null),
             "Cancel QC" => pool.CancelQcCommand.CanExecute(null),
-            "Import QC XML…" => !pool.HasMultipleSelection && pool.CanStartQc,
-            "Export QC XML…" => !pool.HasMultipleSelection && pool.HasQcResults,
-            "View QC results…" => pool.HasQcResults || pool.CanCancelQc || pool.CanStartQc,
-            "ADM metadata" => !pool.HasMultipleSelection && (pool.CanImportAdm || pool.HasAdmMetadata),
+            "QC reports and checks…" => pool.HasQcResults || pool.CanCancelQc || pool.CanStartQc,
             "Import ADM…" => !pool.HasMultipleSelection && pool.CanImportAdm,
-            "Export ADM XML…" or "Export ADM JSON…" => !pool.HasMultipleSelection && pool.CanExportAdm,
-            "View ADM tracks…" => !pool.HasMultipleSelection && (pool.HasAdmMetadata || pool.CanImportAdm),
+            "ADM track tools…" => !pool.HasMultipleSelection && (pool.HasAdmMetadata || pool.CanImportAdm),
             _ => false
         });
     }
