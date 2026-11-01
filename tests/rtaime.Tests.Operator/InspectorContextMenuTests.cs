@@ -143,7 +143,7 @@ public sealed class InspectorContextMenuTests
     {
         for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
             if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
-                return Path.Combine([directory.FullName, .. path]);
+                return Path.Combine(new[] { directory.FullName }.Concat(path).ToArray());
         throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
     }
 }
