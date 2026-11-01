@@ -5,6 +5,55 @@
     xmlns:controls="clr-namespace:rtaime.Operator.Controls"
     UseLayoutRounding="True" SnapsToDevicePixels="True"
     AutomationProperties.Name="Output mapping editor and authoritative Runtime evidence">
+    <UserControl.Resources>
+        <controls:RtaimeContextMenu x:Key="OutputCanvasActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Reload authoritative saved state" Command="{Binding ReloadCommand}"
+                ToolTip="Reload never discards local edits implicitly." />
+            <controls:RtaimeMenuItem Header="Discard local edits and reload" Command="{Binding DiscardAndReloadCommand}"
+                ToolTip="Explicitly discard the unsaved geometry and reread ControlHost." />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Undo local edit" Command="{Binding UndoCommand}" />
+            <controls:RtaimeMenuItem Header="Redo local edit" Command="{Binding RedoCommand}" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Add canvas to draft" Command="{Binding AddCanvasCommand}" />
+            <controls:RtaimeMenuItem Header="Remove selected canvas from draft" Command="{Binding RemoveCanvasCommand}"
+                ToolTip="Removes the selected canvas, its surfaces and bindings from the local draft only." />
+        </controls:RtaimeContextMenu>
+
+        <controls:RtaimeContextMenu x:Key="OutputSurfaceActionsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Add surface to selected canvas" Command="{Binding AddSurfaceCommand}" />
+            <controls:RtaimeMenuItem Header="Remove selected surface" Command="{Binding RemoveSurfaceCommand}" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Enable selected surface (local draft)" IsCheckable="True"
+                IsChecked="{Binding IsSurfaceEnabled, Mode=TwoWay}" IsEnabled="{Binding CanEdit}" />
+            <controls:RtaimeMenuItem Header="Show / hide alignment tools" Click="ToggleAlignmentTools_Click"
+                ToolTip="Align the selected draft quad; the output is not changed." />
+        </controls:RtaimeContextMenu>
+
+        <controls:RtaimeContextMenu x:Key="OutputCanvasViewMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Fit logical canvas in stage" Command="{Binding FitCommand}" />
+            <controls:RtaimeMenuItem Header="Zoom in" Command="{Binding ZoomInCommand}" />
+            <controls:RtaimeMenuItem Header="Zoom out" Command="{Binding ZoomOutCommand}" />
+            <controls:RtaimeMenuSeparator />
+            <controls:RtaimeMenuItem Header="Snap dragged geometry to 10 px" IsCheckable="True"
+                IsChecked="{Binding SnapEnabled, Mode=TwoWay}" />
+            <controls:RtaimeMenuItem Header="Show grid and rulers" IsCheckable="True"
+                IsChecked="{Binding ShowGuides, Mode=TwoWay}" />
+            <controls:RtaimeMenuItem Header="Show design-safe area guides" IsCheckable="True"
+                IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}" />
+            <controls:RtaimeMenuItem Header="Show / hide guide controls" Click="ToggleGuideDetails_Click"
+                ToolTip="Optional local design guides; no physical-output calibration." />
+        </controls:RtaimeContextMenu>
+
+        <controls:RtaimeContextMenu x:Key="OutputCanvasToolsMenu" x:Shared="False"
+            DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <controls:RtaimeMenuItem Header="Advanced geometry / crop / edge blend" Command="{Binding ToggleGeometryDetailsCommand}"
+                ToolTip="Show numeric editors; changing visibility never writes a draft or Program." />
+        </controls:RtaimeContextMenu>
+    </UserControl.Resources>
     <Border Padding="12">
         <Border.Style>
             <Style TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
@@ -60,17 +109,20 @@
                 </StackPanel>
             </Border>
 
-            <WrapPanel Margin="0,0,0,7">
-                <controls:RtaimeButton Content="RELOAD" Command="{Binding ReloadCommand}"
-                    IsCompact="True" Margin="0,0,5,4"
-                    ToolTip="Read authoritative saved state without discarding unsaved edits." />
-                <controls:RtaimeButton Content="DISCARD &amp; RELOAD" Command="{Binding DiscardAndReloadCommand}"
-                    IsCompact="True" Margin="0,0,5,4"
-                    ToolTip="Explicitly discard local unsaved geometry and read ControlHost." />
-                <controls:RtaimeButton Content="UNDO" Command="{Binding UndoCommand}"
-                    IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeButton Content="REDO" Command="{Binding RedoCommand}"
-                    IsCompact="True" Margin="0,0,5,4" />
+            <WrapPanel Margin="0,0,0,8" KeyboardNavigation.TabNavigation="Continue">
+                <controls:RtaimeButton x:Name="CanvasMenuButton" Content="CANVAS" IsCompact="True" Margin="0,0,5,4"
+                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasActionsMenu}"
+                    AutomationProperties.Name="Open canvas configuration and history menu"
+                    ToolTip="Open canvas actions. Shift+F10 or the Menu key opens the focused button's context menu." />
+                <controls:RtaimeButton x:Name="SurfaceMenuButton" Content="SURFACE" IsCompact="True" Margin="0,0,5,4"
+                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputSurfaceActionsMenu}"
+                    AutomationProperties.Name="Open selected surface tools" ToolTip="Selected-surface draft operations." />
+                <controls:RtaimeButton x:Name="ViewMenuButton" Content="VIEW" IsCompact="True" Margin="0,0,5,4"
+                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasViewMenu}"
+                    AutomationProperties.Name="Open canvas viewport and guide tools" ToolTip="Zoom, fit, snapping and design guides only." />
+                <controls:RtaimeButton x:Name="ToolsMenuButton" Content="TOOLS" IsCompact="True" Margin="0,0,5,4"
+                    Click="OpenEditorMenu_Click" ContextMenu="{StaticResource OutputCanvasToolsMenu}"
+                    AutomationProperties.Name="Open advanced output canvas tools" ToolTip="Advanced numeric geometry and blend editors." />
             </WrapPanel>
             <TextBlock Text="CANVAS" Style="{StaticResource OperatorLabel}" Margin="0,2,0,3" />
             <controls:RtaimeComboBox ItemsSource="{Binding Canvases}"
@@ -78,13 +130,6 @@
                 DisplayMemberPath="Name"
                 AutomationProperties.Name="Select logical output canvas"
                 Margin="0,0,0,7" />
-            <WrapPanel Margin="0,0,0,8">
-                <controls:RtaimeButton Content="ADD CANVAS" Command="{Binding AddCanvasCommand}"
-                    IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeButton Content="REMOVE CANVAS" Command="{Binding RemoveCanvasCommand}"
-                    IsCompact="True" Margin="0,0,5,4"
-                    ToolTip="Remove canvas, owned surfaces and bindings from the local draft only." />
-            </WrapPanel>
 
             <TextBlock Text="AVAILABLE PROGRAM TARGET" Style="{StaticResource OperatorLabel}" Margin="0,0,0,3" />
             <controls:RtaimeComboBox ItemsSource="{Binding Targets}"
@@ -104,17 +149,6 @@
                 DisplayMemberPath="Label"
                 AutomationProperties.Name="Select a mapping surface"
                 Margin="0,0,0,6" />
-            <WrapPanel Margin="0,0,0,8">
-                <controls:RtaimeButton Content="ADD SURFACE" Command="{Binding AddSurfaceCommand}"
-                    IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeButton Content="REMOVE SURFACE" Command="{Binding RemoveSurfaceCommand}"
-                    IsCompact="True" Margin="0,0,5,4" />
-                <controls:RtaimeCheckBox IsChecked="{Binding IsSurfaceEnabled, Mode=TwoWay}"
-                    IsEnabled="{Binding CanEdit}" Margin="3,4,0,0"
-                    AutomationProperties.Name="Enable selected canvas surface">
-                    <TextBlock Text="Enabled" Style="{StaticResource OperatorLabel}" />
-                </controls:RtaimeCheckBox>
-            </WrapPanel>
 
             <Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1"
                 Background="{DynamicResource OperatorAlternateSurfaceBrush}" Margin="0,0,0,5">
