@@ -2,6 +2,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace rtaime.Operator;
 
@@ -11,7 +12,22 @@ public partial class OutputCanvasEditorControl : UserControl
 
     private void OpenEditorMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { ContextMenu: { } menu } target)
+        if (sender is FrameworkElement target)
+            OpenEditorMenu(target);
+    }
+
+    private void OnEditorMenuKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Apps && !(e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+            return;
+        e.Handled = true;
+        if (!e.IsRepeat && sender is FrameworkElement target)
+            OpenEditorMenu(target);
+    }
+
+    private static void OpenEditorMenu(FrameworkElement target)
+    {
+        if (target.ContextMenu is not { } menu)
             return;
 
         menu.PlacementTarget = target;
